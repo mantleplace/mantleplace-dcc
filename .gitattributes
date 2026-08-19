@@ -1,0 +1,30 @@
+# mantleplace-dcc — line endings and binary marking.
+#
+# THERE ARE NO GIT LFS PATTERNS HERE, AND THAT IS DELIBERATE. A stranger's first clone of an
+# open-source plugin must not be a multi-hundred-megabyte pull. The binaries in this tree — three
+# .uasset files, three fonts, three PNG icons — total about 1.2 MB and are plain git blobs.
+#
+# If a real need for LFS ever arises (a binary submission that genuinely belongs here), that is a
+# decision to take deliberately and once. Adding a binary type by accident is not reversible without
+# rewriting history: git decides text-vs-binary at `git add` time, and LFS bills every version ever
+# pushed, not just the current checkout. Ask before committing the first file of a new binary type.
+
+* text=auto
+
+# ---------------------------------------------------------------------------
+# Binary, so `* text=auto` never guesses and never rewrites their bytes
+# ---------------------------------------------------------------------------
+*.uasset  binary
+*.umap    binary
+*.ttf     binary
+*.otf     binary
+*.png     binary
+*.ico     binary
+
+# ---------------------------------------------------------------------------
+# Text that must keep specific endings
+# ---------------------------------------------------------------------------
+*.sh        text eol=lf
+*.bat       text eol=crlf
+*.ps1       text eol=crlf
+*.uplugin   text eol=lf

@@ -1,0 +1,25 @@
+# mantleplace-dcc — cross-host ignores only. Host-specific rules live in that host's folder
+# (see revit/.gitignore for the .NET build output).
+
+# Unreal build output. The plugin is source-only here; these appear the moment it is built inside a
+# consuming project.
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+*.VC.db
+*.opensdf
+*.sdf
+*.suo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Editor / OS
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
