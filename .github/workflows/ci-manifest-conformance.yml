@@ -1,0 +1,54 @@
+# Manifest-contract conformance — the CONSUMER leg of the bundle-manifest contract gate.
+#
+# The Mantle Place platform holds the producer leg: its packager must emit manifests that validate
+# against the canonical schema. This job holds the other end: every host consumer in this repo must
+# have been VERIFIED against the newest schema version the platform actually publishes.
+#
+# The schema is fetched from https://mantle.place/.well-known/schemas/bundle-manifest/vN.json —
+# public, and the artifact the platform publishes. It is never copied into this repo: one contract,
+# one source, checked from both ends.
+#
+# This is the gate that scales as hosts go from one to four. Each new DCC host adds an entry to
+# tools/manifest-conformance/verified-against.json and is held to the same line — the script iterates
+# every host key, and each host declares its own version-floor location, so nothing here is
+# Unreal-shaped (HPS-38, HPS-39).
+#
+# The gate's own unit tests run first, offline. They carry a synthetic second host precisely so the
+# multi-host loop is exercised while only one real host exists — see the test module's docstring.
+#
+# Hosted runner on purpose: no engine is needed, so contract drift is caught on free public runners.
+name: ci-manifest-conformance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # The platform can publish a new manifest version without any commit landing here, so poll.
+  # Drift shows up as a red scheduled run rather than a surprise at import time.
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-manifest-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Offline: the multi-host loop, the shipped floorSource patterns, and corpus integrity.
+      # Stdlib unittest, so there is no dependency install to rot.
+      - name: Test the conformance gate itself
+        run: python -m unittest discover -s tools/manifest-conformance -v
+
+      - name: Check every registered host against the published schema
+        run: python tools/manifest-conformance/check_manifest_conformance.py
