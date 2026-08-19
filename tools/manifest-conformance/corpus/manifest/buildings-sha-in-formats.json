@@ -1,0 +1,23 @@
+{
+  "jobId": "b",
+  "version": 19,
+  "buildings": {
+    "formats": [
+      {
+        "format": "glb",
+        "path": "Buildings/Buildings.glb",
+        "sha256": "82cd4048eec9978e5463e101db20a580a04afd2d8bd55e5cf89330f934c4c230",
+        "size_bytes": 1004
+      }
+    ]
+  },
+  "unreal": {
+    "mesh_alternative": {
+      "path": "Mesh/Terrain.glb"
+    },
+    "buildings_mesh": {
+      "path": "Buildings/Buildings.glb",
+      "up_axis": "y"
+    }
+  }
+}

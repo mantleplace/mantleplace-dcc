@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The I/O half of the triad that is NOT Revit (HPS-02). Everything the plugin does to the outside
+    world lives here — HTTP, the loopback listener, the bundle cache, the secret store, the zip —
+    and none of it touches the Revit API.
+
+    Why a third assembly rather than two. The triad splits pure from impure, and the shim was
+    carrying both kinds of impure: "talks to Revit" and "talks to the disk and the network". Only the
+    first genuinely needs a licensed install to exercise. Folding the second into the shim put
+    ⛔HPS-26 (write to .part, verify, rename) behind `agent-review` alone, because CI cannot build the
+    shim on a hosted runner. Split out, the promote-by-rename path is built and tested by
+    ci-revit-tests like anything else — the rule's second enforcer, `automation-test`, becomes real.
+
+    net8.0 and not net8.0-windows: nothing here is Windows-only except the DPAPI secret store, which
+    carries [SupportedOSPlatform("windows")] and a null-store fallback (HPS-16) that the suite
+    exercises on the Linux runner. Keeping the TFM portable is what keeps that fallback honest
+    instead of theoretical.
+
+    NO NUGET PACKAGES, same as the rest of the tree (../../Directory.Build.props).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>MantlePlace.Revit.Client</RootNamespace>
+    <AssemblyName>MantlePlace.Revit.Client</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MantlePlace.Revit.Core\MantlePlace.Revit.Core.csproj" />
+  </ItemGroup>
+
+</Project>

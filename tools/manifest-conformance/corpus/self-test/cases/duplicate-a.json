@@ -1,0 +1,16 @@
+{
+  "jobId": "st-dup-a",
+  "orderId": "ord-selftest-dup",
+  "version": 18,
+  "packaging": {
+    "delivery_model": "base_on_demand"
+  },
+  "layout": {
+    "cesiumTerrain": "Elevation/Terrain/layer.json"
+  },
+  "unreal": {
+    "mesh_alternative": {
+      "path": "Mesh/Terrain.glb"
+    }
+  }
+}

@@ -1,0 +1,1 @@
+{ this is deliberately not valid JSON — a vault listing response of unparseable bytes must fail closed, not crash (the manifest group has the same fixture; the vault parser was relying on a host-local assertion until this fixture landed)

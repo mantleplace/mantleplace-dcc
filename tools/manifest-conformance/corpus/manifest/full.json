@@ -1,0 +1,287 @@
+{
+  "jobId": "fixture-v18-full-0001",
+  "version": 19,
+  "bbox": {
+    "west": -105.654086267237,
+    "south": 36.2661988583669,
+    "east": -105.638328573896,
+    "north": 36.278902896836
+  },
+  "packaging": {
+    "delivery_model": "base_on_demand"
+  },
+  "dcc_readiness": {
+    "unreal": {
+      "landscape": {
+        "present": true
+      },
+      "mesh_terrain": {
+        "present": true,
+        "tile_count": 50
+      },
+      "mesh_import": {
+        "present": true
+      }
+    },
+    "revit": {
+      "toposurface_points": {
+        "present": true
+      },
+      "ifc_site": {
+        "present": true
+      },
+      "surface_dxf": {
+        "present": true
+      }
+    }
+  },
+  "mesh": {
+    "origin": {
+      "lon": -105.64620798739834,
+      "lat": 36.27254939041837,
+      "ellipsoidal_h_m": 2623.112926378328,
+      "geoid_applied": true,
+      "utm": {
+        "epsg": 32613,
+        "easting_m": 441959.49999999854,
+        "northing_m": 4014372.4999999995
+      }
+    }
+  },
+  "unreal": {
+    "engine_min_version": "5.7",
+    "georeference": {
+      "crs_projected": "EPSG:32613",
+      "crs_geographic": "EPSG:4326",
+      "origin": {
+        "lon": -105.64620798739834,
+        "lat": 36.27254939041837,
+        "utm": {
+          "epsg": 32613,
+          "easting_m": 441959.49999999854,
+          "northing_m": 4014372.4999999995
+        },
+        "ground_orthometric_h_m": 2640.955078125
+      },
+      "planet_shape": "Flat",
+      "is_projected": true
+    },
+    "heightmap": {
+      "path": "Elevation/Heightmap.png",
+      "format": "png-16bit-grayscale",
+      "resolution": 1009,
+      "row0_is_north": true,
+      "native_gsd_m": 1,
+      "landscape_post_spacing_m": 1.4136904761904763,
+      "uint16_mapping": {
+        "z_min_m": 2577.826171875,
+        "z_max_m": 2962.585693359375,
+        "datum": "EGM2008-orthometric",
+        "to_meters": "z_m = z_min_m + (u16/65535)*(z_max_m - z_min_m)",
+        "quantization_step_m": 0.005871053963292515
+      },
+      "landscape_transform": {
+        "z_scale_percent": 75.14834403991699,
+        "scale_x_percent": 141.36904761904762,
+        "scale_y_percent": 138.98809523809524,
+        "location_z_offset_cm": 277020.59326171875,
+        "section_size_quads": 63,
+        "sections_per_component": 2,
+        "component_count_x": 8,
+        "component_count_y": 8
+      },
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "imagery_drape": {
+      "source": "Imagery/Drape.png",
+      "format": "png-rgb-8bit",
+      "derive_in_plugin": false,
+      "effective_gsd_m": 0.599886721234499,
+      "extent_crs": "EPSG:32613",
+      "extent": [
+        441247.1293916447,
+        4013672.8381539257,
+        442671.8603545766,
+        4015072.548749614
+      ],
+      "alignment": "matches heightmap AOI-UTM extent",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "mesh_alternative": {
+      "path": "Mesh/Terrain.glb",
+      "up_axis": "y",
+      "nanite_recommended": true,
+      "note": "First-class terrain option; import via Interchange glTF (Y-up->Z-up auto).",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "foliage_points": {
+      "path": "Landcover/TreePoints.csv",
+      "columns": ["x", "y", "ground_z", "height_m", "crown_radius_m"]
+    },
+    "landscape_layers": {
+      "material_weights": {
+        "path": "Landcover/MaterialWeights.tif",
+        "sha256": "bade9ea57931f2ef43df04da9c1afc263971bca2cc9d0eb931f88ae8293323a9",
+        "materials": ["water", "grass", "forest", "dirt", "rock", "sand", "snow", "built"],
+        "ue_ready": [
+          {
+            "path": "Landcover/MaterialWeights_1_4.png",
+            "sha256": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+            "size_bytes": 262144,
+            "encoding": "png-8bit-rgba",
+            "width": 143,
+            "height": 142,
+            "value_mapping": {
+              "bands": ["water", "grass", "forest", "dirt"]
+            }
+          },
+          {
+            "path": "Landcover/MaterialWeights_5_8.png",
+            "sha256": "2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a",
+            "size_bytes": 258048,
+            "encoding": "png-8bit-rgba",
+            "width": 143,
+            "height": 142,
+            "value_mapping": {
+              "bands": ["rock", "sand", "snow", "built"]
+            }
+          }
+        ]
+      },
+      "water_mask": {
+        "path": "Landcover/WaterMask.tif",
+        "sha256": "0f4168490e38b8447e11ba4bd656aa11b925bd22af30bac464bc153fdb608501",
+        "ue_ready": [
+          {
+            "path": "Landcover/WaterMask.png",
+            "sha256": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b",
+            "size_bytes": 16384,
+            "encoding": "png-8bit-mask",
+            "width": 143,
+            "height": 142,
+            "value_mapping": {
+              "true_value": 255,
+              "false_value": 0
+            }
+          }
+        ]
+      },
+      "worldcover": {
+        "path": "Landcover/LandCover.tif",
+        "sha256": "7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3",
+        "ue_ready": [
+          {
+            "path": "Landcover/LandCover.png",
+            "sha256": "8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4",
+            "size_bytes": 8192,
+            "encoding": "png-8bit-indexed",
+            "width": 143,
+            "height": 142,
+            "value_mapping": {
+              "classes": [10, 20, 30, 50, 60, 80]
+            }
+          }
+        ]
+      },
+      "canopy_height": {
+        "path": "Landcover/CanopyHeight.tif",
+        "sha256": "4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c",
+        "ue_ready": [
+          {
+            "path": "Landcover/CanopyHeight.png",
+            "sha256": "5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d",
+            "size_bytes": 40612,
+            "encoding": "png-16bit-grayscale",
+            "width": 143,
+            "height": 142,
+            "value_mapping": {
+              "min": 0.0,
+              "max": 24.3,
+              "to_value": "value = min + (u16/65535)*(max - min)",
+              "units": "m"
+            }
+          }
+        ]
+      },
+      "ndvi": {
+        "path": "Imagery/NDVI.tif",
+        "sha256": "9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5",
+        "ue_ready": [
+          {
+            "path": "Imagery/NDVI.png",
+            "sha256": "0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6",
+            "size_bytes": 40612,
+            "encoding": "png-16bit-grayscale",
+            "width": 143,
+            "height": 142,
+            "value_mapping": {
+              "min": -0.1826,
+              "max": 0.7413,
+              "to_value": "value = min + (u16/65535)*(max - min)",
+              "nodata_value": -9999.0
+            }
+          }
+        ]
+      },
+      "slope": {
+        "path": "Elevation/Slope.tif",
+        "sha256": "1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f607",
+        "ue_ready": [
+          {
+            "path": "Elevation/Slope.png",
+            "sha256": "2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718",
+            "size_bytes": 40612,
+            "encoding": "png-16bit-grayscale",
+            "width": 143,
+            "height": 142,
+            "value_mapping": {
+              "min": 0.0,
+              "max": 61.482,
+              "to_value": "value = min + (u16/65535)*(max - min)",
+              "units": "degrees",
+              "nodata_value": -9999.0
+            }
+          }
+        ]
+      },
+      "aspect": {
+        "path": "Elevation/Aspect.tif",
+        "sha256": "3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071829",
+        "ue_ready": [
+          {
+            "path": "Elevation/Aspect.png",
+            "sha256": "4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f607182930",
+            "size_bytes": 40612,
+            "encoding": "png-16bit-grayscale",
+            "width": 143,
+            "height": 142,
+            "value_mapping": {
+              "min": 0.0,
+              "max": 359.9,
+              "to_value": "value = min + (u16/65535)*(max - min)",
+              "units": "degrees",
+              "nodata_value": -9999.0
+            }
+          }
+        ]
+      },
+      "hillshade": {
+        "path": "Elevation/Hillshade.tif",
+        "sha256": "6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e",
+        "ue_ready": [
+          {
+            "path": "Elevation/Hillshade.png",
+            "sha256": "708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f",
+            "size_bytes": 20306,
+            "encoding": "png-8bit-grayscale",
+            "width": 143,
+            "height": 142,
+            "value_mapping": {
+              "identity": true
+            }
+          }
+        ]
+      }
+    }
+  }
+}

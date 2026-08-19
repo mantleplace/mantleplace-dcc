@@ -1,0 +1,52 @@
+{
+  "tokens": [
+    "elevation.heightmap_png",
+    "imagery.drape_png",
+    "mesh.glb",
+    "buildings.glb",
+    "vector.geojson",
+    "landcover.tree_points_csv"
+  ],
+  "bodyForExplicitScope": {
+    "tokens": [
+      "elevation.heightmap_png",
+      "imagery.drape_png",
+      "mesh.glb",
+      "buildings.glb",
+      "vector.geojson",
+      "landcover.tree_points_csv"
+    ]
+  },
+  "bodyForAllScope": {
+    "tokens": "all"
+  },
+  "validScopes": [
+    "unreal",
+    "all"
+  ],
+  "scopeVectors": [
+    {
+      "scope": "unreal",
+      "valid": true
+    },
+    {
+      "scope": "Unreal",
+      "valid": true,
+      "note": "scope matching is case-insensitive — lowercase-only vectors left that unpinned"
+    },
+    {
+      "scope": "ALL",
+      "valid": true
+    },
+    {
+      "scope": "",
+      "valid": false
+    },
+    {
+      "scope": "mesh",
+      "valid": false,
+      "note": "a layer token is not a scope"
+    }
+  ],
+  "scopeVectorsNote": "Each host substitutes its own name for `unreal`; the case-insensitivity and the two invalids are the normative part."
+}

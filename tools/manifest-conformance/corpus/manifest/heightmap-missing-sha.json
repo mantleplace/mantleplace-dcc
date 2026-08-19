@@ -1,0 +1,16 @@
+{
+  "jobId": "h",
+  "version": 19,
+  "unreal": {
+    "heightmap": {
+      "path": "Elevation/Heightmap.png",
+      "resolution": 505,
+      "landscape_transform": {
+        "section_size_quads": 63,
+        "sections_per_component": 2,
+        "component_count_x": 4,
+        "component_count_y": 4
+      }
+    }
+  }
+}

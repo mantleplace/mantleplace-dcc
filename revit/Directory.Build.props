@@ -1,0 +1,42 @@
+<Project>
+
+  <!--
+    Shared MSBuild properties for the Mantle Place Revit plugin.
+
+    Two rules worth knowing before adding a project here:
+
+      1. NO NUGET PACKAGES. The pure core and its conformance suite restore offline and have zero
+         third-party references — the same reason the conformance gate uses stdlib unittest
+         ("no dependency install to rot", .github/workflows/ci-manifest-conformance.yml). The host
+         plugin doctrine is dumb, dependency-light consumers (HPS-03).
+
+      2. The Revit API is referenced from the local install, never vendored and never redistributed.
+         RevitApiDir below is overridable so a machine with a different Revit build can point at it:
+             dotnet build -p:RevitApiDir="C:\Program Files\Autodesk\Revit 2028"
+  -->
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CA1303</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      The Revit install the add-in shim compiles against. Only the shim reads this.
+
+      The default is the OLDEST supported version, not the newest installed. A plugin compiled
+      against Revit 2025's API loads in 2025, 2026 and 2027; one compiled against 2027's does not
+      load in 2025. Pointing this at a newer install therefore silently narrows what ships, which is
+      exactly the kind of change nobody notices until a curator on 2025 reports a missing ribbon.
+    -->
+    <RevitApiDir Condition="'$(RevitApiDir)' == ''">C:\Program Files\Autodesk\Revit 2025</RevitApiDir>
+  </PropertyGroup>
+
+</Project>

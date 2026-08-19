@@ -1,0 +1,140 @@
+{
+  "$comment": "HPS-47: a host decides 'is this bundle materialized' from the neutral signals — a known host block, a dcc_readiness object, or a non-empty vector.layers array — never from its own content alone. Every row is a complete v19 manifest; the host feeds each to its own materialization predicate and asserts the verdict. The revit-block-only and dcc-readiness-only rows are the ones that catch a host keying off its own block: they are materialized bundles that carry nothing this host imports.",
+  "vectors": [
+    {
+      "name": "base bundle — no signal present",
+      "manifest": {
+        "jobId": "ms-base",
+        "orderId": "ord-ms-base",
+        "version": 19,
+        "packaging": {
+          "delivery_model": "base_on_demand"
+        },
+        "layout": {
+          "cesiumTerrain": "Elevation/Terrain/layer.json"
+        }
+      },
+      "materialized": false
+    },
+    {
+      "name": "unreal block only",
+      "manifest": {
+        "jobId": "ms-unreal",
+        "orderId": "ord-ms-unreal",
+        "version": 19,
+        "packaging": {
+          "delivery_model": "base_on_demand"
+        },
+        "layout": {
+          "cesiumTerrain": "Elevation/Terrain/layer.json"
+        },
+        "unreal": {
+          "mesh_alternative": {
+            "path": "Mesh/Terrain.glb"
+          }
+        }
+      },
+      "materialized": true
+    },
+    {
+      "name": "revit block only",
+      "manifest": {
+        "jobId": "ms-revit",
+        "orderId": "ord-ms-revit",
+        "version": 19,
+        "packaging": {
+          "delivery_model": "base_on_demand"
+        },
+        "layout": {
+          "cesiumTerrain": "Elevation/Terrain/layer.json"
+        },
+        "revit": {
+          "host_min_version": "2025",
+          "toposurface_points": {
+            "path": "Surface/SurfacePoints.csv",
+            "format": "csv-xyz-headerless",
+            "units": "m",
+            "horizontal_frame": "local_enu",
+            "vertical_reference": "absolute",
+            "point_count": 98756,
+            "sha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      },
+      "materialized": true,
+      "note": "materialized for someone ELSE is still materialized. A host that answers false here misreads a paid-for bundle as base and tells the user to materialize what already exists."
+    },
+    {
+      "name": "dcc_readiness only",
+      "manifest": {
+        "jobId": "ms-dcc",
+        "orderId": "ord-ms-dcc",
+        "version": 19,
+        "packaging": {
+          "delivery_model": "base_on_demand"
+        },
+        "layout": {
+          "cesiumTerrain": "Elevation/Terrain/layer.json"
+        },
+        "dcc_readiness": {
+          "max": {
+            "mesh_import": {
+              "ready": false,
+              "reason": "available_on_request"
+            }
+          }
+        }
+      },
+      "materialized": true,
+      "note": "the host key inside dcc_readiness is deliberately one no shipped host recognises — the OBJECT's presence is the signal, which is what absorbs host-roster staleness."
+    },
+    {
+      "name": "vector layers only",
+      "manifest": {
+        "jobId": "ms-vector",
+        "orderId": "ord-ms-vector",
+        "version": 19,
+        "packaging": {
+          "delivery_model": "base_on_demand"
+        },
+        "layout": {
+          "cesiumTerrain": "Elevation/Terrain/layer.json"
+        },
+        "vector": {
+          "layers": [
+            {
+              "name": "road_splines",
+              "formats": [
+                {
+                  "format": "geojson",
+                  "path": "Vector/RoadSplines.geojson",
+                  "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "materialized": true
+    },
+    {
+      "name": "empty vector.layers is no signal",
+      "manifest": {
+        "jobId": "ms-empty",
+        "orderId": "ord-ms-empty",
+        "version": 19,
+        "packaging": {
+          "delivery_model": "base_on_demand"
+        },
+        "layout": {
+          "cesiumTerrain": "Elevation/Terrain/layer.json"
+        },
+        "vector": {
+          "layers": []
+        }
+      },
+      "materialized": false,
+      "note": "the signal is NON-EMPTY layers; an empty array is base-tier scaffolding"
+    }
+  ]
+}

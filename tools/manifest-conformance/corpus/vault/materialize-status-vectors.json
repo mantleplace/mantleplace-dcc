@@ -1,0 +1,66 @@
+{
+  "vectors": [
+    {
+      "body": {
+        "status": "processing",
+        "progress": 0.5,
+        "jobId": "j1"
+      },
+      "state": "Processing",
+      "fraction": 0.5,
+      "jobId": "j1",
+      "note": "jobId is surfaced when reported — the body carried it unasserted before this vector"
+    },
+    {
+      "body": {
+        "status": "processing",
+        "progress": 42
+      },
+      "state": "Processing",
+      "fraction": 0.42,
+      "note": "a value > 1 is a percentage; divide by 100, then clamp"
+    },
+    {
+      "body": {
+        "status": "complete"
+      },
+      "state": "Complete",
+      "fraction": -1.0,
+      "note": "absent progress is INDETERMINATE (-1), not 0"
+    },
+    {
+      "body": {
+        "status": "failed",
+        "message": "the packaging job failed"
+      },
+      "state": "Failed",
+      "fraction": -1.0,
+      "parseSucceeds": true,
+      "message": "the packaging job failed",
+      "note": "a failed job is still a VALID status body \u2014 parse succeeds, state is Failed, and the message is surfaced so the user learns WHY (unasserted before this vector)"
+    },
+    {
+      "body": {
+        "state": "running"
+      },
+      "state": "Processing",
+      "fraction": -1.0,
+      "note": "`state` is an accepted alias, consulted only when `status` is missing"
+    },
+    {
+      "body": {
+        "status": "wat"
+      },
+      "state": "Unknown",
+      "fraction": -1.0,
+      "note": "an unrecognised status is Unknown, never a parse error"
+    },
+    {
+      "body": {
+        "error": "Unknown order"
+      },
+      "parseSucceeds": false,
+      "errorContains": "Unknown order"
+    }
+  ]
+}

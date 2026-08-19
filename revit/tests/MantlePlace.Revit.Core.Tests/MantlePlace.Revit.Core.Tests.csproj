@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The headless conformance suite (HPS-42). No Revit, no NuGet, no test framework: `dotnet run`
+    over a ~120-line harness that exits non-zero on the first failing assertion set.
+
+    Why not xUnit. The gate this suite sits beside deliberately uses stdlib unittest "so there is
+    no dependency install to rot" (.github/workflows/ci-manifest-conformance.yml), and the pure
+    core it exercises has zero references by design. A three-package test dependency would be the
+    only NuGet restore in the whole Revit tree. If this suite ever grows past a few hundred
+    assertions, swapping TestHarness for xUnit is a contained change — nothing else references it.
+
+    TWO target frameworks, and running both is the point. The shipped add-in is one net8.0-windows
+    assembly that Revit 2025 and 2026 load on .NET 8 and Revit 2027 loads on .NET 10. That is a
+    forward-compatibility bet, and a bet is worth exactly as much as the test behind it, so the suite
+    runs on both runtimes rather than on whichever one is convenient. Cheap here — seconds, and one
+    extra SDK on the runner.
+
+    It covers the pure core AND the client (I/O, no Revit). The client is in scope precisely because
+    ⛔HPS-26's promote-by-rename cannot be asserted by a suite that only sees pure functions, and its
+    second enforcer is `automation-test`.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>MantlePlace.Revit.Core.Tests</RootNamespace>
+    <AssemblyName>MantlePlace.Revit.Core.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MantlePlace.Revit.Core\MantlePlace.Revit.Core.csproj" />
+    <ProjectReference Include="..\..\src\MantlePlace.Revit.Client\MantlePlace.Revit.Client.csproj" />
+  </ItemGroup>
+
+</Project>

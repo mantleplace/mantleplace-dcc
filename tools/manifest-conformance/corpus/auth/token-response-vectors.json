@@ -1,0 +1,104 @@
+{
+  "vectors": [
+    {
+      "body": {
+        "access_token": "jwt-access",
+        "refresh_token": "jwt-refresh",
+        "expires_in": 3600,
+        "token_type": "bearer",
+        "user": {
+          "id": "user-uuid-1",
+          "email": "user@example.com"
+        }
+      },
+      "parsed": true,
+      "expiresInSeconds": 3600,
+      "userId": "user-uuid-1",
+      "accessToken": "jwt-access",
+      "refreshToken": "jwt-refresh"
+    },
+    {
+      "body": {
+        "access_token": "a",
+        "refresh_token": "r",
+        "expires_in": 60
+      },
+      "parsed": true,
+      "expiresInSeconds": 60,
+      "accessToken": "a",
+      "refreshToken": "r"
+    },
+    {
+      "body": {
+        "access_token": "a",
+        "refresh_token": "r"
+      },
+      "parsed": true,
+      "expiresInSeconds": 3600,
+      "note": "absent expires_in falls back to the 3600 s default",
+      "accessToken": "a",
+      "refreshToken": "r"
+    },
+    {
+      "body": {
+        "access_token": "a",
+        "expires_in": 0
+      },
+      "parsed": true,
+      "expiresInSeconds": 3600,
+      "note": "a non-positive lifetime would stamp an already-expired session; substitute the default",
+      "accessToken": "a",
+      "refreshToken": ""
+    },
+    {
+      "body": {
+        "access_token": "a",
+        "expires_in": 900
+      },
+      "parsed": true,
+      "expiresInSeconds": 900,
+      "accessToken": "a",
+      "refreshToken": ""
+    },
+    {
+      "body": {
+        "error": "invalid_grant",
+        "error_description": "Invalid login credentials"
+      },
+      "parsed": false,
+      "errorContains": "Invalid login credentials"
+    },
+    {
+      "body": "not json",
+      "raw": true,
+      "parsed": false,
+      "errorContains": "Invalid JSON"
+    }
+  ],
+  "errorPrecedence": [
+    "error_description",
+    "msg",
+    "message",
+    "error_code",
+    "error"
+  ],
+  "chooseRefreshToken": [
+    {
+      "new": "",
+      "prior": "r-old",
+      "chosen": "r-old",
+      "note": "a grant that omits refresh_token MUST NOT wipe the cached one"
+    },
+    {
+      "new": "r-new",
+      "prior": "r-old",
+      "chosen": "r-new"
+    }
+  ],
+  "isExpired": {
+    "formula": "(now + skewSeconds) >= expiresAt",
+    "defaultSkewSeconds": 60,
+    "boundary": "inclusive — equal counts as expired"
+  },
+  "vectorFieldsNote": "accessToken / refreshToken are the values the parser must surface. Stating them separately from `body` is the point: a parser that returns true with an empty access token satisfies every other assertion in this file."
+}

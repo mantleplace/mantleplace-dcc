@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The REVIT half of the triad (HPS-02): transactions, element creation and Revit API calls, and
+    nothing else. Decisions live in MantlePlace.Revit.Core and I/O lives in MantlePlace.Revit.Client,
+    which is why almost everything this plugin does can be asserted without a Revit licence (HPS-42).
+
+    net8.0-windows, compiled against Revit 2025's API — the OLDEST version supported, not the newest
+    installed. Autodesk's .NET floors: Revit 2024 is .NET Framework 4.8 (out of scope — System.Text.Json
+    is a NuGet package there, which the zero-dependency doctrine forbids), 2025 and 2026 are .NET 8,
+    2027 is .NET 10. A single net8.0-windows assembly built against the 2025 API loads in all three
+    supported hosts; building against 2027 would pin the plugin to 2027 alone. Compiling against the
+    floor and relying on Revit's forward compatibility is the standard multi-version add-in pattern,
+    and the load check in each of 2025/2026/2027 is a release step, not an inference — see the PR
+    that introduced this.
+
+    The Revit API assemblies are referenced from the local install with Private=false: they are
+    supplied by the host process at run time and MUST NOT be copied to the output or redistributed.
+    EnableDynamicLoading gives the add-in its own deps.json so its dependency graph does not fight
+    whatever else Revit has already loaded.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>MantlePlace.Revit.Addin</RootNamespace>
+    <AssemblyName>MantlePlace.Revit.Addin</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <!-- The Revit API ships no XML nullability annotations, so its returns read as oblivious. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <!--
+      MSB3277: RevitAPI.dll transitively drags in Revit's own copies of Microsoft.VisualBasic and
+      System.Drawing, which "conflict" with the framework's. The framework versions win, and that is
+      the correct outcome — Revit supplies the runtime, we reference its API surface only
+      (Private=false, nothing is copied to the output). Demoted to a message so a real reference
+      conflict is not lost in the noise; if this ever needs revisiting, the resolution log is
+      `dotnet build -v n`.
+    -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MantlePlace.Revit.Core\MantlePlace.Revit.Core.csproj" />
+    <ProjectReference Include="..\MantlePlace.Revit.Client\MantlePlace.Revit.Client.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="RevitAPI">
+      <HintPath>$(RevitApiDir)\RevitAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="RevitAPIUI">
+      <HintPath>$(RevitApiDir)\RevitAPIUI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="MantlePlace.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    A missing Revit install is the single most likely reason this project fails to build, and the
+    default failure is forty lines of CS0246 for every Revit type. Say it once, in one sentence.
+  -->
+  <Target Name="CheckRevitApiDir" BeforeTargets="ResolveAssemblyReferences">
+    <Error
+      Condition="!Exists('$(RevitApiDir)\RevitAPI.dll')"
+      Text="Revit API assemblies not found at '$(RevitApiDir)'. The shim compiles against the OLDEST supported Revit (2025) so one build loads in 2025, 2026 and 2027. Install Revit 2025, or override: dotnet build -p:RevitApiDir=&quot;C:\Program Files\Autodesk\Revit 2026&quot;. The pure core and the client build and test without any Revit install." />
+  </Target>
+
+</Project>

@@ -1,0 +1,199 @@
+{
+  "$comment": [
+    "Per-case host coverage, derived by check_manifest_conformance.py from",
+    "each host's claimed `groups` and each case's `appliesTo`. The",
+    "gate fails on ANY difference from this file \u2014 a host losing a case is a",
+    "regression, a new covered case is an unrecorded improvement. Both are",
+    "recorded deliberately: rerun with --update-baseline and commit the diff.",
+    "Maintainer-owned: propose changes by pull request."
+  ],
+  "cases": {
+    "auth.callbackQueryVectors": [
+      "revit",
+      "unreal"
+    ],
+    "auth.pkceVectors": [
+      "revit",
+      "unreal"
+    ],
+    "auth.stateMachine": [
+      "revit",
+      "unreal"
+    ],
+    "auth.tokenResponseVectors": [
+      "revit",
+      "unreal"
+    ],
+    "cache.keySanitisation": [
+      "revit",
+      "unreal"
+    ],
+    "cache.validityTruthTable": [
+      "revit",
+      "unreal"
+    ],
+    "digest.sha256Vectors": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.baseOnDemand": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.buildingsShaInFormats": [
+      "unreal"
+    ],
+    "manifest.dccReadinessIgnoresRetiredFlatKey": [
+      "unreal"
+    ],
+    "manifest.dccReadinessReason": [
+      "unreal"
+    ],
+    "manifest.deliveryReasonNotProduced": [
+      "unreal"
+    ],
+    "manifest.drapeMissingSha": [
+      "unreal"
+    ],
+    "manifest.full": [
+      "unreal"
+    ],
+    "manifest.heightmapMissingSha": [
+      "unreal"
+    ],
+    "manifest.materializationSignals": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.meshMissingSha": [
+      "unreal"
+    ],
+    "manifest.meshUpAxisZ": [
+      "unreal"
+    ],
+    "manifest.planetShapeAbsent": [
+      "unreal"
+    ],
+    "manifest.planetShapeSphere": [
+      "unreal"
+    ],
+    "manifest.reject.notJson": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.revitHashMissing": [
+      "revit"
+    ],
+    "manifest.reject.unversioned": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.v13": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.v14": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.v16": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.v17": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.v6": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.v7": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.resolutionMismatch": [
+      "unreal"
+    ],
+    "manifest.revitArtifactHashes": [
+      "revit"
+    ],
+    "manifest.revitBlockIgnored": [
+      "unreal"
+    ],
+    "manifest.revitOwnGeoreference": [
+      "revit"
+    ],
+    "manifest.roadSplinesGeojsonWins": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.roadSplinesGpkgOnly": [
+      "revit",
+      "unreal"
+    ],
+    "projection.lonLatToUtm": [
+      "revit",
+      "unreal"
+    ],
+    "vault.download.missingUrl": [
+      "revit",
+      "unreal"
+    ],
+    "vault.download.presigned": [
+      "revit",
+      "unreal"
+    ],
+    "vault.errorBodyPrecedence": [
+      "revit",
+      "unreal"
+    ],
+    "vault.list.empty": [
+      "revit",
+      "unreal"
+    ],
+    "vault.list.fullAndLegacy": [
+      "revit",
+      "unreal"
+    ],
+    "vault.list.skipsMalformedRows": [
+      "revit",
+      "unreal"
+    ],
+    "vault.list.tierLabel": [
+      "unreal"
+    ],
+    "vault.list.wrongTopLevelKey": [
+      "revit",
+      "unreal"
+    ],
+    "vault.materialize.alreadyRunning": [
+      "revit",
+      "unreal"
+    ],
+    "vault.materialize.startNoJobId": [
+      "revit",
+      "unreal"
+    ],
+    "vault.materialize.started": [
+      "revit",
+      "unreal"
+    ],
+    "vault.materialize.statusVectors": [
+      "revit",
+      "unreal"
+    ],
+    "vault.materializeTokenList": [
+      "revit",
+      "unreal"
+    ],
+    "vault.reject.notJson": [
+      "revit",
+      "unreal"
+    ],
+    "vault.statusWordBuckets": [
+      "revit",
+      "unreal"
+    ]
+  }
+}

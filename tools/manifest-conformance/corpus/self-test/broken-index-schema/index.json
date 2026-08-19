@@ -1,0 +1,5 @@
+{
+  "$comment": "Deliberately missing the `cases` key — parseable JSON that is not a corpus index. A reader pointed here must fail the suite, never treat it as an empty corpus (HPS-46).",
+  "corpusVersion": 2,
+  "manifestVersion": 18
+}

@@ -1,0 +1,9 @@
+{
+  "jobId": "m",
+  "version": 19,
+  "unreal": {
+    "mesh_alternative": {
+      "path": "Mesh/Terrain.glb"
+    }
+  }
+}

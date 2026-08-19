@@ -1,0 +1,73 @@
+{
+  "rule": "keep alphanumerics AND '.', '_', '-'; map everything else to '_'; then map the results '', '.' and '..' to '_'. Enumeration is over CODE POINTS, never UTF-16 code units. 'Alphanumeric' follows the host platform's Unicode-aware classification, not ASCII, BOUNDED TO THE BASIC MULTILINGUAL PLANE: a non-Latin BMP order id survives unchanged and is therefore NOT lossy, while every code point above U+FFFF is non-alphanumeric on every host and maps to exactly ONE underscore — the reference's FChar::IsAlnum takes a code unit and cannot classify an astral code point at all, and two hand-maintained Unicode tables would drift. A host that hardcodes [A-Za-z0-9] produces different cache paths for the same order id; so does a host that walks code units.",
+  "collisionSuffix": "when sanitisation is lossy, append '_' + sha256(utf8(rawOrderId))[:8]",
+  "vectors": [
+    {
+      "orderId": "3f285101-0310-425b-b06b-bdb73b025b6a",
+      "sanitisedDir": "3f285101-0310-425b-b06b-bdb73b025b6a",
+      "lossy": false,
+      "note": "a lossless id gets NO suffix, so existing cache paths are preserved"
+    },
+    {
+      "orderId": "заказ-2026",
+      "sanitisedDir": "заказ-2026",
+      "lossy": false,
+      "note": "The rule above says 'alphanumeric' is the platform's Unicode-aware classification, not ASCII. A host that hardcodes [A-Za-z0-9] mangles this to '_____-2026' and derives a DIFFERENT cache path for the same order — the bundle is silently re-downloaded every session. This vector is the only thing that catches it."
+    },
+    {
+      "orderId": "\ud835\udfce",
+      "sanitisedDir": "_",
+      "lossy": true,
+      "suffixed": true,
+      "$comment": "U+1D7CE MATHEMATICAL BOLD DIGIT ZERO is Unicode category Nd, but classification is BMP-bounded: every host maps a code point above U+FFFF to exactly ONE underscore. A host enumerating UTF-16 code units emits two, and derives a different directory for the same order. Distinctness is not lost - the collision suffix hashes the RAW id."
+    },
+    {
+      "orderId": "a\ud83d\ude00b",
+      "sanitisedDir": "a_b",
+      "lossy": true,
+      "suffixed": true,
+      "$comment": "One non-alphanumeric CODE POINT maps to exactly one underscore. A per-code-unit walk emits two."
+    },
+    {
+      "orderId": "..",
+      "sanitisedDir": "_",
+      "lossy": true,
+      "suffixed": true
+    },
+    {
+      "orderId": ".",
+      "sanitisedDir": "_",
+      "lossy": true,
+      "suffixed": true
+    },
+    {
+      "orderId": "",
+      "sanitisedDir": "_",
+      "lossy": true,
+      "suffixed": true
+    },
+    {
+      "orderId": "../../etc/passwd",
+      "sanitisedDir": ".._.._etc_passwd",
+      "lossy": true,
+      "suffixed": true,
+      "note": "path traversal must be neutralised before the string reaches the filesystem"
+    },
+    {
+      "orderIdPair": [
+        "a/b",
+        "a:b"
+      ],
+      "sanitisedDir": "a_b",
+      "lossy": true,
+      "suffixed": true,
+      "mustDiffer": true,
+      "note": "both sanitise to 'a_b'; the hash suffix is what stops one bundle overwriting the other"
+    }
+  ],
+  "fileNames": {
+    "final": "bundle.zip",
+    "partial": "bundle.zip.part",
+    "sidecar": "cache.json"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "jobId": "p",
+  "version": 19,
+  "unreal": {
+    "mesh_alternative": {
+      "path": "Mesh/Terrain.glb"
+    },
+    "georeference": {
+      "planet_shape": "Sphere"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+# Revit host — .NET build output. Host-specific by design: the repo-root .gitignore holds only
+# cross-host rules, the same way unreal/.gitignore holds the UE ones.
+
+bin/
+obj/
+
+# Visual Studio / Rider local state. *.slnx IS tracked (it is the solution of record); the legacy
+# *.sln and the per-user files are not.
+.vs/
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.idea/
+
+# NuGet is not used in this tree (see Directory.Build.props) — if that ever changes, these keep a
+# restore from landing in git.
+packages/
+*.nupkg
+
+# A Revit add-in is loaded by dropping a manifest in %APPDATA%\Autodesk\Revit\Addins\<year>\.
+# A locally-edited copy pointing at a developer's own output path must not come back here.
+*.addin.local

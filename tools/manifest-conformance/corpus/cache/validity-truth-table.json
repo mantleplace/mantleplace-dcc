@@ -1,0 +1,162 @@
+{
+  "minSupportedManifestVersion": 18,
+  "precedence": [
+    "missing",
+    "sizeMismatch",
+    "sha256Mismatch",
+    "manifestTooOld",
+    "valid"
+  ],
+  "rows": [
+    {
+      "name": "missing",
+      "fileExists": false,
+      "valid": false,
+      "reason": "Missing",
+      "integrityChecked": false
+    },
+    {
+      "name": "full match",
+      "fileExists": true,
+      "onDiskSizeBytes": 1024,
+      "computedSha256": "AB",
+      "expectedSha256": "ab",
+      "expectedSizeBytes": 1024,
+      "manifestVersion": 18,
+      "valid": true,
+      "reason": "None",
+      "integrityChecked": true,
+      "note": "Deliberately different CASE on the two digests: hex comparison is case-insensitive, and a host doing an ordinal compare invalidates every cached bundle whose vault sha is upper-case."
+    },
+    {
+      "name": "sha mismatch",
+      "fileExists": true,
+      "onDiskSizeBytes": 1024,
+      "computedSha256": "ab",
+      "expectedSha256": "cd",
+      "expectedSizeBytes": 1024,
+      "manifestVersion": 18,
+      "valid": false,
+      "reason": "Sha256Mismatch",
+      "integrityChecked": true
+    },
+    {
+      "name": "size mismatch wins over sha",
+      "fileExists": true,
+      "onDiskSizeBytes": 999,
+      "computedSha256": "ab",
+      "expectedSha256": "cd",
+      "expectedSizeBytes": 1024,
+      "manifestVersion": 18,
+      "valid": false,
+      "reason": "SizeMismatch",
+      "integrityChecked": false,
+      "note": "size is the cheapest discriminator and is checked first"
+    },
+    {
+      "name": "missing wins over everything",
+      "fileExists": false,
+      "expectedSha256": "cd",
+      "expectedSizeBytes": 1024,
+      "manifestVersion": 17,
+      "valid": false,
+      "reason": "Missing",
+      "integrityChecked": false,
+      "note": "every downstream discriminator has grounds to fire; Missing still wins. Pins the head of the precedence chain instead of implying it."
+    },
+    {
+      "name": "sha mismatch wins over manifest too old",
+      "fileExists": true,
+      "onDiskSizeBytes": 1024,
+      "computedSha256": "ab",
+      "expectedSha256": "cd",
+      "expectedSizeBytes": 1024,
+      "manifestVersion": 17,
+      "valid": false,
+      "reason": "Sha256Mismatch",
+      "integrityChecked": true,
+      "note": "pins sha256Mismatch > manifestTooOld — with the size-over-sha and missing-over-everything rows, the whole `precedence` list is now exercised, not implied."
+    },
+    {
+      "name": "manifest too old",
+      "fileExists": true,
+      "onDiskSizeBytes": 1024,
+      "computedSha256": "ab",
+      "expectedSha256": "ab",
+      "expectedSizeBytes": 1024,
+      "manifestVersion": 17,
+      "valid": false,
+      "reason": "ManifestTooOld",
+      "integrityChecked": true,
+      "note": "v17 was the supported floor until the v18 hygiene bump; a bundle cached under it is stale now. The 'too old' row must always sit exactly one below minSupportedManifestVersion, so a bump that forgets this file is caught by the host asserting its own floor constant against minSupportedManifestVersion."
+    },
+    {
+      "name": "legacy, everything unknown",
+      "fileExists": true,
+      "onDiskSizeBytes": 1024,
+      "computedSha256": "",
+      "expectedSha256": null,
+      "expectedSizeBytes": null,
+      "manifestVersion": null,
+      "valid": true,
+      "reason": "None",
+      "integrityChecked": false,
+      "note": "NULL SHA256 MEANS UNKNOWN, NOT ABSENT: skip the check, stay valid, and report integrityChecked=false. Failing here would make every legacy bundle un-openable."
+    },
+    {
+      "name": "advertised sha but nothing computed (over the hash cap)",
+      "fileExists": true,
+      "onDiskSizeBytes": 1024,
+      "computedSha256": "",
+      "expectedSha256": "ab",
+      "expectedSizeBytes": 1024,
+      "manifestVersion": 18,
+      "valid": true,
+      "reason": "None",
+      "integrityChecked": false,
+      "note": "valid but unverified — the host MUST say so rather than claim verification"
+    },
+    {
+      "name": "size mismatch with no sha advertised",
+      "fileExists": true,
+      "onDiskSizeBytes": 900,
+      "computedSha256": "",
+      "expectedSha256": null,
+      "expectedSizeBytes": 1024,
+      "manifestVersion": null,
+      "valid": false,
+      "reason": "SizeMismatch",
+      "integrityChecked": false,
+      "note": "Size alone is enough to invalidate. The sha leg being unknown must not rescue a file that is demonstrably the wrong length."
+    },
+    {
+      "name": "size mismatch with a sha advertised but uncomputed",
+      "fileExists": true,
+      "onDiskSizeBytes": 900,
+      "computedSha256": "",
+      "expectedSha256": "ab",
+      "expectedSizeBytes": 1024,
+      "manifestVersion": 18,
+      "valid": false,
+      "reason": "SizeMismatch",
+      "integrityChecked": false,
+      "note": "distinct from the over-cap row: there the size MATCHED and the entry stayed valid-but-unverified. Here the advertised-but-uncomputed sha must not soften a size mismatch into 'unverified'."
+    }
+  ],
+  "cacheState": [
+    {
+      "fileExists": false,
+      "state": "NotCached"
+    },
+    {
+      "fileExists": true,
+      "valid": true,
+      "state": "CachedValid"
+    },
+    {
+      "fileExists": true,
+      "valid": false,
+      "state": "CachedStale"
+    }
+  ]
+}

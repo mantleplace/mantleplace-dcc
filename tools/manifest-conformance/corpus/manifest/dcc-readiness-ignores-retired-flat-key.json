@@ -1,0 +1,15 @@
+{
+  "jobId": "retired-flat-key",
+  "version": 19,
+  "dcc_readiness": {
+    "mesh_import": {
+      "present": false,
+      "reason": "SHOULD_BE_IGNORED"
+    }
+  },
+  "unreal": {
+    "mesh_alternative": {
+      "path": "Mesh/Terrain.glb"
+    }
+  }
+}

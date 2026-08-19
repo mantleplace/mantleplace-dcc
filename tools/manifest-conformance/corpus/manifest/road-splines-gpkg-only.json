@@ -1,0 +1,23 @@
+{
+  "jobId": "vg",
+  "version": 19,
+  "vector": {
+    "layers": [
+      {
+        "name": "road_splines",
+        "formats": [
+          {
+            "format": "gpkg",
+            "path": "Vector/RoadSplines.gpkg",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      }
+    ]
+  },
+  "unreal": {
+    "mesh_alternative": {
+      "path": "Mesh/Terrain.glb"
+    }
+  }
+}

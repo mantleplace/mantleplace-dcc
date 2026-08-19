@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Revit add-in manifest. Copy this file (and the built assemblies) to
+  %APPDATA%\Autodesk\Revit\Addins\<year>\ to load the plugin — 2025, 2026 and 2027 all take the
+  same net8.0-windows build. See revit/README.md.
+
+  Assembly is a bare file name on purpose: Revit resolves it beside this manifest, so the same
+  file works from a build output directory and from an installed location.
+-->
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Mantle Place</Name>
+    <Assembly>MantlePlace.Revit.Addin.dll</Assembly>
+    <FullClassName>MantlePlace.Revit.Addin.MantlePlaceApplication</FullClassName>
+    <ClientId>7f3b9c22-5a41-4d0e-9a6b-2c8e10d47b93</ClientId>
+    <VendorId>MNTL</VendorId>
+    <VendorDescription>Mantle Place, https://mantle.place</VendorDescription>
+  </AddIn>
+</RevitAddIns>

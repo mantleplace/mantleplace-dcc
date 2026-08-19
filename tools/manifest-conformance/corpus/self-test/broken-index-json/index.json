@@ -1,0 +1,1 @@
+{ deliberately not valid JSON — a reader pointed at an unparseable index must fail the suite, never resolve to zero cases (HPS-46)

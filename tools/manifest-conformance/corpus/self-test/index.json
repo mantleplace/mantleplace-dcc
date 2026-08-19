@@ -1,0 +1,121 @@
+{
+  "$comment": [
+    "The self-test corpus (HPS-46): deliberately broken index and case fixtures that every host's",
+    "corpus READER must reject. A fixture that passes is the failure. This proves the reader,",
+    "where the corpus proper proves the parser — the two are never mixed in one index.",
+    "",
+    "Each case carries `selfTestFailure` naming the one way it is broken:",
+    "  unknownExpectationKey  an expectations key NO host may ever consume. Keys prefixed",
+    "                         `selfTest` are a reserved namespace for exactly this purpose.",
+    "  wrongTypeExpectation   a universally consumed key (`orderId`) declared with the wrong",
+    "                         JSON type — the accessor reads nothing, so an allow-list reader",
+    "                         stays green and an asserted-keys reader fails.",
+    "  nestedUnreadExpectation  keys BELOW the top level of `expectations` that nothing reads.",
+    "                         The top-level key IS asserted, so a reader tracking only the top",
+    "                         level stays green; a reader honouring HPS-46b fails and names the",
+    "                         path. Both causes ride one fixture because the rule is that they",
+    "                         fail identically: a reserved `selfTest`-prefixed key no host may",
+    "                         consume, and a consumed key declared with the wrong JSON type.",
+    "  missingFile            the index names a case file that does not exist.",
+    "  malformedCase          the case file is not valid JSON and the case does NOT carry",
+    "                         `malformedJson` — undeclared rot, distinct from a deliberate",
+    "                         malformed fixture.",
+    "  duplicateId            two cases share one id.",
+    "",
+    "Top-level `orphanFiles` lists files present on disk but absent from `cases` — the reader's",
+    "directory sweep must flag them. The sibling directories `broken-index-json/` and",
+    "`broken-index-schema/` each hold an index broken at the index level (unparseable JSON;",
+    "parseable but no `cases` key) — a reader pointed at either must fail, not resolve to zero",
+    "cases.",
+    "",
+    "check_manifest_conformance.py validates this set is well-formed-broken: each fixture broken",
+    "in exactly its declared way, before any host suite trusts it.",
+    "",
+    "OWNERSHIP: maintainer-owned, same as the corpus proper."
+  ],
+  "corpusVersion": 2,
+  "manifestVersion": 18,
+  "orphanFiles": [
+    "cases/orphan.json"
+  ],
+  "cases": [
+    {
+      "id": "selfTest.unknownExpectationKey",
+      "group": "manifest",
+      "file": "cases/unknown-key.json",
+      "expect": "accept",
+      "selfTestFailure": "unknownExpectationKey",
+      "reason": "An expectations key no host consumes must fail the suite, or a platform session's new assertion silently binds nobody (HPS-46).",
+      "manifestVersion": 18,
+      "expectations": {
+        "orderId": "ord-selftest-unknown",
+        "selfTestNeverConsumed": true
+      }
+    },
+    {
+      "id": "selfTest.wrongTypeExpectation",
+      "group": "manifest",
+      "file": "cases/wrong-type.json",
+      "expect": "accept",
+      "selfTestFailure": "wrongTypeExpectation",
+      "reason": "orderId declared as a number. A typed accessor reads nothing from it; a reader that only allow-lists key NAMES counts it covered anyway. The exact asserted-keys bug.",
+      "manifestVersion": 18,
+      "expectations": {
+        "orderId": 999
+      }
+    },
+    {
+      "id": "selfTest.nestedUnreadExpectation",
+      "group": "manifest",
+      "file": "cases/nested-unread.json",
+      "expect": "accept",
+      "selfTestFailure": "nestedUnreadExpectation",
+      "reason": "HPS-46b. `items` IS asserted at the top level, so a reader tracking only the top level reports this case covered; the two keys inside the row are read by nothing. Deliberately the vault listing's shape rather than a manifest one — that is the blind spot the rule names, and the self-test corpus proves the READER, never the parser. `status` is the coercion half: a host reading it through an accessor that coerces across JSON types sees \"404\" and marks it read, which is the asserted-keys bug one level down.",
+      "manifestVersion": 18,
+      "expectations": {
+        "orderId": "ord-selftest-nested",
+        "items": [
+          {
+            "orderId": "ord-selftest-nested",
+            "status": 404,
+            "sha256": null,
+            "selfTestNote": "Prose at depth. Documentation keys are exempt at EVERY level, not just the top — a reader that only exempts them at the top reports this and is wrong.",
+            "selfTestNeverReadNested": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "selfTest.missingFile",
+      "group": "manifest",
+      "file": "cases/does-not-exist.json",
+      "expect": "accept",
+      "selfTestFailure": "missingFile",
+      "reason": "A case whose file is gone must fail loudly, not be skipped as if it never existed."
+    },
+    {
+      "id": "selfTest.malformedCase",
+      "group": "manifest",
+      "file": "cases/malformed.json",
+      "expect": "accept",
+      "selfTestFailure": "malformedCase",
+      "reason": "Unparseable case bytes WITHOUT a malformedJson declaration are corpus rot the reader must surface, not data."
+    },
+    {
+      "id": "selfTest.duplicateId",
+      "group": "manifest",
+      "file": "cases/duplicate-a.json",
+      "expect": "accept",
+      "selfTestFailure": "duplicateId",
+      "reason": "First half of the duplicate-id pair. Two cases with one id means one of them is invisible to id-dispatched suites."
+    },
+    {
+      "id": "selfTest.duplicateId",
+      "group": "manifest",
+      "file": "cases/duplicate-b.json",
+      "expect": "accept",
+      "selfTestFailure": "duplicateId",
+      "reason": "Second half of the duplicate-id pair."
+    }
+  ]
+}

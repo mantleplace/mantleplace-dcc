@@ -1,0 +1,33 @@
+{
+  "source": "mesh.origin of the platform's v18 reference fixture family. NOTE: this is a DIFFERENT AOI from manifest/full.json, which carries the unreal.georeference origin. The two are not expected to agree, and neither is derivable from the other.",
+  "toleranceMetres": 0.05,
+  "pairs": [
+    {
+      "lonDeg": -105.64620798739834,
+      "latDeg": 36.27254939041837,
+      "epsg": 32613,
+      "eastingM": 441959.49999999854,
+      "northingM": 4014372.4999999995
+    }
+  ],
+  "southernHemisphere": [
+    {
+      "lonDeg": -70.0,
+      "latDeg": -33.0,
+      "epsg": 32719,
+      "northingGreaterThan": 6000000.0,
+      "note": "the 10 000 km false northing must be applied south of the equator"
+    }
+  ],
+  "rejects": [
+    {
+      "epsg": 4326,
+      "reason": "not a UTM zone code"
+    },
+    {
+      "latDeg": 89.0,
+      "epsg": 32601,
+      "reason": "latitude outside the UTM validity band"
+    }
+  ]
+}

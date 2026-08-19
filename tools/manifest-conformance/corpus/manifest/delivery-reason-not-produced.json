@@ -1,0 +1,20 @@
+{
+  "jobId": "reason-v19",
+  "version": 19,
+  "packaging": {
+    "delivery_model": "base_on_demand"
+  },
+  "dcc_readiness": {
+    "unreal": {
+      "mesh_import": {
+        "present": false,
+        "reason": "not_produced"
+      },
+      "landscape": {
+        "present": false,
+        "reason": "not_selected"
+      }
+    }
+  },
+  "unreal": {}
+}

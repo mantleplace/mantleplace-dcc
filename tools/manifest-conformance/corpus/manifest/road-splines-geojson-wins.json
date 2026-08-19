@@ -1,0 +1,38 @@
+{
+  "jobId": "v",
+  "version": 19,
+  "vector": {
+    "layers": [
+      {
+        "name": "road",
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/decoy.geojson",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      {
+        "name": "road_splines",
+        "formats": [
+          {
+            "format": "gpkg",
+            "path": "Vector/RoadSplines.gpkg",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "format": "geojson",
+            "path": "Vector/RoadSplines.geojson",
+            "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        ]
+      }
+    ]
+  },
+  "unreal": {
+    "mesh_alternative": {
+      "path": "Mesh/Terrain.glb"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.0.1",
+	"FriendlyName": "Mantle Place",
+	"Description": "Mantle Place",
+	"Category": "Mantle Place",
+	"CreatedBy": "Mantle Place",
+	"CreatedByURL": "https://mantle.place",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "mailto:support@mantle.place",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "MantlePlaceRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "MantlePlaceEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "Interchange",
+			"Enabled": true
+		}
+	]
+}

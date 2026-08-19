@@ -1,0 +1,22 @@
+{
+  "$comment": [
+    "One SDK for the whole tree. The 10.0 SDK builds every target here: net8.0 (the pure core and",
+    "the client), net8.0-windows (the add-in shim) and the suite's net8.0/net10.0 pair.",
+    "",
+    "The shim compiles against Revit 2025's API, NOT the newest installed. Autodesk's floors are",
+    "Revit 2025 and 2026 on .NET 8 and Revit 2027 on .NET 10, and one net8.0-windows assembly loads",
+    "in all three. The reverse does not hold, and the compiler says so: a net8.0 project referencing",
+    "Revit 2027's RevitAPI.dll fails with CS1705 ('uses System.Runtime 10.0.0.0 which has a higher",
+    "version'). So the API version is what pins support, and pointing RevitApiDir at a newer install",
+    "silently drops the older hosts.",
+    "",
+    "rollForward latestFeature keeps this on 10.0.x: a machine with a newer 10.0 patch band builds",
+    "without editing this file, and a machine with only 8/9 fails loudly instead of silently",
+    "skipping the shim."
+  ],
+  "sdk": {
+    "version": "10.0.302",
+    "rollForward": "latestFeature",
+    "allowPrerelease": false
+  }
+}

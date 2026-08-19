@@ -1,0 +1,11 @@
+{
+  "bundles": [
+    {
+      "id": "ok1"
+    },
+    {
+      "aoiLabel": "no-id"
+    },
+    "not-an-object"
+  ]
+}

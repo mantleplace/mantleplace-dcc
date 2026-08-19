@@ -1,0 +1,78 @@
+{
+  "$comment": "One precedence order for EVERY platform error-body parser, auth and vault alike (HPS-48). The competing-key vectors are the point: a single-key body cannot distinguish two orders, which is how auth and vault shipped opposite ones.",
+  "keyPrecedence": [
+    "error_description",
+    "msg",
+    "message",
+    "error_code",
+    "error"
+  ],
+  "vectors": [
+    {
+      "body": {
+        "error": "Invalid or expired token"
+      },
+      "message": "Invalid or expired token",
+      "code": ""
+    },
+    {
+      "body": {
+        "error": "Order refunded",
+        "code": "refunded",
+        "refundedAt": "2026-06-01T00:00:00.000Z"
+      },
+      "message": "Order refunded",
+      "code": "refunded"
+    },
+    {
+      "body": {},
+      "parseSucceeds": false
+    },
+    {
+      "body": {
+        "message": "another"
+      },
+      "message": "another",
+      "code": ""
+    },
+    {
+      "body": {
+        "error": "invalid_grant",
+        "error_description": "Invalid login credentials"
+      },
+      "message": "Invalid login credentials",
+      "code": "",
+      "note": "error_description beats error: prose over machine code. The 410 body that motivated the rule."
+    },
+    {
+      "body": {
+        "message": "generic text",
+        "msg": "specific text"
+      },
+      "message": "specific text",
+      "code": "",
+      "note": "msg beats message"
+    },
+    {
+      "body": {
+        "error": "gone",
+        "error_code": "order_revoked",
+        "code": "revoked"
+      },
+      "message": "order_revoked",
+      "code": "revoked",
+      "note": "error_code beats error; the machine-readable `code` is a SEPARATE read and is unaffected by the message precedence"
+    },
+    {
+      "body": {
+        "error": "gone",
+        "message": "Order revoked by the seller",
+        "error_description": "This order is no longer available",
+        "code": "revoked"
+      },
+      "message": "This order is no longer available",
+      "code": "revoked",
+      "note": "three competing keys at once: error_description wins over both"
+    }
+  ]
+}

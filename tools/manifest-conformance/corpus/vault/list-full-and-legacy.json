@@ -1,0 +1,50 @@
+{
+  "bundles": [
+    {
+      "id": "f3c1",
+      "aoiLabel": "Downtown Minneapolis",
+      "createdAt": "2026-06-17T12:00:00.000Z",
+      "areaKm2": 12.34,
+      "status": "available",
+      "layers": {
+        "imagery": true,
+        "basemap": true,
+        "elevation": false
+      },
+      "manifestVersion": 7,
+      "sizeBytes": 134217728,
+      "sha256": "ab12",
+      "formats": [
+        "glb",
+        "geotiff"
+      ],
+      "download": {
+        "formats": [
+          {
+            "format": "glb",
+            "byteSize": 1048576
+          },
+          {
+            "format": "geotiff",
+            "byteSize": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "leg1",
+      "aoiLabel": "Legacy AOI",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "areaKm2": 1.0,
+      "status": "refresh-pending",
+      "layers": null,
+      "manifestVersion": null,
+      "sizeBytes": null,
+      "sha256": null,
+      "formats": [],
+      "download": {
+        "formats": []
+      }
+    }
+  ]
+}

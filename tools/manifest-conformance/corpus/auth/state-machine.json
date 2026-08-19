@@ -1,0 +1,80 @@
+{
+  "states": [
+    "Unauthenticated",
+    "Authenticating",
+    "Authenticated",
+    "Refreshing",
+    "Failed"
+  ],
+  "initial": "Unauthenticated",
+  "transitions": [
+    {
+      "event": "SignOut",
+      "from": "*",
+      "to": "Unauthenticated"
+    },
+    {
+      "event": "Cancel",
+      "from": "Authenticating",
+      "to": "Unauthenticated"
+    },
+    {
+      "event": "Cancel",
+      "from": "*",
+      "to": "unchanged",
+      "note": "cancelling never latches Failed"
+    },
+    {
+      "event": "BeginSignIn",
+      "from": "Authenticating",
+      "to": "unchanged",
+      "note": "a second sign-in while one is in flight is ignored, not queued"
+    },
+    {
+      "event": "BeginSignIn",
+      "from": "Refreshing",
+      "to": "unchanged"
+    },
+    {
+      "event": "BeginSignIn",
+      "from": "*",
+      "to": "Authenticating"
+    },
+    {
+      "event": "SignInSucceeded",
+      "from": "Authenticating",
+      "to": "Authenticated"
+    },
+    {
+      "event": "SignInFailed",
+      "from": "Authenticating",
+      "to": "Failed"
+    },
+    {
+      "event": "BeginRefresh",
+      "from": "Authenticated",
+      "to": "Refreshing"
+    },
+    {
+      "event": "BeginRestore",
+      "from": "Unauthenticated",
+      "to": "Refreshing"
+    },
+    {
+      "event": "BeginRestore",
+      "from": "Failed",
+      "to": "Refreshing"
+    },
+    {
+      "event": "RefreshSucceeded",
+      "from": "Refreshing",
+      "to": "Authenticated"
+    },
+    {
+      "event": "RefreshFailed",
+      "from": "Refreshing",
+      "to": "Failed"
+    }
+  ],
+  "default": "an event with no matching rule leaves the state unchanged"
+}

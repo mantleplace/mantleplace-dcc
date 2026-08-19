@@ -1,0 +1,21 @@
+{
+  "bundles": [
+    {
+      "id": "marker"
+    },
+    {
+      "id": "base",
+      "formats": [
+        "pmtiles",
+        "geotiff"
+      ]
+    },
+    {
+      "id": "full",
+      "formats": [
+        "glb",
+        "geotiff"
+      ]
+    }
+  ]
+}

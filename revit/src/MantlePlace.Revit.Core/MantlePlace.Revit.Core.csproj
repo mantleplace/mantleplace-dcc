@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The PURE half of every triad (HPS-02): protocol behaviour only — parsing, validity decisions,
+    path resolution, state. It references NOTHING: not the Revit API, not a NuGet package. That is
+    what makes the conformance suite runnable on a hosted runner with no Revit installed (HPS-42).
+
+    net8.0 rather than net10.0 on purpose. Nothing here needs .NET 10, and a net8.0 library loads
+    fine inside the net10.0 Revit host. When Rhino kicks off and HPS-43 fires, the .NET SDK is
+    extracted from THIS assembly — the lower floor is what makes that extraction cheap.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>MantlePlace.Revit.Core</RootNamespace>
+    <AssemblyName>MantlePlace.Revit.Core</AssemblyName>
+  </PropertyGroup>
+
+</Project>

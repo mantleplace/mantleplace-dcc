@@ -1,0 +1,52 @@
+{
+  "base64url": {
+    "alphabet": "A-Za-z0-9-_ with no '=' padding (RFC 4648 section 5)",
+    "vectors": [
+      {
+        "bytesHex": "ffffff",
+        "encoded": "____"
+      },
+      {
+        "bytesHex": "14fb9c03d97e",
+        "encoded": "FPucA9l-"
+      },
+      {
+        "bytesHex": "14fb9c03d9",
+        "encoded": "FPucA9k"
+      }
+    ]
+  },
+  "verifier": {
+    "entropyBytes": 32,
+    "encodedLength": 43,
+    "mustNotContain": [
+      "+",
+      "/",
+      "="
+    ]
+  },
+  "challengeS256": {
+    "rfc7636AppendixB": {
+      "verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+      "challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+    },
+    "definition": "base64url(SHA256(utf8(verifier))), method S256"
+  },
+  "redirectUri": {
+    "template": "http://127.0.0.1:{port}{path}",
+    "example": "http://127.0.0.1:51000/callback",
+    "note": "literal loopback IP, never 'localhost' (RFC 8252 section 8.3)"
+  },
+  "authorizeQueryOrder": [
+    "response_type=code",
+    "code_challenge",
+    "code_challenge_method=S256",
+    "redirect_uri",
+    "state"
+  ],
+  "percentEncoding": {
+    "unreserved": "A-Za-z0-9-._~",
+    "example": "http://127.0.0.1:51000/callback",
+    "encoded": "http%3A%2F%2F127.0.0.1%3A51000%2Fcallback"
+  }
+}

@@ -1,0 +1,931 @@
+{
+  "$comment": [
+    "The shared conformance corpus: language-neutral test vectors every Mantle Place host",
+    "plugin runs against its own parser. Seeded from the Unreal reference suite, which had",
+    "them as inline C++ string literals reachable by exactly one host.",
+    "",
+    "NORMATIVE OWNER: the Host Plugin Standard (HPS-40, HPS-41). This file is",
+    "data; the rules about consuming it, and the integrity checks the CI gate applies, are",
+    "stated there and in check_manifest_conformance.py. Nothing here restates them.",
+    "",
+    "Case fields:",
+    "  id              stable, dotted, never renumbered — host suites name it in failures.",
+    "  group           manifest | vault | auth | cache | digest | projection.",
+    "  file            path relative to corpus/.",
+    "  expect          accept  — the parser MUST accept and produce `expectations`.",
+    "                  reject  — the parser MUST refuse; `errorContains` if the message matters.",
+    "                            A reject case MAY still carry `expectations` for values the",
+    "                            parser is required to have read BEFORE refusing (HPS-37).",
+    "                  vector  — a known-answer table, not a single document to parse.",
+    "  reason          why the case exists. Required: a fixture nobody can explain gets",
+    "                  deleted the first time it is inconvenient.",
+    "  appliesTo       this case asserts ONE host's manifest block; other hosts skip it",
+    "                  (HPS-41). Absent means host-invariant.",
+    "  expectations    derived values a conformant host must produce (optional).",
+    "  errorContains   substring the refusal message must contain (optional).",
+    "  malformedJson   this file is deliberately not valid JSON (optional).",
+    "  manifestVersion the bundle-manifest version this case's file carries (optional). Checked",
+    "                  by check_manifest_conformance.py against the file's own `version` field —",
+    "                  a case whose declared and actual versions disagree is corpus rot, caught",
+    "                  before any host suite sees it.",
+    "",
+    "Top-level fields:",
+    "  corpusVersion   the shape of THIS index's case fields — bumped on a breaking change to",
+    "                  what a field means, not on adding cases. Each host pins the corpusVersion",
+    "                  it was last reviewed against in verified-against.json",
+    "                  (`verifiedAgainstCorpusVersion`); check_manifest_conformance.py fails a",
+    "                  host that trails this number.",
+    "  manifestVersion the bundle-manifest version this corpus's fixtures are written against.",
+    "",
+    "OWNERSHIP: maintainer-owned. A host that needs a new case proposes it here by pull",
+    "request rather than forking a private copy."
+  ],
+  "corpusVersion": 2,
+  "manifestVersion": 19,
+  "cases": [
+    {
+      "id": "auth.callbackQueryVectors",
+      "group": "auth",
+      "file": "auth/callback-query-vectors.json",
+      "expect": "vector",
+      "reason": "The loopback redirect is attacker-reachable. The empty-expected-state case is the one that matters: a host that treats ''=='' as a match accepts any callback."
+    },
+    {
+      "id": "auth.pkceVectors",
+      "group": "auth",
+      "file": "auth/pkce-vectors.json",
+      "expect": "vector",
+      "reason": "PKCE is the one place where a plausible-looking implementation is silently insecure. The RFC 7636 Appendix B pair proves S256 end to end; the base64url triples catch the padding and +/ substitution bugs that make a verifier fail server-side."
+    },
+    {
+      "id": "auth.stateMachine",
+      "group": "auth",
+      "file": "auth/state-machine.json",
+      "expect": "vector",
+      "reason": "Transcribed as data so a .NET or Python host can drive the identical table instead of re-deriving the guards. The unchanged-by-default rule is what keeps an out-of-order callback from corrupting the session."
+    },
+    {
+      "id": "auth.tokenResponseVectors",
+      "group": "auth",
+      "file": "auth/token-response-vectors.json",
+      "expect": "vector",
+      "reason": "expires_in <= 0 and the refresh-token-preservation rule are both silent-failure classes: one logs the user out instantly, the other on the next restart."
+    },
+    {
+      "id": "cache.keySanitisation",
+      "group": "cache",
+      "file": "cache/key-sanitisation.json",
+      "expect": "vector",
+      "reason": "An order id is attacker-influencable text that becomes a filesystem path. Traversal neutralisation and collision resistance are both required, and they pull in opposite directions."
+    },
+    {
+      "id": "cache.validityTruthTable",
+      "group": "cache",
+      "file": "cache/validity-truth-table.json",
+      "expect": "vector",
+      "reason": "The null-sha256 row is the whole reason this table is in the corpus: 'unknown' and 'corrupt' look identical to a naive implementation and have opposite correct responses."
+    },
+    {
+      "id": "digest.sha256Vectors",
+      "group": "digest",
+      "file": "digest/sha256-vectors.json",
+      "expect": "vector",
+      "reason": "NIST FIPS 180-4 known answers. Two hosts already had to ship their own SHA-256 because the platform primitive was unusable; these pin any future one."
+    },
+    {
+      "id": "manifest.baseOnDemand",
+      "group": "manifest",
+      "file": "manifest/base-on-demand.json",
+      "expect": "reject",
+      "reason": "A base bundle carries no unreal block yet. It is not importable, but bbox/layout/orderId MUST still be parsed so streaming and the vault join key survive — the early return must not skip them.",
+      "manifestVersion": 19,
+      "expectations": {
+        "orderId": "ord-abc123",
+        "cesiumTerrainPath": "Elevation/Terrain/layer.json",
+        "cesiumTerrainPrefix": "Elevation/Terrain/",
+        "deliveryModel": "base_on_demand"
+      }
+    },
+    {
+      "id": "manifest.buildingsShaInFormats",
+      "group": "manifest",
+      "file": "manifest/buildings-sha-in-formats.json",
+      "expect": "accept",
+      "reason": "buildings_mesh carries no hash of its own; the host resolves it by matching path against the top-level buildings.formats[] entry. Cross-block resolution, not convention.",
+      "manifestVersion": 19,
+      "expectations": {
+        "buildingsPath": "Buildings/Buildings.glb",
+        "buildingsSha256": "82cd4048eec9978e5463e101db20a580a04afd2d8bd55e5cf89330f934c4c230",
+        "hasBuildings": true,
+        "buildingsUpAxis": "y",
+        "hasFoliagePoints": false
+      },
+      "appliesTo": "unreal"
+    },
+    {
+      "id": "manifest.dccReadinessIgnoresRetiredFlatKey",
+      "group": "manifest",
+      "file": "manifest/dcc-readiness-ignores-retired-flat-key.json",
+      "expect": "accept",
+      "manifestVersion": 19,
+      "appliesTo": "unreal",
+      "reason": "Regression guard: the v17 anonymous dcc_readiness.mesh_import is RETIRED and must be ignored at v18, not used as a fallback. A fallback ladder here is how a clean break quietly becomes dual-parsing (HPS-31).",
+      "expectations": {
+        "meshAbsentReason": "",
+        "hasMesh": true
+      }
+    },
+    {
+      "id": "manifest.dccReadinessReason",
+      "group": "manifest",
+      "file": "manifest/dcc-readiness-reason.json",
+      "expect": "reject",
+      "manifestVersion": 19,
+      "appliesTo": "unreal",
+      "reason": "v18 normalises dcc_readiness to per-host keys. The host reads its OWN key and surfaces the stated reason instead of dead-ending on an empty import. The sibling revit block must be ignored, not merged.",
+      "expectations": {
+        "meshAbsentReason": "available_on_request"
+      }
+    },
+    {
+      "id": "manifest.deliveryReasonNotProduced",
+      "group": "manifest",
+      "file": "manifest/delivery-reason-not-produced.json",
+      "expect": "reject",
+      "manifestVersion": 19,
+      "appliesTo": "unreal",
+      "reason": "v19 closes `reason` into #/$defs/deliveryReason, and closing it required GROWING the set: `not_produced` and `not_selected` did not exist through v18. A host that matches on the reason instead of surfacing it (HPS-36) loses the explanation on exactly the values v19 added. Pairs with manifest.dccReadinessReason, which pins a value that predates v19.",
+      "expectations": {
+        "meshAbsentReason": "not_produced"
+      }
+    },
+    {
+      "id": "manifest.revitBlockIgnored",
+      "group": "manifest",
+      "file": "manifest/revit-block-ignored.json",
+      "expect": "accept",
+      "manifestVersion": 19,
+      "appliesTo": "unreal",
+      "reason": "v19 adds a top-level `revit` block, and it is ANOTHER host's block. This fixture states the two georeferences in conflict on purpose — `unreal.georeference` is metric UTM, `revit.georeference` a State Plane foot zone — so a reader that keys placement off whichever it finds first reports 2231 and fails. HPS-33: apply your own block, never merge or re-derive from a sibling.",
+      "expectations": {
+        "hasMesh": true,
+        "integrityCheckedMesh": false,
+        "epsg": 32613
+      }
+    },
+    {
+      "id": "manifest.revitArtifactHashes",
+      "group": "manifest",
+      "file": "manifest/revit-artifact-hashes.json",
+      "expect": "accept",
+      "manifestVersion": 19,
+      "appliesTo": "revit",
+      "reason": "v19 publishes the Revit deliverables' sha256 inside the `revit` block and NOWHERE else — `elevation.points_csv` and `buildings.ifc` still carry none. A host that keeps reading the hash off the v18 detail block surfaces three unverifiable artifacts while every other assertion stays green, which is the hole this case exists to close. HPS-33: read your OWN block, verbatim.",
+      "expectations": {
+        "toposurfacePointsSha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "surfaceDxfSha256": "7cbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "ifcSiteSha256": "e1cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    {
+      "id": "manifest.revitOwnGeoreference",
+      "group": "manifest",
+      "file": "manifest/revit-own-georeference.json",
+      "expect": "accept",
+      "manifestVersion": 19,
+      "appliesTo": "revit",
+      "reason": "The mirror of manifest.revitBlockIgnored, pointed the other way: this fixture states THREE origins in conflict on purpose — `unreal.georeference.origin.utm` (metric UTM), `delivery.local_origin` (metric UTM, host-neutral) and `revit.georeference.origin.projected` (State Plane feet) — and Revit must report the one addressed to it. Until v19 this host had only `delivery.local_origin`, emitted on the `local_ft` tier ALONE, so a metric-tier bundle carried no survey point and the model was imported not georeferenced at all; reading the own block as PRIMARY with delivery as the fallback is what closes that without a coordinated pipeline release. Note `grid_rotation_deg` is deliberately non-zero. The emitters reproject per-vertex so today's bundles publish 0.0, and a fixture that agreed would be passed by a host that hardcodes zero and never reads the field — the value is here to be carried, not to be plausible. `linear_unit` is on the ORIGIN and differs from the artifacts' own `units` on this tier, which is the pair a host must not collapse: reading a State Plane foot origin as metres places the site 3.28× out.",
+      "expectations": {
+        "surveyPointEpsg": 2231,
+        "surveyPointEasting": 1450131.2,
+        "surveyPointNorthing": 13171825.6,
+        "surveyPointLinearUnit": "ftUS",
+        "gridRotationDeg": -0.35
+      }
+    },
+    {
+      "id": "manifest.drapeMissingSha",
+      "group": "manifest",
+      "file": "manifest/drape-missing-sha.json",
+      "expect": "reject",
+      "reason": "The drape carries the same required-sha rule as the heightmap.",
+      "manifestVersion": 19,
+      "errorContains": "unreal.imagery_drape has no sha256",
+      "appliesTo": "unreal"
+    },
+    {
+      "id": "manifest.full",
+      "group": "manifest",
+      "file": "manifest/full.json",
+      "expect": "accept",
+      "reason": "The reference v18 accept shape, lifted from the platform's reference fixture. A host that parses this correctly has the whole unreal block, the per-host dcc_readiness and the placement math covered. v19 grew `landscape_layers`: all eight sub-blocks, each with its source raster's hash and its UE-ready PNG companions, whose `value_mapping` shape follows the companion's `encoding`. The companions are declared 143x142 against a 1009-post heightmap deliberately - the weight rasters ride the DEM's grid, not the Landscape's, so a host that assumes the two match is wrong.",
+      "manifestVersion": 19,
+      "expectations": {
+        "quadsPerComponent": 126,
+        "landscapeScale": [
+          141.36904761904762,
+          138.98809523809524,
+          75.14834403991699
+        ],
+        "landscapeScaleTolerance": 1e-06,
+        "landscapeSpawnLocation": [
+          -71250.0,
+          -70050.0,
+          277020.59326171875
+        ],
+        "landscapeSpawnToleranceCm": 0.01,
+        "meshLocation": [
+          0.0,
+          0.0,
+          264095.5078125
+        ],
+        "meshLocationToleranceCm": 0.01,
+        "drapeWorldRectMin": [
+          -71237.06083538709,
+          -69966.184607381
+        ],
+        "drapeWorldRectMinToleranceCm": 1.0,
+        "drapeWorldRectSize": [
+          142473.09629319352,
+          139971.0595688317
+        ],
+        "drapeWorldRectSizeToleranceCm": 0.01,
+        "epsg": 32613,
+        "hasHeightmap": true,
+        "hasDrape": true,
+        "hasMesh": true,
+        "meshAbsentReason": "",
+        "jobId": "fixture-v18-full-0001",
+        "deliveryModel": "base_on_demand",
+        "planetShape": "Flat",
+        "heightmapPath": "Elevation/Heightmap.png",
+        "resolution": 1009,
+        "sectionSizeQuads": 63,
+        "sectionsPerComponent": 2,
+        "componentCountX": 8,
+        "componentCountY": 8,
+        "row0IsNorth": true,
+        "heightmapSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "drapePath": "Imagery/Drape.png",
+        "drapeSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "meshPath": "Mesh/Terrain.glb",
+        "meshUpAxis": "y",
+        "meshSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "integrityCheckedMesh": true,
+        "hasBuildings": false,
+        "hasRoadSplines": false,
+        "hasFoliagePoints": true,
+        "foliagePointsPath": "Landcover/TreePoints.csv",
+        "hasLandscapeLayers": true,
+        "landscapeLayerNames": [
+          "aspect",
+          "canopy_height",
+          "hillshade",
+          "material_weights",
+          "ndvi",
+          "slope",
+          "water_mask",
+          "worldcover"
+        ],
+        "landscapeLayers": [
+          {
+            "name": "aspect",
+            "path": "Elevation/Aspect.tif",
+            "sha256": "3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071829",
+            "materials": [],
+            "ueReady": [
+              {
+                "path": "Elevation/Aspect.png",
+                "sha256": "4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f607182930",
+                "sizeBytes": 40612,
+                "encoding": "png-16bit-grayscale",
+                "width": 143,
+                "height": 142,
+                "mapping": {
+                  "min": 0.0,
+                  "max": 359.9,
+                  "toValue": "value = min + (u16/65535)*(max - min)",
+                  "units": "degrees",
+                  "nodataValue": -9999.0
+                }
+              }
+            ]
+          },
+          {
+            "name": "canopy_height",
+            "path": "Landcover/CanopyHeight.tif",
+            "sha256": "4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c",
+            "materials": [],
+            "ueReady": [
+              {
+                "path": "Landcover/CanopyHeight.png",
+                "sha256": "5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d",
+                "sizeBytes": 40612,
+                "encoding": "png-16bit-grayscale",
+                "width": 143,
+                "height": 142,
+                "mapping": {
+                  "min": 0.0,
+                  "max": 24.3,
+                  "toValue": "value = min + (u16/65535)*(max - min)",
+                  "units": "m"
+                }
+              }
+            ]
+          },
+          {
+            "name": "hillshade",
+            "path": "Elevation/Hillshade.tif",
+            "sha256": "6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e",
+            "materials": [],
+            "ueReady": [
+              {
+                "path": "Elevation/Hillshade.png",
+                "sha256": "708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f",
+                "sizeBytes": 20306,
+                "encoding": "png-8bit-grayscale",
+                "width": 143,
+                "height": 142,
+                "mapping": {
+                  "identity": true
+                }
+              }
+            ]
+          },
+          {
+            "name": "material_weights",
+            "path": "Landcover/MaterialWeights.tif",
+            "sha256": "bade9ea57931f2ef43df04da9c1afc263971bca2cc9d0eb931f88ae8293323a9",
+            "materials": [
+              "water",
+              "grass",
+              "forest",
+              "dirt",
+              "rock",
+              "sand",
+              "snow",
+              "built"
+            ],
+            "ueReady": [
+              {
+                "path": "Landcover/MaterialWeights_1_4.png",
+                "sha256": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+                "sizeBytes": 262144,
+                "encoding": "png-8bit-rgba",
+                "width": 143,
+                "height": 142,
+                "mapping": {
+                  "bands": [
+                    "water",
+                    "grass",
+                    "forest",
+                    "dirt"
+                  ]
+                }
+              },
+              {
+                "path": "Landcover/MaterialWeights_5_8.png",
+                "sha256": "2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a",
+                "sizeBytes": 258048,
+                "encoding": "png-8bit-rgba",
+                "width": 143,
+                "height": 142,
+                "mapping": {
+                  "bands": [
+                    "rock",
+                    "sand",
+                    "snow",
+                    "built"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "ndvi",
+            "path": "Imagery/NDVI.tif",
+            "sha256": "9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5",
+            "materials": [],
+            "ueReady": [
+              {
+                "path": "Imagery/NDVI.png",
+                "sha256": "0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6",
+                "sizeBytes": 40612,
+                "encoding": "png-16bit-grayscale",
+                "width": 143,
+                "height": 142,
+                "mapping": {
+                  "min": -0.1826,
+                  "max": 0.7413,
+                  "toValue": "value = min + (u16/65535)*(max - min)",
+                  "nodataValue": -9999.0
+                }
+              }
+            ]
+          },
+          {
+            "name": "slope",
+            "path": "Elevation/Slope.tif",
+            "sha256": "1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f607",
+            "materials": [],
+            "ueReady": [
+              {
+                "path": "Elevation/Slope.png",
+                "sha256": "2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718",
+                "sizeBytes": 40612,
+                "encoding": "png-16bit-grayscale",
+                "width": 143,
+                "height": 142,
+                "mapping": {
+                  "min": 0.0,
+                  "max": 61.482,
+                  "toValue": "value = min + (u16/65535)*(max - min)",
+                  "units": "degrees",
+                  "nodataValue": -9999.0
+                }
+              }
+            ]
+          },
+          {
+            "name": "water_mask",
+            "path": "Landcover/WaterMask.tif",
+            "sha256": "0f4168490e38b8447e11ba4bd656aa11b925bd22af30bac464bc153fdb608501",
+            "materials": [],
+            "ueReady": [
+              {
+                "path": "Landcover/WaterMask.png",
+                "sha256": "3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b",
+                "sizeBytes": 16384,
+                "encoding": "png-8bit-mask",
+                "width": 143,
+                "height": 142,
+                "mapping": {
+                  "trueValue": 255,
+                  "falseValue": 0
+                }
+              }
+            ]
+          },
+          {
+            "name": "worldcover",
+            "path": "Landcover/LandCover.tif",
+            "sha256": "7a8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3",
+            "materials": [],
+            "ueReady": [
+              {
+                "path": "Landcover/LandCover.png",
+                "sha256": "8b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4",
+                "sizeBytes": 8192,
+                "encoding": "png-8bit-indexed",
+                "width": 143,
+                "height": 142,
+                "mapping": {
+                  "classes": [
+                    10,
+                    20,
+                    30,
+                    50,
+                    60,
+                    80
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "materialWeightBands": [
+          {
+            "material": "water",
+            "image": "Landcover/MaterialWeights_1_4.png",
+            "channel": 0
+          },
+          {
+            "material": "grass",
+            "image": "Landcover/MaterialWeights_1_4.png",
+            "channel": 1
+          },
+          {
+            "material": "forest",
+            "image": "Landcover/MaterialWeights_1_4.png",
+            "channel": 2
+          },
+          {
+            "material": "dirt",
+            "image": "Landcover/MaterialWeights_1_4.png",
+            "channel": 3
+          },
+          {
+            "material": "rock",
+            "image": "Landcover/MaterialWeights_5_8.png",
+            "channel": 0
+          },
+          {
+            "material": "sand",
+            "image": "Landcover/MaterialWeights_5_8.png",
+            "channel": 1
+          },
+          {
+            "material": "snow",
+            "image": "Landcover/MaterialWeights_5_8.png",
+            "channel": 2
+          },
+          {
+            "material": "built",
+            "image": "Landcover/MaterialWeights_5_8.png",
+            "channel": 3
+          }
+        ]
+      },
+      "appliesTo": "unreal"
+    },
+    {
+      "id": "manifest.heightmapMissingSha",
+      "group": "manifest",
+      "file": "manifest/heightmap-missing-sha.json",
+      "expect": "reject",
+      "reason": "The heightmap sha256 has been required since v17 and remains so — refuse to import unverifiable bytes.",
+      "manifestVersion": 19,
+      "errorContains": "unreal.heightmap has no sha256",
+      "appliesTo": "unreal"
+    },
+    {
+      "id": "manifest.meshMissingSha",
+      "group": "manifest",
+      "file": "manifest/mesh-missing-sha.json",
+      "expect": "accept",
+      "reason": "The mesh sha256 is OPTIONAL: absent means the integrity check is skipped, which is 'unknown', not 'absent'. This is the asymmetry hosts get wrong.",
+      "manifestVersion": 19,
+      "expectations": {
+        "hasMesh": true,
+        "integrityCheckedMesh": false
+      },
+      "appliesTo": "unreal"
+    },
+    {
+      "id": "manifest.meshUpAxisZ",
+      "group": "manifest",
+      "file": "manifest/mesh-up-axis-z.json",
+      "expect": "reject",
+      "reason": "A glTF pointer declaring an up axis the importer does not convert must fail closed, the way planet_shape does. Every consumer that trusts its glTF reader's fixed Y-up-to-Z-up conversion has this exposure: the bundle would import at a plausible-looking transform, rotated, with no error anywhere - the worst failure shape there is. The value must be READ before the refusal (HPS-37) so the message can name what it got. `nanite_recommended` rides along to prove the refusal happens on the axis and not on a half-parsed block.",
+      "manifestVersion": 19,
+      "errorContains": "up_axis",
+      "appliesTo": "unreal",
+      "expectations": {
+        "meshPath": "Mesh/Terrain.glb",
+        "meshUpAxis": "z"
+      }
+    },
+    {
+      "id": "manifest.planetShapeAbsent",
+      "group": "manifest",
+      "file": "manifest/planet-shape-absent.json",
+      "expect": "accept",
+      "manifestVersion": 19,
+      "appliesTo": "unreal",
+      "reason": "The counterpart to manifest.planetShapeSphere: ABSENT is not a rejection. The flat frame is the default, so a bundle that simply omits the field imports. A host that fails closed on absence rejects most real bundles.",
+      "expectations": {
+        "planetShape": "",
+        "hasMesh": true,
+        "epsg": 32613
+      }
+    },
+    {
+      "id": "manifest.planetShapeSphere",
+      "group": "manifest",
+      "file": "manifest/planet-shape-sphere.json",
+      "expect": "reject",
+      "reason": "Only the flat frame is supported in v1. An unknown planet_shape fails closed rather than silently importing a wrong frame. The value must be READ before the refusal (HPS-37) so the message can name what it got.",
+      "manifestVersion": 19,
+      "errorContains": "planet_shape",
+      "appliesTo": "unreal",
+      "expectations": {
+        "planetShape": "Sphere"
+      }
+    },
+    {
+      "id": "manifest.reject.notJson",
+      "group": "manifest",
+      "file": "manifest/reject-not-json.json",
+      "expect": "reject",
+      "reason": "Unparseable bytes must fail closed with a manifest-shaped error, not crash.",
+      "malformedJson": true,
+      "errorContains": "not valid JSON"
+    },
+    {
+      "id": "manifest.reject.revitHashMissing",
+      "group": "manifest",
+      "file": "manifest/reject-revit-hash-missing.json",
+      "expect": "reject",
+      "manifestVersion": 19,
+      "appliesTo": "revit",
+      "reason": "v19 lists `sha256` in the `required` set of every `revit.*` deliverable, so a present block without one is a producer bug. A host that keeps treating it as optional imports unverifiable bytes and reports them as fine — the asymmetry HPS-34 draws between a hash that was never published (v18: skipped, valid-but-unverified) and one that was promised and is missing (v19: refuse).",
+      "errorContains": "revit.surface_dxf has no sha256"
+    },
+    {
+      "id": "manifest.reject.unversioned",
+      "group": "manifest",
+      "file": "manifest/reject-unversioned.json",
+      "expect": "reject",
+      "reason": "An absent `version` reads as 0, which is below the floor. Absence is not a licence to guess.",
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.v13",
+      "group": "manifest",
+      "file": "manifest/reject-v13.json",
+      "expect": "reject",
+      "reason": "Clean break: v13 predates the v18 floor and MUST be refused outright, not best-effort parsed.",
+      "manifestVersion": 13,
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.v14",
+      "group": "manifest",
+      "file": "manifest/reject-v14.json",
+      "expect": "reject",
+      "reason": "Clean break: v14 predates the v18 floor and MUST be refused outright, not best-effort parsed.",
+      "manifestVersion": 14,
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.v16",
+      "group": "manifest",
+      "file": "manifest/reject-v16.json",
+      "expect": "reject",
+      "reason": "Clean break: v16 predates the v18 floor and MUST be refused outright, not best-effort parsed.",
+      "manifestVersion": 16,
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.v17",
+      "group": "manifest",
+      "file": "manifest/reject-v17.json",
+      "expect": "reject",
+      "manifestVersion": 17,
+      "reason": "Clean break: v17 was the supported version until the v18 hygiene bump and is now refused like any other old version. Nothing about the shape changed enough to matter — the point is that 'nearly current' gets no special treatment.",
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.v6",
+      "group": "manifest",
+      "file": "manifest/reject-v6.json",
+      "expect": "reject",
+      "reason": "Clean break: v6 predates the v18 floor and MUST be refused outright, not best-effort parsed.",
+      "manifestVersion": 6,
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.v7",
+      "group": "manifest",
+      "file": "manifest/reject-v7.json",
+      "expect": "reject",
+      "reason": "Clean break: v7 predates the v18 floor and MUST be refused outright, not best-effort parsed.",
+      "manifestVersion": 7,
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.resolutionMismatch",
+      "group": "manifest",
+      "file": "manifest/heightmap-resolution-mismatch.json",
+      "expect": "reject",
+      "reason": "component_count_x * (sections_per_component * section_size_quads) + 1 MUST equal resolution. 4*126+1 = 505, not 512 — an internally inconsistent manifest is a producer bug and must not be papered over.",
+      "manifestVersion": 19,
+      "errorContains": "resolution",
+      "appliesTo": "unreal"
+    },
+    {
+      "id": "manifest.roadSplinesGeojsonWins",
+      "group": "manifest",
+      "file": "manifest/road-splines-geojson-wins.json",
+      "expect": "accept",
+      "reason": "Layer selection is by name AND format — a decoy `road` layer and a sibling gpkg must both lose to road_splines/geojson.",
+      "manifestVersion": 19,
+      "expectations": {
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    {
+      "id": "manifest.roadSplinesGpkgOnly",
+      "group": "manifest",
+      "file": "manifest/road-splines-gpkg-only.json",
+      "expect": "accept",
+      "reason": "No geojson means no splines. A host must not fall back to a format it cannot read.",
+      "manifestVersion": 19,
+      "expectations": {
+        "hasRoadSplines": false
+      }
+    },
+    {
+      "id": "manifest.materializationSignals",
+      "group": "manifest",
+      "file": "manifest/materialization-signals.json",
+      "expect": "vector",
+      "reason": "HPS-47: 'is this bundle materialized' is decided from the neutral signals (known host block, dcc_readiness, non-empty vector.layers), never from a host's own content. The revit-only and dcc-readiness-only rows catch a host keying off its own block — the coincidence found holding up the road-splines cases, made a rule."
+    },
+    {
+      "id": "projection.lonLatToUtm",
+      "group": "projection",
+      "file": "projection/lonlat-utm.json",
+      "expect": "vector",
+      "reason": "The lon/lat <-> UTM known-answer pin. A host that gets the false northing or the zone wrong places geometry kilometres away while every test that does not check numbers still passes — the definition of a silent failure."
+    },
+    {
+      "id": "vault.download.missingUrl",
+      "group": "vault",
+      "file": "vault/download-missing-url.json",
+      "expect": "reject",
+      "reason": "No url means no download. Fail closed and surface the platform's own message.",
+      "errorContains": "Not entitled"
+    },
+    {
+      "id": "vault.download.presigned",
+      "group": "vault",
+      "file": "vault/download-presigned.json",
+      "expect": "accept",
+      "reason": "Presigned URL + expiry. The URL is minted per import and never cached past expiry.",
+      "expectations": {
+        "url": "https://r2.example/jobs/f3c1/download.zip?sig=abc",
+        "expiresAt": "2026-06-20T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "vault.errorBodyPrecedence",
+      "group": "vault",
+      "file": "vault/error-body-precedence.json",
+      "expect": "vector",
+      "reason": "ONE precedence order for every platform error-body parser, auth and vault alike (HPS-48) — the split this case used to document is resolved. The competing-key vectors pin the order; the machine-readable `code` (refunded / revoked on a 410) is a separate read that drives UI and is unaffected."
+    },
+    {
+      "id": "vault.list.empty",
+      "group": "vault",
+      "file": "vault/list-empty.json",
+      "expect": "accept",
+      "reason": "An empty vault is a successful response, not an error.",
+      "expectations": {
+        "itemCount": 0
+      }
+    },
+    {
+      "id": "vault.list.fullAndLegacy",
+      "group": "vault",
+      "file": "vault/list-full-and-legacy.json",
+      "expect": "accept",
+      "reason": "null means UNKNOWN, not absent and not zero. The legacy row must survive with every `has…` companion false — a host that coerces null to 0 will later claim a size mismatch against a bundle it never knew the size of.",
+      "expectations": {
+        "itemCount": 2,
+        "items": [
+          {
+            "orderId": "f3c1",
+            "status": "Available",
+            "layersKnown": true,
+            "hasManifestVersion": true,
+            "hasSizeBytes": true,
+            "hasSha256": true,
+            "downloadable": true,
+            "layers": {
+              "imagery": true,
+              "basemap": true,
+              "elevation": false
+            },
+            "layersNote": "elevation is known-and-FALSE. A host that reads 'layers object present' as 'all three true' passes a laxer check and is wrong.",
+            "aoiLabel": "Downtown Minneapolis",
+            "createdAt": "2026-06-17T12:00:00.000Z",
+            "areaKm2": 12.34,
+            "manifestVersion": 7,
+            "sizeBytes": 134217728,
+            "sha256": "ab12",
+            "formats": [
+              "glb",
+              "geotiff"
+            ],
+            "downloadFormats": [
+              {
+                "format": "glb",
+                "byteSize": 1048576
+              },
+              {
+                "format": "geotiff",
+                "byteSize": 0
+              }
+            ],
+            "downloadFormatsNote": "byteSize 0 means UNRECORDED, not an empty file — a host that hides zero-size formats hides half the download menu."
+          },
+          {
+            "orderId": "leg1",
+            "status": "RefreshPending",
+            "layersKnown": false,
+            "hasManifestVersion": false,
+            "hasSizeBytes": false,
+            "hasSha256": false,
+            "downloadable": false,
+            "layersNote": "layers is null: nothing is known, and no flag may be read.",
+            "aoiLabel": "Legacy AOI",
+            "createdAt": "2025-01-01T00:00:00.000Z",
+            "areaKm2": 1.0,
+            "formats": [],
+            "downloadFormats": [],
+            "valuesNote": "manifestVersion / sizeBytes / sha256 are deliberately absent here: the row's nulls mean UNKNOWN, so there is no value to assert, only hasX=false."
+          }
+        ]
+      }
+    },
+    {
+      "id": "vault.list.skipsMalformedRows",
+      "group": "vault",
+      "file": "vault/list-skips-malformed-rows.json",
+      "expect": "accept",
+      "reason": "THE malformed-row rule: skip the bad row, keep the good ones, warn. One unparseable entry must never blank a customer's whole vault.",
+      "expectations": {
+        "itemCount": 1,
+        "orderIds": [
+          "ok1"
+        ],
+        "warningCount": 2
+      }
+    },
+    {
+      "id": "vault.list.tierLabel",
+      "group": "vault",
+      "file": "vault/tier-label.json",
+      "expect": "accept",
+      "appliesTo": "unreal",
+      "reason": "The tier label is ONE host's answer: its whole discriminator is the presence of `glb` — the Unreal terrain mesh — so it cannot ride a host-invariant case (HPS-41). Three rows for the three branches: empty formats is UNKNOWN (the base_on_demand marker, which advertises nothing yet), formats without `glb` is Base, and `glb` present is the full Unreal set. A host that collapses the first two loses the difference between 'nothing is known' and 'known to be partial' — which is the difference between materializing and importing.",
+      "expectations": {
+        "itemCount": 3,
+        "tierLabels": [
+          "Unknown",
+          "Base",
+          "Unreal"
+        ]
+      }
+    },
+    {
+      "id": "vault.list.wrongTopLevelKey",
+      "group": "vault",
+      "file": "vault/list-wrong-top-level-key.json",
+      "expect": "reject",
+      "reason": "A missing `bundles` array is a contract violation, not an empty vault. Failing closed here is what stops 'your vault is empty' from being a lie.",
+      "errorContains": "bundles"
+    },
+    {
+      "id": "vault.materialize.alreadyRunning",
+      "group": "vault",
+      "file": "vault/materialize-start-already-running.json",
+      "expect": "accept",
+      "reason": "THE single-flight 409 shape. Recognised by BODY, not by status code, and reported as SUCCESS — the caller joins the running job instead of erroring or starting a second.",
+      "expectations": {
+        "jobId": "job-existing",
+        "alreadyRunning": true
+      }
+    },
+    {
+      "id": "vault.materialize.started",
+      "group": "vault",
+      "file": "vault/materialize-start-accepted.json",
+      "expect": "accept",
+      "reason": "Normal start: a fresh jobId.",
+      "expectations": {
+        "jobId": "job-123",
+        "alreadyRunning": false
+      }
+    },
+    {
+      "id": "vault.materialize.startNoJobId",
+      "group": "vault",
+      "file": "vault/materialize-start-no-job-id.json",
+      "expect": "reject",
+      "reason": "A materialize-start body with no job id fails closed and surfaces the platform's message via the HPS-48 precedence. Fails closed today in the reference; asserted nowhere before this case.",
+      "errorContains": "Internal error"
+    },
+    {
+      "id": "vault.materialize.statusVectors",
+      "group": "vault",
+      "file": "vault/materialize-status-vectors.json",
+      "expect": "vector",
+      "reason": "Status-word synonym buckets and progress normalisation. Every host maps a different vocabulary onto the same five states; this table is that mapping."
+    },
+    {
+      "id": "vault.materializeTokenList",
+      "group": "vault",
+      "file": "vault/materialize-token-list.json",
+      "expect": "vector",
+      "reason": "The reference host's token list, shown as the SHAPE a host must send: an explicit array it owns. The server-side `\"unreal\"` keyword expands to only four core tokens and would silently drop the vector and landcover layers — which is exactly why the list is client-owned. Each host substitutes its own tokens; only the shape is normative."
+    },
+    {
+      "id": "vault.reject.notJson",
+      "group": "vault",
+      "file": "vault/reject-not-json.json",
+      "expect": "reject",
+      "reason": "Unparseable vault-listing bytes must fail closed, not crash and not blank the vault. The manifest group had this fixture from day one; the vault parser relied on a host-local assertion until this case landed.",
+      "malformedJson": true
+    },
+    {
+      "id": "vault.statusWordBuckets",
+      "group": "vault",
+      "file": "vault/status-word-buckets.json",
+      "expect": "vector",
+      "reason": "The wire vocabulary is wider than the state set. Hosts that switch on exact strings silently drop bundles when the platform adds a synonym."
+    }
+  ]
+}

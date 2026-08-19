@@ -1,0 +1,43 @@
+{
+  "bundleStatus": {
+    "available": "Available",
+    "refresh-pending": "RefreshPending",
+    "refunded": "Refunded",
+    "failed": "Failed",
+    "": "Unknown",
+    "anything-else": "Unknown"
+  },
+  "materializeState": {
+    "Pending": [
+      "pending",
+      "queued",
+      "accepted",
+      "waiting"
+    ],
+    "Processing": [
+      "processing",
+      "running",
+      "in_progress",
+      "in-progress",
+      "active",
+      "materializing",
+      "started"
+    ],
+    "Complete": [
+      "complete",
+      "completed",
+      "ready",
+      "available",
+      "done",
+      "succeeded",
+      "success"
+    ],
+    "Failed": [
+      "failed",
+      "error",
+      "errored",
+      "failure"
+    ]
+  },
+  "matching": "case-insensitive; anything unlisted maps to Unknown and is never an error"
+}

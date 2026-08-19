@@ -1,0 +1,74 @@
+{
+  "recognisedKeys": [
+    "code",
+    "state",
+    "error",
+    "error_description"
+  ],
+  "vectors": [
+    {
+      "input": "code=abc123&state=xyz789",
+      "parsed": true,
+      "code": "abc123",
+      "state": "xyz789"
+    },
+    {
+      "input": "http://127.0.0.1:51000/callback?code=abc123&state=xyz789#frag",
+      "parsed": true,
+      "code": "abc123",
+      "state": "xyz789",
+      "note": "accepts a full URL; everything from the first '#' is dropped"
+    },
+    {
+      "input": "error=access_denied&error_description=User+denied+the+request",
+      "parsed": true,
+      "error": "access_denied",
+      "errorDescription": "User denied the request",
+      "note": "'+' decodes to a space"
+    },
+    {
+      "input": "code=a%20b%2Fc",
+      "parsed": true,
+      "code": "a b/c"
+    },
+    {
+      "input": "",
+      "parsed": false
+    },
+    {
+      "input": "foo=bar",
+      "parsed": false,
+      "note": "no recognised key means nothing was parsed"
+    }
+  ],
+  "stateValidation": [
+    {
+      "expected": "xyz789",
+      "received": "xyz789",
+      "valid": true
+    },
+    {
+      "expected": "xyz789",
+      "received": "XYZ789",
+      "valid": false,
+      "note": "comparison is case-SENSITIVE"
+    },
+    {
+      "expected": "abc",
+      "received": "abd",
+      "valid": false,
+      "note": "a plain mismatch — neither a case difference nor emptiness — must also fail"
+    },
+    {
+      "expected": "",
+      "received": "",
+      "valid": false,
+      "note": "empty expected is never valid \u2014 an unset state must not authorise anything"
+    },
+    {
+      "expected": "xyz789",
+      "received": "",
+      "valid": false
+    }
+  ]
+}

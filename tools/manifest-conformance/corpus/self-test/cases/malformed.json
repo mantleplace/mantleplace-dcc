@@ -1,0 +1,1 @@
+{ deliberately not valid JSON, and the index entry does NOT declare malformedJson — the reader must flag undeclared rot

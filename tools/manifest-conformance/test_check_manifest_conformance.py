@@ -1,0 +1,518 @@
+"""Tests for the multi-host conformance gate.
+
+Two jobs:
+
+1. **Prove the loop.** The gate was single-host for its whole life — `pinned_doc["unreal"]`, a
+   hardcoded C++ header regex, and remediation text naming a `.cpp` file. Those are exactly the
+   bugs that stay invisible while only one host exists, so a *synthetic second host* is checked in
+   here permanently. It is not a placeholder for Revit; it is the fixture that fails the day
+   someone re-hardcodes a host name.
+2. **Guard the shipped `verified-against.json` offline.** Every host's `floorSource` must actually
+   resolve, on a runner with no engine installed. A pattern that silently stops matching turns the
+   floor check into a no-op, so it is asserted here rather than only in the network path.
+
+Stdlib `unittest` on purpose: this runs on a bare hosted runner in the same job as the gate, with
+no `pip install` step to go stale.
+
+Run: `python -m unittest discover -s tools/manifest-conformance`
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import check_manifest_conformance as gate  # noqa: E402
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REAL_FETCH = gate.fetch_schema
+
+#: A published-schema stub keyed by version, in the shape `check_host` reads.
+def _schema(version: int) -> dict:
+    return {"properties": {"version": {"const": version}}}
+
+
+def _host_entry(**overrides) -> dict:
+    entry = {
+        "verifiedAgainstManifestVersion": 17,
+        "verifiedAgainstCorpusVersion": 2,
+        "evidence": "exercised against the v17 shape",
+        "consumer": "somewhere/Consumer.ext",
+        "floorSource": {"path": "", "pattern": r"FLOOR\s*=\s*(\d+)"},
+        "tests": "somewhere/ConsumerTest.ext",
+        "owner": "a test",
+        "groups": ["manifest"],
+    }
+    entry.update(overrides)
+    return entry
+
+
+class MultiHostGateTest(unittest.TestCase):
+    """The generalized loop, driven by a synthetic two-host `verified-against.json`."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+        # Two hosts in different languages, each declaring its own floor location.
+        (self.tmp / "Cpp.h").write_text("inline constexpr int FLOOR = 17;\n", encoding="utf-8")
+        (self.tmp / "Dotnet.cs").write_text("public const int Floor = 17;\n", encoding="utf-8")
+
+        # `read_declared_floor` resolves floorSource.path against the repo root; point it at tmp.
+        self._real_root = gate._REPO_ROOT
+        gate._REPO_ROOT = self.tmp
+        self.addCleanup(lambda: setattr(gate, "_REPO_ROOT", self._real_root))
+
+        gate._schema_cache.clear()
+        self.addCleanup(gate._schema_cache.clear)
+
+        self.published = {17: _schema(17)}
+        gate.fetch_schema = lambda version, timeout=20: self.published.get(version)  # type: ignore[assignment]
+        self.addCleanup(lambda: setattr(gate, "fetch_schema", _REAL_FETCH))
+
+    def _write_doc(self, hosts: dict) -> Path:
+        path = self.tmp / "verified-against.json"
+        path.write_text(json.dumps({"$comment": ["ignored"], **hosts}), encoding="utf-8")
+        return path
+
+    def _run(self, hosts: dict) -> int:
+        return gate.main([
+            "--verified-against", str(self._write_doc(hosts)),
+            "--skip-corpus",
+        ])
+
+    def _two_hosts(self, **synthetic_overrides) -> dict:
+        return {
+            "unreal": _host_entry(
+                floorSource={"path": "Cpp.h", "pattern": r"FLOOR\s*=\s*(\d+)"},
+                tests="unreal/…/MantlePlaceImportManifestTest.cpp",
+            ),
+            "synthetic": _host_entry(
+                floorSource={"path": "Dotnet.cs", "pattern": r"Floor\s*=\s*(\d+)"},
+                tests="synthetic/Tests/ManifestReaderTests.cs",
+                **synthetic_overrides,
+            ),
+        }
+
+    def test_every_host_is_checked_not_just_unreal(self) -> None:
+        self.assertEqual(0, self._run(self._two_hosts()))
+
+    def test_a_second_hosts_failure_fails_the_gate(self) -> None:
+        """The regression that motivates this file: a non-`unreal` key used to be unreachable."""
+        hosts = self._two_hosts()
+        (self.tmp / "Dotnet.cs").write_text("public const int Floor = 18;\n", encoding="utf-8")
+        self.assertEqual(1, self._run(hosts))
+
+    def test_failures_name_the_offending_host(self) -> None:
+        hosts = self._two_hosts()
+        (self.tmp / "Dotnet.cs").write_text("public const int Floor = 18;\n", encoding="utf-8")
+        failures, _ = gate.check_host("synthetic", hosts["synthetic"])
+        self.assertTrue(failures)
+        self.assertIn("[synthetic]", failures[0])
+
+    def test_remediation_names_the_hosts_own_tests_not_unreals(self) -> None:
+        """The old message told a .NET author to edit a .cpp file."""
+        self.published[18] = _schema(18)
+        failures, _ = gate.check_host("synthetic", self._two_hosts()["synthetic"])
+        joined = "\n".join(failures)
+        self.assertIn("synthetic/Tests/ManifestReaderTests.cs", joined)
+        self.assertNotIn("MantlePlaceImportManifestTest.cpp", joined)
+        self.assertNotIn(".cpp", joined)
+
+    def test_floor_pattern_that_stops_matching_is_drift_not_a_pass(self) -> None:
+        entry = _host_entry(floorSource={"path": "Cpp.h", "pattern": r"RENAMED\s*=\s*(\d+)"})
+        failures, _ = gate.check_host("synthetic", entry)
+        self.assertTrue(any("could not read the version floor" in f for f in failures))
+
+    def test_missing_required_field_is_rejected_before_any_fetch(self) -> None:
+        fetched: list[int] = []
+        gate.fetch_schema = lambda version, timeout=20: (  # type: ignore[assignment]
+            fetched.append(version) or self.published.get(version))
+        entry = _host_entry()
+        del entry["floorSource"]
+        failures, pinned = gate.check_host("synthetic", entry)
+        self.assertIsNone(pinned)
+        self.assertIn("floorSource", failures[0])
+        self.assertEqual([], fetched, "a malformed entry must not cost a network round trip")
+
+    def test_comment_key_is_not_treated_as_a_host(self) -> None:
+        self.assertEqual(
+            ["unreal"],
+            [h for h, _ in gate.host_entries({"$comment": ["x"], "unreal": _host_entry()})],
+        )
+
+    def test_a_host_behind_the_corpus_version_fails(self) -> None:
+        entry = _host_entry(verifiedAgainstCorpusVersion=1)
+        failures, _ = gate.check_host("synthetic", entry, corpus_version=2)
+        self.assertTrue(any("corpusVersion" in f for f in failures))
+
+    def test_a_host_at_the_corpus_version_passes(self) -> None:
+        entry = _host_entry(verifiedAgainstCorpusVersion=2)
+        failures, _ = gate.check_host("synthetic", entry, corpus_version=2)
+        self.assertEqual([], [f for f in failures if "corpusVersion" in f])
+
+    def test_a_host_ahead_of_the_corpus_version_fails(self) -> None:
+        entry = _host_entry(verifiedAgainstCorpusVersion=3)
+        failures, _ = gate.check_host("synthetic", entry, corpus_version=2)
+        self.assertTrue(any("above the corpus's actual corpusVersion" in f for f in failures))
+
+    def test_corpus_version_not_checked_when_unknown(self) -> None:
+        """`--skip-corpus` passes corpus_version=None; the drift check is a no-op, not a failure."""
+        entry = _host_entry(verifiedAgainstCorpusVersion=1)
+        failures, _ = gate.check_host("synthetic", entry, corpus_version=None)
+        self.assertEqual([], [f for f in failures if "corpusVersion" in f])
+
+    def test_a_host_only_run_still_works(self) -> None:
+        hosts = self._two_hosts()
+        (self.tmp / "Dotnet.cs").write_text("public const int Floor = 18;\n", encoding="utf-8")
+        doc = self._write_doc(hosts)
+        self.assertEqual(0, gate.main(["--verified-against", str(doc), "--skip-corpus",
+                                       "--host", "unreal"]))
+
+
+class ShippedRegistryTest(unittest.TestCase):
+    """The real `verified-against.json`, checked without touching the network."""
+
+    def setUp(self) -> None:
+        self.doc = json.loads(gate._PINNED.read_text(encoding="utf-8"))
+        self.hosts = gate.host_entries(self.doc)
+
+    def test_at_least_one_host_is_registered(self) -> None:
+        self.assertTrue(self.hosts)
+
+    def test_every_host_declares_every_required_field(self) -> None:
+        for host, entry in self.hosts:
+            with self.subTest(host=host):
+                for field in gate._REQUIRED_HOST_FIELDS:
+                    self.assertIn(field, entry)
+
+    def test_every_declared_path_exists(self) -> None:
+        for host, entry in self.hosts:
+            with self.subTest(host=host):
+                for key in ("consumer", "tests"):
+                    self.assertTrue((_REPO_ROOT / entry[key]).is_file(),
+                                    f"{host}.{key} points at a missing file: {entry[key]}")
+
+    def test_every_floor_source_still_resolves(self) -> None:
+        """A floorSource that stops matching turns the floor check into a silent no-op."""
+        for host, entry in self.hosts:
+            with self.subTest(host=host):
+                floor, path, pattern = gate.read_declared_floor(host, entry)
+                self.assertIsNotNone(floor, f"{host}: {pattern!r} no longer matches {path}")
+                self.assertLessEqual(floor, int(entry["verifiedAgainstManifestVersion"]))
+
+    def test_floor_patterns_capture_exactly_one_group(self) -> None:
+        for host, entry in self.hosts:
+            with self.subTest(host=host):
+                self.assertEqual(1, re.compile(entry["floorSource"]["pattern"]).groups)
+
+    def test_every_shipped_host_is_at_the_shipped_corpus_version(self) -> None:
+        """A host pinned below (or above) the corpus's actual version is exactly the drift
+        ENF-01 exists to catch. Compared directly rather than via `check_host`, which would also
+        hit the network for the manifest-version leg -- this class stays offline by design."""
+        corpus_version = gate.read_corpus_version()
+        self.assertIsNotNone(corpus_version)
+        for host, entry in self.hosts:
+            with self.subTest(host=host):
+                self.assertEqual(corpus_version, entry["verifiedAgainstCorpusVersion"])
+
+
+class CorpusTest(unittest.TestCase):
+    """The shared corpus, which every host suite consumes (HPS-40)."""
+
+    def test_shipped_corpus_is_intact(self) -> None:
+        self.assertEqual([], gate.check_corpus())
+
+    def test_shipped_corpus_passes_the_full_check_with_the_real_roster(self) -> None:
+        """Integrity + self-test + coverage ratchet, exactly as `main()` runs it."""
+        doc = json.loads(gate._PINNED.read_text(encoding="utf-8"))
+        self.assertEqual([], gate.check_corpus(gate.host_entries(doc)))
+
+    def test_shipped_selftest_is_well_formed_broken(self) -> None:
+        """Each self-test fixture must be wrong in exactly its declared way (HPS-46) — a host
+        suite asserts these are rejected, which is only meaningful if the breakage is real."""
+        self.assertEqual([], gate.check_selftest())
+
+    def test_index_declares_both_accept_and_reject_cases(self) -> None:
+        index = json.loads((gate._CORPUS / "index.json").read_text(encoding="utf-8"))
+        expectations = {c["expect"] for c in index["cases"]}
+        self.assertIn("accept", expectations)
+        self.assertIn("reject", expectations)
+
+    def test_a_malformed_index_reports_rather_than_crashes(self) -> None:
+        """The gate's contract is exit codes; a traceback is not one of them."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        real = gate._CORPUS
+        gate._CORPUS = root
+        self.addCleanup(lambda: setattr(gate, "_CORPUS", real))
+
+        (root / "index.json").write_text('{"cases":[{"id":"x","group":"manifest"}]}',
+                                         encoding="utf-8")
+        failures = gate.check_corpus()
+        self.assertTrue(failures)
+        self.assertTrue(all(f.startswith("FAIL:") for f in failures))
+
+        (root / "index.json").write_text("{ not json", encoding="utf-8")
+        self.assertTrue(gate.check_corpus()[0].startswith("FAIL:"))
+
+    def test_an_unlisted_non_json_vector_is_still_an_orphan(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        real = gate._CORPUS
+        gate._CORPUS = root
+        self.addCleanup(lambda: setattr(gate, "_CORPUS", real))
+
+        (root / "index.json").write_text('{"cases":[]}', encoding="utf-8")
+        (root / "README.md").write_text("docs are not vectors\n", encoding="utf-8")
+        (root / "stray.csv").write_text("a,b\n", encoding="utf-8")
+        failures = gate.check_corpus()
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("stray.csv", failures[0])
+
+    def test_every_case_states_why_it_exists(self) -> None:
+        index = json.loads((gate._CORPUS / "index.json").read_text(encoding="utf-8"))
+        for case in index["cases"]:
+            with self.subTest(case=case["id"]):
+                self.assertTrue(case.get("reason", "").strip(),
+                                "a case with no stated reason rots into an unexplained fixture")
+
+    def test_read_corpus_version_matches_the_shipped_corpus(self) -> None:
+        index = json.loads((gate._CORPUS / "index.json").read_text(encoding="utf-8"))
+        self.assertEqual(index["corpusVersion"], gate.read_corpus_version())
+
+
+class CoverageRatchetTest(unittest.TestCase):
+    """Per-case host coverage: derived from `groups` x `appliesTo`, ratcheted against the
+    committed baseline. Any difference fails; --update-baseline records it."""
+
+    _CASES = [
+        {"id": "manifest.a", "group": "manifest", "file": "a.json", "expect": "vector",
+         "reason": "r"},
+        {"id": "manifest.b", "group": "manifest", "file": "b.json", "expect": "vector",
+         "reason": "r", "appliesTo": "unreal"},
+        {"id": "vault.c", "group": "vault", "file": "c.json", "expect": "vector", "reason": "r"},
+    ]
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._real_baseline = gate._BASELINE
+        gate._BASELINE = Path(self._tmp.name) / "coverage-baseline.json"
+        self.addCleanup(lambda: setattr(gate, "_BASELINE", self._real_baseline))
+        self.entries = [
+            ("revit", _host_entry(groups=["manifest"])),
+            ("unreal", _host_entry(groups=["manifest", "vault"])),
+        ]
+
+    def _write_baseline(self, cases: dict) -> None:
+        gate._BASELINE.write_text(json.dumps({"cases": cases}), encoding="utf-8")
+
+    def _expected(self) -> dict:
+        return {"manifest.a": ["revit", "unreal"], "manifest.b": ["unreal"],
+                "vault.c": ["unreal"]}
+
+    def test_matching_baseline_passes(self) -> None:
+        self._write_baseline(self._expected())
+        self.assertEqual([], gate.check_coverage(self._CASES, self.entries))
+
+    def test_a_host_losing_a_case_is_a_regression(self) -> None:
+        recorded = self._expected()
+        recorded["vault.c"] = ["revit", "unreal"]  # revit once covered it; now it cannot
+        self._write_baseline(recorded)
+        failures = gate.check_coverage(self._CASES, self.entries)
+        self.assertTrue(any("coverage regression" in f and "revit" in f for f in failures))
+
+    def test_an_unrecorded_improvement_is_a_stale_baseline(self) -> None:
+        recorded = self._expected()
+        recorded["manifest.a"] = ["unreal"]  # revit's coverage is real but unrecorded
+        self._write_baseline(recorded)
+        failures = gate.check_coverage(self._CASES, self.entries)
+        self.assertTrue(any("stale" in f and "manifest.a" in f for f in failures))
+
+    def test_a_missing_baseline_tells_you_to_create_one(self) -> None:
+        failures = gate.check_coverage(self._CASES, self.entries)
+        self.assertTrue(any("--update-baseline" in f for f in failures))
+
+    def test_update_baseline_writes_the_derived_matrix(self) -> None:
+        self.assertEqual([], gate.check_coverage(self._CASES, self.entries,
+                                                 update_baseline=True))
+        written = json.loads(gate._BASELINE.read_text(encoding="utf-8"))
+        self.assertEqual(self._expected(), written["cases"])
+        # And the file it wrote passes the ratchet it feeds.
+        self.assertEqual([], gate.check_coverage(self._CASES, self.entries))
+
+    def test_applies_to_must_name_a_registered_host(self) -> None:
+        cases = [{"id": "manifest.x", "group": "manifest", "file": "x.json", "expect": "vector",
+                  "reason": "r", "appliesTo": "rhino"}]
+        failures = gate.check_coverage(cases, self.entries, update_baseline=True)
+        self.assertTrue(any("appliesTo" in f and "rhino" in f for f in failures))
+
+    def test_a_host_without_groups_cannot_be_covered(self) -> None:
+        entry = _host_entry()
+        del entry["groups"]
+        failures = gate.check_coverage(self._CASES, [("synthetic", entry)])
+        self.assertTrue(any("groups" in f for f in failures))
+
+    def test_update_baseline_refuses_to_write_a_derivation_that_failed(self) -> None:
+        """A case dropped for a bad `appliesTo` would be written out MISSING, and a case the
+        baseline never mentions is one the ratchet can never regress."""
+        cases = self._CASES + [{"id": "manifest.rot", "group": "manifest", "file": "r.json",
+                                "expect": "vector", "reason": "r", "appliesTo": "rhino"}]
+        failures = gate.check_coverage(cases, self.entries, update_baseline=True)
+        self.assertTrue(any("refusing to write" in f for f in failures))
+        self.assertFalse(gate._BASELINE.exists(), "no baseline may be written from a failed run")
+
+
+class SelfTestSweepTest(unittest.TestCase):
+    """The self-test corpus's own orphan sweep. The MAIN sweep excludes `self-test/` wholesale,
+    so anything this one misses is invisible to the gate while the host readers' recursive sweeps
+    still flag it — the HPS-46 asymmetry, inverted."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        real = gate._CORPUS
+        gate._CORPUS = self.root
+        self.addCleanup(lambda: setattr(gate, "_CORPUS", real))
+        # A minimal well-formed-broken self-test tree: one fixture, declared broken its one way.
+        selftest = self.root / "self-test"
+        (selftest / "cases").mkdir(parents=True)
+        (selftest / "cases" / "missing-is-fine.json").write_text("{}", encoding="utf-8")
+        (selftest / "index.json").write_text(json.dumps({
+            "orphanFiles": ["cases/missing-is-fine.json"],
+            "cases": [{"id": "selfTest.missingFile", "group": "manifest",
+                       "file": "cases/does-not-exist.json", "expect": "accept",
+                       "selfTestFailure": "missingFile", "reason": "r"}],
+        }), encoding="utf-8")
+        (selftest / "broken-index-json").mkdir()
+        (selftest / "broken-index-json" / "index.json").write_text("{ not json", encoding="utf-8")
+        (selftest / "broken-index-schema").mkdir()
+        (selftest / "broken-index-schema" / "index.json").write_text('{"corpusVersion":2}',
+                                                                     encoding="utf-8")
+        self.selftest = selftest
+
+    def test_the_fixture_tree_is_clean_to_start_with(self) -> None:
+        self.assertEqual([], gate.check_selftest())
+
+    def test_a_stray_file_deeper_than_cases_is_still_flagged(self) -> None:
+        """The sweep used to be one non-recursive listing of `cases/`."""
+        nested = self.selftest / "cases" / "nested"
+        nested.mkdir()
+        (nested / "stray.json").write_text("{}", encoding="utf-8")
+        failures = gate.check_selftest()
+        self.assertTrue(any("cases/nested/stray.json" in f for f in failures), failures)
+
+    def test_a_stray_file_beside_the_index_is_flagged(self) -> None:
+        (self.selftest / "notes.json").write_text("{}", encoding="utf-8")
+        failures = gate.check_selftest()
+        self.assertTrue(any("notes.json" in f for f in failures), failures)
+
+    def test_files_inside_a_nested_corpus_are_not_swept(self) -> None:
+        """A directory carrying its own index.json is another index's to sweep, not this one's."""
+        (self.selftest / "broken-index-schema" / "extra.json").write_text("{}", encoding="utf-8")
+        self.assertEqual([], gate.check_selftest())
+
+
+class NestedUnreadFixtureTest(unittest.TestCase):
+    """`nestedUnreadExpectation` must be broken exactly its declared way (HPS-46b).
+
+    A host suite asserts its reader REJECTS this fixture. That assertion is worth nothing if the
+    unread nested keys quietly stopped being unread — which is the single way this fixture rots.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        real = gate._CORPUS
+        gate._CORPUS = self.root
+        self.addCleanup(lambda: setattr(gate, "_CORPUS", real))
+        selftest = self.root / "self-test"
+        (selftest / "cases").mkdir(parents=True)
+        (selftest / "cases" / "nested.json").write_text("{}", encoding="utf-8")
+        (selftest / "broken-index-json").mkdir()
+        (selftest / "broken-index-json" / "index.json").write_text("{ not json", encoding="utf-8")
+        (selftest / "broken-index-schema").mkdir()
+        (selftest / "broken-index-schema" / "index.json").write_text('{"corpusVersion":2}',
+                                                                     encoding="utf-8")
+        self.selftest = selftest
+
+    def write(self, expectations: dict) -> list[str]:
+        (self.selftest / "index.json").write_text(json.dumps({
+            "cases": [{"id": "selfTest.nestedUnreadExpectation", "group": "manifest",
+                       "file": "cases/nested.json", "expect": "accept",
+                       "selfTestFailure": "nestedUnreadExpectation", "reason": "r",
+                       "expectations": expectations}],
+        }), encoding="utf-8")
+        return gate.check_selftest()
+
+    WELL_FORMED = {
+        "items": [{"orderId": "ord", "status": 404, "selfTestNeverReadNested": True}],
+    }
+
+    def test_a_well_formed_fixture_passes(self) -> None:
+        self.assertEqual([], self.write(self.WELL_FORMED))
+
+    def test_a_reserved_key_that_is_prose_cannot_be_the_breakage(self) -> None:
+        """`selfTestNote` ends in `Note`, so it is documentation and exempt at every depth — a
+        fixture whose only reserved key is prose asserts nothing and must not pass as broken."""
+        failures = self.write({
+            "items": [{"orderId": "ord", "status": 404, "selfTestNote": "prose"}],
+        })
+        self.assertTrue(any("reserved `selfTest` prefix" in f for f in failures), failures)
+
+    def test_the_coercion_half_is_required(self) -> None:
+        """Without a wrong-typed nested value, a host reading through UE's coercing
+        `TryGet*Field` — which reads 404 back as "404" — passes the fixture (one level down)."""
+        failures = self.write({
+            "items": [{"orderId": "ord", "status": "Available", "selfTestNeverReadNested": True}],
+        })
+        self.assertTrue(any("coercion half" in f for f in failures), failures)
+
+    def test_the_breakage_must_sit_below_an_assertable_key(self) -> None:
+        """All-scalar expectations put the breakage at the top level, where HPS-46 already
+        catches it — such a fixture proves nothing about nesting."""
+        failures = self.write({"status": 404, "selfTestNeverReadNested": True})
+        self.assertTrue(any("top-level expectation holds a container" in f for f in failures),
+                        failures)
+
+
+class NestedExpectationEntriesTest(unittest.TestCase):
+    """The walk HPS-46b's obligation is derived from."""
+
+    def test_the_top_level_is_excluded(self) -> None:
+        """It is HPS-46's, and double-reporting it would make one gap read as two."""
+        entries = gate.nested_expectation_entries({"itemCount": 2, "items": [{"orderId": "a"}]})
+        self.assertEqual(["items[0].orderId"], [p for p, _, _ in entries])
+
+    def test_paths_name_the_row(self) -> None:
+        entries = gate.nested_expectation_entries(
+            {"items": [{"a": 1}, {"hasManifestVersion": False}]})
+        self.assertIn("items[1].hasManifestVersion", [p for p, _, _ in entries])
+
+    def test_prose_is_yielded_but_never_walked(self) -> None:
+        """A `*Note` value that happens to be an object is documentation all the way down."""
+        entries = gate.nested_expectation_entries(
+            {"items": [{"layersNote": {"buried": True}}]})
+        self.assertEqual(["items[0].layersNote"], [p for p, _, _ in entries])
+
+    def test_documentation_keys_follow_the_convention_at_every_depth(self) -> None:
+        self.assertTrue(gate.is_documentation_key("$comment"))
+        self.assertTrue(gate.is_documentation_key("layersNote"))
+        self.assertFalse(gate.is_documentation_key("noteworthy"))
+        self.assertFalse(gate.is_documentation_key("orderId"))
+
+
+if __name__ == "__main__":
+    unittest.main()
