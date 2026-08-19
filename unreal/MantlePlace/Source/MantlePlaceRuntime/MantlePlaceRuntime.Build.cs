@@ -40,6 +40,7 @@ public class MantlePlaceRuntime : ModuleRules
 				"HTTP",        // Mantle Place platform API (Supabase GoTrue) over HTTP
 				"Json",        // request body construction + auth response parsing
 				"HTTPServer",  // loopback (127.0.0.1) OAuth redirect callback server (RFC 8252)
+				"Projects",    // IPluginManager: the conformance-corpus reader anchors its walk on the plugin dir
 				// ... add private dependencies that you statically link with here ...
 			}
 			);

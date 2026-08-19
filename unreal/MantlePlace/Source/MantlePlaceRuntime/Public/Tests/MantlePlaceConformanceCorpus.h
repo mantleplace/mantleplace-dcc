@@ -10,6 +10,7 @@
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "HAL/FileManager.h"
+#include "Interfaces/IPluginManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
@@ -99,12 +100,23 @@ struct FCase
 
 namespace Detail
 {
-	/** Walk up from the project directory looking for the corpus. The plugin sits at
-	 *  `unreal/Plugins/MantlePlace`, so the corpus is one level above ProjectDir today — the walk
-	 *  keeps this working if the tree is ever re-rooted, without hardcoding a depth. */
+	/** Where the walk starts: this plugin's own base directory. The corpus lives in the same repo
+	 *  as the plugin (`tools/manifest-conformance/corpus` at that repo's root), so anchoring on
+	 *  the plugin resolves wherever the repo is mounted — including as a submodule under a
+	 *  consuming project's Plugins/ tree, where no ancestor of ProjectDir carries the corpus.
+	 *  ProjectDir is the fallback for the one context with no plugin manager entry to ask. */
+	inline FString CorpusSearchAnchor()
+	{
+		const TSharedPtr<IPlugin> ThisPlugin = IPluginManager::Get().FindPlugin(TEXT("MantlePlace"));
+		return FPaths::ConvertRelativePathToFull(
+			ThisPlugin.IsValid() ? ThisPlugin->GetBaseDir() : FPaths::ProjectDir());
+	}
+
+	/** Walk up from the plugin directory looking for the corpus. The walk keeps this working if
+	 *  the repo's tree is ever re-rooted, without hardcoding a depth. */
 	inline FString FindCorpusDir()
 	{
-		FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir());
+		FString Dir = CorpusSearchAnchor();
 		FPaths::NormalizeDirectoryName(Dir);
 
 		for (int32 Up = 0; Up < 8 && !Dir.IsEmpty(); ++Up)
@@ -425,14 +437,14 @@ inline bool LoadGroup(const TCHAR* Group, TArray<FCase>& OutCases, FString& OutE
 			TEXT("could not locate tools/manifest-conformance/corpus/index.json by walking up from '%s'. ")
 			TEXT("The shared corpus is checked into this repo; a working tree without it cannot assert ")
 			TEXT("HPS-40 conformance."),
-			*FPaths::ConvertRelativePathToFull(FPaths::ProjectDir()));
+			*Detail::CorpusSearchAnchor());
 		return false;
 	}
 
 	return LoadGroupFromDir(Root, Group, OutCases, OutError);
 }
 
-/** Absolute path of the main corpus directory (walked up from ProjectDir), or empty if not found.
+/** Absolute path of the main corpus directory (walked up from the plugin dir), or empty if not found.
  *  Exposed so the HPS-46 reader self-test can point LoadGroupFromDir at `<root>/self-test` and its
  *  broken-index siblings; ordinary group loading goes through LoadGroup. */
 inline FString FindCorpusRoot()
