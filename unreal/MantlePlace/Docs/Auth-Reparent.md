@@ -10,10 +10,10 @@ C++-base / Blueprint-child bridge.
 > the old `UE_Placeholder.uasset` was removed). This doc is the maintained reference for
 > its surface wiring — follow the steps below when re-creating or re-wiring it.
 
-## Option A — create the Blueprint child (recommended)
+## Creating the Blueprint child
 
-1. Open the editor on `MantlePlace.uproject` (UE 5.8) and make sure the C++ compiled
-   (the editor builds `MantlePlace` on open; or build `MantlePlaceEditor` first).
+1. Open the consuming UE 5.8 project in the editor and make sure the C++ compiled
+   (the editor builds the plugin modules on open; or build `MantlePlaceEditor` first).
 2. In the Content Browser, browse to **MantlePlace Content → Blueprints**
    (enable *Settings → Show Plugin Content* if the plugin folder is hidden).
 3. **Add → Blueprint Class**. In the picker, expand **All Classes**, search
@@ -22,7 +22,8 @@ C++-base / Blueprint-child bridge.
 5. Configuration: the public mantle.place routes (`Web Login Url`, `Token Endpoint Url`) are
    compiled into the C++ base — leave them alone unless pointing at a non-production stack.
    `Platform Api Base Url` and `Supabase Anon Key` are **capture-sensitive** and are hydrated
-   from the consuming project's `Config/DefaultGame.ini` (see that file's auth section) at
+   from the consuming project's `Config/DefaultGame.ini` (a
+   `[/Script/MantlePlaceRuntime.MantlePlaceAuthSystemBase]` section) at
    packaging time. **Never set them in the BP's Class Defaults** — the BP ships with the
    plugin, and a value baked there is compiled into every distributed copy.
 6. On the **Event Graph**, implement the events the C++ base raises:
@@ -38,13 +39,6 @@ C++-base / Blueprint-child bridge.
      the result arrives on `On Token Refreshed(bSuccess)`.
    - `Sign Out` / `Refresh Token` are unchanged. The legacy `Sign In(email, password)` is
      **disabled** unless `bAllowPasswordGrant` is set true (kept only for dev/automation).
-
-## Option B — reparent the existing placeholder
-
-1. Open `Content/Blueprints/UE_Placeholder` (in MantlePlace plugin content).
-2. **Class Settings → Class Options → Parent Class** → set to
-   `MantlePlaceAuthSystemBase`.
-3. Rename the asset to `BP_MantlePlaceAuthSystemBase`, then do steps 5–6 above.
 
 ## Division of labor (keep it)
 
@@ -69,7 +63,7 @@ there.
 
 1. Set `PlatformApiBaseUrl` and `SupabaseAnonKey` in the project's `Config/DefaultGame.ini`
    (never the BP class defaults — see step 5 above); the public routes and `LoopbackPorts` have
-   compiled defaults. Allow-list the loopback redirect URIs (see that file's auth section).
+   compiled defaults. Allow-list the loopback redirect URIs with the identity provider.
 2. Construct `BP_MantlePlaceAuthSystemBase`, bind `On Sign In Result`, call
    `Sign In With Browser`. The system browser opens the mantle.place login; after logging in the
    tab shows "you can close this window."

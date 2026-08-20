@@ -151,17 +151,19 @@ normative, and each was verified by making it fail on purpose:
   on an allow-list — is what catches a corpus typo that would otherwise assert nothing while still
   counting as covered.
 
-Cases carrying `appliesTo` belong to another host's manifest block and are skipped. Today that
-leaves **12 host-invariant `manifest` cases** binding Revit — the version gate, the base-bundle
-partial parse, the top-level `vector` pointers and the materialization signals — and **no
-`appliesTo: "revit"` case at all**, because there is no `revit` manifest block yet.
+Cases carrying another host's `appliesTo` are skipped. Today that binds Revit to the
+**12 host-invariant `manifest` cases** — the version gate, the base-bundle partial parse, the
+top-level `vector` pointers and the materialization signals — plus this host's **own three
+`appliesTo: "revit"` cases** (`manifest.revitArtifactHashes`, `manifest.revitOwnGeoreference`,
+`manifest.reject.revitHashMissing`), which pin the v19 `revit` manifest block described under
+"The contract gap" below.
 
-`revit` claims **five of the six groups**: `manifest`, `auth`, `vault`, `cache`, `digest`.
+`revit` claims **all six groups**: `manifest`, `auth`, `vault`, `cache`, `digest`, `projection`.
 
-**`projection` is deliberately unclaimed**, per `HPS-45`. This host performs no local projection: it
-applies the manifest's pre-derived survey point verbatim and computes no easting, northing or zone of
-its own (`HPS-33`). Claiming the group would be a promise to run a case whose subject the
-plugin does not have.
+**`projection` is claimed for one thing only**, per `HPS-45`: the WGS84 lon/lat → UTM forward
+projection behind the `vector` layers (roads, site boundaries) — see `GeoProjection.cs` and
+`ProjectionConformanceTests.cs`. Placement is different: the survey point is applied verbatim from
+the manifest, and this host computes no easting, northing or zone of its own for it (`HPS-33`).
 
 ### Vector cases, and the one thing `HPS-46` does not reach
 

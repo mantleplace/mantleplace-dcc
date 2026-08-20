@@ -65,7 +65,7 @@ it is silent. Never assume the working directory from conversation history — c
 ## Binaries
 
 **There are no Git LFS patterns in this repository, on purpose.** A stranger's first clone must not
-be a multi-hundred-megabyte pull. The binaries that are here — three `.uasset` files, three fonts,
+be a multi-hundred-megabyte pull. The binaries that are here — two `.uasset` files, three fonts,
 three PNG icons — total about 1.2 MB and are plain git blobs.
 
 **Do not add a new binary type without asking.** Git decides text-vs-binary at `git add` time, and a
