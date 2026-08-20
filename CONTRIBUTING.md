@@ -11,9 +11,13 @@ This is a small project with a small maintainer team. Issues and pull requests a
 roughly once a week. A patch that is small, tested and inside the merge bar below is likely to land
 quickly; a large architectural change is likely to get a conversation before it gets a review.
 
-Stale issues are closed automatically after a period of inactivity. That is not a judgement on the
-issue — it is the alternative to a tracker with hundreds of open items nobody has read in five years.
-Comment on a closed issue and it reopens.
+Issues are marked stale after 90 days without activity and closed 14 days later; pull requests get 45
+days and the same 14. That is not a judgement on the item — it is the alternative to a tracker with
+hundreds of open entries nobody has read in five years, which tells a newcomer nothing about what is
+actually live. Any comment clears the mark, a confirmed defect is labelled and exempted, and a closed
+issue reopens on request. The job that does this is
+[`.github/workflows/stale.yml`](.github/workflows/stale.yml), so the policy and its enforcement are
+the same artifact.
 
 If sustained load makes this posture dishonest, we will change **the published policy** rather than
 quietly stop answering. Any such change is announced here.
@@ -102,6 +106,13 @@ Per-host specifics live beside the code:
 
 Match the surrounding code. The comment density here is higher than most codebases and that is
 deliberate: comments explain *why*, especially where a rule guards a failure that looks like success.
+
+**C++ formatting:** [`unreal/.clang-format`](unreal/.clang-format) is the authority for new Unreal
+code. It is deliberately conservative — no rewrapping, no include reordering, no comment churn — but
+**the existing files predate it and are not clean against it**, so do not run it over a file you are
+not otherwise changing. Reformat-only pull requests are declined: they bury the change nobody can
+review in a diff nobody can read, and this repository's Unreal compile runs privately and after the
+merge, so a mechanical sweep is the worst possible thing to have to bisect.
 
 ## Reporting a bug
 

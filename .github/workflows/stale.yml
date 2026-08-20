@@ -1,0 +1,66 @@
+# Issue and pull-request hygiene.
+#
+# CONTRIBUTING.md publishes this policy, so this file is what makes the published promise true rather
+# than aspirational. The alternative to autoclose is a tracker with hundreds of items nobody has read
+# in five years, which tells a newcomer nothing about what is actually live — and it is worse than
+# closing, because it looks like an open question that someone is holding.
+#
+# Closing is not a verdict. Any activity clears the stale mark, and a closed issue reopens on request
+# (its author can reopen it themselves).
+#
+# The exempt labels are the escape hatch: anything a maintainer has confirmed as a real defect, or
+# accepted as a long-lived tracking item, is marked and never touched by this job.
+name: stale
+
+on:
+  schedule:
+    - cron: "0 6 * * 2" # Tuesday, the day after the weekly triage batch
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-issue-stale: 90
+          days-before-issue-close: 14
+          # Pull requests get a shorter clock than issues: an unanswered issue may still be a real
+          # defect nobody has reached, while an abandoned pull request rots against a moving tree.
+          days-before-pr-stale: 45
+          days-before-pr-close: 14
+          exempt-issue-labels: "confirmed,security,pinned,tracking"
+          exempt-pr-labels: "confirmed,security,pinned,tracking"
+          exempt-all-milestones: true
+          stale-issue-label: stale
+          stale-pr-label: stale
+          stale-issue-message: >
+            This issue has had no activity for 90 days, so it is being marked stale under the
+            maintenance posture published in CONTRIBUTING.md — best-effort, weekly triage batch, no
+            SLA. That is a statement about our capacity, not about whether the issue is real.
+
+
+            Any comment clears this mark. Otherwise it closes in 14 days, and you can reopen it then
+            if it is still live.
+          stale-pr-message: >
+            This pull request has had no activity for 45 days, so it is being marked stale under the
+            maintenance posture published in CONTRIBUTING.md.
+
+
+            Any comment or push clears this mark. Otherwise it closes in 14 days — the branch is not
+            deleted and you can reopen it.
+          close-issue-message: >
+            Closing after 14 days with no further activity. This is tracker hygiene, not a judgement:
+            if the problem is still there, comment and reopen, and please say what you are running
+            now — a report against a current version is far easier to act on.
+          close-pr-message: >
+            Closing after 14 days with no further activity. Your branch is untouched; reopen whenever
+            you want to pick it back up.
+          # Oldest first, so a backlog drains from the end that has been waiting longest rather than
+          # from whatever the API happens to return.
+          ascending: true
+          operations-per-run: 100

@@ -62,7 +62,7 @@ ships a bundle is redistributing that data. So the docs show you how to *make* o
 unreal/MantlePlace/            the Unreal plugin — MantlePlaceRuntime + MantlePlaceEditor
 revit/                         the Revit plugin — pure Core, Client, Addin shim, headless tests
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
-.github/workflows/             the two public CI gates
+.github/workflows/             the two public CI gates, plus tracker hygiene
 ```
 
 Start with each host's own docs: [`revit/README.md`](revit/README.md) for Revit; for Unreal, the
@@ -116,6 +116,33 @@ discovered later.
 Report vulnerabilities privately through this repository's
 [Security tab](../../security/advisories/new), or to **support@mantle.place**. Full policy:
 [SECURITY.md](SECURITY.md).
+
+## Why the history starts here
+
+**This repository's history begins at its first commit, on purpose.** It is not a scrub, and nothing
+was removed from a past that used to be here.
+
+These plugins grew up inside a private monorepo that also vendors paid marketplace plugins — licensed
+to us, and not ours to redistribute. Those files entered at that repository's **root** commit, which
+is the fact that decides everything downstream: there is no edit at the tip that makes such a history
+publishable, and a filtered import would rewrite every hash anyway. What it would produce is not
+continuity but a costume — a commit graph you cannot check out, cannot build, and cannot bisect.
+Given the choice between a fabricated lineage and an honest first commit, we took the first commit.
+The timestamped record of independent creation stays in the private repositories, which is where it
+does the job it exists for.
+
+So there is no contributor graph here and no archaeology to read. The things that carry the weight
+instead are the ones you can check yourself: public CI green on the merge bar, the conformance corpus
+and the published schema it tests against, and documentation that states the gaps — the Unreal-compile
+lag above is in this README because it is real, not because we ran out of places to hide it.
+
+## How this code is written
+
+Much of this code is written with AI assistance under human review, and the commit trailers say so.
+We neither lead with that nor hide it. The questions worth asking about a patch are the same either
+way: does the conformance suite still pass, does the thin-client boundary hold, and does the comment
+explain *why* rather than restate the line beneath it. Those are the questions this project's review
+asks of its own changes, and the ones it will ask of yours.
 
 ## Third-party notices
 
