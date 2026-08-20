@@ -25,7 +25,7 @@ plugin discovery is a recursive scan.
 unreal/MantlePlace/            the UE 5.8 plugin, folder + .uplugin — PascalCase within
 revit/                         the Revit plugin: pure Core, Client, Addin shim, headless tests
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
-.github/workflows/             the two public CI gates
+.github/workflows/             the two public CI gates, plus the stale-tracker job
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  README.md  CLAUDE.md
 ```
 
@@ -101,8 +101,15 @@ even when the arithmetic is correct.
 
 ## CI
 
-Two workflows, both on free hosted runners, both the merge bar:
-`ci-manifest-conformance` and `ci-revit-tests`.
+Two workflows, both on free hosted runners, both required checks on `main`, together the merge bar:
+`ci-manifest-conformance` and `ci-revit-tests`. **Neither may carry a `paths:` filter on
+`pull_request`** — a required check that is path-filtered never reports on a pull request outside its
+paths, so the check sits pending forever and nothing can merge. (`stale.yml` is tracker hygiene, not
+a gate.)
+
+**C++ formatting** is [`unreal/.clang-format`](unreal/.clang-format), for new code only: the existing
+files predate it and are not clean against it. Nothing in CI checks formatting, and a reformat sweep
+is refused — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 **Never attach a self-hosted runner to this repository.** A fork's pull request would execute on the
 build machine. The Unreal compile stays on private infrastructure for exactly this reason, which

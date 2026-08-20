@@ -1,0 +1,54 @@
+# Copyright Mantle Place. All Rights Reserved.
+#
+# clang-format config for the Unreal host.
+# Configures clang-format to match the Unreal Engine C++ Coding Standard (and the style the shipped
+# MantlePlace plugin already uses) as closely as clang-format allows.
+#
+# READ THIS BEFORE RUNNING IT OVER ANYTHING: the files in this repository predate this config and are
+# NOT clean against it. It is here so a contributor has a format authority to point at for new code,
+# not so the tree can be swept. Reformat-only pull requests are declined — see CONTRIBUTING.md.
+#
+# DELIBERATELY CONSERVATIVE: ColumnLimit 0 + SortIncludes false + ReflowComments false so a format
+# pass does NOT rewrap lines, reorder the existing include grouping, or churn comments. Before
+# enabling format-on-save, dry-run against a file you have not changed and confirm the diff is
+# limited to what you meant:
+#     clang-format --dry-run --Werror unreal/MantlePlace/Source/MantlePlaceRuntime/Private/MantlePlaceAuthSystemBase.cpp
+
+Language: Cpp
+Standard: Cpp11
+BasedOnStyle: LLVM
+
+# Indentation: tabs to indent, spaces to align continuations (Epic standard, width 4).
+UseTab: ForIndentation
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 4
+
+# Do not auto-wrap: preserve the author's line breaks (avoids mass reformat of long UE lines).
+ColumnLimit: 0
+
+# Allman braces — every brace on its own line.
+BreakBeforeBraces: Allman
+
+# Pointers/references bind to the type: `const FString& Email`, `UObject* Outer`.
+PointerAlignment: Left
+DerivePointerAlignment: false
+
+# Never collapse blocks/statements onto one line.
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+
+# Access specifiers sit flush with the class keyword.
+AccessModifierOffset: -4
+NamespaceIndentation: None
+
+# Churn-reduction: respect existing include order, comment wrapping, and namespace comments.
+SortIncludes: false
+ReflowComments: false
+FixNamespaceComments: false
+KeepEmptyLinesAtTheStartOfBlocks: true
+Cpp11BracedListStyle: false
+SpaceBeforeParens: ControlStatements
