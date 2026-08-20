@@ -1,8 +1,8 @@
 namespace MantlePlace.Revit.Core;
 
-/// <summary>Exact conversions for the three linear units the ETL delivers in.</summary>
+/// <summary>Exact conversions for the three linear units bundle artifacts are delivered in.</summary>
 /// <remarks>
-/// Both foot definitions are exact by statute and by platform ADR — the US survey foot is
+/// Both foot definitions are exact by statute — the US survey foot is
 /// 1200/3937 m and the international foot is 0.3048 m.
 /// They differ by about 2 ppm, which is ~3 mm across a 1.4 km AOI: harmless for placement, and
 /// wrong enough to matter if the two are ever conflated in a survey deliverable. Writing both out
