@@ -140,6 +140,12 @@ machine. So the engine build runs privately and at integration time. A pull requ
 and still break the Unreal compile; releases gate on that private build being green. This is a real,
 accepted lag rather than a gap we would rather you not notice.
 
+## Roadmap
+
+Quarter-by-quarter, in [ROADMAP.md](ROADMAP.md). The headline: **World Partition large-AOI import**
+— today an import produces a single `ALandscape`, and lifting that ceiling is the main course of the
+plugin's path from early access to 1.0 on Fab.
+
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) first — it is short, and it names the things that get a pull
