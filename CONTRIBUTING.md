@@ -37,6 +37,11 @@ Signed-off-by: Your Name <you@example.com>
 `git commit -s` writes it for you. It asserts that you wrote the patch, or have the right to submit
 it under Apache 2.0.
 
+> ⛔ **Working from a submodule checkout?** Run `git status` before you edit. If it reports
+> `HEAD detached at <sha>`, create a branch first — `git switch -c <type>/<name> origin/main` — or the
+> commit you are about to sign off belongs to no branch and is lost the next time the consuming
+> project runs `git submodule update`. Nothing warns you. See `CLAUDE.md` rule 3.
+
 We are not reserving the right to relicense this code. There is no CLA precisely because the only
 thing a CLA would buy here is an option we do not intend to exercise.
 
