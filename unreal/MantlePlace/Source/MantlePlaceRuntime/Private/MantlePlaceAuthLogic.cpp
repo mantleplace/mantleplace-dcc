@@ -3,6 +3,7 @@
 #include "MantlePlaceAuthLogic.h"
 
 #include "Dom/JsonObject.h"
+#include "Policies/CondensedJsonPrintPolicy.h" // TCondensedJsonPrintPolicy: not transitively available in a game target
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
