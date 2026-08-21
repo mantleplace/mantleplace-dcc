@@ -459,6 +459,37 @@ FString FMantlePlaceAuthLogic::BuildLoopbackRedirectUri(int32 Port, const FStrin
 	return FString::Printf(TEXT("http://127.0.0.1:%d%s"), Port, *Path);
 }
 
+TArray<int32> FMantlePlaceAuthLogic::DefaultLoopbackPorts()
+{
+	// See the header for why the stride is 512 rather than 1.
+	TArray<int32> Ports;
+	Ports.Reserve(5);
+	for (int32 Index = 0; Index < 5; ++Index)
+	{
+		Ports.Add(51000 + Index * 512);
+	}
+	return Ports;
+}
+
+TArray<int32> FMantlePlaceAuthLogic::ResolveLoopbackPorts(const TArray<int32>& ConfiguredPorts)
+{
+	return ConfiguredPorts.Num() > 0 ? ConfiguredPorts : DefaultLoopbackPorts();
+}
+
+bool FMantlePlaceAuthLogic::SelectLoopbackPort(const TArray<int32>& Ports,
+	TFunctionRef<bool(int32)> TryAcquire, int32& OutPort)
+{
+	for (const int32 Port : Ports)
+	{
+		if (TryAcquire(Port))
+		{
+			OutPort = Port;
+			return true;
+		}
+	}
+	return false;
+}
+
 FString FMantlePlaceAuthLogic::BuildAuthorizeUrl(const FString& WebLoginBaseUrl, const FString& RedirectUri,
 	const FString& CodeChallenge, const FString& State)
 {

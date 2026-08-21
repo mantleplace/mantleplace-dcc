@@ -86,12 +86,14 @@ void FMantlePlaceLocalTileServer::Stop()
 	PreprocessorHandle.Reset();
 	Router.Reset();
 
-	if (bRunning && FHttpServerModule::IsAvailable())
-	{
-		// UE exposes only a global listener stop. For an editor QA tool that is acceptable; revisit if
-		// the editor ever runs another HTTP listener we must not disturb.
-		FHttpServerModule::Get().StopAllListeners();
-	}
+	// Deliberately NOT StopAllListeners(). UE exposes only a global stop, and the editor now does run
+	// another HTTP listener we must not disturb: the auth loopback callback server. Stopping globally
+	// tore that down mid-sign-in, and also cleared the module's "listeners enabled" flag, which is what
+	// makes a per-port bind check real — so it silently re-broke sign-in's port fallback too.
+	//
+	// Unregistering the preprocessor above already stops us serving anything. The listener stays bound
+	// for the rest of the session; that is the same trade the auth path makes, and there is no
+	// per-listener stop to do better with.
 	bRunning = false;
 	BaseUrl.Reset();
 }

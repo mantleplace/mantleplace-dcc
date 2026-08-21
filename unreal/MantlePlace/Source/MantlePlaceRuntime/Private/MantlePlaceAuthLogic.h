@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/Function.h"
 #include "MantlePlaceAuthTypes.h"
 
 /**
@@ -109,6 +110,32 @@ struct FMantlePlaceAuthLogic
 
 	/** The loopback redirect URI for a concrete bound port, e.g. http://127.0.0.1:51000/callback. */
 	static FString BuildLoopbackRedirectUri(int32 Port, const FString& CallbackPath);
+
+	/**
+	 * Candidate loopback ports when the host configures none.
+	 *
+	 * Spaced 512 apart, NOT consecutive. Windows reserves ~100-port blocks for Hyper-V/WinNAT that
+	 * shift across reboots; a bind into one is refused with WSAEACCES even though nothing is
+	 * listening. A consecutive run of ten ports fits inside a single such block — the previous
+	 * 51000-51009 default did, which took sign-in down outright — whereas a 512 stride cannot.
+	 * 51000 stays first: it is the port in the docs and the conformance corpus, and when it is
+	 * reserved the caller simply steps past it.
+	 */
+	static TArray<int32> DefaultLoopbackPorts();
+
+	/** Configured ports when non-empty, else DefaultLoopbackPorts(). */
+	static TArray<int32> ResolveLoopbackPorts(const TArray<int32>& ConfiguredPorts);
+
+	/**
+	 * Try each port in order until TryAcquire reports success; fills OutPort with the winner.
+	 * Returns false (leaving OutPort untouched) when every candidate fails.
+	 *
+	 * Acquisition is injected so this stays pure and headless-testable — the shim passes a lambda
+	 * that really binds a listener. That seam exists because the un-injected version of this loop
+	 * was dead code that never fell through, and nothing could observe it.
+	 */
+	static bool SelectLoopbackPort(const TArray<int32>& Ports,
+		TFunctionRef<bool(int32 /*Port*/)> TryAcquire, int32& OutPort);
 
 	/**
 	 * Build the system-browser authorize URL the user is sent to. WebLoginBaseUrl is the
