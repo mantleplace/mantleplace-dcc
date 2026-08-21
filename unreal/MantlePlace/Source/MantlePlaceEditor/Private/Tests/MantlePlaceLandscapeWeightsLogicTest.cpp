@@ -127,7 +127,7 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("no pixels"), FMantlePlaceLandscapeWeightsLogic::SampleIndex(2, 3, 0), 0);
 	}
 
-	// --- The real shape: a 2x2 raster resampled onto a 3x3 Landscape, rows flipped ------------
+	// --- The real shape: a 2x2 raster resampled onto a 3x3 Landscape, TRANSPOSED --------------
 	{
 		const FMantlePlaceLandscapeLayer Layer = MakeLayer(2, 2);
 		const TArray<FMantlePlaceRgbaImage> Images = {
@@ -148,28 +148,39 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("plane is Size*Size"), Planes[0].Data.Num(), 9);
 
 			// water == channel 0 of the 1_4 half, whose pixel (Row,Col) value is Row*4 + Col.
-			// Landscape row 0 is SOUTH, so it reads the PNG's LAST row (Row 1): values 4 and 5.
+			//
+			// The plane is indexed Data[X + Y*Size] with X = NORTH and Y = EAST, so landscape X
+			// walks the PNG's rows (flipped, since PNG row 0 is north) and landscape Y walks its
+			// columns. On the 3x3 grid that puts the four corners at:
+			//   SW = Data[0]   NW = Data[2]   SE = Data[6]   NE = Data[8]
+			// The two off-diagonal corners are what a missing transpose gets wrong — under the old
+			// East->+X reading, NW and SE held each other's values. SW and NE are invariant under a
+			// diagonal reflection, so they cannot detect it and are asserted only as a sanity check.
 			const TArray<uint8>& Water = Planes[0].Data;
 			TestEqual(TEXT("south-west post reads PNG row 1, col 0"), static_cast<int32>(Water[0]), 4);
-			TestEqual(TEXT("south-east post reads PNG row 1, col 1"), static_cast<int32>(Water[2]), 5);
-			// Landscape row 2 is NORTH, so it reads the PNG's row 0: values 0 and 1.
-			TestEqual(TEXT("north-west post reads PNG row 0, col 0"), static_cast<int32>(Water[6]), 0);
+			TestEqual(TEXT("north-west post reads PNG row 0, col 0"), static_cast<int32>(Water[2]), 0);
+			TestEqual(TEXT("south-east post reads PNG row 1, col 1"), static_cast<int32>(Water[6]), 5);
 			TestEqual(TEXT("north-east post reads PNG row 0, col 1"), static_cast<int32>(Water[8]), 1);
 
 			// built == channel 3 of the 5_8 half: base 100 + 3*40 + Row*4 + Col.
 			const TArray<uint8>& Built = Planes[7].Data;
 			TestEqual(TEXT("built reads the second half, channel 3"), static_cast<int32>(Built[0]), 224);
+			TestEqual(TEXT("built north-west"), static_cast<int32>(Built[2]), 220);
+			TestEqual(TEXT("built south-east"), static_cast<int32>(Built[6]), 225);
 			TestEqual(TEXT("built north-east"), static_cast<int32>(Built[8]), 221);
 		}
 
-		// row0_is_north false means no flip: the south row reads the PNG's first row.
+		// row0_is_north false means no flip along the north axis: landscape X=0 reads the PNG's
+		// first row. The transpose still applies — only the row direction changes.
 		TArray<FMantlePlaceWeightPlane> Unflipped;
 		Error.Reset();
 		TestTrue(TEXT("planes build unflipped"), FMantlePlaceLandscapeWeightsLogic::BuildWeightPlanes(
 		                                             Layer, Images, 3, /*bRow0IsNorth*/ false, Unflipped, Error));
 		if (Unflipped.Num() == 8)
 		{
-			TestEqual(TEXT("no flip: south post reads PNG row 0"), static_cast<int32>(Unflipped[0].Data[0]), 0);
+			TestEqual(TEXT("no flip: X=0 post reads PNG row 0"), static_cast<int32>(Unflipped[0].Data[0]), 0);
+			TestEqual(TEXT("no flip: X=2 post reads PNG row 1"), static_cast<int32>(Unflipped[0].Data[2]), 4);
+			TestEqual(TEXT("no flip: Y still walks columns"), static_cast<int32>(Unflipped[0].Data[6]), 1);
 		}
 	}
 

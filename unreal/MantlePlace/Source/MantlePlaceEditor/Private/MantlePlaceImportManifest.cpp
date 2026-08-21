@@ -11,10 +11,42 @@
 
 // ── Placement helpers ──────────────────────────────────────────────────────
 
+FVector FMantlePlaceVaultManifest::ProjectedToUeCm(double DeltaEastingM, double DeltaNorthingM, double UpM)
+{
+	// The single legal home for the projected->UE axis mapping. Unreal's world is
+	// LEFT-handed with X forward/North and Y right/East, so a right-handed map frame maps
+	// North -> +X, East -> +Y, Up -> +Z. Writing East -> +X instead swaps two axes, which is a
+	// reflection (determinant -1), not a rotation -- it mirrors the whole scene across the NE
+	// diagonal and reads, on a near-square AOI, as a 90 degree rotation. Every projected
+	// coordinate in this plugin goes through here so that mistake cannot be made twice.
+	return FVector(DeltaNorthingM * 100.0, DeltaEastingM * 100.0, UpM * 100.0);
+}
+
+FVector2D FMantlePlaceVaultManifest::GetAoiSizeUeCm() const
+{
+	// The manifest names its grid axes the ETL's way: `scale_x_percent` / `component_count_x`
+	// describe the EASTING axis and `*_y` the NORTHING axis. UE X is North, so the X component
+	// here takes the *_y values and vice versa. The scale is genuinely anisotropic (the corpus
+	// ships 141.369 vs 138.988), so a half-done swap survives as a quiet aspect-ratio error
+	// rather than an obvious one -- hence one accessor rather than the arithmetic inline.
+	return FVector2D(
+		ComponentCountY * GetQuadsPerComponent() * ScaleYPercent,   // North span
+		ComponentCountX * GetQuadsPerComponent() * ScaleXPercent);  // East span
+}
+
+FRotator FMantlePlaceVaultManifest::GetMeshRotation()
+{
+	// mesh(East, South) -> world(North, East) is (x, y) -> (-y, x), i.e. yaw +90. A rotation, not
+	// a mirror — see the header for the measurement this is derived from.
+	return FRotator(0.0, 90.0, 0.0);
+}
+
 FVector FMantlePlaceVaultManifest::GetLandscapeScale() const
 {
-	// The *_percent values ARE the DrawScale3D (100 == 1 m/quad, 512 m full uint16 range).
-	return FVector(ScaleXPercent, ScaleYPercent, ScaleZPercent);
+	// The *_percent values ARE the DrawScale3D (100 == 1 m/quad, 512 m full uint16 range),
+	// swapped into UE axis order: landscape-local X indexes the heightmap's ROWS (northing) and
+	// local Y its COLUMNS (easting), per the transpose in MantlePlaceLandscapeImporter.
+	return FVector(ScaleYPercent, ScaleXPercent, ScaleZPercent);
 }
 
 FVector FMantlePlaceVaultManifest::GetLandscapeSpawnLocation() const
@@ -22,11 +54,8 @@ FVector FMantlePlaceVaultManifest::GetLandscapeSpawnLocation() const
 	// Mirror the engine's New-Landscape centring: the actor location is the corner; offset it
 	// by half the (scaled) quad span so the AOI centre lands on world (0,0). Identity rotation,
 	// so TransformVector(scale) is a component-wise multiply.
-	const double HalfQuadsX = ComponentCountX * GetQuadsPerComponent() / 2.0;
-	const double HalfQuadsY = ComponentCountY * GetQuadsPerComponent() / 2.0;
-	const double OffsetX = -HalfQuadsX * ScaleXPercent; // ScaleXPercent == cm per quad
-	const double OffsetY = -HalfQuadsY * ScaleYPercent;
-	return FVector(OffsetX, OffsetY, LocationZOffsetCm);
+	const FVector2D AoiSize = GetAoiSizeUeCm();
+	return FVector(-AoiSize.X / 2.0, -AoiSize.Y / 2.0, LocationZOffsetCm);
 }
 
 FVector FMantlePlaceVaultManifest::GetMeshLocation() const
@@ -38,19 +67,24 @@ FVector FMantlePlaceVaultManifest::GetMeshLocation() const
 
 void FMantlePlaceVaultManifest::GetDrapeWorldRect(FVector2D& OutMin, FVector2D& OutSize) const
 {
-	// UTM -> UE world cm relative to the georeference origin (East -> +X, North -> +Y).
-	OutMin = FVector2D(
-		(DrapeLeftM - OriginEastingM) * 100.0,
-		(DrapeBottomM - OriginNorthingM) * 100.0);
-	OutSize = FVector2D(
-		(DrapeRightM - DrapeLeftM) * 100.0,
-		(DrapeTopM - DrapeBottomM) * 100.0);
+	// UTM -> UE world cm relative to the georeference origin (North -> +X, East -> +Y).
+	const FVector Min = ProjectedToUeCm(DrapeLeftM - OriginEastingM, DrapeBottomM - OriginNorthingM, 0.0);
+	const FVector Size = ProjectedToUeCm(DrapeRightM - DrapeLeftM, DrapeTopM - DrapeBottomM, 0.0);
+	OutMin = FVector2D(Min.X, Min.Y);
+	OutSize = FVector2D(Size.X, Size.Y);
 }
 
 void FMantlePlaceVaultManifest::GetDrapeUvTransform(FVector2D& OutScale, FVector2D& OutOffset) const
 {
 	// The geometry-local drape samples imagery from a grid-normalised [0,1] coordinate (gridUV) that
-	// spans the AOI grid, with U->+X/East and V->+Y/North. The AOI is centred on world (0,0), so its
+	// spans the AOI grid, with U->+X/North and V->+Y/East. NOTE the ordering contract with
+	// M_MantlePlace_Drape: the material applies these values in landscape-grid order FIRST, then
+	// swizzles AND flips into imagery order LAST -- `t = gridUV*DrapeUvScale + DrapeUvOffset;
+	// sample(t.y, 1 - t.x)` -- because the imagery PNG is north-up, so its U is East and its V grows
+	// southward, while landscape-local U is now North and grows northward. The flip belongs after the
+	// scale/offset: those place the grid inside the drape rect, and only then does `1 -` convert a
+	// north-position into a texture coordinate.
+	// Everything below therefore stays in UE (X=North, Y=East) order. The AOI is centred on world (0,0), so its
 	// world rect is AoiMin = (-AoiSize/2), spanning AoiSize; the imagery spans GetDrapeWorldRect(). The
 	// legacy world projection sampled imageryUV = (worldXY - DrapeMin)/DrapeSize. Substituting
 	// worldXY = AoiMin + gridUV*AoiSize gives imageryUV = gridUV*(AoiSize/DrapeSize) + (AoiMin-DrapeMin)/DrapeSize.
@@ -66,11 +100,10 @@ void FMantlePlaceVaultManifest::GetDrapeUvTransform(FVector2D& OutScale, FVector
 		return;
 	}
 
-	const double AoiSizeX = ComponentCountX * GetQuadsPerComponent() * ScaleXPercent;
-	const double AoiSizeY = ComponentCountY * GetQuadsPerComponent() * ScaleYPercent;
-	const FVector2D AoiMin(-AoiSizeX / 2.0, -AoiSizeY / 2.0); // AOI centred on world (0,0)
+	const FVector2D AoiSize = GetAoiSizeUeCm();
+	const FVector2D AoiMin(-AoiSize.X / 2.0, -AoiSize.Y / 2.0); // AOI centred on world (0,0)
 
-	OutScale = FVector2D(AoiSizeX / DrapeSize.X, AoiSizeY / DrapeSize.Y);
+	OutScale = FVector2D(AoiSize.X / DrapeSize.X, AoiSize.Y / DrapeSize.Y);
 	OutOffset = FVector2D(
 		(AoiMin.X - DrapeMin.X) / DrapeSize.X,
 		(AoiMin.Y - DrapeMin.Y) / DrapeSize.Y);

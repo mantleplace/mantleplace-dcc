@@ -633,6 +633,39 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("epsg empty"), MantlePlaceImportManifest::ParseEpsg(TEXT("")), 0);
 	}
 
+	// --- The world axis mapping ------------------------------------------------------------
+	// The one conversion every projected coordinate goes through, plus the mesh path's separate
+	// correction. Both are asserted by their EFFECT on a known offset rather than by restating
+	// the literal, so a sign or an axis that drifts fails here rather than in a screenshot.
+	{
+		// 100 m north of the origin is +X; 100 m east is +Y. Both components each time, because a
+		// half-done swap satisfies either one alone.
+		const FVector North = FMantlePlaceVaultManifest::ProjectedToUeCm(0.0, 100.0, 0.0);
+		TestEqual(TEXT("100 m north -> +10000 cm X"), North.X, 10000.0, 1e-9);
+		TestEqual(TEXT("100 m north -> 0 Y"), North.Y, 0.0, 1e-9);
+
+		const FVector East = FMantlePlaceVaultManifest::ProjectedToUeCm(100.0, 0.0, 0.0);
+		TestEqual(TEXT("100 m east -> +10000 cm Y"), East.Y, 10000.0, 1e-9);
+		TestEqual(TEXT("100 m east -> 0 X"), East.X, 0.0, 1e-9);
+
+		const FVector Up = FMantlePlaceVaultManifest::ProjectedToUeCm(0.0, 0.0, 100.0);
+		TestEqual(TEXT("100 m up -> +10000 cm Z"), Up.Z, 10000.0, 1e-9);
+
+		// Interchange lands glTF with East on +X and South on +Y. The mesh rotation must carry
+		// mesh-space east onto world +Y and mesh-space south onto world -X, WITHOUT mirroring:
+		// a determinant of +1 is the thing that distinguishes this from the old `-1` Y workaround.
+		const FRotator MeshRot = FMantlePlaceVaultManifest::GetMeshRotation();
+		const FVector MeshEast = MeshRot.RotateVector(FVector(1.0, 0.0, 0.0));
+		const FVector MeshSouth = MeshRot.RotateVector(FVector(0.0, 1.0, 0.0));
+		TestEqual(TEXT("mesh +X (east) -> world +Y"), MeshEast.Y, 1.0, 1e-6);
+		TestEqual(TEXT("mesh +X (east) -> no world X"), MeshEast.X, 0.0, 1e-6);
+		TestEqual(TEXT("mesh +Y (south) -> world -X"), MeshSouth.X, -1.0, 1e-6);
+		TestEqual(TEXT("mesh +Y (south) -> no world Y"), MeshSouth.Y, 0.0, 1e-6);
+		TestEqual(TEXT("mesh correction is a rotation, not a mirror (det +1)"),
+			FVector::CrossProduct(MeshEast, MeshSouth).Z, FVector::CrossProduct(
+				FVector(1.0, 0.0, 0.0), FVector(0.0, 1.0, 0.0)).Z, 1e-6);
+	}
+
 	// --- Bundle-level behaviour with no cross-host analogue --------------------------------
 	// cesiumTerrain streaming is a Cesium-for-Unreal concern; the retired pre-v13 tile-count key
 	// is Unreal's own deleted fallback. Neither belongs in a corpus a Revit host must consume.

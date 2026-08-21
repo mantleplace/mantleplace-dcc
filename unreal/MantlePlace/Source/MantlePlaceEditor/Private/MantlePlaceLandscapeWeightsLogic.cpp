@@ -135,13 +135,15 @@ bool FMantlePlaceLandscapeWeightsLogic::BuildWeightPlanes(
 		Plane.Data.SetNumUninitialized(Size * Size);
 		for (int32 Y = 0; Y < Size; ++Y)
 		{
-			// Landscape row 0 is the south edge; the PNG's row 0 is the north edge when the bundle
-			// says so, exactly as the heightmap is flipped in MantlePlaceLandscapeImporter.
-			const int32 SampledRow = SampleIndex(Y, Size, Image->Height);
-			const int32 SrcRow = bRow0IsNorth ? (Image->Height - 1 - SampledRow) : SampledRow;
+			// Transposed, exactly as the heightmap is in MantlePlaceLandscapeImporter: landscape X is
+			// North so it indexes the PNG's ROWS, landscape Y is East so it indexes the COLUMNS. The
+			// resample axes swap with it — Y (east) resamples against Image->Width, X against Height.
+			const int32 SrcCol = SampleIndex(Y, Size, Image->Width);
 			for (int32 X = 0; X < Size; ++X)
 			{
-				const int32 SrcCol = SampleIndex(X, Size, Image->Width);
+				// Landscape X=0 is the south edge; the PNG's row 0 is the north edge when the bundle says so.
+				const int32 SampledRow = SampleIndex(X, Size, Image->Height);
+				const int32 SrcRow = bRow0IsNorth ? (Image->Height - 1 - SampledRow) : SampledRow;
 				const int64 SrcIndex =
 					(static_cast<int64>(SrcRow) * Image->Width + SrcCol) * RgbaChannels + Band.Channel;
 				Plane.Data[X + Y * Size] = Image->Pixels[SrcIndex];

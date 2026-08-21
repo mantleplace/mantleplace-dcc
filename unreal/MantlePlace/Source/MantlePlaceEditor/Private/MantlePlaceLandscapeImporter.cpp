@@ -162,18 +162,29 @@ namespace MantlePlaceLandscapeImporter
 			return nullptr;
 		}
 
-		// Orient so North maps to +Y. The Landscape's row Y=0 is the south (corner) edge, while
-		// the PNG's row 0 is North when row0_is_north — so flip vertically. Columns (X) are
-		// West->East in both. HeightData index = X + Y*SizeX (X is the inner/fast axis).
+		// Orient so North maps to +X and East to +Y — Unreal's LEFT-handed world frame. This is a
+		// TRANSPOSE, not a row flip: the PNG is a map raster whose rows run north->south and whose
+		// columns run west->east, so the landscape's local X (north) indexes the PNG's ROWS and its
+		// local Y (east) indexes the PNG's COLUMNS. Copying rows straight across instead — the way
+		// this read before — puts East on +X, which swaps two axes of a Z-up frame. That is a
+		// reflection (determinant -1), not a rotation, so it mirrored every imported bundle across
+		// the NE diagonal and read as a 90-degree rotation on a near-square AOI.
+		//
+		// X is the engine's inner/fast axis (HeightData index = X + Y*SizeX), so the source stride
+		// is the one that walks: SrcRow advances down the PNG as X advances north.
+		const int32 SrcWidth = SizeY;  // PNG columns  -> landscape Y (east)
+		const int32 SrcHeight = SizeX; // PNG rows     -> landscape X (north)
 		TArray<uint16> HeightData;
 		HeightData.SetNumUninitialized(SizeX * SizeY);
 		for (int32 Y = 0; Y < SizeY; ++Y)
 		{
-			const int32 SrcRow = Manifest.bRow0IsNorth ? (SizeY - 1 - Y) : Y;
-			FMemory::Memcpy(
-				HeightData.GetData() + static_cast<int64>(Y) * SizeX,
-				Samples.GetData() + static_cast<int64>(SrcRow) * SizeX,
-				static_cast<int64>(SizeX) * sizeof(uint16));
+			for (int32 X = 0; X < SizeX; ++X)
+			{
+				// Landscape X=0 is the south edge; PNG row 0 is the north edge when the bundle says so.
+				const int32 SrcRow = Manifest.bRow0IsNorth ? (SrcHeight - 1 - X) : X;
+				HeightData[X + static_cast<int64>(Y) * SizeX] =
+					Samples[static_cast<int64>(SrcRow) * SrcWidth + Y];
+			}
 		}
 
 		const FVector Scale = Manifest.GetLandscapeScale();

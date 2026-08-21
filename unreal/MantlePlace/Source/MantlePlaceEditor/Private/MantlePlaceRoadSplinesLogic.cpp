@@ -2,6 +2,8 @@
 
 #include "MantlePlaceRoadSplinesLogic.h"
 
+#include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest::ProjectedToUeCm
+
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Serialization/JsonReader.h"
@@ -37,12 +39,11 @@ bool PositionToUeCm(
 	{
 		return false;
 	}
-	// Same frame math as FMantlePlaceVaultManifest::GetDrapeWorldRect / GetMeshLocation:
-	// East -> +X, North -> +Y, orthometric meters -> +Z, all relative to the AOI-centroid origin.
-	OutUeCm = FVector(
-	    (EastingM - OriginEastingM) * 100.0,
-	    (NorthingM - OriginNorthingM) * 100.0,
-	    ZM * 100.0);
+	// Same frame math as FMantlePlaceVaultManifest::GetDrapeWorldRect / GetMeshLocation, through
+	// the one helper that owns it: North -> +X, East -> +Y, orthometric metres -> +Z, all relative
+	// to the AOI-centroid origin.
+	OutUeCm = FMantlePlaceVaultManifest::ProjectedToUeCm(
+	    EastingM - OriginEastingM, NorthingM - OriginNorthingM, ZM);
 	return true;
 }
 

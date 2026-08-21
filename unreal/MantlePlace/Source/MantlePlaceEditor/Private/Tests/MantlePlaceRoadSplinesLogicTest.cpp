@@ -162,13 +162,21 @@ bool FMantlePlaceRoadSplinesLogicTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("origin point lands at world X=0"), Splines[0].PointsUeCm[0].X, 0.0, 5.0);
 			TestEqual(TEXT("origin point lands at world Y=0"), Splines[0].PointsUeCm[0].Y, 0.0, 5.0);
 			TestEqual(TEXT("Z is orthometric meters -> cm"), Splines[0].PointsUeCm[0].Z, 264000.0, 1e-3);
-			// +0.001 deg lon at this latitude is ~89.9 m east -> +X.
-			TestTrue(TEXT("east of origin -> +X"), Splines[0].PointsUeCm[1].X > 8000.0);
+			// UE is left-handed: North -> +X, East -> +Y. Each direction asserts BOTH components,
+			// because a half-done axis swap still satisfies the one-sided form of these checks. The
+			// cross-axis tolerance is deliberately loose (20 m): a due-east step in geographic space
+			// does pick up a little northing through meridian convergence, but a swapped axis would
+			// land at ~90 m, so 20 m separates the two without being brittle about convergence.
+			//
+			// +0.001 deg lon at this latitude is ~89.9 m east -> +Y, and no meaningful northing.
+			TestTrue(TEXT("east of origin -> +Y"), Splines[0].PointsUeCm[1].Y > 8000.0);
+			TestEqual(TEXT("east of origin has no +X"), Splines[0].PointsUeCm[1].X, 0.0, 2000.0);
 			TestEqual(TEXT("width rides along"), Splines[0].WidthMEstimated, 6.0, 1e-9);
 			TestEqual(TEXT("class rides along"), Splines[0].RoadClass, FString(TEXT("residential")));
 			TestEqual(TEXT("name rides along"), Splines[0].Name, FString(TEXT("Comet Rd")));
-			// +0.001 deg lat is ~110.9 m north -> +Y (the frame's North -> +Y convention).
-			TestTrue(TEXT("north of origin -> +Y"), Splines[1].PointsUeCm[1].Y > 10000.0);
+			// +0.001 deg lat is ~110.9 m north -> +X, and no easting.
+			TestTrue(TEXT("north of origin -> +X"), Splines[1].PointsUeCm[1].X > 10000.0);
+			TestEqual(TEXT("north of origin has no +Y"), Splines[1].PointsUeCm[1].Y, 0.0, 2000.0);
 			TestEqual(TEXT("second MultiLineString part is its own spline"),
 				Splines[2].RoadClass, FString(TEXT("track")));
 		}

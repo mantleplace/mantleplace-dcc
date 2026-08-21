@@ -835,8 +835,11 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			// mismatch is visible rather than silently mis-scaled.
 			if (Manifest.bHasHeightmap)
 			{
-				const double SpanXcm = Manifest.ComponentCountX * Manifest.GetQuadsPerComponent() * Manifest.ScaleXPercent;
-				const double SpanYcm = Manifest.ComponentCountY * Manifest.GetQuadsPerComponent() * Manifest.ScaleYPercent;
+				// Both spans in UE axis order (X = North, Y = East) — GetAoiSizeUeCm owns the swap
+				// between the manifest's grid-axis naming and UE's, so this must not open-code it.
+				const FVector2D AoiSize = Manifest.GetAoiSizeUeCm();
+				const double SpanXcm = AoiSize.X;
+				const double SpanYcm = AoiSize.Y;
 				FVector2D DrapeMin, DrapeSize;
 				Manifest.GetDrapeWorldRect(DrapeMin, DrapeSize);
 				if (SpanXcm > 0.0 && SpanYcm > 0.0
