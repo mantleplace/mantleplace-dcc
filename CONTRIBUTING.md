@@ -2,6 +2,8 @@
 
 Thanks for looking. This document is short and specific, and it tells you the things that will get a
 pull request closed before it is read — so you can spend your time on the ones that will not.
+Conduct expectations are the [Contributor Covenant](CODE_OF_CONDUCT.md); reports go to
+**support@mantle.place**.
 
 ## The maintenance posture, stated up front
 

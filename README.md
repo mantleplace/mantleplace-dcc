@@ -10,6 +10,9 @@ tools designers actually work in.
 
 Licensed under [Apache 2.0](LICENSE). The name is not covered — see [TRADEMARK.md](TRADEMARK.md).
 
+<!-- media slot: hero GIF — draw an AOI on mantle.place, import the bundle, orbit the finished
+     landscape in the Unreal editor. Keep it under a few MB; this repo has no LFS on purpose. -->
+
 ## What these plugins do
 
 A Mantle Place **bundle** is a zip of pre-derived, host-ready geospatial artifacts — a heightmap or
@@ -42,19 +45,65 @@ That means a second implementer is possible, and welcome. The
 RFC known answers for PKCE and base64url, NIST FIPS 180-4 digests, the vault client's response
 vocabulary. If you write a third-party consumer, that corpus is the spec you can test against.
 
-## Getting a bundle to try
+## Get a real bundle in minutes
 
 **There are no sample bundles in this repository, and there never will be** — no trimmed one, no small
 one. Real geospatial data carries real licence obligations (much of it is ODbL), and a repository that
-ships a bundle is redistributing that data. So the docs show you how to *make* one instead.
+ships a bundle is redistributing that data. So the docs show you how to *make* one instead — and the
+free tier makes that a matter of minutes, not a purchase decision.
 
-1. Create an account at [mantle.place](https://mantle.place) and define an area of interest.
+**Areas of interest up to 2 km² are free.** $0, full paid-tier quality, an account but no payment
+method. That is the intended way to evaluate these plugins: a real bundle over ground you know,
+produced by the same pipeline as a paid order.
+
+1. Create an account at [mantle.place](https://mantle.place) and draw an area of interest — keep it
+   at or under 2 km² and the order is free.
 2. Order a bundle for your host. The platform packages the artifacts and publishes a manifest.
 3. Either sign in from inside the plugin and use the vault browser, or download the zip and use the
    local-import path:
    - **Unreal:** the Mantle Place panel → *Browse for vault zip*.
    - **Revit:** `Mantle Place ▸ Bundles ▸ Import bundle zip`, or set `MANTLEPLACE_BUNDLE_ZIP` and the
      picker is skipped entirely, so the import runs unattended from a script.
+
+<!-- media slot: screenshot — the imported result in UE 5.8: the Landscape with painted weight
+     layers and the imagery drape, viewport + outliner visible. -->
+
+### What a downloaded bundle obliges you to do
+
+A bundle is built from licensed geospatial sources, and some of those licences carry obligations —
+most commonly an attribution requirement — that travel with the data into your project. Which
+sources a given bundle used, which licences apply, and the exact attribution text they require are
+stated by the platform, per bundle, not by this repository:
+[mantle.place/licensing](https://mantle.place/licensing) describes the licences bundle data may
+carry, and [mantle.place/attributions](https://mantle.place/attributions) is where the required
+attribution statements live. Nothing here restates those values — the platform's pages are the
+authority, and they are the ones kept current.
+
+## Stream to compare, import to own
+
+The Unreal plugin can show you the same bundle two ways in one viewport, and the pairing is the
+clearest statement of what it is for.
+
+The import path is the product: the bundle becomes **owned, engine-native assets on your disk** — a
+single `ALandscape` with painted weight layers, the imagery drape, meshes, splines. It works offline,
+needs no token, and survives the platform not being reachable, because after the download nothing is
+streamed from anywhere.
+
+Beside that, the plugin ships a streaming path built as a QA tool:
+[`mantleplace_cesium_stream.py`](unreal/MantlePlace/Content/Python/mantleplace_cesium_stream.py)
+starts a **local loopback tile server** that hosts the bundle's own Cesium-ready quantized-mesh
+terrain and imagery, then spawns a `Cesium3DTileset` pointed at it — so
+[Cesium for Unreal](https://cesium.com/platform/cesium-for-unreal/) (validated against 2.22.1)
+streams your bundle next to the imported copy, with Cesium World Terrain alongside for
+apples-to-apples comparison. Nothing streams from the Mantle Place platform; the server reads only
+the local zip you already own.
+
+The two paths do different jobs, and that is the point. Streaming answers *look at it now*; the
+import answers *keep it — offline, forever, no token*. Cesium for Unreal is the natural companion
+for the first job, and this plugin exists for the second.
+
+<!-- media slot: GIF — the side-by-side: the streamed tileset and the imported Landscape of the
+     same AOI in one viewport, camera panning between them. -->
 
 ## Repository layout
 
@@ -102,6 +151,12 @@ machine. So the engine build runs privately and at integration time. A pull requ
 and still break the Unreal compile; releases gate on that private build being green. This is a real,
 accepted lag rather than a gap we would rather you not notice.
 
+## Roadmap
+
+Quarter-by-quarter, in [ROADMAP.md](ROADMAP.md). The headline: **World Partition large-AOI import**
+— today an import produces a single `ALandscape`, and lifting that ceiling is the main course of the
+plugin's path from early access to 1.0 on Fab.
+
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) first — it is short, and it names the things that get a pull
@@ -134,7 +189,10 @@ does the job it exists for.
 So there is no contributor graph here and no archaeology to read. The things that carry the weight
 instead are the ones you can check yourself: public CI green on the merge bar, the conformance corpus
 and the published schema it tests against, and documentation that states the gaps — the Unreal-compile
-lag above is in this README because it is real, not because we ran out of places to hide it.
+lag above is in this README because it is real, not because we ran out of places to hide it. The record
+also reaches back further than this repository: the bundle-manifest schema series is published with an
+append-only freeze ledger under `https://mantle.place/.well-known/schemas/bundle-manifest/`, so the
+contract's iteration history is dated, externally served, and checkable without trusting a commit graph.
 
 ## How this code is written
 

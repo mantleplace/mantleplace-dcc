@@ -1,0 +1,45 @@
+name: Feature request
+description: Something a plugin should do that it does not.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing: two classes of request are declined by standing rule, not by mood, so it is
+        kinder to say so here than in review.
+
+        - **The client stays thin.** The plugins apply placement values the platform publishes; they
+          never derive them. A request for the plugin to compute a survey point, a UTM zone, a
+          landscape scale or a drape extent locally will be declined even when the arithmetic is
+          easy — see the [README](https://github.com/mantleplace/mantleplace-dcc/blob/main/README.md#what-these-plugins-do).
+        - **No sample bundles, no binaries.** See
+          [CONTRIBUTING.md](https://github.com/mantleplace/mantleplace-dcc/blob/main/CONTRIBUTING.md#what-does-not-go-in-this-repository).
+
+        The [roadmap](https://github.com/mantleplace/mantleplace-dcc/blob/main/ROADMAP.md) shows what is already planned.
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host
+      options:
+        - Unreal Engine
+        - Revit
+        - Both / cross-host
+        - manifest-conformance tooling
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and where does the current plugin stop short?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: >-
+        A behaviour, not an implementation, is fine. If it involves new manifest content, note that
+        the manifest contract is owned by the published schema series, not this repository.
+    validations:
+      required: true

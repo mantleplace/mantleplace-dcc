@@ -1,0 +1,10 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/mantleplace/mantleplace-dcc/security/advisories/new
+    about: "Report privately — never in the public tracker. Policy: SECURITY.md."
+  - name: Platform, account, or order problems
+    url: https://mantle.place
+    about: >-
+      This repository is the plugins only. Anything about the mantle.place platform itself — orders,
+      the vault, billing, coverage — goes to support@mantle.place.

@@ -26,7 +26,7 @@ unreal/MantlePlace/            the UE 5.8 plugin, folder + .uplugin — PascalCa
 revit/                         the Revit plugin: pure Core, Client, Addin shim, headless tests
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
 .github/workflows/             the two public CI gates, plus the stale-tracker job
-LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  README.md  CLAUDE.md
+LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md  CLAUDE.md
 ```
 
 **The rule for every future top-level addition:** *a top-level folder is a DCC host or a cross-host
