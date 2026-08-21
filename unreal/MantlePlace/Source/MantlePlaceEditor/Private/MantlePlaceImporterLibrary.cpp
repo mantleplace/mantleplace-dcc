@@ -238,8 +238,8 @@ namespace
 
 	// The local Cesium stream server outlives StreamBundleIntoCesium so Cesium keeps fetching tiles.
 	// Editor-session lifetime; restarted per stream, stopped by StopBundleStream. The server dtor's
-	// Stop() is guarded by FHttpServerModule::IsAvailable(), so static teardown after the module unloads
-	// is safe.
+	// Stop() touches only the router it already holds a shared reference to — never the module — so
+	// static teardown after the module unloads is safe.
 	TUniquePtr<FMantlePlaceLocalTileServer> GBundleStreamServer;
 }
 

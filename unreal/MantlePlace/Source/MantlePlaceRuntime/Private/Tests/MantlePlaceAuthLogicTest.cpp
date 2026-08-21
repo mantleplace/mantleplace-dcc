@@ -587,6 +587,83 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 			FString(TEXT("http://127.0.0.1:51000/callback")));
 	}
 
+	// ----- Loopback port selection -----
+	//
+	// This fallback was dead code in shipped builds: the shim committed to the first candidate
+	// before any real bind was attempted, so a reserved or occupied first port opened a browser tab
+	// onto nothing. The loop is only observable once acquisition is injected, which is what these
+	// cover — the fall-through, the give-up, and that each candidate is tried once, in order.
+
+	// The default spread must not be consecutive: a Windows Hyper-V/WinNAT reservation is ~100 ports
+	// wide, so a consecutive run is swallowed whole (51000-51009 was, and sign-in broke outright).
+	{
+		const TArray<int32> Defaults = FLogic::DefaultLoopbackPorts();
+		TestTrue(TEXT("default loopback spread offers several candidates"), Defaults.Num() >= 3);
+		TestEqual(TEXT("default loopback spread still leads with 51000"), Defaults[0], 51000);
+
+		bool bWidelySpaced = true;
+		for (int32 Index = 1; Index < Defaults.Num(); ++Index)
+		{
+			if (Defaults[Index] - Defaults[Index - 1] < 512)
+			{
+				bWidelySpaced = false;
+			}
+		}
+		TestTrue(TEXT("default loopback candidates are at least 512 apart"), bWidelySpaced);
+	}
+
+	// Configured ports win; an empty config falls back to the built-in spread.
+	{
+		const TArray<int32> Configured = { 41000, 41512 };
+		TestTrue(TEXT("configured loopback ports pass through"),
+			FLogic::ResolveLoopbackPorts(Configured) == Configured);
+		TestTrue(TEXT("no configured ports falls back to the default spread"),
+			FLogic::ResolveLoopbackPorts(TArray<int32>()) == FLogic::DefaultLoopbackPorts());
+	}
+
+	// The first candidate failing must not abort the search — the regression that broke sign-in.
+	{
+		TArray<int32> Attempted;
+		int32 Selected = 0;
+		const bool bAcquired = FLogic::SelectLoopbackPort({ 51000, 51512, 52024 },
+			[&Attempted](int32 Port)
+			{
+				Attempted.Add(Port);
+				return Port == 51512;
+			}, Selected);
+
+		TestTrue(TEXT("selection succeeds when a later candidate binds"), bAcquired);
+		TestEqual(TEXT("selection returns the port that actually bound"), Selected, 51512);
+		TestTrue(TEXT("selection stops at the first success"),
+			Attempted == TArray<int32>({ 51000, 51512 }));
+	}
+
+	// Every candidate failing must be reported, not silently treated as success — otherwise the
+	// caller opens a browser onto a port nothing is listening on.
+	{
+		TArray<int32> Attempted;
+		int32 Selected = -7; // sentinel: must survive untouched
+		const bool bAcquired = FLogic::SelectLoopbackPort({ 51000, 51512 },
+			[&Attempted](int32 Port)
+			{
+				Attempted.Add(Port);
+				return false;
+			}, Selected);
+
+		TestFalse(TEXT("selection fails when no candidate binds"), bAcquired);
+		TestEqual(TEXT("a failed selection leaves the out port untouched"), Selected, -7);
+		TestTrue(TEXT("a failed selection tries every candidate, in order"),
+			Attempted == TArray<int32>({ 51000, 51512 }));
+	}
+
+	// An empty candidate list is a failure, not a crash or an accidental success.
+	{
+		int32 Selected = 0;
+		const bool bAcquired = FLogic::SelectLoopbackPort({},
+			[](int32) { return true; }, Selected);
+		TestFalse(TEXT("no candidates means no port"), bAcquired);
+	}
+
 	return true;
 }
 

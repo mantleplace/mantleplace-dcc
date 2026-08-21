@@ -39,11 +39,19 @@ public sealed class MantlePlaceEndpoints
     public string SupabaseAnonKey { get; init; } = string.Empty;
 
     /// <summary>
-    /// Loopback ports tried in order (<c>HPS-06</c>). Ten is enough for a handful of Revit sessions
+    /// Loopback ports tried in order (<c>HPS-06</c>). Five is enough for a handful of Revit sessions
     /// on one machine and small enough that a firewall exception is a bounded ask.
+    /// <para>
+    /// Spaced 512 apart, NOT consecutive. Windows reserves ~100-port blocks for Hyper-V/WinNAT that
+    /// shift across reboots; a bind into one is refused with WSAEACCES even though nothing is
+    /// listening. A consecutive run fits inside a single such block — the previous 51000-51009 list
+    /// did, and that took Unreal sign-in down outright — whereas a 512 stride cannot. 51000 stays
+    /// first: it is the port in the docs and the conformance corpus, and when it is reserved the
+    /// listener simply steps past it.
+    /// </para>
     /// </summary>
     public IReadOnlyList<int> LoopbackPorts { get; init; } =
-        [51000, 51001, 51002, 51003, 51004, 51005, 51006, 51007, 51008, 51009];
+        [51000, 51512, 52024, 52536, 53048];
 
     /// <summary>Path component of the loopback redirect URI.</summary>
     public string CallbackPath { get; init; } = "/callback";

@@ -62,9 +62,20 @@ internal static class AuthClientTests
             MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load(Path.Combine(sandbox, "absent.json"));
             run.Equal(endpoints.WebLoginUrl, "https://mantle.place/auth/native", "web login");
             run.Equal(endpoints.TokenEndpointUrl, "https://mantle.place/api/v1/auth/native/token", "token exchange");
-            run.Equal(endpoints.LoopbackPorts.Count, 10, "ten loopback ports");
+            run.Equal(endpoints.LoopbackPorts.Count, 5, "five loopback ports");
             run.Equal(endpoints.LoopbackPorts[0], 51000, "first port");
-            run.Equal(endpoints.LoopbackPorts[^1], 51009, "last port");
+            run.Equal(endpoints.LoopbackPorts[^1], 53048, "last port");
+            // Spaced, not consecutive: a Windows reserved block is ~100 ports wide and would
+            // otherwise swallow the whole list at once.
+            bool spaced = true;
+            for (int i = 1; i < endpoints.LoopbackPorts.Count; i++)
+            {
+                if (endpoints.LoopbackPorts[i] - endpoints.LoopbackPorts[i - 1] < 512)
+                {
+                    spaced = false;
+                }
+            }
+            run.True(spaced, "candidates are at least 512 apart");
             run.Equal(endpoints.SignInTimeoutSeconds, 300, "sign-in timeout");
             run.True(endpoints.RefreshTokenUrl is null, "and refresh is unconfigured until Supabase is set");
         });
@@ -116,7 +127,11 @@ internal static class AuthClientTests
 
         run.Case("the loopback listener binds before anything opens a browser (HPS-06)", () =>
         {
-            using LoopbackRedirectListener? first = LoopbackRedirectListener.Start([51000, 51001], "/callback");
+            // Use the shipped candidate list rather than hardcoded ports: on a Windows box a
+            // hardcoded pair can sit inside a Hyper-V reserved range and fail for reasons that have
+            // nothing to do with this test.
+            using LoopbackRedirectListener? first =
+                LoopbackRedirectListener.Start(new MantlePlaceEndpoints().LoopbackPorts, "/callback");
             run.True(first is not null, "bound a port");
             run.Equal(
                 first!.RedirectUri,

@@ -443,14 +443,19 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 
 	FHttpServerModule& ServerModule = FHttpServerModule::Get();
 
-	TArray<int32> Ports = LoopbackPorts;
-	if (Ports.Num() == 0)
-	{
-		for (int32 Port = 51000; Port <= 51009; ++Port)
-		{
-			Ports.Add(Port);
-		}
-	}
+	// ORDER IS LOAD-BEARING: enable listeners BEFORE probing candidate ports.
+	//
+	// GetHttpRouter(Port, bFailOnBindFailure=true) only attempts a real socket bind when the
+	// module-global "listeners enabled" flag is already set — and that flag is set by
+	// StartAllListeners(). Called the other way round (probe first, start after), the first
+	// sign-in of every process binds nothing, GetHttpRouter returns a valid router for whatever
+	// port we asked about, and the loop below "succeeds" on candidate #1 no matter what. The
+	// bind then fails inside StartAllListeners(), too late to fall back, and the browser opens
+	// on a dead port with no in-app failure at all. Starting first makes each probe an honest
+	// bind-or-null, which is exactly what the loop already assumes.
+	ServerModule.StartAllListeners();
+
+	const TArray<int32> Ports = FMantlePlaceAuthLogic::ResolveLoopbackPorts(LoopbackPorts);
 
 	FString CallbackPath = LoopbackCallbackPath;
 	if (!CallbackPath.StartsWith(TEXT("/")))
@@ -460,12 +465,14 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 
 	TWeakObjectPtr<UMantlePlaceAuthSystemBase> WeakThis(this);
 
-	for (const int32 Port : Ports)
+	int32 SelectedPort = 0;
+	const bool bAcquired = FMantlePlaceAuthLogic::SelectLoopbackPort(Ports,
+		[this, &ServerModule, &CallbackPath, WeakThis](int32 Port) -> bool
 	{
 		TSharedPtr<IHttpRouter> Router = ServerModule.GetHttpRouter(static_cast<uint32>(Port), /*bFailOnBindFailure=*/true);
 		if (!Router.IsValid())
 		{
-			continue; // Port unavailable — try the next candidate.
+			return false; // Port reserved or in use — try the next candidate.
 		}
 
 		FHttpRouteHandle Handle = Router->BindRoute(
@@ -543,18 +550,32 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 
 		if (!Handle.IsValid())
 		{
-			continue; // Couldn't bind the route here — try the next port.
+			return false; // Couldn't bind the route here — try the next port.
 		}
 
 		LoopbackRouter = Router;
 		CallbackRouteHandle = Handle;
-		BoundLoopbackPort = Port;
-		ServerModule.StartAllListeners();
 		return true;
+	}, SelectedPort);
+
+	if (!bAcquired)
+	{
+		// Name the ports actually tried. "In use" would be a guess — and usually the wrong one:
+		// the common cause on Windows is a reserved range, where nothing is listening at all.
+		OutError = FString::Printf(
+			TEXT("Could not start the local sign-in callback server: none of the candidate loopback "
+			     "ports could be bound (tried %s)."),
+			*FString::JoinBy(Ports, TEXT(", "), [](int32 Port) { return FString::FromInt(Port); }));
+#if PLATFORM_WINDOWS
+		OutError += TEXT(" On Windows a bind is also refused for ports inside a Hyper-V/WinNAT reserved "
+			"range, even with nothing listening. List the ranges with "
+			"'netsh interface ipv4 show excludedportrange protocol=tcp' and configure LoopbackPorts outside them.");
+#endif
+		return false;
 	}
 
-	OutError = TEXT("Could not start the local sign-in callback server: all candidate loopback ports are in use.");
-	return false;
+	BoundLoopbackPort = SelectedPort;
+	return true;
 }
 
 void UMantlePlaceAuthSystemBase::StopLoopbackServer()
