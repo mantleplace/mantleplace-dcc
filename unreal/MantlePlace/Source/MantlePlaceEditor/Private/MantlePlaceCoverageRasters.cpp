@@ -93,6 +93,11 @@ namespace MantlePlaceCoverageRasters
 		Data->Mapping = Kind;
 		Data->LayerName = Layer.Name;
 		Data->Encoding = Raster.Encoding;
+		// Stated, not defaulted: UTextureFactory copies the PNG through in source-map order, so
+		// unlike the heightmap and weight planes (which this plugin transposes onto the Landscape
+		// grid) these keep U=East / V=South. A consumer sampling one beside the Landscape has to
+		// swizzle, and this is the field that tells it so.
+		Data->Orientation = EMantlePlaceCoverageOrientation::NorthUpRowMajor;
 		Data->MinValue = Raster.ValueMapping.MinValue;
 		Data->MaxValue = Raster.ValueMapping.MaxValue;
 		Data->ToValueFormula = Raster.ValueMapping.ToValueFormula;

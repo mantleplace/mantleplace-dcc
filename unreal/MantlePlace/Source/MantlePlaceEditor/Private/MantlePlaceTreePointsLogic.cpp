@@ -2,6 +2,8 @@
 
 #include "MantlePlaceTreePointsLogic.h"
 
+#include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest::ProjectedToUeCm
+
 bool FMantlePlaceTreePointsLogic::ParseCsv(
     const FString& CsvText,
     double OriginEastingM,
@@ -36,11 +38,9 @@ bool FMantlePlaceTreePointsLogic::ParseCsv(
 		const double GroundZM = Fields[2].IsEmpty() ? 0.0 : FCString::Atod(*Fields[2]);
 
 		FMantlePlaceTreePointRow Row;
-		// Same frame math as the drape/mesh placement: East -> +X, North -> +Y, orthometric m -> +Z cm.
-		Row.Position = FVector(
-		    (UtmX - OriginEastingM) * 100.0,
-		    (UtmY - OriginNorthingM) * 100.0,
-		    GroundZM * 100.0);
+		// Same frame math as the drape/mesh placement, through the one helper that owns it.
+		Row.Position = FMantlePlaceVaultManifest::ProjectedToUeCm(
+		    UtmX - OriginEastingM, UtmY - OriginNorthingM, GroundZM);
 		Row.HeightM = FCString::Atof(*Fields[3]);
 		Row.CrownRadiusM = FCString::Atof(*Fields[4]);
 		Row.GroundZM = static_cast<float>(GroundZM);

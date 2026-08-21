@@ -218,19 +218,19 @@
       "group": "manifest",
       "file": "manifest/full.json",
       "expect": "accept",
-      "reason": "The reference v18 accept shape, lifted from the platform's reference fixture. A host that parses this correctly has the whole unreal block, the per-host dcc_readiness and the placement math covered. v19 grew `landscape_layers`: all eight sub-blocks, each with its source raster's hash and its UE-ready PNG companions, whose `value_mapping` shape follows the companion's `encoding`. The companions are declared 143x142 against a 1009-post heightmap deliberately - the weight rasters ride the DEM's grid, not the Landscape's, so a host that assumes the two match is wrong.",
+      "reason": "The reference v18 accept shape, lifted from the platform's reference fixture. A host that parses this correctly has the whole unreal block, the per-host dcc_readiness and the placement math covered. v19 grew `landscape_layers`: all eight sub-blocks, each with its source raster's hash and its UE-ready PNG companions, whose `value_mapping` shape follows the companion's `encoding`. The companions are declared 143x142 against a 1009-post heightmap deliberately - the weight rasters ride the DEM's grid, not the Landscape's, so a host that assumes the two match is wrong. Every placement tuple here (landscapeScale, landscapeSpawnLocation, drapeWorldRect*) is in the HOST ENGINE's axis order, which for Unreal is left-handed North=+X / East=+Y. The manifest names its own grid axes the other way round (`scale_x_percent` and `component_count_x` describe EASTING), so these tuples read as swapped against the source fields on purpose — that swap is the thing under test. Mapping East to +X instead swaps two axes of a Z-up frame, which is a reflection rather than a rotation, and mirrors the whole import.",
       "manifestVersion": 19,
       "expectations": {
         "quadsPerComponent": 126,
         "landscapeScale": [
-          141.36904761904762,
           138.98809523809524,
+          141.36904761904762,
           75.14834403991699
         ],
         "landscapeScaleTolerance": 1e-06,
         "landscapeSpawnLocation": [
-          -71250.0,
           -70050.0,
+          -71250.0,
           277020.59326171875
         ],
         "landscapeSpawnToleranceCm": 0.01,
@@ -241,13 +241,13 @@
         ],
         "meshLocationToleranceCm": 0.01,
         "drapeWorldRectMin": [
-          -71237.06083538709,
-          -69966.184607381
+          -69966.184607381,
+          -71237.06083538709
         ],
         "drapeWorldRectMinToleranceCm": 1.0,
         "drapeWorldRectSize": [
-          142473.09629319352,
-          139971.0595688317
+          139971.0595688317,
+          142473.09629319352
         ],
         "drapeWorldRectSizeToleranceCm": 0.01,
         "epsg": 32613,

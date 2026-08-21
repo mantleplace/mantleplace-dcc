@@ -29,6 +29,36 @@ enum class EMantlePlaceCoverageMapping : uint8
 };
 
 /**
+ * Which way is north in a coverage raster's texture space.
+ *
+ * This is recorded rather than assumed because the plugin's two raster paths genuinely differ. The
+ * heightmap and the material-weight planes are decoded by this plugin and TRANSPOSED onto the
+ * Landscape's grid (landscape-local X is North, Y is East — see FMantlePlaceVaultManifest's
+ * convention block). Coverage rasters instead go through the engine's texture factory, which copies
+ * the PNG through verbatim, so they keep the source map's own row order. A material that samples a
+ * coverage raster with the same coordinate it uses for the drape, without accounting for that, gets
+ * a silently transposed layer — and a transposed slope or water mask looks plausible, which is
+ * exactly the kind of wrong that survives review.
+ */
+UENUM(BlueprintType)
+enum class EMantlePlaceCoverageOrientation : uint8
+{
+	/**
+	 * Source-map order: row 0 is the northern edge, columns run west->east. Texture U is therefore
+	 * EAST and V is SOUTH. To sample this against the Landscape's LandscapeLayerCoords (whose U is
+	 * North and V is East), apply the same U/V swizzle M_MantlePlace_Drape does.
+	 */
+	NorthUpRowMajor,
+
+	/**
+	 * Already transposed onto the Landscape's grid: texture U is North, V is East, matching
+	 * LandscapeLayerCoords directly. Nothing imports as this today; it exists so a future
+	 * pre-transposed raster can say so rather than being mistaken for the case above.
+	 */
+	LandscapeGrid,
+};
+
+/**
  * The meaning and provenance of one imported coverage raster, attached to its UTexture2D.
  *
  * A coverage raster describes what is ON the ground without changing what the Landscape IS — that
@@ -58,6 +88,13 @@ public:
 	/** The `ue_ready[].encoding` this texture was imported under, e.g. "png-16bit-grayscale". */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mantle Place|Coverage Raster")
 	FString Encoding;
+
+	/**
+	 * Which way is north in this texture's UV space. Read this before sampling the raster
+	 * alongside the Landscape — the two do not share a coordinate order by default.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mantle Place|Coverage Raster")
+	EMantlePlaceCoverageOrientation Orientation = EMantlePlaceCoverageOrientation::NorthUpRowMajor;
 
 	// --- Scale ------------------------------------------------------------------------------
 

@@ -64,9 +64,15 @@ struct FMantlePlaceLandscapeLayer
  *
  * Coordinate conventions (validated against the contract):
  *  - The georeference origin (AOI centroid, UTM easting/northing) maps to UE world (0,0).
- *  - East -> +X, North -> +Y, Up -> +Z; 1 uu = 1 cm.
+ *  - **North -> +X, East -> +Y, Up -> +Z**; 1 uu = 1 cm. This is Unreal's LEFT-handed world
+ *    frame, and the swap versus the manifest's own grid-axis naming is deliberate: the ETL
+ *    calls its easting axis "x" (`scale_x_percent`, `component_count_x`), so those values are
+ *    applied to UE **Y**. Mapping East -> +X instead swaps two axes, which is a reflection
+ *    (determinant -1) rather than a rotation, and silently mirrors every imported bundle.
+ *    Route every projected coordinate through ProjectedToUeCm() rather than open-coding it.
  *  - The *_percent transform values are the Landscape actor DrawScale3D *directly* (the UE
- *    convention where a scale of 100 == the default 1 m / quad and 512 m full uint16 range).
+ *    convention where a scale of 100 == the default 1 m / quad and 512 m full uint16 range),
+ *    after the axis swap above.
  */
 struct FMantlePlaceVaultManifest
 {
@@ -176,7 +182,38 @@ struct FMantlePlaceVaultManifest
 
 	// --- Placement helpers (apply the contract verbatim) -------------------------------
 
-	/** Landscape actor DrawScale3D = the manifest's *_percent values directly. */
+	/**
+	 * Projected metres, relative to the georeference origin, into UE world cm. The ONE place the
+	 * projected->UE axis mapping lives: North -> +X, East -> +Y, Up -> +Z.
+	 */
+	static FVector ProjectedToUeCm(double DeltaEastingM, double DeltaNorthingM, double UpM);
+
+	/** The AOI's full span in UE world cm, in UE axis order (X = North, Y = East). The manifest's
+	 *  grid axes are named the other way round, so this is where that swap is applied once. */
+	FVector2D GetAoiSizeUeCm() const;
+
+	/**
+	 * Actor rotation for the bundle's glTF-sourced actors (terrain `mesh_alternative`, `buildings_mesh`).
+	 *
+	 * Interchange lands these meshes with **East on +X and South on +Y** — measured, not assumed:
+	 * the terrain mesh's >100 m vertices centroid at local (-572.3, +228.9) m against a heightmap
+	 * whose true high-ground centroid is 572.8 m west and 219.2 m south of the AOI centre. The
+	 * world frame is North -> +X, East -> +Y (ProjectedToUeCm), so mapping mesh(East, South) onto
+	 * world(North, East) is (x, y) -> (-y, x): a **+90 degree yaw, determinant +1**. It is a pure
+	 * rotation, so the meshes need no mirroring and no negative scale.
+	 *
+	 * This is why the mesh path differs from the raster path, which needed a transpose: the glTF
+	 * arrives right-handed and Interchange's Y-up->Z-up conversion already performs the handedness
+	 * flip, leaving only an in-plane rotation. The heightmap is a bare raster with no
+	 * such conversion, so its correction is a reflection instead.
+	 *
+	 * Historical note: against the OLD, mirrored landscape (East -> +X, North -> +Y) these meshes
+	 * differed by exactly a Y negation, which is why a `-1` Y scale appeared to line them up. That
+	 * workaround mirrored the geometry to match a mirrored terrain; this rotation does not.
+	 */
+	static FRotator GetMeshRotation();
+
+	/** Landscape actor DrawScale3D = the manifest's *_percent values, swapped into UE axis order. */
 	FVector GetLandscapeScale() const;
 
 	/** Spawn location for the Landscape actor (corner), centring the AOI on world (0,0). */
@@ -185,15 +222,24 @@ struct FMantlePlaceVaultManifest
 	/** Static-mesh actor location: centroid at world (0,0), ground at true orthometric Z. */
 	FVector GetMeshLocation() const;
 
-	/** Drape footprint in UE world cm (East/+X, North/+Y). Used by the importer's imagery-coverage
+	/** Drape footprint in UE world cm (North/+X, East/+Y). Used by the importer's imagery-coverage
 	 *  warning (and to derive the UV transform below). */
 	void GetDrapeWorldRect(FVector2D& OutMin, FVector2D& OutSize) const;
 
 	/**
 	 * Grid-relative UV transform for the geometry-local drape material. The material samples the imagery
-	 * from a normalised [0,1] coordinate that spans the AOI grid (LandscapeLayerCoords; U->+X/East,
-	 * V->+Y/North), then applies `OutScale`/`OutOffset` to land on the imagery's geographic footprint:
-	 *   imageryUV = gridUV * OutScale + OutOffset.
+	 * from a normalised [0,1] coordinate that spans the AOI grid (LandscapeLayerCoords; U->+X/North,
+	 * V->+Y/East), then applies `OutScale`/`OutOffset` to land on the imagery's geographic footprint:
+	 *   t         = gridUV * OutScale + OutOffset   // still (North, East); 0 at the drape's S/W edge
+	 *   imageryUV = (t.y, 1 - t.x)                  // (East, 1 - North)
+	 * That second line is load-bearing and lives in M_MantlePlace_Drape, because scale-and-offset can
+	 * express neither half of it:
+	 *   - the swizzle, because these values are in landscape-grid order (X=North) while the imagery
+	 *     PNG is north-up, so its own U is East;
+	 *   - the `1 -`, because t.x grows northward from the drape's south edge whereas texture V grows
+	 *     downward from its north edge. It is applied AFTER scale/offset deliberately: those place the
+	 *     grid within the drape rect, and only then does the flip turn a north-position into a texture
+	 *     coordinate. Folding the flip in earlier would be wrong by `1 - OutScale - 2*OutOffset`.
 	 * Derived so the result equals the legacy world-position projection, but it now rides the surface
 	 * through sculpts/moves/Y-mirror (LandscapeLayerCoords is topological, not world-space). For v8
 	 * (imagery == AOI) this is the identity: scale (1,1), offset (0,0).

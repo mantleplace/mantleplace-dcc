@@ -13,13 +13,43 @@ Download-to-own: nothing is streamed from the platform, only from the user's loc
 Usage (Python console, or an Editor Utility Widget "Stream into Cesium" button via Execute Python):
     import mantleplace_cesium_stream as mp
     mp.stream_into_cesium(r"C:/path/to/bundle.zip")
+    mp.ground_truth_overlay(r"C:/path/to/bundle.zip")   # Cesium World Terrain + imagery, for QA
 
 NOTE: the exact Cesium-for-Unreal Python property/enum names below are validated against v2.22.1 during
 the editor step; risky calls are wrapped so a name mismatch degrades to a warning rather than aborting.
+
+THE FRAME (Mantle Place world convention: North -> +X, East -> +Y, Up -> +Z)
+--------------------------------------------------------------------------------
+Cesium places content in an **East-South-Up** frame: +X East, +Y South, so north is -Y. That is
+deliberate -- ENU is right-handed and Unreal is left-handed, so exactly one horizontal axis has to
+flip or the result is a mirror. Mantle Place flips the other way round, to **North-East-Up**: +X
+North, +Y East. Both are left-handed; they differ by a clean +90 deg yaw and nothing else.
+
+Cesium offers no knob for this: ACesiumGeoreference hardcodes East/South/Up
+(UCesiumEllipsoid::CreateCoordinateSystem) and derives the tileset transform from the georeference
+alone, ignoring the georeference actor's own rotation. What DOES work is rotating the tileset actor:
+its primitives are positioned with SetRelativeTransform, so the actor's transform composes. Hence
+CESIUM_TO_WORLD_YAW below, applied to every tileset this module spawns.
+
+Getting the sign wrong mirrors rather than rotates, which is the whole class of bug this convention exists
+to prevent -- so a residual ROTATION here means this yaw is wrong, while a residual FLIP means
+something upstream is.
 """
+import json
+import zipfile
+
 import unreal
 
 _TILESET_LABEL = "MP_CesiumStream_Terrain"
+_QA_TERRAIN_LABEL = "MP_CesiumQA_WorldTerrain"
+
+#: Cesium's East-South-Up -> our North-East-Up. East(+X) -> +Y and South(+Y) -> -X, which is yaw +90.
+CESIUM_TO_WORLD_YAW = 90.0
+
+#: Cesium World Terrain and Bing Maps Aerial. Both need a signed-in Cesium ion account
+#: (Window -> Cesium -> "Connect to Cesium ion").
+ION_ASSET_WORLD_TERRAIN = 1
+ION_ASSET_BING_AERIAL = 2
 
 
 def _find_georeference():
@@ -62,6 +92,36 @@ def _add_raster_overlay(actor, overlay_class, name):
         return None
     sds.rename_subobject(handle=new_handle, new_name=unreal.Text(name))
     return SDLib.get_associated_object(SDLib.get_data(new_handle))
+
+
+def _orient_into_world_frame(tileset):
+    """Yaw a Cesium tileset out of Cesium's East-South-Up and into our North-East-Up world.
+
+    Pivots on the actor origin, which sits at UE (0,0,0) == the georeference origin == the AOI
+    centroid, so this is a rotation about the right point and nothing translates. It lands on the
+    tiles because Cesium positions its primitives with SetRelativeTransform under the tileset root,
+    so the actor's own transform composes -- unlike the georeference's, which Cesium ignores.
+
+    CAVEAT: in a `-run=pythonscript` commandlet this silently no-ops. That is not a Cesium quirk --
+    set_actor_rotation returns True and leaves yaw at 0 for a plain StaticMeshActor there too,
+    because components are never fully registered. Verify this yaw in a real editor session, not
+    headlessly.
+    """
+    tileset.set_actor_rotation(unreal.Rotator(0.0, CESIUM_TO_WORLD_YAW, 0.0), False)
+    unreal.log("[MantlePlace] {} yawed {:+.0f} deg: Cesium East-South-Up -> world North-East-Up."
+               .format(tileset.get_actor_label(), CESIUM_TO_WORLD_YAW))
+
+
+def _manifest_origin(zip_path):
+    """(lon, lat, ground_orthometric_h_m) from the bundle manifest, or None."""
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            manifest = json.loads(archive.read("Metadata/manifest.json"))
+        origin = manifest["unreal"]["georeference"]["origin"]
+        return origin["lon"], origin["lat"], origin.get("ground_orthometric_h_m", 0.0)
+    except Exception as exc:  # noqa: BLE001 - QA helper: degrade to "leave the georeference alone"
+        unreal.log_warning("[MantlePlace] could not read the manifest origin: {}".format(exc))
+        return None
 
 
 def stream_into_cesium(zip_path):
@@ -118,7 +178,77 @@ def stream_into_cesium(zip_path):
             # terrain streams untextured -- the exact failure we hit before this fix.
             overlay.refresh()
 
+    # The streamed terrain is Cesium-framed like any other tileset, so it needs the same yaw as the
+    # ion assets do. Without it the bundle's own terrain sits 90 deg off its natively-imported twin --
+    # the two would disagree about north while both being "correct" in their own frame.
+    _orient_into_world_frame(tileset)
+
     unreal.log("[MantlePlace] Cesium stream wired -> {}".format(info.cesium_terrain_url))
+    return tileset
+
+
+def ground_truth_overlay(zip_path, geoid_separation_m=0.0):
+    """Drop Cesium World Terrain + Bing aerial over the AOI, in OUR frame, for visual QA.
+
+    This is the external check on a native import: real-world terrain and imagery, georeferenced from
+    the bundle's own manifest origin and yawed into the world frame, sitting on top of the imported
+    landscape. A coastline that coincides is the acceptance evidence; one that is rotated means
+    CESIUM_TO_WORLD_YAW is wrong, and one that is MIRRORED means an importer bug.
+
+    Requires a signed-in Cesium ion account: Window -> Cesium -> "Connect to Cesium ion". (The
+    sign-in lives on the "Cesium" tab, which a saved layout can leave stacked behind "Cesium ion
+    Assets" -- if you cannot see the button, that is why.)
+
+    `geoid_separation_m` is added to the manifest's orthometric origin height to get the ellipsoidal
+    height Cesium wants. It defaults to 0, which leaves a vertical offset of roughly the local geoid
+    separation (about -32 m around San Francisco Bay). That offset is elevation-only and cannot
+    affect the horizontal comparison this function exists for -- do not "fix" it by rotating or
+    mirroring anything.
+    """
+    georef = _find_georeference()
+    if georef is None:
+        unreal.log_warning("[MantlePlace] No CesiumGeoreference in the level; spawning a default one.")
+        georef = unreal.EditorActorSubsystem().spawn_actor_from_class(
+            unreal.CesiumGeoreference, unreal.Vector(0, 0, 0))
+
+    origin = _manifest_origin(zip_path) if zip_path else None
+    if origin is not None:
+        lon, lat, ground_h = origin
+        try:
+            georef.set_editor_property("origin_placement", unreal.OriginPlacement.CARTOGRAPHIC_ORIGIN)
+            georef.set_editor_property("origin_longitude", lon)
+            georef.set_editor_property("origin_latitude", lat)
+            georef.set_editor_property("origin_height", ground_h + geoid_separation_m)
+            unreal.log("[MantlePlace] georeference origin -> {:.6f} lon, {:.6f} lat, {:.2f} m"
+                       .format(lon, lat, ground_h + geoid_separation_m))
+        except Exception as exc:  # noqa: BLE001 - degrade to whatever the level already had
+            unreal.log_warning("[MantlePlace] could not set the georeference origin: {}".format(exc))
+
+    _remove_existing(_QA_TERRAIN_LABEL)
+    tileset = unreal.EditorActorSubsystem().spawn_actor_from_class(
+        unreal.Cesium3DTileset, unreal.Vector(0, 0, 0))
+    tileset.set_actor_label(_QA_TERRAIN_LABEL)
+    try:
+        tileset.set_editor_property("tileset_source", unreal.TilesetSource.FROM_CESIUM_ION)
+        tileset.set_editor_property("ion_asset_id", ION_ASSET_WORLD_TERRAIN)
+    except Exception as exc:  # noqa: BLE001
+        unreal.log_warning("[MantlePlace] could not point the QA tileset at ion asset {} ({}); "
+                           "set it by hand.".format(ION_ASSET_WORLD_TERRAIN, exc))
+    tileset.set_editor_property("georeference", georef)
+
+    overlay = _add_raster_overlay(tileset, unreal.CesiumIonRasterOverlay, "MP_QA_BingAerial")
+    if overlay is None:
+        unreal.log_warning("[MantlePlace] QA terrain has no imagery overlay; terrain only.")
+    else:
+        try:
+            overlay.set_editor_property("ion_asset_id", ION_ASSET_BING_AERIAL)
+            overlay.refresh()
+        except Exception as exc:  # noqa: BLE001
+            unreal.log_warning("[MantlePlace] could not configure the QA imagery overlay: {}".format(exc))
+
+    _orient_into_world_frame(tileset)
+    unreal.log("[MantlePlace] QA overlay ready. Expect the coastline to coincide with the imported "
+               "landscape in plan; a vertical offset of about the geoid separation is expected.")
     return tileset
 
 

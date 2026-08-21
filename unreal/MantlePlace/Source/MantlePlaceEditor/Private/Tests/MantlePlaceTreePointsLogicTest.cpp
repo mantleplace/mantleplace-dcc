@@ -40,12 +40,14 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("height carried"), Rows[0].HeightM, 12.4f, 1e-4f);
 			TestEqual(TEXT("crown carried"), Rows[0].CrownRadiusM, 4.34f, 1e-4f);
 
-			TestEqual(TEXT("east 100 m -> +10000 cm X"), Rows[1].Position.X, 10000.0, 1e-6);
-			TestEqual(TEXT("south 100 m -> -10000 cm Y"), Rows[1].Position.Y, -10000.0, 1e-6);
+			// UE is left-handed: North -> +X, East -> +Y. These rows are pure UTM offsets, so both
+			// components are exact and a swapped axis cannot hide behind a tolerance.
+			TestEqual(TEXT("south 100 m -> -10000 cm X"), Rows[1].Position.X, -10000.0, 1e-6);
+			TestEqual(TEXT("east 100 m -> +10000 cm Y"), Rows[1].Position.Y, 10000.0, 1e-6);
 			TestEqual(TEXT("empty ground_z -> Z 0"), Rows[1].Position.Z, 0.0, 1e-9);
 
-			TestEqual(TEXT("west 100 m -> -10000 cm X"), Rows[2].Position.X, -10000.0, 1e-6);
-			TestEqual(TEXT("north 100 m -> +10000 cm Y"), Rows[2].Position.Y, 10000.0, 1e-6);
+			TestEqual(TEXT("north 100 m -> +10000 cm X"), Rows[2].Position.X, 10000.0, 1e-6);
+			TestEqual(TEXT("west 100 m -> -10000 cm Y"), Rows[2].Position.Y, -10000.0, 1e-6);
 		}
 	}
 

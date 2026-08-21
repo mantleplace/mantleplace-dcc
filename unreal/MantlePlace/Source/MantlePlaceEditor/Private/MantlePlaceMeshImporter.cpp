@@ -95,7 +95,10 @@ namespace MantlePlaceMeshImporter
 			Mesh->NotifyNaniteSettingsChanged();
 		}
 
-		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(Manifest.GetMeshLocation(), FRotator::ZeroRotator);
+		// Interchange lands glTF with East on +X / South on +Y; the world frame is North on +X.
+		// GetMeshRotation() is the +90 yaw that reconciles them (a rotation, not a mirror).
+		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(
+			Manifest.GetMeshLocation(), FMantlePlaceVaultManifest::GetMeshRotation());
 		if (Actor == nullptr)
 		{
 			OutError = TEXT("Failed to spawn the StaticMeshActor.");
@@ -129,9 +132,10 @@ namespace MantlePlaceMeshImporter
 		}
 
 		// Buildings share the terrain's Local Projected Frame (centroid ground at z=0), so the identical
-		// GetMeshLocation() transform lands them resting on the terrain. No Nanite (trivial geometry) and
-		// no imagery drape (massing is untextured).
-		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(Manifest.GetMeshLocation(), FRotator::ZeroRotator);
+		// GetMeshLocation() + GetMeshRotation() transform lands them resting on the terrain. No Nanite
+		// (trivial geometry) and no imagery drape (massing is untextured).
+		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(
+			Manifest.GetMeshLocation(), FMantlePlaceVaultManifest::GetMeshRotation());
 		if (Actor == nullptr)
 		{
 			OutError = TEXT("Failed to spawn the buildings StaticMeshActor.");

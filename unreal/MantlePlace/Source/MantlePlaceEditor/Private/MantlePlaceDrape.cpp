@@ -106,16 +106,21 @@ namespace MantlePlaceDrape
 		// Geometry-local drape parameters. The material reads LandscapeLayerCoords (grid-quad coords),
 		// normalises to [0,1] over the AOI grid via LandscapeQuadsXY, then maps onto the imagery footprint
 		// with DrapeUvScale/DrapeUvOffset. There are no world-space ExtentMin/ExtentSize any more, so the
-		// imagery rides the surface through sculpts/moves/the ESU Y-mirror instead of clamping to a smear
-		// when the geometry leaves a fixed world band. GetDrapeUvTransform is identity for v8 (imagery
-		// spans the full AOI); a sub-AOI imagery footprint maps to its correct sub-rect.
+		// imagery rides the surface through sculpts and moves instead of clamping to a smear when the
+		// geometry leaves a fixed world band. GetDrapeUvTransform is identity for v8 (imagery spans the
+		// full AOI); a sub-AOI imagery footprint maps to its correct sub-rect.
 		FVector2D UvScale, UvOffset;
 		Manifest.GetDrapeUvTransform(UvScale, UvOffset);
+		// LandscapeQuadsXY divides LandscapeLayerCoords, whose local X indexes the heightmap's ROWS
+		// (north) after the importer's transpose. The manifest names its grid axes the other way round --
+		// ComponentCountX is the EASTING axis -- so the counts swap here, for the same reason
+		// GetAoiSizeUeCm() swaps the scales. `resolution` forces the two counts equal today, so this is
+		// latent rather than visible; it is written the right way round so it cannot rot if that changes.
 		Mic->SetVectorParameterValueEditorOnly(
 			FMaterialParameterInfo(TEXT("LandscapeQuadsXY")),
 			FLinearColor(
-				static_cast<float>(Manifest.ComponentCountX * Manifest.GetQuadsPerComponent()),
-				static_cast<float>(Manifest.ComponentCountY * Manifest.GetQuadsPerComponent()),
+				static_cast<float>(Manifest.ComponentCountY * Manifest.GetQuadsPerComponent()), // North
+				static_cast<float>(Manifest.ComponentCountX * Manifest.GetQuadsPerComponent()), // East
 				0.0f, 0.0f));
 		Mic->SetVectorParameterValueEditorOnly(
 			FMaterialParameterInfo(TEXT("DrapeUvScale")),
