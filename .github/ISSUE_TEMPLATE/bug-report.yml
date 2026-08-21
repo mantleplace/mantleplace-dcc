@@ -1,0 +1,65 @@
+name: Bug report
+description: Something a plugin does wrong — import, auth, vault, manifest handling.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Two things before you start:
+
+        - **Security issues do not go here.** Use the repository's
+          [Security tab](https://github.com/mantleplace/mantleplace-dcc/security/advisories/new) or **support@mantle.place** — see
+          [SECURITY.md](https://github.com/mantleplace/mantleplace-dcc/blob/main/SECURITY.md).
+        - **Do not attach a bundle.** Bundles carry licensed geospatial data. Describe the manifest
+          fields that matter, or paste the relevant block with any identifiers removed.
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host
+      description: Which plugin, in which application?
+      options:
+        - Unreal Engine 5.8
+        - Revit 2025
+        - Revit 2026
+        - Revit 2027
+        - manifest-conformance tooling
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version or commit
+      description: A release tag, or the commit you built from.
+      placeholder: e.g. main @ 39fa7be
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Include the exact error text or log lines if there are any.
+    validations:
+      required: true
+  - type: textarea
+    id: manifest
+    attributes:
+      label: The smallest manifest shape that reproduces it
+      description: >-
+        The manifest block(s) that matter, identifiers removed — not the bundle itself. If the bug
+        does not involve a bundle, say so and skip this.
+      render: json
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: This is not a security issue (those go through SECURITY.md, not the tracker).
+          required: true
+        - label: No bundle, licensed data, or credential is attached to this report.
+          required: true
