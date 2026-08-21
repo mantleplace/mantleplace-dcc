@@ -28,8 +28,9 @@ roadmap moves when reality does, by pull request, where you can see it.
 
 - **World Partition import lands** — large-AOI orders import end-to-end, single-Landscape import
   remains the default for small sites.
-- **Import-surface completion** — consume the manifest's `landscape_layers` rasters, finish the
-  imagery-drape work, and add a per-layer import picker so a bundle can be brought in selectively.
+- **Import-surface completion** — a per-layer import picker so a bundle can be brought in
+  selectively, a shipped landscape material that samples the coverage rasters the importer already
+  lands, and the remaining imagery-drape work.
 - **The bundle format published as a spec** — the portable half of the host-plugin contract, with a
   changelog, a deprecation window and a compatibility policy, so a second implementer has a document
   and not just the [conformance corpus](tools/manifest-conformance/).
