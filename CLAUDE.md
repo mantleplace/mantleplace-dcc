@@ -3,7 +3,7 @@
 **This repo is `mantleplace-dcc`. Version control is git. It is open source, Apache 2.0, and
 everything in it is world-readable.**
 
-Read that line before running any write command. Both halves matter — see "The two rules" below.
+Read that line before running any write command. Both halves matter — see "The three rules" below.
 
 ## Identity
 
@@ -36,7 +36,7 @@ concern, nothing else.* Names are spelled out in full — `mantleplace`, never `
 Each host folder carries its own `CLAUDE.md` with the toolchain specifics. For Revit, read
 [`revit/CLAUDE.md`](revit/CLAUDE.md).
 
-## The two rules
+## The three rules
 
 ### 1. Everything here is public
 
@@ -61,6 +61,37 @@ deleted. So:
 Place repositories, all of them git, so a session confused about which root it is in can run a
 *successful* commit in the wrong place. A commit that lands in the wrong repo is a real incident, and
 it is silent. Never assume the working directory from conversation history — check it.
+
+### 3. If this tree is a submodule, create a branch before your first edit
+
+⛔ **Run `git status` here first. If it says `HEAD detached at <sha>`, you are inside a consuming
+project's submodule checkout, and a commit made now belongs to no branch.**
+
+```
+$ git status
+HEAD detached at a0f1c37
+```
+
+`git submodule update` checks out a *commit*, not a branch — that is what a pin is — so this is the
+**default state** in every consumer, not a mistake someone made. Commit in it, let any later
+`git submodule update` run, and the commit is unreachable and for practical purposes gone. Nothing
+warns you. The work is simply lost.
+
+The cure is one command, and it has to come **before** you edit anything:
+
+```bash
+git fetch origin
+git switch -c <type>/<short-description> origin/main
+```
+
+Then commit with `-s` (see [CONTRIBUTING.md](CONTRIBUTING.md)), **push the branch before you touch
+anything in the consuming project**, and open the PR here. The consuming project's pin moves only
+after that PR merges, and only to the merged commit on `main` — pinning to your branch tip is green
+on your machine and unfetchable for everyone else.
+
+This applies to any consumer of this repo. The Mantle Place project tree mounts it at
+`unreal/Plugins/MantlePlaceDcc/` and documents the full loop on its side; the rule above is what
+matters wherever you are.
 
 ## Binaries
 
