@@ -68,6 +68,17 @@ produced by the same pipeline as a paid order.
 <!-- media slot: screenshot — the imported result in UE 5.8: the Landscape with painted weight
      layers and the imagery drape, viewport + outliner visible. -->
 
+### What a downloaded bundle obliges you to do
+
+A bundle is built from licensed geospatial sources, and some of those licences carry obligations —
+most commonly an attribution requirement — that travel with the data into your project. Which
+sources a given bundle used, which licences apply, and the exact attribution text they require are
+stated by the platform, per bundle, not by this repository:
+[mantle.place/licensing](https://mantle.place/licensing) describes the licences bundle data may
+carry, and [mantle.place/attributions](https://mantle.place/attributions) is where the required
+attribution statements live. Nothing here restates those values — the platform's pages are the
+authority, and they are the ones kept current.
+
 ## Stream to compare, import to own
 
 The Unreal plugin can show you the same bundle two ways in one viewport, and the pairing is the
