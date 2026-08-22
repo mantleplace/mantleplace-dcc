@@ -129,12 +129,27 @@ namespace MantlePlaceImportLiveTest
 	{
 		return FMath::Clamp(FMath::RoundToInt32((Index + 0.5) * Extent / Count), 0, Extent - 1);
 	}
+
+	/**
+	 * Is this a CI run? Keyed on `CI`, which every mainstream CI provider sets and which no
+	 * developer shell sets by accident; presence is the signal, the value is not read.
+	 *
+	 * Strictness matters because a warn-and-pass skip and a gate that ran and passed are the same
+	 * green. That is not hypothetical: the orientation gate below shipped unable to run on CI and
+	 * went unnoticed until it was audited. Under CI a skip is therefore an error — the same rule
+	 * the conformance corpus already lives by, where a missing corpus is a failure and never a skip.
+	 */
+	bool IsCi()
+	{
+		return !FPlatformMisc::GetEnvironmentVariable(TEXT("CI")).IsEmpty();
+	}
 }
 
 // Live end-to-end import against a real downloaded sample bundle. Runs in the editor
 // (needs an editor world). Skips (with a warning) when the sample isn't present, so it
-// stays portable. It intentionally leaves the imported actors in the level so the result
-// can be inspected / screenshotted.
+// stays portable — EXCEPT under CI, where every skip below is an error instead, because a
+// skipped gate and a passed gate are otherwise the same green. It intentionally leaves the
+// imported actors in the level so the result can be inspected / screenshotted.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceImportLiveTest,
 	"MantlePlace.Import.LiveFreeTier",
@@ -143,8 +158,27 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 {
 	// MP_LIVETEST_BUNDLE overrides; otherwise the in-tree live-test copy. No developer-machine
-	// fallback paths — a missing bundle is a warn-and-pass skip (portable, no-op on CI).
+	// fallback paths — a missing bundle is a warn-and-pass skip locally and an error on CI (below).
 	IPlatformFile& Platform = FPlatformFileManager::Get().GetPlatformFile();
+
+	// Every skip in this test routes through here: warn-and-pass locally, error on CI. Returning
+	// the value RunTest should return keeps each skip site a single line, so a future skip branch
+	// added without the strict path would stand out as the one that does not use it.
+	const bool bStrict = MantlePlaceImportLiveTest::IsCi();
+	auto SkipOrFail = [this, bStrict](const FString& Reason) -> bool
+	{
+		if (bStrict)
+		{
+			AddError(FString::Printf(
+				TEXT("%s CI is set, so this is a failure rather than a skip: the orientation gate "
+				     "must not be able to go green without running. Point MP_LIVETEST_BUNDLE at a "
+				     "bundle at or above the current manifest floor."),
+				*Reason));
+			return false;
+		}
+		AddWarning(Reason);
+		return true;
+	};
 	FString Zip = FPlatformMisc::GetEnvironmentVariable(TEXT("MP_LIVETEST_BUNDLE"));
 	if (Zip.IsEmpty() || !Platform.FileExists(*Zip))
 	{
@@ -152,8 +186,8 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 	}
 	if (!Platform.FileExists(*Zip))
 	{
-		AddWarning(FString::Printf(TEXT("Sample bundle not present (%s); skipping live import test."), *Zip));
-		return true;
+		return SkipOrFail(
+			FString::Printf(TEXT("Sample bundle not present (%s); skipping live import test."), *Zip));
 	}
 
 	// A base_on_demand bundle whose Unreal formats haven't materialized yet can't exercise the
@@ -170,18 +204,17 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		// missing-bundle and base_on_demand cases get, for the same portability reason.
 		if (bRead && !Manifest.bValid && Manifest.Version < MantlePlaceMinSupportedManifestVersion)
 		{
-			AddWarning(FString::Printf(
+			return SkipOrFail(FString::Printf(
 			    TEXT("Sample bundle is manifest v%d, below the v%d floor; skipping live import test. "
 			         "Re-download this AOI from mantle.place/vault to re-cut it on the current pipeline."),
 			    Manifest.Version, MantlePlaceMinSupportedManifestVersion));
-			return true;
 		}
 
 		if (bRead && !Manifest.bValid && Manifest.DeliveryModel == TEXT("base_on_demand"))
 		{
-			AddWarning(TEXT("Base bundle — materialize incomplete, live import not exercised. "
-			                "Generate its Unreal formats (vault panel or mantle.place/vault) and re-download."));
-			return true;
+			return SkipOrFail(
+			    TEXT("Base bundle — materialize incomplete, live import not exercised. "
+			         "Generate its Unreal formats (vault panel or mantle.place/vault) and re-download."));
 		}
 	}
 
