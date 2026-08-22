@@ -115,12 +115,18 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
-        ElementId typeId = FirstElementIdOf<ToposolidType>();
-        ElementId levelId = FirstElementIdOf<Level>();
-        if (typeId == ElementId.InvalidElementId || levelId == ElementId.InvalidElementId)
+        // Guard the producer's nodata fill before Revit ever sees it. What this removes and why is
+        // SurfacePointsSanitiser's; the underlying defect is filed against the platform.
+        points = SurfacePointsSanitiser.Clean(points, step.Crop, out SurfaceCleanReport cleaned);
+        if (cleaned.Explanation.Length > 0)
+        {
+            _log.Add(cleaned.Explanation);
+        }
+
+        if (ChooseToposolidType() is not { } chosenType)
         {
             _log.Add(
-                "This project has no toposolid type or no level, so the terrain could not be created. "
+                "This project has no toposolid type, so the terrain could not be created. "
                 + "Start from an architectural template and try again.");
             return;
         }
@@ -135,16 +141,155 @@ internal sealed class RevitBundleImporter(
                 ToInternalFeet(point.Z, metresPerUnit)));
         }
 
-        using Transaction transaction = new(_document, "Mantle Place: terrain from points file");
-        transaction.Start();
-        Toposolid terrain = Toposolid.Create(_document, revitPoints, typeId, levelId);
-        transaction.Commit();
+        // Relief is read off the points in Revit's own internal feet, because that is the unit the
+        // level elevations and the type thickness are already in — TerrainBasePlanner never converts.
+        TerrainRelief relief = new(
+            revitPoints.Min(point => point.Z),
+            revitPoints.Max(point => point.Z),
+            revitPoints.Count);
+
+        TerrainBasePlan plan = TerrainBasePlanner.Decide(
+            CollectLevels(),
+            relief,
+            chosenType.TotalThickness,
+            CompoundStructure.GetMinimumLayerThickness());
+
+        if (plan.Strategy == TerrainBaseStrategy.NoLevelAvailable)
+        {
+            _log.Add(plan.Explanation + " Start from an architectural template and try again.");
+            return;
+        }
+
+        if (!TryBuildTerrain(plan, chosenType, revitPoints, relief))
+        {
+            // ⛔ The retry is not defensive coding. Toposolid.Create takes no offset argument, so the
+            // height offset can only be written after the element exists — and whether Revit
+            // evaluates its minimum-thickness check before or after that write is the one thing that
+            // could not be established without running it. If it is before, the offset arm is
+            // unreachable and only a level at the right elevation works. So the second arm is tried
+            // rather than assumed away, and the log records which one Revit accepted.
+            TerrainBasePlan escalated = TerrainBasePlanner.Escalate(plan, relief);
+            _log.Add(escalated.Explanation);
+
+            if (!TryBuildTerrain(escalated, chosenType, revitPoints, relief))
+            {
+                _log.Add("The terrain could not be built on either base plane, so this project has no "
+                    + "ground. The rest of the bundle was still imported.");
+                return;
+            }
+        }
+
+        _log.Add($"Built the terrain from {points.Count:N0} points ({step.EntryName}).");
+    }
+
+    /// <summary>
+    /// One attempt at the toposolid, on the base plane <paramref name="plan"/> describes.
+    /// </summary>
+    /// <returns><c>false</c> when Revit refused it and rolled the transaction back.</returns>
+    private bool TryBuildTerrain(
+        TerrainBasePlan plan,
+        CandidateToposolidType type,
+        IList<XYZ> revitPoints,
+        TerrainRelief relief)
+    {
+        ImportFailureSwallower swallower = new("Building the terrain");
+        using Transaction transaction = BeginTransaction("Mantle Place: terrain from points file", swallower);
+
+        ElementId levelId = plan.Strategy == TerrainBaseStrategy.DedicatedLevel
+            ? FindOrCreateTerrainLevel(plan.LevelElevation)
+            : new ElementId(plan.LevelId);
+
+        Toposolid terrain = Toposolid.Create(_document, revitPoints, new ElementId(type.Id), levelId);
+
+        if (plan.HeightOffset != 0.0)
+        {
+            terrain.get_Parameter(BuiltInParameter.TOPOSOLID_HEIGHTABOVELEVEL_PARAM)?.Set(plan.HeightOffset);
+
+            // The shape does not settle against the new base plane until the document regenerates,
+            // and a too-thin refusal that would have fired at commit fires here instead — inside the
+            // transaction, where the swallower can turn it into a rollback rather than a dialog.
+            _document.Regenerate();
+        }
+
+        // Captured BEFORE the commit: a rolled-back element cannot be asked for its id.
+        ElementId built = terrain.Id;
+
+        if (!CommitAndReport(transaction, swallower))
+        {
+            return false;
+        }
 
         // Remembered, not re-found: the site-boundary step drapes its rings onto THIS toposolid, and
         // a collector would happily return one the user had already modelled.
-        _terrainId = terrain.Id;
+        _terrainId = built;
+        _log.Add(plan.Explanation
+            + $" Type \"{type.Name}\"; terrain spans {UnitUtils.ConvertFromInternalUnits(relief.MinZ, UnitTypeId.Meters):0.##}"
+            + $" m to {UnitUtils.ConvertFromInternalUnits(relief.MaxZ, UnitTypeId.Meters):0.##} m.");
+        return true;
+    }
 
-        _log.Add($"Built the terrain from {points.Count:N0} points ({step.EntryName}).");
+    /// <summary>
+    /// The level a dedicated-base terrain sits on, reused by name across imports.
+    /// </summary>
+    /// <remarks>
+    /// Found by name rather than created every time, the same way <c>TryWearMaterial</c> reuses its
+    /// duplicated type: a curator who re-imports an area should not accumulate a level per run.
+    /// </remarks>
+    private ElementId FindOrCreateTerrainLevel(double elevation)
+    {
+        Level? existing = new FilteredElementCollector(_document)
+            .OfClass(typeof(Level))
+            .Cast<Level>()
+            .FirstOrDefault(level => string.Equals(
+                level.Name,
+                TerrainBasePlanner.DedicatedLevelName,
+                StringComparison.Ordinal));
+
+        if (existing is not null)
+        {
+            return existing.Id;
+        }
+
+        Level created = Level.Create(_document, elevation);
+        created.Name = TerrainBasePlanner.DedicatedLevelName;
+        return created.Id;
+    }
+
+    /// <summary>Every level in the project, as the pure planner needs to see it.</summary>
+    private List<CandidateLevel> CollectLevels()
+        => [.. new FilteredElementCollector(_document)
+            .OfClass(typeof(Level))
+            .Cast<Level>()
+            .Select(level => new CandidateLevel(level.Id.Value, level.Name, level.ProjectElevation))];
+
+    /// <summary>
+    /// The toposolid type the terrain is built from, or <c>null</c> when the project has none usable.
+    /// </summary>
+    /// <remarks>
+    /// The choice itself is <see cref="ToposolidTypeChoice"/>'s. What lives here is reading a total
+    /// thickness out of Revit: the compound structure when there is one, the type's Default Thickness
+    /// parameter when there is not.
+    /// </remarks>
+    private CandidateToposolidType? ChooseToposolidType()
+    {
+        List<CandidateToposolidType> candidates = [];
+        foreach (ToposolidType type in new FilteredElementCollector(_document)
+            .OfClass(typeof(ToposolidType))
+            .Cast<ToposolidType>())
+        {
+            CompoundStructure? structure = type.GetCompoundStructure();
+            double thickness = structure is { LayerCount: > 0 }
+                ? structure.GetWidth()
+                : type.get_Parameter(BuiltInParameter.TOPOSOLID_TYPE_DEFAULT_THICKNESS_PARAM)?.AsDouble() ?? 0.0;
+
+            candidates.Add(new CandidateToposolidType(
+                type.Id.Value,
+                type.Name,
+                thickness,
+                structure?.LayerCount ?? 0));
+        }
+
+        return ToposolidTypeChoice.Best(candidates, CompoundStructure.GetMinimumLayerThickness());
     }
 
     /// <summary>
@@ -169,8 +314,8 @@ internal sealed class RevitBundleImporter(
         ElementId category = DirectShapeCategory(BuiltInCategory.OST_Roads);
         int created = 0;
 
-        using Transaction transaction = new(_document, "Mantle Place: road centrelines");
-        transaction.Start();
+        ImportFailureSwallower swallower = new("Importing the road centrelines");
+        using Transaction transaction = BeginTransaction("Mantle Place: road centrelines", swallower);
 
         foreach (SiteFeature feature in features)
         {
@@ -191,7 +336,12 @@ internal sealed class RevitBundleImporter(
             }
         }
 
-        transaction.Commit();
+        if (!CommitAndReport(transaction, swallower))
+        {
+            // The swallower already said why. Reporting the work below as done would be a lie:
+            // the rollback took all of it.
+            return;
+        }
 
         _log.Add($"Imported {created:N0} road centreline(s) from {step.EntryName}.");
     }
@@ -235,8 +385,8 @@ internal sealed class RevitBundleImporter(
         int declined = 0;
         int unstamped = 0;
 
-        using Transaction transaction = new(_document, "Mantle Place: site boundaries");
-        transaction.Start();
+        ImportFailureSwallower swallower = new("Importing the site boundaries");
+        using Transaction transaction = BeginTransaction("Mantle Place: site boundaries", swallower);
 
         foreach (NewSiteBoundary boundary in newBoundaries)
         {
@@ -287,7 +437,12 @@ internal sealed class RevitBundleImporter(
             }
         }
 
-        transaction.Commit();
+        if (!CommitAndReport(transaction, swallower))
+        {
+            // The swallower already said why. Reporting the work below as done would be a lie:
+            // the rollback took all of it.
+            return;
+        }
 
         string summary = $"Imported {created:N0} site boundary subdivision(s) from {step.EntryName}";
         if (alreadyPresent > 0)
@@ -355,8 +510,8 @@ internal sealed class RevitBundleImporter(
         ElementId category = DirectShapeCategory(BuiltInCategory.OST_Planting);
         int created = 0;
 
-        using Transaction transaction = new(_document, "Mantle Place: vegetation");
-        transaction.Start();
+        ImportFailureSwallower swallower = new("Importing the vegetation");
+        using Transaction transaction = BeginTransaction("Mantle Place: vegetation", swallower);
 
         foreach (SiteTree tree in trees)
         {
@@ -367,7 +522,12 @@ internal sealed class RevitBundleImporter(
             }
         }
 
-        transaction.Commit();
+        if (!CommitAndReport(transaction, swallower))
+        {
+            // The swallower already said why. Reporting the work below as done would be a lie:
+            // the rollback took all of it.
+            return;
+        }
 
         _log.Add($"Imported {created:N0} tree(s) of {trees.Count:N0} from {step.EntryName}.");
     }
@@ -569,8 +729,8 @@ internal sealed class RevitBundleImporter(
         string imagePath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
         string name = $"Mantle Place Site Imagery {_archive.Layout.Key.Stem}";
 
-        using Transaction transaction = new(_document, "Mantle Place: satellite imagery");
-        transaction.Start();
+        ImportFailureSwallower swallower = new("Applying the aerial photograph");
+        using Transaction transaction = BeginTransaction("Mantle Place: satellite imagery", swallower);
 
         ElementId materialId = DrapeMaterialId(name, imagePath, placement);
         if (materialId == ElementId.InvalidElementId)
@@ -592,7 +752,12 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
-        transaction.Commit();
+        if (!CommitAndReport(transaction, swallower))
+        {
+            // The swallower already said why. Reporting the work below as done would be a lie:
+            // the rollback took all of it.
+            return;
+        }
 
         string summary =
             $"Draped the satellite imagery from {step.EntryName} over the terrain — {placement.PixelSize} pixels "
@@ -866,10 +1031,15 @@ internal sealed class RevitBundleImporter(
             Unit = ToImportUnit(step.Units),
         };
 
-        using Transaction transaction = new(_document, "Mantle Place: link surface DXF");
-        transaction.Start();
+        ImportFailureSwallower swallower = new("Linking the surface DXF");
+        using Transaction transaction = BeginTransaction("Mantle Place: link surface DXF", swallower);
         bool linked = _document.Link(dxfPath, options, null, out ElementId linkId);
-        transaction.Commit();
+        if (!CommitAndReport(transaction, swallower))
+        {
+            // The swallower already said why. Reporting the work below as done would be a lie:
+            // the rollback took all of it.
+            return;
+        }
 
         _log.Add(linked && linkId != ElementId.InvalidElementId
             ? $"Linked the surface DXF ({step.EntryName}). Use Massing & Site ▸ Toposurface ▸ Create from "
@@ -910,8 +1080,8 @@ internal sealed class RevitBundleImporter(
             }
         }
 
-        using Transaction transaction = new(_document, "Mantle Place: link IFC site");
-        transaction.Start();
+        ImportFailureSwallower swallower = new("Linking the IFC site");
+        using Transaction transaction = BeginTransaction("Mantle Place: link IFC site", swallower);
         LinkLoadResult result = RevitLinkType.CreateFromIFC(
             _document,
             ifcPath,
@@ -924,7 +1094,12 @@ internal sealed class RevitBundleImporter(
             RevitLinkInstance.Create(_document, result.ElementId);
         }
 
-        transaction.Commit();
+        if (!CommitAndReport(transaction, swallower))
+        {
+            // The swallower already said why. Reporting the work below as done would be a lie:
+            // the rollback took all of it.
+            return;
+        }
 
         _log.Add(result.ElementId != ElementId.InvalidElementId
             ? $"Linked the IFC site model ({step.EntryName})."
@@ -961,15 +1136,20 @@ internal sealed class RevitBundleImporter(
         GeoOrigin origin = placement.Origin;
         ForgeTypeId originUnit = ToUnitTypeId(origin.LinearUnit);
 
-        using Transaction transaction = new(_document, "Mantle Place: shared coordinates");
-        transaction.Start();
+        ImportFailureSwallower swallower = new("Setting the shared coordinates");
+        using Transaction transaction = BeginTransaction("Mantle Place: shared coordinates", swallower);
         ProjectPosition position = new(
             UnitUtils.ConvertToInternalUnits(origin.Easting!.Value, originUnit),
             UnitUtils.ConvertToInternalUnits(origin.Northing!.Value, originUnit),
             UnitUtils.ConvertToInternalUnits(placement.ElevationM, UnitTypeId.Meters),
             placement.AngleRadians);
         _document.ActiveProjectLocation.SetProjectPosition(XYZ.Zero, position);
-        transaction.Commit();
+        if (!CommitAndReport(transaction, swallower))
+        {
+            // The swallower already said why. Reporting the work below as done would be a lie:
+            // the rollback took all of it.
+            return;
+        }
 
         _log.Add($"Set shared coordinates from the manifest (EPSG:{origin.Epsg}).");
     }
@@ -987,6 +1167,67 @@ internal sealed class RevitBundleImporter(
 
     private static double ToInternalFeet(double value, double metresPerUnit)
         => UnitUtils.ConvertToInternalUnits(value * metresPerUnit, UnitTypeId.Meters);
+
+    /// <summary>
+    /// Opens a transaction that will not stop for a dialog.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ Every transaction this importer opens goes through here, not just the terrain one. Any of
+    /// them can post a warning — the site-boundary step posts one per overlapping ring, the drape's
+    /// <c>ChangeTypeId</c> can post a slope warning — and a run driven by
+    /// <c>MANTLEPLACE_BUNDLE_ZIP</c> has nobody to dismiss it. Uniformity is the only way to
+    /// guarantee that.
+    /// </para>
+    /// <para>
+    /// <c>SetClearAfterRollback(true)</c> matters on the retry path: without it a rolled-back
+    /// transaction leaves its failures posted, and the next attempt starts in a document Revit
+    /// already considers to be in failure mode.
+    /// </para>
+    /// </remarks>
+    private Transaction BeginTransaction(string name, ImportFailureSwallower swallower)
+    {
+        Transaction transaction = new(_document, name);
+        transaction.Start();
+
+        FailureHandlingOptions options = transaction.GetFailureHandlingOptions();
+        options.SetFailuresPreprocessor(swallower);
+        options.SetForcedModalHandling(false);
+        options.SetClearAfterRollback(true);
+        transaction.SetFailureHandlingOptions(options);
+
+        return transaction;
+    }
+
+    /// <summary>
+    /// Commits, appends whatever the swallower absorbed to the log, and says whether it stood.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ The return value of <c>Transaction.Commit</c> used to be discarded at every one of these
+    /// sites. That is how the first real import ended up reading <c>terrain.Id</c> off an element
+    /// Revit had just rolled back: the step reported success, remembered a dead <c>ElementId</c>, and
+    /// the drape and boundary steps then chased it.
+    /// </remarks>
+    private bool CommitAndReport(Transaction transaction, ImportFailureSwallower swallower)
+    {
+        TransactionStatus status = transaction.Commit();
+        _log.AddRange(swallower.Lines);
+
+        if (status == TransactionStatus.Committed)
+        {
+            return true;
+        }
+
+        if (!swallower.SawError)
+        {
+            // Rolled back with nothing posted. Rare, and worth saying so rather than reporting a
+            // silent success.
+            _log.Add($"Revit did not accept \"{transaction.GetName()}\" ({status}). Nothing from that "
+                + "step was left in the project.");
+        }
+
+        return false;
+    }
 
     private ElementId FirstElementIdOf<T>()
         where T : Element

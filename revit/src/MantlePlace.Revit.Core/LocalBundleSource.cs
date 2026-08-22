@@ -44,4 +44,14 @@ public static class LocalBundleSource
     /// <see cref="PathVariable"/> already knows how to find.
     /// </remarks>
     public static string LogPathFor(string zipPath) => zipPath + ".mantleplace-import.log";
+
+    /// <summary>
+    /// Where the terrain probe writes what it measured — beside the zip, next to the import log.
+    /// </summary>
+    /// <remarks>
+    /// A separate file rather than a section of the import log, because the probe changes nothing and
+    /// the import does. Two files make it obvious which run produced which numbers, and a probe log
+    /// left lying around can never be mistaken for evidence that a model was built.
+    /// </remarks>
+    public static string ProbeLogPathFor(string zipPath) => zipPath + ".mantleplace-terrain-probe.log";
 }
