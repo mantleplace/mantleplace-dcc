@@ -10,6 +10,18 @@ separate, and Apache 2.0 §6 says so explicitly.
 
 This document says what we will and will not object to, so you do not have to guess.
 
+## The marks
+
+For the avoidance of doubt, the marks this policy covers are:
+
+- the **"Mantle Place"** word mark;
+- the **`mantle.place`** domain;
+- the **"mp" roundel** and the Mantle Place logo lockups shipped in
+  [`unreal/MantlePlace/Resources/`](unreal/MantlePlace/Resources/);
+- the tagline **"place it on mantle"**.
+
+All are trademarks (™) of Mantle Place LLC.
+
 ## What you may do
 
 - **Redistribute this software unmodified**, under its own name, including through package
