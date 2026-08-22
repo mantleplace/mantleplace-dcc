@@ -2,7 +2,15 @@
 
 Language-neutral test vectors that **every** Mantle Place host plugin runs against its own parser.
 
-This is procedural — the binding rules are the Host Plugin Standard's (`HPS-40`, `HPS-41`).
+**This corpus is normative.** It ships as one third of an MPB spec release — the schema, the prose
+in [`spec/`](../../../spec/), and these vectors, published and versioned together — and it is the
+part that decides: *a conforming reader passes the corpus*. The prose describes; the schema and this
+corpus settle disagreements. See [`spec/conformance.md`](../../../spec/conformance.md) for what
+claiming a group obliges you to, and which groups a third-party bundle reader needs at all.
+
+This file is procedural: how to consume the vectors. What a reader owes the manifest is
+[`spec/format.md`](../../../spec/format.md); the additional obligations a first-party Mantle Place
+plugin carries are the Host Plugin Standard's (`HPS-40`, `HPS-41`).
 
 ## Why it exists
 
@@ -14,12 +22,12 @@ sha256 read as "corrupt" instead of "unknown", a `+` left unescaped in a PKCE ve
 northing dropped in the southern hemisphere — are all silent. They produce a plugin that works on
 the developer's bundle and misplaces a customer's site by kilometres.
 
-Lifting the vectors here makes them one artifact with one owner, and makes "host #2 agrees with
-host #1" a thing a test can assert instead of a thing a reviewer hopes.
+Lifting the vectors here makes them one artifact with one owner, and makes "the second host agrees
+with the first" a thing a test can assert instead of a thing a reviewer hopes.
 
 **The Unreal suite now reads these files at run time rather than duplicating them** — six automation
 tests across both plugin modules. Editing a case here turns those tests red, which is the only proof
-that the corpus and host #1 have not quietly diverged. The `digest` group is the sharpest
+that the corpus and the reference host have not quietly diverged. The `digest` group is the sharpest
 demonstration: one edit to `sha256-vectors.json` fails two independent SHA-256 implementations
 inside the same host.
 

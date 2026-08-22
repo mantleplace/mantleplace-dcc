@@ -24,6 +24,7 @@ plugin discovery is a recursive scan.
 ```
 unreal/MantlePlace/            the UE 5.8 plugin, folder + .uplugin — PascalCase within
 revit/                         the Revit plugin: pure Core, Client, Addin shim, headless tests
+spec/                          the public MPB format spec — prose only; the schema stays remote
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
 .github/workflows/             the two public CI gates, plus the stale-tracker job
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md  CLAUDE.md
@@ -127,7 +128,13 @@ even when the arithmetic is correct.
   restate a value the schema owns. The version each host is verified against lives in
   [`tools/manifest-conformance/verified-against.json`](tools/manifest-conformance/verified-against.json),
   where CI checks it — never hardcode a version in prose.
-- **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id.
+- **The format, in public prose** → [`spec/`](spec/) — what a bundle is, the compatibility policy,
+  the consolidated changelog, what conformance means. It is **descriptive**: it explains blocks and
+  doctrine and never restates a field, an enum, a constraint or a version. The one place versions
+  appear is the changelog, as dated history.
+- **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id. Its *portable*
+  half — what any consumer owes a manifest — is now published as `spec/`; the vault-client half
+  stays private, and `HPS-NN` ids are for internal prose, not for the public spec.
 - **What the plugins do, and how to build them** → [`README.md`](README.md).
 - **Governance** → [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
   [`TRADEMARK.md`](TRADEMARK.md).

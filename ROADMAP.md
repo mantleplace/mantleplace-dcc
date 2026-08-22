@@ -13,7 +13,9 @@ artifacts).
 
 Dates are intentions, not promises. This is a small project with a
 [published best-effort posture](CONTRIBUTING.md#the-maintenance-posture-stated-up-front); the
-roadmap moves when reality does, by pull request, where you can see it.
+roadmap moves when reality does, by pull request, where you can see it. It moves early sometimes:
+**the bundle format is published as a spec now**, in [`spec/`](spec/), ahead of the quarter that
+planned it.
 
 ## Q4 2026
 
@@ -36,9 +38,10 @@ roadmap moves when reality does, by pull request, where you can see it.
 - **Import-surface completion** — a per-layer import picker so a bundle can be brought in
   selectively, a shipped landscape material that samples the coverage rasters the importer already
   lands, and the remaining imagery-drape work.
-- **The bundle format published as a spec** — the portable half of the host-plugin contract, with a
-  changelog, a deprecation window and a compatibility policy, so a second implementer has a document
-  and not just the [conformance corpus](tools/manifest-conformance/).
+- **The spec earns its second implementer** — [`spec/`](spec/) shipped early, so what this quarter
+  owes it is use rather than prose: a worked third-party read of a real bundle against the spec and
+  the [conformance corpus](tools/manifest-conformance/) alone, and whatever that exercise proves is
+  missing.
 
 ## Q2 2027
 
