@@ -1,11 +1,11 @@
 {
-  "jobId": "x",
-  "orderId": "ord-abc123",
-  "version": 19,
+  "version": "1.0.0",
   "packaging": {
     "delivery_model": "base_on_demand"
   },
   "layout": {
-    "cesiumTerrain": "Elevation/Terrain/layer.json"
-  }
+    "cesium_terrain": "Elevation/Terrain/layer.json"
+  },
+  "job_id": "x",
+  "order_id": "ord-abc123"
 }

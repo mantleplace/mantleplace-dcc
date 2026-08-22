@@ -104,6 +104,14 @@
       "revit",
       "unreal"
     ],
+    "manifest.reject.v18": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.v19": [
+      "revit",
+      "unreal"
+    ],
     "manifest.reject.v6": [
       "revit",
       "unreal"

@@ -46,21 +46,26 @@ public static class BundleManifestReader
         [RevitToposurfacePoints, RevitSurfaceDxf, RevitIfcSite];
 
     /// <summary>
-    /// First manifest version that publishes the Revit deliverables' hashes, and so the version from
-    /// which their absence is a refusal rather than an unknown. NOT a floor: v18 stays importable.
-    /// </summary>
-    private const int RevitArtifactHashVersion = 19;
-
-    /// <summary>
     /// Top-level keys that are plugin-host blocks. Used ONLY as one of several materialization
     /// signals — never to read another host's values (HPS-36). HPS-47 names this
     /// roster corroborative rather than load-bearing: a bundle materialized for a host this list
-    /// has never heard of still carries <c>dcc_readiness</c> and its vector layers, so those
+    /// has never heard of still carries its own host sub-block and the vector layers, so those
     /// signals absorb the staleness when <c>max</c> or <c>blender</c> lands. The day the roster
     /// can be replaced by a structural marker is a v19 <c>hosts.&lt;hostId&gt;</c> namespace,
     /// proposed to the platform.
     /// </summary>
-    private static readonly string[] HostBlockKeys = ["unreal", "revit"];
+    /// <summary>
+    /// The envelope every host block lives under at MPB 1.0.0. One key replaces the roster: a host
+    /// asks whether this object has ANY key, never which keys it has, which is what makes roster
+    /// staleness structurally unable to matter rather than merely tolerated.
+    /// </summary>
+    private const string HostsKey = "hosts";
+
+    /// <summary>
+    /// This host's own subtree, <c>hosts.revit</c> — and never a sibling's (HPS-33).
+    /// </summary>
+    private static JsonElement? RevitHostBlock(JsonElement root) =>
+        root.Object(HostsKey)?.Object(HostKey);
 
     /// <summary>
     /// Parses manifest text. Never throws. On refusal the returned manifest carries
@@ -96,28 +101,54 @@ public static class BundleManifestReader
 
     private static BundleManifest ParseRoot(BundleManifest manifest, JsonElement root)
     {
-        manifest.JobId = root.Str("jobId");
+        manifest.JobId = root.Str("job_id");
 
-        // Truncate, do not round. The Unreal reference truncates, and a ⛔ version gate is the last
-        // place two hosts may disagree: rounding would accept a `17.6` that Unreal refuses.
-        manifest.Version = root.TruncatedInt("version");
+        // Read as a STRING and parsed as semver. An MPB version IS a string, so the numeric read
+        // this used to do is gone entirely — and with it the truncate-vs-round divergence that
+        // needed policing, since there is no longer a number to disagree about. Kept verbatim and
+        // unparsed on the manifest so a refusal can quote exactly what the bundle said, including
+        // an integer-era value this reader does not speak.
+        manifest.Version = root.Str("version");
         manifest.OrderId = ReadOrderId(root);
 
-        // Clean break (HPS-31). An absent `version` reads as 0 and is refused like any other old
-        // version. This is the one refusal that returns immediately: below the floor, the rest of
-        // the document is written in a dialect this host does not speak, so reading on would be
-        // dual-parsing by another name.
-        if (manifest.Version < ManifestVersions.MinSupportedManifestVersion)
+        // Clean break (HPS-31). Anything that fails to parse as semver — an absent version, an
+        // integer from the pre-history, a partial "1.0" — is refused. Deliberately NOT coerced
+        // through a number first: the integer era read an absent version as 0 and refused it, and
+        // letting a string fall to 0 the same way would be an accident that happens to work rather
+        // than a decision. This is the one refusal that returns immediately: below the floor, the
+        // rest of the document is written in a dialect this host does not speak, so reading on
+        // would be dual-parsing by another name.
+        ManifestVersion parsedVersion = ManifestVersion.Parse(manifest.Version);
+        ManifestVersion floor = ManifestVersion.Parse(ManifestVersions.MinSupportedManifestVersion);
+        if (!parsedVersion.IsValid || parsedVersion.CompareTo(floor) < 0)
         {
             return Refuse(
                 manifest,
                 string.Format(
                     CultureInfo.InvariantCulture,
-                    "Bundle manifest version {0} is no longer supported (minimum v{1}). Re-download this AOI "
+                    "Bundle manifest version {0} is no longer supported (minimum {1}). Re-download this AOI "
                     + "from your vault at mantle.place/vault — rebuilding it there re-cuts the bundle on the "
                     + "current pipeline.",
-                    manifest.Version,
+                    string.IsNullOrEmpty(manifest.Version) ? "(absent)" : manifest.Version,
                     ManifestVersions.MinSupportedManifestVersion));
+        }
+
+        // The other end of the semver compatibility policy, which the integer era had no way to
+        // express. Minors are strictly additive and unknown fields are ignored, so any 1.x reads
+        // here; an unknown higher MAJOR is a graceful refusal rather than a best-effort parse,
+        // because a major is exactly the promise that something this reader relies on may have
+        // changed meaning. Too-old and too-new are distinct refusals with distinct remedies —
+        // re-download the AOI, versus update the plugin — which a bare "unsupported" conflated.
+        if (parsedVersion.Major > floor.Major)
+        {
+            return Refuse(
+                manifest,
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Bundle manifest version {0} is newer than this plugin understands (it reads {1}.x). "
+                    + "Update the Mantle Place plugin to import this bundle.",
+                    manifest.Version,
+                    floor.Major));
         }
 
         // From here every refusal is accumulated rather than returned, so a refused manifest still
@@ -156,14 +187,14 @@ public static class BundleManifestReader
     }
 
     /// <summary>
-    /// The vault join key. Top-level <c>orderId</c> is authoritative; <c>attribution.order_id</c> is
+    /// The vault join key. Top-level <c>order_id</c> is authoritative; <c>attribution.order_id</c> is
     /// the fallback the packager actually emits today. The ETL <c>jobId</c> is deliberately NOT a
     /// fallback — it changes on every rebuild and joining on it would silently address the wrong
     /// row (HPS-37).
     /// </summary>
     private static string ReadOrderId(JsonElement root)
     {
-        string orderId = root.Str("orderId");
+        string orderId = root.Str("order_id");
         if (!string.IsNullOrEmpty(orderId))
         {
             return orderId;
@@ -218,7 +249,7 @@ public static class BundleManifestReader
         }
 
         manifest.Layout = layout;
-        manifest.CesiumTerrainPath = layout.GetValueOrDefault("cesiumTerrain", string.Empty);
+        manifest.CesiumTerrainPath = layout.GetValueOrDefault("cesium_terrain", string.Empty);
     }
 
     /// <summary>
@@ -379,7 +410,7 @@ public static class BundleManifestReader
     /// </remarks>
     private static string? ReadGeoreference(BundleManifest manifest, JsonElement root)
     {
-        if (root.Object(HostKey)?.Object("georeference") is not { } georeference)
+        if (RevitHostBlock(root)?.Object("georeference") is not { } georeference)
         {
             manifest.Georeference = new RevitGeoreference();
             return null;
@@ -456,13 +487,13 @@ public static class BundleManifestReader
             raw);
 
     /// <summary>
-    /// Reads <c>dcc_readiness.revit</c> and nothing else. A sibling host's block is ignored, never
+    /// Reads <c>hosts.revit.readiness</c> and nothing else. A sibling host's block is ignored, never
     /// merged, and the retired v17 anonymous keys are not a fallback — reading them would turn a
     /// clean break into dual-parsing (HPS-36).
     /// </summary>
     private static void ReadReadiness(BundleManifest manifest, JsonElement root)
     {
-        if (root.Object("dcc_readiness")?.Object(HostKey) is not { } revit)
+        if (RevitHostBlock(root)?.Object("readiness") is not { } revit)
         {
             manifest.Readiness = new RevitReadiness();
             return;
@@ -496,7 +527,7 @@ public static class BundleManifestReader
     {
         JsonElement? elevation = root.Object("elevation");
         JsonElement? buildings = root.Object("buildings");
-        JsonElement? revit = root.Object(HostKey);
+        JsonElement? revit = RevitHostBlock(root);
 
         manifest.ToposurfacePoints = BuildArtifact(
             manifest,
@@ -750,16 +781,22 @@ public static class BundleManifestReader
     /// Refuses a v19 bundle whose <c>revit</c> block declares a deliverable without its hash.
     /// </summary>
     /// <remarks>
-    /// The v19 schema lists <c>sha256</c> in the <c>required</c> set of each deliverable sub-object,
+    /// The schema lists <c>sha256</c> in the <c>required</c> set of each deliverable sub-object,
     /// so a present block without one is a producer bug and fails closed (HPS-34) — importing
-    /// unverifiable bytes is worse than not importing. The rule is version-gated because the floor
-    /// still accepts v18, which published no Revit hashes at all: below v19 an absent hash stays
-    /// <em>valid but unverified</em>, never "corrupt" (HPS-27). The sub-objects
-    /// themselves remain optional — a bundle with no Revit deliverables selected is well-formed.
+    /// unverifiable bytes is worse than not importing. The sub-objects themselves remain
+    /// optional — a bundle with no Revit deliverables selected is well-formed.
+    /// </para>
+    /// <para>
+    /// This rule used to be version-gated at v19, because the floor still accepted v18, which
+    /// published no Revit hashes at all, and an absent hash there had to stay <em>valid but
+    /// unverified</em> rather than "corrupt" (HPS-27). The MPB 1.0.0 floor retires that gate
+    /// entirely: every version this reader accepts publishes the hashes, so the condition was
+    /// unconditionally true and a branch that can never be taken is worse than no branch — it
+    /// reads as a live rule protecting a case that no longer exists.
     /// </remarks>
     private static string? CheckRevitHashes(BundleManifest manifest, JsonElement root)
     {
-        if (manifest.Version < RevitArtifactHashVersion || root.Object(HostKey) is not { } revit)
+        if (RevitHostBlock(root) is not { } revit)
         {
             return null;
         }
@@ -770,7 +807,7 @@ public static class BundleManifestReader
             {
                 return string.Format(
                     CultureInfo.InvariantCulture,
-                    "revit.{0} has no sha256, and this bundle's manifest (v{1}) is required to publish one. "
+                    "hosts.revit.{0} has no sha256, and this bundle's manifest ({1}) is required to publish one. "
                     + "Re-download this AOI from your vault at mantle.place/vault — rebuilding it there "
                     + "re-cuts the bundle on the current pipeline.",
                     key,
@@ -788,13 +825,13 @@ public static class BundleManifestReader
     /// <para>
     /// The discriminator is deliberately "has this bundle been materialized for <em>anyone</em>",
     /// not "does it have Revit content" — HPS-47, decided from the manifest's neutral signals:
-    /// a known host block at top level, a <c>dcc_readiness</c> object, or a non-empty
+    /// a non-empty <c>hosts</c> object, or a non-empty
     /// <c>vector.layers</c> array. Those are different questions and only the first one is a
     /// parse verdict: a materialized bundle with no Revit deliverables selected is a perfectly
     /// well-formed manifest, and the shared corpus requires every host to accept it
     /// (<c>manifest.materializationSignals</c>). The "there is nothing here for Revit" case is
     /// <see cref="BundleManifest.HasRevitContent"/>, and the reason lives in
-    /// <c>dcc_readiness.revit</c> (HPS-36).
+    /// <c>hosts.revit.readiness</c> (HPS-36).
     /// </para>
     /// <para>
     /// A base, not-yet-materialized bundle carries no host block, no vector layers and no artifact
@@ -812,13 +849,21 @@ public static class BundleManifestReader
             return null;
         }
 
-        // A `dcc_readiness` block at all means the bundle reached the readiness stage, so it IS
-        // materialized — even when every path in it reads `present: false`. That case is not a
-        // parse failure, it is the case HPS-36 exists for: the manifest says WHY each artifact is
-        // absent and the plugin must surface those reasons. Refusing here would throw them away and
-        // leave the user with a generic "nothing here yet", which is the dead-end the rule bans.
-        // Note this reads only whether the block exists — no sibling host's values are consulted.
-        if (root.Object("dcc_readiness") is not null)
+        // A non-empty `hosts` object means the bundle reached the readiness stage, so it IS
+        // materialized — even when every readiness path inside reads `present: false`. That case is
+        // not a parse failure, it is the case HPS-36 exists for: the manifest says WHY each
+        // artifact is absent and the plugin must surface those reasons. Refusing here would throw
+        // them away and leave the user with a generic "nothing here yet", which is the dead-end the
+        // rule bans.
+        //
+        // At 1.0.0 this ONE check replaces the integer era's three (a known host block, a
+        // `dcc_readiness` object, a host roster). Only whether the object has a key is read — no
+        // host id is compared, so a bundle materialized solely for a host this plugin has never
+        // heard of still answers "materialized".
+        //
+        // A key, not mere existence: an empty `hosts` object is base-tier scaffolding exactly as an
+        // empty `vector.layers` array is.
+        if (root.Object(HostsKey) is { } hosts && hosts.EnumerateObject().Any())
         {
             return null;
         }
@@ -826,14 +871,6 @@ public static class BundleManifestReader
         if (root.Object("vector")?.Array("layers") is { } layers && layers.GetArrayLength() > 0)
         {
             return null;
-        }
-
-        foreach (string hostBlock in HostBlockKeys)
-        {
-            if (root.HasObject(hostBlock))
-            {
-                return null;
-            }
         }
 
         return "This bundle hasn't generated its DCC formats yet. Open your vault at mantle.place/vault, "

@@ -128,7 +128,8 @@ do **not** cross over.
 ## Where knowledge lives
 
 - The bundle-manifest contract → the published JSON Schema series at
-  `https://mantle.place/.well-known/schemas/bundle-manifest/v{N}.json`. It is the authority; the
+  `https://mantle.place/.well-known/schemas/bundle-manifest/` (`v{N}.json` for the integer
+  pre-history, `{X.Y.Z}.json` for the MPB semver era). It is the authority; the
   version this host is verified against lives in
   [`verified-against.json`](../tools/manifest-conformance/verified-against.json), never in prose.
 - Cross-host normative rules → the Host Plugin Standard, cited by `HPS-NN` id.

@@ -62,7 +62,8 @@ internal static class ManifestConformanceTests
         // confusing messages instead of this one saying it once, loudly.
         run.Case("corpus pin is at or above this host's floor (clean break, HPS-31)", () =>
             run.True(
-                ConformanceCorpus.PinnedManifestVersion() >= ManifestVersions.MinSupportedManifestVersion,
+                !ManifestVersion.IsBelowFloor(
+                    ConformanceCorpus.PinnedManifestVersion(), ManifestVersions.MinSupportedManifestVersion),
                 $"corpus manifestVersion {ConformanceCorpus.PinnedManifestVersion()} "
                 + $"< MinSupportedManifestVersion {ManifestVersions.MinSupportedManifestVersion}"));
 
@@ -321,13 +322,13 @@ internal static class ManifestConformanceTests
             run.False(manifest.IsValid, "v17 is refused");
             run.Contains(manifest.Error, "no longer supported", "names the version gate");
             run.Contains(manifest.Error, "mantle.place/vault", "names the vault");
-            run.Equal(manifest.Version, 17, "version was still read");
+            run.Equal(manifest.Version, "", "an integer-era version is not readable as a string");
         });
 
         run.Case("an unsupported delivery enum fails closed and names the value (HPS-35)", () =>
         {
             BundleManifest manifest = BundleManifestReader.Parse(
-                "{\"version\": 18, \"unreal\": {}, \"delivery\": {\"linear_unit\": \"furlong\"}}");
+                "{\"version\": \"1.0.0\", \"hosts\": {\"unreal\": {}}, \"delivery\": {\"linear_unit\": \"furlong\"}}");
             run.False(manifest.IsValid, "unknown linear_unit is refused");
             run.Contains(manifest.Error, "furlong", "refusal names the offending value");
         });

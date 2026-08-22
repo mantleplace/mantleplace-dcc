@@ -1,9 +1,11 @@
 {
-  "jobId": "m",
-  "version": 19,
-  "unreal": {
-    "mesh_alternative": {
-      "path": "Mesh/Terrain.glb"
+  "version": "1.0.0",
+  "job_id": "m",
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
     }
   }
 }

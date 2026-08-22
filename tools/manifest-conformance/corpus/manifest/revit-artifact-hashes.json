@@ -1,60 +1,62 @@
 {
-  "jobId": "revit-artifact-hashes",
-  "orderId": "ord-revit-hashes",
-  "version": 19,
+  "version": "1.0.0",
   "layout": {
     "points_csv": "Surface/SurfacePoints.csv",
     "surface_dxf": "Surface/Surface.dxf",
     "buildings_ifc": "Site/Site.ifc"
   },
-  "revit": {
-    "host_min_version": "2025",
-    "units_note": "Revit's internal length is decimal feet; the project's display units are the user's. Apply georeference.origin VERBATIM as the survey point / shared coordinates and set its Elev to 0 — every artifact's Z is ABSOLUTE orthometric height, not an offset from the origin. Grid rotation is zero by construction: the emitters reproject per-vertex, so meridian convergence is already absorbed. Do not re-derive any of this; origin.projected.linear_unit describes the ORIGIN's coordinates and each artifact's own `units` describes that file (they differ on the local_ft tier, where the origin is metric UTM and the files are international feet).",
-    "georeference": {
-      "crs_projected": "EPSG:32613",
-      "crs_geographic": "EPSG:4326",
-      "vertical_datum": "EGM2008-orthometric",
-      "grid_rotation_deg": 0.0,
-      "is_projected": true,
-      "origin": {
-        "lon": -105.64620798739834,
-        "lat": 36.27254939041837,
-        "projected": {
-          "epsg": 32613,
-          "easting": 441959.49999999854,
-          "northing": 4014372.4999999995,
-          "linear_unit": "m"
+  "job_id": "revit-artifact-hashes",
+  "order_id": "ord-revit-hashes",
+  "hosts": {
+    "revit": {
+      "host_min_version": "2025",
+      "units_note": "Revit's internal length is decimal feet; the project's display units are the user's. Apply georeference.origin VERBATIM as the survey point / shared coordinates and set its Elev to 0 \u2014 every artifact's Z is ABSOLUTE orthometric height, not an offset from the origin. Grid rotation is zero by construction: the emitters reproject per-vertex, so meridian convergence is already absorbed. Do not re-derive any of this; origin.projected.linear_unit describes the ORIGIN's coordinates and each artifact's own `units` describes that file (they differ on the local_ft tier, where the origin is metric UTM and the files are international feet).",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "vertical_datum": "EGM2008-orthometric",
+        "grid_rotation_deg": 0.0,
+        "is_projected": true,
+        "origin": {
+          "lon": -105.64620798739834,
+          "lat": 36.27254939041837,
+          "projected": {
+            "epsg": 32613,
+            "easting": 441959.49999999854,
+            "northing": 4014372.4999999995,
+            "linear_unit": "m"
+          }
         }
+      },
+      "toposurface_points": {
+        "path": "Surface/SurfacePoints.csv",
+        "format": "csv-xyz-headerless",
+        "horizontal_frame": "local_enu",
+        "vertical_reference": "absolute",
+        "units": "m",
+        "point_count": 98756,
+        "sha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "surface_dxf": {
+        "path": "Surface/Surface.dxf",
+        "surf_type": "TIN-3DFACE",
+        "horizontal_frame": "absolute_projected",
+        "units": "m",
+        "triangle_count": 150000,
+        "decimated_from_triangle_count": 3987200,
+        "sha256": "7cbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "ifc_site": {
+        "path": "Site/Site.ifc",
+        "schema": "IFC4",
+        "horizontal_frame": "local_enu",
+        "units": "m",
+        "map_conversion_scale": 1.0,
+        "terrain_is_context_geometry": true,
+        "footprint_count": 0,
+        "terrain_triangle_count": 150000,
+        "sha256": "e1cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       }
-    },
-    "toposurface_points": {
-      "path": "Surface/SurfacePoints.csv",
-      "format": "csv-xyz-headerless",
-      "horizontal_frame": "local_enu",
-      "vertical_reference": "absolute",
-      "units": "m",
-      "point_count": 98756,
-      "sha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    },
-    "surface_dxf": {
-      "path": "Surface/Surface.dxf",
-      "surf_type": "TIN-3DFACE",
-      "horizontal_frame": "absolute_projected",
-      "units": "m",
-      "triangle_count": 150000,
-      "decimated_from_triangle_count": 3987200,
-      "sha256": "7cbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    },
-    "ifc_site": {
-      "path": "Site/Site.ifc",
-      "schema": "IFC4",
-      "horizontal_frame": "local_enu",
-      "units": "m",
-      "map_conversion_scale": 1.0,
-      "terrain_is_context_geometry": true,
-      "footprint_count": 0,
-      "terrain_triangle_count": 150000,
-      "sha256": "e1cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
     }
   }
 }

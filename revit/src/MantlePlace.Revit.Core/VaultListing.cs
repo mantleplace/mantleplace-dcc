@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace MantlePlace.Revit.Core;
@@ -48,7 +49,15 @@ public sealed class VaultBundle
     /// <summary><c>null</c> when the row said nothing — not "all false".</summary>
     public BundleLayers? Layers { get; init; }
 
-    public int? ManifestVersion { get; init; }
+    /// <summary>
+    /// The listed bundle's manifest version; <c>null</c> when the listing reported none.
+    /// </summary>
+    /// <remarks>
+    /// A string spanning both families — the vault lists bundles at rest, and one cut before the
+    /// MPB re-baseline reports the integer 19 while one cut after reports "1.0.0". Surfaced, never
+    /// gated on: the import gate is the one place a version decides anything.
+    /// </remarks>
+    public string? ManifestVersion { get; init; }
 
     public long? SizeBytes { get; init; }
 
@@ -177,7 +186,8 @@ public static class VaultListingReader
         AreaKm2 = row.OptionalDouble("areaKm2"),
         Status = ParseStatus(row.Str("status")),
         Layers = ReadLayers(row),
-        ManifestVersion = row.OptionalInt("manifestVersion"),
+        ManifestVersion = row.OptionalStr("manifestVersion")
+            ?? row.OptionalInt("manifestVersion")?.ToString(CultureInfo.InvariantCulture),
         SizeBytes = ReadOptionalLong(row, "sizeBytes"),
         Sha256 = row.OptionalStr("sha256"),
         Formats = ReadStrings(row, "formats"),

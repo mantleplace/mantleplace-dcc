@@ -1,0 +1,9 @@
+{
+  "jobId": "pre-mpb-v18",
+  "version": 18,
+  "unreal": {
+    "mesh_alternative": {
+      "path": "Mesh/Terrain.glb"
+    }
+  }
+}

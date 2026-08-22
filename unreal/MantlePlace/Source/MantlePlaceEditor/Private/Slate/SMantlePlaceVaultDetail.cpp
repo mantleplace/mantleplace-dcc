@@ -120,7 +120,7 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 	if (View.bHasManifestVersion)
 	{
 		DetailsBox->AddSlot().AutoHeight().Padding(0.f, 4.f)
-		[ MakeDefRow(TEXT("manifest"), FString::Printf(TEXT("v%d"), View.ManifestVersion)) ];
+		[ MakeDefRow(TEXT("manifest"), MantlePlaceDescribeManifestVersion(View.ManifestVersion)) ];
 	}
 	DetailsBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S6)[ MakeDefRow(TEXT("layers"), LayersText) ];
 

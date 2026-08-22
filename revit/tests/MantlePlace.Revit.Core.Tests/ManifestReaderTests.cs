@@ -12,28 +12,36 @@ internal static class ManifestReaderTests
     /// the <c>revit</c> block instead.
     /// </summary>
     private const string MetricTierOwnBlock = """
-        {
-          "version": 19,
-          "delivery": {
-            "unit_system": "metric", "tier": "metric", "horizontal_epsg": 32613, "linear_unit": "m"
-          },
-          "revit": {
-            "georeference": {
-              "crs_projected": "EPSG:32613",
-              "crs_geographic": "EPSG:4326",
-              "vertical_datum": "EGM2008-orthometric",
-              "grid_rotation_deg": 0.0,
-              "is_projected": true,
-              "origin": {
-                "lon": -105.32557885004304, "lat": 38.46130517000308,
-                "projected": {
-                  "epsg": 32613, "easting": 471594.99999999977,
-                  "northing": 4257050.0, "linear_unit": "m"
+          {
+            "version": "1.0.0",
+            "delivery": {
+              "unit_system": "metric",
+              "tier": "metric",
+              "horizontal_epsg": 32613,
+              "linear_unit": "m"
+            },
+            "hosts": {
+              "revit": {
+                "georeference": {
+                  "crs_projected": "EPSG:32613",
+                  "crs_geographic": "EPSG:4326",
+                  "vertical_datum": "EGM2008-orthometric",
+                  "grid_rotation_deg": 0.0,
+                  "is_projected": true,
+                  "origin": {
+                    "lon": -105.32557885004304,
+                    "lat": 38.46130517000308,
+                    "projected": {
+                      "epsg": 32613,
+                      "easting": 471594.99999999977,
+                      "northing": 4257050.0,
+                      "linear_unit": "m"
+                    }
+                  }
                 }
               }
             }
           }
-        }
         """;
 
     internal static int Run()
@@ -48,16 +56,27 @@ internal static class ManifestReaderTests
             // rule was contingent on another host being materialized.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 18,
-                  "dcc_readiness": {
-                    "revit": {
-                      "toposurface_points": { "present": false, "reason": "points_csv_not_produced" },
-                      "ifc_site": { "present": false, "reason": "ifc_site_not_produced" },
-                      "surface_dxf": { "present": false, "reason": "surface_dxf_not_produced" }
+                  {
+                    "version": "1.0.0",
+                    "hosts": {
+                      "revit": {
+                        "readiness": {
+                          "toposurface_points": {
+                            "present": false,
+                            "reason": "points_csv_not_produced"
+                          },
+                          "ifc_site": {
+                            "present": false,
+                            "reason": "ifc_site_not_produced"
+                          },
+                          "surface_dxf": {
+                            "present": false,
+                            "reason": "surface_dxf_not_produced"
+                          }
+                        }
+                      }
                     }
                   }
-                }
                 """);
 
             run.True(manifest.IsValid, $"accepted ({manifest.Error})");
@@ -74,7 +93,7 @@ internal static class ManifestReaderTests
             // The host-block list cannot be the only materialization signal — max/ and blender/ are
             // already anticipated in this repo's layout.
             BundleManifest manifest = BundleManifestReader.Parse(
-                """{"version": 18, "dcc_readiness": {"max": {"mesh": {"present": true}}}}""");
+                """{"version": "1.0.0", "hosts": {"max": {"readiness": {"mesh": {"present": true}}}}}""");
             run.True(manifest.IsValid, $"accepted ({manifest.Error})");
         });
 
@@ -82,8 +101,16 @@ internal static class ManifestReaderTests
         {
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {"version": 18, "orderId": "ord-1", "packaging": {"delivery_model": "base_on_demand"},
-                 "layout": {"cesiumTerrain": "Elevation/Terrain/layer.json"}}
+                  {
+                    "version": "1.0.0",
+                    "packaging": {
+                      "delivery_model": "base_on_demand"
+                    },
+                    "layout": {
+                      "cesium_terrain": "Elevation/Terrain/layer.json"
+                    },
+                    "order_id": "ord-1"
+                  }
                 """);
 
             run.False(manifest.IsValid, "refused");
@@ -98,16 +125,19 @@ internal static class ManifestReaderTests
             // too small, with nothing on screen to suggest it.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 18,
-                  "layout": { "points_csv": "Surface/B.csv" },
-                  "elevation": {
-                    "points_csv": {
-                      "path": "Surface/A.csv", "units": "ftUS",
-                      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                  {
+                    "version": "1.0.0",
+                    "layout": {
+                      "points_csv": "Surface/B.csv"
+                    },
+                    "elevation": {
+                      "points_csv": {
+                        "path": "Surface/A.csv",
+                        "units": "ftUS",
+                        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                      }
                     }
                   }
-                }
                 """);
 
             run.Equal(manifest.ToposurfacePoints?.Path, "Surface/B.csv", "the declared pointer wins");
@@ -119,11 +149,18 @@ internal static class ManifestReaderTests
         {
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 18,
-                  "layout": { "points_csv": "Surface/SurfacePoints.csv" },
-                  "elevation": { "points_csv": { "path": "Surface/SurfacePoints.csv", "units": "ftUS" } }
-                }
+                  {
+                    "version": "1.0.0",
+                    "layout": {
+                      "points_csv": "Surface/SurfacePoints.csv"
+                    },
+                    "elevation": {
+                      "points_csv": {
+                        "path": "Surface/SurfacePoints.csv",
+                        "units": "ftUS"
+                      }
+                    }
+                  }
                 """);
 
             run.Equal(manifest.ToposurfacePoints?.Units, "ftUS", "units kept when both name one file");
@@ -132,19 +169,40 @@ internal static class ManifestReaderTests
         run.Case("a null bbox edge is unknown, not zero (HPS-20)", () =>
         {
             BundleManifest manifest = BundleManifestReader.Parse(
-                """{"version": 18, "unreal": {}, "bbox": {"west": null, "south": 36.2, "east": -105.6, "north": 36.3}}""");
+                """{"version": "1.0.0", "hosts": {"unreal": {}}, "bbox": {"west": null, "south": 36.2, "east": -105.6, "north": 36.3}}""");
             run.False(manifest.HasBbox, "a partially-known bbox is not a bbox");
 
             BundleManifest complete = BundleManifestReader.Parse(
-                """{"version": 18, "unreal": {}, "bbox": {"west": -105.7, "south": 36.2, "east": -105.6, "north": 36.3}}""");
+                """{"version": "1.0.0", "hosts": {"unreal": {}}, "bbox": {"west": -105.7, "south": 36.2, "east": -105.6, "north": 36.3}}""");
             run.True(complete.HasBbox, "a fully-known bbox is");
         });
 
-        run.Case("the version gate truncates, matching the Unreal reference", () =>
+        run.Case("a version that is not a semver string is refused, whatever its JSON type", () =>
         {
-            // Rounding would accept a 17.6 that host #1 refuses — a divergence inside a ⛔ gate.
-            run.False(BundleManifestReader.Parse("""{"version": 17.6, "unreal": {}}""").IsValid, "17.6 refused");
-            run.True(BundleManifestReader.Parse("""{"version": 18.9, "unreal": {}}""").IsValid, "18.9 accepted");
+            // Replaces "the version gate truncates, matching the Unreal reference". That case
+            // pinned truncate-not-round because a non-integral version like 17.6 would otherwise be
+            // rounded up and accepted by one host while the other refused it — a divergence inside
+            // a ⛔ gate. MPB versions are STRINGS, so there is no number to round and the
+            // divergence is unrepresentable rather than merely policed.
+            //
+            // What has to hold now is that nothing outside the semver family is coerced into one.
+            // A number is the whole integer pre-history and is refused wholesale; the near-misses
+            // are refused because "close to a version" is how a reader ends up dual-parsing.
+            string[] notVersions =
+                ["19", "18.9", "\"19\"", "\"1.0\"", "\"1.0.0-rc1\"", "\"01.0.0\"", "null", "true"];
+            foreach (string version in notVersions)
+            {
+                // Concatenated rather than interpolated: the literal ends in three consecutive
+                // closing braces, which an interpolated raw string reads as a placeholder.
+                BundleManifest manifest = BundleManifestReader.Parse(
+                    """{"version": """ + version + """, "hosts": {"unreal": {}}}""");
+                run.False(manifest.IsValid, $"{version} refused");
+                run.Contains(manifest.Error, "no longer supported", $"{version} names the version gate");
+            }
+
+            run.True(
+                BundleManifestReader.Parse("""{"version": "1.0.0", "hosts": {"unreal": {}}}""").IsValid,
+                "the semver form is accepted");
         });
 
         run.Case("unit_system is recorded but does not gate the import", () =>
@@ -152,7 +210,7 @@ internal static class ManifestReaderTests
             // Nothing reads UnitSystem — scale comes from linear_unit and per-artifact units. A
             // refusal here would make every bundle unimportable the day web adds a third token.
             BundleManifest manifest = BundleManifestReader.Parse(
-                """{"version": 18, "unreal": {}, "delivery": {"unit_system": "nautical", "linear_unit": "m"}}""");
+                """{"version": "1.0.0", "hosts": {"unreal": {}}, "delivery": {"unit_system": "nautical", "linear_unit": "m"}}""");
             run.True(manifest.IsValid, $"accepted ({manifest.Error})");
             run.True(manifest.Delivery.UnitSystem == UnitSystem.Unspecified, "recorded as unspecified");
         });
@@ -160,7 +218,7 @@ internal static class ManifestReaderTests
         run.Case("linear_unit DOES gate the import, because scale depends on it (HPS-35)", () =>
         {
             BundleManifest manifest = BundleManifestReader.Parse(
-                """{"version": 18, "unreal": {}, "delivery": {"linear_unit": "furlong"}}""");
+                """{"version": "1.0.0", "hosts": {"unreal": {}}, "delivery": {"linear_unit": "furlong"}}""");
             run.False(manifest.IsValid, "refused");
             run.Contains(manifest.Error, "furlong", "names the offending value");
         });
@@ -171,17 +229,28 @@ internal static class ManifestReaderTests
             // `elevation.points_csv` still carries none. A host reads its OWN block (HPS-33).
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 19,
-                  "layout": { "points_csv": "Surface/SurfacePoints.csv" },
-                  "elevation": { "points_csv": { "path": "Surface/SurfacePoints.csv", "units": "m" } },
-                  "revit": {
-                    "toposurface_points": {
-                      "path": "Surface/SurfacePoints.csv", "units": "m", "point_count": 98756,
-                      "sha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                  {
+                    "version": "1.0.0",
+                    "layout": {
+                      "points_csv": "Surface/SurfacePoints.csv"
+                    },
+                    "elevation": {
+                      "points_csv": {
+                        "path": "Surface/SurfacePoints.csv",
+                        "units": "m"
+                      }
+                    },
+                    "hosts": {
+                      "revit": {
+                        "toposurface_points": {
+                          "path": "Surface/SurfacePoints.csv",
+                          "units": "m",
+                          "point_count": 98756,
+                          "sha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        }
+                      }
                     }
                   }
-                }
                 """);
 
             run.True(manifest.IsValid, $"accepted ({manifest.Error})");
@@ -198,16 +267,22 @@ internal static class ManifestReaderTests
             // one is a producer bug. Importing unverifiable bytes is worse than not importing.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 19,
-                  "layout": { "surface_dxf": "Surface/Surface.dxf" },
-                  "revit": {
-                    "surface_dxf": {
-                      "path": "Surface/Surface.dxf", "surf_type": "TIN-3DFACE",
-                      "units": "m", "triangle_count": 150000
+                  {
+                    "version": "1.0.0",
+                    "layout": {
+                      "surface_dxf": "Surface/Surface.dxf"
+                    },
+                    "hosts": {
+                      "revit": {
+                        "surface_dxf": {
+                          "path": "Surface/Surface.dxf",
+                          "surf_type": "TIN-3DFACE",
+                          "units": "m",
+                          "triangle_count": 150000
+                        }
+                      }
                     }
                   }
-                }
                 """);
 
             run.False(manifest.IsValid, "refused");
@@ -220,14 +295,23 @@ internal static class ManifestReaderTests
             // on the required-hash rule is what keeps those bundles importable.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 18,
-                  "layout": { "points_csv": "Surface/SurfacePoints.csv", "surface_dxf": "Surface/Surface.dxf" },
-                  "elevation": {
-                    "points_csv": { "path": "Surface/SurfacePoints.csv", "units": "m" },
-                    "surface_dxf": { "path": "Surface/Surface.dxf", "units": "m" }
+                  {
+                    "version": "1.0.0",
+                    "layout": {
+                      "points_csv": "Surface/SurfacePoints.csv",
+                      "surface_dxf": "Surface/Surface.dxf"
+                    },
+                    "elevation": {
+                      "points_csv": {
+                        "path": "Surface/SurfacePoints.csv",
+                        "units": "m"
+                      },
+                      "surface_dxf": {
+                        "path": "Surface/Surface.dxf",
+                        "units": "m"
+                      }
+                    }
                   }
-                }
                 """);
 
             run.True(manifest.IsValid, $"accepted ({manifest.Error})");
@@ -261,26 +345,39 @@ internal static class ManifestReaderTests
             // to this host, and one carrying only the delivery origin still works (below).
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 19,
-                  "delivery": {
-                    "unit_system": "imperial", "tier": "local_ft", "linear_unit": "ft",
-                    "local_origin": {
-                      "lon": -105.6462, "lat": 36.2725, "utm_epsg": 32613,
-                      "easting_m": 441959.5, "northing_m": 4014372.5
-                    }
-                  },
-                  "revit": {
-                    "georeference": {
-                      "crs_projected": "EPSG:2231", "grid_rotation_deg": 0.0,
-                      "origin": {
-                        "lon": -105.6462, "lat": 36.2725,
-                        "projected": {"epsg": 2231, "easting": 1450131.2,
-                                      "northing": 13171825.6, "linear_unit": "ftUS"}
+                  {
+                    "version": "1.0.0",
+                    "delivery": {
+                      "unit_system": "imperial",
+                      "tier": "local_ft",
+                      "linear_unit": "ft",
+                      "local_origin": {
+                        "lon": -105.6462,
+                        "lat": 36.2725,
+                        "utm_epsg": 32613,
+                        "easting_m": 441959.5,
+                        "northing_m": 4014372.5
+                      }
+                    },
+                    "hosts": {
+                      "revit": {
+                        "georeference": {
+                          "crs_projected": "EPSG:2231",
+                          "grid_rotation_deg": 0.0,
+                          "origin": {
+                            "lon": -105.6462,
+                            "lat": 36.2725,
+                            "projected": {
+                              "epsg": 2231,
+                              "easting": 1450131.2,
+                              "northing": 13171825.6,
+                              "linear_unit": "ftUS"
+                            }
+                          }
+                        }
                       }
                     }
                   }
-                }
                 """);
 
             run.Equal(manifest.SurveyPoint?.Epsg ?? 0, 2231, "the own block's EPSG, not delivery's");
@@ -296,17 +393,21 @@ internal static class ManifestReaderTests
             // block; dropping this path would break them to fix the metric tier.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 18,
-                  "revit": {},
-                  "delivery": {
-                    "unit_system": "imperial", "tier": "local_ft", "linear_unit": "ft",
-                    "local_origin": {
-                      "lon": -105.6462, "lat": 36.2725, "utm_epsg": 32613,
-                      "easting_m": 441959.5, "northing_m": 4014372.5
+                  {
+                    "version": "1.0.0",
+                    "delivery": {
+                      "unit_system": "imperial",
+                      "tier": "local_ft",
+                      "linear_unit": "ft",
+                      "local_origin": {
+                        "lon": -105.6462,
+                        "lat": 36.2725,
+                        "utm_epsg": 32613,
+                        "easting_m": 441959.5,
+                        "northing_m": 4014372.5
+                      }
                     }
                   }
-                }
                 """);
 
             run.True(manifest.HasPreDerivedSurveyPoint, "the delivery origin is still applied");
@@ -320,15 +421,23 @@ internal static class ManifestReaderTests
         {
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 19,
-                  "unreal": {
-                    "georeference": {
-                      "crs_projected": "EPSG:32613",
-                      "origin": {"utm": {"epsg": 32613, "easting": 441959.5, "northing": 4014372.5}}
+                  {
+                    "version": "1.0.0",
+                    "hosts": {
+                      "unreal": {
+                        "georeference": {
+                          "crs_projected": "EPSG:32613",
+                          "origin": {
+                            "utm": {
+                              "epsg": 32613,
+                              "easting": 441959.5,
+                              "northing": 4014372.5
+                            }
+                          }
+                        }
+                      }
                     }
                   }
-                }
                 """);
 
             run.True(manifest.IsValid, $"accepted ({manifest.Error})");
@@ -343,17 +452,23 @@ internal static class ManifestReaderTests
             // everything in the bundle, so a scale nobody can read is not one artifact's problem.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 19,
-                  "revit": {
-                    "georeference": {
-                      "origin": {
-                        "projected": {"epsg": 32613, "easting": 1.0, "northing": 2.0,
-                                      "linear_unit": "furlong"}
+                  {
+                    "version": "1.0.0",
+                    "hosts": {
+                      "revit": {
+                        "georeference": {
+                          "origin": {
+                            "projected": {
+                              "epsg": 32613,
+                              "easting": 1.0,
+                              "northing": 2.0,
+                              "linear_unit": "furlong"
+                            }
+                          }
+                        }
                       }
                     }
                   }
-                }
                 """);
 
             run.False(manifest.IsValid, "refused");
@@ -368,16 +483,42 @@ internal static class ManifestReaderTests
         {
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 19,
-                  "layout": { "imagery_drape": "Imagery/Drape.png" },
-                  "imagery": { "present": true, "gsd_m": 0.3 },
-                  "elevation": { "dem": { "crs": "EPSG:32613",
-                    "bounds_target_crs": [470880.0, 4256340.0, 472310.0, 4257760.0] } },
-                  "unreal": { "imagery_drape": { "source": "Imagery/Drape.png", "extent_crs": "EPSG:32613",
-                    "extent": [1.0, 2.0, 3.0, 4.0],
-                    "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" } }
-                }
+                  {
+                    "version": "1.0.0",
+                    "layout": {
+                      "imagery_drape": "Imagery/Drape.png"
+                    },
+                    "imagery": {
+                      "present": true,
+                      "gsd_m": 0.3
+                    },
+                    "elevation": {
+                      "dem": {
+                        "crs": "EPSG:32613",
+                        "bounds_target_crs": [
+                          470880.0,
+                          4256340.0,
+                          472310.0,
+                          4257760.0
+                        ]
+                      }
+                    },
+                    "hosts": {
+                      "unreal": {
+                        "imagery_drape": {
+                          "source": "Imagery/Drape.png",
+                          "extent_crs": "EPSG:32613",
+                          "extent": [
+                            1.0,
+                            2.0,
+                            3.0,
+                            4.0
+                          ],
+                          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                        }
+                      }
+                    }
+                  }
                 """);
 
             run.Equal(manifest.ImageryDrape?.Path, "Imagery/Drape.png", "the layout pointer is of record (HPS-32)");
@@ -387,7 +528,8 @@ internal static class ManifestReaderTests
             run.True(manifest.ImageryDrapeExtent is null, "no imagery.drape block means no drape extent");
 
             // The sibling host's block carries both an extent and a sha for this very file. Reading
-            // either would be the read-a-sibling's-block failure exactly, so the drape stays
+            // either would be the read-a-sibling's-block failure exactly, so the drape stays
+
             // unverified instead.
             run.True(manifest.ImageryDrape?.Sha256 is null, "unreal.imagery_drape.sha256 is not read");
         });
@@ -396,13 +538,26 @@ internal static class ManifestReaderTests
         {
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 19,
-                  "layout": { "imagery_drape": "Imagery/Drape.png" },
-                  "imagery": { "present": true, "gsd_m": 0.3, "drape": {
-                    "extent": [470880.0, 4256340.0, 472310.0, 4257760.0], "extent_crs": "EPSG:32613",
-                    "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" } }
-                }
+                  {
+                    "version": "1.0.0",
+                    "layout": {
+                      "imagery_drape": "Imagery/Drape.png"
+                    },
+                    "imagery": {
+                      "present": true,
+                      "gsd_m": 0.3,
+                      "drape": {
+                        "extent": [
+                          470880.0,
+                          4256340.0,
+                          472310.0,
+                          4257760.0
+                        ],
+                        "extent_crs": "EPSG:32613",
+                        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                      }
+                    }
+                  }
                 """);
 
             run.Within(manifest.ImageryDrapeExtent?.WidthUnits ?? 0.0, 1430.0, 1e-6, "the drape's own extent");
@@ -426,10 +581,10 @@ internal static class ManifestReaderTests
         run.Case("an absent imagery block is not an imagery block saying no", () =>
         {
             run.False(
-                BundleManifestReader.Parse("""{"version": 19}""").ImageryAbsentByDeclaration,
+                BundleManifestReader.Parse("""{"version": "1.0.0"}""").ImageryAbsentByDeclaration,
                 "silence is unknown");
             run.True(
-                BundleManifestReader.Parse("""{"version": 19, "imagery": {"present": false}}""")
+                BundleManifestReader.Parse("""{"version": "1.0.0", "imagery": {"present": false}}""")
                     .ImageryAbsentByDeclaration,
                 "an explicit false is a statement");
         });

@@ -1,26 +1,29 @@
 {
-  "jobId": "readiness",
-  "version": 19,
+  "version": "1.0.0",
   "packaging": {
     "delivery_model": "base_on_demand"
   },
-  "dcc_readiness": {
+  "job_id": "readiness",
+  "hosts": {
     "unreal": {
-      "landscape": {
-        "present": false,
-        "reason": "available_on_request"
-      },
-      "mesh_import": {
-        "present": false,
-        "reason": "available_on_request"
+      "readiness": {
+        "landscape": {
+          "present": false,
+          "reason": "available_on_request"
+        },
+        "mesh_import": {
+          "present": false,
+          "reason": "available_on_request"
+        }
       }
     },
     "revit": {
-      "toposurface_points": {
-        "present": false,
-        "reason": "available_on_request"
+      "readiness": {
+        "toposurface_points": {
+          "present": false,
+          "reason": "available_on_request"
+        }
       }
     }
-  },
-  "unreal": {}
+  }
 }
