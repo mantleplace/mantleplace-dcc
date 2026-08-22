@@ -155,7 +155,7 @@ public sealed class SkippedImport
 
     /// <summary>
     /// User-facing sentence. Where the manifest states a reason of its own
-    /// (<c>dcc_readiness.revit.&lt;path&gt;.reason</c>) that reason is surfaced rather than replaced —
+    /// (<c>hosts.revit.readiness.&lt;path&gt;.reason</c>) that reason is surfaced rather than replaced —
     /// dead-ending on an empty import is the failure this rule exists to prevent (HPS-36).
     /// </summary>
     /// <remarks>

@@ -1,16 +1,18 @@
 {
-  "jobId": "st-unknown",
-  "orderId": "ord-selftest-unknown",
-  "version": 18,
+  "job_id": "st-unknown",
+  "order_id": "ord-selftest-unknown",
+  "version": "1.0.0",
   "packaging": {
     "delivery_model": "base_on_demand"
   },
   "layout": {
-    "cesiumTerrain": "Elevation/Terrain/layer.json"
+    "cesium_terrain": "Elevation/Terrain/layer.json"
   },
-  "unreal": {
-    "mesh_alternative": {
-      "path": "Mesh/Terrain.glb"
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
     }
   }
 }

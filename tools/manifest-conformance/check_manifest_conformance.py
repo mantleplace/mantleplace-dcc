@@ -198,7 +198,23 @@ def fetch_published_versions(timeout: int = 20) -> list[str]:
         print(f"error: {LEDGER_URL} carries no 'frozen' map", file=sys.stderr)
         raise SystemExit(2)
 
-    keys = [key for key in frozen if version_key(key) is not None or _INTEGER_KEY_RE.match(key)]
+    keys: list[str] = []
+    for key in frozen:
+        if version_key(key) is not None or _INTEGER_KEY_RE.match(key):
+            keys.append(key)
+        elif not is_documentation_key(key):
+            # A frozen key in neither family — a bare "19", a partial "1.0" — may be a published
+            # version this gate cannot place in its total order, which means a version it cannot
+            # see past. Silently dropping it would turn ledger rot into a green run, which is the
+            # exact failure the ledger read exists to prevent — so it is loud, and exit 2 (could
+            # not CHECK), never exit 1 (drift).
+            print(
+                f"error: {LEDGER_URL} 'frozen' names {key!r}, which is not a version key in "
+                "either family (integer-era keys read 'v19'; semver keys read '1.0.0'). A key "
+                "this gate cannot order may hide a newer published version — refusing to guess.",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
     if not keys:
         print(f"error: {LEDGER_URL} names no recognizable version", file=sys.stderr)
         raise SystemExit(2)
@@ -334,6 +350,10 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
                 "only 'accept', 'reject' and 'vector' are meaningful to a host suite."
             )
 
+    # `self-test/` is excluded from THIS sweep on purpose: it is a nested corpus with its own
+    # index.json, and `check_selftest` runs its own recursive sweep over it — one that honours the
+    # index's `orphanFiles` declaration, which this sweep would misreport as rot (the deliberate
+    # orphan fixture is declared, not forgotten).
     orphans = sorted(
         p.relative_to(_CORPUS).as_posix()
         for p in _CORPUS.rglob("*")
@@ -396,6 +416,20 @@ def nested_expectation_entries(expectations: dict) -> list[tuple[str, str, objec
     return found
 
 
+def _corpus_manifest_version() -> object | None:
+    """The corpus proper's top-level `manifestVersion`, or None if unreadable or absent.
+
+    Kept verbatim (int for the pre-history, string for the MPB era) so the self-test cross-check
+    compares JSON values, never coerced ones — coercion across the era break is the reader bug the
+    whole gate exists to catch.
+    """
+    try:
+        index = json.loads((_CORPUS / "index.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return index.get("manifestVersion")
+
+
 def check_selftest(required: bool = True) -> list[str]:
     """Verify `corpus/self-test/` is *well-formed-broken*: each fixture wrong in exactly its
     declared way (HPS-46). A host suite asserts these fixtures are rejected; that assertion is
@@ -415,6 +449,21 @@ def check_selftest(required: bool = True) -> list[str]:
         return [f"FAIL: {index_path} is not a readable self-test index: {exc}"]
 
     failures: list[str] = []
+
+    # The self-test fixtures must be written in the dialect the host readers actually speak, or an
+    # `expect: accept` fixture is refused on the VERSION GATE and its self-test passes for the
+    # wrong reason — the reader never reaches the breakage the fixture declares. The corpus
+    # proper's `manifestVersion` is the pin the readers are held to, so the self-test index is
+    # cross-checked against it whenever both declare one.
+    corpus_pin = _corpus_manifest_version()
+    selftest_pin = index.get("manifestVersion")
+    if corpus_pin is not None and selftest_pin is not None and selftest_pin != corpus_pin:
+        failures.append(
+            f"FAIL: self-test index declares manifestVersion={selftest_pin!r} but the corpus "
+            f"proper is pinned at {corpus_pin!r}. Fixtures in a dialect the readers refuse make "
+            "every accept-shaped self-test pass on the version gate instead of on its declared "
+            "breakage (HPS-46)."
+        )
     id_counts: dict[str, int] = {}
     for case in cases:
         id_counts[case.get("id", "")] = id_counts.get(case.get("id", ""), 0) + 1
@@ -439,6 +488,18 @@ def check_selftest(required: bool = True) -> list[str]:
                 parsed = json.loads(path.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 parse_error = True
+
+        # The same declared-vs-actual cross-check the corpus proper gets in `check_corpus`: a
+        # self-test case whose `manifestVersion` disagrees with its fixture's own `version` is rot,
+        # and rot here is worse than in the corpus proper — the fixture's breakage stops being the
+        # reason the reader rejects it.
+        declared_version = case.get("manifestVersion")
+        if declared_version is not None and isinstance(parsed, dict) \
+                and parsed.get("version") != declared_version:
+            failures.append(
+                f"FAIL: self-test case '{case_id}' declares manifestVersion={declared_version!r} "
+                f"but {case.get('file')} carries version={parsed.get('version')!r}."
+            )
 
         if declared == "missingFile":
             if path.is_file():

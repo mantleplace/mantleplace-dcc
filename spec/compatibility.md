@@ -32,6 +32,8 @@ directory. Everything in `spec/` describes the semver era.
 - **MINOR** — strictly additive. New optional fields, new blocks, a new `hosts.<hostId>` sub-block,
   a widened enum. Nothing existing changes shape or meaning.
 - **PATCH** — editorial. Documentation and description text only; no change to what validates.
+  A patch release therefore obliges a host to nothing: no re-pin and no re-verification,
+  because nothing a reader parses has changed.
 
 ⛔ **A field is never reused with a changed meaning.** A key that meant one thing keeps meaning it,
 for as long as it exists. Repurposing a key is the one change that no version number can warn a

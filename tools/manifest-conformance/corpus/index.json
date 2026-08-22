@@ -257,7 +257,7 @@
         "hasDrape": true,
         "hasMesh": true,
         "meshAbsentReason": "",
-        "jobId": "fixture-v18-full-0001",
+        "jobId": "fixture-mpb-full-0001",
         "deliveryModel": "base_on_demand",
         "planetShape": "Flat",
         "heightmapPath": "Elevation/Heightmap.png",
@@ -1008,6 +1008,42 @@
       "expect": "reject",
       "manifestVersion": 19,
       "reason": "Clean break: v19 \u2014 the last version of the integer pre-history \u2014 predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed. The integer era is pre-history now; a host reads the version's JSON TYPE and refuses the whole family below its floor (HPS-31). Re-procurement, not dual-parsing, is how a bundle at rest crosses the break.",
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.versionIntegerString",
+      "group": "manifest",
+      "file": "manifest/reject-version-integer-string.json",
+      "expect": "reject",
+      "manifestVersion": "19",
+      "reason": "Semver near-miss: the integer era's 19 spelled as a JSON STRING. The families are told apart by JSON type, so \"19\" is not the pre-history — it is a malformed MPB version and MUST be refused. A reader that coerces it through a number resurrects dual-parsing across the era break.",
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.versionPartial",
+      "group": "manifest",
+      "file": "manifest/reject-version-partial.json",
+      "expect": "reject",
+      "manifestVersion": "1.0",
+      "reason": "Semver near-miss: \"1.0\" is not MAJOR.MINOR.PATCH. A permissive parser that pads the missing component invents a version the platform never published — refusal, not repair.",
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.versionPrerelease",
+      "group": "manifest",
+      "file": "manifest/reject-version-prerelease.json",
+      "expect": "reject",
+      "manifestVersion": "1.0.0-rc1",
+      "reason": "Semver near-miss: MPB publishes no pre-release tags, so \"1.0.0-rc1\" MUST fail the parse and be refused. A reader that strips the tag imports against a contract that does not exist.",
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.versionLeadingZero",
+      "group": "manifest",
+      "file": "manifest/reject-version-leading-zero.json",
+      "expect": "reject",
+      "manifestVersion": "01.0.0",
+      "reason": "Semver near-miss: semver forbids a leading zero and the platform's publisher and gate enforce it, so \"01.0.0\" MUST be refused. Both first-party hosts accepted it until a test caught the drift — this case is what keeps it caught, for every host at once.",
       "errorContains": "no longer supported"
     }
   ]
