@@ -210,6 +210,33 @@ class MultiHostGateTest(unittest.TestCase):
         self.assertNotIn("MantlePlaceImportManifestTest.cpp", joined)
         self.assertNotIn(".cpp", joined)
 
+    def test_an_integer_floor_under_a_semver_pin_is_drift(self) -> None:
+        """The cross-era hole: ordering says v18 <= 1.0.0, but a reader gating on an INTEGER floor
+        reads a semver version as 0 and refuses it. Without this the host passes every check while
+        refusing every manifest it claims to be verified against."""
+        self.published["1.0.0"] = _schema("1.0.0")
+        entry = _host_entry(
+            verifiedAgainstManifestVersion="1.0.0",
+            floorSource={"path": "Cpp.h", "pattern": r"FLOOR\s*=\s*(\d+)"},  # still `= 17`
+        )
+        failures, _ = gate.check_host("synthetic", entry)
+        self.assertTrue(any("integer pre-history" in f for f in failures), failures)
+
+    def test_a_semver_floor_under_a_semver_pin_is_fine(self) -> None:
+        self.published["1.0.0"] = _schema("1.0.0")
+        (self.tmp / "Semver.h").write_text('FLOOR = TEXT("1.0.0");\n', encoding="utf-8")
+        entry = _host_entry(
+            verifiedAgainstManifestVersion="1.0.0",
+            floorSource={"path": "Semver.h", "pattern": r'FLOOR\s*=\s*TEXT\("([0-9.]+)"\)'},
+        )
+        failures, _ = gate.check_host("synthetic", entry)
+        self.assertEqual([], failures)
+
+    def test_an_integer_floor_under_an_integer_pin_is_still_fine(self) -> None:
+        """The pre-history keeps working exactly as it did — this check must not retire it."""
+        failures, _ = gate.check_host("unreal", self._two_hosts()["unreal"])
+        self.assertEqual([], failures)
+
     def test_floor_pattern_that_stops_matching_is_drift_not_a_pass(self) -> None:
         entry = _host_entry(floorSource={"path": "Cpp.h", "pattern": r"RENAMED\s*=\s*(\d+)"})
         failures, _ = gate.check_host("synthetic", entry)

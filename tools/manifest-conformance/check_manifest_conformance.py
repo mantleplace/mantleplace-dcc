@@ -788,6 +788,20 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
             f"FAIL [{host}]: consumer floor {describe(floor)} is above the verified version "
             f"{describe(pinned)}. The consumer rejects manifests it claims to support."
         )
+    elif _INTEGER_KEY_RE.match(floor) and not _INTEGER_KEY_RE.match(pinned):
+        # `floor <= pinned` meant "reads everything from the floor up" while there was one family.
+        # Across the era break it does not: a reader whose floor is an integer compares the version
+        # NUMERICALLY, so a semver string reads as 0 (or fails to parse) and is refused below the
+        # floor like any ancient bundle. Such a host would pass every check above while refusing
+        # every manifest it claims to be verified against — the ordering says it is in range, and
+        # the reader never agrees.
+        failures.append(
+            f"FAIL [{host}]: consumer floor {describe(floor)} is in the integer pre-history while "
+            f"the pin {describe(pinned)} is in the MPB semver era.\n"
+            "      Ordering alone would allow this, but a reader gating on an integer floor reads a\n"
+            "      semver version as 0 and refuses it. Move the floor across the break with the pin\n"
+            f"      ({entry['floorSource']['path']}), or pin this host back to the era it reads."
+        )
 
     newest = newest_published(pinned)
     if sort_key(newest) > sort_key(pinned):
