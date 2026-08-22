@@ -319,7 +319,11 @@ void UMantlePlaceVaultImportOrchestrator::CleanupLocalStaging()
 void UMantlePlaceVaultImportOrchestrator::BeginPresign()
 {
 	Phase = EPhase::Presigning;
-	VaultClient->GetPresignedUrl(ActiveItem.OrderId, TEXT("glb")); // whole-bundle zip; result -> HandlePresignedNative
+	// ⛔ Ask for the ARCHIVE by name. The old literal here was "glb", the platform's deprecated
+	// whole-bundle alias, which returns the glb ARTIFACT whenever the order carries one and only
+	// falls through to download.zip when it does not -- so this was correct by luck of the data.
+	// The cache verifies against the listing's sha256, which is the archive's digest.
+	VaultClient->GetPresignedBundleUrl(ActiveItem.OrderId); // -> HandlePresignedNative
 }
 
 void UMantlePlaceVaultImportOrchestrator::SchedulePoll()

@@ -309,6 +309,17 @@ bool FMantlePlaceVaultLogic::IsKnownFormat(const FString& Format)
 	return false;
 }
 
+const FString& FMantlePlaceVaultLogic::WholeBundleFormat()
+{
+	static const FString Format = TEXT("bundle");
+	return Format;
+}
+
+bool FMantlePlaceVaultLogic::IsPresignableFormat(const FString& Format)
+{
+	return IsKnownFormat(Format) || Format.Equals(WholeBundleFormat(), ESearchCase::IgnoreCase);
+}
+
 const TArray<FString>& FMantlePlaceVaultLogic::KnownFormats()
 {
 	static const TArray<FString> Formats = {

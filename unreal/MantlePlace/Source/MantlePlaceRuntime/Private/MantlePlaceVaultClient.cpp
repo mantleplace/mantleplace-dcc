@@ -116,10 +116,12 @@ void UMantlePlaceVaultClient::GetPresignedUrl(const FString& OrderId, const FStr
 		return;
 	}
 
-	if (!FMantlePlaceVaultLogic::IsKnownFormat(Format))
+	if (!FMantlePlaceVaultLogic::IsPresignableFormat(Format))
 	{
 		NotifyPresigned(false, Empty,
-			FString::Printf(TEXT("Unknown format '%s'. Expected one of glb, fbx, geotiff, cog, dwg, pmtiles."), *Format));
+		                FString::Printf(
+		                    TEXT("Unknown format '%s'. Expected 'bundle' for the whole archive, or one of glb, fbx, geotiff, cog, dwg, pmtiles."),
+		                    *Format));
 		return;
 	}
 
@@ -151,6 +153,11 @@ void UMantlePlaceVaultClient::GetPresignedUrl(const FString& OrderId, const FStr
 		ActiveRequest.Reset();
 		NotifyPresigned(false, Empty, TEXT("Failed to start the download-mint request."));
 	}
+}
+
+void UMantlePlaceVaultClient::GetPresignedBundleUrl(const FString& OrderId)
+{
+	GetPresignedUrl(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat());
 }
 
 void UMantlePlaceVaultClient::ProbePresignedUrl(const FString& Url)

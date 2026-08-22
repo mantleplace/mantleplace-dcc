@@ -647,9 +647,28 @@ public readonly record struct PresignedDownload(string Url, string ExpiresAt)
             && TokenGrants.IsExpired(now, expiry);
 }
 
-/// <summary>Reading a presign response.</summary>
+/// <summary>Asking for a presigned download, and reading the answer.</summary>
 public static class PresignedDownloads
 {
+    /// <summary>
+    /// The format token naming the packaged archive rather than one artifact inside it.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <c>HPS-49</c>. This host imports the whole <c>download.zip</c> — the cache verifies against
+    /// the listing's <c>sha256</c>, which is the archive's digest — so it must ask for the archive by
+    /// name. The alias <c>glb</c> also means "the whole bundle", but only when the order happens to
+    /// carry no <c>glb</c> artifact; where one exists the platform hands back that mesh instead, and
+    /// the digest check then fails on a download that succeeded. Ambiguity that resolves on the
+    /// server's data is not a token a host may send.
+    /// </remarks>
+    public const string WholeBundleFormat = "bundle";
+
+    /// <summary>
+    /// The presign request body. The route validates this against a schema, so an empty object is a
+    /// <c>400</c>, not a default.
+    /// </summary>
+    public static string BuildRequestBody() => $$"""{"format":"{{WholeBundleFormat}}"}""";
+
     /// <summary>
     /// Parses a presign response. A body with no <c>url</c> is a refusal, and the platform's own
     /// message is what the curator sees — "Not entitled" beats anything this host could invent.

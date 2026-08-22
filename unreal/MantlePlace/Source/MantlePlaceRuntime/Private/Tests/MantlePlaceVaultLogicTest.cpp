@@ -825,6 +825,59 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			FLogic::IsValidMaterializeScope(TEXT("buildings")));
 	}
 
+	// --- the presign request body -----------------------------------------------------------
+	// The corpus pinned presign RESPONSES from the start and never the request, so a host could ask
+	// for the wrong thing and stay green through every gate. This host asked for "glb" and called it
+	// the whole-bundle zip: that token ALSO names a real artifact format, so the platform hands back
+	// the mesh whenever the order carries one and only falls through to the archive when it does
+	// not. It was right by luck of the data, and the cache verifies against the archive's sha256.
+	if (const FCase* Case = Take(TEXT("vault.downloadRequestBody")))
+	{
+		const FString WholeBundle = Case->PayloadObject.IsValid()
+		                                ? RowString(Case->PayloadObject, TEXT("wholeBundleFormat"))
+		                                : FString();
+		const FString DeprecatedAlias = Case->PayloadObject.IsValid()
+		                                    ? RowString(Case->PayloadObject, TEXT("deprecatedWholeBundleAlias"))
+		                                    : FString();
+
+		TestEqual(Case->What(TEXT("this host names the archive with the corpus's token")),
+		          FLogic::WholeBundleFormat(), WholeBundle);
+		TestFalse(Case->What(TEXT("and never with the deprecated alias")),
+		          FLogic::WholeBundleFormat().Equals(DeprecatedAlias, ESearchCase::IgnoreCase));
+
+		// The body on the wire comes from the corpus, not from a literal here.
+		const TSharedPtr<FJsonObject>* Body = nullptr;
+		if (Case->PayloadObject.IsValid() && Case->PayloadObject->TryGetObjectField(TEXT("body"), Body) && Body != nullptr)
+		{
+			TestEqual(Case->What(TEXT("the presign body matches the corpus body")),
+			          VaultReadStringField(FLogic::BuildDownloadBody(FLogic::WholeBundleFormat()), TEXT("format")),
+			          RowString(*Body, TEXT("format")));
+		}
+		else
+		{
+			AddError(Case->What(TEXT("body missing")));
+		}
+
+		const TArray<TSharedPtr<FJsonObject>> FormatVectors = Rows(*Case, TEXT("formatVectors"));
+		TestTrue(Case->What(TEXT("has formatVectors")), FormatVectors.Num() > 0);
+		for (const TSharedPtr<FJsonObject>& Row : FormatVectors)
+		{
+			const FString Format = RowString(Row, TEXT("format"));
+			const bool bPresignable = RowBool(Row, TEXT("presignable"));
+			const bool bWholeBundle = RowBool(Row, TEXT("wholeBundle"));
+
+			TestTrue(
+			    FString::Printf(TEXT("[%s] IsPresignableFormat(\"%s\") == %s"),
+			                    *Case->Id, *Format, bPresignable ? TEXT("true") : TEXT("false")),
+			    FLogic::IsPresignableFormat(Format) == bPresignable);
+
+			TestTrue(
+			    FString::Printf(TEXT("[%s] \"%s\" names the whole archive: %s"),
+			                    *Case->Id, *Format, bWholeBundle ? TEXT("true") : TEXT("false")),
+			    Format.Equals(FLogic::WholeBundleFormat(), ESearchCase::IgnoreCase) == bWholeBundle);
+		}
+	}
+
 	// --- HPS-46 asserted-keys guard ---------------------------------------------------------
 	// Consumption is proven by what was ASSERTED, not by the allow-list alone: a declared key
 	// nothing read — unknown, mistyped, or on an assertion path that never ran — fails.

@@ -1,0 +1,24 @@
+{
+  "$comment": "The presign REQUEST body. The corpus covered presign RESPONSES from the start and never the request, so a host could ask for the wrong thing — or for nothing — and stay green through every gate. One host shipped an empty object and the route's schema rejected it; the other shipped the deprecated alias and got the right bytes only because the orders it was tried on happened to carry no glb artifact.",
+
+  "wholeBundleFormat": "bundle",
+
+  "deprecatedWholeBundleAlias": "glb",
+  "deprecatedAliasNote": "'glb' also names a REAL artifact format, so as a whole-bundle request it is ambiguous: the platform looks up a glb artifact first and only falls through to the archive when the order has none. A host asking this way is reading the server's data, not stating its intent, and gets a mesh where it expected a zip.",
+
+  "body": {
+    "format": "bundle"
+  },
+  "bodyNote": "The route validates against a schema, so an empty object is a 400 rather than a default meaning 'the usual one'. There is no default.",
+
+  "formatVectors": [
+    { "format": "bundle", "presignable": true, "wholeBundle": true, "note": "the archive, named as itself" },
+    { "format": "glb", "presignable": true, "wholeBundle": false, "note": "a real artifact format; accepted, but it asks for the MESH" },
+    { "format": "geotiff", "presignable": true, "wholeBundle": false },
+    { "format": "pmtiles", "presignable": true, "wholeBundle": false },
+    { "format": "BUNDLE", "presignable": true, "wholeBundle": true, "note": "format matching is case-insensitive" },
+    { "format": "zip", "presignable": false, "wholeBundle": false, "note": "the archive's file extension is not its format token" },
+    { "format": "tiff", "presignable": false, "wholeBundle": false },
+    { "format": "", "presignable": false, "wholeBundle": false }
+  ]
+}

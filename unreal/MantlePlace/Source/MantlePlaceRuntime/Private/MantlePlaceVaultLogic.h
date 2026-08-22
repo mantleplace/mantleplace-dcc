@@ -65,6 +65,21 @@ struct FMantlePlaceVaultLogic
 	/** The six accepted download formats (mirrored from the producer allow-list). */
 	static const TArray<FString>& KnownFormats();
 
+	/**
+	 * The format token that names the packaged archive rather than one artifact inside it.
+	 *
+	 * The DEPRECATED alias for this is the literal "glb", which this plugin used to send. It is
+	 * genuinely ambiguous: "glb" is also a real artifact format, so the platform looks up a glb
+	 * artifact FIRST and only falls through to the whole zip when the order has none. An order that
+	 * does carry one answers with that mesh -- and the bundle cache then verifies it against the
+	 * listing's sha256, which is the ARCHIVE's digest, so a download that succeeded fails integrity.
+	 * We were never getting the zip on purpose; we were getting it when the data happened to allow.
+	 */
+	static const FString& WholeBundleFormat();
+
+	/** True iff the presign route accepts Format: any artifact format, plus the whole-bundle token. */
+	static bool IsPresignableFormat(const FString& Format);
+
 	//~ ----- "Generate Unreal formats" (on-demand materialize) -----
 
 	/** POST/GET endpoint: request or poll an on-demand materialize for one order (orderId URL-encoded). */

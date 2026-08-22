@@ -750,6 +750,13 @@
       }
     },
     {
+      "id": "vault.downloadRequestBody",
+      "group": "vault",
+      "file": "vault/download-request-body.json",
+      "expect": "vector",
+      "reason": "The presign REQUEST, which nothing asserted until a host shipped an empty body and a schema rejection came back as two unactionable words. The route validates its body, so there is no default; and the whole-bundle token must be named as itself, never through the deprecated 'glb' alias whose meaning depends on whether the order happens to carry a glb artifact. Every existing download case pins the RESPONSE, which is why a host asking for the wrong thing stayed green."
+    },
+    {
       "id": "vault.errorBodyPrecedence",
       "group": "vault",
       "file": "vault/error-body-precedence.json",

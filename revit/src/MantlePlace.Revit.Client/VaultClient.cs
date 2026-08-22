@@ -194,7 +194,10 @@ public sealed class VaultClient
     public async Task<VaultResult<PresignedDownload>> PresignAsync(string orderId, CancellationToken cancellationToken)
     {
         (int status, string body, string? error) = await SendAsync(
-            HttpMethod.Post, DownloadUrl(orderId), "{}", cancellationToken).ConfigureAwait(false);
+            HttpMethod.Post,
+            DownloadUrl(orderId),
+            PresignedDownloads.BuildRequestBody(),
+            cancellationToken).ConfigureAwait(false);
 
         if (error is null && Refusal(status, body) is { } refusal)
         {
@@ -334,6 +337,12 @@ public sealed class VaultClient
     /// ("410") tells a curator nothing; "This order was refunded" tells them everything.
     /// </para>
     /// <para>
+    /// It is returned as <see cref="PlatformError.Sentence"/>, not <c>Message</c>: this is the one
+    /// read with no parser behind it to add context, so a schema rejection that answers
+    /// "Invalid request" and names the offending field in a sibling must show both halves. Showing
+    /// only the first is how a missing request field looked like an unexplained refusal.
+    /// </para>
+    /// <para>
     /// ⛔ <b>A non-2xx that explains nothing is still a refusal.</b> Passing its body through as
     /// success is how a 502 proxy page and a 500 with an unfamiliar error envelope both reached a
     /// parser expecting a materialize response, and surfaced as "the platform accepted the request
@@ -345,6 +354,6 @@ public sealed class VaultClient
         => status is >= 200 and < 300
             ? null
             : PlatformErrors.FromBody(body) is { } platformError
-                ? platformError.Message
+                ? platformError.Sentence
                 : $"mantle.place refused this request (HTTP {status}) and gave no reason.";
 }

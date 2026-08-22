@@ -144,6 +144,10 @@
       "revit",
       "unreal"
     ],
+    "vault.downloadRequestBody": [
+      "revit",
+      "unreal"
+    ],
     "vault.errorBodyPrecedence": [
       "revit",
       "unreal"

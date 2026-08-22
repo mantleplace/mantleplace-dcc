@@ -67,10 +67,22 @@ public:
 	/**
 	 * Begin minting a presigned download URL for one owned bundle + format.
 	 * OrderId is FMantlePlaceVaultItem.OrderId; Format must be one of
-	 * glb | fbx | geotiff | cog | dwg | pmtiles. Result via OnPresignedUrlReady.
+	 * glb | fbx | geotiff | cog | dwg | pmtiles, or "bundle" for the whole archive.
+	 * Result via OnPresignedUrlReady.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	void GetPresignedUrl(const FString& OrderId, const FString& Format);
+
+	/**
+	 * Begin minting a presigned URL for the whole packaged archive -- what the importer wants, and
+	 * what the bundle cache's sha256 describes.
+	 *
+	 * Exists so callers never spell the token themselves. It lives in the Runtime module's PRIVATE
+	 * logic header, unreachable from the Editor module, and the last caller to work around that
+	 * hardcoded the platform's deprecated ambiguous alias instead. Result via OnPresignedUrlReady.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
+	void GetPresignedBundleUrl(const FString& OrderId);
 
 	/**
 	 * Probe a minted URL with a 1-byte ranged GET (no auth header) to confirm it resolves

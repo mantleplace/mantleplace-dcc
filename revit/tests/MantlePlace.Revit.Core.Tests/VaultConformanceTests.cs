@@ -102,6 +102,10 @@ internal static class VaultConformanceTests
             case "vault.materializeTokenList":
                 DriveWithVectors(run, corpusCase, DriveTokenList);
                 break;
+
+            case "vault.downloadRequestBody":
+                DriveWithVectors(run, corpusCase, DriveDownloadRequestBody);
+                break;
             case "vault.statusWordBuckets":
                 DriveWithVectors(run, corpusCase, DriveStatusWords);
                 break;
@@ -519,6 +523,50 @@ internal static class VaultConformanceTests
                 MaterializeJobs.IsValidScope(scope),
                 vector.Bool("valid") ?? false,
                 $"scope '{scope}'");
+        }
+    }
+
+    private static void DriveDownloadRequestBody(TestRun run, VectorNode root)
+    {
+        string wholeBundle = root.Str("wholeBundleFormat")!;
+
+        run.Equal(
+            PresignedDownloads.WholeBundleFormat,
+            wholeBundle,
+            "this host names the archive with the corpus's whole-bundle token");
+
+        run.False(
+            string.Equals(
+                PresignedDownloads.WholeBundleFormat,
+                root.Str("deprecatedWholeBundleAlias")!,
+                StringComparison.OrdinalIgnoreCase),
+            "and never with the deprecated alias, whose meaning depends on the order's own data");
+
+        // ⛔HPS-49: the route validates its body, so "{}" is a 400 and not a default. The reference
+        // body is the whole assertion — a host that omits `format` cannot download at all.
+        string expectedFormat = root.Obj("body")!.Str("format")!;
+        string body = PresignedDownloads.BuildRequestBody();
+
+        run.Equal(body, $$"""{"format":"{{expectedFormat}}"}""", "the presign body names the format");
+        run.Contains(body, "\"format\"", "and it is not an empty object");
+
+        foreach (VectorNode vector in root.Items("formatVectors"))
+        {
+            string format = vector.Str("format")!;
+            bool wholeBundleVector = vector.Bool("wholeBundle") ?? false;
+            bool presignable = vector.Bool("presignable") ?? false;
+
+            run.Equal(
+                string.Equals(format, wholeBundle, StringComparison.OrdinalIgnoreCase),
+                wholeBundleVector,
+                $"'{format}' names the whole archive: {wholeBundleVector}");
+
+            // This host asks for the archive and nothing else, so it carries no format allow-list to
+            // assert against — the reference host does. What binds here is the implication: a token
+            // naming the archive must be one the route will presign, or this host cannot download.
+            run.True(
+                !wholeBundleVector || presignable,
+                $"'{format}' naming the archive implies the route presigns it");
         }
     }
 

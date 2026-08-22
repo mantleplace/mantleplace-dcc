@@ -342,6 +342,54 @@ internal static class MaterializeJobTests
             run.Within(status.Fraction, MaterializeStatus.Indeterminate, 0.0001, "indeterminate, not 0");
         });
 
+        // ---- the presign request ------------------------------------------------------------
+        // The download only happens if the ask is well-formed. The route validates its body against
+        // a schema, so the empty object this host used to send came back 400 "Invalid request" —
+        // and, until the detail read below, with nothing naming the missing field.
+        run.Case("presign body names the whole archive", () =>
+        {
+            run.Equal(
+                PresignedDownloads.BuildRequestBody(),
+                """{"format":"bundle"}""",
+                "the presign body names the whole archive");
+
+            run.False(
+                PresignedDownloads.BuildRequestBody().Contains("glb", StringComparison.OrdinalIgnoreCase),
+                "and never the deprecated alias, which returns a MESH when the order carries one");
+        });
+
+        // ---- a refusal explains itself ------------------------------------------------------
+        // `Message` stays the HPS-48 precedence read; `Sentence` adds what the platform said about
+        // why. A schema rejection puts the only actionable half in a sibling.
+        run.Case("a schema rejection names the field it rejected", () => run.Equal(
+            PlatformErrors.FromBody(
+                """{"error":"Invalid request","issues":[{"path":["format"],"message":"Required"}]}""")!
+                .Value.Sentence,
+            "Invalid request — format: Required",
+            "issues render as field: reason"));
+
+        run.Case("detail prose is carried the same way", () => run.Equal(
+            PlatformErrors.FromBody("""{"error":"Invalid request","code":"invalid_body","detail":"tokens: expected array"}""")!
+                .Value.Sentence,
+            "Invalid request — tokens: expected array",
+            "detail"));
+
+        run.Case("a body with no detail reads as it always did", () => run.Equal(
+            PlatformErrors.FromBody("""{"error":"Not entitled"}""")!.Value.Sentence,
+            "Not entitled",
+            "unchanged"));
+
+        run.Case("an issue with no message contributes no empty clause", () => run.Equal(
+            PlatformErrors.FromBody("""{"error":"Invalid request","issues":[{"path":["format"]}]}""")!
+                .Value.Sentence,
+            "Invalid request",
+            "skipped"));
+
+        run.Case("a non-array issues field never throws", () => run.Equal(
+            PlatformErrors.FromBody("""{"error":"Invalid request","issues":"nope"}""")!.Value.Message,
+            "Invalid request",
+            "total accessors"));
+
         return run.Report("materialize contract");
     }
 
