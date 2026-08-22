@@ -5,9 +5,15 @@ manifests that validate against the canonical schema, and that the schema's `ver
 the producer's manifest version.
 
 This is the *consumer* leg. It deliberately does **not** duplicate the schema — it fetches the
-published copy from `https://mantle.place/.well-known/schemas/bundle-manifest/vN.json`, which is the
+published copy from `https://mantle.place/.well-known/schemas/bundle-manifest/`, which is the
 artifact the Mantle Place platform publishes, served publicly. One contract, one source, checked
 from both ends.
+
+**Two version families.** The manifest contract has an integer pre-history (`version: 19`, published
+at `v19.json`) and a semver era (`version: "1.0.0"`, published at `1.0.0.json` — no `v` prefix; the
+`v` belonged to the integer era). Consumers tell them apart by JSON type. Both families are served
+forever, so this gate reads both, orders them (the whole integer era precedes the whole semver era,
+it being pre-history by definition), and holds a host to whichever one it pins.
 
 What it catches: the platform ships a new manifest version and a host consumer has never been
 verified against that shape. This is the gate that scales as hosts go from one to four — each new
@@ -47,11 +53,21 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SCHEMA_URL = "https://mantle.place/.well-known/schemas/bundle-manifest/v{version}.json"
+SCHEMA_BASE_URL = "https://mantle.place/.well-known/schemas/bundle-manifest"
+SCHEMA_URL = SCHEMA_BASE_URL + "/{version}.json"
 
-#: How far above the pinned version to probe before concluding nothing newer exists. Generous: a
-#: missed bump is a silent failure, and each probe is one cheap HEAD-ish GET.
-PROBE_AHEAD = 8
+#: The platform's append-only freeze ledger, served beside the schemas: one sha256 entry per
+#: PUBLISHED version, the current one included. It is the published index of what exists.
+#:
+#: This is how "is anything newer published?" is answered. The integer era could be probed by
+#: counting (`v19` then `v20`, `v21`, …); semver cannot — nothing about `1.0.0` tells you whether
+#: the next release is `1.0.1`, `1.1.0` or `2.0.0`, and a walk that guesses one axis silently
+#: misses the others. A missed bump is exactly the silent failure this gate exists to prevent, so
+#: it reads the index rather than guessing at it.
+LEDGER_URL = SCHEMA_BASE_URL + "/frozen.lock.json"
+
+_SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+_INTEGER_KEY_RE = re.compile(r"^v(\d+)$")
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _HERE = Path(__file__).resolve().parent
@@ -77,14 +93,56 @@ _CORPUS_GROUPS = frozenset({"manifest", "vault", "auth", "cache", "digest", "pro
 _REQUIRED_HOST_FIELDS = ("verifiedAgainstManifestVersion", "verifiedAgainstCorpusVersion",
                          "evidence", "consumer", "floorSource", "tests", "owner", "groups")
 
-_schema_cache: dict[int, dict | None] = {}
+_schema_cache: dict[str, dict | None] = {}
+_ledger_cache: list[str] | None = None
 
 
-def fetch_schema(version: int, timeout: int = 20) -> dict | None:
-    """Return the published schema for `version`, or None if it is not published.
+def version_key(value: object) -> str | None:
+    """The published identity of a manifest version const, or None if it is neither family.
 
-    Memoized: with N hosts pinned at the same version the probe range overlaps heavily, and the
-    weekly scheduled run should stay one-cheap-GET-per-version regardless of host count.
+    `19` (a JSON number) -> `"v19"`; `"1.0.0"` (a JSON string) -> `"1.0.0"`. The key IS the mirror
+    filename stem, so it is also what the URL and the ledger are keyed by. Returns None rather than
+    raising: every caller here is reporting drift, not crashing on it.
+
+    An integer-as-string (`"19"`), a partial semver (`"1.0"`) and any pre-release tag are all None
+    — published versions carry none of those.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return f"v{value}"
+    if isinstance(value, str) and _SEMVER_RE.match(value):
+        return value
+    return None
+
+
+def sort_key(key: str) -> tuple[int, tuple[int, ...]]:
+    """Total order over version keys.
+
+    The whole integer era precedes the whole semver era — it is pre-history by definition, so a
+    leading rank of 0 vs 1 decides it before any component comparison. Within a family, numeric
+    component order (so `v7 < v12`, and `1.9.0 < 1.10.0` rather than the lexical opposite).
+    """
+    integer = _INTEGER_KEY_RE.match(key)
+    if integer:
+        return (0, (int(integer.group(1)),))
+    return (1, tuple(int(part) for part in key.split(".")))
+
+
+def describe(key: str) -> str:
+    """A version key as it should read in a message: `v19`, or `MPB 1.0.0`.
+
+    The integer era's key already carries its own `v` marker; the semver era's does not, and a bare
+    `1.0.0` in a sentence about a bundle reads as a plugin version as easily as a manifest one.
+    """
+    return key if _INTEGER_KEY_RE.match(key) else f"MPB {key}"
+
+
+def fetch_schema(version: str, timeout: int = 20) -> dict | None:
+    """Return the published schema for version key `version`, or None if it is not published.
+
+    Memoized: with N hosts pinned at the same version the lookups overlap heavily, and the weekly
+    scheduled run should stay one-cheap-GET-per-version regardless of host count.
     """
     if version in _schema_cache:
         return _schema_cache[version]
@@ -108,20 +166,67 @@ def fetch_schema(version: int, timeout: int = 20) -> dict | None:
     return result
 
 
-def newest_published(start: int, probe_ahead: int = PROBE_AHEAD) -> int:
-    """Highest published schema version at or above `start`."""
-    newest = start
-    for candidate in range(start + 1, start + probe_ahead + 1):
-        if fetch_schema(candidate) is not None:
-            newest = candidate
-    return newest
+def fetch_published_versions(timeout: int = 20) -> list[str]:
+    """Every published version key, newest last, from the platform's freeze ledger.
+
+    Unreachable or unparseable is exit 2 (could not CHECK), never exit 1 (drift) — the same
+    distinction `fetch_schema` draws. A gate that reported "no newer version" because the network
+    was down would be silently green in exactly the situation it cannot see.
+    """
+    global _ledger_cache
+    if _ledger_cache is not None:
+        return _ledger_cache
+    req = urllib.request.Request(LEDGER_URL, headers={"User-Agent": "mantleplace-dcc-conformance"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                print(f"error: {LEDGER_URL} returned HTTP {resp.status}", file=sys.stderr)
+                raise SystemExit(2)
+            ledger = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        print(f"error: {LEDGER_URL} returned HTTP {exc.code}: {exc.reason}", file=sys.stderr)
+        raise SystemExit(2)
+    except urllib.error.URLError as exc:
+        print(f"error: cannot reach {LEDGER_URL}: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+    except json.JSONDecodeError as exc:
+        print(f"error: {LEDGER_URL} is not readable JSON: {exc}", file=sys.stderr)
+        raise SystemExit(2)
+
+    frozen = ledger.get("frozen")
+    if not isinstance(frozen, dict) or not frozen:
+        print(f"error: {LEDGER_URL} carries no 'frozen' map", file=sys.stderr)
+        raise SystemExit(2)
+
+    keys = [key for key in frozen if version_key(key) is not None or _INTEGER_KEY_RE.match(key)]
+    if not keys:
+        print(f"error: {LEDGER_URL} names no recognizable version", file=sys.stderr)
+        raise SystemExit(2)
+    _ledger_cache = sorted(keys, key=sort_key)
+    return _ledger_cache
 
 
-def read_declared_floor(host: str, entry: dict) -> tuple[int | None, Path, str]:
+def newest_published(start: str) -> str:
+    """Highest published version key at or above `start`.
+
+    `start` itself is the floor of the answer: a host pinned above everything the ledger names is
+    reported by the pin check, not silently downgraded here.
+    """
+    published = [key for key in fetch_published_versions() if sort_key(key) > sort_key(start)]
+    return published[-1] if published else start
+
+
+def read_declared_floor(host: str, entry: dict) -> tuple[str | None, Path, str]:
     """Parse a host's minimum-supported manifest version out of the file the host declares.
 
-    Returns `(floor, resolved_path, pattern)`; `floor` is None when the file is missing or the
-    pattern does not match, which the caller reports as drift.
+    Returns `(floor, resolved_path, pattern)` where `floor` is a version KEY; it is None when the
+    file is missing, the pattern does not match, or the captured text is not a version in either
+    family — all of which the caller reports as drift.
+
+    The capture is read as source text, so it arrives as a string either way: a semver floor
+    captures as `1.0.0` and is already its own key, while an integer floor captures as `18` and
+    becomes `v18`. That asymmetry lives here so a host's `floorSource.pattern` stays a plain regex
+    over its own constant and never has to encode which era it is in.
 
     Deliberately a regex over source rather than a build-time export: this check must run on a cheap
     hosted runner with no Unreal Engine, no Revit and no Blender present. The cost of that choice is
@@ -137,7 +242,12 @@ def read_declared_floor(host: str, entry: dict) -> tuple[int | None, Path, str]:
     match = re.search(pattern, text)
     if match is None or not match.groups():
         return None, path, pattern
-    return int(match.group(1)), path, pattern
+    captured = match.group(1)
+    if _SEMVER_RE.match(captured):
+        return captured, path, pattern
+    if captured.isdigit():
+        return version_key(int(captured)), path, pattern
+    return None, path, pattern
 
 
 def host_entries(pinned_doc: dict) -> list[tuple[str, dict]]:
@@ -625,8 +735,14 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
             f"      Every host declares its own floor source and tests (HPS-39)."
         ], None
 
-    pinned = int(entry["verifiedAgainstManifestVersion"])
+    pinned = version_key(entry["verifiedAgainstManifestVersion"])
     tests = entry["tests"]
+    if pinned is None:
+        return [
+            f"FAIL [{host}]: verifiedAgainstManifestVersion="
+            f"{entry['verifiedAgainstManifestVersion']!r} is not a manifest version.\n"
+            "      Use the integer pre-history form (19) or the MPB semver form (\"1.0.0\")."
+        ], None
 
     pinned_corpus = int(entry["verifiedAgainstCorpusVersion"])
     if corpus_version is not None and pinned_corpus < corpus_version:
@@ -647,16 +763,16 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
     schema = fetch_schema(pinned)
     if schema is None:
         failures.append(
-            f"FAIL [{host}]: pinned manifest v{pinned} is not published at "
+            f"FAIL [{host}]: pinned manifest {describe(pinned)} is not published at "
             f"{SCHEMA_URL.format(version=pinned)}.\n"
             "      Either the pin is wrong or a published schema was withdrawn."
         )
         return failures, pinned
 
     schema_const = schema.get("properties", {}).get("version", {}).get("const")
-    if schema_const != pinned:
+    if version_key(schema_const) != pinned:
         failures.append(
-            f"FAIL [{host}]: schema v{pinned} declares version.const={schema_const}. "
+            f"FAIL [{host}]: schema {describe(pinned)} declares version.const={schema_const!r}. "
             "The published artifact is not self-consistent."
         )
 
@@ -667,26 +783,25 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
             f"      using pattern {pattern!r}.\n"
             f"      The consumer moved or was renamed; update this host's floorSource with it."
         )
-    elif floor > pinned:
+    elif sort_key(floor) > sort_key(pinned):
         failures.append(
-            f"FAIL [{host}]: consumer floor {floor} is above the verified version v{pinned}. "
-            "The consumer rejects manifests it claims to support."
+            f"FAIL [{host}]: consumer floor {describe(floor)} is above the verified version "
+            f"{describe(pinned)}. The consumer rejects manifests it claims to support."
         )
 
     newest = newest_published(pinned)
-    if newest > pinned:
+    if sort_key(newest) > sort_key(pinned):
         failures.append(
-            f"FAIL [{host}]: the platform publishes manifest v{newest}; {host} is only verified "
-            f"against "
-            f"v{pinned}.\n"
-            f"      Confirm the {host} parser handles the v{newest} shape (add a case to\n"
+            f"FAIL [{host}]: the platform publishes manifest {describe(newest)}; {host} is only "
+            f"verified against {describe(pinned)}.\n"
+            f"      Confirm the {host} parser handles the {describe(newest)} shape (add a case to\n"
             f"      {tests}), then raise verifiedAgainstManifestVersion in the '{host}' entry of\n"
             f"      verified-against.json and refresh its `evidence` to say what was exercised."
         )
 
     if not failures:
-        print(f"OK [{host}]: verified against manifest v{pinned}; nothing newer published.")
-        print(f"    consumer floor = {floor} (from {entry['floorSource']['path']})")
+        print(f"OK [{host}]: verified against manifest {describe(pinned)}; nothing newer published.")
+        print(f"    consumer floor = {describe(floor)} (from {entry['floorSource']['path']})")
     return failures, pinned
 
 

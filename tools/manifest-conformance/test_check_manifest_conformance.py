@@ -32,10 +32,13 @@ import check_manifest_conformance as gate  # noqa: E402
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _REAL_FETCH = gate.fetch_schema
+_REAL_LEDGER = gate.fetch_published_versions
 
-#: A published-schema stub keyed by version, in the shape `check_host` reads.
-def _schema(version: int) -> dict:
-    return {"properties": {"version": {"const": version}}}
+#: A published-schema stub, in the shape `check_host` reads. Takes the version CONST as the
+#: platform publishes it — an int for the pre-history family, a semver string for the MPB era —
+#: because the const's JSON type is exactly what tells the two apart.
+def _schema(const: int | str) -> dict:
+    return {"properties": {"version": {"const": const}}}
 
 
 def _host_entry(**overrides) -> dict:
@@ -51,6 +54,76 @@ def _host_entry(**overrides) -> dict:
     }
     entry.update(overrides)
     return entry
+
+
+class VersionFamilyTest(unittest.TestCase):
+    """The two version families (integer pre-history, MPB semver) and the order over them."""
+
+    def test_version_key_tells_the_families_apart_by_json_type(self) -> None:
+        self.assertEqual("v19", gate.version_key(19))
+        self.assertEqual("1.0.0", gate.version_key("1.0.0"))
+
+    def test_version_key_refuses_the_near_misses(self) -> None:
+        # An integer-as-string is the one that would silently publish under the wrong filename.
+        self.assertIsNone(gate.version_key("19"))
+        self.assertIsNone(gate.version_key("1.0"))
+        self.assertIsNone(gate.version_key("1.0.0-rc1"))
+        self.assertIsNone(gate.version_key("01.0.0"))
+        self.assertIsNone(gate.version_key(None))
+        # `True` is an int in Python, and would key as `vTrue` without the guard.
+        self.assertIsNone(gate.version_key(True))
+
+    def test_the_whole_integer_era_precedes_the_whole_semver_era(self) -> None:
+        self.assertLess(gate.sort_key("v19"), gate.sort_key("1.0.0"))
+        self.assertLess(gate.sort_key("v7"), gate.sort_key("1.0.0"))
+
+    def test_components_order_numerically_not_lexically(self) -> None:
+        self.assertLess(gate.sort_key("v7"), gate.sort_key("v12"))
+        self.assertLess(gate.sort_key("1.9.0"), gate.sort_key("1.10.0"))
+        self.assertLess(gate.sort_key("1.10.3"), gate.sort_key("2.0.0"))
+
+    def test_describe_marks_the_semver_era_so_a_message_reads_unambiguously(self) -> None:
+        self.assertEqual("v19", gate.describe("v19"))
+        self.assertEqual("MPB 1.0.0", gate.describe("1.0.0"))
+
+    def test_schema_url_drops_the_v_prefix_only_for_semver(self) -> None:
+        self.assertTrue(gate.SCHEMA_URL.format(version="v19").endswith("/v19.json"))
+        self.assertTrue(gate.SCHEMA_URL.format(version="1.0.0").endswith("/1.0.0.json"))
+
+
+class NewestPublishedTest(unittest.TestCase):
+    """Discovery reads the published ledger. The integer era could be found by counting; semver
+    cannot, and a walk that guesses one axis misses bumps on the others."""
+
+    def setUp(self) -> None:
+        self._real = gate.fetch_published_versions
+        gate._ledger_cache = None
+        self.addCleanup(lambda: setattr(gate, "fetch_published_versions", self._real))
+        self.addCleanup(lambda: setattr(gate, "_ledger_cache", None))
+
+    def _ledger(self, keys: list[str]) -> None:
+        gate.fetch_published_versions = lambda timeout=20: sorted(keys, key=gate.sort_key)
+
+    def test_finds_a_semver_release_above_an_integer_pin(self) -> None:
+        self._ledger(["v18", "v19", "1.0.0"])
+        self.assertEqual("1.0.0", gate.newest_published("v19"))
+
+    def test_finds_a_minor_bump_a_patch_walk_would_have_missed(self) -> None:
+        self._ledger(["v19", "1.0.0", "1.1.0"])
+        self.assertEqual("1.1.0", gate.newest_published("1.0.0"))
+
+    def test_finds_a_major_bump(self) -> None:
+        self._ledger(["v19", "1.0.0", "2.0.0"])
+        self.assertEqual("2.0.0", gate.newest_published("1.0.0"))
+
+    def test_a_current_pin_reports_itself(self) -> None:
+        self._ledger(["v19", "1.0.0"])
+        self.assertEqual("1.0.0", gate.newest_published("1.0.0"))
+
+    def test_a_pin_above_everything_published_is_not_silently_downgraded(self) -> None:
+        """That disagreement is the pin check's to report, with its own message."""
+        self._ledger(["v19", "1.0.0"])
+        self.assertEqual("1.1.0", gate.newest_published("1.1.0"))
 
 
 class MultiHostGateTest(unittest.TestCase):
@@ -73,9 +146,20 @@ class MultiHostGateTest(unittest.TestCase):
         gate._schema_cache.clear()
         self.addCleanup(gate._schema_cache.clear)
 
-        self.published = {17: _schema(17)}
+        # Keyed by version KEY (`v17`, `1.0.0`) — the mirror filename stem, which is what the gate
+        # resolves a pin to before it fetches anything.
+        self.published = {"v17": _schema(17)}
         gate.fetch_schema = lambda version, timeout=20: self.published.get(version)  # type: ignore[assignment]
         self.addCleanup(lambda: setattr(gate, "fetch_schema", _REAL_FETCH))
+
+        # "What else is published" comes from the platform's freeze ledger over the network. Stub
+        # it from the same dict so a test that publishes a version does not also have to remember
+        # to tell the ledger about it.
+        gate._ledger_cache = None
+        gate.fetch_published_versions = lambda timeout=20: sorted(  # type: ignore[assignment]
+            self.published, key=gate.sort_key)
+        self.addCleanup(lambda: setattr(gate, "fetch_published_versions", _REAL_LEDGER))
+        self.addCleanup(lambda: setattr(gate, "_ledger_cache", None))
 
     def _write_doc(self, hosts: dict) -> Path:
         path = self.tmp / "verified-against.json"
@@ -119,7 +203,7 @@ class MultiHostGateTest(unittest.TestCase):
 
     def test_remediation_names_the_hosts_own_tests_not_unreals(self) -> None:
         """The old message told a .NET author to edit a .cpp file."""
-        self.published[18] = _schema(18)
+        self.published["v18"] = _schema(18)
         failures, _ = gate.check_host("synthetic", self._two_hosts()["synthetic"])
         joined = "\n".join(failures)
         self.assertIn("synthetic/Tests/ManifestReaderTests.cs", joined)
@@ -206,7 +290,17 @@ class ShippedRegistryTest(unittest.TestCase):
             with self.subTest(host=host):
                 floor, path, pattern = gate.read_declared_floor(host, entry)
                 self.assertIsNotNone(floor, f"{host}: {pattern!r} no longer matches {path}")
-                self.assertLessEqual(floor, int(entry["verifiedAgainstManifestVersion"]))
+                pinned = gate.version_key(entry["verifiedAgainstManifestVersion"])
+                self.assertIsNotNone(pinned, f"{host}: pin is not a manifest version")
+                self.assertLessEqual(gate.sort_key(floor), gate.sort_key(pinned))
+
+    def test_every_floor_source_captures_a_recognizable_version(self) -> None:
+        """A pattern can match and still capture nonsense — `read_declared_floor` returns None for
+        a capture in neither family, and a None floor is drift, not a pass."""
+        for host, entry in self.hosts:
+            with self.subTest(host=host):
+                floor, _path, _pattern = gate.read_declared_floor(host, entry)
+                self.assertIsNotNone(gate.version_key(floor) or gate.sort_key(floor))
 
     def test_floor_patterns_capture_exactly_one_group(self) -> None:
         for host, entry in self.hosts:
