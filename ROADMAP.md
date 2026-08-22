@@ -1,9 +1,10 @@
 # Roadmap
 
 Where these plugins are going, a quarter at a time. The near-term arc is the **Unreal plugin from
-early access to 1.0 on Fab**, and the headline item on the way there is **World Partition large-AOI
-import** — today an imported bundle becomes a single `ALandscape`, which is the honest ceiling on
-how much ground one order can practically bring in.
+early access to 1.0 on Fab**, and the headline item on the way there is **World Partition import**:
+real-world sites brought in as streaming World Partition worlds. Today an imported bundle becomes a
+single `ALandscape`, which is the honest ceiling on how much ground one order can practically bring
+in.
 
 Three threads run through every quarter, and each bullet below belongs to one of them:
 **import capability** (the code), **documentation and onboarding** (the tutorial, the media, the
@@ -16,9 +17,10 @@ roadmap moves when reality does, by pull request, where you can see it.
 
 ## Q4 2026
 
-- **World Partition large-AOI import begins** — streaming-proxy landscapes so a large area of
-  interest imports as World Partition regions rather than one monolithic `ALandscape`, working
-  toward the platform's largest orderable AOIs.
+- **World Partition import begins** — imported sites become streaming World Partition worlds
+  rather than one monolithic `ALandscape`, working toward the platform's largest orderable AOIs.
+  The quarter also opens a spike on **Mesh Terrain** (Experimental in UE 5.8) as the forward
+  terrain path alongside the `ALandscape` default.
 - **Packaged releases** — versioned GitHub Releases carrying a built plugin, with the packaging
   step automated so a release is repeatable rather than an event.
 - **Unreal quickstart tutorial** — the missing walk-through from empty project to imported site,
@@ -26,8 +28,11 @@ roadmap moves when reality does, by pull request, where you can see it.
 
 ## Q1 2027
 
-- **World Partition import lands** — large-AOI orders import end-to-end, single-Landscape import
-  remains the default for small sites.
+- **World Partition import lands** — large-AOI orders import end-to-end as streaming World
+  Partition worlds: bundle layers arrive as **Data Layers** with generated **HLODs**, and the
+  bundle's canopy and landcover data drives **PCG foliage** that generates and streams with World
+  Partition. Single-Landscape import remains the default for small sites, and Mesh Terrain
+  continues to be tracked as the Experimental feature matures.
 - **Import-surface completion** — a per-layer import picker so a bundle can be brought in
   selectively, a shipped landscape material that samples the coverage rasters the importer already
   lands, and the remaining imagery-drape work.
