@@ -882,7 +882,13 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
-        if (!TryWearMaterial(terrain, materialId, name, out int retypedSubDivisions, out int refusedSubDivisions))
+        if (!TryWearMaterial(
+            terrain,
+            materialId,
+            name,
+            out int retypedSubDivisions,
+            out int refusedSubDivisions,
+            out string? refusalReason))
         {
             transaction.RollBack();
             Say(
@@ -913,7 +919,9 @@ internal sealed class RevitBundleImporter(
 
         if (refusedSubDivisions > 0)
         {
-            summary += $"; Revit declined to retype {refusedSubDivisions:N0} subdivision(s), which keep their original look";
+            summary += $"; Revit declined to retype {refusedSubDivisions:N0} subdivision(s), which keep "
+                + "their original look and show through the photograph as untextured patches"
+                + (refusalReason is null ? string.Empty : $" — Revit said: {refusalReason}");
         }
 
         Say(summary + ".");
@@ -1063,10 +1071,13 @@ internal sealed class RevitBundleImporter(
         ElementId materialId,
         string typeName,
         out int retypedSubDivisions,
-        out int refusedSubDivisions)
+        out int refusedSubDivisions,
+        out string? refusalReason)
     {
         retypedSubDivisions = 0;
         refusedSubDivisions = 0;
+        refusalReason = null;
+        HashSet<string> refusals = [];
 
         if (_document.GetElement(terrain.GetTypeId()) is not ToposolidType current)
         {
@@ -1109,22 +1120,40 @@ internal sealed class RevitBundleImporter(
 
         // Only the subdivisions THIS import created — retyping a curator-drawn one is the trespass
         // this refuses, the same way it declines to edit the project's own type.
+        //
+        // ⚠ The first run that got this far had all seventeen refused, and the count was the whole
+        // of what was recorded: Revit's own message went into the catch and nowhere else, so the
+        // model showed brown patches through the photograph and the log could not say why. Whatever
+        // the cause turns out to be, the exception text is the only thing that names it, and a
+        // second live import is far too expensive to spend on re-learning that it failed.
         foreach (ElementId subdivisionId in _createdSubDivisionIds)
         {
+            if (_document.GetElement(subdivisionId) is not Toposolid subdivision)
+            {
+                // Retyping the host may regenerate its subdivisions, which would leave these
+                // remembered ids pointing at nothing. Distinct from a refusal, and worth telling
+                // apart, because the fix for it is to retype the subdivisions FIRST.
+                refusedSubDivisions++;
+                Trace($"  drape: subdivision {subdivisionId.Value} is no longer in the document — "
+                    + "retyping the host appears to have replaced it.");
+                continue;
+            }
+
             try
             {
-                if (_document.GetElement(subdivisionId) is Toposolid subdivision)
-                {
-                    subdivision.ChangeTypeId(draped.Id);
-                    retypedSubDivisions++;
-                }
+                subdivision.ChangeTypeId(draped.Id);
+                retypedSubDivisions++;
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
                 refusedSubDivisions++;
+                Trace($"  drape: Revit refused to retype subdivision {subdivisionId.Value} — "
+                    + $"{ex.GetType().Name}: {ex.Message}");
+                refusals.Add(ex.Message);
             }
         }
 
+        refusalReason = refusals.Count == 0 ? null : string.Join(" / ", refusals);
         return true;
     }
 
