@@ -43,6 +43,11 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
         string? unattended = LocalBundleSource.Unattended(
             Environment.GetEnvironmentVariable(LocalBundleSource.PathVariable));
 
+        // Truncated once, here; everything after this point appends. See ImportLog for why the
+        // record is streamed rather than written at the end.
+        ImportLog? log = unattended is null ? null : new ImportLog(unattended);
+        log?.Begin();
+
         string zipPath;
         if (unattended is not null)
         {
@@ -109,7 +114,11 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
             return Result.Failed;
         }
 
-        RevitBundleImporter importer = new(commandData.Application.Application, document, archive);
+        RevitBundleImporter importer = new(
+            commandData.Application.Application,
+            document,
+            archive,
+            log is null ? null : log.Append);
 
         // The Revit API throws for a long tail of document states this command cannot anticipate —
         // a template with no toposolid type, an IFC that will not convert, a degenerate TIN. An
@@ -161,15 +170,11 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
             return;
         }
 
-        try
-        {
-            File.WriteAllText(
-                LocalBundleSource.LogPathFor(unattendedZipPath),
-                instruction + Environment.NewLine + body);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
+        // Appends, because the streamed lines are already in the file and they carry the timings and
+        // the appearance-asset writes that the summary does not. Overwriting here would throw away
+        // the half of the record that only exists because the run was watched as it happened.
+        new ImportLog(unattendedZipPath)
+            .Append(Environment.NewLine + instruction + Environment.NewLine + body);
     }
 
     /// <summary>

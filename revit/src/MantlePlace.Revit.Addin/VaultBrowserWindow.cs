@@ -46,6 +46,21 @@ internal sealed class VaultBrowserWindow : Window
     private List<VaultBundle> _bundles = [];
     private CancellationTokenSource? _work;
 
+    /// <summary>
+    /// One list row. It exists so a row can be found and rewritten after a download, a removal or an
+    /// import — the ListBox held bare strings, so the only way to update one was to rebuild all of
+    /// them, and rebuilding all of them is what made <see cref="RefreshAsync"/> the only refresh
+    /// there was.
+    /// </summary>
+    private sealed class VaultRow(VaultBundle bundle, string text)
+    {
+        internal VaultBundle Bundle { get; } = bundle;
+
+        internal string Text { get; set; } = text;
+
+        public override string ToString() => Text;
+    }
+
     internal VaultBrowserWindow(
         AuthSession session,
         VaultClient vault,
@@ -122,11 +137,21 @@ internal sealed class VaultBrowserWindow : Window
                 return;
             }
 
+            // Selection survives a refresh. Losing it is the other reason a curator clicks Refresh
+            // twice: they lose their place and go looking for it.
+            string? selectedOrderId = Selected?.OrderId;
+
             _bundles = [.. listing!.Bundles];
             _list.Items.Clear();
             foreach (VaultBundle bundle in _bundles)
             {
-                _list.Items.Add(Describe(bundle));
+                _list.Items.Add(new VaultRow(bundle, Describe(bundle)));
+            }
+
+            if (selectedOrderId is not null)
+            {
+                _list.SelectedIndex = _bundles.FindIndex(
+                    bundle => string.Equals(bundle.OrderId, selectedOrderId, StringComparison.Ordinal));
             }
 
             // ⛔HPS-21: rows that were skipped are SAID, not swallowed. A silent skip hides platform
@@ -264,9 +289,15 @@ internal sealed class VaultBrowserWindow : Window
         Report("Downloading…");
         string? downloadError = await _vault.DownloadAsync(refreshed, _cache, token).ConfigureAwait(true);
 
-        Report(downloadError ?? _cache
-            .Inspect(refreshed.OrderId, refreshed.SizeBytes, refreshed.Sha256, refreshed.ManifestVersion)
-            .Describe());
+        // The row is rewritten from the same verdict the status line reports, so the list stops
+        // saying "Not downloaded." about a bundle that is sitting on disk. It used to keep saying
+        // that until the curator clicked Refresh — the download had worked, and only the row was
+        // stale.
+        CacheEntry entry = _cache.InspectQuick(
+            refreshed.OrderId, refreshed.SizeBytes, refreshed.Sha256, refreshed.ManifestVersion);
+        UpdateRow(refreshed, entry);
+
+        Report(downloadError ?? entry.Describe());
     }
 
     /// <summary>
@@ -307,7 +338,11 @@ internal sealed class VaultBrowserWindow : Window
             return;
         }
 
+        // The full hash, not InspectQuick: this is the pre-import gate, and it is exactly the "once
+        // per import" cost Inspect's remark defends.
         CacheEntry entry = _cache.Inspect(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion);
+        UpdateRow(bundle, entry);
+
         if (entry.State != CacheState.CachedValid)
         {
             Report(entry.Describe() + " Use “Prepare for Revit” first.");
@@ -334,6 +369,8 @@ internal sealed class VaultBrowserWindow : Window
         // HPS-44: eviction is explicit and per-order, and this button is the only thing that does
         // it. Nothing in this plugin reclaims disk on the curator's behalf.
         _cache.Remove(bundle.OrderId);
+        UpdateRow(bundle, _cache.InspectQuick(
+            bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion));
         Report($"Removed the local copy of {bundle.AoiLabel}. It stays in your vault and can be downloaded again.");
     }
 
@@ -379,9 +416,46 @@ internal sealed class VaultBrowserWindow : Window
 
     private void Report(string message) => _status.Text = message;
 
-    private string Describe(VaultBundle bundle)
+    /// <summary>
+    /// Rewrites one row in place, from a verdict the caller is already holding.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ It takes the <see cref="CacheEntry"/> rather than looking one up, and that is the whole
+    /// point. Download, remove and import each already know the cache state they just produced;
+    /// re-deriving it would mean another <c>Inspect</c>, and the naive version of this fix — call
+    /// <see cref="RefreshAsync"/> after a download — re-lists over the network and re-inspects every
+    /// row besides. Passing the entry through costs nothing at all.
+    /// </remarks>
+    private void UpdateRow(VaultBundle bundle, CacheEntry entry)
     {
-        CacheEntry entry = _cache.Inspect(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion);
+        for (int index = 0; index < _list.Items.Count; index++)
+        {
+            if (_list.Items[index] is VaultRow row
+                && string.Equals(row.Bundle.OrderId, bundle.OrderId, StringComparison.Ordinal))
+            {
+                row.Text = Describe(bundle, entry);
+
+                // A ListBox of plain objects does not re-read ToString on its own. Re-seating the
+                // item is what makes the row redraw, and it keeps the selection where it was.
+                bool wasSelected = _list.SelectedIndex == index;
+                _list.Items[index] = row;
+                if (wasSelected)
+                {
+                    _list.SelectedIndex = index;
+                }
+
+                return;
+            }
+        }
+    }
+
+    private string Describe(VaultBundle bundle)
+        => Describe(
+            bundle,
+            _cache.InspectQuick(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion));
+
+    private static string Describe(VaultBundle bundle, CacheEntry entry)
+    {
         string area = bundle.AreaKm2 is { } km2
             ? km2.ToString("0.##", CultureInfo.InvariantCulture) + " km²"
             : "area unknown";

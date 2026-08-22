@@ -242,6 +242,20 @@ public sealed class ImportStep
 
     /// <summary>Populated only for <see cref="ImportStepKind.ImageryDrape"/>.</summary>
     public DrapePlacement? Drape { get; init; }
+
+    /// <summary>
+    /// The area of interest, in the points file's own local metres — points outside it are dropped
+    /// before Revit sees them. Populated only for
+    /// <see cref="ImportStepKind.ToposurfaceFromPointsFile"/>.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the step for the same reason <see cref="Frame"/> and <see cref="Drape"/> are: the
+    /// decision — including the decision that there is no usable window — is the interesting part,
+    /// and it belongs where a headless test reaches it. <c>null</c> is a stated degradation, never a
+    /// refusal: <see cref="SurfaceGrid"/>'s bbox-free guard still runs. Why the crop is needed at
+    /// all is <see cref="SurfacePointsSanitiser"/>.
+    /// </remarks>
+    public SurfaceCropWindow? Crop { get; init; }
 }
 
 /// <summary>

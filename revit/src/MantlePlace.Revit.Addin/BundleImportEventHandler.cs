@@ -69,13 +69,23 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             return "Open a project first — there is no active document to import into.";
         }
 
+        // ⛔ This path had no file record at all: the summary went to the vault window and nowhere
+        // else, so an import that hung, crashed or was clicked away left nothing behind. That is the
+        // path a curator actually uses, and it is the one that most needs a record — the
+        // site-boundary step has been measured spending ten minutes inside a single commit. Same
+        // file beside the zip that the ribbon command writes, same streaming, same best-effort
+        // contract: an unwritable path never turns an import into a failure.
+        ImportLog log = new(zipPath);
+        log.Begin();
+
         try
         {
             using LocalBundleArchive archive = LocalBundleArchive.Open(zipPath);
 
             if (archive.Manifest is not { } manifest)
             {
-                return "That download has no Metadata/manifest.json, so it is not a Mantle Place bundle.";
+                return log.AndSay(
+                    "That download has no Metadata/manifest.json, so it is not a Mantle Place bundle.");
             }
 
             BundleImportPlan plan = BundleImportPlanner.Plan(
@@ -84,7 +94,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
                 archive.ProbeImageSize);
             if (!plan.CanImport)
             {
-                return plan.BlockedReason + Environment.NewLine + Summarise(plan, []);
+                return log.AndSay(plan.BlockedReason + Environment.NewLine + Summarise(plan, []));
             }
 
             // Fail-closed, and BEFORE any element exists. The download path already verifies on the
@@ -92,16 +102,18 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             // costs one pass over three files.
             if (archive.VerifyPlan(plan) is { } integrityFailure)
             {
-                return integrityFailure;
+                return log.AndSay(integrityFailure);
             }
 
-            RevitBundleImporter importer = new(application.Application, document, archive);
+            RevitBundleImporter importer = new(application.Application, document, archive, log.Append);
             importer.Execute(plan);
 
-            return Summarise(plan, importer.Log)
+            string summary = Summarise(plan, importer.Log)
                 + Environment.NewLine
                 + $"Linked files live in {archive.RetainedDirectory} — moving or deleting that folder will "
                 + "break the links.";
+            log.Append(Environment.NewLine + summary);
+            return summary;
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
                                        or InvalidOperationException
@@ -110,7 +122,9 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             // The Revit API throws for a long tail of document states this cannot anticipate. An
             // unhandled one surfaces as Revit's internal-error dialog, which tells the curator
             // nothing and implicates the whole session.
-            return $"The import failed partway through: {ex.Message}";
+            string failure = $"The import failed partway through: {ex.Message}";
+            log.Append(Environment.NewLine + failure);
+            return failure;
         }
     }
 

@@ -16,12 +16,20 @@ public readonly record struct CacheEntry(BundleCacheLayout Layout, CacheVerdict 
     /// A sentence for the panel. Unverified is never phrased as a problem — it is the normal state
     /// of every bundle whose Revit artifacts the ETL published no digest for.
     /// </summary>
+    /// <remarks>
+    /// The unverified sentence says which checksum is missing, because the old wording — "the platform
+    /// published no checksum for this bundle" — was not true as a whole and read worse than the
+    /// situation is. What is absent is a digest for the <em>zip</em>. The manifest inside it publishes
+    /// one per Revit deliverable, and <c>LocalBundleArchive.VerifyPlan</c> checks every one of them,
+    /// fail-closed, before a single element exists.
+    /// </remarks>
     public string Describe() => State switch
     {
         CacheState.NotCached => "Not downloaded.",
         CacheState.CachedValid when Verdict.IntegrityChecked => "Downloaded and verified.",
-        CacheState.CachedValid => "Downloaded. The platform published no checksum for this bundle, so it "
-            + "could not be verified — that is expected, not a problem.",
+        CacheState.CachedValid => "Downloaded. Your vault publishes no checksum for the zip as a whole, "
+            + "so the file itself was not verified — the files inside it are checked against the "
+            + "manifest's own checksums when you import.",
         _ => Verdict.Reason switch
         {
             CacheInvalidReason.SizeMismatch => "The downloaded file is the wrong size. Download it again.",
@@ -59,14 +67,50 @@ public sealed class BundleCache
     /// Inspects what is on disk for an order, hashing the file when one is there.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// <b>No size cap on hashing.</b> The reference host skips files above ~2 GB and reports them
     /// valid-but-unverified; this host does not, because reading a 2 GB file at disk speed costs a
     /// few seconds once per import and the alternative is telling a curator their largest and most
     /// expensive purchase is the one nobody checked. The uncomputed path still exists in
     /// <see cref="CacheValidity"/> — it is reachable from a legacy sidecar — it is just not something
     /// this host chooses.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>"Once per import" is the load-bearing half of that sentence.</b> Call this from anything
+    /// that runs per row per refresh and the cost stops being a few seconds once and becomes a few
+    /// seconds every time the window redraws — for a 275 MB bundle, per bundle. Listing uses
+    /// <see cref="InspectQuick"/>; this one belongs on the pre-import gate.
+    /// </para>
     /// </remarks>
     public CacheEntry Inspect(string orderId, long? expectedSizeBytes, string? expectedSha256, string? manifestVersion)
+        => Inspect(orderId, expectedSizeBytes, expectedSha256, manifestVersion, hashTheFile: true);
+
+    /// <summary>
+    /// Inspects what is on disk without hashing it — the listing's view.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It is not a weaker <see cref="Inspect"/> so much as an honest one for a different question.
+    /// <see cref="CacheValidity"/> already distinguishes an <em>unknown</em> hash from an absent one
+    /// (<c>HPS-27</c>), so leaving the computed hash empty yields <c>CachedValid</c> with
+    /// <c>IntegrityChecked: false</c> — "downloaded, not verified here" — while the size check, which
+    /// is free, still runs. No rule is relaxed: ⛔<c>HPS-26</c>'s verification happens at download,
+    /// and the full hash still gates the import before a single element exists.
+    /// </para>
+    /// <para>
+    /// The consequence worth stating: a size-preserving corruption on disk reads as "Downloaded" in
+    /// the list until the import gate catches it. It does catch it, and before anything is built.
+    /// </para>
+    /// </remarks>
+    public CacheEntry InspectQuick(string orderId, long? expectedSizeBytes, string? expectedSha256, string? manifestVersion)
+        => Inspect(orderId, expectedSizeBytes, expectedSha256, manifestVersion, hashTheFile: false);
+
+    private CacheEntry Inspect(
+        string orderId,
+        long? expectedSizeBytes,
+        string? expectedSha256,
+        string? manifestVersion,
+        bool hashTheFile)
     {
         BundleCacheLayout layout = LayoutFor(orderId);
         CacheSidecar? sidecar = ReadSidecar(layout);
@@ -86,7 +130,7 @@ public sealed class BundleCache
         long? expectedSize = expectedSizeBytes ?? sidecar?.SizeBytes;
         string? expectedVersion = manifestVersion ?? sidecar?.ManifestVersion;
 
-        string computed = ComputeSha256(layout.BundleZipPath);
+        string computed = hashTheFile ? ComputeSha256(layout.BundleZipPath) : string.Empty;
 
         return new CacheEntry(
             layout,

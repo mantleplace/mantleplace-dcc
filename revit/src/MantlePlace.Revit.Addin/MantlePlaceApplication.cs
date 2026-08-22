@@ -146,6 +146,19 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "next; this local path stays as the permanent fallback.",
         });
 
+        panel.AddItem(new PushButtonData(
+            "MantlePlaceProbeTerrain",
+            "Probe\nterrain",
+            assemblyPath,
+            typeof(TerrainProbeCommand).FullName)
+        {
+            LongDescription =
+                "Measure what this project would give the terrain importer — its levels, its toposolid "
+                + "types and the bundle's own elevations — and try each way of placing the terrain. "
+                + "Every attempt is rolled back, so nothing in your project changes. Use it when an "
+                + "import is refused and the log does not say enough.",
+        });
+
         return Result.Succeeded;
     }
 

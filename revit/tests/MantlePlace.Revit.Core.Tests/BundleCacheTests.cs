@@ -142,7 +142,10 @@ internal static class BundleCacheTests
             CacheEntry entry = cache.Inspect(OrderId, bytes.Length, null, ManifestVersions.MinSupportedManifestVersion);
             run.Equal(entry.State.ToString(), "CachedValid", "usable");
             run.False(entry.Verdict.IntegrityChecked, "and honestly reported as unchecked");
-            run.Contains(entry.Describe(), "not a problem", "which the panel does not phrase as an error");
+            run.Contains(entry.Describe(), "checked against", "which the panel frames as a gap, not a fault");
+            run.False(
+                entry.Describe().Contains("could not be verified.", StringComparison.Ordinal),
+                "and does not end on the missing check — the per-entry checks still happen at import");
         });
 
         run.Case("inspect finds a verified entry and reports it as verified", () =>
@@ -166,6 +169,53 @@ internal static class BundleCacheTests
             CacheEntry entry = cache.Inspect(OrderId, expectedSizeBytes: null, expectedSha256: null, manifestVersion: null);
             run.True(entry.Verdict.IsValid, "still valid");
             run.True(entry.Verdict.IntegrityChecked, "and still verified, from the sidecar's digest");
+        });
+
+        run.Case("InspectQuick does NOT hash, and says so honestly", () =>
+        {
+            // The listing calls this per row per refresh. Inspect hashes the whole zip with no size
+            // cap, which is right once per import and wrong 275 MB at a time whenever a window
+            // redraws. Tampering with the bytes WITHOUT changing the length is what proves the hash
+            // was skipped: Inspect catches it, InspectQuick cannot and does not claim to.
+            BundleCache cache = new(Path.Combine(sandbox, "quick"));
+            Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
+
+            string path = cache.LayoutFor(OrderId).BundleZipPath;
+            byte[] tampered = [.. bytes];
+            tampered[0] ^= 0xFF;
+            File.WriteAllBytes(path, tampered);
+
+            CacheEntry quick = cache.InspectQuick(OrderId, bytes.Length, sha, "1.0.0");
+            run.Equal(quick.State.ToString(), "CachedValid", "the listing still shows it as downloaded");
+            run.False(quick.Verdict.IntegrityChecked, "but never claims it was verified");
+
+            CacheEntry full = cache.Inspect(OrderId, bytes.Length, sha, "1.0.0");
+            run.Equal(full.State.ToString(), "CachedStale", "and the import gate still catches it");
+        });
+
+        run.Case("InspectQuick still catches a size mismatch, which costs nothing", () =>
+        {
+            BundleCache cache = new(Path.Combine(sandbox, "quick-size"));
+            Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
+            File.WriteAllText(cache.LayoutFor(OrderId).BundleZipPath, "short");
+
+            CacheEntry quick = cache.InspectQuick(OrderId, bytes.Length, sha, "1.0.0");
+            run.Equal(quick.State.ToString(), "CachedStale", "the free check is still made");
+        });
+
+        run.Case("an unverified bundle says WHICH checksum is missing", () =>
+        {
+            // The old wording claimed "the platform published no checksum for this bundle", which is
+            // not true as a whole: the manifest inside publishes one per Revit deliverable and
+            // LocalBundleArchive.VerifyPlan checks every one of them before an element exists. What
+            // is absent is a digest for the zip.
+            BundleCache cache = new(Path.Combine(sandbox, "nodigest"));
+            Promote(cache, bytes, bytes.Length, expectedSha: null).GetAwaiter().GetResult();
+
+            CacheEntry entry = cache.Inspect(OrderId, bytes.Length, expectedSha256: null, manifestVersion: "1.0.0");
+            run.False(entry.Verdict.IntegrityChecked, "nothing to check the zip against");
+            run.Contains(entry.Describe(), "zip as a whole", "the sentence names what is missing");
+            run.Contains(entry.Describe(), "when you import", "and what is checked instead");
         });
 
         run.Case("a corrupted cached file is reported stale rather than imported", () =>
