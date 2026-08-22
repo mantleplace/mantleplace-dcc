@@ -33,7 +33,10 @@ prepare and download — is a convenience on top of that, not a gate under it.
 ## The contract is published, not private
 
 The bundle manifest is a **published JSON Schema**, served from
-`https://mantle.place/.well-known/schemas/bundle-manifest/v{N}.json`. The schema series is the
+`https://mantle.place/.well-known/schemas/bundle-manifest/`. Two filename families are served:
+`v{N}.json` for the integer pre-history, and `{X.Y.Z}.json` for the Mantle Place Bundle (MPB)
+semver era — a consumer tells the two apart by the JSON type of the manifest's own `version`
+field, a number meaning pre-history and a string meaning MPB. The schema series is the
 authority on what a manifest may contain; nothing in this repository restates it, and the version each
 host is verified against lives in
 [`tools/manifest-conformance/verified-against.json`](tools/manifest-conformance/verified-against.json)

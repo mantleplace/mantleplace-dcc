@@ -31,7 +31,10 @@ Remove (`HPS-44`).
 
 `Mantle Place ▸ Bundles ▸ Import bundle zip` takes a bundle you already downloaded and:
 
-- refuses anything below manifest **v18**, naming re-download rather than dual-parsing (`HPS-31`);
+- refuses anything below manifest **MPB 1.0.0**, and anything whose MAJOR is above the line it
+  reads, naming re-download and plugin-update respectively rather than dual-parsing (`HPS-31`).
+  The integer pre-history (v7–v19) is below the floor as a family: a bundle cut before the MPB
+  re-baseline is not merely old, it is written in a dialect this reader does not speak;
 - builds the terrain from `Surface/SurfacePoints.csv` — the points file is the preferred path
   because it yields a genuinely editable surface and its coordinates are local, so the model lands
   near the project origin instead of at a ~500 000 m easting;
