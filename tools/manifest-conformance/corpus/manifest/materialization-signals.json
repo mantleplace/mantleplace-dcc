@@ -1,63 +1,67 @@
 {
-  "$comment": "HPS-47: a host decides 'is this bundle materialized' from the neutral signals — a known host block, a dcc_readiness object, or a non-empty vector.layers array — never from its own content alone. Every row is a complete v19 manifest; the host feeds each to its own materialization predicate and asserts the verdict. The revit-block-only and dcc-readiness-only rows are the ones that catch a host keying off its own block: they are materialized bundles that carry nothing this host imports.",
+  "$comment": "HPS-47: a host decides 'is this bundle materialized' from the neutral signals — a non-empty `hosts` object, or a non-empty vector.layers array — never from its own content alone. Every row is a complete MPB 1.0.0 manifest; the host feeds each to its own materialization predicate and asserts the verdict. The other-host and unknown-host rows are the ones that catch a host keying off its own block: they are materialized bundles that carry nothing this host imports. At 1.0.0 the three host-ish signals of the integer era (a known host block, a sibling host block, a dcc_readiness object) are ONE signal, because everything host-specific now lives under `hosts.<hostId>` — a host asks whether the object has any key, never which keys it has.",
   "vectors": [
     {
       "name": "base bundle — no signal present",
       "manifest": {
-        "jobId": "ms-base",
-        "orderId": "ord-ms-base",
-        "version": 19,
+        "job_id": "ms-base",
+        "order_id": "ord-ms-base",
+        "version": "1.0.0",
         "packaging": {
           "delivery_model": "base_on_demand"
         },
         "layout": {
-          "cesiumTerrain": "Elevation/Terrain/layer.json"
+          "cesium_terrain": "Elevation/Terrain/layer.json"
         }
       },
       "materialized": false
     },
     {
-      "name": "unreal block only",
+      "name": "unreal host block only",
       "manifest": {
-        "jobId": "ms-unreal",
-        "orderId": "ord-ms-unreal",
-        "version": 19,
+        "job_id": "ms-unreal",
+        "order_id": "ord-ms-unreal",
+        "version": "1.0.0",
         "packaging": {
           "delivery_model": "base_on_demand"
         },
         "layout": {
-          "cesiumTerrain": "Elevation/Terrain/layer.json"
+          "cesium_terrain": "Elevation/Terrain/layer.json"
         },
-        "unreal": {
-          "mesh_alternative": {
-            "path": "Mesh/Terrain.glb"
+        "hosts": {
+          "unreal": {
+            "mesh_alternative": {
+              "path": "Mesh/Terrain.glb"
+            }
           }
         }
       },
       "materialized": true
     },
     {
-      "name": "revit block only",
+      "name": "revit host block only",
       "manifest": {
-        "jobId": "ms-revit",
-        "orderId": "ord-ms-revit",
-        "version": 19,
+        "job_id": "ms-revit",
+        "order_id": "ord-ms-revit",
+        "version": "1.0.0",
         "packaging": {
           "delivery_model": "base_on_demand"
         },
         "layout": {
-          "cesiumTerrain": "Elevation/Terrain/layer.json"
+          "cesium_terrain": "Elevation/Terrain/layer.json"
         },
-        "revit": {
-          "host_min_version": "2025",
-          "toposurface_points": {
-            "path": "Surface/SurfacePoints.csv",
-            "format": "csv-xyz-headerless",
-            "units": "m",
-            "horizontal_frame": "local_enu",
-            "vertical_reference": "absolute",
-            "point_count": 98756,
-            "sha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "hosts": {
+          "revit": {
+            "host_min_version": "2025",
+            "toposurface_points": {
+              "path": "Surface/SurfacePoints.csv",
+              "format": "csv-xyz-headerless",
+              "units": "m",
+              "horizontal_frame": "local_enu",
+              "vertical_reference": "absolute",
+              "point_count": 98756,
+              "sha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
           }
         }
       },
@@ -65,40 +69,42 @@
       "note": "materialized for someone ELSE is still materialized. A host that answers false here misreads a paid-for bundle as base and tells the user to materialize what already exists."
     },
     {
-      "name": "dcc_readiness only",
+      "name": "unknown host, readiness only",
       "manifest": {
-        "jobId": "ms-dcc",
-        "orderId": "ord-ms-dcc",
-        "version": 19,
+        "job_id": "ms-unknown-host",
+        "order_id": "ord-ms-unknown-host",
+        "version": "1.0.0",
         "packaging": {
           "delivery_model": "base_on_demand"
         },
         "layout": {
-          "cesiumTerrain": "Elevation/Terrain/layer.json"
+          "cesium_terrain": "Elevation/Terrain/layer.json"
         },
-        "dcc_readiness": {
+        "hosts": {
           "max": {
-            "mesh_import": {
-              "ready": false,
-              "reason": "available_on_request"
+            "readiness": {
+              "mesh_import": {
+                "present": false,
+                "reason": "available_on_request"
+              }
             }
           }
         }
       },
       "materialized": true,
-      "note": "the host key inside dcc_readiness is deliberately one no shipped host recognises — the OBJECT's presence is the signal, which is what absorbs host-roster staleness."
+      "note": "the host id is deliberately one no shipped host recognises, and it carries readiness rather than a payload — the `hosts` OBJECT's presence is the signal, which is what absorbs host-roster staleness. This is the 1.0.0 heir of the integer era's `dcc_readiness`-only row: readiness folded into the host block, so the same bundle now signals through `hosts`."
     },
     {
       "name": "vector layers only",
       "manifest": {
-        "jobId": "ms-vector",
-        "orderId": "ord-ms-vector",
-        "version": 19,
+        "job_id": "ms-vector",
+        "order_id": "ord-ms-vector",
+        "version": "1.0.0",
         "packaging": {
           "delivery_model": "base_on_demand"
         },
         "layout": {
-          "cesiumTerrain": "Elevation/Terrain/layer.json"
+          "cesium_terrain": "Elevation/Terrain/layer.json"
         },
         "vector": {
           "layers": [
@@ -120,14 +126,14 @@
     {
       "name": "empty vector.layers is no signal",
       "manifest": {
-        "jobId": "ms-empty",
-        "orderId": "ord-ms-empty",
-        "version": 19,
+        "job_id": "ms-empty",
+        "order_id": "ord-ms-empty",
+        "version": "1.0.0",
         "packaging": {
           "delivery_model": "base_on_demand"
         },
         "layout": {
-          "cesiumTerrain": "Elevation/Terrain/layer.json"
+          "cesium_terrain": "Elevation/Terrain/layer.json"
         },
         "vector": {
           "layers": []
@@ -135,6 +141,23 @@
       },
       "materialized": false,
       "note": "the signal is NON-EMPTY layers; an empty array is base-tier scaffolding"
+    },
+    {
+      "name": "empty hosts object is no signal",
+      "manifest": {
+        "job_id": "ms-empty-hosts",
+        "order_id": "ord-ms-empty-hosts",
+        "version": "1.0.0",
+        "packaging": {
+          "delivery_model": "base_on_demand"
+        },
+        "layout": {
+          "cesium_terrain": "Elevation/Terrain/layer.json"
+        },
+        "hosts": {}
+      },
+      "materialized": false,
+      "note": "the `hosts` twin of the empty-layers row, and new at 1.0.0: collapsing three signals into one makes the container's mere EXISTENCE the tempting shortcut, and an empty object is scaffolding exactly as an empty array is."
     }
   ]
 }

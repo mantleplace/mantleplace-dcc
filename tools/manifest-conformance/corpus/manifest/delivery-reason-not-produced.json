@@ -1,20 +1,21 @@
 {
-  "jobId": "reason-v19",
-  "version": 19,
+  "version": "1.0.0",
   "packaging": {
     "delivery_model": "base_on_demand"
   },
-  "dcc_readiness": {
+  "job_id": "reason-v19",
+  "hosts": {
     "unreal": {
-      "mesh_import": {
-        "present": false,
-        "reason": "not_produced"
-      },
-      "landscape": {
-        "present": false,
-        "reason": "not_selected"
+      "readiness": {
+        "mesh_import": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "landscape": {
+          "present": false,
+          "reason": "not_selected"
+        }
       }
     }
-  },
-  "unreal": {}
+  }
 }

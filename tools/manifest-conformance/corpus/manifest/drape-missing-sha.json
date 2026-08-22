@@ -1,26 +1,28 @@
 {
-  "jobId": "d",
-  "version": 19,
-  "unreal": {
-    "heightmap": {
-      "path": "Elevation/Heightmap.png",
-      "resolution": 505,
-      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
-      "landscape_transform": {
-        "section_size_quads": 63,
-        "sections_per_component": 2,
-        "component_count_x": 4,
-        "component_count_y": 4
+  "version": "1.0.0",
+  "job_id": "d",
+  "hosts": {
+    "unreal": {
+      "heightmap": {
+        "path": "Elevation/Heightmap.png",
+        "resolution": 505,
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "landscape_transform": {
+          "section_size_quads": 63,
+          "sections_per_component": 2,
+          "component_count_x": 4,
+          "component_count_y": 4
+        }
+      },
+      "imagery_drape": {
+        "source": "Imagery/Drape.png",
+        "extent": [
+          508390.0,
+          4300745.0,
+          509955.0,
+          4302395.0
+        ]
       }
-    },
-    "imagery_drape": {
-      "source": "Imagery/Drape.png",
-      "extent": [
-        508390.0,
-        4300745.0,
-        509955.0,
-        4302395.0
-      ]
     }
   }
 }

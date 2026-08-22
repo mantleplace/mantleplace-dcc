@@ -1,6 +1,5 @@
 {
-  "jobId": "vg",
-  "version": 19,
+  "version": "1.0.0",
   "vector": {
     "layers": [
       {
@@ -15,9 +14,12 @@
       }
     ]
   },
-  "unreal": {
-    "mesh_alternative": {
-      "path": "Mesh/Terrain.glb"
+  "job_id": "vg",
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
     }
   }
 }
