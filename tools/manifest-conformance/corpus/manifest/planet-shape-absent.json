@@ -1,12 +1,14 @@
 {
-  "jobId": "planet-shape-absent",
-  "version": 19,
-  "unreal": {
-    "georeference": {
-      "crs_projected": "EPSG:32613"
-    },
-    "mesh_alternative": {
-      "path": "Mesh/Terrain.glb"
+  "version": "1.0.0",
+  "job_id": "planet-shape-absent",
+  "hosts": {
+    "unreal": {
+      "georeference": {
+        "crs_projected": "EPSG:32613"
+      },
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
     }
   }
 }

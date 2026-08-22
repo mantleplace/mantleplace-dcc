@@ -198,9 +198,9 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 				{
 					TestEqual(Where + TEXT(".areaKm2"), Item.AreaKm2, Number, 1e-9);
 				}
-				if (ExpectRowNumber(*Case, Path, Row, TEXT("manifestVersion"), Number))
+				if (ExpectRowVersion(*Case, Path, Row, TEXT("manifestVersion"), Text))
 				{
-					TestEqual(Where + TEXT(".manifestVersion"), Item.ManifestVersion, static_cast<int32>(Number));
+					TestEqual(Where + TEXT(".manifestVersion"), Item.ManifestVersion, Text);
 				}
 				if (ExpectRowNumber(*Case, Path, Row, TEXT("sizeBytes"), Number))
 				{

@@ -117,8 +117,8 @@ FMantlePlaceCacheValidity FMantlePlaceBundleCacheLogic::DecideValidity(
 	bool bHasExpectedSize,
 	int64 ExpectedSizeBytes,
 	bool bHasManifestVersion,
-	int32 ManifestVersion,
-	int32 MinVersion)
+	const FString& ManifestVersion,
+	const FString& MinVersion)
 {
 	FMantlePlaceCacheValidity Validity;
 
@@ -150,7 +150,11 @@ FMantlePlaceCacheValidity FMantlePlaceBundleCacheLogic::DecideValidity(
 		return Validity;
 	}
 
-	if (bHasManifestVersion && ManifestVersion < MinVersion)
+	// Across the era break this is not a numeric comparison any more: a sidecar written before the
+	// MPB re-baseline carries an integer-era version, and the whole integer era sorts below the
+	// semver floor. `bHasManifestVersion` still carries the unknown-is-not-zero rule (HPS-20) — a
+	// legacy sidecar that reported nothing is not treated as reporting something old.
+	if (bHasManifestVersion && MantlePlaceIsManifestVersionBelowFloor(ManifestVersion, MinVersion))
 	{
 		Validity.bValid = false;
 		Validity.Reason = EMantlePlaceCacheInvalidReason::ManifestTooOld;
@@ -330,7 +334,7 @@ FString FMantlePlaceBundleCacheLogic::SerializeMeta(const FMantlePlaceCachedBund
 	Root->SetStringField(TEXT("localPath"), Meta.LocalPath);
 	Root->SetStringField(TEXT("sha256"), Meta.Sha256);
 	Root->SetNumberField(TEXT("sizeBytes"), static_cast<double>(Meta.SizeBytes));
-	Root->SetNumberField(TEXT("manifestVersion"), Meta.ManifestVersion);
+	Root->SetStringField(TEXT("manifestVersion"), Meta.ManifestVersion);
 	Root->SetStringField(TEXT("downloadedAtUtc"), Meta.DownloadedAtUtc);
 	Root->SetStringField(TEXT("format"), Meta.Format);
 	return BundleCacheSerializeCondensed(Root);
@@ -361,10 +365,20 @@ bool FMantlePlaceBundleCacheLogic::ParseMeta(const FString& Json, FMantlePlaceCa
 		Parsed.SizeBytes = static_cast<int64>(SizeBytes);
 	}
 
-	double ManifestVersion = 0.0;
-	if (Root->TryGetNumberField(TEXT("manifestVersion"), ManifestVersion))
+	// The sidecar is OUR cache format, not the manifest contract, and sidecars written by the
+	// shipped plugin are on users' disks right now with this field as a JSON NUMBER. Reading both
+	// shapes here is not the dual-parsing HPS-31 forbids — that rule governs the manifest — and the
+	// alternative is worse than it sounds: a cache entry whose version reads as "unknown" stays
+	// VALID, so a pre-MPB bundle would sit in the cache looking importable and be refused by the
+	// importer instead. Stringifying the old number lets it sort below the semver floor and
+	// invalidate honestly, which re-downloads it once.
+	if (!Root->TryGetStringField(TEXT("manifestVersion"), Parsed.ManifestVersion))
 	{
-		Parsed.ManifestVersion = static_cast<int32>(ManifestVersion);
+		double LegacyManifestVersion = 0.0;
+		if (Root->TryGetNumberField(TEXT("manifestVersion"), LegacyManifestVersion))
+		{
+			Parsed.ManifestVersion = FString::FromInt(static_cast<int32>(LegacyManifestVersion));
+		}
 	}
 
 	Root->TryGetStringField(TEXT("downloadedAtUtc"), Parsed.DownloadedAtUtc);

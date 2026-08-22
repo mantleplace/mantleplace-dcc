@@ -65,6 +65,23 @@ internal sealed class ExpectationNode
         ? child.GetInt32()
         : null;
 
+    /// <summary>
+    /// Reads a manifest version in EITHER family, recording the path: a semver string as itself, an
+    /// integer-era number stringified. The vault lists bundles at rest, so a corpus expectation for
+    /// a listed version may be written in either era.
+    /// </summary>
+    internal string? Version(string key)
+    {
+        if (Read(key, JsonValueKind.String, out JsonElement text))
+        {
+            return text.GetString();
+        }
+
+        return Read(key, JsonValueKind.Number, out JsonElement number)
+            ? number.GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : null;
+    }
+
     internal bool? Bool(string key)
     {
         if (!Element.TryGetProperty(key, out JsonElement child))

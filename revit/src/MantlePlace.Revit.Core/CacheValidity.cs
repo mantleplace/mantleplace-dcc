@@ -68,7 +68,7 @@ public static class CacheValidity
         string computedSha256,
         string? expectedSha256,
         long? expectedSizeBytes,
-        int? manifestVersion)
+        string? manifestVersion)
     {
         if (!fileExists)
         {
@@ -88,7 +88,12 @@ public static class CacheValidity
             return new CacheVerdict(false, CacheInvalidReason.Sha256Mismatch, IntegrityChecked: true);
         }
 
-        if (manifestVersion is { } version && version < ManifestVersions.MinSupportedManifestVersion)
+        // Across the era break this is not a numeric comparison any more: a sidecar written before
+        // the MPB re-baseline carries an integer-era version, and the whole integer era sorts below
+        // the semver floor. `null` still means UNKNOWN and is never a reason to refuse (HPS-20) — a
+        // legacy sidecar that reported nothing is not treated as reporting something old.
+        if (manifestVersion is { } version
+            && ManifestVersion.IsBelowFloor(version, ManifestVersions.MinSupportedManifestVersion))
         {
             return new CacheVerdict(false, CacheInvalidReason.ManifestTooOld, IntegrityChecked: comparable);
         }
@@ -118,7 +123,14 @@ public sealed class CacheSidecar
     /// <summary><c>null</c> means the platform advertised no digest, NOT that the file has none.</summary>
     public string? Sha256 { get; init; }
 
-    public int? ManifestVersion { get; init; }
+    /// <summary>
+    /// Manifest version recorded for the cached bundle; <c>null</c> when the sidecar reported none.
+    /// </summary>
+    /// <remarks>
+    /// A string spanning both families: a bundle cached before the MPB re-baseline recorded the
+    /// integer era's "19", one cached after records "1.0.0".
+    /// </remarks>
+    public string? ManifestVersion { get; init; }
 
     public string DownloadedAtUtc { get; init; } = string.Empty;
 
@@ -148,7 +160,7 @@ public static class CacheSidecars
         json.Append("  \"sizeBytes\": ").Append(sidecar.SizeBytes.ToString(CultureInfo.InvariantCulture)).Append(",\n");
         json.Append("  \"sha256\": ").Append(sidecar.Sha256 is null ? "null" : Quote(sidecar.Sha256)).Append(",\n");
         json.Append("  \"manifestVersion\": ")
-            .Append(sidecar.ManifestVersion?.ToString(CultureInfo.InvariantCulture) ?? "null").Append(",\n");
+            .Append(sidecar.ManifestVersion is null ? "null" : Quote(sidecar.ManifestVersion)).Append(",\n");
         json.Append("  \"downloadedAtUtc\": ").Append(Quote(sidecar.DownloadedAtUtc)).Append(",\n");
         json.Append("  \"integrityChecked\": ").Append(sidecar.IntegrityChecked ? "true" : "false").Append('\n');
         json.Append("}\n");
@@ -187,7 +199,15 @@ public static class CacheSidecars
                 BundleFileName = root.Str("bundleFileName") is { Length: > 0 } name ? name : BundleCacheFileNames.Bundle,
                 SizeBytes = (long)(root.OptionalDouble("sizeBytes") ?? 0.0),
                 Sha256 = root.OptionalStr("sha256"),
-                ManifestVersion = root.OptionalInt("manifestVersion"),
+                // The sidecar is OUR cache format, not the manifest contract, and sidecars written
+                // by the shipped plugin are on users' disks right now with this field as a JSON
+                // NUMBER. Reading both shapes is not the dual-parsing HPS-31 forbids — that rule
+                // governs the manifest — and the alternative is worse: the version would read as
+                // "unknown", the entry would stay VALID, and a pre-MPB bundle would sit in the
+                // cache looking importable only to be refused at import. Stringifying the old
+                // number lets it sort below the floor and invalidate honestly, re-downloading once.
+                ManifestVersion = root.OptionalStr("manifestVersion")
+                    ?? root.OptionalInt("manifestVersion")?.ToString(CultureInfo.InvariantCulture),
                 DownloadedAtUtc = root.Str("downloadedAtUtc"),
                 IntegrityChecked = root.Bool("integrityChecked"),
             };

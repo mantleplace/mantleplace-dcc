@@ -44,8 +44,10 @@ Anything you write lands in a world-readable repository, permanently, whether or
 deleted. So:
 
 - **Cite only public URLs.** The bundle-manifest schema series at
-  `https://mantle.place/.well-known/schemas/bundle-manifest/v{N}.json` is public and is the authority
-  on the contract. Internal trackers, internal documents and internal repositories are not citable
+  `https://mantle.place/.well-known/schemas/bundle-manifest/` is public and is the
+  authority on the contract. Two filename families are served: `v{N}.json` for the integer
+  pre-history and `{X.Y.Z}.json` for the MPB semver era — no `v` prefix, the `v` belonged to
+  the integer era. `frozen.lock.json` beside them names every version that exists. Internal trackers, internal documents and internal repositories are not citable
   here — not by URL, not by path, not by issue number. A bare `#42` in a Markdown file auto-links to
   *this* repo's issue 42, which is worse than dangling: it is wrong and it looks deliberate.
 - **Rule ids are fine, links to them are not.** `HPS-40`, `DOC-06` and the like are stable

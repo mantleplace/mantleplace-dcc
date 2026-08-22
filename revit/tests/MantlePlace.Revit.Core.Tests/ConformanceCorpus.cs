@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace MantlePlace.Revit.Core.Tests;
@@ -117,18 +118,32 @@ internal static class ConformanceCorpus
     /// The manifest version the corpus itself is pinned at. Cross-checked against this host's floor
     /// so the two cannot drift (HPS-31).
     /// </summary>
-    internal static int PinnedManifestVersion()
+    /// <remarks>
+    /// A STRING spanning both families, because the corpus itself does: the pin is the semver
+    /// "1.0.0" today, and a corpus pinned to the pre-history would carry the integer 19. Returned
+    /// verbatim so the caller compares through the total order rather than coercing an era it did
+    /// not expect into a number — which is how a pin this reader cannot actually read would slip
+    /// through as 0.
+    /// </remarks>
+    internal static string PinnedManifestVersion()
     {
         if (FindCorpusDirectory() is not { } root)
         {
-            return 0;
+            return string.Empty;
         }
 
         using JsonDocument index = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "index.json")));
-        return index.RootElement.TryGetProperty("manifestVersion", out JsonElement version)
-            && version.ValueKind == JsonValueKind.Number
-                ? version.GetInt32()
-                : 0;
+        if (!index.RootElement.TryGetProperty("manifestVersion", out JsonElement version))
+        {
+            return string.Empty;
+        }
+
+        return version.ValueKind switch
+        {
+            JsonValueKind.String => version.GetString() ?? string.Empty,
+            JsonValueKind.Number => version.GetInt32().ToString(CultureInfo.InvariantCulture),
+            _ => string.Empty,
+        };
     }
 
     /// <summary>
