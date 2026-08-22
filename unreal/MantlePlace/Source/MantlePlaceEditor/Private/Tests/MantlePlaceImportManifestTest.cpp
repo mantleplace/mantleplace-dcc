@@ -486,11 +486,11 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 	// instead of this one saying it once, loudly.
 	TestTrue(
 		FString::Printf(
-			TEXT("corpus manifestVersion (%d) >= this host's MinSupportedManifestVersion (%d) "
+			TEXT("corpus manifestVersion (%s) >= this host's MinSupportedManifestVersion (%s) "
 			     "(clean break, HPS-31; independent repin)"),
-			PinnedManifestVersion(),
-			MantlePlaceMinSupportedManifestVersion),
-		PinnedManifestVersion() >= MantlePlaceMinSupportedManifestVersion);
+			*PinnedManifestVersion(),
+			*MantlePlaceMinSupportedManifestVersion),
+		!MantlePlaceIsManifestVersionBelowFloor(PinnedManifestVersion(), MantlePlaceMinSupportedManifestVersion));
 
 	TSet<FString> Driven;
 	for (const FCase& Case : Cases)
@@ -667,28 +667,67 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 	}
 
 	// --- Bundle-level behaviour with no cross-host analogue --------------------------------
-	// cesiumTerrain streaming is a Cesium-for-Unreal concern; the retired pre-v13 tile-count key
+	// cesium_terrain streaming is a Cesium-for-Unreal concern; the retired pre-v13 tile-count key
 	// is Unreal's own deleted fallback. Neither belongs in a corpus a Revit host must consume.
 	{
 		FString Error;
 		const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(
-		    TEXT("{\"jobId\":\"x\",\"version\":18,")
-		        TEXT("\"layout\":{\"cesiumTerrain\":\"Elevation/Terrain/layer.json\"},")
-		            TEXT("\"cesiumTerrain\":{\"present\":true,\"tileCount\":1287},")
+		    TEXT("{\"job_id\":\"x\",\"version\":\"1.0.0\",")
+		        TEXT("\"layout\":{\"cesium_terrain\":\"Elevation/Terrain/layer.json\"},")
+		            TEXT("\"cesium_terrain\":{\"present\":true,\"tile_count\":1287},")
 		                TEXT("\"terrain\":{\"cesiumTerrainTileCount\":42},")
-		                    TEXT("\"unreal\":{\"mesh_alternative\":{\"path\":\"Mesh/Terrain.glb\"}}}"),
+		                    TEXT("\"hosts\":{\"unreal\":{\"mesh_alternative\":{\"path\":\"Mesh/Terrain.glb\"}}}}"),
 		    Error);
 		TestEqual(TEXT("tile count"), M.CesiumTerrainTileCount, 1287);
 		TestTrue(TEXT("bundle has cesium terrain"), M.bHasCesiumTerrain);
 
+		// The retired `terrain` block is doubly dead at 1.0.0: the key map deletes the block
+		// outright, and this host had already deleted its fallback to the key inside it. Kept as a
+		// regression guard because a retired block that reappears in a bundle must be IGNORED, not
+		// resurrected as a fallback — that is how a clean break becomes dual-parsing.
 		Error.Reset();
 		const FMantlePlaceVaultManifest Legacy = MantlePlaceImportManifest::Parse(
-		    TEXT("{\"jobId\":\"x\",\"version\":18,")
-		        TEXT("\"layout\":{\"cesiumTerrain\":\"Elevation/Terrain/layer.json\"},")
+		    TEXT("{\"job_id\":\"x\",\"version\":\"1.0.0\",")
+		        TEXT("\"layout\":{\"cesium_terrain\":\"Elevation/Terrain/layer.json\"},")
 		            TEXT("\"terrain\":{\"cesiumTerrainTileCount\":42},")
-		                TEXT("\"unreal\":{\"mesh_alternative\":{\"path\":\"Mesh/Terrain.glb\"}}}"),
+		                TEXT("\"hosts\":{\"unreal\":{\"mesh_alternative\":{\"path\":\"Mesh/Terrain.glb\"}}}}"),
 		    Error);
 		TestEqual(TEXT("retired pre-v13 tile-count key is ignored"), Legacy.CesiumTerrainTileCount, 0);
+	}
+
+	// --- The version gate, both directions --------------------------------------------------
+	// Too old and too new are DIFFERENT refusals with different remedies (re-download vs update
+	// the plugin), and a bare "unsupported" message makes them indistinguishable to the user.
+	{
+		FString Error;
+		const FMantlePlaceVaultManifest Integer = MantlePlaceImportManifest::Parse(
+		    TEXT("{\"jobId\":\"x\",\"version\":19,")
+		        TEXT("\"unreal\":{\"mesh_alternative\":{\"path\":\"Mesh/Terrain.glb\"}}}"),
+		    Error);
+		TestFalse(TEXT("an integer-era manifest is refused"), Integer.bValid);
+		TestTrue(TEXT("refusal names it as no longer supported"), Error.Contains(TEXT("no longer supported")));
+
+		Error.Reset();
+		const FMantlePlaceVaultManifest Absent = MantlePlaceImportManifest::Parse(
+		    TEXT("{\"job_id\":\"x\"}"), Error);
+		TestFalse(TEXT("an absent version is refused"), Absent.bValid);
+		TestTrue(TEXT("absent version is named, not shown as 0"), Error.Contains(TEXT("(absent)")));
+
+		Error.Reset();
+		const FMantlePlaceVaultManifest Future = MantlePlaceImportManifest::Parse(
+		    TEXT("{\"job_id\":\"x\",\"version\":\"2.0.0\",")
+		        TEXT("\"hosts\":{\"unreal\":{\"mesh_alternative\":{\"path\":\"Mesh/Terrain.glb\"}}}}"),
+		    Error);
+		TestFalse(TEXT("an unknown higher MAJOR is refused"), Future.bValid);
+		TestTrue(TEXT("the refusal says to update the plugin, not to re-download"),
+			Error.Contains(TEXT("Update the Mantle Place plugin")));
+
+		Error.Reset();
+		const FMantlePlaceVaultManifest AdditiveMinor = MantlePlaceImportManifest::Parse(
+		    TEXT("{\"job_id\":\"x\",\"version\":\"1.7.3\",\"an_unknown_future_key\":42,")
+		        TEXT("\"hosts\":{\"unreal\":{\"mesh_alternative\":{\"path\":\"Mesh/Terrain.glb\"}}}}"),
+		    Error);
+		TestTrue(TEXT("a higher MINOR is accepted — minors are strictly additive"), AdditiveMinor.bValid);
 	}
 
 	// --- The base-on-demand guidance string (surface copy, not contract) --------------------

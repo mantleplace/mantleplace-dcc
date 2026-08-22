@@ -202,12 +202,17 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		// invalidates every bundle downloaded before it, so failing here would turn a routine bump
 		// into a red local suite on every machine holding an older zip — the same warn-and-skip the
 		// missing-bundle and base_on_demand cases get, for the same portability reason.
-		if (bRead && !Manifest.bValid && Manifest.Version < MantlePlaceMinSupportedManifestVersion)
+		// Through the version helper, never through FString's `<`. Both operands are strings now, so
+		// a raw comparison compiles and is lexicographic: the pre-history's "19" sorts ABOVE "1.0.0"
+		// on the second character, and exactly the stale fixture this branch exists to skip would
+		// fall through to a hard failure instead.
+		if (bRead && !Manifest.bValid
+		    && MantlePlaceIsManifestVersionBelowFloor(Manifest.Version, MantlePlaceMinSupportedManifestVersion))
 		{
 			return SkipOrFail(FString::Printf(
-			    TEXT("Sample bundle is manifest v%d, below the v%d floor; skipping live import test. "
+			    TEXT("Sample bundle is manifest %s, below the %s floor; skipping live import test. "
 			         "Re-download this AOI from mantle.place/vault to re-cut it on the current pipeline."),
-			    Manifest.Version, MantlePlaceMinSupportedManifestVersion));
+			    *MantlePlaceDescribeManifestVersion(Manifest.Version), *MantlePlaceMinSupportedManifestVersion));
 		}
 
 		if (bRead && !Manifest.bValid && Manifest.DeliveryModel == TEXT("base_on_demand"))

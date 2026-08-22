@@ -24,6 +24,7 @@ plugin discovery is a recursive scan.
 ```
 unreal/MantlePlace/            the UE 5.8 plugin, folder + .uplugin — PascalCase within
 revit/                         the Revit plugin: pure Core, Client, Addin shim, headless tests
+spec/                          the public MPB format spec — prose only; the schema stays remote
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
 .github/workflows/             the two public CI gates, plus the stale-tracker job
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md  CLAUDE.md
@@ -44,8 +45,10 @@ Anything you write lands in a world-readable repository, permanently, whether or
 deleted. So:
 
 - **Cite only public URLs.** The bundle-manifest schema series at
-  `https://mantle.place/.well-known/schemas/bundle-manifest/v{N}.json` is public and is the authority
-  on the contract. Internal trackers, internal documents and internal repositories are not citable
+  `https://mantle.place/.well-known/schemas/bundle-manifest/` is public and is the
+  authority on the contract. Two filename families are served: `v{N}.json` for the integer
+  pre-history and `{X.Y.Z}.json` for the MPB semver era — no `v` prefix, the `v` belonged to
+  the integer era. `frozen.lock.json` beside them names every version that exists. Internal trackers, internal documents and internal repositories are not citable
   here — not by URL, not by path, not by issue number. A bare `#42` in a Markdown file auto-links to
   *this* repo's issue 42, which is worse than dangling: it is wrong and it looks deliberate.
 - **Rule ids are fine, links to them are not.** `HPS-40`, `DOC-06` and the like are stable
@@ -125,7 +128,13 @@ even when the arithmetic is correct.
   restate a value the schema owns. The version each host is verified against lives in
   [`tools/manifest-conformance/verified-against.json`](tools/manifest-conformance/verified-against.json),
   where CI checks it — never hardcode a version in prose.
-- **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id.
+- **The format, in public prose** → [`spec/`](spec/) — what a bundle is, the compatibility policy,
+  the consolidated changelog, what conformance means. It is **descriptive**: it explains blocks and
+  doctrine and never restates a field, an enum, a constraint or a version. The one place versions
+  appear is the changelog, as dated history.
+- **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id. Its *portable*
+  half — what any consumer owes a manifest — is now published as `spec/`; the vault-client half
+  stays private, and `HPS-NN` ids are for internal prose, not for the public spec.
 - **What the plugins do, and how to build them** → [`README.md`](README.md).
 - **Governance** → [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
   [`TRADEMARK.md`](TRADEMARK.md).

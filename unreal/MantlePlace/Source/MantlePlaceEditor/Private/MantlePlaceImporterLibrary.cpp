@@ -334,10 +334,12 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	}
 
 	// Surface the bundle's schema version up front: the importer keys off the manifest's `unreal`
-	// block, not this number, but logging it tells the user exactly which ETL output they fed in
-	// (a v8 bundle that silently omits the mesh looks identical to v7 at the actor level otherwise).
-	Log.Add(FString::Printf(TEXT("Bundle manifest version %d (jobId %s)."),
-		Manifest.Version, *Manifest.JobId.Left(8)));
+	// block, not this version, but logging it tells the user exactly which ETL output they fed in
+	// (a 1.1.0 bundle that omits an optional block looks identical to a 1.0.0 one at the actor
+	// level otherwise). Verbatim and unqualified: Parse has already refused everything that is not
+	// a semver string, so by here this is always MAJOR.MINOR.PATCH.
+	Log.Add(FString::Printf(TEXT("Bundle manifest version %s (jobId %s)."),
+		*Manifest.Version, *Manifest.JobId.Left(8)));
 
 	// --- Fail-closed integrity check: the downloaded bytes must match the manifest's declared sha256
 	// before anything is imported. A corrupt/truncated/tampered download aborts here, creating nothing.

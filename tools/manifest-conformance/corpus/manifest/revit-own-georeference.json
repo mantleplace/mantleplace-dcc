@@ -1,6 +1,5 @@
 {
-  "jobId": "revit-own-georeference",
-  "version": 19,
+  "version": "1.0.0",
   "delivery": {
     "unit_system": "imperial",
     "tier": "local_ft",
@@ -14,39 +13,42 @@
       "northing_m": 4014372.4999999995
     }
   },
-  "unreal": {
-    "georeference": {
-      "crs_projected": "EPSG:32613",
-      "grid_rotation_deg": 0.0,
-      "origin": {
-        "lon": -105.64620798739834,
-        "lat": 36.27254939041837,
-        "utm": {
-          "epsg": 32613,
-          "easting": 441959.49999999854,
-          "northing": 4014372.4999999995,
-          "linear_unit": "m"
+  "job_id": "revit-own-georeference",
+  "hosts": {
+    "unreal": {
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "grid_rotation_deg": 0.0,
+        "origin": {
+          "lon": -105.64620798739834,
+          "lat": 36.27254939041837,
+          "utm": {
+            "epsg": 32613,
+            "easting": 441959.49999999854,
+            "northing": 4014372.4999999995,
+            "linear_unit": "m"
+          }
         }
       }
-    }
-  },
-  "revit": {
-    "host_min_version": "2025",
-    "units_note": "Apply georeference.origin VERBATIM as the survey point / shared coordinates and set its Elev to 0 — every artifact's Z is ABSOLUTE orthometric height, not an offset from the origin. origin.projected.linear_unit describes the ORIGIN's coordinates and each artifact's own `units` describes that file; they differ on this tier, where the origin is State Plane feet and the files are international feet.",
-    "georeference": {
-      "crs_projected": "EPSG:2231",
-      "crs_geographic": "EPSG:4326",
-      "vertical_datum": "EGM2008-orthometric",
-      "grid_rotation_deg": -0.35,
-      "is_projected": true,
-      "origin": {
-        "lon": -105.64620798739834,
-        "lat": 36.27254939041837,
-        "projected": {
-          "epsg": 2231,
-          "easting": 1450131.2,
-          "northing": 13171825.6,
-          "linear_unit": "ftUS"
+    },
+    "revit": {
+      "host_min_version": "2025",
+      "units_note": "Apply georeference.origin VERBATIM as the survey point / shared coordinates and set its Elev to 0 \u2014 every artifact's Z is ABSOLUTE orthometric height, not an offset from the origin. origin.projected.linear_unit describes the ORIGIN's coordinates and each artifact's own `units` describes that file; they differ on this tier, where the origin is State Plane feet and the files are international feet.",
+      "georeference": {
+        "crs_projected": "EPSG:2231",
+        "crs_geographic": "EPSG:4326",
+        "vertical_datum": "EGM2008-orthometric",
+        "grid_rotation_deg": -0.35,
+        "is_projected": true,
+        "origin": {
+          "lon": -105.64620798739834,
+          "lat": 36.27254939041837,
+          "projected": {
+            "epsg": 2231,
+            "easting": 1450131.2,
+            "northing": 13171825.6,
+            "linear_unit": "ftUS"
+          }
         }
       }
     }

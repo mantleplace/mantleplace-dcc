@@ -82,7 +82,7 @@ public sealed class BundleCache
     /// <see cref="InspectQuick"/>; this one belongs on the pre-import gate.
     /// </para>
     /// </remarks>
-    public CacheEntry Inspect(string orderId, long? expectedSizeBytes, string? expectedSha256, int? manifestVersion)
+    public CacheEntry Inspect(string orderId, long? expectedSizeBytes, string? expectedSha256, string? manifestVersion)
         => Inspect(orderId, expectedSizeBytes, expectedSha256, manifestVersion, hashTheFile: true);
 
     /// <summary>
@@ -102,14 +102,14 @@ public sealed class BundleCache
     /// the list until the import gate catches it. It does catch it, and before anything is built.
     /// </para>
     /// </remarks>
-    public CacheEntry InspectQuick(string orderId, long? expectedSizeBytes, string? expectedSha256, int? manifestVersion)
+    public CacheEntry InspectQuick(string orderId, long? expectedSizeBytes, string? expectedSha256, string? manifestVersion)
         => Inspect(orderId, expectedSizeBytes, expectedSha256, manifestVersion, hashTheFile: false);
 
     private CacheEntry Inspect(
         string orderId,
         long? expectedSizeBytes,
         string? expectedSha256,
-        int? manifestVersion,
+        string? manifestVersion,
         bool hashTheFile)
     {
         BundleCacheLayout layout = LayoutFor(orderId);
@@ -128,7 +128,7 @@ public sealed class BundleCache
         // case, where the facts the vault would have supplied are not available.
         string? expectedHash = expectedSha256 ?? sidecar?.Sha256;
         long? expectedSize = expectedSizeBytes ?? sidecar?.SizeBytes;
-        int? expectedVersion = manifestVersion ?? sidecar?.ManifestVersion;
+        string? expectedVersion = manifestVersion ?? sidecar?.ManifestVersion;
 
         string computed = hashTheFile ? ComputeSha256(layout.BundleZipPath) : string.Empty;
 
@@ -158,7 +158,7 @@ public sealed class BundleCache
         Func<Stream, CancellationToken, Task> writeBody,
         long? expectedSizeBytes,
         string? expectedSha256,
-        int? manifestVersion,
+        string? manifestVersion,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {

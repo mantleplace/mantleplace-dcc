@@ -1,37 +1,39 @@
 {
-  "jobId": "reject-revit-hash-missing",
-  "orderId": "ord-revit-hash-missing",
-  "version": 19,
+  "version": "1.0.0",
   "layout": {
     "surface_dxf": "Surface/Surface.dxf"
   },
-  "revit": {
-    "host_min_version": "2025",
-    "units_note": "Revit's internal length is decimal feet; the project's display units are the user's. Apply georeference.origin VERBATIM as the survey point / shared coordinates and set its Elev to 0 — every artifact's Z is ABSOLUTE orthometric height, not an offset from the origin. Grid rotation is zero by construction: the emitters reproject per-vertex, so meridian convergence is already absorbed. Do not re-derive any of this; origin.projected.linear_unit describes the ORIGIN's coordinates and each artifact's own `units` describes that file (they differ on the local_ft tier, where the origin is metric UTM and the files are international feet).",
-    "georeference": {
-      "crs_projected": "EPSG:32613",
-      "crs_geographic": "EPSG:4326",
-      "vertical_datum": "EGM2008-orthometric",
-      "grid_rotation_deg": 0.0,
-      "is_projected": true,
-      "origin": {
-        "lon": -105.64620798739834,
-        "lat": 36.27254939041837,
-        "projected": {
-          "epsg": 32613,
-          "easting": 441959.49999999854,
-          "northing": 4014372.4999999995,
-          "linear_unit": "m"
+  "job_id": "reject-revit-hash-missing",
+  "order_id": "ord-revit-hash-missing",
+  "hosts": {
+    "revit": {
+      "host_min_version": "2025",
+      "units_note": "Revit's internal length is decimal feet; the project's display units are the user's. Apply georeference.origin VERBATIM as the survey point / shared coordinates and set its Elev to 0 \u2014 every artifact's Z is ABSOLUTE orthometric height, not an offset from the origin. Grid rotation is zero by construction: the emitters reproject per-vertex, so meridian convergence is already absorbed. Do not re-derive any of this; origin.projected.linear_unit describes the ORIGIN's coordinates and each artifact's own `units` describes that file (they differ on the local_ft tier, where the origin is metric UTM and the files are international feet).",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "vertical_datum": "EGM2008-orthometric",
+        "grid_rotation_deg": 0.0,
+        "is_projected": true,
+        "origin": {
+          "lon": -105.64620798739834,
+          "lat": 36.27254939041837,
+          "projected": {
+            "epsg": 32613,
+            "easting": 441959.49999999854,
+            "northing": 4014372.4999999995,
+            "linear_unit": "m"
+          }
         }
+      },
+      "surface_dxf": {
+        "path": "Surface/Surface.dxf",
+        "surf_type": "TIN-3DFACE",
+        "horizontal_frame": "absolute_projected",
+        "units": "m",
+        "triangle_count": 150000,
+        "decimated_from_triangle_count": 3987200
       }
-    },
-    "surface_dxf": {
-      "path": "Surface/Surface.dxf",
-      "surf_type": "TIN-3DFACE",
-      "horizontal_frame": "absolute_projected",
-      "units": "m",
-      "triangle_count": 150000,
-      "decimated_from_triangle_count": 3987200
     }
   }
 }

@@ -37,6 +37,17 @@ public sealed class SurfaceCleanReport
 /// answers "should these points be built", and conflating them would make the reader's fail-closed
 /// contract negotiable.
 /// </para>
+/// <para>
+/// ⛔ <b>This class knowingly presses against <c>spec/format.md</c>'s "a consumer MUST NOT
+/// re-derive" rule</b> and survives review only as a guarded, sunsettable workaround: it derives
+/// nothing the manifest publishes (the crop window is projected from the manifest's own bbox
+/// corners, the fill detection judges bit-identity, never terrain), both guards cap at
+/// <c>MaxDroppedFraction</c> and degrade to a log line, and every branch is headlessly tested.
+/// <b>Removal condition:</b> when the upstream ETL honours the DEM's declared nodata value and
+/// re-cut bundles stop carrying filled edge lines, this class and <see cref="SurfaceGrid"/>'s
+/// edge-fill detection are deleted, not kept as belt-and-braces — a second implementation of the
+/// pipeline is exactly what the thin-client rule exists to prevent.
+/// </para>
 /// </remarks>
 public static class SurfacePointsSanitiser
 {

@@ -37,6 +37,12 @@ namespace MantlePlace.Revit.Addin;
 /// <see cref="LocalBundleSource.PathVariable"/> and it skips the picker, writing to
 /// <see cref="LocalBundleSource.ProbeLogPathFor"/>.
 /// </para>
+/// <para>
+/// <b>Deletion trigger:</b> this command is diagnostic scaffolding, not product. Once both open
+/// questions above are settled by recorded probe runs and <see cref="TerrainBasePlanner"/>'s
+/// default arm is chosen on that evidence, delete this file and its ribbon button — a shipped
+/// diagnostics command that outlived its question is UI debt.
+/// </para>
 /// </remarks>
 [Transaction(TransactionMode.Manual)]
 [Regeneration(RegenerationOption.Manual)]

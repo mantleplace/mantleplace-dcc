@@ -1,5 +1,5 @@
 {
-  "minSupportedManifestVersion": 18,
+  "minSupportedManifestVersion": "1.0.0",
   "precedence": [
     "missing",
     "sizeMismatch",
@@ -22,7 +22,7 @@
       "computedSha256": "AB",
       "expectedSha256": "ab",
       "expectedSizeBytes": 1024,
-      "manifestVersion": 18,
+      "manifestVersion": "1.0.0",
       "valid": true,
       "reason": "None",
       "integrityChecked": true,
@@ -35,7 +35,7 @@
       "computedSha256": "ab",
       "expectedSha256": "cd",
       "expectedSizeBytes": 1024,
-      "manifestVersion": 18,
+      "manifestVersion": "1.0.0",
       "valid": false,
       "reason": "Sha256Mismatch",
       "integrityChecked": true
@@ -47,7 +47,7 @@
       "computedSha256": "ab",
       "expectedSha256": "cd",
       "expectedSizeBytes": 1024,
-      "manifestVersion": 18,
+      "manifestVersion": "1.0.0",
       "valid": false,
       "reason": "SizeMismatch",
       "integrityChecked": false,
@@ -58,7 +58,7 @@
       "fileExists": false,
       "expectedSha256": "cd",
       "expectedSizeBytes": 1024,
-      "manifestVersion": 17,
+      "manifestVersion": 19,
       "valid": false,
       "reason": "Missing",
       "integrityChecked": false,
@@ -71,11 +71,11 @@
       "computedSha256": "ab",
       "expectedSha256": "cd",
       "expectedSizeBytes": 1024,
-      "manifestVersion": 17,
+      "manifestVersion": 19,
       "valid": false,
       "reason": "Sha256Mismatch",
       "integrityChecked": true,
-      "note": "pins sha256Mismatch > manifestTooOld — with the size-over-sha and missing-over-everything rows, the whole `precedence` list is now exercised, not implied."
+      "note": "pins sha256Mismatch > manifestTooOld \u00e2\u20ac\u201d with the size-over-sha and missing-over-everything rows, the whole `precedence` list is now exercised, not implied."
     },
     {
       "name": "manifest too old",
@@ -84,11 +84,11 @@
       "computedSha256": "ab",
       "expectedSha256": "ab",
       "expectedSizeBytes": 1024,
-      "manifestVersion": 17,
+      "manifestVersion": 19,
       "valid": false,
       "reason": "ManifestTooOld",
       "integrityChecked": true,
-      "note": "v17 was the supported floor until the v18 hygiene bump; a bundle cached under it is stale now. The 'too old' row must always sit exactly one below minSupportedManifestVersion, so a bump that forgets this file is caught by the host asserting its own floor constant against minSupportedManifestVersion."
+      "note": "v19 closed the integer pre-history; a bundle cached under it is stale now that the floor is MPB 1.0.0. The 'too old' row must always sit exactly one below minSupportedManifestVersion in the TOTAL order over both families - and across the era break that neighbour is an integer, not a semver, which is the case a host comparing only within one family gets wrong. A bump that forgets this file is caught by the host asserting its own floor constant against minSupportedManifestVersion."
     },
     {
       "name": "legacy, everything unknown",
@@ -110,11 +110,11 @@
       "computedSha256": "",
       "expectedSha256": "ab",
       "expectedSizeBytes": 1024,
-      "manifestVersion": 18,
+      "manifestVersion": "1.0.0",
       "valid": true,
       "reason": "None",
       "integrityChecked": false,
-      "note": "valid but unverified — the host MUST say so rather than claim verification"
+      "note": "valid but unverified \u00e2\u20ac\u201d the host MUST say so rather than claim verification"
     },
     {
       "name": "size mismatch with no sha advertised",
@@ -136,7 +136,7 @@
       "computedSha256": "",
       "expectedSha256": "ab",
       "expectedSizeBytes": 1024,
-      "manifestVersion": 18,
+      "manifestVersion": "1.0.0",
       "valid": false,
       "reason": "SizeMismatch",
       "integrityChecked": false,

@@ -261,7 +261,7 @@ void UMantlePlaceBundleCache::HandleDownloadComplete(
 	Meta.LocalPath = ActiveFinalPath;
 	Meta.Sha256 = ComputedSha;
 	Meta.SizeBytes = OnDiskSize;
-	Meta.ManifestVersion = ActiveItem.bHasManifestVersion ? ActiveItem.ManifestVersion : 0;
+	Meta.ManifestVersion = ActiveItem.bHasManifestVersion ? ActiveItem.ManifestVersion : FString();
 	Meta.DownloadedAtUtc = FDateTime::UtcNow().ToIso8601();
 	Meta.Format = TEXT("glb");
 	FFileHelper::SaveStringToFile(

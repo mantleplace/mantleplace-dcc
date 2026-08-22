@@ -264,23 +264,37 @@ namespace Detail
 	}
 } // namespace Detail
 
-/** Manifest version the corpus is pinned at (index.json `manifestVersion`); 0 if unreadable. */
-inline int32 PinnedManifestVersion()
+/**
+ * Manifest version the corpus is pinned at (index.json `manifestVersion`); empty if unreadable.
+ *
+ * A STRING spanning both families, because the corpus itself does: the pin is the semver "1.0.0"
+ * today, and a corpus pinned to the pre-history would carry the integer 19. Returned verbatim so
+ * the caller compares through the total order rather than coercing an era it did not expect into a
+ * number — which is how a pin the reader cannot actually read would slip through as 0.
+ */
+inline FString PinnedManifestVersion()
 {
 	const FString Root = Detail::FindCorpusDir();
 	if (Root.IsEmpty())
 	{
-		return 0;
+		return FString();
 	}
 	TSharedPtr<FJsonObject> Index;
 	FString Text;
 	if (!Detail::LoadJsonObject(FPaths::Combine(Root, TEXT("index.json")), Index, Text))
 	{
-		return 0;
+		return FString();
 	}
-	double Version = 0.0;
-	Index->TryGetNumberField(TEXT("manifestVersion"), Version);
-	return static_cast<int32>(Version);
+	FString Version;
+	if (!Index->TryGetStringField(TEXT("manifestVersion"), Version))
+	{
+		double NumericVersion = 0.0;
+		if (Index->TryGetNumberField(TEXT("manifestVersion"), NumericVersion))
+		{
+			Version = FString::FromInt(static_cast<int32>(NumericVersion));
+		}
+	}
+	return Version;
 }
 
 /**
@@ -745,6 +759,39 @@ inline bool ExpectRowNumber(
 	}
 	OutValue = Value->AsNumber();
 	return true;
+}
+
+/**
+ * A row key holding a manifest version, in EITHER era's shape, normalized to the string the reader
+ * holds.
+ *
+ * The one deliberate exception to the strict typing above, and it is the contract's exception, not
+ * a convenience: the vault LIST payload widens `manifestVersion` int -> string on the platform's
+ * own schedule, so a row may state the semver `"1.0.0"` or the pre-history's bare `7`, and this
+ * host reads both (MantlePlaceVaultLogic widens a number the same way). Requiring one shape here
+ * would make a corpus case fail on the era it did not happen to be written in. This is NOT the
+ * coercion HPS-46 forbids — a `"status": 404` still reads as nothing, because only this one field
+ * is genuinely two-shaped. Revit's `ExpectationNode.Version` is the same rule on the other host.
+ */
+inline bool ExpectRowVersion(
+	const FCase& Case, const FString& RowPath, const TSharedPtr<FJsonObject>& Row,
+	const TCHAR* Key, FString& OutValue)
+{
+	const TSharedPtr<FJsonValue> Value = Row.IsValid() ? Row->TryGetField(Key) : nullptr;
+	if (Detail::RecordTypedRead(Case, ExpectPath(RowPath, Key), Value, EJson::String))
+	{
+		OutValue = Value->AsString();
+		return true;
+	}
+	// RecordTypedRead has already recorded an explicit null (a VALUE in this corpus) and returned
+	// false; Type is Number only when it did neither, so nothing double-records here.
+	if (Value.IsValid() && Value->Type == EJson::Number)
+	{
+		Case.AssertedPaths.Add(ExpectPath(RowPath, Key));
+		OutValue = FString::FromInt(static_cast<int32>(Value->AsNumber()));
+		return true;
+	}
+	return false;
 }
 
 /** An object-valued row key. An EMPTY object records here rather than through a child read,

@@ -62,12 +62,20 @@ namespace
 			(*LayersObj)->TryGetBoolField(TEXT("elevation"), Item.Layers.bElevation);
 		}
 
-		double ManifestVersion = 0.0;
-		if (B->TryGetNumberField(TEXT("manifestVersion"), ManifestVersion))
+		// The vault LIST contract carries `manifestVersion` for each bundle at rest, and the vault
+		// spans both eras: a bundle cut before the MPB re-baseline reports the integer 19, one cut
+		// after reports the string "1.0.0". Both shapes are read because both are live facts about
+		// the listing, and the value is SURFACED rather than gated on — the import gate is the one
+		// place a version decides anything. Absent stays absent (HPS-20: unknown is not zero).
+		if (!B->TryGetStringField(TEXT("manifestVersion"), Item.ManifestVersion))
 		{
-			Item.bHasManifestVersion = true;
-			Item.ManifestVersion = static_cast<int32>(ManifestVersion);
+			double NumericManifestVersion = 0.0;
+			if (B->TryGetNumberField(TEXT("manifestVersion"), NumericManifestVersion))
+			{
+				Item.ManifestVersion = FString::FromInt(static_cast<int32>(NumericManifestVersion));
+			}
 		}
+		Item.bHasManifestVersion = !Item.ManifestVersion.IsEmpty();
 
 		double SizeBytes = 0.0;
 		if (B->TryGetNumberField(TEXT("sizeBytes"), SizeBytes))

@@ -1,6 +1,5 @@
 {
-  "jobId": "b",
-  "version": 19,
+  "version": "1.0.0",
   "buildings": {
     "formats": [
       {
@@ -11,13 +10,16 @@
       }
     ]
   },
-  "unreal": {
-    "mesh_alternative": {
-      "path": "Mesh/Terrain.glb"
-    },
-    "buildings_mesh": {
-      "path": "Buildings/Buildings.glb",
-      "up_axis": "y"
+  "job_id": "b",
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      },
+      "buildings_mesh": {
+        "path": "Buildings/Buildings.glb",
+        "up_axis": "y"
+      }
     }
   }
 }

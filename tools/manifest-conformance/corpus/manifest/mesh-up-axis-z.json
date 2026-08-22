@@ -1,11 +1,13 @@
 {
-  "jobId": "u",
-  "version": 19,
-  "unreal": {
-    "mesh_alternative": {
-      "path": "Mesh/Terrain.glb",
-      "up_axis": "z",
-      "nanite_recommended": true
+  "version": "1.0.0",
+  "job_id": "u",
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb",
+        "up_axis": "z",
+        "nanite_recommended": true
+      }
     }
   }
 }

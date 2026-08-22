@@ -404,8 +404,8 @@ internal static class LocalBundleArchiveTests
     private static string ManifestJson(string? orderId)
         => $$"""
              {
-               "version": 18,
-               "orderId": "{{orderId}}",
+               "version": "1.0.0",
+               "order_id": "{{orderId}}",
                "packaging": { "delivery_model": "base_on_demand" }
              }
              """;

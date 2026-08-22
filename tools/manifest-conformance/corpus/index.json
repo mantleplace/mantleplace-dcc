@@ -4,19 +4,21 @@
     "plugin runs against its own parser. Seeded from the Unreal reference suite, which had",
     "them as inline C++ string literals reachable by exactly one host.",
     "",
-    "NORMATIVE OWNER: the Host Plugin Standard (HPS-40, HPS-41). This file is",
-    "data; the rules about consuming it, and the integrity checks the CI gate applies, are",
-    "stated there and in check_manifest_conformance.py. Nothing here restates them.",
+    "NORMATIVE: this corpus is one third of an MPB spec release (schema + spec/ prose +",
+    "corpus, versioned together) - a conforming reader passes it. This file is data; what",
+    "claiming a group obliges a reader to is spec/conformance.md, the additional first-party",
+    "plugin obligations are the Host Plugin Standard's (HPS-40, HPS-41), and the integrity",
+    "checks the CI gate applies are check_manifest_conformance.py's. Nothing here restates them.",
     "",
     "Case fields:",
-    "  id              stable, dotted, never renumbered — host suites name it in failures.",
+    "  id              stable, dotted, never renumbered \u2014 host suites name it in failures.",
     "  group           manifest | vault | auth | cache | digest | projection.",
     "  file            path relative to corpus/.",
-    "  expect          accept  — the parser MUST accept and produce `expectations`.",
-    "                  reject  — the parser MUST refuse; `errorContains` if the message matters.",
+    "  expect          accept  \u2014 the parser MUST accept and produce `expectations`.",
+    "                  reject  \u2014 the parser MUST refuse; `errorContains` if the message matters.",
     "                            A reject case MAY still carry `expectations` for values the",
     "                            parser is required to have read BEFORE refusing (HPS-37).",
-    "                  vector  — a known-answer table, not a single document to parse.",
+    "                  vector  \u2014 a known-answer table, not a single document to parse.",
     "  reason          why the case exists. Required: a fixture nobody can explain gets",
     "                  deleted the first time it is inconvenient.",
     "  appliesTo       this case asserts ONE host's manifest block; other hosts skip it",
@@ -25,12 +27,12 @@
     "  errorContains   substring the refusal message must contain (optional).",
     "  malformedJson   this file is deliberately not valid JSON (optional).",
     "  manifestVersion the bundle-manifest version this case's file carries (optional). Checked",
-    "                  by check_manifest_conformance.py against the file's own `version` field —",
+    "                  by check_manifest_conformance.py against the file's own `version` field \u2014",
     "                  a case whose declared and actual versions disagree is corpus rot, caught",
     "                  before any host suite sees it.",
     "",
     "Top-level fields:",
-    "  corpusVersion   the shape of THIS index's case fields — bumped on a breaking change to",
+    "  corpusVersion   the shape of THIS index's case fields \u2014 bumped on a breaking change to",
     "                  what a field means, not on adding cases. Each host pins the corpusVersion",
     "                  it was last reviewed against in verified-against.json",
     "                  (`verifiedAgainstCorpusVersion`); check_manifest_conformance.py fails a",
@@ -40,8 +42,8 @@
     "OWNERSHIP: maintainer-owned. A host that needs a new case proposes it here by pull",
     "request rather than forking a private copy."
   ],
-  "corpusVersion": 2,
-  "manifestVersion": 19,
+  "corpusVersion": 3,
+  "manifestVersion": "1.0.0",
   "cases": [
     {
       "id": "auth.callbackQueryVectors",
@@ -97,8 +99,8 @@
       "group": "manifest",
       "file": "manifest/base-on-demand.json",
       "expect": "reject",
-      "reason": "A base bundle carries no unreal block yet. It is not importable, but bbox/layout/orderId MUST still be parsed so streaming and the vault join key survive — the early return must not skip them.",
-      "manifestVersion": 19,
+      "reason": "A base bundle carries no host block yet. It is not importable, but bbox/layout/order_id MUST still be parsed so streaming and the vault join key survive \u2014 the early return must not skip them.",
+      "manifestVersion": "1.0.0",
       "expectations": {
         "orderId": "ord-abc123",
         "cesiumTerrainPath": "Elevation/Terrain/layer.json",
@@ -112,7 +114,7 @@
       "file": "manifest/buildings-sha-in-formats.json",
       "expect": "accept",
       "reason": "buildings_mesh carries no hash of its own; the host resolves it by matching path against the top-level buildings.formats[] entry. Cross-block resolution, not convention.",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "expectations": {
         "buildingsPath": "Buildings/Buildings.glb",
         "buildingsSha256": "82cd4048eec9978e5463e101db20a580a04afd2d8bd55e5cf89330f934c4c230",
@@ -127,9 +129,9 @@
       "group": "manifest",
       "file": "manifest/dcc-readiness-ignores-retired-flat-key.json",
       "expect": "accept",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "appliesTo": "unreal",
-      "reason": "Regression guard: the v17 anonymous dcc_readiness.mesh_import is RETIRED and must be ignored at v18, not used as a fallback. A fallback ladder here is how a clean break quietly becomes dual-parsing (HPS-31).",
+      "reason": "Regression guard: the pre-history anonymous `dcc_readiness.mesh_import` is RETIRED \u2014 readiness lives at `hosts.<hostId>.readiness` \u2014 and a stray one must be ignored, never used as a fallback. A fallback ladder here is how a clean break quietly becomes dual-parsing (HPS-31).",
       "expectations": {
         "meshAbsentReason": "",
         "hasMesh": true
@@ -140,9 +142,9 @@
       "group": "manifest",
       "file": "manifest/dcc-readiness-reason.json",
       "expect": "reject",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "appliesTo": "unreal",
-      "reason": "v18 normalises dcc_readiness to per-host keys. The host reads its OWN key and surfaces the stated reason instead of dead-ending on an empty import. The sibling revit block must be ignored, not merged.",
+      "reason": "Readiness is per host, at `hosts.<hostId>.readiness`. The host reads its OWN subtree and surfaces the stated reason instead of dead-ending on an empty import. The sibling host's block must be ignored, not merged.",
       "expectations": {
         "meshAbsentReason": "available_on_request"
       }
@@ -152,7 +154,7 @@
       "group": "manifest",
       "file": "manifest/delivery-reason-not-produced.json",
       "expect": "reject",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "appliesTo": "unreal",
       "reason": "v19 closes `reason` into #/$defs/deliveryReason, and closing it required GROWING the set: `not_produced` and `not_selected` did not exist through v18. A host that matches on the reason instead of surfacing it (HPS-36) loses the explanation on exactly the values v19 added. Pairs with manifest.dccReadinessReason, which pins a value that predates v19.",
       "expectations": {
@@ -164,9 +166,9 @@
       "group": "manifest",
       "file": "manifest/revit-block-ignored.json",
       "expect": "accept",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "appliesTo": "unreal",
-      "reason": "v19 adds a top-level `revit` block, and it is ANOTHER host's block. This fixture states the two georeferences in conflict on purpose — `unreal.georeference` is metric UTM, `revit.georeference` a State Plane foot zone — so a reader that keys placement off whichever it finds first reports 2231 and fails. HPS-33: apply your own block, never merge or re-derive from a sibling.",
+      "reason": "`hosts.revit` is ANOTHER host's block. This fixture states the two georeferences in conflict on purpose \u2014 `hosts.unreal.georeference` is metric UTM, `hosts.revit.georeference` a State Plane foot zone \u2014 so a reader that keys placement off whichever it finds first reports 2231 and fails. HPS-33: apply your own block, never merge or re-derive from a sibling.",
       "expectations": {
         "hasMesh": true,
         "integrityCheckedMesh": false,
@@ -178,9 +180,9 @@
       "group": "manifest",
       "file": "manifest/revit-artifact-hashes.json",
       "expect": "accept",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "appliesTo": "revit",
-      "reason": "v19 publishes the Revit deliverables' sha256 inside the `revit` block and NOWHERE else — `elevation.points_csv` and `buildings.ifc` still carry none. A host that keeps reading the hash off the v18 detail block surfaces three unverifiable artifacts while every other assertion stays green, which is the hole this case exists to close. HPS-33: read your OWN block, verbatim.",
+      "reason": "v19 publishes the Revit deliverables' sha256 inside the `revit` block and NOWHERE else \u2014 `elevation.points_csv` and `buildings.ifc` still carry none. A host that keeps reading the hash off the v18 detail block surfaces three unverifiable artifacts while every other assertion stays green, which is the hole this case exists to close. HPS-33: read your OWN block, verbatim.",
       "expectations": {
         "toposurfacePointsSha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "surfaceDxfSha256": "7cbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -192,9 +194,9 @@
       "group": "manifest",
       "file": "manifest/revit-own-georeference.json",
       "expect": "accept",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "appliesTo": "revit",
-      "reason": "The mirror of manifest.revitBlockIgnored, pointed the other way: this fixture states THREE origins in conflict on purpose — `unreal.georeference.origin.utm` (metric UTM), `delivery.local_origin` (metric UTM, host-neutral) and `revit.georeference.origin.projected` (State Plane feet) — and Revit must report the one addressed to it. Until v19 this host had only `delivery.local_origin`, emitted on the `local_ft` tier ALONE, so a metric-tier bundle carried no survey point and the model was imported not georeferenced at all; reading the own block as PRIMARY with delivery as the fallback is what closes that without a coordinated pipeline release. Note `grid_rotation_deg` is deliberately non-zero. The emitters reproject per-vertex so today's bundles publish 0.0, and a fixture that agreed would be passed by a host that hardcodes zero and never reads the field — the value is here to be carried, not to be plausible. `linear_unit` is on the ORIGIN and differs from the artifacts' own `units` on this tier, which is the pair a host must not collapse: reading a State Plane foot origin as metres places the site 3.28× out.",
+      "reason": "The mirror of manifest.revitBlockIgnored, pointed the other way: this fixture states THREE origins in conflict on purpose \u2014 `hosts.unreal.georeference.origin.utm` (metric UTM), `delivery.local_origin` (metric UTM, host-neutral) and `hosts.revit.georeference.origin.projected` (State Plane feet) \u2014 and Revit must report the one addressed to it. Before it had a block of its own this host had only `delivery.local_origin`, emitted on the `local_ft` tier ALONE, so a metric-tier bundle carried no survey point and the model was imported not georeferenced at all; reading the own block as PRIMARY with delivery as the fallback is what closes that without a coordinated pipeline release. Note `grid_rotation_deg` is deliberately non-zero. The emitters reproject per-vertex so today's bundles publish 0.0, and a fixture that agreed would be passed by a host that hardcodes zero and never reads the field \u2014 the value is here to be carried, not to be plausible. `linear_unit` is on the ORIGIN and differs from the artifacts' own `units` on this tier, which is the pair a host must not collapse: reading a State Plane foot origin as metres places the site 3.28\u00d7 out.",
       "expectations": {
         "surveyPointEpsg": 2231,
         "surveyPointEasting": 1450131.2,
@@ -209,7 +211,7 @@
       "file": "manifest/drape-missing-sha.json",
       "expect": "reject",
       "reason": "The drape carries the same required-sha rule as the heightmap.",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "errorContains": "unreal.imagery_drape has no sha256",
       "appliesTo": "unreal"
     },
@@ -218,8 +220,8 @@
       "group": "manifest",
       "file": "manifest/full.json",
       "expect": "accept",
-      "reason": "The reference v18 accept shape, lifted from the platform's reference fixture. A host that parses this correctly has the whole unreal block, the per-host dcc_readiness and the placement math covered. v19 grew `landscape_layers`: all eight sub-blocks, each with its source raster's hash and its UE-ready PNG companions, whose `value_mapping` shape follows the companion's `encoding`. The companions are declared 143x142 against a 1009-post heightmap deliberately - the weight rasters ride the DEM's grid, not the Landscape's, so a host that assumes the two match is wrong. Every placement tuple here (landscapeScale, landscapeSpawnLocation, drapeWorldRect*) is in the HOST ENGINE's axis order, which for Unreal is left-handed North=+X / East=+Y. The manifest names its own grid axes the other way round (`scale_x_percent` and `component_count_x` describe EASTING), so these tuples read as swapped against the source fields on purpose — that swap is the thing under test. Mapping East to +X instead swaps two axes of a Z-up frame, which is a reflection rather than a rotation, and mirrors the whole import.",
-      "manifestVersion": 19,
+      "reason": "The reference accept shape, lifted from the platform's reference fixture. A host that parses this correctly has the whole `hosts.unreal` block, its `readiness` verdicts and the placement math covered. It carries `landscape_layers` in full: all eight sub-blocks, each with its source raster's hash and its UE-ready PNG companions, whose `value_mapping` shape follows the companion's `encoding`. The companions are declared 143x142 against a 1009-post heightmap deliberately - the weight rasters ride the DEM's grid, not the Landscape's, so a host that assumes the two match is wrong. Every placement tuple here (landscapeScale, landscapeSpawnLocation, drapeWorldRect*) is in the HOST ENGINE's axis order, which for Unreal is left-handed North=+X / East=+Y. The manifest names its own grid axes the other way round (`scale_x_percent` and `component_count_x` describe EASTING), so these tuples read as swapped against the source fields on purpose \u2014 that swap is the thing under test. Mapping East to +X instead swaps two axes of a Z-up frame, which is a reflection rather than a rotation, and mirrors the whole import.",
+      "manifestVersion": "1.0.0",
       "expectations": {
         "quadsPerComponent": 126,
         "landscapeScale": [
@@ -543,8 +545,8 @@
       "group": "manifest",
       "file": "manifest/heightmap-missing-sha.json",
       "expect": "reject",
-      "reason": "The heightmap sha256 has been required since v17 and remains so — refuse to import unverifiable bytes.",
-      "manifestVersion": 19,
+      "reason": "The heightmap sha256 has been required since v17 and remains so \u2014 refuse to import unverifiable bytes.",
+      "manifestVersion": "1.0.0",
       "errorContains": "unreal.heightmap has no sha256",
       "appliesTo": "unreal"
     },
@@ -554,7 +556,7 @@
       "file": "manifest/mesh-missing-sha.json",
       "expect": "accept",
       "reason": "The mesh sha256 is OPTIONAL: absent means the integrity check is skipped, which is 'unknown', not 'absent'. This is the asymmetry hosts get wrong.",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "expectations": {
         "hasMesh": true,
         "integrityCheckedMesh": false
@@ -567,7 +569,7 @@
       "file": "manifest/mesh-up-axis-z.json",
       "expect": "reject",
       "reason": "A glTF pointer declaring an up axis the importer does not convert must fail closed, the way planet_shape does. Every consumer that trusts its glTF reader's fixed Y-up-to-Z-up conversion has this exposure: the bundle would import at a plausible-looking transform, rotated, with no error anywhere - the worst failure shape there is. The value must be READ before the refusal (HPS-37) so the message can name what it got. `nanite_recommended` rides along to prove the refusal happens on the axis and not on a half-parsed block.",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "errorContains": "up_axis",
       "appliesTo": "unreal",
       "expectations": {
@@ -580,7 +582,7 @@
       "group": "manifest",
       "file": "manifest/planet-shape-absent.json",
       "expect": "accept",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "appliesTo": "unreal",
       "reason": "The counterpart to manifest.planetShapeSphere: ABSENT is not a rejection. The flat frame is the default, so a bundle that simply omits the field imports. A host that fails closed on absence rejects most real bundles.",
       "expectations": {
@@ -595,7 +597,7 @@
       "file": "manifest/planet-shape-sphere.json",
       "expect": "reject",
       "reason": "Only the flat frame is supported in v1. An unknown planet_shape fails closed rather than silently importing a wrong frame. The value must be READ before the refusal (HPS-37) so the message can name what it got.",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "errorContains": "planet_shape",
       "appliesTo": "unreal",
       "expectations": {
@@ -616,9 +618,9 @@
       "group": "manifest",
       "file": "manifest/reject-revit-hash-missing.json",
       "expect": "reject",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "appliesTo": "revit",
-      "reason": "v19 lists `sha256` in the `required` set of every `revit.*` deliverable, so a present block without one is a producer bug. A host that keeps treating it as optional imports unverifiable bytes and reports them as fine — the asymmetry HPS-34 draws between a hash that was never published (v18: skipped, valid-but-unverified) and one that was promised and is missing (v19: refuse).",
+      "reason": "The schema lists `sha256` in the `required` set of every `hosts.revit.*` deliverable it publishes, so a present block without one is a producer bug. A host that keeps treating it as optional imports unverifiable bytes and reports them as fine \u2014 the asymmetry HPS-34 draws between a hash that was never published (skipped, valid-but-unverified) and one that was promised and is missing (refuse).",
       "errorContains": "revit.surface_dxf has no sha256"
     },
     {
@@ -634,7 +636,7 @@
       "group": "manifest",
       "file": "manifest/reject-v13.json",
       "expect": "reject",
-      "reason": "Clean break: v13 predates the v18 floor and MUST be refused outright, not best-effort parsed.",
+      "reason": "Clean break: v13 predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed.",
       "manifestVersion": 13,
       "errorContains": "no longer supported"
     },
@@ -643,7 +645,7 @@
       "group": "manifest",
       "file": "manifest/reject-v14.json",
       "expect": "reject",
-      "reason": "Clean break: v14 predates the v18 floor and MUST be refused outright, not best-effort parsed.",
+      "reason": "Clean break: v14 predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed.",
       "manifestVersion": 14,
       "errorContains": "no longer supported"
     },
@@ -652,7 +654,7 @@
       "group": "manifest",
       "file": "manifest/reject-v16.json",
       "expect": "reject",
-      "reason": "Clean break: v16 predates the v18 floor and MUST be refused outright, not best-effort parsed.",
+      "reason": "Clean break: v16 predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed.",
       "manifestVersion": 16,
       "errorContains": "no longer supported"
     },
@@ -662,7 +664,7 @@
       "file": "manifest/reject-v17.json",
       "expect": "reject",
       "manifestVersion": 17,
-      "reason": "Clean break: v17 was the supported version until the v18 hygiene bump and is now refused like any other old version. Nothing about the shape changed enough to matter — the point is that 'nearly current' gets no special treatment.",
+      "reason": "Clean break: v17 was the supported version until the v18 hygiene bump and is now refused like any other old version. Nothing about the shape changed enough to matter \u2014 the point is that 'nearly current' gets no special treatment.",
       "errorContains": "no longer supported"
     },
     {
@@ -670,7 +672,7 @@
       "group": "manifest",
       "file": "manifest/reject-v6.json",
       "expect": "reject",
-      "reason": "Clean break: v6 predates the v18 floor and MUST be refused outright, not best-effort parsed.",
+      "reason": "Clean break: v6 predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed.",
       "manifestVersion": 6,
       "errorContains": "no longer supported"
     },
@@ -679,7 +681,7 @@
       "group": "manifest",
       "file": "manifest/reject-v7.json",
       "expect": "reject",
-      "reason": "Clean break: v7 predates the v18 floor and MUST be refused outright, not best-effort parsed.",
+      "reason": "Clean break: v7 predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed.",
       "manifestVersion": 7,
       "errorContains": "no longer supported"
     },
@@ -688,8 +690,8 @@
       "group": "manifest",
       "file": "manifest/heightmap-resolution-mismatch.json",
       "expect": "reject",
-      "reason": "component_count_x * (sections_per_component * section_size_quads) + 1 MUST equal resolution. 4*126+1 = 505, not 512 — an internally inconsistent manifest is a producer bug and must not be papered over.",
-      "manifestVersion": 19,
+      "reason": "component_count_x * (sections_per_component * section_size_quads) + 1 MUST equal resolution. 4*126+1 = 505, not 512 \u2014 an internally inconsistent manifest is a producer bug and must not be papered over.",
+      "manifestVersion": "1.0.0",
       "errorContains": "resolution",
       "appliesTo": "unreal"
     },
@@ -698,8 +700,8 @@
       "group": "manifest",
       "file": "manifest/road-splines-geojson-wins.json",
       "expect": "accept",
-      "reason": "Layer selection is by name AND format — a decoy `road` layer and a sibling gpkg must both lose to road_splines/geojson.",
-      "manifestVersion": 19,
+      "reason": "Layer selection is by name AND format \u2014 a decoy `road` layer and a sibling gpkg must both lose to road_splines/geojson.",
+      "manifestVersion": "1.0.0",
       "expectations": {
         "roadSplinesPath": "Vector/RoadSplines.geojson",
         "roadSplinesSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
@@ -711,7 +713,7 @@
       "file": "manifest/road-splines-gpkg-only.json",
       "expect": "accept",
       "reason": "No geojson means no splines. A host must not fall back to a format it cannot read.",
-      "manifestVersion": 19,
+      "manifestVersion": "1.0.0",
       "expectations": {
         "hasRoadSplines": false
       }
@@ -721,14 +723,14 @@
       "group": "manifest",
       "file": "manifest/materialization-signals.json",
       "expect": "vector",
-      "reason": "HPS-47: 'is this bundle materialized' is decided from the neutral signals (known host block, dcc_readiness, non-empty vector.layers), never from a host's own content. The revit-only and dcc-readiness-only rows catch a host keying off its own block — the coincidence found holding up the road-splines cases, made a rule."
+      "reason": "HPS-47: 'is this bundle materialized' is decided from the neutral signals (a non-empty `hosts` object, or a non-empty vector.layers array), never from a host's own content. The other-host and unknown-host rows catch a host keying off its own block \u2014 the coincidence found holding up the road-splines cases, made a rule."
     },
     {
       "id": "projection.lonLatToUtm",
       "group": "projection",
       "file": "projection/lonlat-utm.json",
       "expect": "vector",
-      "reason": "The lon/lat <-> UTM known-answer pin. A host that gets the false northing or the zone wrong places geometry kilometres away while every test that does not check numbers still passes — the definition of a silent failure."
+      "reason": "The lon/lat <-> UTM known-answer pin. A host that gets the false northing or the zone wrong places geometry kilometres away while every test that does not check numbers still passes \u2014 the definition of a silent failure."
     },
     {
       "id": "vault.download.missingUrl",
@@ -761,7 +763,7 @@
       "group": "vault",
       "file": "vault/error-body-precedence.json",
       "expect": "vector",
-      "reason": "ONE precedence order for every platform error-body parser, auth and vault alike (HPS-48) — the split this case used to document is resolved. The competing-key vectors pin the order; the machine-readable `code` (refunded / revoked on a 410) is a separate read that drives UI and is unaffected."
+      "reason": "ONE precedence order for every platform error-body parser, auth and vault alike (HPS-48) \u2014 the split this case used to document is resolved. The competing-key vectors pin the order; the machine-readable `code` (refunded / revoked on a 410) is a separate read that drives UI and is unaffected."
     },
     {
       "id": "vault.list.empty",
@@ -778,7 +780,7 @@
       "group": "vault",
       "file": "vault/list-full-and-legacy.json",
       "expect": "accept",
-      "reason": "null means UNKNOWN, not absent and not zero. The legacy row must survive with every `has…` companion false — a host that coerces null to 0 will later claim a size mismatch against a bundle it never knew the size of.",
+      "reason": "null means UNKNOWN, not absent and not zero. The legacy row must survive with every `has\u2026` companion false \u2014 a host that coerces null to 0 will later claim a size mismatch against a bundle it never knew the size of.",
       "expectations": {
         "itemCount": 2,
         "items": [
@@ -816,7 +818,7 @@
                 "byteSize": 0
               }
             ],
-            "downloadFormatsNote": "byteSize 0 means UNRECORDED, not an empty file — a host that hides zero-size formats hides half the download menu."
+            "downloadFormatsNote": "byteSize 0 means UNRECORDED, not an empty file \u2014 a host that hides zero-size formats hides half the download menu."
           },
           {
             "orderId": "leg1",
@@ -857,7 +859,7 @@
       "file": "vault/tier-label.json",
       "expect": "accept",
       "appliesTo": "unreal",
-      "reason": "The tier label is ONE host's answer: its whole discriminator is the presence of `glb` — the Unreal terrain mesh — so it cannot ride a host-invariant case (HPS-41). Three rows for the three branches: empty formats is UNKNOWN (the base_on_demand marker, which advertises nothing yet), formats without `glb` is Base, and `glb` present is the full Unreal set. A host that collapses the first two loses the difference between 'nothing is known' and 'known to be partial' — which is the difference between materializing and importing.",
+      "reason": "The tier label is ONE host's answer: its whole discriminator is the presence of `glb` \u2014 the Unreal terrain mesh \u2014 so it cannot ride a host-invariant case (HPS-41). Three rows for the three branches: empty formats is UNKNOWN (the base_on_demand marker, which advertises nothing yet), formats without `glb` is Base, and `glb` present is the full Unreal set. A host that collapses the first two loses the difference between 'nothing is known' and 'known to be partial' \u2014 which is the difference between materializing and importing.",
       "expectations": {
         "itemCount": 3,
         "tierLabels": [
@@ -880,7 +882,7 @@
       "group": "vault",
       "file": "vault/materialize-start-already-running.json",
       "expect": "accept",
-      "reason": "THE single-flight 409 shape. Recognised by BODY, not by status code, and reported as SUCCESS — the caller joins the running job instead of erroring or starting a second.",
+      "reason": "THE single-flight 409 shape. Recognised by BODY, not by status code, and reported as SUCCESS \u2014 the caller joins the running job instead of erroring or starting a second.",
       "expectations": {
         "jobId": "job-existing",
         "alreadyRunning": true
@@ -973,7 +975,7 @@
       "group": "vault",
       "file": "vault/materialize-token-list.json",
       "expect": "vector",
-      "reason": "The reference host's token list, shown as the SHAPE a host must send: an explicit array it owns. The server-side `\"unreal\"` keyword expands to only four core tokens and would silently drop the vector and landcover layers — which is exactly why the list is client-owned. Each host substitutes its own tokens; only the shape is normative."
+      "reason": "The reference host's token list, shown as the SHAPE a host must send: an explicit array it owns. The server-side `\"unreal\"` keyword expands to only four core tokens and would silently drop the vector and landcover layers \u2014 which is exactly why the list is client-owned. Each host substitutes its own tokens; only the shape is normative."
     },
     {
       "id": "vault.reject.notJson",
@@ -989,6 +991,24 @@
       "file": "vault/status-word-buckets.json",
       "expect": "vector",
       "reason": "The wire vocabulary is wider than the state set. Hosts that switch on exact strings silently drop bundles when the platform adds a synonym."
+    },
+    {
+      "id": "manifest.reject.v18",
+      "group": "manifest",
+      "file": "manifest/reject-v18.json",
+      "expect": "reject",
+      "manifestVersion": 18,
+      "reason": "Clean break: v18 \u2014 the per-host dcc_readiness hygiene bump \u2014 predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed. The integer era is pre-history now; a host reads the version's JSON TYPE and refuses the whole family below its floor (HPS-31). Re-procurement, not dual-parsing, is how a bundle at rest crosses the break.",
+      "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.reject.v19",
+      "group": "manifest",
+      "file": "manifest/reject-v19.json",
+      "expect": "reject",
+      "manifestVersion": 19,
+      "reason": "Clean break: v19 \u2014 the last version of the integer pre-history \u2014 predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed. The integer era is pre-history now; a host reads the version's JSON TYPE and refuses the whole family below its floor (HPS-31). Re-procurement, not dual-parsing, is how a bundle at rest crosses the break.",
+      "errorContains": "no longer supported"
     }
   ]
 }

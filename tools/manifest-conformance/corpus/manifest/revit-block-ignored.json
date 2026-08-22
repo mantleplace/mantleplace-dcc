@@ -1,30 +1,32 @@
 {
-  "jobId": "revit-block-ignored",
-  "version": 19,
-  "unreal": {
-    "georeference": {
-      "crs_projected": "EPSG:32613"
+  "version": "1.0.0",
+  "job_id": "revit-block-ignored",
+  "hosts": {
+    "unreal": {
+      "georeference": {
+        "crs_projected": "EPSG:32613"
+      },
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
     },
-    "mesh_alternative": {
-      "path": "Mesh/Terrain.glb"
-    }
-  },
-  "revit": {
-    "host_min_version": "2025",
-    "georeference": {
-      "crs_projected": "EPSG:2231",
-      "crs_geographic": "EPSG:4326",
-      "vertical_datum": "EGM2008-orthometric",
-      "grid_rotation_deg": 0.0,
-      "is_projected": true,
-      "origin": {
-        "lon": -105.64620798739834,
-        "lat": 36.27254939041837,
-        "projected": {
-          "epsg": 2231,
-          "easting": 1450131.2,
-          "northing": 13171825.6,
-          "linear_unit": "ftUS"
+    "revit": {
+      "host_min_version": "2025",
+      "georeference": {
+        "crs_projected": "EPSG:2231",
+        "crs_geographic": "EPSG:4326",
+        "vertical_datum": "EGM2008-orthometric",
+        "grid_rotation_deg": 0.0,
+        "is_projected": true,
+        "origin": {
+          "lon": -105.64620798739834,
+          "lat": 36.27254939041837,
+          "projected": {
+            "epsg": 2231,
+            "easting": 1450131.2,
+            "northing": 13171825.6,
+            "linear_unit": "ftUS"
+          }
         }
       }
     }

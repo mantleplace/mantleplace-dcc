@@ -37,7 +37,7 @@ internal static class ImportPlannerTests
 
         run.Case("the points file is the preferred toposurface path", () =>
         {
-            BundleImportPlan plan = PlanFor($$"""{"version": 18, {{RevitLayout}}}""", FullBundle);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
 
             run.True(plan.CanImport, "can import");
             run.True(HasStep(plan, ImportStepKind.ToposurfaceFromPointsFile), "points-file step planned");
@@ -52,7 +52,7 @@ internal static class ImportPlannerTests
             string[] withoutPoints = Array.FindAll(
                 FullBundle,
                 entry => !entry.EndsWith("SurfacePoints.csv", StringComparison.Ordinal));
-            BundleImportPlan plan = PlanFor($$"""{"version": 18, {{RevitLayout}}}""", withoutPoints);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", withoutPoints);
 
             run.True(HasStep(plan, ImportStepKind.ToposurfaceFromSurfaceDxf), "fell back to the DXF");
             SkippedImport? skip = FindSkip(plan, ImportStepKind.ToposurfaceFromPointsFile);
@@ -69,12 +69,14 @@ internal static class ImportPlannerTests
             BundleImportPlan plan = PlanFor(
                 """
                 {
-                  "version": 18,
-                  "dcc_readiness": {
+                  "version": "1.0.0",
+                  "hosts": {
                     "revit": {
+                      "readiness": {
                       "toposurface_points": { "present": false, "reason": "points_csv_not_produced" },
                       "ifc_site": { "present": false, "reason": "ifc_site_not_produced" },
                       "surface_dxf": { "present": false, "reason": "surface_dxf_not_produced" }
+                    }
                     }
                   }
                 }
@@ -107,7 +109,7 @@ internal static class ImportPlannerTests
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
-                  "version": 18,
+                  "version": "1.0.0",
                   {{RevitLayout}},
                   "delivery": { "unit_system": "imperial", "tier": "sp_ftus", "linear_unit": "ftUS" },
                   "elevation": { "points_csv": { "path": "Surface/SurfacePoints.csv", "units": "ftUS" } }
@@ -129,7 +131,7 @@ internal static class ImportPlannerTests
                 "Backup/Surface/SurfacePoints.csv",
                 "Site/Site.ifc",
             ];
-            BundleImportPlan plan = PlanFor($$"""{"version": 18, {{RevitLayout}}}""", withBackupOnly);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", withBackupOnly);
 
             run.False(
                 HasStep(plan, ImportStepKind.ToposurfaceFromPointsFile),
@@ -141,7 +143,7 @@ internal static class ImportPlannerTests
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
-                  "version": 18,
+                  "version": "1.0.0",
                   {{RevitLayout}},
                   "elevation": { "points_csv": { "path": "Surface/SurfacePoints.csv", "units": "cubit" } }
                 }
@@ -165,7 +167,7 @@ internal static class ImportPlannerTests
 
         run.Case("shared coordinates are published only from pre-derived values (HPS-33)", () =>
         {
-            BundleImportPlan withoutOrigin = PlanFor($$"""{"version": 18, {{RevitLayout}}}""", FullBundle);
+            BundleImportPlan withoutOrigin = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
             run.False(
                 HasStep(withoutOrigin, ImportStepKind.SetSharedCoordinates),
                 "no survey point is invented when the manifest carries none");
@@ -177,7 +179,7 @@ internal static class ImportPlannerTests
             BundleImportPlan withOrigin = PlanFor(
                 $$"""
                 {
-                  "version": 18,
+                  "version": "1.0.0",
                   {{RevitLayout}},
                   "delivery": {
                     "unit_system": "imperial", "tier": "local_ft", "linear_unit": "ft",
@@ -206,14 +208,16 @@ internal static class ImportPlannerTests
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
-                  "version": 19,
+                  "version": "1.0.0",
                   {{RevitLayout}},
-                  "revit": {
-                    "georeference": {
-                      "crs_projected": "EPSG:2231", "grid_rotation_deg": 90.0,
-                      "origin": {
-                        "projected": {"epsg": 2231, "easting": 1450131.2,
-                                      "northing": 13171825.6, "linear_unit": "ftUS"}
+                  "hosts": {
+                    "revit": {
+                      "georeference": {
+                        "crs_projected": "EPSG:2231", "grid_rotation_deg": 90.0,
+                        "origin": {
+                          "projected": {"epsg": 2231, "easting": 1450131.2,
+                                        "northing": 13171825.6, "linear_unit": "ftUS"}
+                        }
                       }
                     }
                   }
@@ -236,7 +240,7 @@ internal static class ImportPlannerTests
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
-                  "version": 18,
+                  "version": "1.0.0",
                   {{RevitLayout}},
                   "delivery": {
                     "tier": "local_ft", "linear_unit": "ft",
@@ -258,16 +262,18 @@ internal static class ImportPlannerTests
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
-                  "version": 19,
+                  "version": "1.0.0",
                   {{RevitLayout}},
-                  "revit": {
-                    "toposurface_points": {
-                      "path": "Surface/SurfacePoints.csv", "units": "m",
-                      "sha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                    },
-                    "ifc_site": {
-                      "path": "Site/Site.ifc", "units": "m",
-                      "sha256": "e1cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                  "hosts": {
+                    "revit": {
+                      "toposurface_points": {
+                        "path": "Surface/SurfacePoints.csv", "units": "m",
+                        "sha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                      },
+                      "ifc_site": {
+                        "path": "Site/Site.ifc", "units": "m",
+                        "sha256": "e1cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                      }
                     }
                   }
                 }
@@ -289,7 +295,7 @@ internal static class ImportPlannerTests
 
         run.Case("a v18 step carries no hash — unknown, not empty (HPS-27)", () =>
         {
-            BundleImportPlan plan = PlanFor($$"""{"version": 18, {{RevitLayout}}}""", FullBundle);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
 
             run.True(
                 FindStep(plan, ImportStepKind.ToposurfaceFromPointsFile)?.ExpectedSha256 is null,
@@ -299,7 +305,7 @@ internal static class ImportPlannerTests
         run.Case("an enclosing folder in the zip still resolves", () =>
         {
             string[] rezipped = Array.ConvertAll(FullBundle, entry => "mantleplace_2026-08-09_abcd1234/" + entry);
-            BundleImportPlan plan = PlanFor($$"""{"version": 18, {{RevitLayout}}}""", rezipped);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", rezipped);
 
             ImportStep? step = FindStep(plan, ImportStepKind.ToposurfaceFromPointsFile);
             run.Equal(
@@ -316,7 +322,7 @@ internal static class ImportPlannerTests
                 "b/Surface/SurfacePoints.csv",
                 "Site/Site.ifc",
             ];
-            BundleImportPlan plan = PlanFor($$"""{"version": 18, {{RevitLayout}}}""", ambiguous);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", ambiguous);
 
             run.False(
                 HasStep(plan, ImportStepKind.ToposurfaceFromPointsFile),
@@ -334,7 +340,7 @@ internal static class ImportPlannerTests
 
         run.Case("Civil 3D and linework deliverables are named, not silently dropped", () =>
         {
-            BundleImportPlan plan = PlanFor($$"""{"version": 18, {{RevitLayout}}}""", FullBundle);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
 
             run.Equal(plan.AvailableButNotImported.Count, 2, "LandXML and contours are both listed");
         });
@@ -538,7 +544,7 @@ internal static class ImportPlannerTests
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
-                  "version": 19,
+                  "version": "1.0.0",
                   "layout": { "points_csv": "Surface/SurfacePoints.csv", "imagery_drape": "Imagery/Drape.png" },
                   {{MetricGeoreference}},
                   {{ImageryWithGsd}},
@@ -591,7 +597,7 @@ internal static class ImportPlannerTests
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
-                  "version": 19,
+                  "version": "1.0.0",
                   "layout": { "tree_points": "Landcover/TreePoints.csv" },
                   {{MetricGeoreference}},
                   "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv", "crs": "EPSG:32613" } }
@@ -659,7 +665,7 @@ internal static class ImportPlannerTests
 
         run.Case("a bundle with no parity layers at all says so without inventing paths", () =>
         {
-            BundleImportPlan plan = PlanFor($$"""{"version": 19, {{RevitLayout}}, {{MetricGeoreference}}}""", FullBundle);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}, {{MetricGeoreference}}}""", FullBundle);
 
             foreach (ImportStepKind kind in ParityKinds)
             {
@@ -675,7 +681,7 @@ internal static class ImportPlannerTests
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
-                  "version": 19,
+                  "version": "1.0.0",
                   {{MetricGeoreference}},
                   "vector": {
                     "layers": [
@@ -724,7 +730,7 @@ internal static class ImportPlannerTests
     private static string DrapeManifest(string georeference, string imagery, string elevation) =>
         $$"""
         {
-          "version": 19,
+          "version": "1.0.0",
           "layout": { "imagery_drape": "Imagery/Drape.png" },
           {{georeference}},
           {{imagery}},
@@ -733,37 +739,41 @@ internal static class ImportPlannerTests
         """;
 
     private const string MetricGeoreference = """
-        "revit": {
-          "georeference": {
-            "crs_projected": "EPSG:32613",
-            "origin": {
-              "lon": -105.32557885004304,
-              "lat": 38.46130517000308,
-              "projected": { "epsg": 32613, "easting": 471595.0, "northing": 4257050.0, "linear_unit": "m" }
+        "hosts": {
+          "revit": {
+            "georeference": {
+              "crs_projected": "EPSG:32613",
+              "origin": {
+                "lon": -105.32557885004304,
+                "lat": 38.46130517000308,
+                "projected": { "epsg": 32613, "easting": 471595.0, "northing": 4257050.0, "linear_unit": "m" }
+              }
             }
           }
         }
         """;
 
     private const string FootGeoreference = """
-        "revit": {
-          "georeference": {
-            "crs_projected": "EPSG:2231",
-            "origin": {
-              "lon": -105.32557885004304,
-              "lat": 38.46130517000308,
-              "projected": { "epsg": 2231, "easting": 1450131.2, "northing": 13171825.6, "linear_unit": "ftUS" }
+        "hosts": {
+          "revit": {
+            "georeference": {
+              "crs_projected": "EPSG:2231",
+              "origin": {
+                "lon": -105.32557885004304,
+                "lat": 38.46130517000308,
+                "projected": { "epsg": 2231, "easting": 1450131.2, "northing": 13171825.6, "linear_unit": "ftUS" }
+              }
             }
           }
         }
         """;
 
-    private const string NoGeoreference = "\"dcc_readiness\": { \"revit\": {} }";
+    private const string NoGeoreference = "\"hosts\": { \"revit\": {} }";
 
     private static string ParityManifest(string georeference) =>
         $$"""
         {
-          "version": 19,
+          "version": "1.0.0",
           "layout": { "tree_points": "Landcover/TreePoints.csv" },
           {{georeference}},
           "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv", "crs": "EPSG:32613" } },
