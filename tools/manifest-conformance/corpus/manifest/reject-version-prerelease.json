@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0-rc1",
+  "job_id": "near-miss-prerelease",
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
+    }
+  }
+}

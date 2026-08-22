@@ -1,16 +1,18 @@
 {
-  "jobId": "st-orphan",
-  "orderId": "ord-selftest-orphan",
-  "version": 18,
+  "job_id": "st-orphan",
+  "order_id": "ord-selftest-orphan",
+  "version": "1.0.0",
   "packaging": {
     "delivery_model": "base_on_demand"
   },
   "layout": {
-    "cesiumTerrain": "Elevation/Terrain/layer.json"
+    "cesium_terrain": "Elevation/Terrain/layer.json"
   },
-  "unreal": {
-    "mesh_alternative": {
-      "path": "Mesh/Terrain.glb"
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
     }
   },
   "$comment": "Deliberately absent from self-test/index.json `cases` (it is declared in `orphanFiles`). A file on disk the index does not know about must be flagged, not ignored."

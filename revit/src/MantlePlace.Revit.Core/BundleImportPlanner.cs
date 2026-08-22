@@ -684,7 +684,7 @@ public static class BundleImportPlanner
     /// Explains an absent artifact, preferring the manifest's own reason where it stated one.
     /// </summary>
     /// <remarks>
-    /// The reason is TRANSLATED, not interpolated. <c>dcc_readiness</c> reasons are an open
+    /// The reason is TRANSLATED, not interpolated. <c>hosts.&lt;hostId&gt;.readiness</c> reasons are an open
     /// vocabulary until v19 and include <c>emit_threw:&lt;stage&gt;</c>, so splicing the raw token
     /// into this sentence showed curators internal stage identifiers (<see cref="ReadinessReasons"/>).
     /// </remarks>

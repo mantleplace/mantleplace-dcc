@@ -120,6 +120,22 @@
       "revit",
       "unreal"
     ],
+    "manifest.reject.versionIntegerString": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.versionLeadingZero": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.versionPartial": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.reject.versionPrerelease": [
+      "revit",
+      "unreal"
+    ],
     "manifest.resolutionMismatch": [
       "unreal"
     ],

@@ -129,7 +129,7 @@ struct FMantlePlaceVaultManifest
 	bool bNaniteRecommended = false;
 	FString MeshSha256;             // sha256 of the glb bytes (v17 emits it; schema keeps it optional,
 	                                // so empty = check skipped)
-	FString MeshAbsentReason;       // dcc_readiness.unreal.mesh_import.reason when the ETL produced no mesh
+	FString MeshAbsentReason;       // hosts.unreal.readiness.mesh_import.reason when the ETL produced no mesh
 	                                // (e.g. "mesh_not_produced"); empty when a mesh is present
 
 	// --- Foliage points (-> DataTable scatter input; HPS-32) ---------------------------
@@ -272,11 +272,13 @@ FMantlePlaceVaultManifest Parse(const FString& JsonText, FString& OutError);
 int32 ParseEpsg(const FString& CrsString);
 
 /** True iff the bundle has been materialized for ANY host, decided from the manifest's neutral
-	 *  signals (HPS-47): a known host block (`unreal`, `revit`) present as a top-level object, a
-	 *  `dcc_readiness` object, or a non-empty `vector.layers` array — never from this host's own
-	 *  content. Materialized-for-someone-else is still materialized: answering false there misreads
-	 *  a paid-for bundle as base and tells the user to materialize what already exists. Pure and
-	 *  headless-testable; driven by the corpus vector case manifest.materializationSignals. */
+	 *  signals (HPS-47): a `hosts` object with at least one key — no host id is ever compared —
+	 *  or a non-empty `vector.layers` array; never from this host's own content. At MPB 1.0.0 this
+	 *  is ONE signal where the integer era had three (a known host block, a `dcc_readiness`
+	 *  object, a host roster). Materialized-for-someone-else is still materialized: answering
+	 *  false there misreads a paid-for bundle as base and tells the user to materialize what
+	 *  already exists. Pure and headless-testable; driven by the corpus vector case
+	 *  manifest.materializationSignals. */
 bool IsBundleMaterialized(const TSharedPtr<FJsonObject>& Root);
 
 /** Zip-entry prefix for streaming this bundle's Cesium terrain: the parent directory of

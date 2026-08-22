@@ -86,15 +86,6 @@ struct FMantlePlaceManifestVersion
 };
 
 /**
- * Is `Version` below `Floor`, across BOTH version families?
- *
- * The whole integer pre-history sorts below the whole semver era, so anything that is not a semver
- * string — an integer-era "19", an absent value, a malformed one — is below a semver floor. That
- * single rule is why the caller never has to know which era a stored version came from, which
- * matters most at the cache, where a sidecar written before the re-baseline sits on disk beside
- * one written after it.
- */
-/**
  * A manifest version as it should READ to a user: "1.0.0" for the MPB era, "v19" for the
  * pre-history. The semver era's value carries no marker of its own, and the integer era's always
  * read with a leading `v`, so rendering both verbatim would relabel every pre-history bundle in the
@@ -109,6 +100,15 @@ inline FString MantlePlaceDescribeManifestVersion(const FString& Version)
 	return FMantlePlaceManifestVersion::Parse(Version).bValid ? Version : FString::Printf(TEXT("v%s"), *Version);
 }
 
+/**
+ * Is `Version` below `Floor`, across BOTH version families?
+ *
+ * The whole integer pre-history sorts below the whole semver era, so anything that is not a semver
+ * string — an integer-era "19", an absent value, a malformed one — is below a semver floor. That
+ * single rule is why the caller never has to know which era a stored version came from, which
+ * matters most at the cache, where a sidecar written before the re-baseline sits on disk beside
+ * one written after it.
+ */
 inline bool MantlePlaceIsManifestVersionBelowFloor(const FString& Version, const FString& Floor)
 {
 	const FMantlePlaceManifestVersion Parsed = FMantlePlaceManifestVersion::Parse(Version);

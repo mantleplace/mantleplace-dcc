@@ -20,8 +20,9 @@ Three artifacts make up an MPB release, and they are not equal in authority.
 
 **Prose describes; the schema and the gates decide.** Where this directory and the schema appear to
 disagree, the schema is right and the prose is a bug — say so in an issue. Nothing here restates a
-value the schema owns: no field lists, no enum members, no constraints, no version numbers pinned
-into a sentence that will quietly rot.
+value the schema owns: no field lists, no enum members, no constraints, and — outside the
+changelog, whose whole job is to name versions — no version numbers pinned into a sentence that
+will quietly rot.
 
 That division is the whole reason this spec can be short. A specification that re-types its own
 schema has two contracts and no way to tell which one a producer honoured.

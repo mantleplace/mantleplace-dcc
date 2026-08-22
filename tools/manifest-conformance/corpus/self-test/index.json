@@ -33,8 +33,8 @@
     "",
     "OWNERSHIP: maintainer-owned, same as the corpus proper."
   ],
-  "corpusVersion": 2,
-  "manifestVersion": 18,
+  "corpusVersion": 3,
+  "manifestVersion": "1.0.0",
   "orphanFiles": [
     "cases/orphan.json"
   ],
@@ -46,7 +46,7 @@
       "expect": "accept",
       "selfTestFailure": "unknownExpectationKey",
       "reason": "An expectations key no host consumes must fail the suite, or a platform session's new assertion silently binds nobody (HPS-46).",
-      "manifestVersion": 18,
+      "manifestVersion": "1.0.0",
       "expectations": {
         "orderId": "ord-selftest-unknown",
         "selfTestNeverConsumed": true
@@ -59,7 +59,7 @@
       "expect": "accept",
       "selfTestFailure": "wrongTypeExpectation",
       "reason": "orderId declared as a number. A typed accessor reads nothing from it; a reader that only allow-lists key NAMES counts it covered anyway. The exact asserted-keys bug.",
-      "manifestVersion": 18,
+      "manifestVersion": "1.0.0",
       "expectations": {
         "orderId": 999
       }
@@ -71,7 +71,7 @@
       "expect": "accept",
       "selfTestFailure": "nestedUnreadExpectation",
       "reason": "HPS-46b. `items` IS asserted at the top level, so a reader tracking only the top level reports this case covered; the two keys inside the row are read by nothing. Deliberately the vault listing's shape rather than a manifest one — that is the blind spot the rule names, and the self-test corpus proves the READER, never the parser. `status` is the coercion half: a host reading it through an accessor that coerces across JSON types sees \"404\" and marks it read, which is the asserted-keys bug one level down.",
-      "manifestVersion": 18,
+      "manifestVersion": "1.0.0",
       "expectations": {
         "orderId": "ord-selftest-nested",
         "items": [

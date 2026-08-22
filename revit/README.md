@@ -40,9 +40,9 @@ Remove (`HPS-44`).
   near the project origin instead of at a ~500 000 m easting;
 - falls back to `Surface/Surface.dxf` when the points file is absent, and says so;
 - links `Site/Site.ifc` as a coordinated reference;
-- sets the survey point / shared coordinates from `revit.georeference.origin.projected` — this
-  host's own block — falling back to `delivery.local_origin` on bundles cut before v19 published
-  one (`HPS-33`);
+- sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
+  this host's own block — falling back to `delivery.local_origin` on a bundle whose own block
+  publishes no usable origin (`HPS-33`);
 - draws the road centrelines from the `road_splines` vector layer as DirectShape linework, drapes
   the `land_use` boundaries onto the terrain as toposolid subdivisions, and places the trees from
   `Landcover/TreePoints.csv` at their published height and crown radius — the three rows that closed
@@ -57,7 +57,7 @@ Remove (`HPS-44`).
 - refuses to import anything at all when an artifact's bytes do not match the `sha256` its own
   manifest publishes, before a single element is created (⛔`HPS-26`);
 - tells you what it did **not** import and why, using the manifest's own
-  `dcc_readiness.revit.<path>.reason` where there is one (`HPS-36`).
+  `hosts.revit.readiness.<path>.reason` where there is one (`HPS-36`).
 
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
 runs unattended from a Revit journal or a tester script. An unattended run raises no dialog — it
@@ -167,10 +167,11 @@ normative, and each was verified by making it fail on purpose:
   counting as covered.
 
 Cases carrying another host's `appliesTo` are skipped. Today that binds Revit to the
-**12 host-invariant `manifest` cases** — the version gate, the base-bundle partial parse, the
-top-level `vector` pointers and the materialization signals — plus this host's **own three
+**18 host-invariant `manifest` cases** — the version gate with its pre-history ladder and semver
+near-misses, the base-bundle partial parse, the top-level `vector` pointers and the
+materialization signals — plus this host's **own three
 `appliesTo: "revit"` cases** (`manifest.revitArtifactHashes`, `manifest.revitOwnGeoreference`,
-`manifest.reject.revitHashMissing`), which pin the v19 `revit` manifest block described under
+`manifest.reject.revitHashMissing`), which pin the `hosts.revit` manifest block described under
 "The contract gap" below.
 
 `revit` claims **all six groups**: `manifest`, `auth`, `vault`, `cache`, `digest`, `projection`.

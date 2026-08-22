@@ -16,8 +16,8 @@ public static class BundleManifestReader
 
     /// <summary>
     /// Layout keys for the artifacts this plugin imports. The manifest's <c>layout</c> table is the
-    /// pointer of record: schema-required and schema-declared, where the <c>elevation.*</c> and
-    /// <c>buildings.ifc</c> detail blocks still ride <c>additionalProperties</c> in v18. Those
+    /// pointer of record: schema-required and schema-declared, while the <c>elevation.*</c> and
+    /// <c>buildings.ifc</c> detail blocks ride <c>additionalProperties</c>. Those
     /// blocks are read for frame metadata, and for the path only as a fallback (HPS-32).
     /// </summary>
     private const string LayoutPointsCsv = "points_csv";
@@ -35,7 +35,7 @@ public static class BundleManifestReader
     internal const string GeographicFrame = "EPSG:4326";
 
     /// <summary>
-    /// Deliverable sub-objects of the v19 <c>revit</c> block — this host's OWN block (HPS-33). Each
+    /// Deliverable sub-objects of the <c>hosts.revit</c> block — this host's OWN block (HPS-33). Each
     /// is optional, and each present one carries a <c>sha256</c> the schema makes required (HPS-34).
     /// </summary>
     private const string RevitToposurfacePoints = "toposurface_points";
@@ -45,15 +45,6 @@ public static class BundleManifestReader
     private static readonly string[] RevitDeliverableKeys =
         [RevitToposurfacePoints, RevitSurfaceDxf, RevitIfcSite];
 
-    /// <summary>
-    /// Top-level keys that are plugin-host blocks. Used ONLY as one of several materialization
-    /// signals — never to read another host's values (HPS-36). HPS-47 names this
-    /// roster corroborative rather than load-bearing: a bundle materialized for a host this list
-    /// has never heard of still carries its own host sub-block and the vector layers, so those
-    /// signals absorb the staleness when <c>max</c> or <c>blender</c> lands. The day the roster
-    /// can be replaced by a structural marker is a v19 <c>hosts.&lt;hostId&gt;</c> namespace,
-    /// proposed to the platform.
-    /// </summary>
     /// <summary>
     /// The envelope every host block lives under at MPB 1.0.0. One key replaces the roster: a host
     /// asks whether this object has ANY key, never which keys it has, which is what makes roster

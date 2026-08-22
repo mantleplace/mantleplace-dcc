@@ -33,7 +33,7 @@ The ones this tree already turns on:
 | `HPS-31`              | one supported manifest version, one home for the floor: `ManifestVersions.MinSupportedManifestVersion`.                                                       |
 | `HPS-32`              | artifact paths come from `layout` (or the artifact block), never from folder convention.                                                                      |
 | `HPS-33`              | manifest values are applied verbatim. This host does not compute a survey point.                                                                              |
-| `HPS-36`              | read `dcc_readiness.revit` only. Never a sibling host's block, never the retired flat keys.                                                                   |
+| `HPS-36`              | read the `hosts.revit` subtree only. Never a sibling host's block, never the retired flat keys.                                                               |
 | `HPS-38`/`39`         | `revit` is registered in `verified-against.json`, with its floor declared as path + regex.                                                                    |
 | `HPS-40`/`41`         | the suite drives the shared corpus at run time and fails on an unknown expectation key.                                                                       |
 | `HPS-04` … `13`       | PKCE `S256` in the system browser, loopback on the literal `127.0.0.1`, five-state machine driven from the corpus table.                                      |

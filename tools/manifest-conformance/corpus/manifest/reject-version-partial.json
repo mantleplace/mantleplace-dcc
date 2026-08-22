@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "job_id": "near-miss-partial",
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
+    }
+  }
+}

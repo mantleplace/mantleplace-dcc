@@ -88,7 +88,10 @@ host may ever consume.
 "Lifted from" means the _assertions_ came from those files, not that every fixture is byte-identical
 to its C++ literal. Where a vector was renamed or padded for readability (placeholder sha values,
 clearer decoy paths) the behaviour it exercises is unchanged; `manifest/full.json` is the one
-that is byte-exact, because its derived expectations depend on the exact numbers.
+that is value-exact — every number is carried digit-for-digit from the reference fixture, because
+its derived expectations depend on the exact values. (Its keys were mapped to the MPB 1.0.0
+dialect along with the rest of the corpus, and its `job_id` label is corpus-local; the numbers are
+the preserved thing.)
 
 Note the `projection` and `manifest` groups describe **different AOIs** — the projection pair comes
 from `mesh.origin`, the manifest fixture from `unreal.georeference.origin`. They are not expected to

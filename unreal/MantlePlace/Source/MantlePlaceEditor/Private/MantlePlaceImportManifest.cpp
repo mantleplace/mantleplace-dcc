@@ -188,7 +188,7 @@ namespace
 			return true;
 		}
 		OutError = FString::Printf(
-			TEXT("Unsupported up_axis \"%s\" on unreal.%s: this importer converts Y-up glTF only "
+			TEXT("Unsupported up_axis \"%s\" on hosts.unreal.%s: this importer converts Y-up glTF only "
 			     "(Interchange applies that conversion unconditionally, so any other axis would import "
 			     "rotated with no error)."),
 			*UpAxis, Block);
@@ -368,8 +368,8 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		}
 	}
 
-	// Native Cesium artifacts + AOI bbox (top-level siblings of `unreal`). The bundle ships a
-	// Cesium-ready quantized-mesh tileset (layout.cesiumTerrain) + tiled imagery (layout.imagery); the
+	// Native Cesium artifacts + AOI bbox (top-level siblings of `hosts`). The bundle ships a
+	// Cesium-ready quantized-mesh tileset (layout.cesium_terrain) + tiled imagery (layout.imagery); the
 	// local tile server hosts them so Cesium for Unreal can stream the bundle. Optional — absent on
 	// bundles that predate the Cesium-terrain stage.
 	if (const TSharedPtr<FJsonObject>* BboxPtr = GetObject(Root, TEXT("bbox")))
@@ -494,11 +494,11 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 			&& M.SectionSizeQuads > 0 && M.SectionsPerComponent > 0
 			&& M.ComponentCountX > 0 && M.ComponentCountY > 0;
 
-		// The v17 schema requires heightmap.sha256; with pre-v17 tolerance gone, an absent hash is a
-		// malformed manifest, not a legacy bundle — fail closed rather than silently skip the check.
+		// The schema requires heightmap.sha256, so an absent hash is a malformed manifest, not a
+		// legacy bundle — fail closed rather than silently skip the check.
 		if (M.bHasHeightmap && M.HeightmapSha256.IsEmpty())
 		{
-			OutError = TEXT("manifest unreal.heightmap has no sha256 (required since v17); refusing to import unverifiable bytes.");
+			OutError = TEXT("manifest hosts.unreal.heightmap has no sha256 (schema-required); refusing to import unverifiable bytes.");
 			return M;
 		}
 	}
@@ -554,10 +554,10 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 			M.bHasDrape = !M.DrapePath.IsEmpty() && (M.DrapeRightM > M.DrapeLeftM) && (M.DrapeTopM > M.DrapeBottomM);
 		}
 
-		// imagery_drape.sha256 is likewise schema-required at v17 — same fail-closed rule as the heightmap.
+		// imagery_drape.sha256 is likewise schema-required — same fail-closed rule as the heightmap.
 		if (M.bHasDrape && M.DrapeSha256.IsEmpty())
 		{
-			OutError = TEXT("manifest unreal.imagery_drape has no sha256 (required since v17); refusing to import unverifiable bytes.");
+			OutError = TEXT("manifest hosts.unreal.imagery_drape has no sha256 (schema-required); refusing to import unverifiable bytes.");
 			return M;
 		}
 	}
@@ -581,10 +581,11 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	}
 
 	// --- Foliage points (-> DataTable scatter input; HPS-32) ----------------------------
-	// The tree-points layer's OWN pointer block. v19 also carries `layout.tree_points` (a bare
-	// string) and `landcover.tree_points` (richer, with a sha256) — HPS-33 says read your own
-	// block regardless, so neither of those is a fallback for a missing unreal.foliage_points; an
-	// absent pointer means the bundle simply has no tree points, not a parse failure.
+	// The tree-points layer's OWN pointer block. The manifest also carries `layout.tree_points` (a
+	// bare string) and `landcover.tree_points` (richer, with a sha256) — HPS-33 says read your own
+	// block regardless, so neither of those is a fallback for a missing
+	// hosts.unreal.foliage_points; an absent pointer means the bundle simply has no tree points,
+	// not a parse failure.
 	if (const TSharedPtr<FJsonObject>* FoliagePointsPtr = GetObject(Unreal, TEXT("foliage_points")))
 	{
 		M.FoliagePointsPath = GetString(*FoliagePointsPtr, TEXT("path"));

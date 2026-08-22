@@ -66,7 +66,7 @@ public sealed class BundleArtifact
     public int? FootprintCount { get; init; }
 }
 
-/// <summary>One <c>dcc_readiness.&lt;host&gt;.&lt;path&gt;</c> entry.</summary>
+/// <summary>One <c>hosts.&lt;hostId&gt;.readiness.&lt;path&gt;</c> entry.</summary>
 /// <remarks>
 /// The v18 schema requires <c>reason</c> exactly when <c>present</c> is false and forbids it
 /// otherwise, so an empty reason on an absent path is a producer bug worth surfacing rather than
@@ -82,7 +82,7 @@ public sealed class ReadinessPath
     public bool Declared { get; init; }
 }
 
-/// <summary>The <c>dcc_readiness.revit</c> block. A host reads only its own key (HPS-36).</summary>
+/// <summary>The <c>hosts.revit.readiness</c> block. A host reads only its own subtree (HPS-36).</summary>
 public sealed class RevitReadiness
 {
     public ReadinessPath ToposurfacePoints { get; init; } = new();
@@ -91,7 +91,7 @@ public sealed class RevitReadiness
 
     public ReadinessPath SurfaceDxf { get; init; } = new();
 
-    /// <summary>True when <c>dcc_readiness.revit</c> was present at all.</summary>
+    /// <summary>True when <c>hosts.revit.readiness</c> was present at all.</summary>
     public bool Declared { get; init; }
 }
 

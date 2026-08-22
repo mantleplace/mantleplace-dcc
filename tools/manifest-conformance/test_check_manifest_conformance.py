@@ -19,12 +19,15 @@ Run: `python -m unittest discover -s tools/manifest-conformance`
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import re
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -124,6 +127,67 @@ class NewestPublishedTest(unittest.TestCase):
         """That disagreement is the pin check's to report, with its own message."""
         self._ledger(["v19", "1.0.0"])
         self.assertEqual("1.1.0", gate.newest_published("1.1.0"))
+
+
+class _FakeLedgerResponse:
+    """Just enough of an http.client response for `fetch_published_versions`."""
+
+    status = 200
+
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    def read(self) -> bytes:
+        return self._payload
+
+    def __enter__(self) -> "_FakeLedgerResponse":
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+
+class LedgerMalformedKeyTest(unittest.TestCase):
+    """The real ledger read. A frozen key in neither family may HIDE a published version, so it
+    must be loud (exit 2, could-not-check), never silently dropped."""
+
+    def setUp(self) -> None:
+        gate._ledger_cache = None
+        self.addCleanup(lambda: setattr(gate, "_ledger_cache", None))
+
+    def _with_ledger(self, frozen: dict):
+        payload = json.dumps({"frozen": frozen}).encode("utf-8")
+        return mock.patch("urllib.request.urlopen",
+                          return_value=_FakeLedgerResponse(payload))
+
+    def test_a_bare_number_string_key_is_loud_not_silently_dropped(self) -> None:
+        with self._with_ledger({"v19": "a", "19": "b"}):
+            with contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as caught:
+                    gate.fetch_published_versions()
+        self.assertEqual(2, caught.exception.code, "malformed ledger is could-not-check, not drift")
+
+    def test_the_failure_names_the_malformed_key(self) -> None:
+        err = io.StringIO()
+        with self._with_ledger({"v19": "a", "19": "b"}):
+            with contextlib.redirect_stderr(err):
+                with self.assertRaises(SystemExit):
+                    gate.fetch_published_versions()
+        self.assertIn("'19'", err.getvalue())
+
+    def test_other_near_miss_shapes_are_loud_too(self) -> None:
+        for bad in ("1.0", "1.0.0-rc1", "01.0.0"):
+            gate._ledger_cache = None
+            with self.subTest(key=bad):
+                with self._with_ledger({"v19": "a", bad: "b"}):
+                    with contextlib.redirect_stderr(io.StringIO()):
+                        with self.assertRaises(SystemExit) as caught:
+                            gate.fetch_published_versions()
+                self.assertEqual(2, caught.exception.code)
+
+    def test_documentation_keys_stay_exempt(self) -> None:
+        with self._with_ledger({"v19": "a", "1.0.0": "b", "$comment": "prose"}):
+            self.assertEqual(["v19", "1.0.0"], gate.fetch_published_versions())
 
 
 class MultiHostGateTest(unittest.TestCase):
@@ -542,6 +606,47 @@ class SelfTestSweepTest(unittest.TestCase):
     def test_files_inside_a_nested_corpus_are_not_swept(self) -> None:
         """A directory carrying its own index.json is another index's to sweep, not this one's."""
         (self.selftest / "broken-index-schema" / "extra.json").write_text("{}", encoding="utf-8")
+        self.assertEqual([], gate.check_selftest())
+
+    def test_a_fixture_disagreeing_with_its_declared_manifest_version_is_rot(self) -> None:
+        """The same declared-vs-actual cross-check the corpus proper gets — without it a self-test
+        fixture can sit in a dialect the readers refuse, and its case passes on the version gate
+        rather than on its declared breakage."""
+        (self.selftest / "cases" / "unknown-key.json").write_text(
+            json.dumps({"version": "1.0.0"}), encoding="utf-8")
+        (self.selftest / "index.json").write_text(json.dumps({
+            "orphanFiles": ["cases/missing-is-fine.json"],
+            "cases": [{"id": "selfTest.unknownExpectationKey", "group": "manifest",
+                       "file": "cases/unknown-key.json", "expect": "accept",
+                       "selfTestFailure": "unknownExpectationKey", "reason": "r",
+                       "manifestVersion": 18,
+                       "expectations": {"orderId": "ord", "selfTestNeverConsumed": True}}],
+        }), encoding="utf-8")
+        failures = gate.check_selftest()
+        self.assertTrue(any("manifestVersion=18" in f and "'1.0.0'" in f for f in failures),
+                        failures)
+
+    def test_a_selftest_pin_that_trails_the_corpus_pin_is_rot(self) -> None:
+        """The rot that motivated the check: fixtures internally consistent at a version the
+        readers no longer speak. Caught by comparing the self-test index's own pin to the corpus
+        proper's."""
+        (self.root / "index.json").write_text(json.dumps({
+            "corpusVersion": 3, "manifestVersion": "1.0.0", "cases": [],
+        }), encoding="utf-8")
+        stale = json.loads((self.selftest / "index.json").read_text(encoding="utf-8"))
+        stale["manifestVersion"] = 18
+        (self.selftest / "index.json").write_text(json.dumps(stale), encoding="utf-8")
+        failures = gate.check_selftest()
+        self.assertTrue(any("self-test index declares manifestVersion=18" in f
+                            for f in failures), failures)
+
+    def test_matching_pins_pass(self) -> None:
+        (self.root / "index.json").write_text(json.dumps({
+            "corpusVersion": 3, "manifestVersion": "1.0.0", "cases": [],
+        }), encoding="utf-8")
+        aligned = json.loads((self.selftest / "index.json").read_text(encoding="utf-8"))
+        aligned["manifestVersion"] = "1.0.0"
+        (self.selftest / "index.json").write_text(json.dumps(aligned), encoding="utf-8")
         self.assertEqual([], gate.check_selftest())
 
 

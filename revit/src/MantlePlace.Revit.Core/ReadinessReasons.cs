@@ -1,7 +1,7 @@
 namespace MantlePlace.Revit.Core;
 
 /// <summary>
-/// Turns a <c>dcc_readiness.revit.&lt;path&gt;.reason</c> token into a clause a human can read.
+/// Turns a <c>hosts.revit.readiness.&lt;path&gt;.reason</c> token into a clause a human can read.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -9,7 +9,7 @@ namespace MantlePlace.Revit.Core;
 /// host used to satisfy that by interpolating the token straight into a sentence
 /// (<c>$"No {label} in this bundle: {readiness.Reason}."</c>). Two vocabularies feed that field and
 /// only one of them is closed: <c>packaging.not_delivered[].reason</c> has five members, while
-/// <c>dcc_readiness</c> passes raw sidecar strings through, including <c>emit_threw:&lt;stage&gt;</c>
+/// <c>hosts.&lt;hostId&gt;.readiness</c> passes raw sidecar strings through, including <c>emit_threw:&lt;stage&gt;</c>
 /// which is open-ended by construction. So a curator could be shown <c>emit_threw:mesh_stage_3</c>
 /// in an import dialog as though it were an explanation.
 /// </para>
