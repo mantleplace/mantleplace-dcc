@@ -4,9 +4,11 @@
     "plugin runs against its own parser. Seeded from the Unreal reference suite, which had",
     "them as inline C++ string literals reachable by exactly one host.",
     "",
-    "NORMATIVE OWNER: the Host Plugin Standard (HPS-40, HPS-41). This file is",
-    "data; the rules about consuming it, and the integrity checks the CI gate applies, are",
-    "stated there and in check_manifest_conformance.py. Nothing here restates them.",
+    "NORMATIVE: this corpus is one third of an MPB spec release (schema + spec/ prose +",
+    "corpus, versioned together) - a conforming reader passes it. This file is data; what",
+    "claiming a group obliges a reader to is spec/conformance.md, the additional first-party",
+    "plugin obligations are the Host Plugin Standard's (HPS-40, HPS-41), and the integrity",
+    "checks the CI gate applies are check_manifest_conformance.py's. Nothing here restates them.",
     "",
     "Case fields:",
     "  id              stable, dotted, never renumbered \u2014 host suites name it in failures.",
@@ -97,7 +99,7 @@
       "group": "manifest",
       "file": "manifest/base-on-demand.json",
       "expect": "reject",
-      "reason": "A base bundle carries no unreal block yet. It is not importable, but bbox/layout/orderId MUST still be parsed so streaming and the vault join key survive \u2014 the early return must not skip them.",
+      "reason": "A base bundle carries no host block yet. It is not importable, but bbox/layout/order_id MUST still be parsed so streaming and the vault join key survive \u2014 the early return must not skip them.",
       "manifestVersion": "1.0.0",
       "expectations": {
         "orderId": "ord-abc123",
@@ -129,7 +131,7 @@
       "expect": "accept",
       "manifestVersion": "1.0.0",
       "appliesTo": "unreal",
-      "reason": "Regression guard: the v17 anonymous dcc_readiness.mesh_import is RETIRED and must be ignored at v18, not used as a fallback. A fallback ladder here is how a clean break quietly becomes dual-parsing (HPS-31).",
+      "reason": "Regression guard: the pre-history anonymous `dcc_readiness.mesh_import` is RETIRED \u2014 readiness lives at `hosts.<hostId>.readiness` \u2014 and a stray one must be ignored, never used as a fallback. A fallback ladder here is how a clean break quietly becomes dual-parsing (HPS-31).",
       "expectations": {
         "meshAbsentReason": "",
         "hasMesh": true
@@ -142,7 +144,7 @@
       "expect": "reject",
       "manifestVersion": "1.0.0",
       "appliesTo": "unreal",
-      "reason": "v18 normalises dcc_readiness to per-host keys. The host reads its OWN key and surfaces the stated reason instead of dead-ending on an empty import. The sibling revit block must be ignored, not merged.",
+      "reason": "Readiness is per host, at `hosts.<hostId>.readiness`. The host reads its OWN subtree and surfaces the stated reason instead of dead-ending on an empty import. The sibling host's block must be ignored, not merged.",
       "expectations": {
         "meshAbsentReason": "available_on_request"
       }
@@ -166,7 +168,7 @@
       "expect": "accept",
       "manifestVersion": "1.0.0",
       "appliesTo": "unreal",
-      "reason": "v19 adds a top-level `revit` block, and it is ANOTHER host's block. This fixture states the two georeferences in conflict on purpose \u2014 `unreal.georeference` is metric UTM, `revit.georeference` a State Plane foot zone \u2014 so a reader that keys placement off whichever it finds first reports 2231 and fails. HPS-33: apply your own block, never merge or re-derive from a sibling.",
+      "reason": "`hosts.revit` is ANOTHER host's block. This fixture states the two georeferences in conflict on purpose \u2014 `hosts.unreal.georeference` is metric UTM, `hosts.revit.georeference` a State Plane foot zone \u2014 so a reader that keys placement off whichever it finds first reports 2231 and fails. HPS-33: apply your own block, never merge or re-derive from a sibling.",
       "expectations": {
         "hasMesh": true,
         "integrityCheckedMesh": false,
@@ -194,7 +196,7 @@
       "expect": "accept",
       "manifestVersion": "1.0.0",
       "appliesTo": "revit",
-      "reason": "The mirror of manifest.revitBlockIgnored, pointed the other way: this fixture states THREE origins in conflict on purpose \u2014 `unreal.georeference.origin.utm` (metric UTM), `delivery.local_origin` (metric UTM, host-neutral) and `revit.georeference.origin.projected` (State Plane feet) \u2014 and Revit must report the one addressed to it. Until v19 this host had only `delivery.local_origin`, emitted on the `local_ft` tier ALONE, so a metric-tier bundle carried no survey point and the model was imported not georeferenced at all; reading the own block as PRIMARY with delivery as the fallback is what closes that without a coordinated pipeline release. Note `grid_rotation_deg` is deliberately non-zero. The emitters reproject per-vertex so today's bundles publish 0.0, and a fixture that agreed would be passed by a host that hardcodes zero and never reads the field \u2014 the value is here to be carried, not to be plausible. `linear_unit` is on the ORIGIN and differs from the artifacts' own `units` on this tier, which is the pair a host must not collapse: reading a State Plane foot origin as metres places the site 3.28\u00d7 out.",
+      "reason": "The mirror of manifest.revitBlockIgnored, pointed the other way: this fixture states THREE origins in conflict on purpose \u2014 `hosts.unreal.georeference.origin.utm` (metric UTM), `delivery.local_origin` (metric UTM, host-neutral) and `hosts.revit.georeference.origin.projected` (State Plane feet) \u2014 and Revit must report the one addressed to it. Before it had a block of its own this host had only `delivery.local_origin`, emitted on the `local_ft` tier ALONE, so a metric-tier bundle carried no survey point and the model was imported not georeferenced at all; reading the own block as PRIMARY with delivery as the fallback is what closes that without a coordinated pipeline release. Note `grid_rotation_deg` is deliberately non-zero. The emitters reproject per-vertex so today's bundles publish 0.0, and a fixture that agreed would be passed by a host that hardcodes zero and never reads the field \u2014 the value is here to be carried, not to be plausible. `linear_unit` is on the ORIGIN and differs from the artifacts' own `units` on this tier, which is the pair a host must not collapse: reading a State Plane foot origin as metres places the site 3.28\u00d7 out.",
       "expectations": {
         "surveyPointEpsg": 2231,
         "surveyPointEasting": 1450131.2,
@@ -218,7 +220,7 @@
       "group": "manifest",
       "file": "manifest/full.json",
       "expect": "accept",
-      "reason": "The reference v18 accept shape, lifted from the platform's reference fixture. A host that parses this correctly has the whole unreal block, the per-host dcc_readiness and the placement math covered. v19 grew `landscape_layers`: all eight sub-blocks, each with its source raster's hash and its UE-ready PNG companions, whose `value_mapping` shape follows the companion's `encoding`. The companions are declared 143x142 against a 1009-post heightmap deliberately - the weight rasters ride the DEM's grid, not the Landscape's, so a host that assumes the two match is wrong. Every placement tuple here (landscapeScale, landscapeSpawnLocation, drapeWorldRect*) is in the HOST ENGINE's axis order, which for Unreal is left-handed North=+X / East=+Y. The manifest names its own grid axes the other way round (`scale_x_percent` and `component_count_x` describe EASTING), so these tuples read as swapped against the source fields on purpose \u2014 that swap is the thing under test. Mapping East to +X instead swaps two axes of a Z-up frame, which is a reflection rather than a rotation, and mirrors the whole import.",
+      "reason": "The reference accept shape, lifted from the platform's reference fixture. A host that parses this correctly has the whole `hosts.unreal` block, its `readiness` verdicts and the placement math covered. It carries `landscape_layers` in full: all eight sub-blocks, each with its source raster's hash and its UE-ready PNG companions, whose `value_mapping` shape follows the companion's `encoding`. The companions are declared 143x142 against a 1009-post heightmap deliberately - the weight rasters ride the DEM's grid, not the Landscape's, so a host that assumes the two match is wrong. Every placement tuple here (landscapeScale, landscapeSpawnLocation, drapeWorldRect*) is in the HOST ENGINE's axis order, which for Unreal is left-handed North=+X / East=+Y. The manifest names its own grid axes the other way round (`scale_x_percent` and `component_count_x` describe EASTING), so these tuples read as swapped against the source fields on purpose \u2014 that swap is the thing under test. Mapping East to +X instead swaps two axes of a Z-up frame, which is a reflection rather than a rotation, and mirrors the whole import.",
       "manifestVersion": "1.0.0",
       "expectations": {
         "quadsPerComponent": 126,
@@ -618,7 +620,7 @@
       "expect": "reject",
       "manifestVersion": "1.0.0",
       "appliesTo": "revit",
-      "reason": "v19 lists `sha256` in the `required` set of every `revit.*` deliverable, so a present block without one is a producer bug. A host that keeps treating it as optional imports unverifiable bytes and reports them as fine \u2014 the asymmetry HPS-34 draws between a hash that was never published (v18: skipped, valid-but-unverified) and one that was promised and is missing (v19: refuse).",
+      "reason": "The schema lists `sha256` in the `required` set of every `hosts.revit.*` deliverable it publishes, so a present block without one is a producer bug. A host that keeps treating it as optional imports unverifiable bytes and reports them as fine \u2014 the asymmetry HPS-34 draws between a hash that was never published (skipped, valid-but-unverified) and one that was promised and is missing (refuse).",
       "errorContains": "revit.surface_dxf has no sha256"
     },
     {
@@ -721,7 +723,7 @@
       "group": "manifest",
       "file": "manifest/materialization-signals.json",
       "expect": "vector",
-      "reason": "HPS-47: 'is this bundle materialized' is decided from the neutral signals (known host block, dcc_readiness, non-empty vector.layers), never from a host's own content. The revit-only and dcc-readiness-only rows catch a host keying off its own block \u2014 the coincidence found holding up the road-splines cases, made a rule."
+      "reason": "HPS-47: 'is this bundle materialized' is decided from the neutral signals (a non-empty `hosts` object, or a non-empty vector.layers array), never from a host's own content. The other-host and unknown-host rows catch a host keying off its own block \u2014 the coincidence found holding up the road-splines cases, made a rule."
     },
     {
       "id": "projection.lonLatToUtm",

@@ -15,10 +15,11 @@ Licensed under [Apache 2.0](LICENSE). The name is not covered — see [TRADEMARK
 
 ## What these plugins do
 
-A Mantle Place **bundle** is a zip of pre-derived, host-ready geospatial artifacts — a heightmap or
-terrain mesh, an imagery drape, building geometry, road centrelines, site boundaries, tree points —
-plus a `Metadata/manifest.json` that describes them. The plugins read that manifest and place the
-artifacts correctly in the host's own coordinate system.
+A **Mantle Place Bundle (MPB)** is a zip of pre-derived, host-ready geospatial artifacts — a
+heightmap or terrain mesh, an imagery drape, building geometry, road centrelines, site boundaries,
+tree points — plus a `Metadata/manifest.json` that describes them. The plugins read that manifest
+and place the artifacts correctly in the host's own coordinate system. The format is specified in
+public, in [`spec/`](spec/).
 
 **The client is deliberately thin.** It applies numbers the platform already derived; it does not
 re-derive them. The plugin never computes a survey point, a UTM zone, a landscape scale or a drape
@@ -32,21 +33,27 @@ prepare and download — is a convenience on top of that, not a gate under it.
 
 ## The contract is published, not private
 
-The bundle manifest is a **published JSON Schema**, served from
-`https://mantle.place/.well-known/schemas/bundle-manifest/`. Two filename families are served:
-`v{N}.json` for the integer pre-history, and `{X.Y.Z}.json` for the Mantle Place Bundle (MPB)
-semver era — a consumer tells the two apart by the JSON type of the manifest's own `version`
-field, a number meaning pre-history and a string meaning MPB. The schema series is the
-authority on what a manifest may contain; nothing in this repository restates it, and the version each
-host is verified against lives in
-[`tools/manifest-conformance/verified-against.json`](tools/manifest-conformance/verified-against.json)
-where CI checks it.
+MPB is a **specified format**, and a release of it is three artifacts published together:
 
-That means a second implementer is possible, and welcome. The
-[shared conformance corpus](tools/manifest-conformance/corpus/) is language-neutral test vectors that
-**every** host runs against its own parser — accept and reject shapes, derived placement expectations,
-RFC known answers for PKCE and base64url, NIST FIPS 180-4 digests, the vault client's response
-vocabulary. If you write a third-party consumer, that corpus is the spec you can test against.
+- **The schema** — a JSON Schema series served from
+  `https://mantle.place/.well-known/schemas/bundle-manifest/`, the authority on what a manifest may
+  contain. Two filename families: `v{N}.json` for the integer pre-history, and `{X.Y.Z}.json` for
+  the MPB semver era — a consumer tells them apart by the JSON type of the manifest's own `version`
+  field, a number meaning pre-history and a string meaning MPB.
+- **The prose** — [`spec/`](spec/) in this repository: the format, the compatibility policy, the
+  consolidated changelog, and what conformance means. It describes; the schema decides. Nothing in
+  this repository restates a value the schema owns, and the version each host is verified against
+  lives in
+  [`tools/manifest-conformance/verified-against.json`](tools/manifest-conformance/verified-against.json)
+  where CI checks it.
+- **The [conformance corpus](tools/manifest-conformance/corpus/)** — language-neutral test vectors
+  that **every** host runs against its own parser: accept and reject shapes, derived placement
+  expectations, RFC known answers for PKCE and base64url, NIST FIPS 180-4 digests, the vault
+  client's response vocabulary. A conforming reader passes it.
+
+That means a second implementer is possible, and welcome. If you write a third-party consumer,
+[`spec/`](spec/) is the document and the corpus is the test you can run against it — neither
+requires reading a line of our plugin code.
 
 ## Get a real bundle in minutes
 
@@ -113,6 +120,7 @@ for the first job, and this plugin exists for the second.
 ```
 unreal/MantlePlace/            the Unreal plugin — MantlePlaceRuntime + MantlePlaceEditor
 revit/                         the Revit plugin — pure Core, Client, Addin shim, headless tests
+spec/                          the published MPB format spec — prose, policy, changelog
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
 .github/workflows/             the two public CI gates, plus tracker hygiene
 ```
