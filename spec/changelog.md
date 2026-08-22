@@ -44,6 +44,17 @@ emitted.
 - **Policy**: freeze-on-publish replaced freeze-on-supersede, and the compatibility policy became
   spec-facing and explicit. See [`compatibility.md`](compatibility.md).
 
+> **On this schema's own `description`.** 1.0.0 was published and frozen *ahead* of the producer
+> cutover, so that host plugins could pin the next contract over the network before any bundle
+> carried it. Its `description` therefore opens with a banner saying the version is not yet
+> published and that v19 remains canonical — true on the morning it was frozen, false by that
+> afternoon, when the producer and the web consumers cut over. Freeze-on-publish is one-way and has
+> no exception for prose, so the banner stays exactly where it is: the bytes a reader hashes against
+> [`frozen.lock.json`](https://mantle.place/.well-known/schemas/bundle-manifest/frozen.lock.json)
+> are the bytes that were published. **1.0.0 is the canonical contract as of 2026-08-22**, banner
+> notwithstanding; every constraint in the document is correct and current. Whether to supersede it
+> with an editorial 1.0.1 is open.
+
 ---
 
 ## Integer era — Public pre-history
