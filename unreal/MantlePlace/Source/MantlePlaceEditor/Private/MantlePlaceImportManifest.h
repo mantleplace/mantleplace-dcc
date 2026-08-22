@@ -81,7 +81,10 @@ struct FMantlePlaceVaultManifest
 	FString OrderId;                // vault order id (orders.id); present on order-linked cloud bundles,
 	                                 // empty on legacy / local / admin ones. The join key used to
 	                                 // materialize a locally-imported bundle that lacks Unreal formats.
-	int32 Version = 0;              // top-level manifest schema version (7, 8, …); 0 if absent
+	FString Version;                // top-level manifest version, verbatim ("1.0.0"); empty if absent.
+	                                 // A STRING in the MPB era; kept unparsed so a refusal can quote
+	                                 // exactly what the bundle said, including an integer-era value
+	                                 // this reader does not speak.
 	FString DeliveryModel;          // packaging.delivery_model, e.g. "base_on_demand" (v14 Vault
 	                                 // Pick-and-Process); empty if absent
 
@@ -257,9 +260,11 @@ namespace MantlePlaceImportManifest
 {
 /**
 	 * Parse a bundle manifest's JSON text into FMantlePlaceVaultManifest. Rejects any manifest
-	 * below MantlePlaceMinSupportedManifestVersion fail-closed (clean break: pre-v18 bundles are
-	 * re-procured, never dual-parsed), then reads the `unreal` block; sets bValid=false and fills
-	 * OutError if the block is missing/malformed (e.g. an unmaterialized base bundle). Never throws.
+	 * below MantlePlaceMinSupportedManifestVersion fail-closed, and any whose MAJOR is above the
+	 * supported line (clean break: older bundles are re-procured and never dual-parsed; newer
+	 * majors are refused gracefully rather than best-effort parsed). Then reads the `hosts.unreal`
+	 * block; sets bValid=false and fills OutError if the block is missing/malformed (e.g. an
+	 * unmaterialized base bundle). Never throws.
 	 */
 FMantlePlaceVaultManifest Parse(const FString& JsonText, FString& OutError);
 

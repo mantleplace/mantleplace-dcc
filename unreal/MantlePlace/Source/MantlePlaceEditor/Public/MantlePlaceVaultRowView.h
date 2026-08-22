@@ -120,7 +120,7 @@ struct FMantlePlaceVaultDetailView
 	bool bBasemap = false;
 	bool bElevation = false;
 	bool bHasManifestVersion = false;
-	int32 ManifestVersion = 0;
+	FString ManifestVersion;   // verbatim, both families — rendered, never gated on
 	TArray<FMantlePlaceVaultArtifactView> Artifacts;
 	FString PrimaryLabel;                      // "Import"
 	bool bPrimaryEnabled = false;              // Available && !bBusy

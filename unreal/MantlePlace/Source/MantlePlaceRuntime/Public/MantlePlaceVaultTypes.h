@@ -6,15 +6,117 @@
 #include "MantlePlaceVaultTypes.generated.h"
 
 /**
- * The minimum bundle-manifest version every native consumer accepts. v18 is the per-host hygiene
- * bump: `dcc_readiness` is normalized to per-host keys, so a
- * v17 reader of `dcc_readiness.mesh_import` must read `dcc_readiness.unreal.mesh_import`. That
- * relocation is the whole reason the floor moves — the `unreal` block's own keys are unchanged.
- * The floor is a clean break: pre-v18 bundles are rejected outright and re-procured, never
- * dual-parsed. One home for the number — the importer's manifest gate, the bundle cache's
- * validity decision, and tools/manifest-conformance (which regexes this header) all read it here.
+ * The minimum bundle-manifest version every native consumer accepts.
+ *
+ * MPB 1.0.0 re-baselined the contract onto semantic versioning: the `version` field is the STRING
+ * "1.0.0" where it used to be the integer 19, keys went snake_case, and everything host-specific
+ * moved under `hosts.<hostId>`. The integer era (v7-v19) is pre-history — still published, never
+ * read here.
+ *
+ * The floor is a clean break: everything below it is rejected outright and re-procured, never
+ * dual-parsed (HPS-31). Crossing an era makes that stricter rather than looser, because an
+ * integer-versioned bundle is not merely old, it is written in a dialect this reader does not
+ * speak at all — `hosts.unreal` against a top-level `unreal` block.
+ *
+ * One home for the number: the importer's manifest gate, the bundle cache's validity decision, and
+ * tools/manifest-conformance (which regexes this header) all read it here. The supported MAJOR
+ * line is derived from this same literal rather than written twice.
  */
-inline constexpr int32 MantlePlaceMinSupportedManifestVersion = 18;
+inline const FString MantlePlaceMinSupportedManifestVersion = TEXT("1.0.0");
+
+/**
+ * A parsed MPB manifest version.
+ *
+ * `bValid` is false for everything that is not `MAJOR.MINOR.PATCH` — an absent version, an integer
+ * from the pre-history, a partial "1.0", a pre-release tag. Those are all refusals, and the reader
+ * must never coerce them into a number: the integer era's reader read an absent version as 0 and
+ * refused it, and reading a STRING as 0 the same way would be an accident that happens to work
+ * rather than a decision.
+ */
+struct FMantlePlaceManifestVersion
+{
+	bool bValid = false;
+	int32 Major = 0;
+	int32 Minor = 0;
+	int32 Patch = 0;
+
+	/** Parse `MAJOR.MINOR.PATCH`. Never throws; anything else comes back `bValid == false`. */
+	static FMantlePlaceManifestVersion Parse(const FString& Text)
+	{
+		FMantlePlaceManifestVersion Out;
+		TArray<FString> Parts;
+		Text.ParseIntoArray(Parts, TEXT("."), /*InCullEmpty=*/false);
+		if (Parts.Num() != 3)
+		{
+			return Out;
+		}
+		for (const FString& Part : Parts)
+		{
+			// `IsNumeric` accepts a leading sign and a decimal point; neither belongs in a semver
+			// component, and "1.-0.0" parsing as valid would be a silent wrong answer.
+			if (Part.IsEmpty() || !Part.IsNumeric() || Part.Contains(TEXT("-")) || Part.Contains(TEXT("+")))
+			{
+				return Out;
+			}
+		}
+		Out.Major = FCString::Atoi(*Parts[0]);
+		Out.Minor = FCString::Atoi(*Parts[1]);
+		Out.Patch = FCString::Atoi(*Parts[2]);
+		Out.bValid = true;
+		return Out;
+	}
+
+	FString ToString() const
+	{
+		return bValid ? FString::Printf(TEXT("%d.%d.%d"), Major, Minor, Patch) : TEXT("(none)");
+	}
+
+	/** Total order over parsed versions. Only meaningful when both are valid. */
+	bool operator<(const FMantlePlaceManifestVersion& Other) const
+	{
+		return Major != Other.Major   ? Major < Other.Major
+		     : Minor != Other.Minor   ? Minor < Other.Minor
+		                              : Patch < Other.Patch;
+	}
+};
+
+/**
+ * Is `Version` below `Floor`, across BOTH version families?
+ *
+ * The whole integer pre-history sorts below the whole semver era, so anything that is not a semver
+ * string — an integer-era "19", an absent value, a malformed one — is below a semver floor. That
+ * single rule is why the caller never has to know which era a stored version came from, which
+ * matters most at the cache, where a sidecar written before the re-baseline sits on disk beside
+ * one written after it.
+ */
+/**
+ * A manifest version as it should READ to a user: "1.0.0" for the MPB era, "v19" for the
+ * pre-history. The semver era's value carries no marker of its own, and the integer era's always
+ * read with a leading `v`, so rendering both verbatim would relabel every pre-history bundle in the
+ * vault listing. Display only — nothing gates on this.
+ */
+inline FString MantlePlaceDescribeManifestVersion(const FString& Version)
+{
+	if (Version.IsEmpty())
+	{
+		return TEXT("unknown");
+	}
+	return FMantlePlaceManifestVersion::Parse(Version).bValid ? Version : FString::Printf(TEXT("v%s"), *Version);
+}
+
+inline bool MantlePlaceIsManifestVersionBelowFloor(const FString& Version, const FString& Floor)
+{
+	const FMantlePlaceManifestVersion Parsed = FMantlePlaceManifestVersion::Parse(Version);
+	const FMantlePlaceManifestVersion FloorParsed = FMantlePlaceManifestVersion::Parse(Floor);
+	if (!FloorParsed.bValid)
+	{
+		// An unparseable floor is a programming error, not bundle data. Refuse nothing rather than
+		// refuse everything: a cache that invalidated every entry on a typo'd constant would be a
+		// far worse failure than one that stopped enforcing a rule it can no longer read.
+		return false;
+	}
+	return !Parsed.bValid || Parsed < FloorParsed;
+}
 
 /**
  * Status of an owned vault bundle, mirrored from the platform vault API
@@ -117,9 +219,18 @@ struct FMantlePlaceVaultItem
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	bool bHasManifestVersion = false;
 
-	/** Bundle manifest version; meaningful only when bHasManifestVersion. */
+	/**
+	 * Bundle manifest version as the sidecar reported it; meaningful only when
+	 * bHasManifestVersion.
+	 *
+	 * A STRING, and deliberately not parsed here. The vault lists bundles at rest, which span both
+	 * eras — a bundle cut before the MPB re-baseline reports the integer 19, one cut after reports
+	 * "1.0.0" — and this field is surfaced to the user, not gated on. Rendering what the sidecar
+	 * actually said keeps a pre-history bundle legible in the listing instead of showing 0 for a
+	 * version that is merely from the other family (HPS-20: unknown is not zero).
+	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
-	int32 ManifestVersion = 0;
+	FString ManifestVersion;
 
 	/** True when the sidecar reported a whole-bundle size. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")

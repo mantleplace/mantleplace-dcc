@@ -264,12 +264,10 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 	{
 		Driven.Add(Case->Id);
 
-		int32 MinVersion = 0;
+		FString MinVersion;
 		if (Case->PayloadObject.IsValid())
 		{
-			double Value = 0.0;
-			Case->PayloadObject->TryGetNumberField(TEXT("minSupportedManifestVersion"), Value);
-			MinVersion = static_cast<int32>(Value);
+			Case->PayloadObject->TryGetStringField(TEXT("minSupportedManifestVersion"), MinVersion);
 		}
 		// The table's rows are written relative to this floor (the "too old" row sits exactly one
 		// below it). If the corpus and this host disagree, every row below is meaningless.
@@ -289,8 +287,21 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 			const bool bHasExpectedSha = Row->TryGetStringField(TEXT("expectedSha256"), ExpectedSha);
 			double ExpectedSize = 0.0;
 			const bool bHasExpectedSize = Row->TryGetNumberField(TEXT("expectedSizeBytes"), ExpectedSize);
-			double Version = 0.0;
-			const bool bHasVersion = Row->TryGetNumberField(TEXT("manifestVersion"), Version);
+			// The truth table deliberately SPANS the era break: rows at the floor carry the semver
+			// string "1.0.0", and the "too old" rows carry the integer 19 — the pre-history's top,
+			// which is the neighbour immediately below a semver floor in the total order. So both
+			// JSON shapes are read here, and reading only one would silently skip half the table.
+			FString Version;
+			bool bHasVersion = Row->TryGetStringField(TEXT("manifestVersion"), Version);
+			if (!bHasVersion)
+			{
+				double NumericVersion = 0.0;
+				bHasVersion = Row->TryGetNumberField(TEXT("manifestVersion"), NumericVersion);
+				if (bHasVersion)
+				{
+					Version = FString::FromInt(static_cast<int32>(NumericVersion));
+				}
+			}
 
 			const FMantlePlaceCacheValidity Validity = FLogic::DecideValidity(
 				RowBool(Row, TEXT("fileExists")),
@@ -301,7 +312,7 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 				bHasExpectedSize,
 				static_cast<int64>(ExpectedSize),
 				bHasVersion,
-				static_cast<int32>(Version),
+				Version,
 				MinVersion);
 
 			TestTrue(Where + TEXT(" valid"), Validity.bValid == RowBool(Row, TEXT("valid")));
@@ -316,7 +327,7 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 		const FMantlePlaceCacheValidity Stale = FLogic::DecideValidity(
 			true, 1024, TEXT("ab"), true, TEXT("cd"), true, 1024, true, MinVersion, MinVersion);
 		const FMantlePlaceCacheValidity Absent = FLogic::DecideValidity(
-			false, 0, TEXT(""), false, TEXT(""), false, 0, false, 0, MinVersion);
+			false, 0, TEXT(""), false, TEXT(""), false, 0, false, FString(), MinVersion);
 
 		const TArray<TSharedPtr<FJsonObject>> StateRows = Rows(*Case, TEXT("cacheState"));
 		TestTrue(Case->What(TEXT("has cacheState rows")), StateRows.Num() > 0);

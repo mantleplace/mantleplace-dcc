@@ -259,23 +259,21 @@ bool MantlePlaceImportManifest::IsBundleMaterialized(const TSharedPtr<FJsonObjec
 	}
 
 	// HPS-47: any one of the neutral signals means the ETL has built DCC formats for SOMEBODY.
-	// The host-block roster is corroborative, not load-bearing — a bundle materialized for a host
-	// this plugin has never heard of still carries `dcc_readiness` and its vector layers, so a
-	// stale roster degrades nothing.
-	static const TCHAR* const KnownHostBlocks[] = { TEXT("unreal"), TEXT("revit") };
-	for (const TCHAR* const HostBlock : KnownHostBlocks)
+	//
+	// At MPB 1.0.0 this is ONE signal where the integer era had three. Everything host-specific now
+	// lives under `hosts.<hostId>` — payloads and readiness alike — so the question is whether that
+	// object has ANY key, never which keys it has. No host roster is consulted at all, which is
+	// what makes roster staleness structurally unable to matter: a bundle materialized only for a
+	// host this plugin has never heard of still answers true.
+	//
+	// A key, not mere existence: an empty `hosts` object is base-tier scaffolding exactly as an
+	// empty `vector.layers` array is.
+	if (const TSharedPtr<FJsonObject>* HostsPtr = GetObject(Root, TEXT("hosts")))
 	{
-		if (GetObject(Root, HostBlock) != nullptr)
+		if ((*HostsPtr)->Values.Num() > 0)
 		{
 			return true;
 		}
-	}
-
-	// The block's mere presence is the signal (it means the bundle reached the readiness stage),
-	// so no host key inside it is consulted — which is what absorbs roster staleness above.
-	if (GetObject(Root, TEXT("dcc_readiness")) != nullptr)
-	{
-		return true;
 	}
 
 	// Non-empty layers only: an empty `vector.layers` array is base-tier scaffolding, not a signal.
@@ -303,25 +301,45 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		return M;
 	}
 
-	M.JobId = GetString(Root, TEXT("jobId"));
+	M.JobId = GetString(Root, TEXT("job_id"));
 	// The vault order id (orders.id), written into the manifest for order-linked cloud bundles (it
-	// rides through the ETL as an additive top-level `orderId`; empty on legacy / local-dev / admin
+	// rides through the ETL as a top-level `order_id`; empty on legacy / local-dev / admin
 	// bundles). This is the join key that lets a downloaded zip map back to its vault order so an
-	// incomplete bundle can be materialized on demand. NB: jobId is the per-rebuild ETL job id and is
-	// deliberately NOT used for this - it changes on every rebuild.
-	M.OrderId = GetString(Root, TEXT("orderId"));
-	M.Version = GetInt(Root, TEXT("version"));
+	// incomplete bundle can be materialized on demand. NB: job_id is the per-rebuild ETL job id and
+	// is deliberately NOT used for this - it changes on every rebuild.
+	M.OrderId = GetString(Root, TEXT("order_id"));
+	M.Version = GetString(Root, TEXT("version"));
 
-	// Clean-break version gate: anything below the floor (including a missing version -> 0) is
-	// rejected outright. We have no users on pre-v18 bundles and old jobs re-procure for free, so
-	// the importer carries exactly one contract version instead of a fallback ladder.
-	if (M.Version < MantlePlaceMinSupportedManifestVersion)
+	// Clean-break version gate (HPS-31). Read as a STRING and parsed as semver: an MPB version IS
+	// a string, so anything that fails to parse — an absent version, an integer from the
+	// pre-history, a partial "1.0" — is refused here. Deliberately NOT coerced through a number:
+	// the integer era's reader read an absent version as 0 and refused it, and letting a string
+	// fall to 0 the same way would be an accident that happens to work rather than a decision.
+	const FMantlePlaceManifestVersion Parsed = FMantlePlaceManifestVersion::Parse(M.Version);
+	const FMantlePlaceManifestVersion Floor =
+	    FMantlePlaceManifestVersion::Parse(MantlePlaceMinSupportedManifestVersion);
+	if (!Parsed.bValid || Parsed < Floor)
 	{
 		OutError = FString::Printf(
-		    TEXT("Bundle manifest version %d is no longer supported (minimum v%d). Re-download this "
+		    TEXT("Bundle manifest version %s is no longer supported (minimum %s). Re-download this "
 		         "AOI from your vault at mantle.place/vault — rebuilding it there re-cuts the bundle "
 		         "on the current pipeline."),
-		    M.Version, MantlePlaceMinSupportedManifestVersion);
+		    M.Version.IsEmpty() ? TEXT("(absent)") : *M.Version, *MantlePlaceMinSupportedManifestVersion);
+		return M;
+	}
+
+	// The other end of the semver compatibility policy. Minors are strictly additive and unknown
+	// fields are ignored, so any 1.x reads here; an unknown higher MAJOR is a graceful refusal
+	// rather than a best-effort parse, because a major is exactly the promise that something this
+	// reader relies on may have changed meaning. This is a refusal, not a crash, and it names the
+	// version it saw so the user can tell "too new" from "too old" — the two failures a bare
+	// "unsupported" message makes indistinguishable.
+	if (Parsed.Major > Floor.Major)
+	{
+		OutError = FString::Printf(
+		    TEXT("Bundle manifest version %s is newer than this plugin understands (it reads %d.x). "
+		         "Update the Mantle Place plugin to import this bundle."),
+		    *M.Version, Floor.Major);
 		return M;
 	}
 
@@ -331,16 +349,21 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	// schema requires it whenever `present` is false and forbids it otherwise, so an empty string
 	// here means "the mesh is present" rather than "the bundle forgot to say".
 	//
-	// v18 normalized this block to per-host keys: the anonymous
-	// `dcc_readiness.mesh_import` of v17 now lives at `dcc_readiness.unreal.mesh_import`, beside a
-	// `revit` sibling. No v17 fallback — the version gate above already rejected those bundles.
-	if (const TSharedPtr<FJsonObject>* DccPtr = GetObject(Root, TEXT("dcc_readiness")))
+	// MPB 1.0.0 folded readiness into the host block: the per-host `dcc_readiness.unreal` of the
+	// integer era now lives at `hosts.unreal.readiness`, inside the one subtree this host reads
+	// (HPS-33). The retired top-level `dcc_readiness` is NOT consulted in either of its old shapes
+	// — a fallback there is how a clean break quietly becomes dual-parsing, and the version gate
+	// above has already refused every bundle that would carry one.
+	if (const TSharedPtr<FJsonObject>* HostsPtr = GetObject(Root, TEXT("hosts")))
 	{
-		if (const TSharedPtr<FJsonObject>* UnrealDccPtr = GetObject(*DccPtr, TEXT("unreal")))
+		if (const TSharedPtr<FJsonObject>* UnrealHostPtr = GetObject(*HostsPtr, TEXT("unreal")))
 		{
-			if (const TSharedPtr<FJsonObject>* MeshImportPtr = GetObject(*UnrealDccPtr, TEXT("mesh_import")))
+			if (const TSharedPtr<FJsonObject>* ReadinessPtr = GetObject(*UnrealHostPtr, TEXT("readiness")))
 			{
-				M.MeshAbsentReason = GetString(*MeshImportPtr, TEXT("reason"));
+				if (const TSharedPtr<FJsonObject>* MeshImportPtr = GetObject(*ReadinessPtr, TEXT("mesh_import")))
+				{
+					M.MeshAbsentReason = GetString(*MeshImportPtr, TEXT("reason"));
+				}
 			}
 		}
 	}
@@ -361,11 +384,11 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	if (const TSharedPtr<FJsonObject>* LayoutPtr = GetObject(Root, TEXT("layout")))
 	{
 		const TSharedPtr<FJsonObject> Layout = *LayoutPtr;
-		M.CesiumTerrainPath = GetString(Layout, TEXT("cesiumTerrain"));
+		M.CesiumTerrainPath = GetString(Layout, TEXT("cesium_terrain"));
 	}
-	if (const TSharedPtr<FJsonObject>* CesiumTerrainPtr = GetObject(Root, TEXT("cesiumTerrain")))
+	if (const TSharedPtr<FJsonObject>* CesiumTerrainPtr = GetObject(Root, TEXT("cesium_terrain")))
 	{
-		M.CesiumTerrainTileCount = GetInt(*CesiumTerrainPtr, TEXT("tileCount"));
+		M.CesiumTerrainTileCount = GetInt(*CesiumTerrainPtr, TEXT("tile_count"));
 	}
 	M.bHasCesiumTerrain = !M.CesiumTerrainPath.IsEmpty();
 
@@ -412,11 +435,16 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	}
 	M.bHasRoadSplines = !M.RoadSplinesPath.IsEmpty();
 
-	const TSharedPtr<FJsonObject>* UnrealPtr = GetObject(Root, TEXT("unreal"));
+	// `hosts.unreal` — the one subtree this host reads, and never a sibling's (HPS-33).
+	const TSharedPtr<FJsonObject>* UnrealPtr = nullptr;
+	if (const TSharedPtr<FJsonObject>* HostsRootPtr = GetObject(Root, TEXT("hosts")))
+	{
+		UnrealPtr = GetObject(*HostsRootPtr, TEXT("unreal"));
+	}
 	if (UnrealPtr == nullptr)
 	{
-		// A missing `unreal` block does NOT mean "unmaterialized" — web can materialize a bundle
-		// for another host only (a `revit` block, a `dcc_readiness` report, vector layers) and this
+		// A missing `hosts.unreal` block does NOT mean "unmaterialized" — web can materialize a
+		// bundle for another host only (a `hosts.revit` block, vector layers) and this
 		// host still has nothing to import. IsBundleMaterialized decides which of the two this is
 		// from the neutral signals, never from our own content (HPS-47); either way the shape is
 		// the same refusal — the top-level facts above stay parsed (HPS-37) and the user is guided

@@ -86,9 +86,15 @@ struct FMantlePlaceCachedBundle
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	int64 SizeBytes = 0;
 
-	/** Manifest version recorded for the cached bundle (0 if unknown). */
+	/**
+	 * Manifest version recorded for the cached bundle; empty if unknown.
+	 *
+	 * A string, spanning both version families: a bundle cached before the MPB re-baseline
+	 * recorded the integer era's "19", one cached after records "1.0.0". Empty means the sidecar
+	 * reported nothing at all, which is NOT the same as reporting something old (HPS-20).
+	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
-	int32 ManifestVersion = 0;
+	FString ManifestVersion;
 
 	/** ISO-8601 UTC stamp of when the bundle was cached. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")

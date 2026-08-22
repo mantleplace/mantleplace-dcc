@@ -42,9 +42,6 @@ private:
 
 struct FMantlePlaceBundleCacheLogic
 {
-	/** The minimum manifest version the Importer accepts — single home: MantlePlaceVaultTypes.h. */
-	static constexpr int32 MinSupportedManifestVersion = MantlePlaceMinSupportedManifestVersion;
-
 	// ── Path derivation (deterministic; the shim supplies CacheRoot so this stays IO-free) ──
 
 	/**
@@ -88,8 +85,8 @@ struct FMantlePlaceBundleCacheLogic
 		bool bHasExpectedSize,
 		int64 ExpectedSizeBytes,
 		bool bHasManifestVersion,
-		int32 ManifestVersion,
-		int32 MinVersion = MinSupportedManifestVersion);
+		const FString& ManifestVersion,
+		const FString& MinVersion = MantlePlaceMinSupportedManifestVersion);
 
 	/** Map (file present?, validity) to the list-row state. */
 	static EMantlePlaceCacheState DeriveCacheState(bool bFileExists, const FMantlePlaceCacheValidity& Validity);

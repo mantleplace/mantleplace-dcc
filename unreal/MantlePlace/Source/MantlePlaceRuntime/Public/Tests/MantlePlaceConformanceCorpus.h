@@ -264,23 +264,37 @@ namespace Detail
 	}
 } // namespace Detail
 
-/** Manifest version the corpus is pinned at (index.json `manifestVersion`); 0 if unreadable. */
-inline int32 PinnedManifestVersion()
+/**
+ * Manifest version the corpus is pinned at (index.json `manifestVersion`); empty if unreadable.
+ *
+ * A STRING spanning both families, because the corpus itself does: the pin is the semver "1.0.0"
+ * today, and a corpus pinned to the pre-history would carry the integer 19. Returned verbatim so
+ * the caller compares through the total order rather than coercing an era it did not expect into a
+ * number — which is how a pin the reader cannot actually read would slip through as 0.
+ */
+inline FString PinnedManifestVersion()
 {
 	const FString Root = Detail::FindCorpusDir();
 	if (Root.IsEmpty())
 	{
-		return 0;
+		return FString();
 	}
 	TSharedPtr<FJsonObject> Index;
 	FString Text;
 	if (!Detail::LoadJsonObject(FPaths::Combine(Root, TEXT("index.json")), Index, Text))
 	{
-		return 0;
+		return FString();
 	}
-	double Version = 0.0;
-	Index->TryGetNumberField(TEXT("manifestVersion"), Version);
-	return static_cast<int32>(Version);
+	FString Version;
+	if (!Index->TryGetStringField(TEXT("manifestVersion"), Version))
+	{
+		double NumericVersion = 0.0;
+		if (Index->TryGetNumberField(TEXT("manifestVersion"), NumericVersion))
+		{
+			Version = FString::FromInt(static_cast<int32>(NumericVersion));
+		}
+	}
+	return Version;
 }
 
 /**
