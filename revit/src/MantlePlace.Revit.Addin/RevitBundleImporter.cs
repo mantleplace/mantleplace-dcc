@@ -150,41 +150,59 @@ internal sealed class RevitBundleImporter(
             Trace($"[{step.Kind}] started.");
             Stopwatch clock = Stopwatch.StartNew();
 
-            switch (step.Kind)
+            // ⛔ One step's exception used to abandon every step after it. The only catch was at the
+            // top of the command, so a re-import that tripped over the IFC link — step two of eight
+            // — reported a single sentence and silently never attempted the terrain, the
+            // boundaries, the vegetation or the drape. The steps already take a transaction each
+            // precisely so a late failure keeps the earlier work; that promise is only half kept if
+            // the LATER work is what disappears instead.
+            //
+            // InvalidOperationException is deliberately NOT caught here: the default arm throws it
+            // for a step kind this build cannot dispatch, and that one must still stop the import
+            // rather than quietly produce a model missing whatever the new kind was for.
+            try
             {
-                case ImportStepKind.ToposurfaceFromPointsFile:
-                    ImportToposurfaceFromPoints(step);
-                    break;
-                case ImportStepKind.ToposurfaceFromSurfaceDxf:
-                    LinkCadSurface(step);
-                    break;
-                case ImportStepKind.LinkSiteIfc:
-                    LinkSiteIfc(step);
-                    break;
-                case ImportStepKind.SetSharedCoordinates:
-                    SetSharedCoordinates(step);
-                    break;
-                case ImportStepKind.RoadCentrelines:
-                    ImportRoadCentrelines(step);
-                    break;
-                case ImportStepKind.SiteBoundaries:
-                    ImportSiteBoundaries(step);
-                    break;
-                case ImportStepKind.Vegetation:
-                    ImportVegetation(step);
-                    break;
-                case ImportStepKind.ImageryDrape:
-                    ApplyImageryDrape(step);
-                    break;
-                default:
-                    // Fail, do not log-and-continue. A step kind added to the pure core and never
-                    // dispatched here would otherwise import silently-incomplete: the plan says the
-                    // bundle is fully handled, the model is missing whatever the new kind was for,
-                    // and the summary reads like a success.
-                    throw new InvalidOperationException(
-                        $"This build of the plugin does not know how to execute the import step "
-                        + $"'{step.Kind}', so the import was stopped rather than left half-done. "
-                        + "Update the Mantle Place add-in.");
+                switch (step.Kind)
+                {
+                    case ImportStepKind.ToposurfaceFromPointsFile:
+                        ImportToposurfaceFromPoints(step);
+                        break;
+                    case ImportStepKind.ToposurfaceFromSurfaceDxf:
+                        LinkCadSurface(step);
+                        break;
+                    case ImportStepKind.LinkSiteIfc:
+                        LinkSiteIfc(step);
+                        break;
+                    case ImportStepKind.SetSharedCoordinates:
+                        SetSharedCoordinates(step);
+                        break;
+                    case ImportStepKind.RoadCentrelines:
+                        ImportRoadCentrelines(step);
+                        break;
+                    case ImportStepKind.SiteBoundaries:
+                        ImportSiteBoundaries(step);
+                        break;
+                    case ImportStepKind.Vegetation:
+                        ImportVegetation(step);
+                        break;
+                    case ImportStepKind.ImageryDrape:
+                        ApplyImageryDrape(step);
+                        break;
+                    default:
+                        // Fail, do not log-and-continue. A step kind added to the pure core and
+                        // never dispatched here would otherwise import silently-incomplete: the plan
+                        // says the bundle is fully handled, the model is missing whatever the new
+                        // kind was for, and the summary reads like a success.
+                        throw new InvalidOperationException(
+                            $"This build of the plugin does not know how to execute the import step "
+                            + $"'{step.Kind}', so the import was stopped rather than left half-done. "
+                            + "Update the Mantle Place add-in.");
+                }
+            }
+            catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or IOException)
+            {
+                Say($"The \"{step.Kind}\" step failed and was skipped — {ex.Message} Everything after "
+                    + "it was still attempted.");
             }
 
             clock.Stop();
@@ -1371,6 +1389,22 @@ internal sealed class RevitBundleImporter(
             }
         }
 
+        // ⛔ A re-import used to die here, and take the whole rest of the import with it:
+        // CreateFromIFC throws when the document already carries a link at that path, and the
+        // curator cannot fix it by selecting the site and pressing Delete — a RevitLinkType is not
+        // in any view, it lives in Manage Links. Every other repeatable step in this import already
+        // recognises its own earlier work (the boundary stamps, the drape's type-by-name); this one
+        // simply had not been run twice yet. Reusing the existing link is also the honest answer:
+        // the file on disk is retained for the life of the project, so the link that is already
+        // pointing at it is the same link this step would create.
+        if (ExistingSiteLink(ifcPath, companionRvt) is { } alreadyLinked)
+        {
+            Say($"The IFC site model ({step.EntryName}) is already linked into this project, so it "
+                + "was left as it is. Remove it under Manage ▸ Manage Links if you want it rebuilt.");
+            EnsureLinkInstance(alreadyLinked);
+            return;
+        }
+
         ImportFailureSwallower swallower = new("Linking the IFC site");
         using Transaction transaction = BeginTransaction("Mantle Place: link IFC site", swallower);
         LinkLoadResult result = RevitLinkType.CreateFromIFC(
@@ -1395,6 +1429,79 @@ internal sealed class RevitBundleImporter(
         Say(result.ElementId != ElementId.InvalidElementId
             ? $"Linked the IFC site model ({step.EntryName})."
             : $"Revit declined to link the IFC site model ({step.EntryName}).");
+    }
+
+    /// <summary>
+    /// The <see cref="RevitLinkType"/> already pointing at one of these paths, or <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Both paths are checked because <c>CreateFromIFC</c> takes two and Revit records the one it
+    /// prefers: the IFC that was converted, or the <c>.rvt</c> it was converted into. Which of the
+    /// two lands in the external file reference is not worth depending on.
+    /// </remarks>
+    private ElementId? ExistingSiteLink(string ifcPath, string companionRvt)
+    {
+        foreach (RevitLinkType link in new FilteredElementCollector(_document)
+            .OfClass(typeof(RevitLinkType))
+            .Cast<RevitLinkType>())
+        {
+            if (!link.IsExternalFileReference())
+            {
+                continue;
+            }
+
+            string linked;
+            try
+            {
+                linked = ModelPathUtils.ConvertModelPathToUserVisiblePath(
+                    link.GetExternalFileReference().GetAbsolutePath());
+            }
+            catch (Autodesk.Revit.Exceptions.ApplicationException)
+            {
+                // A link whose path Revit will not resolve is not one this step can match against,
+                // and it is certainly not a reason to abandon the search.
+                continue;
+            }
+
+            if (string.Equals(linked, ifcPath, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(linked, companionRvt, StringComparison.OrdinalIgnoreCase))
+            {
+                return link.Id;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Puts one instance of <paramref name="linkTypeId"/> in the document if none is there.
+    /// </summary>
+    /// <remarks>
+    /// The type can outlive its instances — deleting the site from a view deletes the instance and
+    /// leaves the type in Manage Links, which is exactly the state the curator who hit this was in.
+    /// Reusing the type without restoring an instance would report a link nobody can see.
+    /// </remarks>
+    private void EnsureLinkInstance(ElementId linkTypeId)
+    {
+        bool placed = new FilteredElementCollector(_document)
+            .OfClass(typeof(RevitLinkInstance))
+            .Cast<RevitLinkInstance>()
+            .Any(instance => instance.GetTypeId() == linkTypeId);
+
+        if (placed)
+        {
+            return;
+        }
+
+        ImportFailureSwallower swallower = new("Placing the existing IFC site link");
+        using Transaction transaction = BeginTransaction("Mantle Place: place IFC site link", swallower);
+        RevitLinkInstance.Create(_document, linkTypeId);
+
+        if (CommitAndReport(transaction, swallower))
+        {
+            Say("Put the existing IFC site link back into the model — the link type was still in "
+                + "Manage Links, but nothing in the project was showing it.");
+        }
     }
 
     /// <summary>Maps the manifest's unit to Revit's import vocabulary.</summary>
