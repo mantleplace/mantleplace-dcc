@@ -2,7 +2,7 @@
 
 #include "MantlePlaceImportManifest.h"
 
-#include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion (the v18 clean-break floor)
+#include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion (the MPB clean-break floor)
 
 #include "Dom/JsonObject.h"
 #include "Misc/Paths.h"

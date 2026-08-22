@@ -761,6 +761,39 @@ inline bool ExpectRowNumber(
 	return true;
 }
 
+/**
+ * A row key holding a manifest version, in EITHER era's shape, normalized to the string the reader
+ * holds.
+ *
+ * The one deliberate exception to the strict typing above, and it is the contract's exception, not
+ * a convenience: the vault LIST payload widens `manifestVersion` int -> string on the platform's
+ * own schedule, so a row may state the semver `"1.0.0"` or the pre-history's bare `7`, and this
+ * host reads both (MantlePlaceVaultLogic widens a number the same way). Requiring one shape here
+ * would make a corpus case fail on the era it did not happen to be written in. This is NOT the
+ * coercion HPS-46 forbids — a `"status": 404` still reads as nothing, because only this one field
+ * is genuinely two-shaped. Revit's `ExpectationNode.Version` is the same rule on the other host.
+ */
+inline bool ExpectRowVersion(
+	const FCase& Case, const FString& RowPath, const TSharedPtr<FJsonObject>& Row,
+	const TCHAR* Key, FString& OutValue)
+{
+	const TSharedPtr<FJsonValue> Value = Row.IsValid() ? Row->TryGetField(Key) : nullptr;
+	if (Detail::RecordTypedRead(Case, ExpectPath(RowPath, Key), Value, EJson::String))
+	{
+		OutValue = Value->AsString();
+		return true;
+	}
+	// RecordTypedRead has already recorded an explicit null (a VALUE in this corpus) and returned
+	// false; Type is Number only when it did neither, so nothing double-records here.
+	if (Value.IsValid() && Value->Type == EJson::Number)
+	{
+		Case.AssertedPaths.Add(ExpectPath(RowPath, Key));
+		OutValue = FString::FromInt(static_cast<int32>(Value->AsNumber()));
+		return true;
+	}
+	return false;
+}
+
 /** An object-valued row key. An EMPTY object records here rather than through a child read,
  *  because it has no children — "known to hold nothing" is still an assertion. */
 inline bool ExpectRowObject(
