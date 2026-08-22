@@ -43,6 +43,13 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
         string? unattended = LocalBundleSource.Unattended(
             Environment.GetEnvironmentVariable(LocalBundleSource.PathVariable));
 
+        // ⛔ The log used to be one WriteAllText after the import returned, which meant a run that
+        // hung or died partway through left NO evidence at all — and the site-boundary step has been
+        // measured spending over four minutes inside a single commit. The file is truncated once,
+        // here, and everything after this point appends to it, so the last line standing names
+        // whatever was in flight.
+        Begin(unattended);
+
         string zipPath;
         if (unattended is not null)
         {
@@ -109,7 +116,11 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
             return Result.Failed;
         }
 
-        RevitBundleImporter importer = new(commandData.Application.Application, document, archive);
+        RevitBundleImporter importer = new(
+            commandData.Application.Application,
+            document,
+            archive,
+            unattended is null ? null : line => Append(unattended, line));
 
         // The Revit API throws for a long tail of document states this command cannot anticipate —
         // a template with no toposolid type, an IFC that will not convert, a degenerate TIN. An
@@ -161,11 +172,50 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
             return;
         }
 
+        // Appends, because the streamed lines are already in the file and they carry the timings and
+        // the appearance-asset writes that the summary does not. Overwriting here would throw away
+        // the half of the record that only exists because the run was watched as it happened.
+        Append(
+            unattendedZipPath,
+            Environment.NewLine + instruction + Environment.NewLine + body);
+    }
+
+    /// <summary>Truncates the unattended log so one run's record cannot be read as another's.</summary>
+    private static void Begin(string? unattendedZipPath)
+    {
+        if (unattendedZipPath is null)
+        {
+            return;
+        }
+
         try
         {
             File.WriteAllText(
                 LocalBundleSource.LogPathFor(unattendedZipPath),
-                instruction + Environment.NewLine + body);
+                $"Mantle Place bundle import, started {DateTime.Now:yyyy-MM-dd HH:mm:ss}."
+                    + Environment.NewLine
+                    + unattendedZipPath
+                    + Environment.NewLine);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// One line into the unattended log, now rather than at the end.
+    /// </summary>
+    /// <remarks>
+    /// Best-effort by contract: an unwritable path must not turn a successful import into a failure,
+    /// and it must not turn a slow one into a crash either.
+    /// </remarks>
+    private static void Append(string unattendedZipPath, string line)
+    {
+        try
+        {
+            File.AppendAllText(
+                LocalBundleSource.LogPathFor(unattendedZipPath),
+                line + Environment.NewLine);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

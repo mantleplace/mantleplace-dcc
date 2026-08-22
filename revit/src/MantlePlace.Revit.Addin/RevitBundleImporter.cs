@@ -1,4 +1,5 @@
 // UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
+using System.Diagnostics;
 using System.IO;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Visual;
@@ -29,12 +30,26 @@ namespace MantlePlace.Revit.Addin;
 internal sealed class RevitBundleImporter(
     Autodesk.Revit.ApplicationServices.Application application,
     Document document,
-    LocalBundleArchive archive)
+    LocalBundleArchive archive,
+    Action<string>? trace = null)
 {
     private readonly Autodesk.Revit.ApplicationServices.Application _application = application;
     private readonly Document _document = document;
     private readonly LocalBundleArchive _archive = archive;
     private readonly List<string> _log = [];
+
+    /// <summary>
+    /// Where a line goes the MOMENT it is produced, when the caller offered somewhere to put it.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ The summary is returned to the caller and written once, after <see cref="Execute"/> has
+    /// returned. A step that never returns therefore leaves no evidence at all — and the
+    /// site-boundary step's commit has been observed spending over four minutes inside
+    /// <c>updateElementRelations</c> on a large toposolid, which is exactly the shape of run this
+    /// import needs a record of. Anything written here is diagnostic and does not appear in the
+    /// curator's dialog.
+    /// </remarks>
+    private readonly Action<string>? _trace = trace;
 
     /// <summary>The toposolid this import built, so the boundary step drapes onto the right one.</summary>
     private ElementId _terrainId = ElementId.InvalidElementId;
@@ -55,7 +70,52 @@ internal sealed class RevitBundleImporter(
     /// <summary>Crown radius at the apex, as a fraction of its widest — never zero.</summary>
     private const double CrownApexFraction = 0.05;
 
+    /// <summary>
+    /// The UnifiedBitmap properties that decide whether a real-world-scaled image is a drape or a
+    /// tile, and that this plugin has never written. Logged, not set — see <see cref="Describe"/>.
+    /// </summary>
+    private static readonly string[] Tiling =
+    [
+        UnifiedBitmap.TextureScaleLock,
+        UnifiedBitmap.TextureOffsetLock,
+        UnifiedBitmap.TextureURepeat,
+        UnifiedBitmap.TextureVRepeat,
+        UnifiedBitmap.TextureLinkTextureTransforms,
+        UnifiedBitmap.TextureWAngle,
+    ];
+
     internal IReadOnlyList<string> Log => _log;
+
+    /// <summary>Adds a line to the summary, and streams it out as it happens.</summary>
+    private void Say(string line)
+    {
+        _log.Add(line);
+        Trace(line);
+    }
+
+    /// <summary>The same, for a batch the swallower already worded.</summary>
+    private void SayAll(IEnumerable<string> lines)
+    {
+        foreach (string line in lines)
+        {
+            Say(line);
+        }
+    }
+
+    /// <summary>
+    /// Diagnostics only — the streamed log, never the curator's dialog. Best-effort by contract:
+    /// a sink that throws must not take the import down with it.
+    /// </summary>
+    private void Trace(string line)
+    {
+        try
+        {
+            _trace?.Invoke(line);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
 
     /// <summary>Runs every step in the plan. One transaction per step, so a late failure keeps the earlier work.</summary>
     internal void Execute(BundleImportPlan plan)
@@ -76,7 +136,7 @@ internal sealed class RevitBundleImporter(
         finally
         {
             _application.FailuresProcessing -= session.OnFailuresProcessing;
-            _log.AddRange(session.Lines);
+            SayAll(session.Lines);
         }
     }
 
@@ -84,6 +144,12 @@ internal sealed class RevitBundleImporter(
     {
         foreach (ImportStep step in plan.Steps)
         {
+            // A start marker and a duration, because a step is the unit a curator waits on and the
+            // unit a slow one has to be attributed to. The marker is traced rather than said: it is
+            // only useful in the streamed file, where it is the last line standing if a step hangs.
+            Trace($"[{step.Kind}] started.");
+            Stopwatch clock = Stopwatch.StartNew();
+
             switch (step.Kind)
             {
                 case ImportStepKind.ToposurfaceFromPointsFile:
@@ -120,6 +186,9 @@ internal sealed class RevitBundleImporter(
                         + $"'{step.Kind}', so the import was stopped rather than left half-done. "
                         + "Update the Mantle Place add-in.");
             }
+
+            clock.Stop();
+            Say($"({step.Kind} took {clock.Elapsed.TotalSeconds:N1} s.)");
         }
     }
 
@@ -133,7 +202,7 @@ internal sealed class RevitBundleImporter(
         string? parseError = SurfacePointsReader.TryParse(File.ReadAllText(csvPath), out IReadOnlyList<SurfacePoint> points);
         if (parseError is not null)
         {
-            _log.Add(parseError);
+            Say(parseError);
             return;
         }
 
@@ -142,12 +211,12 @@ internal sealed class RevitBundleImporter(
         points = SurfacePointsSanitiser.Clean(points, step.Crop, out SurfaceCleanReport cleaned);
         if (cleaned.Explanation.Length > 0)
         {
-            _log.Add(cleaned.Explanation);
+            Say(cleaned.Explanation);
         }
 
         if (ChooseToposolidType() is not { } chosenType)
         {
-            _log.Add(
+            Say(
                 "This project has no toposolid type, so the terrain could not be created. "
                 + "Start from an architectural template and try again.");
             return;
@@ -178,7 +247,7 @@ internal sealed class RevitBundleImporter(
 
         if (plan.Strategy == TerrainBaseStrategy.NoLevelAvailable)
         {
-            _log.Add(plan.Explanation + " Start from an architectural template and try again.");
+            Say(plan.Explanation + " Start from an architectural template and try again.");
             return;
         }
 
@@ -191,17 +260,17 @@ internal sealed class RevitBundleImporter(
             // unreachable and only a level at the right elevation works. So the second arm is tried
             // rather than assumed away, and the log records which one Revit accepted.
             TerrainBasePlan escalated = TerrainBasePlanner.Escalate(plan, relief);
-            _log.Add(escalated.Explanation);
+            Say(escalated.Explanation);
 
             if (!TryBuildTerrain(escalated, chosenType, revitPoints, relief))
             {
-                _log.Add("The terrain could not be built on either base plane, so this project has no "
+                Say("The terrain could not be built on either base plane, so this project has no "
                     + "ground. The rest of the bundle was still imported.");
                 return;
             }
         }
 
-        _log.Add($"Built the terrain from {points.Count:N0} points ({step.EntryName}).");
+        Say($"Built the terrain from {points.Count:N0} points ({step.EntryName}).");
     }
 
     /// <summary>
@@ -244,7 +313,7 @@ internal sealed class RevitBundleImporter(
         // Remembered, not re-found: the site-boundary step drapes its rings onto THIS toposolid, and
         // a collector would happily return one the user had already modelled.
         _terrainId = built;
-        _log.Add(plan.Explanation
+        Say(plan.Explanation
             + $" Type \"{type.Name}\"; terrain spans {UnitUtils.ConvertFromInternalUnits(relief.MinZ, UnitTypeId.Meters):0.##}"
             + $" m to {UnitUtils.ConvertFromInternalUnits(relief.MaxZ, UnitTypeId.Meters):0.##} m.");
         return true;
@@ -393,7 +462,7 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
-        _log.Add($"Imported {created:N0} road centreline(s) from {step.EntryName}.");
+        Say($"Imported {created:N0} road centreline(s) from {step.EntryName}.");
     }
 
     /// <summary>
@@ -417,7 +486,7 @@ internal sealed class RevitBundleImporter(
         ElementId terrainId = _terrainId != ElementId.InvalidElementId ? _terrainId : TerrainToposolidId();
         if (_document.GetElement(terrainId) is not Toposolid terrain)
         {
-            _log.Add(
+            Say(
                 $"Skipped the site boundaries ({step.EntryName}): they are draped onto the terrain as toposolid "
                 + "subdivisions, and this project has no toposolid. Import the terrain first, then re-run.");
             return;
@@ -510,7 +579,7 @@ internal sealed class RevitBundleImporter(
             summary += $"; {unstamped:N0} could not be stamped and will not be recognised by a re-import";
         }
 
-        _log.Add(summary + ".");
+        Say(summary + ".");
     }
 
     /// <summary>
@@ -553,7 +622,7 @@ internal sealed class RevitBundleImporter(
         string? parseError = TreePointsReader.TryParse(File.ReadAllText(csvPath), frame, out IReadOnlyList<SiteTree> trees);
         if (parseError is not null)
         {
-            _log.Add(parseError);
+            Say(parseError);
             return;
         }
 
@@ -579,7 +648,7 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
-        _log.Add($"Imported {created:N0} tree(s) of {trees.Count:N0} from {step.EntryName}.");
+        Say($"Imported {created:N0} tree(s) of {trees.Count:N0} from {step.EntryName}.");
     }
 
     /// <summary>
@@ -655,13 +724,13 @@ internal sealed class RevitBundleImporter(
 
         if (parseError is not null)
         {
-            _log.Add(parseError);
+            Say(parseError);
             return null;
         }
 
         if (features.Count == 0)
         {
-            _log.Add($"The {label} layer ({step.EntryName}) carries nothing this plugin could place.");
+            Say($"The {label} layer ({step.EntryName}) carries nothing this plugin could place.");
             return null;
         }
 
@@ -768,7 +837,7 @@ internal sealed class RevitBundleImporter(
         ElementId terrainId = _terrainId != ElementId.InvalidElementId ? _terrainId : TerrainToposolidId();
         if (_document.GetElement(terrainId) is not Toposolid terrain)
         {
-            _log.Add(
+            Say(
                 $"Skipped the satellite imagery ({step.EntryName}): it is draped onto the terrain as a "
                 + "material texture, and this project has no toposolid. Import the terrain first, then re-run.");
             return;
@@ -786,7 +855,7 @@ internal sealed class RevitBundleImporter(
         if (materialId == ElementId.InvalidElementId)
         {
             transaction.RollBack();
-            _log.Add(
+            Say(
                 $"Skipped the satellite imagery ({step.EntryName}): this Revit build would not create an "
                 + "appearance asset for it, so the terrain was left with the material it had.");
             return;
@@ -795,7 +864,7 @@ internal sealed class RevitBundleImporter(
         if (!TryWearMaterial(terrain, materialId, name, out int retypedSubDivisions, out int refusedSubDivisions))
         {
             transaction.RollBack();
-            _log.Add(
+            Say(
                 $"Skipped the satellite imagery ({step.EntryName}): the terrain's type has no material layer "
                 + "this plugin could set, or its top layer is too thin to carry a separate imagery layer, "
                 + "so it was left untouched rather than half-changed.");
@@ -826,7 +895,7 @@ internal sealed class RevitBundleImporter(
             summary += $"; Revit declined to retype {refusedSubDivisions:N0} subdivision(s), which keep their original look";
         }
 
-        _log.Add(summary + ".");
+        Say(summary + ".");
     }
 
     /// <summary>
@@ -888,14 +957,26 @@ internal sealed class RevitBundleImporter(
                 return ElementId.InvalidElementId;
             }
 
-            SetString(bitmap, UnifiedBitmap.UnifiedbitmapBitmap, imagePath);
+            Trace("  drape: " + SetString(bitmap, UnifiedBitmap.UnifiedbitmapBitmap, imagePath));
+
+            // ⚠ Read before the writes as well as after: if a lock is already on, writing X and
+            // then Y may not do what the two calls below look like they do.
+            foreach (string untouched in Tiling)
+            {
+                Trace("  drape, as found: " + Describe(bitmap, untouched));
+            }
 
             // Real-world scale is the ground the image spans; the offset is where its lower-left
             // corner sits in the project's own frame. Together they are the whole placement.
-            SetDistance(bitmap, UnifiedBitmap.TextureRealWorldScaleX, placement.WidthM);
-            SetDistance(bitmap, UnifiedBitmap.TextureRealWorldScaleY, placement.HeightM);
-            SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetX, placement.LeftM);
-            SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetY, placement.BottomM);
+            Trace("  drape: " + SetDistance(bitmap, UnifiedBitmap.TextureRealWorldScaleX, placement.WidthM));
+            Trace("  drape: " + SetDistance(bitmap, UnifiedBitmap.TextureRealWorldScaleY, placement.HeightM));
+            Trace("  drape: " + SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetX, placement.LeftM));
+            Trace("  drape: " + SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetY, placement.BottomM));
+
+            foreach (string untouched in Tiling)
+            {
+                Trace("  drape, after the writes: " + Describe(bitmap, untouched));
+            }
 
             scope.Commit(true);
         }
@@ -1030,16 +1111,41 @@ internal sealed class RevitBundleImporter(
         return true;
     }
 
-    private static void SetString(Asset asset, string propertyName, string value)
+    /// <summary>
+    /// Sets one appearance-asset text property, and says what it did.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ These two setters used to return <c>void</c> and skip in silence. The first live import
+    /// tiled the aerial photograph roughly ten times across the site while the summary line said it
+    /// had been placed across 1,425 × 1,419 m — and nothing in the log could tell "the value never
+    /// landed" apart from "it landed in a unit this shim guessed wrong". Reading the stored value
+    /// back out of a saved document is the terrain probe's job; saying what was ATTEMPTED is this
+    /// one's, and neither answer is enough on its own.
+    /// </remarks>
+    private static string SetString(Asset asset, string propertyName, string value)
     {
-        if (asset.FindByName(propertyName) is AssetPropertyString property && !property.IsReadOnly)
+        if (asset.FindByName(propertyName) is not { } found)
         {
-            property.Value = value;
+            return $"{propertyName}: absent from this asset, nothing written.";
         }
+
+        if (found is not AssetPropertyString property)
+        {
+            return $"{propertyName}: is a {found.Type}, not text — nothing written.";
+        }
+
+        if (property.IsReadOnly)
+        {
+            return $"{propertyName}: read-only, nothing written.";
+        }
+
+        property.Value = value;
+        return $"{propertyName} = {value}";
     }
 
     /// <summary>
-    /// Sets one real-world texture distance, converted into whatever unit the property declares.
+    /// Sets one real-world texture distance, converted into whatever unit the property declares,
+    /// and says what it did.
     /// </summary>
     /// <remarks>
     /// It asks rather than assumes. Every other length this shim hands Revit goes through
@@ -1048,19 +1154,70 @@ internal sealed class RevitBundleImporter(
     /// <c>GetUnitTypeId</c> is consulted instead of a guess being written down and flagged for a
     /// human to check later. A property that declares no measurable unit falls back to internal
     /// units rather than writing a number in an unknown scale.
+    /// <para>
+    /// The value is read back immediately after the write, inside the same edit scope. Revit will
+    /// refuse or clamp a distance outside a property's own range, and a clamped value reads
+    /// downstream exactly like a unit mistake — so the two are separated here rather than argued
+    /// about later.
+    /// </para>
     /// </remarks>
-    private static void SetDistance(Asset asset, string propertyName, double metres)
+    private static string SetDistance(Asset asset, string propertyName, double metres)
     {
-        if (asset.FindByName(propertyName) is not AssetPropertyDistance property || property.IsReadOnly)
+        if (asset.FindByName(propertyName) is not { } found)
         {
-            return;
+            return $"{propertyName}: absent from this asset, nothing written.";
+        }
+
+        if (found is not AssetPropertyDistance property)
+        {
+            return $"{propertyName}: is a {found.Type}, not a distance — nothing written.";
+        }
+
+        if (property.IsReadOnly)
+        {
+            return $"{propertyName}: read-only, nothing written.";
         }
 
         ForgeTypeId unit = property.GetUnitTypeId();
-        property.Value = unit is not null && UnitUtils.IsMeasurableSpec(unit)
+        bool measurable = unit is not null && UnitUtils.IsMeasurableSpec(unit);
+        double converted = measurable
             ? UnitUtils.Convert(metres, UnitTypeId.Meters, unit)
             : MetresToInternal(metres);
+        string unitName = measurable ? unit!.TypeId : "internal feet (no measurable unit declared)";
+
+        if (!property.IsValidValue(converted))
+        {
+            return $"{propertyName}: Revit rejects {converted:R} in {unitName} as out of range, so "
+                + $"{metres:R} m was not written; it still reads {property.Value:R}.";
+        }
+
+        double before = property.Value;
+        property.Value = converted;
+        return $"{propertyName}: {metres:R} m written as {converted:R} in {unitName} "
+            + $"(was {before:R}, reads back {property.Value:R}).";
     }
+
+    /// <summary>
+    /// Reads one appearance-asset property WITHOUT writing it, for the log.
+    /// </summary>
+    /// <remarks>
+    /// The tiling properties Revit maintains beside the four real-world ones — the scale and offset
+    /// locks, the U/V repeat flags, the rotation — are not written by this plugin, so what they hold
+    /// is whatever Revit's own default is. That is either irrelevant or the entire explanation, and
+    /// the only way to know is to state them beside the values that were written.
+    /// </remarks>
+    private static string Describe(Asset asset, string propertyName)
+        => asset.FindByName(propertyName) switch
+        {
+            null => $"{propertyName}: absent.",
+            AssetPropertyBoolean flag => $"{propertyName} = {flag.Value} (not written by this plugin).",
+            AssetPropertyDistance distance =>
+                $"{propertyName} = {distance.Value:R} in "
+                + $"{distance.GetUnitTypeId()?.TypeId ?? "no declared unit"} (not written by this plugin).",
+            AssetPropertyDouble number => $"{propertyName} = {number.Value:R} (not written by this plugin).",
+            AssetPropertyInteger number => $"{propertyName} = {number.Value} (not written by this plugin).",
+            { } other => $"{propertyName}: a {other.Type}, not read.",
+        };
 
     /// <summary>
     /// Links the surface DXF, as a retained file so the link keeps resolving after this import.
@@ -1091,7 +1248,7 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
-        _log.Add(linked && linkId != ElementId.InvalidElementId
+        Say(linked && linkId != ElementId.InvalidElementId
             ? $"Linked the surface DXF ({step.EntryName}). Use Massing & Site ▸ Toposurface ▸ Create from "
               + "Import ▸ Select Import Instance to build a surface from it."
             : $"Revit declined to link the surface DXF ({step.EntryName}).");
@@ -1121,7 +1278,7 @@ internal sealed class RevitBundleImporter(
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or IOException)
             {
-                _log.Add($"Could not convert the IFC site model for linking ({step.EntryName}): {ex.Message}");
+                Say($"Could not convert the IFC site model for linking ({step.EntryName}): {ex.Message}");
                 return;
             }
             finally
@@ -1151,7 +1308,7 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
-        _log.Add(result.ElementId != ElementId.InvalidElementId
+        Say(result.ElementId != ElementId.InvalidElementId
             ? $"Linked the IFC site model ({step.EntryName})."
             : $"Revit declined to link the IFC site model ({step.EntryName}).");
     }
@@ -1201,7 +1358,7 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
-        _log.Add($"Set shared coordinates from the manifest (EPSG:{origin.Epsg}).");
+        Say($"Set shared coordinates from the manifest (EPSG:{origin.Epsg}).");
     }
 
     /// <summary>
@@ -1260,8 +1417,16 @@ internal sealed class RevitBundleImporter(
     /// </remarks>
     private bool CommitAndReport(Transaction transaction, ImportFailureSwallower swallower)
     {
+        // Timed separately from the step that owns it. Revit does its element-relation bookkeeping
+        // at commit, not at the API call, so "the step took N seconds" and "the commit took N
+        // seconds" point at completely different levers — and only the second one was ever the
+        // problem for the site-boundary subdivisions.
+        Stopwatch clock = Stopwatch.StartNew();
         TransactionStatus status = transaction.Commit();
-        _log.AddRange(swallower.Lines);
+        clock.Stop();
+        Trace($"[{transaction.GetName()}] commit took {clock.Elapsed.TotalSeconds:N1} s ({status}).");
+
+        SayAll(swallower.Lines);
 
         if (status == TransactionStatus.Committed)
         {
@@ -1272,7 +1437,7 @@ internal sealed class RevitBundleImporter(
         {
             // Rolled back with nothing posted. Rare, and worth saying so rather than reporting a
             // silent success.
-            _log.Add($"Revit did not accept \"{transaction.GetName()}\" ({status}). Nothing from that "
+            Say($"Revit did not accept \"{transaction.GetName()}\" ({status}). Nothing from that "
                 + "step was left in the project.");
         }
 
