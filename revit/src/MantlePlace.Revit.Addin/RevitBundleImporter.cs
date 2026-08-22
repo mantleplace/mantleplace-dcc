@@ -800,6 +800,9 @@ internal sealed class RevitBundleImporter(
     private static double MetresToInternal(double metres)
         => UnitUtils.ConvertToInternalUnits(metres, UnitTypeId.Meters);
 
+    private static double InternalToMetres(double internalUnits)
+        => UnitUtils.ConvertFromInternalUnits(internalUnits, UnitTypeId.Meters);
+
     /// <summary>
     /// Drapes the satellite imagery over the terrain as a real-world-scaled diffuse texture —
     /// Forma's last parity row.
@@ -851,7 +854,7 @@ internal sealed class RevitBundleImporter(
         ImportFailureSwallower swallower = new("Applying the aerial photograph");
         using Transaction transaction = BeginTransaction("Mantle Place: satellite imagery", swallower);
 
-        ElementId materialId = DrapeMaterialId(name, imagePath, placement);
+        ElementId materialId = DrapeMaterialId(name, imagePath, placement, out string? misplaced);
         if (materialId == ElementId.InvalidElementId)
         {
             transaction.RollBack();
@@ -896,6 +899,17 @@ internal sealed class RevitBundleImporter(
         }
 
         Say(summary + ".");
+
+        // ⛔ Said out loud, in the summary, not buried in the diagnostics. The last time this went
+        // wrong the plugin reported the placement it INTENDED and the photograph tiled twelve times
+        // across the site; the summary above is still that same statement of intent, and this is the
+        // only line that has read the document back to check it.
+        if (misplaced is not null)
+        {
+            Say($"⚠ The aerial photograph is not pinned where it should be: {misplaced}. The imagery "
+                + "will repeat or sit off the ground it belongs to. This is a plugin defect — please "
+                + "report it with this log.");
+        }
     }
 
     /// <summary>
@@ -907,8 +921,14 @@ internal sealed class RevitBundleImporter(
     /// real-world properties are what make it a drape rather than a tile: the image is pinned to a
     /// rectangle of ground, so it stays put when the terrain is edited underneath it.
     /// </remarks>
-    private ElementId DrapeMaterialId(string name, string imagePath, DrapePlacement placement)
+    private ElementId DrapeMaterialId(
+        string name,
+        string imagePath,
+        DrapePlacement placement,
+        out string? misplaced)
     {
+        misplaced = null;
+
         Material? existing = new FilteredElementCollector(_document)
             .OfClass(typeof(Material))
             .Cast<Material>()
@@ -959,8 +979,10 @@ internal sealed class RevitBundleImporter(
 
             Trace("  drape: " + SetString(bitmap, UnifiedBitmap.UnifiedbitmapBitmap, imagePath));
 
-            // ⚠ Read before the writes as well as after: if a lock is already on, writing X and
-            // then Y may not do what the two calls below look like they do.
+            // ⚠ Read either side of the writes. texture_ScaleLock is True by default, and if it
+            // locked Y to X through the API then writing one and then the other would not mean what
+            // these four calls look like they mean. Measured: it does not — X and Y land as
+            // distinct values — but the log says so rather than the reader having to trust it.
             foreach (string untouched in Tiling)
             {
                 Trace("  drape, as found: " + Describe(bitmap, untouched));
@@ -968,15 +990,38 @@ internal sealed class RevitBundleImporter(
 
             // Real-world scale is the ground the image spans; the offset is where its lower-left
             // corner sits in the project's own frame. Together they are the whole placement.
-            Trace("  drape: " + SetDistance(bitmap, UnifiedBitmap.TextureRealWorldScaleX, placement.WidthM));
-            Trace("  drape: " + SetDistance(bitmap, UnifiedBitmap.TextureRealWorldScaleY, placement.HeightM));
-            Trace("  drape: " + SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetX, placement.LeftM));
-            Trace("  drape: " + SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetY, placement.BottomM));
+            (string Name, double Metres, DistanceWrite Result)[] writes =
+            [
+                ("width", placement.WidthM,
+                    SetDistance(bitmap, UnifiedBitmap.TextureRealWorldScaleX, placement.WidthM)),
+                ("height", placement.HeightM,
+                    SetDistance(bitmap, UnifiedBitmap.TextureRealWorldScaleY, placement.HeightM)),
+                ("west edge", placement.LeftM,
+                    SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetX, placement.LeftM)),
+                ("south edge", placement.BottomM,
+                    SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetY, placement.BottomM)),
+            ];
+
+            foreach ((_, _, DistanceWrite result) in writes)
+            {
+                Trace("  drape: " + result.Report);
+            }
 
             foreach (string untouched in Tiling)
             {
                 Trace("  drape, after the writes: " + Describe(bitmap, untouched));
             }
+
+            string[] wrong =
+            [
+                .. writes
+                    .Where(write => !write.Result.Holds(write.Metres))
+                    .Select(write => double.IsNaN(write.Result.StoredMetres)
+                        ? $"{write.Name} was not written at all"
+                        : $"{write.Name} reads back as {write.Result.StoredMetres:N1} m, not {write.Metres:N1} m"),
+            ];
+
+            misplaced = wrong.Length == 0 ? null : string.Join("; ", wrong);
 
             scope.Commit(true);
         }
@@ -1161,40 +1206,79 @@ internal sealed class RevitBundleImporter(
     /// about later.
     /// </para>
     /// </remarks>
-    private static string SetDistance(Asset asset, string propertyName, double metres)
+    private static DistanceWrite SetDistance(Asset asset, string propertyName, double metres)
     {
         if (asset.FindByName(propertyName) is not { } found)
         {
-            return $"{propertyName}: absent from this asset, nothing written.";
+            return DistanceWrite.Refused($"{propertyName}: absent from this asset, nothing written.");
         }
 
         if (found is not AssetPropertyDistance property)
         {
-            return $"{propertyName}: is a {found.Type}, not a distance — nothing written.";
+            return DistanceWrite.Refused($"{propertyName}: is a {found.Type}, not a distance — nothing written.");
         }
 
         if (property.IsReadOnly)
         {
-            return $"{propertyName}: read-only, nothing written.";
+            return DistanceWrite.Refused($"{propertyName}: read-only, nothing written.");
         }
 
+        // ⛔ This guard used to call UnitUtils.IsMeasurableSpec, which answers a question about a
+        // SPEC (autodesk.spec.aec:length). What GetUnitTypeId hands back is a UNIT
+        // (autodesk.unit.unit:inches), and a unit is never a measurable spec — so the predicate was
+        // false every single time, the conversion below was dead code, and every real-world texture
+        // distance went into Revit as decimal feet. The property is in inches. Feet read as inches
+        // is a factor of twelve, and twelve is exactly how many times the aerial photograph tiled
+        // across a 1,425 m site. IsUnit is the question that was meant.
         ForgeTypeId unit = property.GetUnitTypeId();
-        bool measurable = unit is not null && UnitUtils.IsMeasurableSpec(unit);
-        double converted = measurable
+        bool known = unit is not null && UnitUtils.IsUnit(unit);
+        double converted = known
             ? UnitUtils.Convert(metres, UnitTypeId.Meters, unit)
             : MetresToInternal(metres);
-        string unitName = measurable ? unit!.TypeId : "internal feet (no measurable unit declared)";
+        string unitName = known ? unit!.TypeId : "internal feet (no unit declared)";
 
         if (!property.IsValidValue(converted))
         {
-            return $"{propertyName}: Revit rejects {converted:R} in {unitName} as out of range, so "
-                + $"{metres:R} m was not written; it still reads {property.Value:R}.";
+            return DistanceWrite.Refused(
+                $"{propertyName}: Revit rejects {converted:R} in {unitName} as out of range, so "
+                + $"{metres:R} m was not written; it still reads {property.Value:R}.");
         }
 
-        double before = property.Value;
         property.Value = converted;
-        return $"{propertyName}: {metres:R} m written as {converted:R} in {unitName} "
-            + $"(was {before:R}, reads back {property.Value:R}).";
+
+        // Read back and convert back, in the same edit scope. The shim is the one assembly CI never
+        // builds, so a mistake here is caught by review or by nothing — unless the code checks its
+        // own arithmetic, which costs two lines and is the whole difference between this defect
+        // shipping and this defect being a log line.
+        double stored = property.Value;
+        double storedMetres = known
+            ? UnitUtils.Convert(stored, unit!, UnitTypeId.Meters)
+            : InternalToMetres(stored);
+
+        return new DistanceWrite(
+            storedMetres,
+            $"{propertyName}: {metres:R} m written as {converted:R} in {unitName}, "
+                + $"reads back {stored:R} = {storedMetres:R} m.");
+    }
+
+    /// <summary>
+    /// What one distance write actually achieved, measured in the units the caller asked in.
+    /// </summary>
+    /// <param name="StoredMetres">
+    /// What the property reads back as, converted to metres — <c>NaN</c> when nothing was written.
+    /// </param>
+    /// <param name="Report">One line for the log, whichever way it went.</param>
+    private readonly record struct DistanceWrite(double StoredMetres, string Report)
+    {
+        internal static DistanceWrite Refused(string report) => new(double.NaN, report);
+
+        /// <summary>
+        /// Whether the property now holds the ground distance it was asked for. Five centimetres
+        /// over spans of a kilometre and a half: loose enough for a unit's own rounding, tight
+        /// enough that no wrong unit survives it — the closest wrong answer available is a factor
+        /// of twelve.
+        /// </summary>
+        internal bool Holds(double metres) => Math.Abs(StoredMetres - metres) <= 0.05;
     }
 
     /// <summary>
