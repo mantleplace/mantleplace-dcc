@@ -93,6 +93,40 @@ internal static class SurfaceSanitiserTests
             run.Equal(cleaned.Count, points.Count - 20, "and the column exactly on the edge is inside");
         });
 
+        run.Case("the crop takes the AOI's BOUNDING box, not the rectangle inscribed in it", () =>
+        {
+            // ⛔ The regression, with the real numbers. The first version took the inner extremes of
+            // the four projected corners, reasoning that a window strictly inside the published AOI
+            // was conservative. Convergence tilts the quadrilateral by about 8 m over this AOI, so
+            // that rectangle cut two extra rows off the north and south edges of good terrain: it
+            // dropped 1,980 of 80,940 points (2.45%) to remove 400 bad ones. The bounding box drops
+            // 852 and still removes every one of them, because the defect lives in the raster's
+            // overhang and the overhang is outside either rectangle.
+            //
+            // Simulated here on the real lattice: 285 x 284 at 5 m, spanning -712..708 by -706..709.
+            const double west = -703.76, east = 703.81, south = -708.81, north = 708.60;
+
+            List<SurfacePoint> points = [];
+            for (int ix = 0; ix < 285; ix++)
+            {
+                for (int iy = 0; iy < 284; iy++)
+                {
+                    points.Add(new SurfacePoint(-712.0 + (ix * 5.0), -706.0 + (iy * 5.0), 100.0 + ix + iy));
+                }
+            }
+
+            SurfacePointsSanitiser.Clean(points, new SurfaceCropWindow(west, south, east, north), out SurfaceCleanReport report);
+
+            // 3 columns of 284 (x = -712, -707, 708) + 1 row of 285 (y = 709), less the 3 they share.
+            // The row at y = 709 is only 0.4 m outside the AOI; it goes because the tolerance stays
+            // tight on purpose. Widening it to keep that row would have to reach 3.3 m, which would
+            // re-admit the x = -707 column — and that column carries 116 of the 400 filled points.
+            run.Equal(report.DroppedOutsideAoi, 1134, "one outer ring, no more");
+            run.True(
+                report.DroppedOutsideAoi < 80_940 * 2 / 100,
+                "and comfortably under the 2.45% the inscribed rectangle cost");
+        });
+
         run.Case("with no crop window the terrain is still built, and the log says the crop was unavailable", () =>
         {
             IReadOnlyList<SurfacePoint> points = Grid(columns: 30, rows: 20, filledColumns: 0);

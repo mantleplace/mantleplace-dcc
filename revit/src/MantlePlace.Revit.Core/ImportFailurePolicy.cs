@@ -36,6 +36,15 @@ public enum ImportFailureKind
 
     /// <summary>The outer "Slab Shape Edit failed. [Description]" wrapper.</summary>
     SlabShapeEditFailed,
+
+    /// <summary>Revit joined two elements and then could not keep them joined. Resolvable by unjoining.</summary>
+    CannotKeepElementsJoined,
+
+    /// <summary>A sketch line is fractionally off axis. Unavoidable when the geometry is real ground.</summary>
+    InaccurateSketchLine,
+
+    /// <summary>Revit's own IFC importer saying IFC4 is only partially supported.</summary>
+    IfcPartiallySupported,
 }
 
 /// <summary>What to do with one failure Revit posted.</summary>
@@ -44,7 +53,10 @@ public enum ImportFailureAction
     /// <summary>Delete it and account for it in the log. Warnings only — Revit refuses on an error.</summary>
     Swallow,
 
-    /// <summary>Roll the transaction back, with a stated reason. The only honest answer to an error.</summary>
+    /// <summary>Apply Revit's own default resolution and say which one. Reserved for an allowlist.</summary>
+    Resolve,
+
+    /// <summary>Roll the transaction back, with a stated reason. The default answer to an error.</summary>
     RollBack,
 }
 
@@ -71,24 +83,56 @@ public enum ImportFailureAction
 public static class ImportFailurePolicy
 {
     /// <summary>
-    /// Decides what happens to one posted failure, from its severity alone.
+    /// Decides what happens to one posted failure.
     /// </summary>
+    /// <param name="kind">The failure's id, mapped by the shim.</param>
     /// <param name="isError">Whether Revit posted it at error severity or worse.</param>
+    /// <param name="hasResolutions">Whether Revit itself offers a way out of it.</param>
     /// <remarks>
     /// <para>
-    /// It takes no <see cref="ImportFailureKind"/> on purpose, and that is the whole finding rather
-    /// than a simplification: the id is not reliable enough to decide on. See the type remarks for
-    /// the composite that proves it.
+    /// ⛔ <b>Severity decides first and the id can only ever soften an error, never harden a
+    /// warning.</b> That asymmetry is the point. The id is not reliable enough to detect a specific
+    /// error by — see the composite in the type remarks — so the default for anything at error
+    /// severity is <see cref="ImportFailureAction.RollBack"/>, whatever it turns out to be.
     /// </para>
     /// <para>
-    /// An unrecognised WARNING is therefore swallowed, not escalated. An unattended run — the one
+    /// The one exception is an allowlist of errors Revit offers its own way out of, and it is an
+    /// allowlist rather than "any error with a resolution" for a concrete reason: Revit's own
+    /// resolution for the toposolid failures is <em>delete the toposolid</em>. Resolving those would
+    /// turn a refused import into a silently empty one, which is the failure class
+    /// <c>RevitBundleImporter.Execute</c>'s default arm already refuses on principle. Each entry has
+    /// to be reasoned about individually before it goes in.
+    /// </para>
+    /// <para>
+    /// An unrecognised WARNING is swallowed, not escalated. An unattended run — the one
     /// <c>MANTLEPLACE_BUNDLE_ZIP</c> exists for — must never leave a modal dialog for nobody to
     /// dismiss, and a warning by definition did not stop Revit doing the work. It is reported
     /// verbatim instead, which is where <c>HPS-21</c>'s "a skip is said, not swallowed" lands here.
     /// </para>
     /// </remarks>
-    public static ImportFailureAction Decide(bool isError)
-        => isError ? ImportFailureAction.RollBack : ImportFailureAction.Swallow;
+    public static ImportFailureAction Decide(ImportFailureKind kind, bool isError, bool hasResolutions)
+    {
+        if (!isError)
+        {
+            return ImportFailureAction.Swallow;
+        }
+
+        return hasResolutions && IsResolvable(kind)
+            ? ImportFailureAction.Resolve
+            : ImportFailureAction.RollBack;
+    }
+
+    /// <summary>
+    /// The errors this import is willing to let Revit resolve its own way.
+    /// </summary>
+    /// <remarks>
+    /// Currently one. "Can't keep elements joined" arrives from Revit's own IFC importer while it
+    /// brings the site model in; its resolution is to unjoin, which is what a curator does by hand
+    /// and which loses nothing — the elements stay, they simply stop sharing geometry. Nothing else
+    /// has earned a place here.
+    /// </remarks>
+    private static bool IsResolvable(ImportFailureKind kind)
+        => kind == ImportFailureKind.CannotKeepElementsJoined;
 
     /// <summary>
     /// One sentence for <paramref name="count"/> swallowed warnings of one kind.
@@ -130,6 +174,15 @@ public static class ImportFailurePolicy
                 $"The terrain is steeper than Revit's slope warning threshold in {places}. Real "
                 + "ground can be; nothing was flattened.",
 
+            ImportFailureKind.InaccurateSketchLine =>
+                $"Revit noted {places} where a sketch line sits fractionally off axis. Site boundaries "
+                + "follow real ground, so almost none of their edges are square; nothing was moved.",
+
+            ImportFailureKind.IfcPartiallySupported =>
+                "Revit's IFC importer reports that IFC4 is only partially supported. The site model "
+                + "is IFC4 by design and links as context geometry; what Revit does not read from it "
+                + "is detail this import does not rely on.",
+
             _ => $"Revit raised {places} of \"{kind}\" while building the terrain.",
         };
     }
@@ -146,6 +199,25 @@ public static class ImportFailurePolicy
         string quoted = string.IsNullOrWhiteSpace(revitText) ? "no reason given" : revitText.Trim();
         return $"{stepLabel} was rolled back: Revit refused it with \"{quoted}\". Nothing from this "
             + "step was left in the project.";
+    }
+
+    /// <summary>
+    /// What to say when Revit resolved an error its own way instead of refusing.
+    /// </summary>
+    /// <remarks>
+    /// The resolution's own caption is quoted rather than described, because it is what the curator
+    /// would have clicked had the dialog been shown — and being told which button was pressed on
+    /// their behalf is the least this owes them.
+    /// </remarks>
+    public static string ExplainResolved(ImportFailureKind kind, string resolutionCaption, int count)
+    {
+        string places = count == 1 ? "1 place" : string.Create(CultureInfo.InvariantCulture, $"{count} places");
+        string caption = string.IsNullOrWhiteSpace(resolutionCaption) ? "its default resolution" : $"\"{resolutionCaption.Trim()}\"";
+
+        return kind == ImportFailureKind.CannotKeepElementsJoined
+            ? $"Revit could not keep some elements joined in {places} and unjoined them ({caption}). "
+                + "Nothing was deleted — the elements simply stop sharing geometry."
+            : $"Revit resolved \"{kind}\" in {places} with {caption}.";
     }
 
     /// <summary>

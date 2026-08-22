@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Visual;
 using Autodesk.Revit.UI;
 using MantlePlace.Revit.Client;
 using MantlePlace.Revit.Core;
@@ -131,13 +132,16 @@ public sealed class TerrainProbeCommand : IExternalCommand
                 ? structure.GetWidth()
                 : type.get_Parameter(BuiltInParameter.TOPOSOLID_TYPE_DEFAULT_THICKNESS_PARAM)?.AsDouble() ?? 0.0;
 
-            types.Add(new CandidateToposolidType(type.Id.Value, type.Name, thickness, structure?.LayerCount ?? 0));
+            bool structural = RevitBundleImporter.HasStructuralLayer(structure);
+            types.Add(new CandidateToposolidType(
+                type.Id.Value, type.Name, thickness, structure?.LayerCount ?? 0, structural));
 
             report.AppendLine(CultureInfo.InvariantCulture,
                 $"  id {type.Id.Value}  \"{type.Name}\"  layers={structure?.LayerCount ?? 0}  "
                 + $"total={Ft(thickness)}  "
                 + $"defaultThickness={Ft(type.get_Parameter(BuiltInParameter.TOPOSOLID_TYPE_DEFAULT_THICKNESS_PARAM)?.AsDouble() ?? 0.0)}  "
                 + $"facesLocation={type.get_Parameter(BuiltInParameter.TOPOSOLID_FACES_LOCATION)?.AsInteger().ToString(CultureInfo.InvariantCulture) ?? "n/a"}  "
+                + $"structural={structural}  "
                 + $"drapeSplittable={DrapeLayering.Split(thickness, minimumLayer).Ok}");
 
             if (structure is { LayerCount: > 0 })
@@ -156,6 +160,8 @@ public sealed class TerrainProbeCommand : IExternalCommand
         report.AppendLine(CultureInfo.InvariantCulture,
             $"  first-of-collector (what the plugin used to take): {FirstOf<ToposolidType>(document)}");
         report.AppendLine();
+
+        DescribeDrapeMaterials(document, report);
 
         using LocalBundleArchive archive = LocalBundleArchive.Open(zipPath);
         if (archive.Manifest is not { } manifest)
@@ -353,6 +359,76 @@ public sealed class TerrainProbeCommand : IExternalCommand
             $"  grid: {(SurfaceGrid.Detect(raw) is { } shape ? $"{shape.ColumnCount} x {shape.RowCount} at {shape.Spacing:0.###}" : "not a regular grid")}");
         report.AppendLine(CultureInfo.InvariantCulture,
             $"  crop window: {(step.Crop is { } crop ? $"west={crop.WestM:0.##} south={crop.SouthM:0.##} east={crop.EastM:0.##} north={crop.NorthM:0.##}" : "none published")}");
+    }
+
+    /// <summary>
+    /// Dumps every real-world texture property this plugin writes, as Revit stored them.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ Reading these back is the only way to settle the drape's scale. The first successful import
+    /// tiled the aerial photograph roughly ten times across the site while the plugin's own log said
+    /// it had placed it across 1,425 × 1,419 m — so either the value did not land, or the unit it
+    /// landed in is not the unit <see cref="RevitBundleImporter"/> assumed. Both are invisible from
+    /// outside Revit, and a screenshot cannot tell them apart. The property's declared
+    /// <c>GetUnitTypeId</c> is printed alongside the raw value for exactly that reason.
+    /// </remarks>
+    private static void DescribeDrapeMaterials(Document document, StringBuilder report)
+    {
+        report.AppendLine("DRAPE MATERIALS (appearance assets carrying a UnifiedBitmap)");
+
+        foreach (Material material in new FilteredElementCollector(document)
+            .OfClass(typeof(Material))
+            .Cast<Material>()
+            .Where(material => material.Name.StartsWith("Mantle Place", StringComparison.Ordinal)))
+        {
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"  material id {material.Id.Value} \"{material.Name}\"");
+
+            if (document.GetElement(material.AppearanceAssetId) is not AppearanceAssetElement element)
+            {
+                report.AppendLine("      no appearance asset");
+                continue;
+            }
+
+            Asset asset = element.GetRenderingAsset();
+            for (int i = 0; i < asset.Size; i++)
+            {
+                DescribeAssetProperty(asset[i], "      ", report);
+            }
+        }
+
+        report.AppendLine();
+    }
+
+    private static void DescribeAssetProperty(AssetProperty property, string indent, StringBuilder report)
+    {
+        string value = property switch
+        {
+            AssetPropertyDistance distance => string.Create(
+                CultureInfo.InvariantCulture,
+                $"{distance.Value} (unit {distance.GetUnitTypeId()?.TypeId ?? "none"})"),
+            AssetPropertyDouble number => number.Value.ToString("0.######", CultureInfo.InvariantCulture),
+            AssetPropertyString text => text.Value,
+            AssetPropertyBoolean flag => flag.Value.ToString(),
+            AssetPropertyInteger integer => integer.Value.ToString(CultureInfo.InvariantCulture),
+            _ => property.Type.ToString(),
+        };
+
+        report.AppendLine(CultureInfo.InvariantCulture, $"{indent}{property.Name} = {value}");
+
+        // The UnifiedBitmap hangs off the diffuse slot as a connected asset, so its scale properties
+        // are one level down from anything a flat enumeration would reach.
+        for (int i = 0; i < property.NumberOfConnectedProperties; i++)
+        {
+            if (property.GetConnectedProperty(i) is Asset connected)
+            {
+                report.AppendLine(CultureInfo.InvariantCulture, $"{indent}  -> connected asset:");
+                for (int j = 0; j < connected.Size; j++)
+                {
+                    DescribeAssetProperty(connected[j], indent + "    ", report);
+                }
+            }
+        }
     }
 
     private static void DescribeContours(ToposolidType type, StringBuilder report)

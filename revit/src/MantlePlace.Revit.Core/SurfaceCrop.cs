@@ -60,9 +60,8 @@ public static class SurfaceCrop
             return null;
         }
 
-        // Project all four corners rather than two: a UTM rectangle is not axis-aligned to lon/lat,
-        // so the west edge of the AOI is not one easting. Taking the inner extremes keeps the window
-        // strictly inside the published AOI, which is the conservative direction for a crop.
+        // All four corners, not two: a lon/lat rectangle is not axis-aligned in UTM, so the AOI's
+        // west edge is not one easting.
         if (!frame.TryProjectToLocalMetres(manifest.BboxWestDeg, manifest.BboxSouthDeg, out double swE, out double swN)
             || !frame.TryProjectToLocalMetres(manifest.BboxWestDeg, manifest.BboxNorthDeg, out double nwE, out double nwN)
             || !frame.TryProjectToLocalMetres(manifest.BboxEastDeg, manifest.BboxSouthDeg, out double seE, out double seN)
@@ -71,11 +70,19 @@ public static class SurfaceCrop
             return null;
         }
 
+        // ⛔ The OUTER extremes — the projected quadrilateral's bounding box — not the inner ones.
+        // The first version took the inner extremes, reasoning that a window strictly inside the
+        // published AOI was the conservative choice. Measured against a real bundle it was the
+        // opposite: convergence tilts the quadrilateral by about 8 m over a 1.4 km AOI, so the
+        // inscribed rectangle cut two extra rows off the north and south edges of good terrain — it
+        // dropped 1,980 of 80,940 points (2.45%) to remove 400 bad ones. The bounding box drops 1,134
+        // (1.4%), one outer ring, and still removes every one of them: the defect lives in the
+        // raster's 8.74 m overhang, which is outside either rectangle.
         SurfaceCropWindow window = new(
-            WestM: Math.Max(swE, nwE),
-            SouthM: Math.Max(swN, seN),
-            EastM: Math.Min(seE, neE),
-            NorthM: Math.Min(nwN, neN));
+            WestM: Math.Min(swE, nwE),
+            SouthM: Math.Min(swN, seN),
+            EastM: Math.Max(seE, neE),
+            NorthM: Math.Max(nwN, neN));
 
         return window.IsUsable ? window : null;
     }

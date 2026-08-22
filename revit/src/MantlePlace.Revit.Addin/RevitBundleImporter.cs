@@ -60,6 +60,28 @@ internal sealed class RevitBundleImporter(
     /// <summary>Runs every step in the plan. One transaction per step, so a late failure keeps the earlier work.</summary>
     internal void Execute(BundleImportPlan plan)
     {
+        // ⛔ Revit's own IFC importer opens a transaction named "Import" inside
+        // RevitLinkType.CreateFromIFC, and a per-transaction preprocessor cannot reach it — which is
+        // how "Can't keep elements joined" and the IFC4 warning surfaced as a modal in the middle of
+        // an otherwise silent import. This is the only hook that sees a transaction we did not open.
+        // It is session-wide, so it is attached for the length of the import and detached in the
+        // finally: leaving it on would put this policy between the curator and their own edits.
+        ImportFailureSwallower session = new("The import");
+        _application.FailuresProcessing += session.OnFailuresProcessing;
+
+        try
+        {
+            ExecuteSteps(plan);
+        }
+        finally
+        {
+            _application.FailuresProcessing -= session.OnFailuresProcessing;
+            _log.AddRange(session.Lines);
+        }
+    }
+
+    private void ExecuteSteps(BundleImportPlan plan)
+    {
         foreach (ImportStep step in plan.Steps)
         {
             switch (step.Kind)
@@ -270,6 +292,33 @@ internal sealed class RevitBundleImporter(
     /// thickness out of Revit: the compound structure when there is one, the type's Default Thickness
     /// parameter when there is not.
     /// </remarks>
+    /// <summary>
+    /// Whether any layer of <paramref name="structure"/> is a <c>Structure</c> — the difference
+    /// between a ground type and a paving type.
+    /// </summary>
+    /// <remarks>
+    /// Why this and not a thickness or a name: see <see cref="ToposolidTypeChoice"/>. The short
+    /// version is that thickness alone picked a 150 mm wood-plank path, and on a re-import it picked
+    /// this plugin's own imagery-drape type.
+    /// </remarks>
+    internal static bool HasStructuralLayer(CompoundStructure? structure)
+    {
+        if (structure is not { LayerCount: > 0 })
+        {
+            return false;
+        }
+
+        for (int layer = 0; layer < structure.LayerCount; layer++)
+        {
+            if (structure.GetLayerFunction(layer) == MaterialFunctionAssignment.Structure)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private CandidateToposolidType? ChooseToposolidType()
     {
         List<CandidateToposolidType> candidates = [];
@@ -286,7 +335,8 @@ internal sealed class RevitBundleImporter(
                 type.Id.Value,
                 type.Name,
                 thickness,
-                structure?.LayerCount ?? 0));
+                structure?.LayerCount ?? 0,
+                HasStructuralLayer(structure)));
         }
 
         return ToposolidTypeChoice.Best(candidates, CompoundStructure.GetMinimumLayerThickness());

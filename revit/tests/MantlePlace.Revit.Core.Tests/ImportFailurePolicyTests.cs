@@ -11,28 +11,65 @@ internal static class ImportFailurePolicyTests
     {
         TestRun run = new();
 
-        run.Case("ANY error rolls back, whatever its id", () =>
+        run.Case("an error rolls back whatever its id, unless it is on the allowlist", () =>
         {
-            // ⛔ The reason the policy takes severity and not an id. The failure the first real import
+            // ⛔ Why severity leads and the id can only ever soften. The failure the first real import
             // hit is a composite: SlabShapeEditFailedError is "Slab Shape Edit failed. [Description]"
             // and it substitutes SlabShapeFailedTooThin's text into itself, so a policy keyed on the
             // inner id would never fire on the outer one — and the import would go straight back to
             // the dead-end modal this whole type exists to prevent.
             foreach (ImportFailureKind kind in Enum.GetValues<ImportFailureKind>())
             {
+                if (kind == ImportFailureKind.CannotKeepElementsJoined)
+                {
+                    continue;
+                }
+
                 run.Equal(
-                    ImportFailurePolicy.Decide(isError: true) == ImportFailureAction.RollBack,
+                    ImportFailurePolicy.Decide(kind, isError: true, hasResolutions: true) == ImportFailureAction.RollBack,
                     true,
-                    $"an error posted as {kind} rolls back");
+                    $"an error posted as {kind} rolls back even when Revit offers a way out");
             }
+        });
+
+        run.Case("the one allowlisted error is resolved instead", () =>
+        {
+            // "Can't keep elements joined" comes out of Revit's own IFC importer. Unjoining is what a
+            // curator does by hand and it loses nothing: the elements stay, they stop sharing
+            // geometry. It is an allowlist and not "any error with a resolution" because Revit's
+            // resolution for the toposolid failures is to DELETE THE TOPOSOLID — which would turn a
+            // refused import into a silently empty one.
+            run.Equal(
+                ImportFailurePolicy.Decide(ImportFailureKind.CannotKeepElementsJoined, isError: true, hasResolutions: true)
+                    == ImportFailureAction.Resolve,
+                true,
+                "resolved, not rolled back");
+
+            run.Equal(
+                ImportFailurePolicy.Decide(ImportFailureKind.CannotKeepElementsJoined, isError: true, hasResolutions: false)
+                    == ImportFailureAction.RollBack,
+                true,
+                "but never pretended to be resolvable when Revit offers nothing");
         });
 
         run.Case("every warning is swallowed, including ones this build has never seen", () =>
         {
-            run.Equal(
-                ImportFailurePolicy.Decide(isError: false) == ImportFailureAction.Swallow,
-                true,
-                "an unattended run must never leave a modal for nobody to dismiss");
+            foreach (ImportFailureKind kind in Enum.GetValues<ImportFailureKind>())
+            {
+                run.Equal(
+                    ImportFailurePolicy.Decide(kind, isError: false, hasResolutions: false) == ImportFailureAction.Swallow,
+                    true,
+                    $"a warning posted as {kind} is absorbed — an unattended run must never leave a modal");
+            }
+        });
+
+        run.Case("a resolved error names the button that was pressed on the curator's behalf", () =>
+        {
+            string text = ImportFailurePolicy.ExplainResolved(
+                ImportFailureKind.CannotKeepElementsJoined, "Unjoin Elements", 1);
+
+            run.Contains(text, "Unjoin Elements", "the resolution's own caption, quoted");
+            run.Contains(text, "Nothing was deleted", "and what it did not do");
         });
 
         run.Case("the eight overlaps read as an explanation, not as a failure", () =>
@@ -59,9 +96,10 @@ internal static class ImportFailurePolicyTests
             {
                 if (kind is ImportFailureKind.Unknown
                     or ImportFailureKind.SlabShapeTooThin
-                    or ImportFailureKind.SlabShapeEditFailed)
+                    or ImportFailureKind.SlabShapeEditFailed
+                    or ImportFailureKind.CannotKeepElementsJoined)
                 {
-                    // The error kinds are worded by ExplainRollBack, not here.
+                    // The error kinds are worded by ExplainRollBack and ExplainResolved, not here.
                     continue;
                 }
 

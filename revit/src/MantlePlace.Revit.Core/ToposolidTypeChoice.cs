@@ -4,7 +4,15 @@ namespace MantlePlace.Revit.Core;
 /// <param name="Id">Revit's <c>ElementId</c> value, carried as a number so the core stays Revit-free.</param>
 /// <param name="TotalThickness">The compound structure's total width, in the caller's own unit.</param>
 /// <param name="LayerCount">Zero when the type has no compound structure at all.</param>
-public readonly record struct CandidateToposolidType(long Id, string Name, double TotalThickness, int LayerCount);
+/// <param name="HasStructuralLayer">
+/// Whether any layer is a <c>Structure</c>. This is what separates a terrain type from a paving type.
+/// </param>
+public readonly record struct CandidateToposolidType(
+    long Id,
+    string Name,
+    double TotalThickness,
+    int LayerCount,
+    bool HasStructuralLayer);
 
 /// <summary>
 /// Which of the project's toposolid types the terrain is built from. Pure.
@@ -24,9 +32,19 @@ public readonly record struct CandidateToposolidType(long Id, string Name, doubl
 /// an import that builds the terrain and then declines the aerial photograph with no obvious reason.
 /// </para>
 /// <para>
+/// ⛔ <b>The first cut is whether the type has a <c>Structure</c> layer</b>, and that came out of the
+/// first probe rather than out of a guess. Thickness alone put a 150 mm <em>wood-plank path</em>
+/// under the terrain — and on a re-import it put the plugin's own imagery-drape type there, because
+/// that is thinner still. The metric template's layer functions separate the two cleanly:
+/// "Generic - 1000mm", "Grassland - 1200mm" and "Water - 2000mm" all carry a <c>Structure</c> layer;
+/// "Path - 150mm Wood Planks", "Path - 350mm Concrete" and the drape type this plugin derives are
+/// all <c>Finish1</c>/<c>Substrate</c> only. So the rule excludes our own leftovers without matching
+/// on our own name, which a locale or a rename would break.
+/// </para>
+/// <para>
 /// Among the types that qualify the <em>thinnest</em> wins. Thickness is pure cost at this end: it
-/// deepens the clearance the base plane must leave and buries the terrain under material nobody asked
-/// for. Ties break by ordinal name so two runs of the same import choose the same type.
+/// deepens the clearance the base plane must leave and buries the terrain under material nobody
+/// asked for. Ties break by ordinal name so two runs of the same import choose the same type.
 /// </para>
 /// </remarks>
 public static class ToposolidTypeChoice
@@ -35,10 +53,10 @@ public static class ToposolidTypeChoice
     /// The type to build the terrain from, or <c>null</c> when the project has none usable.
     /// </summary>
     /// <remarks>
-    /// The fallback arm — thinnest with any positive thickness, when nothing is splittable — is
-    /// deliberate. A type too thin for the drape still makes a correct terrain, and refusing to build
-    /// terrain at all because the photograph would not fit is the wrong trade. The drape's own
-    /// refusal path already says so in the log when it happens.
+    /// Every preference is a tie-break rather than a filter, so a project that has only paving types
+    /// still gets terrain. A type too thin for the drape makes a correct terrain anyway, and refusing
+    /// to build ground at all because the photograph would not fit is the wrong trade — the drape's
+    /// own refusal path already says so in the log when it happens.
     /// </remarks>
     public static CandidateToposolidType? Best(
         IReadOnlyList<CandidateToposolidType> types,
@@ -46,9 +64,7 @@ public static class ToposolidTypeChoice
     {
         ArgumentNullException.ThrowIfNull(types);
 
-        CandidateToposolidType? splittable = null;
-        CandidateToposolidType? anyPositive = null;
-
+        CandidateToposolidType? best = null;
         foreach (CandidateToposolidType type in types)
         {
             if (!double.IsFinite(type.TotalThickness) || type.TotalThickness <= 0.0)
@@ -56,31 +72,41 @@ public static class ToposolidTypeChoice
                 continue;
             }
 
-            if (IsThinner(type, anyPositive))
+            if (best is not { } incumbent || Beats(type, incumbent, minimumLayerThickness))
             {
-                anyPositive = type;
-            }
-
-            if (type.LayerCount > 0
-                && DrapeLayering.Split(type.TotalThickness, minimumLayerThickness).Ok
-                && IsThinner(type, splittable))
-            {
-                splittable = type;
+                best = type;
             }
         }
 
-        return splittable ?? anyPositive;
+        return best;
     }
 
-    private static bool IsThinner(CandidateToposolidType candidate, CandidateToposolidType? incumbent)
+    /// <summary>
+    /// The preference order, most significant first: is it ground, can the drape split it, is it
+    /// thin, and finally the name so the answer never depends on collector order.
+    /// </summary>
+    private static bool Beats(
+        CandidateToposolidType candidate,
+        CandidateToposolidType incumbent,
+        double minimumLayerThickness)
     {
-        if (incumbent is not { } held)
+        if (candidate.HasStructuralLayer != incumbent.HasStructuralLayer)
         {
-            return true;
+            return candidate.HasStructuralLayer;
         }
 
-        int byThickness = candidate.TotalThickness.CompareTo(held.TotalThickness);
+        bool candidateSplits = Splittable(candidate, minimumLayerThickness);
+        bool incumbentSplits = Splittable(incumbent, minimumLayerThickness);
+        if (candidateSplits != incumbentSplits)
+        {
+            return candidateSplits;
+        }
+
+        int byThickness = candidate.TotalThickness.CompareTo(incumbent.TotalThickness);
         return byThickness < 0
-            || (byThickness == 0 && string.CompareOrdinal(candidate.Name, held.Name) < 0);
+            || (byThickness == 0 && string.CompareOrdinal(candidate.Name, incumbent.Name) < 0);
     }
+
+    private static bool Splittable(CandidateToposolidType type, double minimumLayerThickness)
+        => type.LayerCount > 0 && DrapeLayering.Split(type.TotalThickness, minimumLayerThickness).Ok;
 }

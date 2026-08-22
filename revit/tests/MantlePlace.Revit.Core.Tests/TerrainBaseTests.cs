@@ -156,57 +156,92 @@ internal static class TerrainBaseTests
 
     private static void RunTypeChoice(TestRun run)
     {
-        run.Case("the thinnest type the drape can still split wins", () =>
+        // The real metric template, as the first probe reported it. Layer functions, not names, are
+        // what separate ground from paving — and what exclude this plugin's own derived type.
+        CandidateToposolidType Generic = new(1570125, "Generic - 1000mm", 3.2808, 1, true);
+        CandidateToposolidType Grassland = new(1570127, "Grassland - 1200mm", 3.937, 3, true);
+        CandidateToposolidType Water = new(1570129, "Water - 2000mm", 6.5617, 2, true);
+        CandidateToposolidType WoodPath = new(1570131, "Path - 150mm Wood Planks", 0.4921, 1, false);
+        CandidateToposolidType ConcretePath = new(1570133, "Path - 350mm Concrete", 1.1483, 2, false);
+        CandidateToposolidType OurDrapeType = new(1669969, "Mantle Place Site Imagery f93bc782", 0.4921, 2, false);
+
+        run.Case("the real template: a paving type never wins on thinness alone", () =>
         {
-            CandidateToposolidType[] types =
-            [
-                new(10, "Thick", 4.0, 3),
-                new(11, "Comfortable", 0.984252, 1),
-                new(12, "Hair", 0.02, 1),
-            ];
+            // ⛔ The regression. Thickness-first put "Path - 150mm Wood Planks" under the terrain on
+            // the first live run — it is 150 mm against Generic's 1 m, and it splits fine for the
+            // drape. Nothing about it is ground.
+            CandidateToposolidType[] types = [Generic, Grassland, Water, WoodPath, ConcretePath];
             CandidateToposolidType? best = ToposolidTypeChoice.Best(types, MinimumLayerFt);
+
+            run.Equal(best is { Id: 1570125 }, true,
+                $"expected \"Generic - 1000mm\", got \"{best?.Name}\"");
+        });
+
+        run.Case("this plugin's own drape type is excluded on a re-import", () =>
+        {
+            // The second-order trap: TryWearMaterial duplicates a type and layers imagery into it,
+            // producing Finish1 + Finish1 at 150 mm — thinner than any ground type in the template.
+            // A re-import would then build the terrain on the previous import's derived type. It has
+            // no Structure layer, so the rule refuses it without matching on our own name.
+            CandidateToposolidType[] types = [Generic, Grassland, OurDrapeType];
+            CandidateToposolidType? best = ToposolidTypeChoice.Best(types, MinimumLayerFt);
+
+            run.Equal(best is { Id: 1570125 }, true, $"expected Generic, got \"{best?.Name}\"");
+        });
+
+        run.Case("among ground types the thinnest wins", () =>
+        {
+            CandidateToposolidType[] types = [Water, Grassland, Generic];
+            run.Equal(ToposolidTypeChoice.Best(types, MinimumLayerFt) is { Id: 1570125 }, true,
+                "1 m beats 1.2 m beats 2 m");
+        });
+
+        run.Case("splittability outranks thinness within the same class", () =>
+        {
+            CandidateToposolidType hair = new(12, "Hair", 0.02, 1, true);
+            CandidateToposolidType comfortable = new(11, "Comfortable", 0.984252, 1, true);
+            CandidateToposolidType? best = ToposolidTypeChoice.Best([hair, comfortable], MinimumLayerFt);
 
             run.Equal(best is { Id: 11 }, true,
-                "\"Hair\" is thinner but the drape cannot split it, so \"Comfortable\" wins");
+                "\"Hair\" is thinner but the drape cannot split it");
         });
 
-        run.Case("when nothing is splittable, the thinnest positive type is still used", () =>
+        run.Case("a project with nothing but paving still gets terrain", () =>
         {
-            // Terrain that cannot wear the photograph is better than no terrain. The drape's own
-            // refusal path says so in the log when it happens.
-            // Both are under 3 x the host minimum, so DrapeLayering.Split refuses both.
-            CandidateToposolidType[] types = [new(12, "Hair", 0.02, 1), new(13, "Wisp", 0.03, 1)];
-            CandidateToposolidType? best = ToposolidTypeChoice.Best(types, MinimumLayerFt);
-
-            run.Equal(best is { Id: 12 }, true, "the thinnest of the unsplittable types");
+            // Every preference is a tie-break, not a filter. Refusing to build ground because the
+            // photograph would not fit is the wrong trade.
+            CandidateToposolidType[] types = [WoodPath, ConcretePath];
+            run.Equal(ToposolidTypeChoice.Best(types, MinimumLayerFt) is { Id: 1570131 }, true,
+                "the thinnest of them, rather than nothing");
         });
 
-        run.Case("a type with no compound structure cannot be split but can still build", () =>
+        run.Case("a type with no compound structure can still build", () =>
         {
-            CandidateToposolidType[] types = [new(20, "Structureless", 1.0, 0)];
-            CandidateToposolidType? best = ToposolidTypeChoice.Best(types, MinimumLayerFt);
-
-            run.Equal(best is { Id: 20 }, true, "it is still the only type there is");
+            CandidateToposolidType[] types = [new(20, "Structureless", 1.0, 0, false)];
+            run.Equal(ToposolidTypeChoice.Best(types, MinimumLayerFt) is { Id: 20 }, true,
+                "it is still the only type there is");
         });
 
-        run.Case("ties break by ordinal name so two runs choose the same type", () =>
+        run.Case("ties break by ordinal name so collector order cannot change the answer", () =>
         {
-            CandidateToposolidType[] forward = [new(1, "Bravo", 1.0, 1), new(2, "Alpha", 1.0, 1)];
-            CandidateToposolidType[] reversed = [new(2, "Alpha", 1.0, 1), new(1, "Bravo", 1.0, 1)];
+            CandidateToposolidType alpha = new(2, "Alpha", 1.0, 1, true);
+            CandidateToposolidType bravo = new(1, "Bravo", 1.0, 1, true);
 
             run.Equal(
-                ToposolidTypeChoice.Best(forward, MinimumLayerFt)?.Id
-                    == ToposolidTypeChoice.Best(reversed, MinimumLayerFt)?.Id,
+                ToposolidTypeChoice.Best([bravo, alpha], MinimumLayerFt)?.Id
+                    == ToposolidTypeChoice.Best([alpha, bravo], MinimumLayerFt)?.Id,
                 true,
-                "collector order must not change the answer");
-            run.Equal(ToposolidTypeChoice.Best(forward, MinimumLayerFt) is { Name: "Alpha" }, true, "and it is Alpha");
+                "same answer either way round");
+            run.Equal(ToposolidTypeChoice.Best([bravo, alpha], MinimumLayerFt) is { Name: "Alpha" }, true, "and it is Alpha");
         });
 
         run.Case("no types, and zero-thickness types, are null rather than a bad choice", () =>
         {
             run.Equal(ToposolidTypeChoice.Best([], MinimumLayerFt) is null, true, "nothing to choose from");
             run.Equal(
-                ToposolidTypeChoice.Best([new(1, "Zero", 0.0, 1), new(2, "NaN", double.NaN, 1)], MinimumLayerFt) is null,
+                ToposolidTypeChoice.Best(
+                    [new(1, "Zero", 0.0, 1, true), new(2, "NaN", double.NaN, 1, true)],
+                    MinimumLayerFt) is null,
                 true,
                 "a type with no thickness is not a type this can build on");
         });
