@@ -18,6 +18,12 @@
 #include "HttpResultCallback.h"
 #include "HttpRouteHandle.h"
 
+// The loopback callback port is probed on a plain socket before the HTTP server is asked to bind
+// it: FHttpListener asserts on port 0, so there is no way to ask IT for an OS-assigned port.
+#include "SocketSubsystem.h"
+#include "Sockets.h"
+#include "IPAddress.h"
+
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformFileManager.h"
 #include "GenericPlatform/GenericPlatformFile.h"
@@ -455,8 +461,6 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 	// bind-or-null, which is exactly what the loop already assumes.
 	ServerModule.StartAllListeners();
 
-	const TArray<int32> Ports = FMantlePlaceAuthLogic::ResolveLoopbackPorts(LoopbackPorts);
-
 	FString CallbackPath = LoopbackCallbackPath;
 	if (!CallbackPath.StartsWith(TEXT("/")))
 	{
@@ -465,9 +469,7 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 
 	TWeakObjectPtr<UMantlePlaceAuthSystemBase> WeakThis(this);
 
-	int32 SelectedPort = 0;
-	const bool bAcquired = FMantlePlaceAuthLogic::SelectLoopbackPort(Ports,
-		[this, &ServerModule, &CallbackPath, WeakThis](int32 Port) -> bool
+	auto TryAcquire = [this, &ServerModule, &CallbackPath, WeakThis](int32 Port) -> bool
 	{
 		TSharedPtr<IHttpRouter> Router = ServerModule.GetHttpRouter(static_cast<uint32>(Port), /*bFailOnBindFailure=*/true);
 		if (!Router.IsValid())
@@ -556,26 +558,125 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 		LoopbackRouter = Router;
 		CallbackRouteHandle = Handle;
 		return true;
-	}, SelectedPort);
+	};
+
+	const FMantlePlaceAuthLogic::ELoopbackPortMode Mode =
+	    FMantlePlaceAuthLogic::ResolveLoopbackPortMode(LoopbackPorts);
+
+	int32 SelectedPort = 0;
+	bool bAcquired = false;
+
+	// REUSE THIS PROCESS'S PORT IF WE ALREADY HAVE ONE, and note that this is not an optimisation.
+	//
+	// FHttpServerModule keeps every listener it ever created in a port-keyed map and removes an
+	// entry only at module shutdown; StopAllListeners() flips a flag, it does not free anything.
+	// So each DISTINCT port this process successfully binds costs a listening socket for the rest
+	// of the session. A fresh ephemeral port per sign-in would therefore leak one socket per
+	// sign-in — strictly worse than the fixed range it replaces. Asking for the same port again is
+	// free: GetHttpRouter finds the live listener and hands back its existing router without
+	// binding anything. One socket per editor process is the trade StopLoopbackServer already
+	// makes, and this keeps it.
+	if (SessionLoopbackPort != 0 && TryAcquire(SessionLoopbackPort))
+	{
+		SelectedPort = SessionLoopbackPort;
+		bAcquired = true;
+	}
+	else if (Mode == FMantlePlaceAuthLogic::ELoopbackPortMode::DeclaredList)
+	{
+		bAcquired = FMantlePlaceAuthLogic::SelectLoopbackPort(LoopbackPorts, TryAcquire, SelectedPort);
+	}
+	else
+	{
+		bAcquired = FMantlePlaceAuthLogic::AcquireEphemeralLoopbackPort(
+		    [this](int32& OutProposed)
+		    { return ProposeEphemeralLoopbackPort(OutProposed); },
+		    TryAcquire,
+		    EphemeralLoopbackAttempts,
+		    SelectedPort);
+	}
 
 	if (!bAcquired)
 	{
-		// Name the ports actually tried. "In use" would be a guess — and usually the wrong one:
-		// the common cause on Windows is a reserved range, where nothing is listening at all.
-		OutError = FString::Printf(
-			TEXT("Could not start the local sign-in callback server: none of the candidate loopback "
-			     "ports could be bound (tried %s)."),
-			*FString::JoinBy(Ports, TEXT(", "), [](int32 Port) { return FString::FromInt(Port); }));
+		if (Mode == FMantlePlaceAuthLogic::ELoopbackPortMode::DeclaredList)
+		{
+			// Name the ports actually tried. "In use" would be a guess — and usually the wrong one:
+			// the common cause on Windows is a reserved range, where nothing is listening at all.
+			OutError = FString::Printf(
+			    TEXT("Could not start the local sign-in callback server: none of the loopback ports "
+			         "configured in LoopbackPorts could be bound (tried %s)."),
+			    *FString::JoinBy(LoopbackPorts, TEXT(", "), [](int32 Port)
+			                     { return FString::FromInt(Port); }));
 #if PLATFORM_WINDOWS
-		OutError += TEXT(" On Windows a bind is also refused for ports inside a Hyper-V/WinNAT reserved "
-			"range, even with nothing listening. List the ranges with "
-			"'netsh interface ipv4 show excludedportrange protocol=tcp' and configure LoopbackPorts outside them.");
+			OutError += TEXT(" On Windows a bind is also refused for ports inside a Hyper-V/WinNAT reserved "
+			                 "range, even with nothing listening. List the ranges with "
+			                 "'netsh interface ipv4 show excludedportrange protocol=tcp' and pick ports outside them — or "
+			                 "clear LoopbackPorts entirely and let the operating system choose.");
 #endif
+		}
+		else
+		{
+			// No port list to name, and the netsh hint would mislead here: the OS does not hand out
+			// a port from its own reserved ranges, so a reserved range is not what went wrong.
+			OutError = FString::Printf(
+			    TEXT("Could not start the local sign-in callback server: the operating system offered "
+			         "%d ports and none could be bound. This is normally a firewall or endpoint-security "
+			         "product blocking local HTTP listeners — it is not another Mantle Place session, "
+			         "which would have its own port. See the LogHttpServerModule output for the "
+			         "underlying error."),
+			    EphemeralLoopbackAttempts);
+		}
 		return false;
 	}
 
 	BoundLoopbackPort = SelectedPort;
+	SessionLoopbackPort = SelectedPort;
+
+	UE_LOG(LogTemp, Log, TEXT("Mantle Place: sign-in callback listening on http://127.0.0.1:%d%s"),
+	       SelectedPort, *CallbackPath);
+
 	return true;
+}
+
+bool UMantlePlaceAuthSystemBase::ProposeEphemeralLoopbackPort(int32& OutPort) const
+{
+	ISocketSubsystem* Sockets = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
+	if (Sockets == nullptr)
+	{
+		return false;
+	}
+
+	// The literal loopback, matching FHttpServerListenerConfig's own default bind address. Probing
+	// a different interface than the listener will use would make the answer meaningless.
+	TSharedRef<FInternetAddr> Addr = Sockets->CreateInternetAddr();
+	Addr->SetLoopbackAddress();
+	Addr->SetPort(0);
+
+	// Same two-argument form FHttpListener::StartListening uses, so the probe allocates the same
+	// kind of socket the real listener will.
+	FUniqueSocket Probe = Sockets->CreateUniqueSocket(NAME_Stream, TEXT("MantlePlaceLoopbackProbe"));
+	if (!Probe.IsValid())
+	{
+		return false;
+	}
+
+	// Explicit, not inherited: a project that turns on HTTPServer.DefaultReuseAddressAndPortEnabled
+	// would otherwise let this probe share a port with someone else, and it would be reporting a
+	// port it does not hold.
+	Probe->SetReuseAddr(false);
+
+	if (!Probe->Bind(*Addr))
+	{
+		return false;
+	}
+
+	// Listening is what actually commits the port, and it is what FHttpListener will do next.
+	if (!Probe->Listen(1))
+	{
+		return false;
+	}
+
+	OutPort = Probe->GetPortNo();
+	return OutPort > 0;
 }
 
 void UMantlePlaceAuthSystemBase::StopLoopbackServer()

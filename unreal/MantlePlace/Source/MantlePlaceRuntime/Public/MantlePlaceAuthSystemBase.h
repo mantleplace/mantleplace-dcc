@@ -87,9 +87,18 @@ public:
 	FString TokenEndpointUrl = TEXT("https://mantle.place/api/v1/auth/native/token");
 
 	/**
-	 * Candidate loopback ports tried in order for the redirect callback server. Each must be
-	 * allow-listed (as http://127.0.0.1:<port>/<callback>) by whatever validates the redirect_uri.
-	 * If left empty, a built-in default range (51000-51009) is used.
+	 * Explicit loopback ports for the redirect callback server, tried in order.
+	 *
+	 * LEAVE EMPTY (the default). The operating system then picks a free port each session, which is
+	 * the only setting that survives Windows' Hyper-V/WinNAT reserved ranges — those move across
+	 * reboots, a bind into one is refused although nothing is listening, and it is reported as if
+	 * the port were in use. It is also what lets Revit and this editor, or two editors, sign in at
+	 * the same time without competing for the same numbers.
+	 *
+	 * Set ports only when something outside this plugin needs a fixed redirect_uri. Each must then
+	 * be allow-listed (as http://127.0.0.1:<port>/<callback>) by whatever validates the redirect,
+	 * and each must fall outside every range that
+	 * 'netsh interface ipv4 show excludedportrange protocol=tcp' reports.
 	 */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Mantle Place|Auth")
 	TArray<int32> LoopbackPorts;
@@ -205,6 +214,12 @@ private:
 	/** Unbind the callback route and release the loopback router (idempotent). */
 	void StopLoopbackServer();
 
+	/**
+	 * Ask the OS for a free loopback port by binding a throwaway socket to port 0 and reading back
+	 * what it assigned. FHttpListener asserts on port 0, so the HTTP server cannot be asked directly.
+	 */
+	bool ProposeEphemeralLoopbackPort(int32& OutPort) const;
+
 	/** Begin the PKCE code→token exchange using AuthCode + the pending code_verifier. */
 	void BeginPkceTokenExchange(const FString& AuthCode);
 
@@ -245,6 +260,19 @@ private:
 	TSharedPtr<IHttpRouter> LoopbackRouter;
 	TSharedPtr<const FHttpRouteHandleInternal> CallbackRouteHandle;
 	int32 BoundLoopbackPort = 0;
+
+	/**
+	 * The port this process bound once and reuses for every later sign-in.
+	 *
+	 * FHttpServerModule keeps every listener it creates in a port-keyed map and frees entries only
+	 * at module shutdown, so each DISTINCT port bound costs a listening socket for the rest of the
+	 * session. Without this, an OS-assigned port per sign-in would leak one socket per sign-in.
+	 * Re-asking for the same port is free — the module returns the live listener's router.
+	 */
+	int32 SessionLoopbackPort = 0;
+
+	/** How many OS-assigned ports to try before giving up. Each attempt proposes a fresh one. */
+	static constexpr int32 EphemeralLoopbackAttempts = 5;
 	FString PendingCodeVerifier;
 	FString PendingState;
 	bool bSignInCallbackConsumed = false;

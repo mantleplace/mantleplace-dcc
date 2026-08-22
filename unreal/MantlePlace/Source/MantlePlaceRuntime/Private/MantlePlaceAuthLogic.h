@@ -112,19 +112,44 @@ struct FMantlePlaceAuthLogic
 	static FString BuildLoopbackRedirectUri(int32 Port, const FString& CallbackPath);
 
 	/**
-	 * Candidate loopback ports when the host configures none.
+	 * How the callback port is chosen.
 	 *
-	 * Spaced 512 apart, NOT consecutive. Windows reserves ~100-port blocks for Hyper-V/WinNAT that
-	 * shift across reboots; a bind into one is refused with WSAEACCES even though nothing is
-	 * listening. A consecutive run of ten ports fits inside a single such block — the previous
-	 * 51000-51009 default did, which took sign-in down outright — whereas a 512 stride cannot.
-	 * 51000 stays first: it is the port in the docs and the conformance corpus, and when it is
-	 * reserved the caller simply steps past it.
+	 * Ephemeral is the default and the only one that is robust: Windows reserves ~100-port blocks
+	 * for Hyper-V/WinNAT that move across reboots, a bind into one is refused although nothing is
+	 * listening, and HTTP.SYS reports that refusal as "in use" — so a declared list fails
+	 * unpredictably AND misdiagnoses itself. 51000-51009 sat entirely inside one such block. A
+	 * 512-wide stride dodged that particular block but was still guessing against a moving target,
+	 * and it still made every host on the machine share one finite list.
 	 */
-	static TArray<int32> DefaultLoopbackPorts();
+	enum class ELoopbackPortMode : uint8
+	{
+		/** The OS assigns the port. No configuration, no collisions, no reserved ranges. */
+		Ephemeral,
 
-	/** Configured ports when non-empty, else DefaultLoopbackPorts(). */
-	static TArray<int32> ResolveLoopbackPorts(const TArray<int32>& ConfiguredPorts);
+		/** Explicit ports, tried in order — an opt-in override for a site that pins redirect_uri. */
+		DeclaredList,
+	};
+
+	/** Empty configuration means the OS picks; any configured port switches to the declared list. */
+	static ELoopbackPortMode ResolveLoopbackPortMode(const TArray<int32>& ConfiguredPorts);
+
+	/**
+	 * Acquire an OS-assigned port: propose one, try to bind it, and on failure propose a FRESH one.
+	 *
+	 * Re-proposing rather than retrying the same number is the whole mechanism. The proposal closes
+	 * its probe socket before the real listener binds, so the port can be taken in between; the
+	 * allocator has already moved on by the next call, so attempt two is a different port instead
+	 * of a re-run of the lost race.
+	 *
+	 * Both seams are injected for the same reason SelectLoopbackPort's is: the real probe needs a
+	 * socket subsystem and the real acquire needs an HTTP listener, and neither exists in a headless
+	 * logic test. Returns false and leaves OutPort untouched when every attempt fails.
+	 */
+	static bool AcquireEphemeralLoopbackPort(
+	    TFunctionRef<bool(int32& /*OutProposedPort*/)> ProposePort,
+	    TFunctionRef<bool(int32 /*Port*/)> TryAcquire,
+	    int32 MaxAttempts,
+	    int32& OutPort);
 
 	/**
 	 * Try each port in order until TryAcquire reports success; fills OutPort with the winner.

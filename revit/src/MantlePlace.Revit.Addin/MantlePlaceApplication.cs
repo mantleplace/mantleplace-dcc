@@ -35,6 +35,42 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
     internal static BundleImportEventHandler ImportHandler => _importHandler ?? throw NotStarted();
 
+    /// <summary>
+    /// Resumes a stored session at startup (<c>HPS-13</c>), without making Revit wait for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is what makes the DPAPI refresh token worth writing.</b> It was being written on
+    /// every sign-in and never read back, so every Revit restart forced a full browser round-trip —
+    /// and <c>SignInCommand</c> promised otherwise, telling the curator they would only have to sign
+    /// in again if the machine had no secure store.
+    /// </para>
+    /// <para>
+    /// Fire-and-forget on purpose. <c>OnStartup</c> runs on Revit's thread before the UI exists;
+    /// blocking it on a network call delays the splash screen by however long the platform takes to
+    /// answer, and throwing from it costs the entire ribbon. <see cref="AuthSession.RestoreAsync"/>
+    /// is already silent when there is no stored token and keeps the token on a network failure, so
+    /// there is nothing here worth interrupting a curator for: the worst case is that the ribbon
+    /// comes up signed out, which is exactly where it came up before.
+    /// </para>
+    /// </remarks>
+    private static void BeginSessionRestore(AuthSession session)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await session.RestoreAsync().ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Deliberately total. Nothing is observing this task, an unobserved exception on the
+                // finalizer thread can take the process down, and there is no surface to report to
+                // this early. The session simply stays signed out.
+            }
+        });
+    }
+
     public Result OnStartup(UIControlledApplication application)
     {
         ArgumentNullException.ThrowIfNull(application);
@@ -43,6 +79,8 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
         _vault = new VaultClient(endpoints, _session);
         _cache = new BundleCache();
+
+        BeginSessionRestore(_session);
 
         // Created during OnStartup because ExternalEvent.Create must run on Revit's own thread, and
         // a modeless window has no other moment when that is guaranteed.

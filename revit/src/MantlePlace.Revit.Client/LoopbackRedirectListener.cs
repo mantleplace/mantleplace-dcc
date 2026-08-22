@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using MantlePlace.Revit.Core;
 
@@ -50,42 +51,156 @@ public sealed class LoopbackRedirectListener : IDisposable
     public string RedirectUri { get; }
 
     /// <summary>
+    /// Asks the OS for a free loopback port. Injected so the retry loop below is testable without
+    /// racing a real socket.
+    /// </summary>
+    /// <returns>A port number that was free at the instant it was probed.</returns>
+    public delegate int EphemeralPortProbe();
+
+    /// <summary>
+    /// Binds a loopback port chosen by the OS (<c>HPS-06</c>). This is the default path.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why not a fixed list.</b> On Windows, Hyper-V/WinNAT reserve ~100-port blocks that move
+    /// across reboots, and a bind into one is refused even though nothing is listening — HTTP.SYS
+    /// reports it as "the process cannot access the file because it is being used by another
+    /// process", which is how a reserved range gets misread as a second copy of this plugin. A
+    /// hardcoded range cannot dodge a moving target: 51000-51009 sat entirely inside one such block
+    /// and took sign-in down outright. The OS ephemeral allocator skips its own exclusions by
+    /// construction, so asking it for a port cannot land in one.
+    /// </para>
+    /// <para>
+    /// It also removes the other failure this range had: two hosts signing in at once. A curator
+    /// with Revit and Unreal open — or two Revit sessions — drew from one finite list, and the
+    /// Unreal editor holds its port for the life of the process. Ports the OS hands out are
+    /// distinct per socket, so no coordination between hosts is needed or possible to get wrong.
+    /// </para>
+    /// <para>
+    /// <b>Why a probe and a retry rather than binding port 0 directly.</b> <see cref="HttpListener"/>
+    /// takes a URI prefix, which needs a literal port; there is no "bind 0 and tell me what you
+    /// got". So we open a throwaway socket on port 0, note the port, close it, and hand that number
+    /// to the real listener. Between those two steps another process could take it. That window is
+    /// tiny and self-correcting: a retry re-probes and the allocator has already moved on, so the
+    /// second attempt is a different port rather than a re-run of the same race.
+    /// </para>
+    /// </remarks>
+    /// <returns><c>null</c> when no port bound — the caller must NOT open a browser.</returns>
+    public static LoopbackRedirectListener? StartEphemeral(string callbackPath, int attempts = 5)
+        => StartEphemeral(callbackPath, ProbeEphemeralPort, attempts);
+
+    /// <summary>As <see cref="StartEphemeral(string,int)"/>, with the probe supplied. For tests.</summary>
+    public static LoopbackRedirectListener? StartEphemeral(
+        string callbackPath,
+        EphemeralPortProbe probe,
+        int attempts = 5)
+    {
+        ArgumentNullException.ThrowIfNull(probe);
+        ArgumentOutOfRangeException.ThrowIfLessThan(attempts, 1);
+
+        string path = NormalisePath(callbackPath);
+
+        for (int attempt = 0; attempt < attempts; attempt++)
+        {
+            int port;
+            try
+            {
+                port = probe();
+            }
+            catch (SocketException)
+            {
+                // No socket to be had at all. A retry is cheap and the next one may succeed.
+                continue;
+            }
+
+            LoopbackRedirectListener? listener = TryBind(port, path);
+            if (listener is not null)
+            {
+                return listener;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Binds the first free port in <paramref name="ports"/>.
     /// </summary>
+    /// <remarks>
+    /// The explicit-list path, used only when a machine configures <c>loopbackPorts</c> — a site
+    /// that has allow-listed specific ports and needs them honoured. Unconfigured machines take
+    /// <see cref="StartEphemeral(string,int)"/> instead, which is why this list no longer has a
+    /// default.
+    /// </remarks>
     /// <returns><c>null</c> when none bound — the caller must NOT open a browser.</returns>
     public static LoopbackRedirectListener? Start(IReadOnlyList<int> ports, string callbackPath)
     {
         ArgumentNullException.ThrowIfNull(ports);
 
-        string path = callbackPath.StartsWith('/') ? callbackPath : "/" + callbackPath;
+        string path = NormalisePath(callbackPath);
 
         foreach (int port in ports)
         {
-            HttpListener listener = new();
-
-            // The prefix is the literal loopback IP, matching the redirect_uri exactly. A prefix of
-            // "localhost" or "+" would either not match the redirect or need an admin URL ACL.
-            listener.Prefixes.Add(string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/"));
-
-            try
+            LoopbackRedirectListener? listener = TryBind(port, path);
+            if (listener is not null)
             {
-                listener.Start();
+                return listener;
             }
-            catch (HttpListenerException)
-            {
-                listener.Close();
-                continue;
-            }
-
-            return new LoopbackRedirectListener(
-                listener,
-                port,
-                AuthUrls.BuildLoopbackRedirectUri(port, path),
-                path);
         }
 
         return null;
     }
+
+    /// <summary>The one place a port becomes a bound listener. Both entry points go through it.</summary>
+    private static LoopbackRedirectListener? TryBind(int port, string path)
+    {
+        HttpListener listener = new();
+
+        // The prefix is the literal loopback IP, matching the redirect_uri exactly. A prefix of
+        // "localhost" or "+" would either not match the redirect or need an admin URL ACL.
+        listener.Prefixes.Add(string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/"));
+
+        try
+        {
+            listener.Start();
+        }
+        catch (HttpListenerException)
+        {
+            // In use, reserved by the OS, or refused by policy. Indistinguishable here on purpose:
+            // the caller's job is to try something else, not to explain Windows.
+            listener.Close();
+            return null;
+        }
+
+        return new LoopbackRedirectListener(
+            listener,
+            port,
+            AuthUrls.BuildLoopbackRedirectUri(port, path),
+            path);
+    }
+
+    /// <summary>Opens a socket on port 0, notes what the OS assigned, and lets it go.</summary>
+    private static int ProbeEphemeralPort()
+    {
+        TcpListener probe = new(IPAddress.Loopback, 0);
+
+        // Must be set before Start(). .NET leaves this false, which sets SO_REUSEADDR, and on
+        // Windows that lets another socket share the port -- so the probe would report a port it
+        // does not actually hold, which is the one thing a probe must not do.
+        probe.ExclusiveAddressUse = true;
+        probe.Start();
+        try
+        {
+            return ((IPEndPoint)probe.LocalEndpoint).Port;
+        }
+        finally
+        {
+            probe.Stop();
+        }
+    }
+
+    private static string NormalisePath(string callbackPath)
+        => callbackPath.StartsWith('/') ? callbackPath : "/" + callbackPath;
 
     /// <summary>
     /// Waits for the redirect, answering every request with a page (<c>HPS-08</c>).

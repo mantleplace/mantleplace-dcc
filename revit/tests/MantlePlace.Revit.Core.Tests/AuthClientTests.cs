@@ -62,22 +62,17 @@ internal static class AuthClientTests
             MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load(Path.Combine(sandbox, "absent.json"));
             run.Equal(endpoints.WebLoginUrl, "https://mantle.place/auth/native", "web login");
             run.Equal(endpoints.TokenEndpointUrl, "https://mantle.place/api/v1/auth/native/token", "token exchange");
-            run.Equal(endpoints.LoopbackPorts.Count, 5, "five loopback ports");
-            run.Equal(endpoints.LoopbackPorts[0], 51000, "first port");
-            run.Equal(endpoints.LoopbackPorts[^1], 53048, "last port");
-            // Spaced, not consecutive: a Windows reserved block is ~100 ports wide and would
-            // otherwise swallow the whole list at once.
-            bool spaced = true;
-            for (int i = 1; i < endpoints.LoopbackPorts.Count; i++)
-            {
-                if (endpoints.LoopbackPorts[i] - endpoints.LoopbackPorts[i - 1] < 512)
-                {
-                    spaced = false;
-                }
-            }
-            run.True(spaced, "candidates are at least 512 apart");
+            // No declared ports at all: the OS picks one (HPS-06). Every fixed list this shipped
+            // with was eventually swallowed by a Windows reserved block that moved under it.
+            run.Equal(endpoints.LoopbackPorts.Count, 0, "no declared loopback ports by default");
             run.Equal(endpoints.SignInTimeoutSeconds, 300, "sign-in timeout");
-            run.True(endpoints.RefreshTokenUrl is null, "and refresh is unconfigured until Supabase is set");
+            run.Equal(
+                endpoints.RefreshEndpointUrl,
+                "https://mantle.place/api/v1/auth/native/refresh",
+                "refresh reaches the broker with nothing on disk");
+            run.True(
+                endpoints.RefreshTokenUrl is null,
+                "and the Supabase-direct route stays unconfigured until Supabase is set");
         });
 
         run.Case("a config file overrides, and a broken one does not take the plugin down", () =>
@@ -127,14 +122,11 @@ internal static class AuthClientTests
 
         run.Case("the loopback listener binds before anything opens a browser (HPS-06)", () =>
         {
-            // Use the shipped candidate list rather than hardcoded ports: on a Windows box a
-            // hardcoded pair can sit inside a Hyper-V reserved range and fail for reasons that have
-            // nothing to do with this test.
-            using LoopbackRedirectListener? first =
-                LoopbackRedirectListener.Start(new MantlePlaceEndpoints().LoopbackPorts, "/callback");
+            using LoopbackRedirectListener? first = LoopbackRedirectListener.StartEphemeral("/callback");
             run.True(first is not null, "bound a port");
+            run.True(first!.Port > 0, "and a real one");
             run.Equal(
-                first!.RedirectUri,
+                first.RedirectUri,
                 AuthUrls.BuildLoopbackRedirectUri(first.Port, "/callback"),
                 "the redirect URI names the port it actually bound");
             run.Contains(first.RedirectUri, "127.0.0.1", "the literal loopback IP, never 'localhost'");
@@ -142,7 +134,70 @@ internal static class AuthClientTests
             // The whole point of returning null rather than throwing: the caller must be able to
             // decide NOT to open a browser that would redirect into nothing.
             using LoopbackRedirectListener? second = LoopbackRedirectListener.Start([first.Port], "/callback");
-            run.True(second is null, "a range with no free port yields no listener");
+            run.True(second is null, "a declared list with no free port yields no listener");
+        });
+
+        run.Case("concurrent sessions each get their own port", () =>
+        {
+            // The requirement the old fixed list could not meet: Revit and Unreal signed in at once,
+            // or two Revit sessions, or two editors -- all drawing from one five-entry list, with the
+            // Unreal editor holding its port for the life of the process. Eight is deliberately more
+            // than that list ever had, so this case fails against the range-based implementation.
+            List<LoopbackRedirectListener> held = [];
+            try
+            {
+                for (int i = 0; i < 8; i++)
+                {
+                    LoopbackRedirectListener? listener = LoopbackRedirectListener.StartEphemeral("/callback");
+                    run.True(listener is not null, $"session {i} bound a port");
+                    held.Add(listener!);
+                }
+
+                run.Equal(held.Select(l => l.Port).Distinct().Count(), 8, "eight sessions, eight distinct ports");
+            }
+            finally
+            {
+                foreach (LoopbackRedirectListener listener in held)
+                {
+                    listener.Dispose();
+                }
+            }
+        });
+
+        run.Case("a port lost between probe and bind is retried with a different one", () =>
+        {
+            // The probe closes its socket before the real listener binds, so another process can
+            // take the port in between. The recovery is to propose a FRESH port, not to retry the
+            // same number -- retrying the same one just re-runs the lost race.
+            using LoopbackRedirectListener? squatter = LoopbackRedirectListener.StartEphemeral("/callback");
+            run.True(squatter is not null, "something is holding a port");
+
+            int probes = 0;
+            using LoopbackRedirectListener? recovered = LoopbackRedirectListener.StartEphemeral(
+                "/callback",
+                () =>
+                {
+                    probes++;
+                    // First proposal is already taken; after that, behave like the real probe.
+                    return probes == 1 ? squatter!.Port : FreeEphemeralPort();
+                });
+
+            run.True(recovered is not null, "the retry recovered");
+            run.True(probes >= 2, "and it did so by proposing again, not by reusing the taken port");
+            run.True(recovered!.Port != squatter!.Port, "landing on a different port");
+        });
+
+        run.Case("an exhausted probe fails without opening a browser", () =>
+        {
+            using LoopbackRedirectListener? squatter = LoopbackRedirectListener.StartEphemeral("/callback");
+            int probes = 0;
+            using LoopbackRedirectListener? never = LoopbackRedirectListener.StartEphemeral(
+                "/callback",
+                () => { probes++; return squatter!.Port; },
+                attempts: 3);
+
+            run.True(never is null, "no listener");
+            run.Equal(probes, 3, "and it gave up after exactly the attempts it was allowed");
         });
 
         run.Case("a callback is classified in the HPS-08 precedence", () =>
@@ -269,6 +324,22 @@ internal static class AuthClientTests
         }
         catch (UnauthorizedAccessException)
         {
+        }
+    }
+
+    /// <summary>A port the OS says is free right now. Mirrors the listener's own probe.</summary>
+    private static int FreeEphemeralPort()
+    {
+        System.Net.Sockets.TcpListener probe = new(System.Net.IPAddress.Loopback, 0);
+        probe.ExclusiveAddressUse = true;
+        probe.Start();
+        try
+        {
+            return ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        }
+        finally
+        {
+            probe.Stop();
         }
     }
 }

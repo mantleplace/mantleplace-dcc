@@ -40,6 +40,21 @@ public sealed class SignInCommand : IExternalCommand
             return Result.Succeeded;
         }
 
+        // Restoring a stored session at startup, or renewing an expiring one, both land here. The
+        // state machine would refuse a sign-in raised on top of either and hand back Abandoned,
+        // which reads as Result.Cancelled -- a button that does nothing at all. Say what is
+        // happening instead: the wait is a network round-trip, not a browser one.
+        if (session.State == AuthState.Refreshing)
+        {
+            new TaskDialog("Mantle Place")
+            {
+                MainInstruction = "Resuming your last session.",
+                MainContent = "Mantle Place is restoring the sign-in stored on this machine. "
+                    + "Give it a moment, then try again — you may not need to sign in at all.",
+            }.Show();
+            return Result.Cancelled;
+        }
+
         // Blocking the UI thread on the browser round-trip would freeze Revit for up to the
         // five-minute timeout. GetAwaiter().GetResult() after a Task.Run keeps the wait off the
         // dispatcher; the modeless progress surface arrives with the vault browser.

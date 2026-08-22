@@ -71,3 +71,44 @@ jobs:
 
       - name: Drive the shared conformance corpus on .NET 10 (Revit 2027)
         run: dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -c Release -f net10.0 --no-build
+
+  # The same suite on Windows, and NOT a matrix leg of the job above.
+  #
+  # Why a second job: `pure-core` is a required status check on main. Turning it into a matrix
+  # renames it to `pure-core (ubuntu-latest)` / `pure-core (windows-latest)`, branch protection
+  # keeps waiting on a check name that no longer reports, and every pull request blocks forever.
+  # A separate job leaves that name alone; add this one to branch protection whenever, with no
+  # window where merges are stuck.
+  #
+  # Why Windows at all: System.Net.HttpListener is a managed socket implementation on Linux and
+  # HTTP.SYS on Windows -- a different bind path, a different reservation namespace, and different
+  # errors. The loopback failure that took Revit sign-in down (a port inside a Hyper-V/WinNAT
+  # reserved block, refused while nothing was listening, reported as "used by another process")
+  # is invisible to a Linux-only job by construction. It is the exact failure this suite now
+  # covers, so it has to run somewhere that can reproduce it.
+  #
+  # Hosted Windows runners carry their own excluded port ranges, which is a feature here: it means
+  # no test may hardcode a port, and none do -- the loopback cases all ask the OS for one.
+  pure-core-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: revit/global.json
+
+      - name: Build the pure core, the client and their suite
+        run: dotnet build revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -c Release
+
+      - name: Drive the shared conformance corpus on .NET 8 (Revit 2025, 2026)
+        run: dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -c Release -f net8.0 --no-build
+
+      - name: Drive the shared conformance corpus on .NET 10 (Revit 2027)
+        run: dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -c Release -f net10.0 --no-build

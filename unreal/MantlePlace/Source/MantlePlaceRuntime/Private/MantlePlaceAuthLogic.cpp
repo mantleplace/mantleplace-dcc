@@ -459,21 +459,34 @@ FString FMantlePlaceAuthLogic::BuildLoopbackRedirectUri(int32 Port, const FStrin
 	return FString::Printf(TEXT("http://127.0.0.1:%d%s"), Port, *Path);
 }
 
-TArray<int32> FMantlePlaceAuthLogic::DefaultLoopbackPorts()
+FMantlePlaceAuthLogic::ELoopbackPortMode FMantlePlaceAuthLogic::ResolveLoopbackPortMode(
+    const TArray<int32>& ConfiguredPorts)
 {
-	// See the header for why the stride is 512 rather than 1.
-	TArray<int32> Ports;
-	Ports.Reserve(5);
-	for (int32 Index = 0; Index < 5; ++Index)
-	{
-		Ports.Add(51000 + Index * 512);
-	}
-	return Ports;
+	return ConfiguredPorts.Num() > 0 ? ELoopbackPortMode::DeclaredList : ELoopbackPortMode::Ephemeral;
 }
 
-TArray<int32> FMantlePlaceAuthLogic::ResolveLoopbackPorts(const TArray<int32>& ConfiguredPorts)
+bool FMantlePlaceAuthLogic::AcquireEphemeralLoopbackPort(
+    TFunctionRef<bool(int32&)> ProposePort,
+    TFunctionRef<bool(int32)> TryAcquire,
+    int32 MaxAttempts,
+    int32& OutPort)
 {
-	return ConfiguredPorts.Num() > 0 ? ConfiguredPorts : DefaultLoopbackPorts();
+	for (int32 Attempt = 0; Attempt < MaxAttempts; ++Attempt)
+	{
+		int32 Proposed = 0;
+		if (!ProposePort(Proposed))
+		{
+			// No socket to be had. Another attempt is cheap, and the subsystem may just be busy.
+			continue;
+		}
+
+		if (TryAcquire(Proposed))
+		{
+			OutPort = Proposed;
+			return true;
+		}
+	}
+	return false;
 }
 
 bool FMantlePlaceAuthLogic::SelectLoopbackPort(const TArray<int32>& Ports,

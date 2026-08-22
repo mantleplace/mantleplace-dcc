@@ -114,14 +114,26 @@ as missing.
 
 ## Loading it into Revit
 
-Copy `MantlePlace.addin` **and** the built assemblies from
-`src/MantlePlace.Revit.Addin/bin/<config>/net8.0-windows/` into the per-version add-ins folder:
+```powershell
+# Close Revit first -- a loaded add-in DLL is file-locked.
+./tools/Deploy-MantlePlaceRevit.ps1
+```
+
+Builds the solution and installs `MantlePlace.addin` plus the assemblies into every supported
+per-version add-ins folder, printing the timestamp of what it wrote:
 
 ```
 %APPDATA%\Autodesk\Revit\Addins\2025\
 %APPDATA%\Autodesk\Revit\Addins\2026\
 %APPDATA%\Autodesk\Revit\Addins\2027\
 ```
+
+`-Configuration Release`, `-RevitVersions 2025`, and `-SkipBuild` narrow it. Copying by hand works
+too, and the script does nothing you could not do with Explorer — but hand-copying is how a machine
+ends up running a plugin months older than the source tree. That failure is silent and it reads
+exactly like a code bug: a fix present in `git` and absent in the symptom, with a file timestamp as
+the only tell. **When a bug reproduces against code that already contains its fix, check the
+deployed timestamp before anything else.**
 
 `MantlePlace.addin` names the assembly without a path, so Revit resolves it beside the manifest.
 
@@ -188,10 +200,13 @@ still open.
 
 ## Configuration
 
-Sign-in needs nothing: the two mantle.place routes are compiled in. Token **refresh** goes
-Supabase-direct — there is no `/api/v1/auth/native/refresh` — so it needs the project URL and the
-public anon key, exactly as the Unreal plugin needs them in `DefaultGame.ini`. Neither is in this
-repo. Put them in `%LOCALAPPDATA%\MantlePlace\config.json`, hydrated at packaging time:
+**Nothing is required.** Sign-in and token refresh both reach mantle.place on compiled-in routes,
+so a curator installs the add-in and signs in with no file to obtain and nothing to configure.
+
+Refresh used to be Supabase-direct only, which meant a machine without the project URL and anon key
+could sign in once and then lose the session at access-token expiry — reporting a misconfiguration
+naming a file that no packaging step produced. Supabase-direct is still **preferred** when those two
+values are present, so an install that already has them is unaffected:
 
 ```json
 {
@@ -201,8 +216,11 @@ repo. Put them in `%LOCALAPPDATA%\MantlePlace\config.json`, hydrated at packagin
 ```
 
 Every other key in that file is an override for a compiled default (`webLoginUrl`,
-`tokenEndpointUrl`, `apiBaseUrl`, `loopbackPorts`, `callbackPath`, `signInTimeoutSeconds`) and is
-how a dev build points at a non-production stack. Absent or malformed, the file is ignored and the
+`tokenEndpointUrl`, `refreshEndpointUrl`, `apiBaseUrl`, `loopbackPorts`, `callbackPath`,
+`signInTimeoutSeconds`) and is how a dev build points at a non-production stack. `loopbackPorts` is
+the `HPS-06a` override: leave it out and the OS assigns the sign-in callback port, which is what
+keeps sign-in clear of Windows' shifting reserved ranges and lets Revit and Unreal be signed in at
+the same time. Absent or malformed, the file is ignored and the
 defaults stand — this is read during Revit's add-in load, where throwing costs the ribbon button and
 explains nothing.
 

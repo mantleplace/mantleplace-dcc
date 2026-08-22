@@ -105,16 +105,16 @@ public sealed class AuthSession : IDisposable
             _signIn = signIn;
         }
 
-        // Bind BEFORE opening the browser (HPS-06).
-        using LoopbackRedirectListener? listener =
-            LoopbackRedirectListener.Start(_endpoints.LoopbackPorts, _endpoints.CallbackPath);
+        // Bind BEFORE opening the browser (HPS-06). Ephemeral unless a machine has forced explicit
+        // ports; a browser sent to a redirect nothing is listening for just hangs on a blank tab.
+        using LoopbackRedirectListener? listener = _endpoints.LoopbackPorts.Count > 0
+            ? LoopbackRedirectListener.Start(_endpoints.LoopbackPorts, _endpoints.CallbackPath)
+            : LoopbackRedirectListener.StartEphemeral(_endpoints.CallbackPath);
 
         if (listener is null)
         {
             Raise(AuthEvent.SignInFailed);
-            return AuthOutcome.Failed(
-                $"No free port in {_endpoints.LoopbackPorts[0]}–{_endpoints.LoopbackPorts[^1]} to receive the "
-                + "sign-in response, so the browser was not opened. Close other Mantle Place sessions and try again.");
+            return AuthOutcome.Failed(DescribeBindFailure(_endpoints.LoopbackPorts));
         }
 
         string verifier = PkceCodes.MakeCodeVerifier();
@@ -277,18 +277,21 @@ public sealed class AuthSession : IDisposable
 
     private async Task<string?> RefreshGrantAsync(string refreshToken, CancellationToken cancellationToken)
     {
-        if (_endpoints.RefreshTokenUrl is not { } url)
-        {
-            return "This plugin has no Supabase project configured, so it cannot renew a sign-in. "
-                + $"Set supabaseUrl and supabaseAnonKey in {MantlePlaceEndpoints.ConfigPath}.";
-        }
+        // Supabase-direct when this machine has the project configured -- unchanged behaviour for
+        // every install that already works. Otherwise the web broker, which needs no local config:
+        // sign-in already reaches mantle.place with nothing on disk, and a session that can be
+        // started but not renewed is worse than one that cannot be started at all, because it dies
+        // mid-import with a message about a file the curator was never given.
+        (string url, string? apiKey) = _endpoints.RefreshTokenUrl is { } supabaseUrl
+            ? (supabaseUrl, _endpoints.SupabaseAnonKey)
+            : (_endpoints.RefreshEndpointUrl, (string?)null);
 
         string body = JsonSerializer.Serialize(new Dictionary<string, string>
         {
             ["refresh_token"] = refreshToken,
         });
 
-        return await PostGrantAsync(url, body, _endpoints.SupabaseAnonKey, cancellationToken).ConfigureAwait(false);
+        return await PostGrantAsync(url, body, apiKey, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -388,6 +391,33 @@ public sealed class AuthSession : IDisposable
     /// ⛔<c>HPS-05</c>: the system browser, never an embedded webview and never a password field in
     /// Revit.
     /// </summary>
+    /// <summary>
+    /// Explains a failure to bind any loopback port, without guessing at a cause we cannot see.
+    /// </summary>
+    /// <remarks>
+    /// The message this replaced said "Close other Mantle Place sessions and try again", which was
+    /// wrong nearly every time it appeared. HTTP.SYS reports a bind into a Windows reserved port
+    /// block as "used by another process", so the OS itself suggests a second copy of the plugin
+    /// that does not exist, and the curator closes Revit twice for nothing. It also rendered a
+    /// sparse candidate list as a range ("51000–53048"), naming thousands of ports it never tried.
+    /// </remarks>
+    private static string DescribeBindFailure(IReadOnlyList<int> configuredPorts)
+    {
+        if (configuredPorts.Count > 0)
+        {
+            string tried = string.Join(", ", configuredPorts);
+            return $"None of the loopback ports this machine is configured to use ({tried}) could be "
+                + "opened, so the browser was not opened. Remove the loopbackPorts override from "
+                + $"{MantlePlaceEndpoints.ConfigPath} to let the operating system choose a port instead.";
+        }
+
+        return "Could not open a loopback port to receive the sign-in response, so the browser was "
+            + "not opened. On Windows this is usually a reserved port range or a policy restriction "
+            + "on local HTTP listeners rather than a port genuinely in use — the operating system "
+            + "reports both the same way. To see the reserved ranges, run:\r\n\r\n"
+            + "    netsh interface ipv4 show excludedportrange protocol=tcp";
+    }
+
     private static bool TryOpenBrowser(string url, out string error)
     {
         error = string.Empty;
