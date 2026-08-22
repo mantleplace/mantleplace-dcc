@@ -5,6 +5,10 @@
 #include "CoreMinimal.h"
 #include "MantlePlaceVaultTypes.h"
 
+// Forward-declared rather than included: only TSharedPtr<FJsonObject> appears in a signature here,
+// and the editor target resolving it transitively is what let the game-target break ship unseen.
+class FJsonObject;
+
 /**
  * Pure (engine-/network-free) logic for the Mantle Place vault API.
  *
