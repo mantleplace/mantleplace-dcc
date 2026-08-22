@@ -326,11 +326,6 @@ public static class MaterializeJobs
     private static readonly string[] PermanentlyAbsentReasons =
         ["no_features_in_aoi", "area_cap_exceeded", "outside_coverage"];
 
-    /// <summary>
-    /// Reasons that mean nobody has tried yet, rather than that an attempt produced nothing.
-    /// </summary>
-    private static readonly string[] NotAttemptedReasons = ["available_on_request", "not_selected"];
-
     /// <summary>Reads one poll response.</summary>
     /// <remarks>
     /// <para>

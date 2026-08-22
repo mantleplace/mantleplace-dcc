@@ -275,7 +275,7 @@ internal sealed class VaultBrowserWindow : Window
     /// <remarks>
     /// The response names what IS delivered and gives no reasons for the rest, so this states the
     /// shortfall without inventing a cause for it. The per-artifact reason arrives at import time
-    /// from <c>dcc_readiness.revit</c>, which is the field that actually knows.
+    /// from <c>hosts.revit.readiness</c>, which is the field that actually knows.
     /// </remarks>
     private static string DescribeNothingToDo(MaterializeStart start)
     {
