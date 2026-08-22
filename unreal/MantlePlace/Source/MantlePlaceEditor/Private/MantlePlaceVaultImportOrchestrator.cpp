@@ -132,6 +132,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartVaultImport(const FMantlePlaceVau
 	ActiveMode = Mode;
 	ActiveScope = Scope.IsEmpty() ? TEXT("unreal") : Scope;
 	ActiveJobId.Reset();
+	ActiveRequestedTokens.Reset();
 	PollCount = 0;
 	ConsecutivePollFailures = 0;
 
@@ -199,6 +200,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartLocalImport(const FString& ZipPat
 	ActiveMode = Mode;
 	ActiveScope = TEXT("unreal");
 	ActiveJobId.Reset();
+	ActiveRequestedTokens.Reset();
 	PollCount = 0;
 	ConsecutivePollFailures = 0;
 
@@ -351,7 +353,7 @@ void UMantlePlaceVaultImportOrchestrator::DoPoll()
 		return;
 	}
 	++PollCount;
-	VaultClient->GetMaterializeStatus(ActiveItem.OrderId); // result -> HandleMaterializeStatusNative
+	VaultClient->GetMaterializeStatus(ActiveItem.OrderId, ActiveRequestedTokens); // result -> HandleMaterializeStatusNative
 }
 
 void UMantlePlaceVaultImportOrchestrator::UnschedulePoll()
@@ -363,7 +365,7 @@ void UMantlePlaceVaultImportOrchestrator::UnschedulePoll()
 	}
 }
 
-void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStartedNative(bool bSuccess, const FString& JobId, const FString& Message)
+void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStartedNative(bool bSuccess, const FMantlePlaceMaterializeStart& Start, const FString& Message)
 {
 	if (Phase != EPhase::Materializing)
 	{
@@ -375,7 +377,23 @@ void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStartedNative(bool bS
 		return;
 	}
 
-	ActiveJobId = JobId;
+	// STOP: nothing to build means there is NO JOB, so there is nothing to poll. Polling anyway would
+	// sit on "waiting for the platform to pick this up" for the whole budget and end in a timeout,
+	// for a bundle that was ready before the request was made. Straight to the re-list, which is
+	// where the post-materialize integrity facts come from either way.
+	if (Start.Outcome == EMantlePlaceMaterializeStartOutcome::NothingToDo)
+	{
+		EmitPhase(TEXT("Generated"), TEXT("This bundle already has everything the importer needs."), 1.0f);
+		Phase = EPhase::Relisting;
+		VaultClient->ListVault();
+		return;
+	}
+
+	ActiveJobId = Start.JobId;
+	// Whatever the platform named as the effective set. Empty is legitimate — it means the body
+	// named none — and the client substitutes this host's own list, since the pure logic that
+	// owns it lives in the Runtime module's private headers and is not visible here.
+	ActiveRequestedTokens = Start.Tokens;
 	Phase = EPhase::Polling;
 	PollCount = 0;
 	ConsecutivePollFailures = 0;
@@ -407,7 +425,14 @@ void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStatusNative(bool bOk
 	switch (Status.State)
 	{
 	case EMantlePlaceMaterializeState::Complete:
-		EmitPhase(TEXT("Generated"), TEXT("Unreal formats are ready."), 1.0f);
+		// A deliverable the platform will never produce for this area is a GAP, not a failure -
+		// waiting for one is waiting forever. Say which, then carry on to the download.
+		EmitPhase(TEXT("Generated"),
+		          Status.Unproducible.Num() == 0
+		              ? TEXT("Unreal formats are ready.")
+		              : FString::Printf(TEXT("Unreal formats are ready. %d not available for this area."),
+		                                Status.Unproducible.Num()),
+		          1.0f);
 		// Re-list to pick up the fresh (post-materialize) integrity facts - the download verifies the
 		// bundle sha256 fail-closed, and the pre-materialize list item's sha is stale.
 		Phase = EPhase::Relisting;

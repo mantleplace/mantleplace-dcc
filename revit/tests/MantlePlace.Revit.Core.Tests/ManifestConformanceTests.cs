@@ -24,6 +24,8 @@ internal static class ManifestConformanceTests
     internal static readonly HashSet<string> ConsumedExpectationKeys =
     [
         "jobId",
+        "outcome",
+        "tokens",
         "orderId",
         "deliveryModel",
         "cesiumTerrainPath",

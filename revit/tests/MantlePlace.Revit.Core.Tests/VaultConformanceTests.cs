@@ -81,6 +81,10 @@ internal static class VaultConformanceTests
             case "vault.materialize.started":
             case "vault.materialize.alreadyRunning":
             case "vault.materialize.startNoJobId":
+            case "vault.materialize.noop":
+            case "vault.materialize.queued":
+            case "vault.materialize.coalesced":
+            case "vault.materialize.activeJobWithoutId":
                 DriveMaterializeStart(run, corpusCase);
                 break;
 
@@ -91,6 +95,9 @@ internal static class VaultConformanceTests
 
             case "vault.materialize.statusVectors":
                 DriveWithVectors(run, corpusCase, DriveStatusVectors);
+                break;
+            case "vault.materialize.deliveryVectors":
+                DriveWithVectors(run, corpusCase, DriveDeliveryVectors);
                 break;
             case "vault.materializeTokenList":
                 DriveWithVectors(run, corpusCase, DriveTokenList);
@@ -313,6 +320,89 @@ internal static class VaultConformanceTests
             // SUCCESS that joins the running job — two curators on one order must not queue two
             // ETL runs.
             run.Equal(start.AlreadyRunning, alreadyRunning, "already running");
+        }
+
+        // ⛔ The outcome, not the presence of an id. Two of the platform's five start shapes are
+        // successes that name no job at all, and inferring failure from a missing `jobId` is what
+        // stopped this host importing any bundle with nothing left to build.
+        if (ConformanceCorpus.WantsString(corpusCase, "outcome", out string outcome))
+        {
+            run.Equal(start.Outcome.ToString(), outcome, "outcome");
+        }
+
+        if (ConformanceCorpus.WantsRows(corpusCase, "tokens", out IReadOnlyList<ExpectationNode> tokens))
+        {
+            run.Equal(start.Tokens.Count, tokens.Count, "token count");
+            for (int index = 0; index < tokens.Count && index < start.Tokens.Count; index++)
+            {
+                run.Equal(start.Tokens[index], tokens[index].AsString(), $"token[{index}]");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Drives the delivery-state table: the shape this endpoint actually answers polls with.
+    /// </summary>
+    /// <remarks>
+    /// There is no status word to read, so every row asserts a DERIVED state. The `requested` array
+    /// at the top of the file is the yardstick — without it there is nothing to compare `delivered`
+    /// against and no way to know a build has finished.
+    /// </remarks>
+    private static void DriveDeliveryVectors(TestRun run, VectorNode root)
+    {
+        List<string> requested = [];
+        foreach (VectorNode token in root.Items("requested"))
+        {
+            requested.Add(token.Element.GetString() ?? string.Empty);
+        }
+
+        root.MarkConsumed("requested");
+
+        foreach (VectorNode vector in root.Items("vectors"))
+        {
+            string body = vector.Element.GetProperty("body").GetRawText();
+            vector.MarkConsumed("body");
+
+            string? error = MaterializeJobs.TryParseStatus(body, requested, out MaterializeStatus status);
+            bool expectParsed = vector.Bool("parseSucceeds") ?? true;
+
+            run.Equal(error is null, expectParsed, $"parse {body}");
+
+            if (!expectParsed)
+            {
+                run.Contains(error, vector.Str("errorContains")!, "failure names the reason");
+                continue;
+            }
+
+            run.Equal(status.State.ToString(), vector.Str("state")!, $"state for {body}");
+            run.Within(status.Fraction, vector.Double("fraction") ?? double.NaN, 1e-9, $"fraction for {body}");
+
+            if (vector.Str("jobId") is { } jobId)
+            {
+                run.Equal(status.JobId, jobId, "job id");
+            }
+
+            if (vector.Str("messageContains") is { } fragment)
+            {
+                run.Contains(status.Message, fragment, "message names the cause");
+            }
+
+            if (vector.Element.TryGetProperty("unproducible", out JsonElement gaps))
+            {
+                vector.MarkConsumed("unproducible");
+                run.Equal(status.Unproducible.Count, gaps.GetArrayLength(), "permanent gap count");
+
+                int index = 0;
+                foreach (JsonElement gap in gaps.EnumerateArray())
+                {
+                    if (index < status.Unproducible.Count)
+                    {
+                        run.Equal(status.Unproducible[index].Token, gap.GetString(), $"gap[{index}]");
+                    }
+
+                    index++;
+                }
+            }
         }
     }
 

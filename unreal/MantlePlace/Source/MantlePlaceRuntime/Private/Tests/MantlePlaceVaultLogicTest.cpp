@@ -37,6 +37,8 @@ const TCHAR* const ConsumedExpectationKeys[] = {
 	TEXT("jobId"),
 	TEXT("alreadyRunning"),
 	TEXT("tierLabels"),
+	TEXT("outcome"),
+	TEXT("tokens"),
 };
 
 /** Parse a JSON body and read a string field; returns "" if absent. */
@@ -51,6 +53,30 @@ FString VaultReadStringField(const FString& JsonStr, const TCHAR* Field)
 		return Value;
 	}
 	return FString();
+}
+
+/** Parse a JSON body and read a top-level string array; empty when absent or wrong-typed. */
+TArray<FString> VaultReadStringArrayField(const FString& JsonStr, const TCHAR* Field)
+{
+	TArray<FString> Values;
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<TCHAR>> Reader = TJsonReaderFactory<TCHAR>::Create(JsonStr);
+	if (FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid())
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Array = nullptr;
+		if (Root->TryGetArrayField(Field, Array) && Array != nullptr)
+		{
+			for (const TSharedPtr<FJsonValue>& Entry : *Array)
+			{
+				FString Text;
+				if (Entry.IsValid() && Entry->TryGetString(Text))
+				{
+					Values.Add(MoveTemp(Text));
+				}
+			}
+		}
+	}
+	return Values;
 }
 
 // Both mappers carry an explicit case per enumerator and NO default: the corpus legitimately
@@ -69,6 +95,23 @@ FString StatusName(EMantlePlaceVaultBundleStatus Status)
 		case EMantlePlaceVaultBundleStatus::Unknown:         return TEXT("Unknown");
 	}
 	return TEXT("UNMAPPED");
+}
+
+FString StartOutcomeName(EMantlePlaceMaterializeStartOutcome Outcome)
+{
+	switch (Outcome)
+	{
+	case EMantlePlaceMaterializeStartOutcome::Started:
+		return TEXT("Started");
+	case EMantlePlaceMaterializeStartOutcome::Joined:
+		return TEXT("Joined");
+	case EMantlePlaceMaterializeStartOutcome::NothingToDo:
+		return TEXT("NothingToDo");
+	case EMantlePlaceMaterializeStartOutcome::Queued:
+		return TEXT("Queued");
+	default:
+		return TEXT("<unmapped>");
+	}
 }
 
 FString StateName(EMantlePlaceMaterializeState State)
@@ -429,6 +472,108 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestTrue(Case->What(TEXT("no job id is invented")), JobId.IsEmpty());
 		TestFalse(Case->What(TEXT("states an errorContains")), Case->ErrorContains.IsEmpty());
 		TestTrue(Case->What(TEXT("error body message surfaces")), Error.Contains(Case->ErrorContains));
+	}
+
+	// --- materialize: the shapes that name NO job -------------------------------------------
+	// STOP: two of the platform's five start shapes are successes carrying no job id, and a third
+	// carries it under `activeJobId` with no `jobId` at all. Inferring failure from a missing `jobId`
+	// is what left the Revit host unable to import any bundle with nothing left to build; this host
+	// had the identical hole, masked only because a complete bundle skips materialize entirely.
+	for (const TCHAR* Id : {
+	         TEXT("vault.materialize.noop"),
+	         TEXT("vault.materialize.queued"),
+	         TEXT("vault.materialize.coalesced"),
+	         TEXT("vault.materialize.activeJobWithoutId") })
+	{
+		if (const FCase* Case = Take(Id))
+		{
+			FMantlePlaceMaterializeStart Start;
+			FString Error;
+			TestTrue(Case->What(TEXT("accepted")),
+			         FLogic::ParseMaterializeStartResponse(Case->Payload, Start, Error));
+
+			FString Expected;
+			if (WantsString(*Case, TEXT("outcome"), Expected))
+			{
+				TestEqual(Case->What(TEXT("outcome")), StartOutcomeName(Start.Outcome), Expected);
+			}
+			if (WantsString(*Case, TEXT("jobId"), Expected))
+			{
+				TestEqual(Case->What(TEXT("jobId")), Start.JobId, Expected);
+			}
+			bool bExpected = false;
+			if (WantsBool(*Case, TEXT("alreadyRunning"), bExpected))
+			{
+				TestTrue(Case->What(TEXT("alreadyRunning")), Start.IsAlreadyRunning() == bExpected);
+			}
+			TArray<FString> ExpectedTokens;
+			if (WantsStringArray(*Case, TEXT("tokens"), ExpectedTokens))
+			{
+				TestEqual(Case->What(TEXT("tokens")), Start.Tokens, ExpectedTokens);
+			}
+		}
+	}
+
+	// --- materialize: the delivery-state document -------------------------------------------
+	// Polling this endpoint returns delivered/notDelivered/activeJob and NO status word, so
+	// completion is derived. This table is that derivation.
+	if (const FCase* Case = Take(TEXT("vault.materialize.deliveryVectors")))
+	{
+		const TArray<FString> Requested = VaultReadStringArrayField(Case->Payload, TEXT("requested"));
+		TestTrue(Case->What(TEXT("names a requested set")), Requested.Num() > 0);
+
+		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("vectors"));
+		TestTrue(Case->What(TEXT("has vectors")), Vectors.Num() > 0);
+		for (int32 Index = 0; Index < Vectors.Num(); ++Index)
+		{
+			const TSharedPtr<FJsonObject>& Row = Vectors[Index];
+			const FString Body = RowBodyAsText(Row);
+			const FString Where = FString::Printf(TEXT("[%s] vectors[%d]"), *Case->Id, Index);
+			const bool bShouldParse = RowBool(Row, TEXT("parseSucceeds"), true);
+
+			FMantlePlaceMaterializeStatus Status;
+			FString Error;
+			const bool bParsed = FLogic::ParseMaterializeStatus(Body, Requested, Status, Error);
+			TestTrue(Where + TEXT(" parseSucceeds"), bParsed == bShouldParse);
+
+			if (bShouldParse && bParsed)
+			{
+				TestEqual(Where + TEXT(" state"), StateName(Status.State), RowString(Row, TEXT("state")));
+				const double ExpectedFraction = RowNumber(Row, TEXT("fraction"), -1.0);
+				TestEqual(Where + TEXT(" fraction"),
+				          static_cast<double>(Status.Fraction), ExpectedFraction, 1e-4);
+
+				FString Expected;
+				if (Row.IsValid() && Row->TryGetStringField(TEXT("jobId"), Expected))
+				{
+					TestEqual(Where + TEXT(" jobId"), Status.JobId, Expected);
+				}
+				if (Row.IsValid() && Row->TryGetStringField(TEXT("messageContains"), Expected))
+				{
+					TestTrue(Where + TEXT(" messageContains"), Status.Message.Contains(Expected));
+				}
+
+				const TArray<TSharedPtr<FJsonValue>>* Gaps = nullptr;
+				if (Row.IsValid() && Row->TryGetArrayField(TEXT("unproducible"), Gaps) && Gaps != nullptr)
+				{
+					TestEqual(Where + TEXT(" unproducible count"), Status.Unproducible.Num(), Gaps->Num());
+					for (int32 Gap = 0; Gap < Gaps->Num() && Gap < Status.Unproducible.Num(); ++Gap)
+					{
+						FString Token;
+						(*Gaps)[Gap]->TryGetString(Token);
+						TestEqual(Where + TEXT(" unproducible token"), Status.Unproducible[Gap].Token, Token);
+					}
+				}
+			}
+			else if (!bShouldParse)
+			{
+				const FString Contains = RowString(Row, TEXT("errorContains"));
+				if (!Contains.IsEmpty())
+				{
+					TestTrue(Where + TEXT(" errorContains"), Error.Contains(Contains));
+				}
+			}
+		}
 	}
 
 	// --- materialize: status vectors --------------------------------------------------------

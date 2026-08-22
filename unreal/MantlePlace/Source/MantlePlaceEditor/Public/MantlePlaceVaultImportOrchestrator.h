@@ -202,7 +202,7 @@ private:
 	//~ Native-delegate handlers bound on the vault client / bundle cache / auth source.
 	void HandleAuthStateChangedNative(EMantlePlaceAuthState NewState);
 	void HandleVaultListedNative(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message);
-	void HandleMaterializeStartedNative(bool bSuccess, const FString& JobId, const FString& Message);
+	void HandleMaterializeStartedNative(bool bSuccess, const FMantlePlaceMaterializeStart& Start, const FString& Message);
 	void HandleMaterializeStatusNative(bool bOk, const FMantlePlaceMaterializeStatus& Status, const FString& Message);
 	void HandlePresignedNative(bool bSuccess, const FMantlePlacePresignedDownload& Download, const FString& Message);
 	void HandleDownloadProgressNative(const FMantlePlaceDownloadProgress& Progress);
@@ -225,6 +225,15 @@ private:
 	EMantlePlaceImportMode ActiveMode = EMantlePlaceImportMode::Landscape;
 	FString ActiveScope;
 	FString ActiveJobId;
+
+	/**
+	 * The tokens this run measures delivery against while polling.
+	 *
+	 * The status endpoint answers with a delivery-state document and no status word, so completion is
+	 * "these tokens are delivered and no job is in flight". Without the set there is nothing to
+	 * compare against.
+	 */
+	TArray<FString> ActiveRequestedTokens;
 	int32 PollCount = 0;
 	int32 ConsecutivePollFailures = 0;
 	FTSTicker::FDelegateHandle PollTicker;

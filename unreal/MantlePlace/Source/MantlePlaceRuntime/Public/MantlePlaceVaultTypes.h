@@ -188,6 +188,64 @@ enum class EMantlePlaceMaterializeState : uint8
 };
 
 /**
+ * What the platform did with a materialize request.
+ *
+ * Five wire shapes, four outcomes. Modelling this as "a job id, or an error" was wrong: two of the
+ * five are successes that name no job at all, and reading their missing job id as a failure is what
+ * left the Revit host unable to import any bundle that had nothing left to build.
+ */
+UENUM(BlueprintType)
+enum class EMantlePlaceMaterializeStartOutcome : uint8
+{
+	/** A fresh job. Tokens is the effective set being built. */
+	Started,
+	/** A run was already in flight and this joined it. JobId MAY be empty - see ParseMaterializeStartResponse. */
+	Joined,
+	/** Nothing to build: everything asked for is delivered or can never be produced here. Tokens is what the bundle HAS. */
+	NothingToDo,
+	/** The order's core build has not finished; the picks are parked and fire on their own. No job exists yet. */
+	Queued
+};
+
+/** The response to starting a materialize. */
+USTRUCT(BlueprintType)
+struct FMantlePlaceMaterializeStart
+{
+	GENERATED_BODY()
+
+	/** Which of the four things happened. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	EMantlePlaceMaterializeStartOutcome Outcome = EMantlePlaceMaterializeStartOutcome::Started;
+
+	/** The job to follow. Empty for every outcome except a started or joined run. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString JobId;
+
+	/** The effective set being built, the delivered set, or the parked set, per Outcome. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	TArray<FString> Tokens;
+
+	/** True when this joined a run rather than starting one. */
+	bool IsAlreadyRunning() const
+	{
+		return Outcome == EMantlePlaceMaterializeStartOutcome::Joined;
+	}
+};
+
+/** A requested deliverable this bundle will never carry, and the platform's reason. */
+USTRUCT(BlueprintType)
+struct FMantlePlaceMissingDeliverable
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString Token;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString Reason;
+};
+
+/**
  * A materialize status poll result. Fraction is in [0,1], or -1 when the endpoint reports no
  * measurable progress (indeterminate). Message/JobId are best-effort and may be empty.
  */
@@ -211,4 +269,15 @@ struct FMantlePlaceMaterializeStatus
 	/** The materialize jobId, when reported. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	FString JobId;
+
+	/** Which of the REQUESTED tokens the bundle now carries. Empty on the legacy job-status shape. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	TArray<FString> Delivered;
+
+	/**
+	 * Requested tokens the platform will never produce for this area, with its reason. A gap, not a
+	 * failure: waiting for one is waiting forever, so these are reported and stepped over.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	TArray<FMantlePlaceMissingDeliverable> Unproducible;
 };

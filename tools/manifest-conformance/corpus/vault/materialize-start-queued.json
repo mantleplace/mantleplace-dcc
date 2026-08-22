@@ -1,0 +1,7 @@
+{
+  "queued": true,
+  "pendingTokens": [
+    "buildings.ifc",
+    "elevation.landxml"
+  ]
+}

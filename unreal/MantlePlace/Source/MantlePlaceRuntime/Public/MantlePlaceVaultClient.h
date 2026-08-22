@@ -18,7 +18,7 @@ class UMantlePlaceAuthSystemBase;
  */
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnVaultListedNative, bool /*bSuccess*/, const TArray<FMantlePlaceVaultItem>& /*Bundles*/, const FString& /*Message*/);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnPresignedNative, bool /*bSuccess*/, const FMantlePlacePresignedDownload& /*Download*/, const FString& /*Message*/);
-DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStartedNative, bool /*bSuccess*/, const FString& /*JobId*/, const FString& /*Message*/);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStartedNative, bool /*bSuccess*/, const FMantlePlaceMaterializeStart& /*Start*/, const FString& /*Message*/);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStatusNative, bool /*bOk*/, const FMantlePlaceMaterializeStatus& /*Status*/, const FString& /*Message*/);
 
 /**
@@ -94,7 +94,14 @@ public:
 	 * the caller's (the orchestrator polls on an interval until complete).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
-	void GetMaterializeStatus(const FString& OrderId);
+	/**
+	 * Poll the materialize status.
+	 *
+	 * Requested is the token set whose delivery decides completion. The platform answers this
+	 * endpoint with a delivery-state document carrying no status word, so without it there is nothing
+	 * to compare against and no way to know a build has finished.
+	 */
+	void GetMaterializeStatus(const FString& OrderId, const TArray<FString>& Requested);
 
 	/**
 	 * True iff Item is an incomplete (BASE) bundle that still needs "Generate Unreal formats" - it
@@ -122,7 +129,7 @@ public:
 
 	/** Implemented by the Blueprint child: a materialize request was accepted (or refused). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Mantle Place|Vault")
-	void OnMaterializeStarted(bool bSuccess, const FString& JobId, const FString& Message);
+	void OnMaterializeStarted(bool bSuccess, const FMantlePlaceMaterializeStart& Start, const FString& Message);
 
 	/** Implemented by the Blueprint child: a non-terminal materialize status poll (pending/processing). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Mantle Place|Vault")
@@ -136,6 +143,15 @@ public:
 	FMantlePlaceOnVaultListedNative OnVaultListedNative;
 	FMantlePlaceOnPresignedNative OnPresignedUrlReadyNative;
 	FMantlePlaceOnMaterializeStartedNative OnMaterializeStartedNative;
+
+	/**
+	 * The tokens the in-flight status poll measures delivery against.
+	 *
+	 * Held on the client because the status response is a delivery-state document with no status
+	 * word: without the requested set there is nothing to compare `delivered` to, and no way to tell
+	 * a finished build from one that has not started.
+	 */
+	TArray<FString> PendingStatusTokens;
 	FMantlePlaceOnMaterializeStatusNative OnMaterializeStatusNative;
 
 	//~ Begin UObject interface
@@ -161,7 +177,7 @@ private:
 	/** Fire the native delegate + the Blueprint event together (single source of truth per signal). */
 	void NotifyVaultListed(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message);
 	void NotifyPresigned(bool bSuccess, const FMantlePlacePresignedDownload& Download, const FString& Message);
-	void NotifyMaterializeStarted(bool bSuccess, const FString& JobId, const FString& Message);
+	void NotifyMaterializeStarted(bool bSuccess, const FMantlePlaceMaterializeStart& Start, const FString& Message);
 	void NotifyMaterializeStatus(bool bOk, const FMantlePlaceMaterializeStatus& Status, const FString& Message);
 
 	/** Unbind + cancel + reset any in-flight request. */

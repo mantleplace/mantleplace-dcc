@@ -167,7 +167,27 @@
       "revit",
       "unreal"
     ],
+    "vault.materialize.activeJobWithoutId": [
+      "revit",
+      "unreal"
+    ],
     "vault.materialize.alreadyRunning": [
+      "revit",
+      "unreal"
+    ],
+    "vault.materialize.coalesced": [
+      "revit",
+      "unreal"
+    ],
+    "vault.materialize.deliveryVectors": [
+      "revit",
+      "unreal"
+    ],
+    "vault.materialize.noop": [
+      "revit",
+      "unreal"
+    ],
+    "vault.materialize.queued": [
       "revit",
       "unreal"
     ],

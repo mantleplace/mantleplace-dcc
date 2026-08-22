@@ -90,23 +90,90 @@ struct FMantlePlaceVaultLogic
 	static FString BuildMaterializeBody(const FString& Scope);
 
 	/**
-	 * Parse the materialize POST response. A 2xx body carries {"jobId":..}; a 409 (single-flight)
-	 * carries {"activeJobId":..} - both mean "a job is running", so both return true with OutJobId
-	 * filled and bOutAlreadyRunning distinguishing them. Fails closed (false, fills OutError from the
-	 * error body) when neither id is present.
+	 * Parse the materialize POST response - all five shapes the platform sends.
+	 *
+	 * STOP: each outcome is keyed on ITS OWN MARKER, never on the absence of `jobId`. That inference
+	 * is what broke this: {"noop":true,..} and {"queued":true,..} are SUCCESSES that name no job, and
+	 * both read as "the platform accepted the request but named no job to poll".
+	 *
+	 *   201 {"jobId",..}                     -> Started
+	 *   200 {"coalesced":true,"activeJobId"} -> Joined  (note: NO `jobId` in this one)
+	 *   200 {"noop":true,"delivered"}        -> NothingToDo
+	 *   202 {"queued":true,"pendingTokens"}  -> Queued
+	 *   409 {"error","code":"active_job",..} -> Joined
+	 *
+	 * A join with no job id is STILL a join: the 409's `activeJobId` may be null, and polling is keyed
+	 * on the ORDER, not the job (the status GET never took a job id), so an unnamed run is fully
+	 * followable. Refusing here tells a curator to retry a build that is already going.
+	 *
+	 * Fails closed (false, fills OutError from the error body) only for a genuine error envelope or a
+	 * body that is none of the five.
+	 */
+	static bool ParseMaterializeStartResponse(const FString& JsonStr, FMantlePlaceMaterializeStart& OutStart, FString& OutError);
+
+	/**
+	 * The four-argument shape, kept so the corpus drivers that assert jobId/alreadyRunning keep
+	 * working unchanged. New callers take the outcome.
 	 */
 	static bool ParseMaterializeStartResponse(const FString& JsonStr, FString& OutJobId, bool& bOutAlreadyRunning, FString& OutError);
+
+	/** True for a `not_delivered` reason that no amount of waiting or retrying will change. */
+	static bool IsPermanentlyAbsentReason(const FString& Reason);
+
+	/**
+	 * The token set to measure delivery against while polling.
+	 *
+	 * The start response echoes the EFFECTIVE set - already deduped against what is delivered and
+	 * against what can never be produced here - so it beats this host's own list, and is the only
+	 * correct answer for the "all" scope whose expansion lives on the server. Falls back to
+	 * TargetedImportTokens() when the body named none.
+	 */
+	static TArray<FString> RequestedForPolling(const FMantlePlaceMaterializeStart& Start);
 
 	/** Map a materialize status string to the enum; unrecognized strings -> Unknown (not a parse error). */
 	static EMantlePlaceMaterializeState ParseMaterializeState(const FString& State);
 
 	/**
-	 * Parse a materialize status body: {"status"|"state":.., "progress"|"fraction"?:.., "message"?:.., "jobId"?:..}.
-	 * Returns true (filling OutStatus, including a Failed state) whenever a recognizable status field is
-	 * present; a raw error envelope ({"error":..} with no status) fails closed (false, fills OutError).
-	 * A progress value > 1 is treated as a percent and normalized to [0,1].
+	 * Parse a materialize status body. TWO shapes.
+	 *
+	 * A body carrying {"status"|"state":..} is a job-status document and is read as one:
+	 * {"progress"|"fraction"?:.., "message"?:.., "jobId"?:..}, a value > 1 treated as a percent and
+	 * normalized to [0,1].
+	 *
+	 * Otherwise the platform answers this endpoint with a DELIVERY-STATE document -
+	 * {"delivered":[..],"notDelivered":[{token,reason}],"activeJob":{..}|null,"lastAttempt":..} -
+	 * which carries no status word ANYWHERE, so completion is derived from `delivered` against
+	 * `Requested`. That derivation is the more truthful reading either way: a run reports `completed`
+	 * even when every token's emit failed, because per-token errors are swallowed by a soft-fail
+	 * envelope. Delivery is proof of production; a job status is not.
+	 *
+	 * A raw error envelope with neither shape fails closed (false, fills OutError).
 	 */
+	static bool ParseMaterializeStatus(const FString& JsonStr, const TArray<FString>& Requested, FMantlePlaceMaterializeStatus& OutStatus, FString& OutError);
+
+	/** The job-status shape only - no requested set, so nothing to derive delivery against. */
 	static bool ParseMaterializeStatus(const FString& JsonStr, FMantlePlaceMaterializeStatus& OutStatus, FString& OutError);
+
+	/**
+	 * Derive a state from the platform's delivery-state document.
+	 *
+	 * The row order IS the design, and three rows are traps:
+	 *
+	 *  - STOP: unreadable delivery state is checked first. `deliveryStateUnknown` means `delivered`
+	 *    is empty for want of an answer, not because the bundle is empty. Falling through with an
+	 *    empty requested set would compute "nothing outstanding" and report Complete - handing over a
+	 *    bundle the platform never confirmed. Unknown is not terminal, so polling continues.
+	 *  - STOP: nothing outstanding beats a running job. If everything asked for is on hand, an
+	 *    in-flight job is building someone else's pick, and waiting stalls a possible download.
+	 *  - STOP: a terminal attempt that left tokens outstanding is a failure whatever it called
+	 *    itself. The verdict keys on the TOKENS; `outcome` only picks the sentence. Reading
+	 *    `completed` as success is the silent loop where a curator regenerates forever.
+	 *
+	 * The last row is Pending, never Complete: that is the normal state in the seconds after a start,
+	 * before the job row is visible. `activeJob.steps` is deliberately NOT read for progress - it is
+	 * an unvalidated jsonb ladder the platform owns.
+	 */
+	static void DeriveMaterializeDelivery(const TSharedPtr<FJsonObject>& Root, const TArray<FString>& Requested, FMantlePlaceMaterializeStatus& OutStatus);
 
 	//~ ----- Tier detection (drives the vault list surface) -----
 

@@ -176,13 +176,41 @@ internal sealed class VaultBrowserWindow : Window
                 return;
             }
 
-            Report(start.Value!.Value.AlreadyRunning
-                ? "This bundle was already being prepared — following that job rather than starting a second."
-                : "Preparing your Revit deliverables…");
+            MaterializeStart begun = start.Value!.Value;
+
+            // ⛔ Nothing to build means there is NO JOB, so there is nothing to poll. Polling anyway
+            // would sit on "waiting for the platform to pick this up" for the whole budget and end in
+            // a timeout, for a bundle that was ready before the request was made. This is also the
+            // ONLY route from the vault to an import for an already-complete bundle: Import refuses
+            // unless the cache holds the zip, and nothing but this method fills the cache.
+            if (begun.Outcome == MaterializeStartOutcome.NothingToDo)
+            {
+                Report(DescribeNothingToDo(begun));
+                await DownloadPreparedAsync(bundle, token).ConfigureAwait(true);
+                return;
+            }
+
+            switch (begun.Outcome)
+            {
+                case MaterializeStartOutcome.Joined:
+                    Report("This bundle was already being prepared — following that job rather than starting a second.");
+                    break;
+
+                case MaterializeStartOutcome.Queued:
+                    Report("Your order is still being built. Your Revit deliverables are queued and "
+                        + "start on their own as soon as it finishes.");
+                    break;
+
+                default:
+                    Report("Preparing your Revit deliverables…");
+                    break;
+            }
+
+            IReadOnlyList<string> requested = MaterializeJobs.RequestedForPolling(begun);
 
             Progress<MaterializeStatus> progress = new(status => Report(Describe(status, bundle)));
             VaultResult<MaterializeStatus> finished = await _vault
-                .PollToCompletionAsync(bundle.OrderId, progress, token)
+                .PollToCompletionAsync(bundle.OrderId, requested, progress, token)
                 .ConfigureAwait(true);
 
             if (!finished.Succeeded)
@@ -191,24 +219,14 @@ internal sealed class VaultBrowserWindow : Window
                 return;
             }
 
-            Report("Built. Fetching the integrity details…");
-            (VaultListing? relisted, string? listError) = await _vault.ListAsync(token).ConfigureAwait(true);
-            if (listError is not null)
+            // A deliverable the platform will never produce for this area is a GAP, not a failure.
+            // Say so and carry on: waiting for one is waiting forever.
+            if (finished.Value!.Value.Unproducible is { Count: > 0 } gaps)
             {
-                Report(listError);
-                return;
+                Report(DescribeGaps(gaps));
             }
 
-            VaultBundle refreshed = relisted!.Bundles
-                .FirstOrDefault(row => string.Equals(row.OrderId, bundle.OrderId, StringComparison.Ordinal))
-                ?? bundle;
-
-            Report("Downloading…");
-            string? downloadError = await _vault.DownloadAsync(refreshed, _cache, token).ConfigureAwait(true);
-
-            Report(downloadError ?? _cache
-                .Inspect(refreshed.OrderId, refreshed.SizeBytes, refreshed.Sha256, refreshed.ManifestVersion)
-                .Describe());
+            await DownloadPreparedAsync(bundle, token).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -218,6 +236,67 @@ internal sealed class VaultBrowserWindow : Window
         {
             EndWork();
         }
+    }
+
+    /// <summary>
+    /// Re-list, then download (<c>HPS-18</c>).
+    /// </summary>
+    /// <remarks>
+    /// Shared by the polled path and the nothing-to-build path so there is one copy of the re-list.
+    /// It is not optional on either: it is where the integrity facts for the bundle as it stands
+    /// come from, and checking a download against a pre-materialize size and digest is checking it
+    /// against numbers that describe a different file.
+    /// </remarks>
+    private async Task DownloadPreparedAsync(VaultBundle bundle, CancellationToken token)
+    {
+        Report("Fetching the integrity details…");
+        (VaultListing? relisted, string? listError) = await _vault.ListAsync(token).ConfigureAwait(true);
+        if (listError is not null)
+        {
+            Report(listError);
+            return;
+        }
+
+        VaultBundle refreshed = relisted!.Bundles
+            .FirstOrDefault(row => string.Equals(row.OrderId, bundle.OrderId, StringComparison.Ordinal))
+            ?? bundle;
+
+        Report("Downloading…");
+        string? downloadError = await _vault.DownloadAsync(refreshed, _cache, token).ConfigureAwait(true);
+
+        Report(downloadError ?? _cache
+            .Inspect(refreshed.OrderId, refreshed.SizeBytes, refreshed.Sha256, refreshed.ManifestVersion)
+            .Describe());
+    }
+
+    /// <summary>
+    /// What to say when the platform had nothing to build.
+    /// </summary>
+    /// <remarks>
+    /// The response names what IS delivered and gives no reasons for the rest, so this states the
+    /// shortfall without inventing a cause for it. The per-artifact reason arrives at import time
+    /// from <c>dcc_readiness.revit</c>, which is the field that actually knows.
+    /// </remarks>
+    private static string DescribeNothingToDo(MaterializeStart start)
+    {
+        HashSet<string> delivered = new(start.Tokens, StringComparer.Ordinal);
+        int absent = MaterializeJobs.RevitTokens.Count(token => !delivered.Contains(token));
+
+        return absent == 0
+            ? "Everything Revit needs is already built. Fetching it…"
+            : $"Everything available for this area is already built. {absent} of the Revit "
+                + "deliverables aren't in this bundle; the import will say why. Fetching it…";
+    }
+
+    /// <summary>The platform's own reason for each deliverable it will never produce here.</summary>
+    private static string DescribeGaps(IReadOnlyList<MissingDeliverable> gaps)
+    {
+        IEnumerable<string> clauses = gaps.Select(gap =>
+            ReadinessReasons.ClauseFor(gap.Reason) is { } clause
+                ? $"{gap.Token} ({clause})"
+                : gap.Token);
+
+        return $"Not available for this area: {string.Join("; ", clauses)}.";
     }
 
     private async Task ImportAsync()
@@ -319,6 +398,10 @@ internal sealed class VaultBrowserWindow : Window
             ? "working"
             : (status.Fraction * 100).ToString("0", CultureInfo.InvariantCulture) + "%";
 
-        return $"Preparing {bundle.AoiLabel}: {status.State} ({progress}).";
+        // The platform's own sentence when it gave one — "Building 3 deliverable(s)…" beats the bare
+        // state name, and on Unknown it is the difference between a spinner and an explanation.
+        return status.Message.Length > 0
+            ? $"Preparing {bundle.AoiLabel}: {status.Message} ({progress})."
+            : $"Preparing {bundle.AoiLabel}: {status.State} ({progress}).";
     }
 }

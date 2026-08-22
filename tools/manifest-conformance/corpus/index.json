@@ -899,6 +899,62 @@
       "errorContains": "Internal error"
     },
     {
+      "id": "vault.materialize.noop",
+      "group": "vault",
+      "file": "vault/materialize-start-noop.json",
+      "expect": "accept",
+      "reason": "Nothing left to build is a SUCCESS that names no job. The platform answers this way when everything asked for is already delivered, or when the rest can never be produced for this area. A host that reads the absence of a job id as a failure refuses the one response meaning 'your bundle is ready' \u2014 and where the download only happens past this parse, that host cannot import at all.",
+      "expectations": {
+        "outcome": "NothingToDo",
+        "jobId": "",
+        "tokens": ["elevation.points_csv", "elevation.surface_dxf", "imagery.drape_png"]
+      }
+    },
+    {
+      "id": "vault.materialize.queued",
+      "group": "vault",
+      "file": "vault/materialize-start-queued.json",
+      "expect": "accept",
+      "reason": "The order's core build has not finished, so the picks are parked and fire on their own when it does. Also a success with no job: there is nothing to poll YET, and telling the curator to retry would queue nothing and explain less.",
+      "expectations": {
+        "outcome": "Queued",
+        "jobId": "",
+        "tokens": ["buildings.ifc", "elevation.landxml"]
+      }
+    },
+    {
+      "id": "vault.materialize.coalesced",
+      "group": "vault",
+      "file": "vault/materialize-start-coalesced.json",
+      "expect": "accept",
+      "reason": "The 200-flavoured join. It carries `activeJobId` and NO `jobId`, so a host keying on `jobId` alone sees 'no id' on a request that succeeded and joined a running build.",
+      "expectations": {
+        "outcome": "Joined",
+        "jobId": "job-existing",
+        "alreadyRunning": true,
+        "tokens": ["buildings.ifc"]
+      }
+    },
+    {
+      "id": "vault.materialize.activeJobWithoutId",
+      "group": "vault",
+      "file": "vault/materialize-start-active-job-no-id.json",
+      "expect": "accept",
+      "reason": "A single-flight refusal may report the running job WITHOUT naming it \u2014 `activeJobId` is null. This is still a join, not an error: polling is keyed on the ORDER, not the job (the status request never took a job id), so an unnamed run is fully followable. A host that refuses here tells a curator to retry a build that is already going, which is the failure HPS-24 exists to prevent.",
+      "expectations": {
+        "outcome": "Joined",
+        "jobId": ""
+      }
+    },
+    {
+      "id": "vault.materialize.deliveryVectors",
+      "group": "vault",
+      "file": "vault/materialize-delivery-vectors.json",
+      "expect": "vector",
+      "reason": "Polling this endpoint returns a DELIVERY-STATE document \u2014 delivered / notDelivered / activeJob \u2014 with no status word anywhere, so completion is derived rather than read. This table is that derivation. It is also the more truthful reading: a run reports `completed` even when every token's emit failed, so delivery is proof of production and a job status is not.",
+      "expectations": {}
+    },
+    {
       "id": "vault.materialize.statusVectors",
       "group": "vault",
       "file": "vault/materialize-status-vectors.json",

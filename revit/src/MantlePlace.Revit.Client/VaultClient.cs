@@ -47,15 +47,15 @@ public sealed class VaultClient
     /// <summary>Lists the curator's bundles.</summary>
     public async Task<(VaultListing? Listing, string? Error)> ListAsync(CancellationToken cancellationToken)
     {
-        (string? body, string? error) = await SendAsync(HttpMethod.Get, BundlesUrl(), null, cancellationToken)
-            .ConfigureAwait(false);
+        (int status, string body, string? error) = await SendAsync(
+            HttpMethod.Get, BundlesUrl(), null, cancellationToken).ConfigureAwait(false);
 
-        if (error is not null)
+        if (error is not null || Refusal(status, body) is { } refusal && (error = refusal) is not null)
         {
             return (null, error);
         }
 
-        string? parseError = VaultListingReader.TryParse(body!, out VaultListing listing);
+        string? parseError = VaultListingReader.TryParse(body, out VaultListing listing);
         return parseError is null ? (listing, null) : (null, parseError);
     }
 
@@ -78,7 +78,7 @@ public sealed class VaultClient
                 + $"'{MaterializeJobs.AllScope}'.");
         }
 
-        (string? body, string? error) = await SendAsync(
+        (int status, string body, string? error) = await SendAsync(
             HttpMethod.Post,
             MaterializeUrl(orderId),
             MaterializeJobs.BuildRequestBody(scope),
@@ -89,26 +89,42 @@ public sealed class VaultClient
             return VaultResult<MaterializeStart>.Failed(error);
         }
 
-        string? parseError = MaterializeJobs.TryParseStart(body!, out MaterializeStart start);
+        // ⛔HPS-24: the start response is recognised by BODY SHAPE, not by status code, so the
+        // single-flight 409 goes to the PARSER — its body carries the running job, and refusing it
+        // here would tell a curator to retry a run that is already going. This exception is the
+        // whole reason `Refusal` is a separate call rather than something SendAsync applies: the
+        // Unreal host makes the identical one, and the two must not drift.
+        if (status != Conflict && Refusal(status, body) is { } refusal)
+        {
+            return VaultResult<MaterializeStart>.Failed(refusal);
+        }
+
+        string? parseError = MaterializeJobs.TryParseStart(body, out MaterializeStart start);
         return parseError is null
             ? VaultResult<MaterializeStart>.Ok(start)
             : VaultResult<MaterializeStart>.Failed(parseError);
     }
 
     /// <summary>One poll.</summary>
+    /// <param name="requested">
+    /// The tokens whose delivery decides completion. The platform answers this endpoint with a
+    /// delivery-state document carrying no status word, so without this there is nothing to compare
+    /// against and no way to know the job is done.
+    /// </param>
     public async Task<VaultResult<MaterializeStatus>> PollOnceAsync(
         string orderId,
+        IReadOnlyCollection<string> requested,
         CancellationToken cancellationToken)
     {
-        (string? body, string? error) = await SendAsync(HttpMethod.Get, MaterializeUrl(orderId), null, cancellationToken)
-            .ConfigureAwait(false);
+        (int status_, string body, string? error) = await SendAsync(
+            HttpMethod.Get, MaterializeUrl(orderId), null, cancellationToken).ConfigureAwait(false);
 
-        if (error is not null)
+        if (error is not null || Refusal(status_, body) is { } refusal && (error = refusal) is not null)
         {
             return VaultResult<MaterializeStatus>.Failed(error);
         }
 
-        string? parseError = MaterializeJobs.TryParseStatus(body!, out MaterializeStatus status);
+        string? parseError = MaterializeJobs.TryParseStatus(body, requested, out MaterializeStatus status);
         return parseError is null
             ? VaultResult<MaterializeStatus>.Ok(status)
             : VaultResult<MaterializeStatus>.Failed(parseError);
@@ -125,6 +141,7 @@ public sealed class VaultClient
     /// </remarks>
     public async Task<VaultResult<MaterializeStatus>> PollToCompletionAsync(
         string orderId,
+        IReadOnlyCollection<string> requested,
         IProgress<MaterializeStatus>? progress,
         CancellationToken cancellationToken)
     {
@@ -133,7 +150,7 @@ public sealed class VaultClient
 
         for (int poll = 0; poll < MaterializeJobs.MaxPolls; poll++)
         {
-            VaultResult<MaterializeStatus> result = await PollOnceAsync(orderId, cancellationToken)
+            VaultResult<MaterializeStatus> result = await PollOnceAsync(orderId, requested, cancellationToken)
                 .ConfigureAwait(false);
 
             if (!result.Succeeded)
@@ -176,8 +193,13 @@ public sealed class VaultClient
     /// <summary>Mints a presigned URL. Per import, never cached (<c>HPS-29</c>).</summary>
     public async Task<VaultResult<PresignedDownload>> PresignAsync(string orderId, CancellationToken cancellationToken)
     {
-        (string? body, string? error) = await SendAsync(HttpMethod.Post, DownloadUrl(orderId), "{}", cancellationToken)
-            .ConfigureAwait(false);
+        (int status, string body, string? error) = await SendAsync(
+            HttpMethod.Post, DownloadUrl(orderId), "{}", cancellationToken).ConfigureAwait(false);
+
+        if (error is null && Refusal(status, body) is { } refusal)
+        {
+            error = refusal;
+        }
 
         if (error is not null)
         {
@@ -235,6 +257,9 @@ public sealed class VaultClient
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>The single-flight status: a refusal everywhere except the materialize start.</summary>
+    private const int Conflict = 409;
+
     private string BundlesUrl() => Base() + "/api/v1/vault/bundles";
 
     private string MaterializeUrl(string orderId)
@@ -252,10 +277,15 @@ public sealed class VaultClient
             + MantlePlaceEndpoints.ConfigPath + ".");
 
     /// <summary>
-    /// One request, with the bearer token attached and the platform's own error text preferred over
-    /// anything this client could invent (<c>HPS-48</c>).
+    /// One request, with the bearer token attached. Reports the status code alongside the body so
+    /// the caller decides what a non-2xx means.
     /// </summary>
-    private async Task<(string? Body, string? Error)> SendAsync(
+    /// <remarks>
+    /// <c>Error</c> is set only when there was no response at all. Whether a response that arrived
+    /// is a refusal is <see cref="Refusal"/>'s question, because one caller — the materialize start —
+    /// legitimately reads a 409 as a success (<c>HPS-24</c>).
+    /// </remarks>
+    private async Task<(int Status, string Body, string? Error)> SendAsync(
         HttpMethod method,
         string url,
         string? jsonBody,
@@ -264,11 +294,12 @@ public sealed class VaultClient
         string accessToken = _session.AccessToken;
         if (accessToken.Length == 0)
         {
-            return (null, "Sign in to Mantle Place first.");
+            return (0, string.Empty, "Sign in to Mantle Place first.");
         }
 
         using HttpRequestMessage request = new(method, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         if (jsonBody is not null)
         {
@@ -281,22 +312,39 @@ public sealed class VaultClient
                 .ConfigureAwait(false);
             string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-            // A non-2xx whose body explains itself is returned as that explanation. The status code
-            // alone ("410") tells a curator nothing; "This order was refunded" tells them everything.
-            if (!response.IsSuccessStatusCode && PlatformErrors.FromBody(body) is { } platformError)
-            {
-                return (null, platformError.Message);
-            }
-
-            return (body, null);
+            return ((int)response.StatusCode, body, null);
         }
         catch (HttpRequestException ex)
         {
-            return (null, $"Could not reach mantle.place: {ex.Message}");
+            return (0, string.Empty, $"Could not reach mantle.place: {ex.Message}");
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return (null, "The request to mantle.place timed out.");
+            return (0, string.Empty, "The request to mantle.place timed out.");
         }
     }
+
+    /// <summary>
+    /// A non-2xx reduced to something a curator can act on, or <c>null</c> when the response was a
+    /// success (<c>HPS-48</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A non-2xx whose body explains itself is returned as that explanation. The status code alone
+    /// ("410") tells a curator nothing; "This order was refunded" tells them everything.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>A non-2xx that explains nothing is still a refusal.</b> Passing its body through as
+    /// success is how a 502 proxy page and a 500 with an unfamiliar error envelope both reached a
+    /// parser expecting a materialize response, and surfaced as "the platform accepted the request
+    /// but named no job to poll" — blaming the shape of a body that was never a success in the first
+    /// place.
+    /// </para>
+    /// </remarks>
+    private static string? Refusal(int status, string body)
+        => status is >= 200 and < 300
+            ? null
+            : PlatformErrors.FromBody(body) is { } platformError
+                ? platformError.Message
+                : $"mantle.place refused this request (HTTP {status}) and gave no reason.";
 }

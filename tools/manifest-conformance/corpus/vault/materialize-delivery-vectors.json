@@ -1,0 +1,152 @@
+{
+  "$comment": "Polling the materialize endpoint returns a DELIVERY-STATE document, not a job-status one: no `status`, no `state`, no `progress`, no top-level `jobId`. Completion is derived from `delivered` against the tokens the host asked for. `requested` below is the yardstick every vector is judged against.",
+  "requested": [
+    "elevation.points_csv",
+    "elevation.surface_dxf",
+    "buildings.ifc"
+  ],
+  "vectors": [
+    {
+      "body": {
+        "deliveryModel": "base_on_demand",
+        "delivered": ["elevation.points_csv", "elevation.surface_dxf", "buildings.ifc"],
+        "base": [],
+        "notDelivered": [],
+        "activeJob": null,
+        "lastFailed": null,
+        "pendingRetryTokens": []
+      },
+      "state": "Complete",
+      "fraction": 1.0,
+      "note": "everything asked for is on hand and nothing is running — done"
+    },
+    {
+      "body": {
+        "deliveryModel": "base_on_demand",
+        "delivered": ["elevation.points_csv"],
+        "base": [],
+        "notDelivered": [],
+        "activeJob": { "id": "job-7", "tokens": ["elevation.surface_dxf", "buildings.ifc"] },
+        "lastFailed": null,
+        "pendingRetryTokens": []
+      },
+      "state": "Processing",
+      "fraction": 0.3333333333333333,
+      "jobId": "job-7",
+      "note": "the job id lives on activeJob.id, never at the top level; progress is delivered over requested"
+    },
+    {
+      "body": {
+        "deliveryModel": "base_on_demand",
+        "deliveryStateUnknown": true,
+        "delivered": [],
+        "base": [],
+        "notDelivered": [],
+        "activeJob": null,
+        "lastFailed": null,
+        "pendingRetryTokens": []
+      },
+      "state": "Unknown",
+      "fraction": -1.0,
+      "note": "STOP: `deliveryStateUnknown` means `delivered` is empty for want of an answer, not because the bundle is empty. Never read it as Complete — that is the reading that hands over a bundle the platform could not confirm. Unknown is not terminal, so polling continues."
+    },
+    {
+      "body": {
+        "deliveryModel": "base_on_demand",
+        "delivered": ["elevation.points_csv", "elevation.surface_dxf"],
+        "base": [],
+        "notDelivered": [{ "token": "buildings.ifc", "reason": "no_features_in_aoi" }],
+        "activeJob": null,
+        "lastFailed": null,
+        "pendingRetryTokens": []
+      },
+      "state": "Complete",
+      "fraction": 1.0,
+      "unproducible": ["buildings.ifc"],
+      "note": "the remainder can never be produced for this area, so the bundle is as complete as it will ever be. Treating a permanently-absent token as outstanding makes a finished bundle poll its whole budget and then time out. Report the gap; do not wait for it."
+    },
+    {
+      "body": {
+        "deliveryModel": "base_on_demand",
+        "delivered": [],
+        "base": [],
+        "notDelivered": [],
+        "activeJob": null,
+        "lastFailed": null,
+        "lastAttempt": { "tokens": ["buildings.ifc"], "outcome": "completed", "reason": null },
+        "pendingRetryTokens": []
+      },
+      "state": "Failed",
+      "fraction": -1.0,
+      "messageContains": "produced none",
+      "note": "STOP: a run reports `completed` even when every token's emit failed — the worker's soft-fail envelope swallows per-token errors. The verdict keys on the TOKENS, not on the word. Believing `completed` is the silent loop where a curator regenerates forever; calling it 'still working' is the ten-minute hang."
+    },
+    {
+      "body": {
+        "deliveryModel": "base_on_demand",
+        "delivered": [],
+        "base": [],
+        "notDelivered": [],
+        "activeJob": null,
+        "lastFailed": null,
+        "lastAttempt": { "tokens": ["buildings.ifc"], "outcome": "cancelled", "reason": null },
+        "pendingRetryTokens": []
+      },
+      "state": "Failed",
+      "fraction": -1.0,
+      "messageContains": "timed out",
+      "note": "the reconciler sweeps a stranded run to `cancelled` rather than `failed`, which kept it out of lastFailed and made a timed-out generation completely silent"
+    },
+    {
+      "body": {
+        "deliveryModel": "base_on_demand",
+        "delivered": [],
+        "base": [],
+        "notDelivered": [],
+        "activeJob": null,
+        "lastFailed": null,
+        "lastAttempt": { "tokens": ["mesh.usdz"], "outcome": "failed", "reason": "emit_failed" },
+        "pendingRetryTokens": []
+      },
+      "state": "Pending",
+      "fraction": 0.0,
+      "note": "the terminal run touched none of what WE asked for — someone else's failed pick is not ours"
+    },
+    {
+      "body": {
+        "deliveryModel": "base_on_demand",
+        "delivered": [],
+        "base": [],
+        "notDelivered": [{ "token": "buildings.ifc", "reason": "available_on_request" }],
+        "activeJob": null,
+        "lastFailed": null,
+        "pendingRetryTokens": []
+      },
+      "state": "Pending",
+      "fraction": 0.0,
+      "note": "`available_on_request` and `not_selected` mean nobody has tried yet, which is not a failure and not a permanent gap"
+    },
+    {
+      "body": {
+        "deliveryModel": "base_on_demand",
+        "delivered": [],
+        "base": [],
+        "notDelivered": [],
+        "activeJob": null,
+        "lastFailed": null,
+        "pendingRetryTokens": []
+      },
+      "state": "Pending",
+      "fraction": 0.0,
+      "note": "STOP: nothing delivered, nothing running, nothing failed is Pending — NEVER Complete. This is the normal state in the seconds after a start, before the job row is visible."
+    },
+    {
+      "body": {
+        "error": "Order not found"
+      },
+      "parseSucceeds": false,
+      "errorContains": "Order not found",
+      "note": "a body that is neither shape still refuses in the platform's own words"
+    }
+  ]
+}
