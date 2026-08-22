@@ -67,9 +67,11 @@ internal static class CacheConformanceTests
     private static void DriveValidity(TestRun run, VectorNode root)
     {
         // The table's floor and this host's floor must agree, or the "too old" row stops testing
-        // anything. It sits exactly one below minSupportedManifestVersion by construction.
+        // anything. It sits exactly one below minSupportedManifestVersion by construction — and
+        // across the era break that neighbour is an INTEGER, not a semver, which is the case a host
+        // comparing only within one family gets wrong.
         run.Equal(
-            root.Int("minSupportedManifestVersion") ?? -1,
+            root.Version("minSupportedManifestVersion") ?? "(absent)",
             ManifestVersions.MinSupportedManifestVersion,
             "the table's floor is this host's floor");
 
@@ -92,7 +94,7 @@ internal static class CacheConformanceTests
                 row.Str("computedSha256") ?? string.Empty,
                 row.Str("expectedSha256"),
                 row.Double("expectedSizeBytes") is { } expectedSize ? (long)expectedSize : null,
-                row.Int("manifestVersion"));
+                row.Version("manifestVersion"));
 
             run.Equal(verdict.IsValid, row.Bool("valid") ?? false, $"[{name}] valid");
             run.Equal(verdict.Reason.ToString(), row.Str("reason")!, $"[{name}] reason");

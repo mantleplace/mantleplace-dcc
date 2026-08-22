@@ -99,7 +99,7 @@ internal static class BundleCacheTests
                     (_, token) => Task.FromCanceled(token),
                     bytes.Length,
                     sha,
-                    18,
+                    ManifestVersions.MinSupportedManifestVersion,
                     DateTimeOffset.UnixEpoch,
                     cancelled.Token).GetAwaiter().GetResult();
             }
@@ -139,7 +139,7 @@ internal static class BundleCacheTests
             string? error = Promote(cache, bytes, bytes.Length, expectedSha: null).GetAwaiter().GetResult();
             run.True(error is null, $"promoted ({error})");
 
-            CacheEntry entry = cache.Inspect(OrderId, bytes.Length, null, 18);
+            CacheEntry entry = cache.Inspect(OrderId, bytes.Length, null, ManifestVersions.MinSupportedManifestVersion);
             run.Equal(entry.State.ToString(), "CachedValid", "usable");
             run.False(entry.Verdict.IntegrityChecked, "and honestly reported as unchecked");
             run.Contains(entry.Describe(), "not a problem", "which the panel does not phrase as an error");
@@ -150,7 +150,7 @@ internal static class BundleCacheTests
             BundleCache cache = new(Path.Combine(sandbox, "inspect"));
             Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
 
-            CacheEntry entry = cache.Inspect(OrderId, bytes.Length, sha, 18);
+            CacheEntry entry = cache.Inspect(OrderId, bytes.Length, sha, ManifestVersions.MinSupportedManifestVersion);
             run.Equal(entry.State.ToString(), "CachedValid", "valid");
             run.True(entry.Verdict.IntegrityChecked, "verified");
             run.Contains(entry.Describe(), "verified", "and says so");
@@ -174,7 +174,7 @@ internal static class BundleCacheTests
             Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
             File.WriteAllText(cache.LayoutFor(OrderId).BundleZipPath, "tampered");
 
-            CacheEntry entry = cache.Inspect(OrderId, bytes.Length, sha, 18);
+            CacheEntry entry = cache.Inspect(OrderId, bytes.Length, sha, ManifestVersions.MinSupportedManifestVersion);
             run.Equal(entry.State.ToString(), "CachedStale", "stale");
             run.Contains(entry.Describe(), "again", "and the curator is told to download it again");
         });
@@ -231,7 +231,7 @@ internal static class BundleCacheTests
             async (destination, token) => await destination.WriteAsync(bytes, token).ConfigureAwait(false),
             expectedSize,
             expectedSha,
-            18,
+            ManifestVersions.MinSupportedManifestVersion,
             DateTimeOffset.UnixEpoch,
             CancellationToken.None);
 

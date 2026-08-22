@@ -212,6 +212,29 @@ internal sealed class VectorNode
         ? child.GetDouble()
         : null;
 
+    /// <summary>
+    /// Reads a manifest version in EITHER family, recording the path: a semver string as itself, an
+    /// integer-era number stringified.
+    /// </summary>
+    /// <remarks>
+    /// The cache truth table deliberately spans the era break — its at-the-floor rows carry the
+    /// string "1.0.0" and its too-old rows carry the number 19, the pre-history's top being the
+    /// neighbour immediately below a semver floor in the total order. Reading with <see cref="Str"/>
+    /// alone would leave the too-old rows unread, and the leaf tracker would then fail the case for
+    /// an unasserted key rather than silently skipping it — correct, but the fix belongs here.
+    /// </remarks>
+    internal string? Version(string key)
+    {
+        if (Read(key, JsonValueKind.String, out JsonElement text))
+        {
+            return text.GetString();
+        }
+
+        return Read(key, JsonValueKind.Number, out JsonElement number)
+            ? number.GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : null;
+    }
+
     /// <summary>Property names of this node, when it is an object used as a map.</summary>
     internal IReadOnlyList<string> Keys()
     {

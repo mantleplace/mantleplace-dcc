@@ -221,9 +221,9 @@ internal static class VaultConformanceTests
                 }
             }
 
-            if (expected.Int("manifestVersion") is { } manifestVersion)
+            if (expected.Version("manifestVersion") is { } manifestVersion)
             {
-                run.Equal(bundle.ManifestVersion ?? -1, manifestVersion, $"{where}.manifestVersion");
+                run.Equal(bundle.ManifestVersion ?? "(absent)", manifestVersion, $"{where}.manifestVersion");
             }
 
             if (expected.Double("sizeBytes") is { } sizeBytes)

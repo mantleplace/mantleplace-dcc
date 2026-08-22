@@ -54,7 +54,12 @@ struct FMantlePlaceManifestVersion
 		{
 			// `IsNumeric` accepts a leading sign and a decimal point; neither belongs in a semver
 			// component, and "1.-0.0" parsing as valid would be a silent wrong answer.
-			if (Part.IsEmpty() || !Part.IsNumeric() || Part.Contains(TEXT("-")) || Part.Contains(TEXT("+")))
+			//
+			// A leading zero is rejected too ("01.0.0"), because semver forbids it and the
+			// platform's own publisher and gate do. A component that parsed here but not there
+			// would be a version this host imports and the contract does not admit exists.
+			if (Part.IsEmpty() || !Part.IsNumeric() || Part.Contains(TEXT("-")) || Part.Contains(TEXT("+"))
+			    || Part.Contains(TEXT(".")) || (Part.Len() > 1 && Part[0] == TEXT('0')))
 			{
 				return Out;
 			}

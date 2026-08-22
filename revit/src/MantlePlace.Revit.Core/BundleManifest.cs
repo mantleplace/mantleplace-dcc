@@ -248,7 +248,15 @@ public sealed class BundleManifest
     /// <summary>The vault order id. This, and only this, joins to the vault.</summary>
     public string OrderId { get; internal set; } = string.Empty;
 
-    public int Version { get; internal set; }
+    /// <summary>
+    /// The manifest's <c>version</c> verbatim, e.g. <c>"1.0.0"</c>; empty when absent.
+    /// </summary>
+    /// <remarks>
+    /// A STRING in the MPB era, and kept unparsed so a refusal can quote exactly what the bundle
+    /// said — including an integer-era value this reader does not speak, which would be
+    /// unrecoverable once coerced to a number.
+    /// </remarks>
+    public string Version { get; internal set; } = string.Empty;
 
     /// <summary><c>packaging.delivery_model</c>, e.g. <c>"base_on_demand"</c>.</summary>
     public string DeliveryModel { get; internal set; } = string.Empty;

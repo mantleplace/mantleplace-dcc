@@ -66,7 +66,7 @@ public sealed class BundleCache
     /// <see cref="CacheValidity"/> — it is reachable from a legacy sidecar — it is just not something
     /// this host chooses.
     /// </remarks>
-    public CacheEntry Inspect(string orderId, long? expectedSizeBytes, string? expectedSha256, int? manifestVersion)
+    public CacheEntry Inspect(string orderId, long? expectedSizeBytes, string? expectedSha256, string? manifestVersion)
     {
         BundleCacheLayout layout = LayoutFor(orderId);
         CacheSidecar? sidecar = ReadSidecar(layout);
@@ -84,7 +84,7 @@ public sealed class BundleCache
         // case, where the facts the vault would have supplied are not available.
         string? expectedHash = expectedSha256 ?? sidecar?.Sha256;
         long? expectedSize = expectedSizeBytes ?? sidecar?.SizeBytes;
-        int? expectedVersion = manifestVersion ?? sidecar?.ManifestVersion;
+        string? expectedVersion = manifestVersion ?? sidecar?.ManifestVersion;
 
         string computed = ComputeSha256(layout.BundleZipPath);
 
@@ -114,7 +114,7 @@ public sealed class BundleCache
         Func<Stream, CancellationToken, Task> writeBody,
         long? expectedSizeBytes,
         string? expectedSha256,
-        int? manifestVersion,
+        string? manifestVersion,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {

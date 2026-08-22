@@ -81,23 +81,30 @@ internal static class SiteVectorTests
         {
             BundleManifest metric = BundleManifestReader.Parse(
                 """
-                {
-                  "version": 19,
-                  "revit": {
-                    "georeference": {
-                      "crs_projected": "EPSG:32613",
-                      "origin": {
-                        "lon": -105.3,
-                        "lat": 38.4,
-                        "projected": { "epsg": 32613, "easting": 471595.0, "northing": 4257050.0, "linear_unit": "m" }
+                  {
+                    "version": "1.0.0",
+                    "hosts": {
+                      "revit": {
+                        "georeference": {
+                          "crs_projected": "EPSG:32613",
+                          "origin": {
+                            "lon": -105.3,
+                            "lat": 38.4,
+                            "projected": {
+                              "epsg": 32613,
+                              "easting": 471595.0,
+                              "northing": 4257050.0,
+                              "linear_unit": "m"
+                            }
+                          }
+                        }
                       }
                     }
                   }
-                }
                 """);
             run.True(SiteFrame.For(metric) is not null, "a published origin yields a frame");
 
-            BundleManifest none = BundleManifestReader.Parse("""{"version": 19, "dcc_readiness": {}}""");
+            BundleManifest none = BundleManifestReader.Parse("""{"version": "1.0.0"}""");
             run.True(SiteFrame.For(none) is null, "no published origin yields no frame — never a guessed one");
         });
     }
