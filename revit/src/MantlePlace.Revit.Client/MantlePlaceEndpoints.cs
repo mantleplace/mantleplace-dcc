@@ -29,6 +29,19 @@ public sealed class MantlePlaceEndpoints
     /// <summary>The PKCE code→token exchange.</summary>
     public string TokenEndpointUrl { get; init; } = "https://mantle.place/api/v1/auth/native/token";
 
+    /// <summary>
+    /// The refresh exchange on the web broker — the path that needs no local configuration.
+    /// </summary>
+    /// <remarks>
+    /// Sign-in needs nothing because both mantle.place routes are compiled in; refresh should be no
+    /// different. When it was Supabase-direct only, a curator without
+    /// <c>%LOCALAPPDATA%\MantlePlace\config.json</c> could sign in once and then lose the session
+    /// at access-token expiry with a misconfiguration message they had no way to act on — and that
+    /// file has no packaging step that produces it. Supabase-direct is still preferred when the
+    /// project URL and anon key ARE configured, so no existing install changes behaviour.
+    /// </remarks>
+    public string RefreshEndpointUrl { get; init; } = "https://mantle.place/api/v1/auth/native/refresh";
+
     /// <summary>The platform API the vault client talks to.</summary>
     public string ApiBaseUrl { get; init; } = "https://mantle.place";
 
@@ -39,19 +52,25 @@ public sealed class MantlePlaceEndpoints
     public string SupabaseAnonKey { get; init; } = string.Empty;
 
     /// <summary>
-    /// Loopback ports tried in order (<c>HPS-06</c>). Five is enough for a handful of Revit sessions
-    /// on one machine and small enough that a firewall exception is a bounded ask.
-    /// <para>
-    /// Spaced 512 apart, NOT consecutive. Windows reserves ~100-port blocks for Hyper-V/WinNAT that
-    /// shift across reboots; a bind into one is refused with WSAEACCES even though nothing is
-    /// listening. A consecutive run fits inside a single such block — the previous 51000-51009 list
-    /// did, and that took Unreal sign-in down outright — whereas a 512 stride cannot. 51000 stays
-    /// first: it is the port in the docs and the conformance corpus, and when it is reserved the
-    /// listener simply steps past it.
-    /// </para>
+    /// Explicit loopback ports to try, in order (<c>HPS-06</c>). <b>Empty by default, which means
+    /// the OS picks the port</b> — see <c>LoopbackRedirectListener.StartEphemeral</c>.
     /// </summary>
-    public IReadOnlyList<int> LoopbackPorts { get; init; } =
-        [51000, 51512, 52024, 52536, 53048];
+    /// <remarks>
+    /// <para>
+    /// A default list used to live here and was the wrong shape twice over. Windows reserves
+    /// ~100-port blocks for Hyper-V/WinNAT that move across reboots, and a bind into one is refused
+    /// while nothing is listening — 51000-51009 sat entirely inside one and took sign-in down. A
+    /// 512 stride dodged that particular block, but it is still guessing against a moving target,
+    /// and it still made every host on the machine draw from one finite list: Revit plus an Unreal
+    /// editor plus a second Revit session, with the editor holding its port for the whole process.
+    /// A port the OS assigns has neither problem.
+    /// </para>
+    /// <para>
+    /// Set <c>loopbackPorts</c> in <c>config.json</c> to force specific ports — for a site that has
+    /// allow-listed them and needs those exact numbers honoured. That is the only reason to.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<int> LoopbackPorts { get; init; } = [];
 
     /// <summary>Path component of the loopback redirect URI.</summary>
     public string CallbackPath { get; init; } = "/callback";
@@ -98,6 +117,7 @@ public sealed class MantlePlaceEndpoints
             {
                 WebLoginUrl = Override(root, "webLoginUrl", defaults.WebLoginUrl),
                 TokenEndpointUrl = Override(root, "tokenEndpointUrl", defaults.TokenEndpointUrl),
+                RefreshEndpointUrl = Override(root, "refreshEndpointUrl", defaults.RefreshEndpointUrl),
                 ApiBaseUrl = Override(root, "apiBaseUrl", defaults.ApiBaseUrl),
                 SupabaseUrl = Override(root, "supabaseUrl", defaults.SupabaseUrl),
                 SupabaseAnonKey = Override(root, "supabaseAnonKey", defaults.SupabaseAnonKey),
@@ -112,7 +132,10 @@ public sealed class MantlePlaceEndpoints
         }
     }
 
-    /// <summary>The refresh URL, or <c>null</c> when Supabase is not configured.</summary>
+    /// <summary>
+    /// The Supabase-direct refresh URL, or <c>null</c> when Supabase is not configured — in which
+    /// case <see cref="RefreshEndpointUrl"/> is used instead.
+    /// </summary>
     public string? RefreshTokenUrl
     {
         get

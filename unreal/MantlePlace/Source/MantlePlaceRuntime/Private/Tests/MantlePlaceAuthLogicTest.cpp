@@ -594,31 +594,77 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 	// onto nothing. The loop is only observable once acquisition is injected, which is what these
 	// cover — the fall-through, the give-up, and that each candidate is tried once, in order.
 
-	// The default spread must not be consecutive: a Windows Hyper-V/WinNAT reservation is ~100 ports
-	// wide, so a consecutive run is swallowed whole (51000-51009 was, and sign-in broke outright).
+	// No configuration means the OS picks the port. Every fixed list this shipped with was
+	// eventually swallowed by a Windows reserved block that moved under it; 51000-51009 sat inside
+	// one entirely and took sign-in down outright.
 	{
-		const TArray<int32> Defaults = FLogic::DefaultLoopbackPorts();
-		TestTrue(TEXT("default loopback spread offers several candidates"), Defaults.Num() >= 3);
-		TestEqual(TEXT("default loopback spread still leads with 51000"), Defaults[0], 51000);
-
-		bool bWidelySpaced = true;
-		for (int32 Index = 1; Index < Defaults.Num(); ++Index)
-		{
-			if (Defaults[Index] - Defaults[Index - 1] < 512)
-			{
-				bWidelySpaced = false;
-			}
-		}
-		TestTrue(TEXT("default loopback candidates are at least 512 apart"), bWidelySpaced);
+		TestTrue(TEXT("no configured ports means the OS picks"),
+		         FLogic::ResolveLoopbackPortMode(TArray<int32>()) == FLogic::ELoopbackPortMode::Ephemeral);
+		TestTrue(TEXT("any configured port switches to the declared list"),
+		         FLogic::ResolveLoopbackPortMode({ 41000 }) == FLogic::ELoopbackPortMode::DeclaredList);
 	}
 
-	// Configured ports win; an empty config falls back to the built-in spread.
+	// A lost probe-to-bind race must be retried with a FRESH port. Retrying the same number just
+	// re-runs the race that was already lost; re-proposing lands somewhere the allocator has moved on to.
 	{
-		const TArray<int32> Configured = { 41000, 41512 };
-		TestTrue(TEXT("configured loopback ports pass through"),
-			FLogic::ResolveLoopbackPorts(Configured) == Configured);
-		TestTrue(TEXT("no configured ports falls back to the default spread"),
-			FLogic::ResolveLoopbackPorts(TArray<int32>()) == FLogic::DefaultLoopbackPorts());
+		TArray<int32> Proposed;
+		TArray<int32> Attempted;
+		int32 NextPort = 60000;
+		int32 Selected = 0;
+
+		const bool bAcquired = FLogic::AcquireEphemeralLoopbackPort(
+		    [&Proposed, &NextPort](int32& OutPort)
+		    {
+			    OutPort = NextPort++;
+			    Proposed.Add(OutPort);
+			    return true;
+		    },
+		    [&Attempted](int32 Port)
+		    {
+			    Attempted.Add(Port);
+			    return Port == 60002; // the first two are taken from under us
+		    },
+		    /*MaxAttempts=*/5, Selected);
+
+		TestTrue(TEXT("an ephemeral acquire recovers from a lost race"), bAcquired);
+		TestEqual(TEXT("it returns the port that actually bound"), Selected, 60002);
+		TestTrue(TEXT("and it got there by proposing fresh ports, not by retrying one"),
+		         Proposed == TArray<int32>({ 60000, 60001, 60002 }));
+		TestTrue(TEXT("every proposal was actually attempted"), Attempted == Proposed);
+	}
+
+	// A probe that cannot produce a port at all (no socket subsystem) is a failure, not a bind on
+	// whatever OutPort happened to contain.
+	{
+		int32 Proposals = 0;
+		int32 Selected = -7; // sentinel: must survive untouched
+		const bool bAcquired = FLogic::AcquireEphemeralLoopbackPort(
+		    [&Proposals](int32&)
+		    { ++Proposals; return false; },
+		    [](int32)
+		    { return true; },
+		    /*MaxAttempts=*/4, Selected);
+
+		TestFalse(TEXT("a probe that never yields a port fails"), bAcquired);
+		TestEqual(TEXT("and leaves the out port untouched"), Selected, -7);
+		TestEqual(TEXT("having tried its full budget"), Proposals, 4);
+	}
+
+	// Exhausting the attempt budget must be reported, not silently treated as success — otherwise
+	// the caller opens a browser onto a port nothing is listening on.
+	{
+		int32 Proposals = 0;
+		int32 Selected = -7;
+		const bool bAcquired = FLogic::AcquireEphemeralLoopbackPort(
+		    [&Proposals](int32& OutPort)
+		    { OutPort = 60000 + ++Proposals; return true; },
+		    [](int32)
+		    { return false; },
+		    /*MaxAttempts=*/3, Selected);
+
+		TestFalse(TEXT("an ephemeral acquire that never binds fails"), bAcquired);
+		TestEqual(TEXT("after exactly its allowed attempts"), Proposals, 3);
+		TestEqual(TEXT("leaving the out port untouched"), Selected, -7);
 	}
 
 	// The first candidate failing must not abort the search — the regression that broke sign-in.
