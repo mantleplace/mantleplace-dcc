@@ -104,6 +104,11 @@ public static class BundleImportPlanner
         List<ImportStep> steps,
         List<SkippedImport> skipped)
     {
+        // The crop rides on the step, so the shim never has to work out what the area of interest was
+        // — and so the case that matters, a bundle whose frame cannot project one, is a null a
+        // headless test can assert rather than a branch inside Revit (HPS-02).
+        SurfaceCropWindow? crop = SurfaceCrop.For(manifest, SiteFrame.For(manifest));
+
         if (TryPlanArtifact(
                 manifest.ToposurfacePoints,
                 manifest,
@@ -113,7 +118,8 @@ public static class BundleImportPlanner
                 "toposurface points file",
                 out ImportStep? pointsStep,
                 out SkippedImport? pointsSkip,
-                out bool pointsUnitUnreadable))
+                out bool pointsUnitUnreadable,
+                crop))
         {
             steps.Add(pointsStep!);
             return;
@@ -591,7 +597,8 @@ public static class BundleImportPlanner
         string label,
         out ImportStep? step,
         out SkippedImport? skipped,
-        out bool unitUnreadable)
+        out bool unitUnreadable,
+        SurfaceCropWindow? crop = null)
     {
         step = null;
         skipped = null;
@@ -640,6 +647,7 @@ public static class BundleImportPlanner
             EntryName = entry,
             Units = units,
             ExpectedSha256 = artifact.Sha256,
+            Crop = crop,
         };
         return true;
     }
