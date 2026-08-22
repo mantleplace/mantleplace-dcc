@@ -63,6 +63,34 @@ internal static class JsonReading
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
+    /// <summary>
+    /// An array field read as strings, skipping anything that is not one.
+    /// </summary>
+    /// <remarks>
+    /// Absent, null, not an array, or an array of mixed junk all yield an empty list rather than
+    /// throwing. Callers use the COUNT to decide meaning (an empty `delivered` means the bundle
+    /// carries none of what was asked for), so a partial read must never masquerade as a full one:
+    /// non-string members are skipped individually, not taken as a reason to abandon the array.
+    /// </remarks>
+    internal static IReadOnlyList<string> StringArray(this JsonElement parent, string field)
+    {
+        if (parent.Array(field) is not { } array)
+        {
+            return [];
+        }
+
+        List<string> values = [];
+        foreach (JsonElement element in array.EnumerateArray())
+        {
+            if (element.ValueKind == JsonValueKind.String && element.GetString() is { Length: > 0 } text)
+            {
+                values.Add(text);
+            }
+        }
+
+        return values;
+    }
+
     internal static bool Bool(this JsonElement parent, string field, bool fallback = false)
     {
         if (parent.ValueKind != JsonValueKind.Object

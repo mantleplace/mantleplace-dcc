@@ -13,12 +13,70 @@ public enum MaterializeState
     Failed,
 }
 
+/// <summary>What the platform did with a materialize request (<c>HPS-24</c>).</summary>
+/// <remarks>
+/// Five wire shapes, four outcomes. Modelling this as "a job id, or an error" was wrong: two of the
+/// five shapes are successes that name no job at all, and reading their absence of a job id as a
+/// failure is what stopped Revit importing any already-complete bundle.
+/// </remarks>
+public enum MaterializeStartOutcome
+{
+    /// <summary>A fresh job. <c>Tokens</c> is the effective set being built.</summary>
+    Started,
+
+    /// <summary>
+    /// A run was already in flight and this request joined it rather than queueing a second.
+    /// <b><c>JobId</c> may be empty</b> — see the remarks on <see cref="MaterializeJobs.TryParseStart"/>.
+    /// </summary>
+    Joined,
+
+    /// <summary>
+    /// Nothing to build: everything asked for is already delivered, or is permanently unavailable
+    /// for this area. <c>Tokens</c> is what the bundle ALREADY has. There is no job, so there is
+    /// nothing to poll — the caller goes straight to the download.
+    /// </summary>
+    NothingToDo,
+
+    /// <summary>
+    /// The order's core build has not finished, so the picks are parked and fire automatically when
+    /// it does. <c>Tokens</c> is the parked set. No job exists yet.
+    /// </summary>
+    Queued,
+}
+
 /// <summary>The response to starting a materialize.</summary>
-/// <param name="JobId">The job to poll.</param>
-/// <param name="AlreadyRunning">
-/// True when this joined an in-flight job rather than starting one (<c>HPS-24</c>).
+/// <param name="Outcome">Which of the four things happened.</param>
+/// <param name="JobId">The job to poll. Empty for every outcome except a started or joined run.</param>
+/// <param name="Tokens">
+/// The token list this outcome names — the effective set being built, the delivered set, or the
+/// parked set, according to <paramref name="Outcome"/>.
 /// </param>
-public readonly record struct MaterializeStart(string JobId, bool AlreadyRunning);
+public readonly record struct MaterializeStart(
+    MaterializeStartOutcome Outcome,
+    string JobId,
+    IReadOnlyList<string> Tokens)
+{
+    /// <summary>Whether this joined a run rather than starting one (<c>HPS-24</c>).</summary>
+    public bool AlreadyRunning => Outcome == MaterializeStartOutcome.Joined;
+
+    /// <summary>Whether anything will be produced. False only when there was nothing to do.</summary>
+    public bool WillBuild => Outcome != MaterializeStartOutcome.NothingToDo;
+
+    public static MaterializeStart Started(string jobId, IReadOnlyList<string> tokens)
+        => new(MaterializeStartOutcome.Started, jobId, tokens);
+
+    public static MaterializeStart Joined(string jobId, IReadOnlyList<string> tokens)
+        => new(MaterializeStartOutcome.Joined, jobId, tokens);
+
+    public static MaterializeStart NothingToDo(IReadOnlyList<string> delivered)
+        => new(MaterializeStartOutcome.NothingToDo, string.Empty, delivered);
+
+    public static MaterializeStart Queued(IReadOnlyList<string> pending)
+        => new(MaterializeStartOutcome.Queued, string.Empty, pending);
+}
+
+/// <summary>A requested deliverable this bundle will never carry, and the platform's reason.</summary>
+public readonly record struct MissingDeliverable(string Token, string Reason);
 
 /// <summary>One poll of a materialize job.</summary>
 /// <param name="State">Where it stands.</param>
@@ -28,10 +86,30 @@ public readonly record struct MaterializeStart(string JobId, bool AlreadyRunning
 /// </param>
 /// <param name="JobId">Echoed when the body carries it.</param>
 /// <param name="Message">The platform's reason, when a job failed.</param>
-public readonly record struct MaterializeStatus(MaterializeState State, double Fraction, string JobId, string Message)
+/// <param name="Delivered">
+/// Which of the REQUESTED tokens the bundle now carries. Empty on the legacy job-status shape,
+/// which does not report delivery.
+/// </param>
+/// <param name="Unproducible">
+/// Requested tokens the platform will never produce for this area, with its reason. A gap, not a
+/// failure: waiting for one is waiting forever, so these are reported and stepped over.
+/// </param>
+public readonly record struct MaterializeStatus(
+    MaterializeState State,
+    double Fraction,
+    string JobId,
+    string Message,
+    IReadOnlyList<string> Delivered,
+    IReadOnlyList<MissingDeliverable> Unproducible)
 {
     /// <summary>What an absent progress value means. Not zero.</summary>
     public const double Indeterminate = -1.0;
+
+    /// <summary>The job-status shape, which reports no delivery facts.</summary>
+    public MaterializeStatus(MaterializeState state, double fraction, string jobId, string message)
+        : this(state, fraction, jobId, message, [], [])
+    {
+    }
 }
 
 /// <summary>Starting, joining and polling a materialize job (<c>HPS-23</c> … <c>HPS-25</c>).</summary>
@@ -131,18 +209,39 @@ public static class MaterializeJobs
             : "{\"tokens\":[" + string.Join(",", RevitTokens.Select(token => $"\"{token}\"")) + "]}";
     }
 
+    /// <summary>The <c>code</c> the platform sends when a run is already in flight.</summary>
+    private const string ActiveJobCode = "active_job";
+
     /// <summary>
     /// Reads a materialize-start response.
     /// </summary>
     /// <remarks>
-    /// <c>HPS-24</c>: recognised by BODY SHAPE, not by status code. A response carrying an active
-    /// job id is a SUCCESS that joins that job — two curators on one order, or one who clicked
-    /// twice, must not queue two ETL runs.
+    /// <para>
+    /// ⛔<c>HPS-24</c>: recognised by BODY SHAPE, not by status code, and <b>each outcome is keyed
+    /// on its own marker — never on the absence of <c>jobId</c></b>. That inference is what broke
+    /// this: two of the platform's five shapes are successes carrying no job at all, and both read
+    /// as "the platform accepted the request but named no job to poll".
+    /// </para>
+    /// <para>
+    /// <c>noop</c> and <c>queued</c> are read FIRST because they are unambiguous discriminators; a
+    /// body carrying either cannot be anything else. The join test comes before the error body
+    /// because the single-flight response carries both a job fact and error-ish prose, and the job
+    /// fact is the useful half.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A join with no job id is still a join.</b> The 409's <c>activeJobId</c> may be
+    /// <c>null</c>, and polling is keyed on the ORDER, not the job — <c>PollOnceAsync</c> GETs the
+    /// order's materialize URL and never took a job id — so an unnamed in-flight run is fully
+    /// followable. Reporting the platform's prose as an error instead would tell a curator to retry
+    /// a run that is already going, which is the exact failure this rule exists to prevent.
+    /// </para>
     /// </remarks>
     /// <returns><c>null</c> on success.</returns>
     public static string? TryParseStart(string body, out MaterializeStart start)
     {
-        start = default;
+        // A well-formed empty value rather than `default`, so a caller that reads `Tokens` off a
+        // failed parse gets an empty list instead of a null reference.
+        start = MaterializeStart.NothingToDo([]);
 
         JsonDocument document;
         try
@@ -162,12 +261,29 @@ public static class MaterializeJobs
                 return "The materialize response was not valid JSON.";
             }
 
-            // Checked BEFORE the error body: a single-flight 409 carries both an active job id and,
-            // often, an error-ish message. The job id is the useful half.
-            string active = root.Str("activeJobId");
-            if (active.Length > 0)
+            // Nothing to build: everything asked for is already delivered, or is permanently
+            // unavailable here. A success, and the one the caller acts on most.
+            if (root.Bool("noop"))
             {
-                start = new MaterializeStart(active, AlreadyRunning: true);
+                start = MaterializeStart.NothingToDo(root.StringArray("delivered"));
+                return null;
+            }
+
+            // The order's core build has not finished; the picks are parked and fire on their own.
+            if (root.Bool("queued"))
+            {
+                start = MaterializeStart.Queued(root.StringArray("pendingTokens"));
+                return null;
+            }
+
+            string active = root.Str("activeJobId");
+            bool joined = active.Length > 0
+                || root.Bool("coalesced")
+                || string.Equals(root.Str("code"), ActiveJobCode, StringComparison.Ordinal);
+
+            if (joined)
+            {
+                start = MaterializeStart.Joined(active, root.StringArray("tokens"));
                 return null;
             }
 
@@ -182,21 +298,62 @@ public static class MaterializeJobs
                 return "The platform accepted the request but named no job to poll.";
             }
 
-            start = new MaterializeStart(jobId, AlreadyRunning: false);
+            start = MaterializeStart.Started(jobId, root.StringArray("tokens"));
             return null;
         }
     }
 
     /// <summary>
-    /// Reads one poll response.
+    /// The token set to measure delivery against while polling.
     /// </summary>
     /// <remarks>
+    /// The start response echoes the EFFECTIVE set — already deduped against what is delivered and
+    /// against what can never be produced here — so it is both more precise than this host's own
+    /// list and the only correct answer for the <c>"all"</c> scope, whose expansion lives on the
+    /// server. Falls back to <see cref="RevitTokens"/> when the body named none.
+    /// </remarks>
+    public static IReadOnlyList<string> RequestedForPolling(MaterializeStart start)
+        => start.Tokens is { Count: > 0 } tokens ? tokens : RevitTokens;
+
+    /// <summary>
+    /// Reasons a deliverable is absent that no amount of waiting or retrying will change.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors the platform's own non-retryable set exactly. Treating one of these as outstanding
+    /// makes a bundle that is as complete as it will ever be poll for its whole budget and then time
+    /// out, having been finished the entire time.
+    /// </remarks>
+    private static readonly string[] PermanentlyAbsentReasons =
+        ["no_features_in_aoi", "area_cap_exceeded", "outside_coverage"];
+
+    /// <summary>Reads one poll response.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Two shapes.</b> A body carrying a <c>status</c> (or its <c>state</c> alias) is a job-status
+    /// document and is read as one. Otherwise the platform answers this endpoint with a
+    /// DELIVERY-STATE document — <c>delivered</c>, <c>notDelivered</c>, <c>activeJob</c> — which
+    /// carries no status word at all, and completion has to be derived from it.
+    /// </para>
+    /// <para>
+    /// That derivation is the more truthful reading either way: a materialize run reports
+    /// <c>completed</c> even when every token's emit failed, because per-token errors are swallowed
+    /// by a soft-fail envelope. <b>Delivery is proof of production; a job status is not.</b>
+    /// </para>
+    /// <para>
     /// A <c>failed</c> status is a VALID body: parsing succeeds, the state is
     /// <see cref="MaterializeState.Failed"/>, and the message is surfaced so the curator learns why.
-    /// Only a body that states an error INSTEAD of a status fails to parse.
+    /// Only a body that states an error INSTEAD of either shape fails to parse.
+    /// </para>
     /// </remarks>
+    /// <param name="requested">
+    /// The tokens whose delivery decides completion. Empty means only the job-status shape yields a
+    /// state — see the single-argument overload.
+    /// </param>
     /// <returns><c>null</c> on success.</returns>
-    public static string? TryParseStatus(string body, out MaterializeStatus status)
+    public static string? TryParseStatus(
+        string body,
+        IReadOnlyCollection<string> requested,
+        out MaterializeStatus status)
     {
         status = new MaterializeStatus(MaterializeState.Unknown, MaterializeStatus.Indeterminate, string.Empty, string.Empty);
 
@@ -225,26 +382,209 @@ public static class MaterializeJobs
                 word = root.Str("state");
             }
 
-            if (word.Length == 0)
+            if (word.Length > 0)
             {
-                return PlatformErrors.TryRead(root, out PlatformError error)
-                    ? error.Message
-                    : "The materialize status response carried no status.";
+                MaterializeState state = ParseState(word);
+
+                status = new MaterializeStatus(
+                    state,
+                    ReadFraction(root),
+                    root.Str("jobId"),
+                    state == MaterializeState.Failed
+                        ? PlatformErrors.TryRead(root, out PlatformError failure) ? failure.Message : string.Empty
+                        : string.Empty);
+
+                return null;
             }
 
-            MaterializeState state = ParseState(word);
+            // `delivered` is the discriminator: the delivery-state document always declares it,
+            // where `activeJob` is legitimately null on an idle order and every other field is
+            // optional. Keying on an optional field would misread an idle bundle as a foreign shape.
+            if (root.Array("delivered") is not null)
+            {
+                status = DeriveDelivery(root, requested);
+                return null;
+            }
 
-            status = new MaterializeStatus(
-                state,
-                ReadFraction(root),
-                root.Str("jobId"),
-                state == MaterializeState.Failed
-                    ? PlatformErrors.TryRead(root, out PlatformError failure) ? failure.Message : string.Empty
-                    : string.Empty);
-
-            return null;
+            return PlatformErrors.TryRead(root, out PlatformError error)
+                ? error.Message
+                : "The materialize status response carried no status.";
         }
     }
+
+    /// <summary>
+    /// As <see cref="TryParseStatus(string, IReadOnlyCollection{string}, out MaterializeStatus)"/>
+    /// with no requested set, so only the job-status shape yields a state.
+    /// </summary>
+    public static string? TryParseStatus(string body, out MaterializeStatus status)
+        => TryParseStatus(body, [], out status);
+
+    /// <summary>
+    /// Derives a state from the platform's delivery-state document.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The row order below IS the design, and three rows are traps.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Unreadable delivery state is checked first.</b> <c>deliveryStateUnknown</c> means the
+    /// platform could not read what the bundle has, so <c>delivered</c> is empty for want of an
+    /// answer rather than because the bundle is empty. Falling through with an empty requested set
+    /// would compute "nothing outstanding" and report Complete — handing a curator a bundle the
+    /// platform never confirmed. <see cref="MaterializeState.Unknown"/> is not terminal, so polling
+    /// continues and the poll budget provides the honest ending.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Nothing outstanding beats a running job.</b> If everything asked for is on hand, an
+    /// in-flight job is building someone else's pick, and waiting on it stalls a download that is
+    /// already possible.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>A terminal attempt that left tokens outstanding is a failure whatever it called
+    /// itself.</b> The verdict keys on the tokens, not on <c>outcome</c>; <c>outcome</c> only picks
+    /// the sentence. Reading <c>completed</c> as success is the silent loop where a curator
+    /// regenerates forever; reading it as "still working" is the ten-minute hang.
+    /// </para>
+    /// <para>
+    /// The last row is Pending, never Complete: nothing outstanding, nothing running and nothing
+    /// failed means the job row is not visible yet, which is the normal state in the seconds after a
+    /// start. <c>activeJob.steps</c> is deliberately NOT read for progress — it is an unvalidated
+    /// jsonb ladder the platform owns, and a newer worker's shape must not become this host's
+    /// progress source.
+    /// </para>
+    /// </remarks>
+    private static MaterializeStatus DeriveDelivery(JsonElement root, IReadOnlyCollection<string> requested)
+    {
+        HashSet<string> delivered = new(root.StringArray("delivered"), StringComparer.Ordinal);
+
+        List<MissingDeliverable> unproducible = [];
+        if (root.Array("notDelivered") is { } notDelivered)
+        {
+            foreach (JsonElement row in notDelivered.EnumerateArray())
+            {
+                string token = row.Str("token");
+                string reason = row.Str("reason");
+                if (token.Length > 0
+                    && requested.Contains(token)
+                    && System.Array.IndexOf(PermanentlyAbsentReasons, reason) >= 0)
+                {
+                    unproducible.Add(new MissingDeliverable(token, reason));
+                }
+            }
+        }
+
+        IReadOnlyList<string> mine = [.. requested.Where(delivered.Contains)];
+        HashSet<string> blocked = new(unproducible.Select(row => row.Token), StringComparer.Ordinal);
+        List<string> outstanding =
+            [.. requested.Where(token => !delivered.Contains(token) && !blocked.Contains(token))];
+
+        double fraction = requested.Count == 0
+            ? MaterializeStatus.Indeterminate
+            : mine.Count / (double)requested.Count;
+
+        // ⛔ No yardstick, no verdict. "Nothing is outstanding" is vacuously true against an empty
+        // requested set, so falling through would report Complete for a bundle nobody asked anything
+        // of. There is no honest answer here, and Unknown is not terminal, so the caller keeps
+        // polling rather than downloading on the strength of a tautology.
+        if (requested.Count == 0)
+        {
+            return new MaterializeStatus(
+                MaterializeState.Unknown,
+                MaterializeStatus.Indeterminate,
+                string.Empty,
+                "No deliverables were named, so there is nothing to check against.",
+                mine,
+                unproducible);
+        }
+
+        if (root.Bool("deliveryStateUnknown"))
+        {
+            return new MaterializeStatus(
+                MaterializeState.Unknown,
+                MaterializeStatus.Indeterminate,
+                string.Empty,
+                "The platform could not confirm what this bundle already has. Still checking…",
+                mine,
+                unproducible);
+        }
+
+        if (outstanding.Count == 0)
+        {
+            return new MaterializeStatus(
+                MaterializeState.Complete,
+                1.0,
+                string.Empty,
+                string.Empty,
+                mine,
+                unproducible);
+        }
+
+        if (root.Object("activeJob") is { } activeJob)
+        {
+            int building = activeJob.StringArray("tokens").Count;
+            return new MaterializeStatus(
+                MaterializeState.Processing,
+                fraction,
+                activeJob.Str("id"),
+                building > 0 ? $"Building {building} deliverable(s)…" : "Building…",
+                mine,
+                unproducible);
+        }
+
+        if (TerminalFailure(root, outstanding) is { } terminal)
+        {
+            return new MaterializeStatus(
+                MaterializeState.Failed,
+                MaterializeStatus.Indeterminate,
+                string.Empty,
+                terminal,
+                mine,
+                unproducible);
+        }
+
+        return new MaterializeStatus(
+            MaterializeState.Pending,
+            fraction,
+            string.Empty,
+            "Waiting for the platform to pick this up…",
+            mine,
+            unproducible);
+    }
+
+    /// <summary>
+    /// The sentence for a terminal attempt that left work undone, or <c>null</c> when no terminal
+    /// attempt touched what is still outstanding.
+    /// </summary>
+    private static string? TerminalFailure(JsonElement root, IReadOnlyCollection<string> outstanding)
+    {
+        if (root.Object("lastAttempt") is { } attempt
+            && attempt.StringArray("tokens").Any(outstanding.Contains))
+        {
+            return attempt.Str("outcome") switch
+            {
+                // ⛔ The soft-fail envelope: the run says it finished, and produced none of it.
+                "completed" =>
+                    "The platform reported the job finished but produced none of these deliverables. "
+                    + "Try preparing again; if it repeats, the platform could not build them.",
+                "cancelled" => "The platform's generation timed out and was swept. Try preparing again.",
+                _ => DescribeFailure(attempt.Str("reason")),
+            };
+        }
+
+        if (root.Object("lastFailed") is { } failed
+            && failed.StringArray("tokens").Any(outstanding.Contains))
+        {
+            return DescribeFailure(failed.Str("reason"));
+        }
+
+        return null;
+    }
+
+    /// <summary>The platform's own reason for a failed run, in a sentence, with a plain fallback.</summary>
+    private static string DescribeFailure(string reason)
+        => ReadinessReasons.ClauseFor(reason) is { } clause
+            ? $"The platform could not build this bundle: {clause}."
+            : "The platform could not build this bundle.";
 
     /// <summary>
     /// <c>HPS-22</c>: synonym buckets, case-insensitive, and anything unlisted is
@@ -302,9 +642,28 @@ public readonly record struct PresignedDownload(string Url, string ExpiresAt)
             && TokenGrants.IsExpired(now, expiry);
 }
 
-/// <summary>Reading a presign response.</summary>
+/// <summary>Asking for a presigned download, and reading the answer.</summary>
 public static class PresignedDownloads
 {
+    /// <summary>
+    /// The format token naming the packaged archive rather than one artifact inside it.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <c>HPS-49</c>. This host imports the whole <c>download.zip</c> — the cache verifies against
+    /// the listing's <c>sha256</c>, which is the archive's digest — so it must ask for the archive by
+    /// name. The alias <c>glb</c> also means "the whole bundle", but only when the order happens to
+    /// carry no <c>glb</c> artifact; where one exists the platform hands back that mesh instead, and
+    /// the digest check then fails on a download that succeeded. Ambiguity that resolves on the
+    /// server's data is not a token a host may send.
+    /// </remarks>
+    public const string WholeBundleFormat = "bundle";
+
+    /// <summary>
+    /// The presign request body. The route validates this against a schema, so an empty object is a
+    /// <c>400</c>, not a default.
+    /// </summary>
+    public static string BuildRequestBody() => $$"""{"format":"{{WholeBundleFormat}}"}""";
+
     /// <summary>
     /// Parses a presign response. A body with no <c>url</c> is a refusal, and the platform's own
     /// message is what the curator sees — "Not entitled" beats anything this host could invent.

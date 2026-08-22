@@ -116,10 +116,12 @@ void UMantlePlaceVaultClient::GetPresignedUrl(const FString& OrderId, const FStr
 		return;
 	}
 
-	if (!FMantlePlaceVaultLogic::IsKnownFormat(Format))
+	if (!FMantlePlaceVaultLogic::IsPresignableFormat(Format))
 	{
 		NotifyPresigned(false, Empty,
-			FString::Printf(TEXT("Unknown format '%s'. Expected one of glb, fbx, geotiff, cog, dwg, pmtiles."), *Format));
+		                FString::Printf(
+		                    TEXT("Unknown format '%s'. Expected 'bundle' for the whole archive, or one of glb, fbx, geotiff, cog, dwg, pmtiles."),
+		                    *Format));
 		return;
 	}
 
@@ -151,6 +153,11 @@ void UMantlePlaceVaultClient::GetPresignedUrl(const FString& OrderId, const FStr
 		ActiveRequest.Reset();
 		NotifyPresigned(false, Empty, TEXT("Failed to start the download-mint request."));
 	}
+}
+
+void UMantlePlaceVaultClient::GetPresignedBundleUrl(const FString& OrderId)
+{
+	GetPresignedUrl(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat());
 }
 
 void UMantlePlaceVaultClient::ProbePresignedUrl(const FString& Url)
@@ -310,20 +317,20 @@ void UMantlePlaceVaultClient::RequestMaterialize(const FString& OrderId, const F
 	if (!EnsureReady(Error, Jwt))
 	{
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("RequestMaterialize refused: %s"), *Error);
-		NotifyMaterializeStarted(false, FString(), Error);
+		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), Error);
 		return;
 	}
 
 	if (OrderId.IsEmpty())
 	{
-		NotifyMaterializeStarted(false, FString(), TEXT("OrderId is required."));
+		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), TEXT("OrderId is required."));
 		return;
 	}
 
 	if (!FMantlePlaceVaultLogic::IsValidMaterializeScope(Scope))
 	{
-		NotifyMaterializeStarted(false, FString(),
-			FString::Printf(TEXT("Unknown materialize scope '%s'. Expected 'unreal' or 'all'."), *Scope));
+		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(),
+		                         FString::Printf(TEXT("Unknown materialize scope '%s'. Expected 'unreal' or 'all'."), *Scope));
 		return;
 	}
 
@@ -353,12 +360,16 @@ void UMantlePlaceVaultClient::RequestMaterialize(const FString& OrderId, const F
 	if (!ActiveRequest->ProcessRequest())
 	{
 		ActiveRequest.Reset();
-		NotifyMaterializeStarted(false, FString(), TEXT("Failed to start the materialize request."));
+		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), TEXT("Failed to start the materialize request."));
 	}
 }
 
-void UMantlePlaceVaultClient::GetMaterializeStatus(const FString& OrderId)
+void UMantlePlaceVaultClient::GetMaterializeStatus(const FString& OrderId, const TArray<FString>& Requested)
 {
+	// An empty set means the caller had nothing better; fall back to this host's own list rather
+	// than polling with no yardstick, which can never conclude.
+	PendingStatusTokens = Requested.Num() > 0 ? Requested : FMantlePlaceVaultLogic::TargetedImportTokens();
+
 	const FMantlePlaceMaterializeStatus Empty;
 
 	FString Error;
@@ -412,7 +423,7 @@ void UMantlePlaceVaultClient::HandleMaterializeStartResponse(
 
 	if (!bConnectedSuccessfully || !Response.IsValid())
 	{
-		NotifyMaterializeStarted(false, FString(), TEXT("Network error: no response from the platform."));
+		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), TEXT("Network error: no response from the platform."));
 		return;
 	}
 
@@ -430,25 +441,38 @@ void UMantlePlaceVaultClient::HandleMaterializeStartResponse(
 		{
 			Error = FString::Printf(TEXT("HTTP %d"), ResponseCode);
 		}
-		NotifyMaterializeStarted(false, FString(), Error);
+		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), Error);
 		return;
 	}
 
-	FString JobId;
-	bool bAlreadyRunning = false;
+	FMantlePlaceMaterializeStart Start;
 	FString ParseError;
-	if (!FMantlePlaceVaultLogic::ParseMaterializeStartResponse(Content, JobId, bAlreadyRunning, ParseError))
+	if (!FMantlePlaceVaultLogic::ParseMaterializeStartResponse(Content, Start, ParseError))
 	{
-		NotifyMaterializeStarted(false, FString(), ParseError);
+		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), ParseError);
 		return;
 	}
 
-	const FString Message = bAlreadyRunning
-		? TEXT("A materialize job is already running for this order - tracking it.")
-		: TEXT("Generating Unreal formats.");
-	UE_LOG(LogMantlePlaceVault, Log, TEXT("Materialize %s (job %s)."),
-		bAlreadyRunning ? TEXT("already running") : TEXT("started"), *JobId);
-	NotifyMaterializeStarted(true, JobId, Message);
+	FString Message;
+	switch (Start.Outcome)
+	{
+	case EMantlePlaceMaterializeStartOutcome::Joined:
+		Message = TEXT("A materialize job is already running for this order - tracking it.");
+		break;
+	case EMantlePlaceMaterializeStartOutcome::NothingToDo:
+		Message = TEXT("This bundle already has everything that was asked for.");
+		break;
+	case EMantlePlaceMaterializeStartOutcome::Queued:
+		Message = TEXT("The order is still building; these formats are queued and start on their own.");
+		break;
+	default:
+		Message = TEXT("Generating Unreal formats.");
+		break;
+	}
+
+	UE_LOG(LogMantlePlaceVault, Log, TEXT("Materialize outcome %d (job '%s', %d token(s))."),
+	       static_cast<int32>(Start.Outcome), *Start.JobId, Start.Tokens.Num());
+	NotifyMaterializeStarted(true, Start, Message);
 }
 
 void UMantlePlaceVaultClient::HandleMaterializeStatusResponse(
@@ -483,7 +507,7 @@ void UMantlePlaceVaultClient::HandleMaterializeStatusResponse(
 
 	FMantlePlaceMaterializeStatus Status;
 	FString ParseError;
-	if (!FMantlePlaceVaultLogic::ParseMaterializeStatus(Content, Status, ParseError))
+	if (!FMantlePlaceVaultLogic::ParseMaterializeStatus(Content, PendingStatusTokens, Status, ParseError))
 	{
 		NotifyMaterializeStatus(false, Empty, ParseError);
 		return;
@@ -504,10 +528,10 @@ void UMantlePlaceVaultClient::NotifyPresigned(bool bSuccess, const FMantlePlaceP
 	OnPresignedUrlReady(bSuccess, Download, Message);
 }
 
-void UMantlePlaceVaultClient::NotifyMaterializeStarted(bool bSuccess, const FString& JobId, const FString& Message)
+void UMantlePlaceVaultClient::NotifyMaterializeStarted(bool bSuccess, const FMantlePlaceMaterializeStart& Start, const FString& Message)
 {
-	OnMaterializeStartedNative.Broadcast(bSuccess, JobId, Message);
-	OnMaterializeStarted(bSuccess, JobId, Message);
+	OnMaterializeStartedNative.Broadcast(bSuccess, Start, Message);
+	OnMaterializeStarted(bSuccess, Start, Message);
 }
 
 void UMantlePlaceVaultClient::NotifyMaterializeStatus(bool bOk, const FMantlePlaceMaterializeStatus& Status, const FString& Message)

@@ -1,0 +1,8 @@
+{
+  "noop": true,
+  "delivered": [
+    "elevation.points_csv",
+    "elevation.surface_dxf",
+    "imagery.drape_png"
+  ]
+}

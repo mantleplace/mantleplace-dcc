@@ -18,7 +18,7 @@ class UMantlePlaceAuthSystemBase;
  */
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnVaultListedNative, bool /*bSuccess*/, const TArray<FMantlePlaceVaultItem>& /*Bundles*/, const FString& /*Message*/);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnPresignedNative, bool /*bSuccess*/, const FMantlePlacePresignedDownload& /*Download*/, const FString& /*Message*/);
-DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStartedNative, bool /*bSuccess*/, const FString& /*JobId*/, const FString& /*Message*/);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStartedNative, bool /*bSuccess*/, const FMantlePlaceMaterializeStart& /*Start*/, const FString& /*Message*/);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStatusNative, bool /*bOk*/, const FMantlePlaceMaterializeStatus& /*Status*/, const FString& /*Message*/);
 
 /**
@@ -67,10 +67,22 @@ public:
 	/**
 	 * Begin minting a presigned download URL for one owned bundle + format.
 	 * OrderId is FMantlePlaceVaultItem.OrderId; Format must be one of
-	 * glb | fbx | geotiff | cog | dwg | pmtiles. Result via OnPresignedUrlReady.
+	 * glb | fbx | geotiff | cog | dwg | pmtiles, or "bundle" for the whole archive.
+	 * Result via OnPresignedUrlReady.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	void GetPresignedUrl(const FString& OrderId, const FString& Format);
+
+	/**
+	 * Begin minting a presigned URL for the whole packaged archive -- what the importer wants, and
+	 * what the bundle cache's sha256 describes.
+	 *
+	 * Exists so callers never spell the token themselves. It lives in the Runtime module's PRIVATE
+	 * logic header, unreachable from the Editor module, and the last caller to work around that
+	 * hardcoded the platform's deprecated ambiguous alias instead. Result via OnPresignedUrlReady.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
+	void GetPresignedBundleUrl(const FString& OrderId);
 
 	/**
 	 * Probe a minted URL with a 1-byte ranged GET (no auth header) to confirm it resolves
@@ -94,7 +106,14 @@ public:
 	 * the caller's (the orchestrator polls on an interval until complete).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
-	void GetMaterializeStatus(const FString& OrderId);
+	/**
+	 * Poll the materialize status.
+	 *
+	 * Requested is the token set whose delivery decides completion. The platform answers this
+	 * endpoint with a delivery-state document carrying no status word, so without it there is nothing
+	 * to compare against and no way to know a build has finished.
+	 */
+	void GetMaterializeStatus(const FString& OrderId, const TArray<FString>& Requested);
 
 	/**
 	 * True iff Item is an incomplete (BASE) bundle that still needs "Generate Unreal formats" - it
@@ -122,7 +141,7 @@ public:
 
 	/** Implemented by the Blueprint child: a materialize request was accepted (or refused). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Mantle Place|Vault")
-	void OnMaterializeStarted(bool bSuccess, const FString& JobId, const FString& Message);
+	void OnMaterializeStarted(bool bSuccess, const FMantlePlaceMaterializeStart& Start, const FString& Message);
 
 	/** Implemented by the Blueprint child: a non-terminal materialize status poll (pending/processing). */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Mantle Place|Vault")
@@ -136,6 +155,15 @@ public:
 	FMantlePlaceOnVaultListedNative OnVaultListedNative;
 	FMantlePlaceOnPresignedNative OnPresignedUrlReadyNative;
 	FMantlePlaceOnMaterializeStartedNative OnMaterializeStartedNative;
+
+	/**
+	 * The tokens the in-flight status poll measures delivery against.
+	 *
+	 * Held on the client because the status response is a delivery-state document with no status
+	 * word: without the requested set there is nothing to compare `delivered` to, and no way to tell
+	 * a finished build from one that has not started.
+	 */
+	TArray<FString> PendingStatusTokens;
 	FMantlePlaceOnMaterializeStatusNative OnMaterializeStatusNative;
 
 	//~ Begin UObject interface
@@ -161,7 +189,7 @@ private:
 	/** Fire the native delegate + the Blueprint event together (single source of truth per signal). */
 	void NotifyVaultListed(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message);
 	void NotifyPresigned(bool bSuccess, const FMantlePlacePresignedDownload& Download, const FString& Message);
-	void NotifyMaterializeStarted(bool bSuccess, const FString& JobId, const FString& Message);
+	void NotifyMaterializeStarted(bool bSuccess, const FMantlePlaceMaterializeStart& Start, const FString& Message);
 	void NotifyMaterializeStatus(bool bOk, const FMantlePlaceMaterializeStatus& Status, const FString& Message);
 
 	/** Unbind + cancel + reset any in-flight request. */

@@ -81,6 +81,10 @@ internal static class VaultConformanceTests
             case "vault.materialize.started":
             case "vault.materialize.alreadyRunning":
             case "vault.materialize.startNoJobId":
+            case "vault.materialize.noop":
+            case "vault.materialize.queued":
+            case "vault.materialize.coalesced":
+            case "vault.materialize.activeJobWithoutId":
                 DriveMaterializeStart(run, corpusCase);
                 break;
 
@@ -92,8 +96,15 @@ internal static class VaultConformanceTests
             case "vault.materialize.statusVectors":
                 DriveWithVectors(run, corpusCase, DriveStatusVectors);
                 break;
+            case "vault.materialize.deliveryVectors":
+                DriveWithVectors(run, corpusCase, DriveDeliveryVectors);
+                break;
             case "vault.materializeTokenList":
                 DriveWithVectors(run, corpusCase, DriveTokenList);
+                break;
+
+            case "vault.downloadRequestBody":
+                DriveWithVectors(run, corpusCase, DriveDownloadRequestBody);
                 break;
             case "vault.statusWordBuckets":
                 DriveWithVectors(run, corpusCase, DriveStatusWords);
@@ -314,6 +325,89 @@ internal static class VaultConformanceTests
             // ETL runs.
             run.Equal(start.AlreadyRunning, alreadyRunning, "already running");
         }
+
+        // ⛔ The outcome, not the presence of an id. Two of the platform's five start shapes are
+        // successes that name no job at all, and inferring failure from a missing `jobId` is what
+        // stopped this host importing any bundle with nothing left to build.
+        if (ConformanceCorpus.WantsString(corpusCase, "outcome", out string outcome))
+        {
+            run.Equal(start.Outcome.ToString(), outcome, "outcome");
+        }
+
+        if (ConformanceCorpus.WantsRows(corpusCase, "tokens", out IReadOnlyList<ExpectationNode> tokens))
+        {
+            run.Equal(start.Tokens.Count, tokens.Count, "token count");
+            for (int index = 0; index < tokens.Count && index < start.Tokens.Count; index++)
+            {
+                run.Equal(start.Tokens[index], tokens[index].AsString(), $"token[{index}]");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Drives the delivery-state table: the shape this endpoint actually answers polls with.
+    /// </summary>
+    /// <remarks>
+    /// There is no status word to read, so every row asserts a DERIVED state. The `requested` array
+    /// at the top of the file is the yardstick — without it there is nothing to compare `delivered`
+    /// against and no way to know a build has finished.
+    /// </remarks>
+    private static void DriveDeliveryVectors(TestRun run, VectorNode root)
+    {
+        List<string> requested = [];
+        foreach (VectorNode token in root.Items("requested"))
+        {
+            requested.Add(token.Element.GetString() ?? string.Empty);
+        }
+
+        root.MarkConsumed("requested");
+
+        foreach (VectorNode vector in root.Items("vectors"))
+        {
+            string body = vector.Element.GetProperty("body").GetRawText();
+            vector.MarkConsumed("body");
+
+            string? error = MaterializeJobs.TryParseStatus(body, requested, out MaterializeStatus status);
+            bool expectParsed = vector.Bool("parseSucceeds") ?? true;
+
+            run.Equal(error is null, expectParsed, $"parse {body}");
+
+            if (!expectParsed)
+            {
+                run.Contains(error, vector.Str("errorContains")!, "failure names the reason");
+                continue;
+            }
+
+            run.Equal(status.State.ToString(), vector.Str("state")!, $"state for {body}");
+            run.Within(status.Fraction, vector.Double("fraction") ?? double.NaN, 1e-9, $"fraction for {body}");
+
+            if (vector.Str("jobId") is { } jobId)
+            {
+                run.Equal(status.JobId, jobId, "job id");
+            }
+
+            if (vector.Str("messageContains") is { } fragment)
+            {
+                run.Contains(status.Message, fragment, "message names the cause");
+            }
+
+            if (vector.Element.TryGetProperty("unproducible", out JsonElement gaps))
+            {
+                vector.MarkConsumed("unproducible");
+                run.Equal(status.Unproducible.Count, gaps.GetArrayLength(), "permanent gap count");
+
+                int index = 0;
+                foreach (JsonElement gap in gaps.EnumerateArray())
+                {
+                    if (index < status.Unproducible.Count)
+                    {
+                        run.Equal(status.Unproducible[index].Token, gap.GetString(), $"gap[{index}]");
+                    }
+
+                    index++;
+                }
+            }
+        }
     }
 
     private static void DrivePresign(TestRun run, ConformanceCorpus.CorpusCase corpusCase)
@@ -429,6 +523,50 @@ internal static class VaultConformanceTests
                 MaterializeJobs.IsValidScope(scope),
                 vector.Bool("valid") ?? false,
                 $"scope '{scope}'");
+        }
+    }
+
+    private static void DriveDownloadRequestBody(TestRun run, VectorNode root)
+    {
+        string wholeBundle = root.Str("wholeBundleFormat")!;
+
+        run.Equal(
+            PresignedDownloads.WholeBundleFormat,
+            wholeBundle,
+            "this host names the archive with the corpus's whole-bundle token");
+
+        run.False(
+            string.Equals(
+                PresignedDownloads.WholeBundleFormat,
+                root.Str("deprecatedWholeBundleAlias")!,
+                StringComparison.OrdinalIgnoreCase),
+            "and never with the deprecated alias, whose meaning depends on the order's own data");
+
+        // ⛔HPS-49: the route validates its body, so "{}" is a 400 and not a default. The reference
+        // body is the whole assertion — a host that omits `format` cannot download at all.
+        string expectedFormat = root.Obj("body")!.Str("format")!;
+        string body = PresignedDownloads.BuildRequestBody();
+
+        run.Equal(body, $$"""{"format":"{{expectedFormat}}"}""", "the presign body names the format");
+        run.Contains(body, "\"format\"", "and it is not an empty object");
+
+        foreach (VectorNode vector in root.Items("formatVectors"))
+        {
+            string format = vector.Str("format")!;
+            bool wholeBundleVector = vector.Bool("wholeBundle") ?? false;
+            bool presignable = vector.Bool("presignable") ?? false;
+
+            run.Equal(
+                string.Equals(format, wholeBundle, StringComparison.OrdinalIgnoreCase),
+                wholeBundleVector,
+                $"'{format}' names the whole archive: {wholeBundleVector}");
+
+            // This host asks for the archive and nothing else, so it carries no format allow-list to
+            // assert against — the reference host does. What binds here is the implication: a token
+            // naming the archive must be one the route will presign, or this host cannot download.
+            run.True(
+                !wholeBundleVector || presignable,
+                $"'{format}' naming the archive implies the route presigns it");
         }
     }
 

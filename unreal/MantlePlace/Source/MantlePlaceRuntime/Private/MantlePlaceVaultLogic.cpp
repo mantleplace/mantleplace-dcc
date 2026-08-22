@@ -317,6 +317,17 @@ bool FMantlePlaceVaultLogic::IsKnownFormat(const FString& Format)
 	return false;
 }
 
+const FString& FMantlePlaceVaultLogic::WholeBundleFormat()
+{
+	static const FString Format = TEXT("bundle");
+	return Format;
+}
+
+bool FMantlePlaceVaultLogic::IsPresignableFormat(const FString& Format)
+{
+	return IsKnownFormat(Format) || Format.Equals(WholeBundleFormat(), ESearchCase::IgnoreCase);
+}
+
 const TArray<FString>& FMantlePlaceVaultLogic::KnownFormats()
 {
 	static const TArray<FString> Formats = {
@@ -380,10 +391,63 @@ FString FMantlePlaceVaultLogic::BuildMaterializeBody(const FString& Scope)
 	return VaultSerializeCondensed(Root);
 }
 
-bool FMantlePlaceVaultLogic::ParseMaterializeStartResponse(const FString& JsonStr, FString& OutJobId, bool& bOutAlreadyRunning, FString& OutError)
+namespace
 {
-	OutJobId.Empty();
-	bOutAlreadyRunning = false;
+/** Read a string array field, skipping non-strings. Absent or wrong-typed yields an empty array. */
+TArray<FString> VaultStringArray(const TSharedPtr<FJsonObject>& Root, const TCHAR* Field)
+{
+	TArray<FString> Values;
+	const TArray<TSharedPtr<FJsonValue>>* Array = nullptr;
+	if (Root.IsValid() && Root->TryGetArrayField(Field, Array) && Array != nullptr)
+	{
+		for (const TSharedPtr<FJsonValue>& Entry : *Array)
+		{
+			FString Text;
+			if (Entry.IsValid() && Entry->TryGetString(Text) && !Text.IsEmpty())
+			{
+				Values.Add(MoveTemp(Text));
+			}
+		}
+	}
+	return Values;
+}
+
+/** As above, for an array hanging off a nested object. */
+TArray<FString> VaultStringArray(const TSharedPtr<FJsonObject>* Object, const TCHAR* Field)
+{
+	return (Object != nullptr && Object->IsValid()) ? VaultStringArray(*Object, Field) : TArray<FString>();
+}
+
+/** True when any element of Tokens is in Outstanding. */
+bool VaultTouchesAny(const TArray<FString>& Tokens, const TArray<FString>& Outstanding)
+{
+	for (const FString& Token : Tokens)
+	{
+		if (Outstanding.Contains(Token))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+}
+
+bool FMantlePlaceVaultLogic::IsPermanentlyAbsentReason(const FString& Reason)
+{
+	// Mirrors the platform's own non-retryable set exactly. Treating one of these as outstanding
+	// makes a bundle that is as complete as it will ever be poll for its whole budget and then time
+	// out, having been finished the entire time.
+	return Reason.Equals(TEXT("no_features_in_aoi"), ESearchCase::IgnoreCase) || Reason.Equals(TEXT("area_cap_exceeded"), ESearchCase::IgnoreCase) || Reason.Equals(TEXT("outside_coverage"), ESearchCase::IgnoreCase);
+}
+
+TArray<FString> FMantlePlaceVaultLogic::RequestedForPolling(const FMantlePlaceMaterializeStart& Start)
+{
+	return Start.Tokens.Num() > 0 ? Start.Tokens : TargetedImportTokens();
+}
+
+bool FMantlePlaceVaultLogic::ParseMaterializeStartResponse(const FString& JsonStr, FMantlePlaceMaterializeStart& OutStart, FString& OutError)
+{
+	OutStart = FMantlePlaceMaterializeStart();
 
 	const TSharedPtr<FJsonObject> Root = VaultDeserializeObject(JsonStr);
 	if (!Root.IsValid())
@@ -392,28 +456,71 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStartResponse(const FString& JsonSt
 		return false;
 	}
 
+	// Nothing to build: everything asked for is already delivered, or the rest can never be produced
+	// for this area. A SUCCESS that names no job - the caller skips polling and downloads.
+	bool bFlag = false;
+	if (Root->TryGetBoolField(TEXT("noop"), bFlag) && bFlag)
+	{
+		OutStart.Outcome = EMantlePlaceMaterializeStartOutcome::NothingToDo;
+		OutStart.Tokens = VaultStringArray(Root, TEXT("delivered"));
+		return true;
+	}
+
+	// The order's core build has not finished; the picks are parked and fire on their own.
+	if (Root->TryGetBoolField(TEXT("queued"), bFlag) && bFlag)
+	{
+		OutStart.Outcome = EMantlePlaceMaterializeStartOutcome::Queued;
+		OutStart.Tokens = VaultStringArray(Root, TEXT("pendingTokens"));
+		return true;
+	}
+
+	FString ActiveJobId;
+	Root->TryGetStringField(TEXT("activeJobId"), ActiveJobId);
+
+	bool bCoalesced = false;
+	Root->TryGetBoolField(TEXT("coalesced"), bCoalesced);
+
+	FString Code;
+	Root->TryGetStringField(TEXT("code"), Code);
+
+	// A run is already in flight. Checked before the error body because the single-flight response
+	// carries both a job fact and error-ish prose, and the job fact is the useful half. An EMPTY id
+	// still joins: polling is keyed on the order, not the job.
+	if (!ActiveJobId.IsEmpty() || bCoalesced || Code.Equals(TEXT("active_job"), ESearchCase::CaseSensitive))
+	{
+		OutStart.Outcome = EMantlePlaceMaterializeStartOutcome::Joined;
+		OutStart.JobId = MoveTemp(ActiveJobId);
+		OutStart.Tokens = VaultStringArray(Root, TEXT("tokens"));
+		return true;
+	}
+
+	FString ErrorCode;
+	if (ParseErrorBody(JsonStr, OutError, ErrorCode))
+	{
+		return false;
+	}
+
 	FString JobId;
 	if (Root->TryGetStringField(TEXT("jobId"), JobId) && !JobId.IsEmpty())
 	{
-		OutJobId = MoveTemp(JobId);
-		bOutAlreadyRunning = false;
+		OutStart.Outcome = EMantlePlaceMaterializeStartOutcome::Started;
+		OutStart.JobId = MoveTemp(JobId);
+		OutStart.Tokens = VaultStringArray(Root, TEXT("tokens"));
 		return true;
 	}
 
-	// Single-flight 409: a materialize is already running for this order - poll the existing job.
-	if (Root->TryGetStringField(TEXT("activeJobId"), JobId) && !JobId.IsEmpty())
-	{
-		OutJobId = MoveTemp(JobId);
-		bOutAlreadyRunning = true;
-		return true;
-	}
-
-	FString Code;
-	if (!ParseErrorBody(JsonStr, OutError, Code))
-	{
-		OutError = TEXT("Materialize response missing 'jobId'");
-	}
+	OutError = TEXT("Materialize response missing 'jobId'");
 	return false;
+}
+
+bool FMantlePlaceVaultLogic::ParseMaterializeStartResponse(const FString& JsonStr, FString& OutJobId, bool& bOutAlreadyRunning, FString& OutError)
+{
+	FMantlePlaceMaterializeStart Start;
+	const bool bParsed = ParseMaterializeStartResponse(JsonStr, Start, OutError);
+
+	OutJobId = Start.JobId;
+	bOutAlreadyRunning = Start.IsAlreadyRunning();
+	return bParsed;
 }
 
 EMantlePlaceMaterializeState FMantlePlaceVaultLogic::ParseMaterializeState(const FString& State)
@@ -444,6 +551,11 @@ EMantlePlaceMaterializeState FMantlePlaceVaultLogic::ParseMaterializeState(const
 
 bool FMantlePlaceVaultLogic::ParseMaterializeStatus(const FString& JsonStr, FMantlePlaceMaterializeStatus& OutStatus, FString& OutError)
 {
+	return ParseMaterializeStatus(JsonStr, TArray<FString>(), OutStatus, OutError);
+}
+
+bool FMantlePlaceVaultLogic::ParseMaterializeStatus(const FString& JsonStr, const TArray<FString>& Requested, FMantlePlaceMaterializeStatus& OutStatus, FString& OutError)
+{
 	OutStatus = FMantlePlaceMaterializeStatus();
 
 	const TSharedPtr<FJsonObject> Root = VaultDeserializeObject(JsonStr);
@@ -462,7 +574,17 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStatus(const FString& JsonStr, FMan
 
 	if (StateStr.IsEmpty())
 	{
-		// No status field: surface a platform error envelope if that's what we got.
+		// `delivered` is the discriminator: the delivery-state document always declares it, where
+		// `activeJob` is legitimately null on an idle order and every other field is optional.
+		// Keying on an optional field would misread an idle bundle as a foreign shape.
+		const TArray<TSharedPtr<FJsonValue>>* DeliveredArray = nullptr;
+		if (Root->TryGetArrayField(TEXT("delivered"), DeliveredArray))
+		{
+			DeriveMaterializeDelivery(Root, Requested, OutStatus);
+			return true;
+		}
+
+		// Neither shape: surface a platform error envelope if that's what we got.
 		FString Code;
 		if (!ParseErrorBody(JsonStr, OutError, Code))
 		{
@@ -490,6 +612,129 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStatus(const FString& JsonStr, FMan
 	return true;
 }
 
+void FMantlePlaceVaultLogic::DeriveMaterializeDelivery(const TSharedPtr<FJsonObject>& Root, const TArray<FString>& Requested, FMantlePlaceMaterializeStatus& OutStatus)
+{
+	const TArray<FString> DeliveredAll = VaultStringArray(Root, TEXT("delivered"));
+
+	TArray<FString> Blocked;
+	const TArray<TSharedPtr<FJsonValue>>* NotDelivered = nullptr;
+	if (Root->TryGetArrayField(TEXT("notDelivered"), NotDelivered) && NotDelivered != nullptr)
+	{
+		for (const TSharedPtr<FJsonValue>& Entry : *NotDelivered)
+		{
+			const TSharedPtr<FJsonObject>* Row = nullptr;
+			if (!Entry.IsValid() || !Entry->TryGetObject(Row) || Row == nullptr || !Row->IsValid())
+			{
+				continue;
+			}
+
+			FString Token;
+			FString Reason;
+			(*Row)->TryGetStringField(TEXT("token"), Token);
+			(*Row)->TryGetStringField(TEXT("reason"), Reason);
+
+			if (!Token.IsEmpty() && Requested.Contains(Token) && IsPermanentlyAbsentReason(Reason))
+			{
+				FMantlePlaceMissingDeliverable Missing;
+				Missing.Token = Token;
+				Missing.Reason = Reason;
+				OutStatus.Unproducible.Add(MoveTemp(Missing));
+				Blocked.Add(Token);
+			}
+		}
+	}
+
+	TArray<FString> Outstanding;
+	for (const FString& Token : Requested)
+	{
+		if (DeliveredAll.Contains(Token))
+		{
+			OutStatus.Delivered.Add(Token);
+		}
+		else if (!Blocked.Contains(Token))
+		{
+			Outstanding.Add(Token);
+		}
+	}
+
+	const float Fraction = Requested.Num() == 0
+	                           ? -1.0f
+	                           : static_cast<float>(OutStatus.Delivered.Num()) / static_cast<float>(Requested.Num());
+
+	// STOP: no yardstick, no verdict. "Nothing is outstanding" is vacuously true against an empty
+	// requested set, so falling through would report Complete for a bundle nobody asked anything of.
+	if (Requested.Num() == 0)
+	{
+		OutStatus.State = EMantlePlaceMaterializeState::Unknown;
+		OutStatus.Message = TEXT("No deliverables were named, so there is nothing to check against.");
+		return;
+	}
+
+	bool bStateUnknown = false;
+	if (Root->TryGetBoolField(TEXT("deliveryStateUnknown"), bStateUnknown) && bStateUnknown)
+	{
+		OutStatus.State = EMantlePlaceMaterializeState::Unknown;
+		OutStatus.Message = TEXT("The platform could not confirm what this bundle already has. Still checking...");
+		return;
+	}
+
+	if (Outstanding.Num() == 0)
+	{
+		OutStatus.State = EMantlePlaceMaterializeState::Complete;
+		OutStatus.Fraction = 1.0f;
+		return;
+	}
+
+	const TSharedPtr<FJsonObject>* ActiveJob = nullptr;
+	if (Root->TryGetObjectField(TEXT("activeJob"), ActiveJob) && ActiveJob != nullptr && ActiveJob->IsValid())
+	{
+		const int32 Building = VaultStringArray(ActiveJob, TEXT("tokens")).Num();
+		OutStatus.State = EMantlePlaceMaterializeState::Processing;
+		OutStatus.Fraction = Fraction;
+		(*ActiveJob)->TryGetStringField(TEXT("id"), OutStatus.JobId);
+		OutStatus.Message = Building > 0
+		                        ? FString::Printf(TEXT("Building %d deliverable(s)..."), Building)
+		                        : TEXT("Building...");
+		return;
+	}
+
+	const TSharedPtr<FJsonObject>* LastAttempt = nullptr;
+	if (Root->TryGetObjectField(TEXT("lastAttempt"), LastAttempt) && LastAttempt != nullptr && LastAttempt->IsValid() && VaultTouchesAny(VaultStringArray(LastAttempt, TEXT("tokens")), Outstanding))
+	{
+		FString Outcome;
+		(*LastAttempt)->TryGetStringField(TEXT("outcome"), Outcome);
+
+		OutStatus.State = EMantlePlaceMaterializeState::Failed;
+		if (Outcome.Equals(TEXT("completed"), ESearchCase::IgnoreCase))
+		{
+			// STOP: the soft-fail envelope. The run says it finished, and produced none of it.
+			OutStatus.Message = TEXT("The platform reported the job finished but produced none of these ")
+			    TEXT("deliverables. Try generating again; if it repeats, the platform could not build them.");
+		}
+		else if (Outcome.Equals(TEXT("cancelled"), ESearchCase::IgnoreCase))
+		{
+			OutStatus.Message = TEXT("The platform's generation timed out and was swept. Try generating again.");
+		}
+		else
+		{
+			OutStatus.Message = TEXT("The platform could not build this bundle.");
+		}
+		return;
+	}
+
+	const TSharedPtr<FJsonObject>* LastFailed = nullptr;
+	if (Root->TryGetObjectField(TEXT("lastFailed"), LastFailed) && LastFailed != nullptr && LastFailed->IsValid() && VaultTouchesAny(VaultStringArray(LastFailed, TEXT("tokens")), Outstanding))
+	{
+		OutStatus.State = EMantlePlaceMaterializeState::Failed;
+		OutStatus.Message = TEXT("The platform could not build this bundle.");
+		return;
+	}
+
+	OutStatus.State = EMantlePlaceMaterializeState::Pending;
+	OutStatus.Fraction = Fraction;
+	OutStatus.Message = TEXT("Waiting for the platform to pick this up...");
+}
+
 bool FMantlePlaceVaultLogic::IsIncompleteBundle(const FMantlePlaceVaultItem& Item)
 {
 	for (const FString& Format : Item.Formats)
@@ -503,8 +748,12 @@ bool FMantlePlaceVaultLogic::IsIncompleteBundle(const FMantlePlaceVaultItem& Ite
 	// base_on_demand marker with an empty formats list. Both need their Unreal formats
 	// generated, so Import must route through materialize first rather than dead-ending at the
 	// importer's manifest gate. Only a listing that explicitly advertises glb is treated as
-	// confidently complete; anything else materializes (an already-materialized bundle coalesces to a
-	// no-op job on the web side, so this is safe for the unknown/legacy case too).
+	// confidently complete; anything else materializes.
+	//
+	// That is safe for the unknown/legacy case ONLY because the NothingToDo outcome is handled: an
+	// already-materialized bundle answers with {"noop":true,..} and NO job. This comment used to
+	// claim the platform "coalesces to a no-op job", and it does not - there is no job. Believing
+	// there was is what left the caller polling for a job that never existed.
 	return true;
 }
 
