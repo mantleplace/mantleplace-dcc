@@ -15,8 +15,11 @@ at `v19.json`) and a semver era (`version: "1.0.0"`, published at `1.0.0.json` �
 forever, so this gate reads both, orders them (the whole integer era precedes the whole semver era,
 it being pre-history by definition), and holds a host to whichever one it pins.
 
-What it catches: the platform ships a new manifest version and a host consumer has never been
-verified against that shape. This is the gate that scales as hosts go from one to four — each new
+What it catches: the platform ships a new manifest MINOR or MAJOR and a host consumer has never
+been verified against that shape. A newer PATCH is exempt — `spec/compatibility.md` §2 makes a patch
+editorial and says it "obliges a host to nothing" — but the exemption is earned, not assumed: the
+gate fetches both documents and requires them to be identical once prose and the version stamp are
+stripped, so a release mislabelled as a patch fails here instead of passing unread. This is the gate that scales as hosts go from one to four — each new
 DCC host adds its own entry to `verified-against.json` and is held to the same line.
 
 **N hosts, one gate.** Nothing here knows what a host is written in. Every host declares, in its own
@@ -136,6 +139,51 @@ def describe(key: str) -> str:
     `1.0.0` in a sentence about a bundle reads as a plugin version as easily as a manifest one.
     """
     return key if _INTEGER_KEY_RE.match(key) else f"MPB {key}"
+
+
+#: Keys whose contents are prose or the document's own identity — everything a PATCH is allowed to
+#: change, and nothing a reader parses. Stripped at every depth before two schemas are compared.
+_EDITORIAL_KEYS = frozenset({"$id", "title", "description", "$comment", "examples"})
+
+
+def is_patch_over(pinned: str, other: str) -> bool:
+    """True when `other` is a higher PATCH of `pinned` — same era, same MAJOR.MINOR.
+
+    The integer pre-history has no patch component, so a key from that family is never a patch of
+    anything: `v19` and `v20` are a whole contract apart.
+    """
+    if _INTEGER_KEY_RE.match(pinned) or _INTEGER_KEY_RE.match(other):
+        return False
+    left, right = pinned.split("."), other.split(".")
+    return left[:2] == right[:2] and int(right[2]) > int(left[2])
+
+
+def strip_editorial(node: object) -> object:
+    """`node` with every editorial key removed, recursively."""
+    if isinstance(node, dict):
+        return {k: strip_editorial(v) for k, v in node.items() if k not in _EDITORIAL_KEYS}
+    if isinstance(node, list):
+        return [strip_editorial(item) for item in node]
+    return node
+
+
+def patch_is_editorial(pinned_schema: dict, newer_schema: dict) -> bool:
+    """True when two published schemas differ ONLY in prose and their own version stamp.
+
+    `spec/compatibility.md` §2 defines a PATCH as editorial — "documentation and description text
+    only; no change to what validates" — which is what lets §2 promise that a patch "obliges a host
+    to nothing". This function is that promise checked rather than trusted: strip the editorial
+    keys and the `version.const` each document uses to name itself, and what remains must be
+    identical. Anything else differing means the release is mislabelled, and a host that skipped it
+    on the strength of its version number would have skipped a real change.
+    """
+    left = strip_editorial(pinned_schema)
+    right = strip_editorial(newer_schema)
+    for doc in (left, right):
+        version = doc.get("properties", {}).get("version")
+        if isinstance(version, dict):
+            version.pop("const", None)
+    return left == right
 
 
 def fetch_schema(version: str, timeout: int = 20) -> dict | None:
@@ -865,7 +913,41 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
         )
 
     newest = newest_published(pinned)
-    if sort_key(newest) > sort_key(pinned):
+    patch_note = ""
+    if sort_key(newest) > sort_key(pinned) and is_patch_over(pinned, newest):
+        # A newer PATCH is not drift. `spec/compatibility.md` §2: a patch is editorial, and
+        # "obliges a host to nothing: no re-pin and no re-verification, because nothing a reader
+        # parses has changed." Demanding a re-pin here made this gate contradict the spec it
+        # enforces, and would turn every editorial republication into two red hosts.
+        #
+        # What IS worth checking is the label. "Editorial" is a claim the publisher makes with a
+        # version number, and a mislabelled patch would be waved through by the rule above and
+        # never looked at again. So the exemption is earned per release, by comparing the two
+        # published documents rather than trusting the number that separates them.
+        newer_schema = fetch_schema(newest)
+        if newer_schema is None:
+            failures.append(
+                f"FAIL [{host}]: the freeze ledger names manifest {describe(newest)}, but it is "
+                f"not served at\n      {SCHEMA_URL.format(version=newest)}.\n"
+                "      The ledger and the published set disagree — that is a platform-side bug."
+            )
+        elif not patch_is_editorial(schema, newer_schema):
+            failures.append(
+                f"FAIL [{host}]: {describe(newest)} is published as a PATCH over "
+                f"{describe(pinned)}, but it changes\n      what validates. A patch is editorial "
+                "by definition (spec/compatibility.md §2); a change to\n      shape or constraint "
+                "is a minor or a major.\n"
+                f"      Either the release is mislabelled, or {host} must re-verify against it "
+                f"(add a case\n      to {tests}) and raise verifiedAgainstManifestVersion in its "
+                "entry here."
+            )
+        else:
+            patch_note = (
+                f"    {describe(newest)} is published as an editorial patch over the pin — "
+                "verified identical\n    once prose and the version stamp are removed, so it "
+                "obliges this host nothing (§2)."
+            )
+    elif sort_key(newest) > sort_key(pinned):
         failures.append(
             f"FAIL [{host}]: the platform publishes manifest {describe(newest)}; {host} is only "
             f"verified against {describe(pinned)}.\n"
@@ -875,7 +957,14 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
         )
 
     if not failures:
-        print(f"OK [{host}]: verified against manifest {describe(pinned)}; nothing newer published.")
+        if patch_note:
+            print(f"OK [{host}]: verified against manifest {describe(pinned)}.")
+            print(patch_note)
+        else:
+            print(
+                f"OK [{host}]: verified against manifest {describe(pinned)}; nothing newer "
+                "published."
+            )
         print(f"    consumer floor = {describe(floor)} (from {entry['floorSource']['path']})")
     return failures, pinned
 

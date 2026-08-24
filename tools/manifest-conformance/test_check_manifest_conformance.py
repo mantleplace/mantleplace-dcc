@@ -44,6 +44,30 @@ def _schema(const: int | str) -> dict:
     return {"properties": {"version": {"const": const}}}
 
 
+#: A fuller published-schema stub. `_schema` above is a version const and nothing else, which every
+#: editorial comparison would call identical for the wrong reason; these tests need a document with
+#: prose, constraints and examples so "only the prose moved" is a real assertion.
+def _semver_schema(const: str, description: str = "the contract") -> dict:
+    return {
+        "$id": f"https://mantle.place/.well-known/schemas/bundle-manifest/{const}.json",
+        "title": f"Mantle Place Bundle (MPB) manifest {const}",
+        "description": description,
+        "type": "object",
+        "additionalProperties": True,
+        "required": ["version", "bbox"],
+        "properties": {
+            "version": {"const": const, "description": f"pinned to {const}"},
+            "bbox": {
+                "type": "object",
+                "description": "the AOI",
+                "required": ["west"],
+                "properties": {"west": {"type": "number", "description": "west edge"}},
+            },
+        },
+        "examples": [{"version": const, "bbox": {"west": -105.0}}],
+    }
+
+
 def _host_entry(**overrides) -> dict:
     entry = {
         "verifiedAgainstManifestVersion": 17,
@@ -350,6 +374,163 @@ class MultiHostGateTest(unittest.TestCase):
         doc = self._write_doc(hosts)
         self.assertEqual(0, gate.main(["--verified-against", str(doc), "--skip-corpus",
                                        "--host", "unreal"]))
+
+
+class PatchExemptionTest(unittest.TestCase):
+    """A newer PATCH is not drift — but only if it really is editorial.
+
+    `spec/compatibility.md` §2 says a patch is "documentation and description text only" and
+    "obliges a host to nothing: no re-pin and no re-verification". The gate used to fail on ANY
+    newer published key, which made it contradict the spec it enforces and turned every editorial
+    republication into two red hosts. The exemption added here is earned per release: the two
+    published documents are compared with prose and their own version stamp stripped.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+        (self.tmp / "Semver.h").write_text('FLOOR = TEXT("1.0.0");\n', encoding="utf-8")
+        self._real_root = gate._REPO_ROOT
+        gate._REPO_ROOT = self.tmp
+        self.addCleanup(lambda: setattr(gate, "_REPO_ROOT", self._real_root))
+
+        gate._schema_cache.clear()
+        self.addCleanup(gate._schema_cache.clear)
+
+        self.published = {"1.0.0": _semver_schema("1.0.0")}
+        gate.fetch_schema = lambda version, timeout=20: self.published.get(version)  # type: ignore[assignment]
+        self.addCleanup(lambda: setattr(gate, "fetch_schema", _REAL_FETCH))
+
+        gate._ledger_cache = None
+        gate.fetch_published_versions = lambda timeout=20: sorted(  # type: ignore[assignment]
+            self.published, key=gate.sort_key)
+        self.addCleanup(lambda: setattr(gate, "fetch_published_versions", _REAL_LEDGER))
+        self.addCleanup(lambda: setattr(gate, "_ledger_cache", None))
+
+    def _entry(self, **overrides) -> dict:
+        return _host_entry(
+            verifiedAgainstManifestVersion="1.0.0",
+            floorSource={"path": "Semver.h", "pattern": r'FLOOR\s*=\s*TEXT\("([0-9.]+)"\)'},
+            tests="synthetic/Tests/ManifestReaderTests.cs",
+            **overrides,
+        )
+
+    # ── the exemption ────────────────────────────────────────────────────────
+
+    def test_a_newer_editorial_patch_is_not_drift(self) -> None:
+        """The case this exists for: 1.0.1 corrects prose and nothing else."""
+        self.published["1.0.1"] = _semver_schema("1.0.1", description="corrected prose")
+        failures, _ = gate.check_host("synthetic", self._entry())
+        self.assertEqual([], failures)
+
+    def test_the_exemption_is_reported_rather_than_silent(self) -> None:
+        """A host that skipped a published version should say so — silence would read as
+        'nothing newer published', which is a different fact."""
+        self.published["1.0.1"] = _semver_schema("1.0.1", description="corrected prose")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            gate.check_host("synthetic", self._entry())
+        printed = out.getvalue()
+        self.assertIn("1.0.1", printed)
+        self.assertIn("editorial patch", printed)
+        self.assertNotIn("nothing newer published", printed)
+
+    def test_prose_at_any_depth_is_editorial(self) -> None:
+        """Descriptions live on every field, not just the document root."""
+        newer = _semver_schema("1.0.1")
+        newer["properties"]["bbox"]["description"] = "reworded"
+        newer["properties"]["bbox"]["properties"]["west"]["description"] = "reworded too"
+        self.published["1.0.1"] = newer
+        failures, _ = gate.check_host("synthetic", self._entry())
+        self.assertEqual([], failures)
+
+    def test_reworked_examples_are_editorial(self) -> None:
+        """`examples` are non-normative and carry the version stamp, so they move with a patch."""
+        newer = _semver_schema("1.0.1")
+        newer["examples"] = [{"version": "1.0.1", "anything": "at all"}]
+        self.published["1.0.1"] = newer
+        failures, _ = gate.check_host("synthetic", self._entry())
+        self.assertEqual([], failures)
+
+    # ── what the exemption must NOT wave through ─────────────────────────────
+
+    def test_a_patch_that_changes_what_validates_is_drift(self) -> None:
+        newer = _semver_schema("1.0.1")
+        newer["required"].append("brand_new_field")
+        self.published["1.0.1"] = newer
+        failures, _ = gate.check_host("synthetic", self._entry())
+        self.assertTrue(any("changes" in f and "validates" in f for f in failures), failures)
+
+    def test_a_patch_that_narrows_a_nested_constraint_is_drift(self) -> None:
+        """The quiet half: a restriction deep in the tree still validates the same documents on
+        the happy path, which is exactly why it needs a machine to notice."""
+        newer = _semver_schema("1.0.1")
+        newer["properties"]["bbox"]["properties"]["west"]["maximum"] = 0
+        self.published["1.0.1"] = newer
+        failures, _ = gate.check_host("synthetic", self._entry())
+        self.assertTrue(any("changes" in f and "validates" in f for f in failures), failures)
+
+    def test_a_newer_minor_is_still_drift(self) -> None:
+        self.published["1.1.0"] = _semver_schema("1.1.0")
+        failures, _ = gate.check_host("synthetic", self._entry())
+        self.assertTrue(any("is only verified against" in f for f in failures), failures)
+
+    def test_a_newer_major_is_still_drift(self) -> None:
+        self.published["2.0.0"] = _semver_schema("2.0.0")
+        failures, _ = gate.check_host("synthetic", self._entry())
+        self.assertTrue(any("is only verified against" in f for f in failures), failures)
+
+    def test_a_ledger_entry_that_is_not_served_is_drift(self) -> None:
+        """The ledger and the published set are two artifacts; if they disagree the gate has to
+        say so rather than treat the unfetchable version as a passing patch."""
+        gate.fetch_published_versions = lambda timeout=20: ["1.0.0", "1.0.1"]  # type: ignore[assignment]
+        failures, _ = gate.check_host("synthetic", self._entry())
+        self.assertTrue(any("not served at" in f for f in failures), failures)
+
+
+class PatchRuleUnitTest(unittest.TestCase):
+    """The two pure helpers behind the exemption."""
+
+    def test_a_higher_patch_is_a_patch(self) -> None:
+        self.assertTrue(gate.is_patch_over("1.0.0", "1.0.1"))
+        self.assertTrue(gate.is_patch_over("1.2.3", "1.2.10"))
+
+    def test_a_minor_or_major_is_not_a_patch(self) -> None:
+        self.assertFalse(gate.is_patch_over("1.0.0", "1.1.0"))
+        self.assertFalse(gate.is_patch_over("1.0.0", "2.0.0"))
+
+    def test_the_same_version_is_not_a_patch_over_itself(self) -> None:
+        self.assertFalse(gate.is_patch_over("1.0.0", "1.0.0"))
+
+    def test_a_lower_patch_is_not_a_patch_over(self) -> None:
+        self.assertFalse(gate.is_patch_over("1.0.1", "1.0.0"))
+
+    def test_the_integer_era_has_no_patch_component(self) -> None:
+        """`v19` -> `v20` is a whole contract apart, and the era break most of all."""
+        self.assertFalse(gate.is_patch_over("v19", "v20"))
+        self.assertFalse(gate.is_patch_over("v19", "1.0.0"))
+        self.assertFalse(gate.is_patch_over("v19", "v19"))
+
+    def test_identical_documents_are_editorial(self) -> None:
+        self.assertTrue(
+            gate.patch_is_editorial(_semver_schema("1.0.0"), _semver_schema("1.0.1")))
+
+    def test_a_changed_constraint_is_not_editorial(self) -> None:
+        newer = _semver_schema("1.0.1")
+        newer["additionalProperties"] = False
+        self.assertFalse(gate.patch_is_editorial(_semver_schema("1.0.0"), newer))
+
+    def test_comparison_does_not_mutate_its_inputs(self) -> None:
+        """`check_host` reuses the memoized schema dicts, so a destructive compare would corrupt
+        the next host's check — and with two hosts pinned at the same version, always the second."""
+        pinned = _semver_schema("1.0.0")
+        newer = _semver_schema("1.0.1")
+        gate.patch_is_editorial(pinned, newer)
+        self.assertEqual("1.0.0", pinned["properties"]["version"]["const"])
+        self.assertEqual("1.0.1", newer["properties"]["version"]["const"])
+        self.assertIn("description", pinned)
 
 
 class ShippedRegistryTest(unittest.TestCase):
