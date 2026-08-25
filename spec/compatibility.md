@@ -78,6 +78,14 @@ served beside the schemas, carries a sha256 of the exact bytes of **every** publ
 newest included. Hash the file you fetched and compare. A published schema whose bytes no longer match its ledger entry is a bug worth
 reporting, and CI on the producing side fails on it.
 
+**A patch's promise is checked, not asserted.** §2 says a patch obliges a host to nothing, which is
+only safe if "editorial" is true rather than merely claimed. The consumer-side conformance gate
+implements it literally: a newer PATCH is exempt from the you-have-not-been-verified-against-this
+failure, and the exemption is earned per release — the gate fetches both published documents and
+requires them to be identical once prose, examples and each document's own version stamp are
+stripped. A release labelled a patch that changes what validates fails there instead of passing
+unread.
+
 **Nothing is ever withdrawn.** Every version ever published stays served at its URL, pre-history
 included. Deprecation therefore never breaks a fetch: a consumer pinned to an old version keeps
 resolving its schema indefinitely. What changes is only whether new bundles are produced against it.
