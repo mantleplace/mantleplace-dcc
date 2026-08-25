@@ -43,11 +43,6 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
         string? unattended = LocalBundleSource.Unattended(
             Environment.GetEnvironmentVariable(LocalBundleSource.PathVariable));
 
-        // Truncated once, here; everything after this point appends. See ImportLog for why the
-        // record is streamed rather than written at the end.
-        ImportLog? log = unattended is null ? null : new ImportLog(unattended);
-        log?.Begin();
-
         string zipPath;
         if (unattended is not null)
         {
@@ -70,13 +65,25 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
             zipPath = picker.FileName;
         }
 
+        // Truncated once, here; everything after this point appends. See ImportLog for why the
+        // record is streamed rather than written at the end.
+        //
+        // ⛔ Written on the ATTENDED path too, and that is the point of it. The dialog below arrives
+        // when the import is over, and two of these steps freeze Revit for minutes with a "this will
+        // take a while" line that has to be readable WHILE they run (SlowStepNotice). A curator can
+        // open a text file beside a frozen Revit; they cannot open a TaskDialog that does not exist
+        // yet. The file was previously written only for unattended runs, so the one person actually
+        // sitting through the freeze was the one person who could not see anything.
+        ImportLog log = new(zipPath);
+        log.Begin();
+
         // The picker guarantees this; an environment variable does not, and an unhandled
         // FileNotFoundException during journal playback is Revit's internal-error dialog with
         // nothing there to dismiss it.
         if (!File.Exists(zipPath))
         {
             message = $"No bundle zip at \"{zipPath}\".";
-            Report(unattended, "Bundle not found.", message);
+            Report(log, unattended, "Bundle not found.", message);
             return Result.Failed;
         }
 
@@ -85,7 +92,7 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
         if (archive.Manifest is not { } manifest)
         {
             message = "That zip has no Metadata/manifest.json, so it is not a Mantle Place bundle.";
-            Report(unattended, "Not a Mantle Place bundle.", message);
+            Report(log, unattended, "Not a Mantle Place bundle.", message);
             return Result.Failed;
         }
 
@@ -99,6 +106,7 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
             // Not an error: an unimportable bundle is a state the manifest explains, and the
             // skipped list carries the manifest's own reasons (HPS-36).
             Report(
+                log,
                 unattended,
                 "Nothing to import from this bundle.",
                 plan.BlockedReason + Environment.NewLine + Summarise(plan, []));
@@ -110,7 +118,7 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
         if (archive.VerifyPlan(plan) is { } integrityFailure)
         {
             message = integrityFailure;
-            Report(unattended, "This bundle failed its integrity check.", integrityFailure);
+            Report(log, unattended, "This bundle failed its integrity check.", integrityFailure);
             return Result.Failed;
         }
 
@@ -118,7 +126,7 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
             commandData.Application.Application,
             document,
             archive,
-            log is null ? null : log.Append);
+            log.Append);
 
         // The Revit API throws for a long tail of document states this command cannot anticipate —
         // a template with no toposolid type, an IFC that will not convert, a degenerate TIN. An
@@ -133,11 +141,12 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
                                        or IOException)
         {
             message = $"The import failed partway through: {ex.Message}";
-            Report(unattended, "The import failed partway through.", message);
+            Report(log, unattended, "The import failed partway through.", message);
             return Result.Failed;
         }
 
         Report(
+            log,
             unattended,
             "Bundle imported.",
             Summarise(plan, importer.Log)
@@ -149,32 +158,33 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
     }
 
     /// <summary>
-    /// Tells the curator what happened — a dialog when one is driving, a file beside the zip when
-    /// the run was unattended.
+    /// Tells the curator what happened — always into the log beside the zip, and additionally as a
+    /// dialog when there is someone driving to read it.
     /// </summary>
     /// <remarks>
     /// A <c>TaskDialog</c> raised during journal playback never gets dismissed, so the run that
-    /// exists to prove the import works would hang instead. Writing the log is best-effort: an
-    /// unwritable path must not turn a successful import into a failure.
+    /// exists to prove the import works would hang instead — which is why the dialog, not the file,
+    /// is the conditional half. Writing the log is best-effort: an unwritable path must not turn a
+    /// successful import into a failure.
     /// </remarks>
-    private static void Report(string? unattendedZipPath, string instruction, string body)
+    private static void Report(ImportLog log, string? unattendedZipPath, string instruction, string body)
     {
-        if (unattendedZipPath is null)
-        {
-            TaskDialog dialog = new("Mantle Place")
-            {
-                MainInstruction = instruction,
-                MainContent = body,
-            };
-            dialog.Show();
-            return;
-        }
-
         // Appends, because the streamed lines are already in the file and they carry the timings and
         // the appearance-asset writes that the summary does not. Overwriting here would throw away
         // the half of the record that only exists because the run was watched as it happened.
-        new ImportLog(unattendedZipPath)
-            .Append(Environment.NewLine + instruction + Environment.NewLine + body);
+        log.AppendBlock(instruction + Environment.NewLine + body);
+
+        if (unattendedZipPath is not null)
+        {
+            return;
+        }
+
+        TaskDialog dialog = new("Mantle Place")
+        {
+            MainInstruction = instruction,
+            MainContent = body,
+        };
+        dialog.Show();
     }
 
     /// <summary>

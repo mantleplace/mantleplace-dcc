@@ -18,6 +18,7 @@ exitCode |= DrapeLayeringTests.Run();
 exitCode |= TerrainBaseTests.Run();
 exitCode |= SurfaceSanitiserTests.Run();
 exitCode |= ImportFailurePolicyTests.Run();
+exitCode |= SlowStepNoticeTests.Run();
 exitCode |= ReadinessReasonTests.Run();
 exitCode |= LocalBundleArchiveTests.Run();
 exitCode |= VectorDocumentSelfTests.Run();

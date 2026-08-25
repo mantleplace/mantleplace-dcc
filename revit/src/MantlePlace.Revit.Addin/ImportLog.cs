@@ -44,12 +44,35 @@ internal sealed class ImportLog(string zipPath)
         }
     }
 
-    /// <summary>One line, now.</summary>
+    /// <summary>One line, now, with the time it happened.</summary>
+    /// <remarks>
+    /// ⛔ The stamp is the half that makes a slow step legible. Two steps of this import commit for
+    /// minutes at a stretch with Revit reporting "not responding", and a curator who walks back to a
+    /// frozen screen needs to know whether the wait started four minutes ago or forty. The header's
+    /// start time alone cannot answer that once anything has happened since.
+    /// </remarks>
     internal void Append(string line)
     {
         try
         {
-            File.AppendAllText(_path, line + Environment.NewLine);
+            File.AppendAllText(_path, $"{DateTime.Now:HH:mm:ss}  {line}{Environment.NewLine}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>A multi-line block — the end-of-run summary — written whole and unstamped.</summary>
+    /// <remarks>
+    /// The summary is one thing, produced at one moment, and a stamp on its first line only would
+    /// read as though the rest of it happened at no time at all. <see cref="Append"/> is for the
+    /// running record, where each line genuinely is its own moment.
+    /// </remarks>
+    internal void AppendBlock(string block)
+    {
+        try
+        {
+            File.AppendAllText(_path, Environment.NewLine + block + Environment.NewLine);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
