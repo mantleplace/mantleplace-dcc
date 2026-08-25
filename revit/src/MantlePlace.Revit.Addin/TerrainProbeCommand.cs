@@ -138,17 +138,20 @@ public sealed class TerrainProbeCommand : IExternalCommand
                 ? structure.GetWidth()
                 : type.get_Parameter(BuiltInParameter.TOPOSOLID_TYPE_DEFAULT_THICKNESS_PARAM)?.AsDouble() ?? 0.0;
 
+            // Layer 0's width, not the total — the number the drape actually splits.
+            double topLayer = structure is { LayerCount: > 0 } ? structure.GetLayerWidth(0) : thickness;
+
             bool structural = RevitBundleImporter.HasStructuralLayer(structure);
             types.Add(new CandidateToposolidType(
-                type.Id.Value, type.Name, thickness, structure?.LayerCount ?? 0, structural));
+                type.Id.Value, type.Name, thickness, topLayer, structure?.LayerCount ?? 0, structural));
 
             report.AppendLine(CultureInfo.InvariantCulture,
                 $"  id {type.Id.Value}  \"{type.Name}\"  layers={structure?.LayerCount ?? 0}  "
-                + $"total={Ft(thickness)}  "
+                + $"total={Ft(thickness)}  topLayer={Ft(topLayer)}  "
                 + $"defaultThickness={Ft(type.get_Parameter(BuiltInParameter.TOPOSOLID_TYPE_DEFAULT_THICKNESS_PARAM)?.AsDouble() ?? 0.0)}  "
                 + $"facesLocation={type.get_Parameter(BuiltInParameter.TOPOSOLID_FACES_LOCATION)?.AsInteger().ToString(CultureInfo.InvariantCulture) ?? "n/a"}  "
                 + $"structural={structural}  "
-                + $"drapeSplittable={DrapeLayering.Split(thickness, minimumLayer).Ok}");
+                + $"drapeSplittable={DrapeLayering.Split(topLayer, minimumLayer).Ok}");
 
             if (structure is { LayerCount: > 0 })
             {
