@@ -12,6 +12,7 @@ internal static class SlowStepNoticeTests
     private static readonly ImportStepKind[] FastKinds =
     [
         ImportStepKind.ToposurfaceFromPointsFile,
+        ImportStepKind.ToposurfaceFromSurfaceTin,
         ImportStepKind.ToposurfaceFromSurfaceDxf,
         ImportStepKind.LinkSiteIfc,
         ImportStepKind.SetSharedCoordinates,
