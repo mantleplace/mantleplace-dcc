@@ -179,6 +179,9 @@ internal sealed class RevitBundleImporter(
                     case ImportStepKind.ToposurfaceFromPointsFile:
                         ImportToposurfaceFromPoints(step);
                         break;
+                    case ImportStepKind.ToposurfaceFromSurfaceTin:
+                        ImportToposurfaceFromTin(step);
+                        break;
                     case ImportStepKind.ToposurfaceFromSurfaceDxf:
                         LinkCadSurface(step);
                         break;
@@ -244,6 +247,75 @@ internal sealed class RevitBundleImporter(
             Say(cleaned.Explanation);
         }
 
+        BuildTerrain(points, LinearUnits.MetresPerUnit(step.Units), step.EntryName, "points");
+    }
+
+    /// <summary>
+    /// The toposolid built from the surface DXF's own TIN vertices — the preferred topo path.
+    /// </summary>
+    /// <remarks>
+    /// It differs from <see cref="ImportToposurfaceFromPoints"/> in where the points come from and
+    /// nowhere else: same type choice, same base-plane planning, same escalation retry, same
+    /// <c>Toposolid.Create</c>. The TIN's triangulation is not passed on because there is nowhere to
+    /// pass it — the API takes points — so what this buys is the vertex placement.
+    /// </remarks>
+    private void ImportToposurfaceFromTin(ImportStep step)
+    {
+        if (step.Frame is not { } frame)
+        {
+            // The planner does not emit this step without a frame. Stated rather than assumed,
+            // because the failure without it is a site placed 500 km from the project origin.
+            Say("The terrain could not be placed: this bundle publishes no origin for its surface.");
+            return;
+        }
+
+        string dxfPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
+
+        SurfaceTin? tin;
+        string? parseError;
+        using (StreamReader reader = new(dxfPath))
+        {
+            parseError = SurfaceTinReader.TryParse(reader, out tin);
+        }
+
+        if (parseError is not null || tin is null)
+        {
+            Say(parseError ?? "The surface DXF could not be read.");
+            return;
+        }
+
+        // Absolute eastings and northings become local metres by subtracting the published origin,
+        // and nothing else happens to them (HPS-33).
+        IReadOnlyList<SurfacePoint>? local = SurfaceTinFrame.TryToLocalMetres(tin, frame, step.Units, out string? frameError);
+        if (local is null)
+        {
+            Say(frameError ?? "The surface DXF could not be placed against this bundle's origin.");
+            return;
+        }
+
+        // Guard the producer's nodata fill before Revit ever sees it. What this removes and why is
+        // SurfaceTinSanitiser's; the underlying defect is filed against the platform.
+        IReadOnlyList<SurfacePoint> vertices = SurfaceTinSanitiser.Clean(tin, local, step.Crop, out SurfaceCleanReport cleaned);
+        if (cleaned.Explanation.Length > 0)
+        {
+            Say(cleaned.Explanation);
+        }
+
+        // 1.0, not step.Units: SurfaceTinFrame consumed the artifact's unit when it subtracted the
+        // origin, exactly as TreePointsReader does, so these coordinates are already metres.
+        BuildTerrain(vertices, 1.0, step.EntryName, "TIN vertices");
+    }
+
+    /// <summary>
+    /// Everything the two toposolid paths share: choose a type, convert into Revit's internal feet,
+    /// decide a base plane, and build — including the escalation retry.
+    /// </summary>
+    private void BuildTerrain(
+        IReadOnlyList<SurfacePoint> points,
+        double metresPerUnit,
+        string entryName,
+        string noun)
+    {
         if (ChooseToposolidType() is not { } chosenType)
         {
             Say(
@@ -252,7 +324,6 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
-        double metresPerUnit = LinearUnits.MetresPerUnit(step.Units);
         List<XYZ> revitPoints = new(points.Count);
         foreach (SurfacePoint point in points)
         {
@@ -300,7 +371,7 @@ internal sealed class RevitBundleImporter(
             }
         }
 
-        Say($"Built the terrain from {points.Count:N0} points ({step.EntryName}).");
+        Say($"Built the terrain from {points.Count:N0} {noun} ({entryName}).");
     }
 
     /// <summary>

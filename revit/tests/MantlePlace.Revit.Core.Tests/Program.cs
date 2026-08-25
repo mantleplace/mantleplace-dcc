@@ -8,6 +8,7 @@ exitCode |= ConformanceCorpusSelfTests.Run();
 exitCode |= ManifestReaderTests.Run();
 exitCode |= ImportPlannerTests.Run();
 exitCode |= SurfacePointsTests.Run();
+exitCode |= SurfaceTinTests.Run();
 exitCode |= SiteVectorTests.Run();
 exitCode |= ProjectionConformanceTests.Run();
 exitCode |= CacheKeySanitiserTests.Run();

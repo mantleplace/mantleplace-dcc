@@ -35,10 +35,15 @@ Remove (`HPS-44`).
   reads, naming re-download and plugin-update respectively rather than dual-parsing (`HPS-31`).
   The integer pre-history (v7–v19) is below the floor as a family: a bundle cut before the MPB
   re-baseline is not merely old, it is written in a dialect this reader does not speak;
-- builds the terrain from `Surface/SurfacePoints.csv` — the points file is the preferred path
-  because it yields a genuinely editable surface and its coordinates are local, so the model lands
-  near the project origin instead of at a ~500 000 m easting;
-- falls back to `Surface/Surface.dxf` when the points file is absent, and says so;
+- builds the terrain from the TIN in `Surface/Surface.dxf` — its vertices are placed adaptively,
+  dense on slopes and sparse on flats, where `Surface/SurfacePoints.csv` is a perfectly regular
+  lattice whose cells are cocircular and therefore degenerate to triangulate, which is what made the
+  imported ground read as faceted no matter how well the imagery was draped. It is also the cheaper
+  of the two: on the bundle this was measured against, 75,203 TIN vertices against the grid's 80,940;
+- falls back to the points file when the DXF is missing, or when the bundle publishes no origin to
+  reduce its absolute coordinates against — the points file is already local, so it needs none — and
+  falls back again to linking the DXF as CAD when neither surface can be built. Whichever tier is
+  used, it says which and why;
 - links `Site/Site.ifc` as a coordinated reference;
 - sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
   this host's own block — falling back to `delivery.local_origin` on a bundle whose own block

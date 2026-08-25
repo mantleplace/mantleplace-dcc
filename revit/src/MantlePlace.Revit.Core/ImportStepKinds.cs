@@ -42,6 +42,11 @@ public static class ImportStepKinds
     {
         ImportStepKind.ToposurfaceFromPointsFile => ExtractionLifetime.Transient,
 
+        // The TIN is parsed into vertices and handed to Toposolid.Create as points. Revit keeps no
+        // reference to the DXF — this is the toposolid path, not the Link CAD path below, which is
+        // the same file under the other kind and genuinely is Retained.
+        ImportStepKind.ToposurfaceFromSurfaceTin => ExtractionLifetime.Transient,
+
         // The parity layers become model elements — model curves, subdivisions, direct shapes — and
         // Revit keeps no reference to the file any of them was read out of.
         ImportStepKind.RoadCentrelines => ExtractionLifetime.Transient,

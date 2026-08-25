@@ -92,12 +92,37 @@ public static class BundleImportPlanner
     }
 
     /// <summary>
-    /// The points file is the preferred topo path: it triangulates into a genuinely editable
-    /// toposurface, and its coordinates are local so the surface lands near the project origin
-    /// instead of ~500 000 m away. The surface DXF is the fallback — same terrain, but it arrives
-    /// as a linked CAD instance the user must then convert. Only one of the two is planned; running
-    /// both would build the same surface twice.
+    /// Three tiers, and only ever one of them: the surface DXF's TIN vertices, then the points file,
+    /// then the same DXF as a linked CAD instance the user converts by hand. Running two would build
+    /// the same surface twice.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>The TIN is preferred over the points file, and it is not a fidelity-for-time trade.</b>
+    /// Both describe the same ground, cut by the same emitter, and on the bundle this was measured
+    /// against the TIN is the <em>cheaper</em> of the two: 75,203 vertices against the grid's 80,940,
+    /// and 73,537 against 80,372 once both are cleaned. What differs is where the vertices are. The
+    /// points file is a perfectly regular lattice — 285 × 284 at exactly 5.000 m, its distinct X and
+    /// Y counts multiplying to the point count exactly — so every cell's four corners are cocircular,
+    /// Delaunay triangulation is degenerate, and the triangulator picks slivers and fans arbitrarily.
+    /// That is what makes the terrain read as faceted no matter how well the imagery is draped. TIN
+    /// vertices are adaptive, dense on slopes and sparse on flats, and therefore in general position.
+    /// </para>
+    /// <para>
+    /// The points file keeps its place as tier 2 rather than being retired: it is <c>local_enu</c>
+    /// already, so it needs no origin, and it is the only topo path a bundle with no publishable
+    /// georeference has. The DXF is <c>absolute_projected</c> — eastings and northings around
+    /// 500 000 m, where Revit's precision warnings start — so tier 1 needs a
+    /// <see cref="SiteFrame"/> to subtract the published origin, and falls through when there is
+    /// none rather than dropping the site 500 km from the project origin.
+    /// </para>
+    /// <para>
+    /// ⛔ Tier 3 is the same file as tier 1 under a different kind, and that is deliberate rather
+    /// than a duplicate: a DXF this plugin cannot parse into a TIN can still be linked for the user
+    /// to convert, and the two kinds have different extraction lifetimes because Revit keeps a path
+    /// to a link and no path to a toposolid.
+    /// </para>
+    /// </remarks>
     private static void PlanToposurface(
         BundleManifest manifest,
         BundleEntryIndex entries,
@@ -107,7 +132,14 @@ public static class BundleImportPlanner
         // The crop rides on the step, so the shim never has to work out what the area of interest was
         // — and so the case that matters, a bundle whose frame cannot project one, is a null a
         // headless test can assert rather than a branch inside Revit (HPS-02).
-        SurfaceCropWindow? crop = SurfaceCrop.For(manifest, SiteFrame.For(manifest));
+        SiteFrame? frame = SiteFrame.For(manifest);
+        SurfaceCropWindow? crop = SurfaceCrop.For(manifest, frame);
+
+        if (TryPlanTin(manifest, entries, crop, frame, out ImportStep? tinStep, out SkippedImport? tinSkip))
+        {
+            steps.Add(tinStep!);
+            return;
+        }
 
         if (TryPlanArtifact(
                 manifest.ToposurfacePoints,
@@ -121,6 +153,7 @@ public static class BundleImportPlanner
                 out bool pointsUnitUnreadable,
                 crop))
         {
+            skipped.Add(tinSkip!);
             steps.Add(pointsStep!);
             return;
         }
@@ -130,6 +163,7 @@ public static class BundleImportPlanner
         // same terrain, cut by the same emitter, at the same suspect scale. Stop instead.
         if (pointsUnitUnreadable)
         {
+            skipped.Add(tinSkip!);
             skipped.Add(pointsSkip!);
             skipped.Add(new SkippedImport
             {
@@ -152,6 +186,7 @@ public static class BundleImportPlanner
                 out SkippedImport? dxfSkip,
                 out _))
         {
+            skipped.Add(tinSkip!);
             skipped.Add(new SkippedImport
             {
                 Kind = ImportStepKind.ToposurfaceFromPointsFile,
@@ -162,8 +197,104 @@ public static class BundleImportPlanner
             return;
         }
 
+        skipped.Add(tinSkip!);
         skipped.Add(pointsSkip!);
         skipped.Add(dxfSkip!);
+    }
+
+    /// <summary>
+    /// Tier 1: the toposolid built from the surface DXF's TIN vertices, when the bundle publishes
+    /// everything needed to place them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two gates on top of the usual artifact checks, both about the frame. The file is
+    /// <c>absolute_projected</c>, so it needs an origin to be measured against and that origin's CRS
+    /// has to be the one the coordinates are in. Neither is derived: the frame token and the CRS are
+    /// both published, and <see cref="SiteFrame"/> only ever subtracts (<c>HPS-33</c>).
+    /// </para>
+    /// <para>
+    /// ⛔ An unreadable unit here falls through to the points file rather than suppressing it. That
+    /// is not a hole in the rule two tiers below — that rule refuses to fall back from a suspect file
+    /// onto <em>the same terrain from the same emitter at the same suspect scale</em>. The points
+    /// file is a different deliverable carrying its own unit declaration, and if that one is also
+    /// unreadable the rule fires there, where it always did.
+    /// </para>
+    /// </remarks>
+    private static bool TryPlanTin(
+        BundleManifest manifest,
+        BundleEntryIndex entries,
+        SurfaceCropWindow? crop,
+        SiteFrame? frame,
+        out ImportStep? step,
+        out SkippedImport? skipped)
+    {
+        const ImportStepKind kind = ImportStepKind.ToposurfaceFromSurfaceTin;
+        const string label = "surface TIN";
+
+        step = null;
+
+        if (!TryPlanArtifact(
+                manifest.SurfaceDxf,
+                manifest,
+                entries,
+                kind,
+                manifest.Readiness.SurfaceDxf,
+                label,
+                out ImportStep? candidate,
+                out skipped,
+                out _,
+                crop,
+                frame))
+        {
+            return false;
+        }
+
+        if (frame is null)
+        {
+            skipped = new SkippedImport
+            {
+                Kind = kind,
+                ReasonCode = SkipReasonCode.NoSiteFrame,
+                Reason = "The surface TIN is measured in real-world coordinates and this bundle "
+                    + "publishes no origin to place it against, so the terrain was built from the "
+                    + "points file instead.",
+            };
+            return false;
+        }
+
+        string? declared = manifest.SurfaceDxf?.HorizontalFrame;
+        if (!string.Equals(declared, BundleManifestReader.ProjectedFrame, StringComparison.Ordinal))
+        {
+            skipped = new SkippedImport
+            {
+                Kind = kind,
+                ReasonCode = SkipReasonCode.CoordinateSystemNotSupported,
+                Reason = declared is null
+                    ? "This bundle does not say what frame its surface DXF is measured in, so its "
+                        + "vertices were not used as the terrain; the points file was."
+                    : $"The surface DXF is in \"{declared}\", which this plugin does not know how to "
+                        + "place, so the terrain was built from the points file instead.",
+            };
+            return false;
+        }
+
+        if (!frame.CanPlaceProjected(frame.Epsg))
+        {
+            skipped = new SkippedImport
+            {
+                Kind = kind,
+                ReasonCode = SkipReasonCode.CoordinateSystemNotSupported,
+                Reason = "This bundle publishes no projected coordinate system for its origin, so "
+                    + "the surface DXF's absolute coordinates could not be reduced to the site; the "
+                    + "terrain was built from the points file instead.",
+            };
+            return false;
+        }
+
+        step = candidate;
+        skipped = null;
+        return true;
     }
 
     private static void PlanSiteIfc(
@@ -598,7 +729,8 @@ public static class BundleImportPlanner
         out ImportStep? step,
         out SkippedImport? skipped,
         out bool unitUnreadable,
-        SurfaceCropWindow? crop = null)
+        SurfaceCropWindow? crop = null,
+        SiteFrame? frame = null)
     {
         step = null;
         skipped = null;
@@ -648,6 +780,7 @@ public static class BundleImportPlanner
             Units = units,
             ExpectedSha256 = artifact.Sha256,
             Crop = crop,
+            Frame = frame,
         };
         return true;
     }

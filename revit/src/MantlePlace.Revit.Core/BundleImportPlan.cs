@@ -6,6 +6,18 @@ public enum ImportStepKind
     /// <summary>Massing &amp; Site ▸ Toposurface ▸ Create from Import ▸ Specify Points File.</summary>
     ToposurfaceFromPointsFile,
 
+    /// <summary>
+    /// The toposolid built from the surface DXF's own TIN vertices — the preferred topo path.
+    /// </summary>
+    /// <remarks>
+    /// Same terrain as <see cref="ToposurfaceFromPointsFile"/> and fewer vertices, but sampled
+    /// adaptively instead of on a lattice. The points file is a perfectly regular grid, which makes
+    /// every cell's four corners cocircular and Delaunay triangulation degenerate, so the
+    /// triangulator picks slivers and fans arbitrarily and the terrain reads as faceted however good
+    /// the drape is. TIN vertices sit in general position and triangulate cleanly.
+    /// </remarks>
+    ToposurfaceFromSurfaceTin,
+
     /// <summary>Insert ▸ Link CAD, then Create from Import ▸ Select Import Instance.</summary>
     ToposurfaceFromSurfaceDxf,
 
@@ -244,15 +256,16 @@ public sealed class ImportStep
     public DrapePlacement? Drape { get; init; }
 
     /// <summary>
-    /// The area of interest, in the points file's own local metres — points outside it are dropped
-    /// before Revit sees them. Populated only for
-    /// <see cref="ImportStepKind.ToposurfaceFromPointsFile"/>.
+    /// The area of interest, in local metres — points outside it are dropped before Revit sees
+    /// them. Populated for <see cref="ImportStepKind.ToposurfaceFromPointsFile"/> and
+    /// <see cref="ImportStepKind.ToposurfaceFromSurfaceTin"/>.
     /// </summary>
     /// <remarks>
     /// Carried on the step for the same reason <see cref="Frame"/> and <see cref="Drape"/> are: the
     /// decision — including the decision that there is no usable window — is the interesting part,
     /// and it belongs where a headless test reaches it. <c>null</c> is a stated degradation, never a
-    /// refusal: <see cref="SurfaceGrid"/>'s bbox-free guard still runs. Why the crop is needed at
+    /// refusal: the bbox-free fill guard still runs on either path (<see cref="SurfaceGrid"/> for
+    /// the points file, <see cref="SurfaceTinSanitiser"/> for the TIN). Why the crop is needed at
     /// all is <see cref="SurfacePointsSanitiser"/>.
     /// </remarks>
     public SurfaceCropWindow? Crop { get; init; }
