@@ -19,6 +19,34 @@ history, not contract.
 
 ## Semver era
 
+### 1.0.1 — the editorial patch (published and frozen 2026-08-24)
+
+Nothing a reader parses changed. 1.0.0 was published *ahead* of the producer cutover, so its
+`description` opened with a banner saying the version was not yet published and that v19 remained
+canonical — true on the morning it was frozen, false by that afternoon. Freeze-on-publish has no
+exception for prose, so the only way to correct a published description is to supersede it, and
+§2 of [compatibility](compatibility.md) says an editorial change is a PATCH.
+
+1.0.1 is that patch: the same shape, with the banner retired.
+
+**"Editorial" is proved, not asserted.** The two documents differ at exactly seven JSON paths —
+`/$id`, `/title`, `/description`, `/properties/version/const`,
+`/properties/version/description`, `/examples[0]/version`, `/examples[1]/version` — and are equal
+once those are normalised away. `check_manifest_conformance.py` performs that
+recursive strip-and-compare itself, so a release mislabelled as a patch fails the gate.
+
+**What a host must do: nothing.** Both plugins compare against a floor, so a 1.0.1 bundle imports
+on the shipped v0.2.0 with no re-pin and no release. That is the PATCH obligation in
+[compatibility](compatibility.md) §2 working as specified.
+
+⚠️ **What it did cost.** `version.const` couples the schema document to the value every bundle
+stamps, so an editorial patch restamps production output and obliges one more ETL Suite promote.
+A patch is free for *consumers*; it is not free for the producer.
+
+The conformance corpus stays pinned at 1.0.0 deliberately — nothing links the corpus pin to a host
+pin, and `validity-truth-table.json`'s `minSupportedManifestVersion` is asserted with exact
+equality against both host floors.
+
 ### 1.0.0 — the Mantle Place Bundle re-baseline (published and frozen 2026-08-22)
 
 One clean break ends the integer era. No artifact, no pointer value and no unit changed: the
@@ -52,8 +80,9 @@ emitted.
 > no exception for prose, so the banner stays exactly where it is: the bytes a reader hashes against
 > [`frozen.lock.json`](https://mantle.place/.well-known/schemas/bundle-manifest/frozen.lock.json)
 > are the bytes that were published. **1.0.0 is the canonical contract as of 2026-08-22**, banner
-> notwithstanding; every constraint in the document is correct and current. Whether to supersede it
-> with an editorial 1.0.1 is open.
+> notwithstanding; every constraint in the document is correct and current. It was superseded by
+> the editorial [1.0.1](#101--the-editorial-patch-published-and-frozen-2026-08-24) on 2026-08-24;
+> 1.0.0's bytes, banner included, stay published and frozen as the record of that publish moment.
 
 ---
 
