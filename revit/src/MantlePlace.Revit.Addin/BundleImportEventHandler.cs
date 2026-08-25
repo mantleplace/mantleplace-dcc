@@ -112,7 +112,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
                 + Environment.NewLine
                 + $"Linked files live in {archive.RetainedDirectory} — moving or deleting that folder will "
                 + "break the links.";
-            log.Append(Environment.NewLine + summary);
+            log.AppendBlock(summary);
             return summary;
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
@@ -123,7 +123,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             // unhandled one surfaces as Revit's internal-error dialog, which tells the curator
             // nothing and implicates the whole session.
             string failure = $"The import failed partway through: {ex.Message}";
-            log.Append(Environment.NewLine + failure);
+            log.AppendBlock(failure);
             return failure;
         }
     }

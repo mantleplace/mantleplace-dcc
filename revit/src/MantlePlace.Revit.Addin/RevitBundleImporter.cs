@@ -55,6 +55,17 @@ internal sealed class RevitBundleImporter(
     private ElementId _terrainId = ElementId.InvalidElementId;
 
     /// <summary>
+    /// How many points that toposolid was built from, for the two steps that have to warn about it.
+    /// </summary>
+    /// <remarks>
+    /// Remembered on the way past rather than asked for later, for the same reason as
+    /// <see cref="_terrainId"/> — and because the number is only knowable from the points file this
+    /// run read. Null when this run did not build the terrain, which is a re-import onto ground an
+    /// earlier one laid; <see cref="SlowStepNotice"/> says so rather than inventing a count.
+    /// </remarks>
+    private int? _terrainVertexCount;
+
+    /// <summary>
     /// The subdivisions this import created, so the drape retypes exactly these and no others.
     /// Remembered, not re-found: <c>GetSubDivisionIds</c> returns curator-drawn subdivisions too, and
     /// retyping one of those is the trespass this list exists to refuse.
@@ -331,6 +342,7 @@ internal sealed class RevitBundleImporter(
         // Remembered, not re-found: the site-boundary step drapes its rings onto THIS toposolid, and
         // a collector would happily return one the user had already modelled.
         _terrainId = built;
+        _terrainVertexCount = relief.PointCount;
         Say(plan.Explanation
             + $" Type \"{type.Name}\"; terrain spans {UnitUtils.ConvertFromInternalUnits(relief.MinZ, UnitTypeId.Meters):0.##}"
             + $" m to {UnitUtils.ConvertFromInternalUnits(relief.MaxZ, UnitTypeId.Meters):0.##} m.");
@@ -521,6 +533,13 @@ internal sealed class RevitBundleImporter(
         int created = 0;
         int declined = 0;
         int unstamped = 0;
+
+        // ⛔ Before the transaction, because the whole cost is inside its commit and nothing can be
+        // written while that runs. This line is the only warning there will ever be.
+        if (SlowStepNotice.For(step.Kind, _terrainVertexCount, newBoundaries.Count) is { } notice)
+        {
+            Say(notice);
+        }
 
         ImportFailureSwallower swallower = new("Importing the site boundaries");
         using Transaction transaction = BeginTransaction("Mantle Place: site boundaries", swallower);
@@ -868,6 +887,13 @@ internal sealed class RevitBundleImporter(
         // project is opened (ImportStepKinds.LifetimeOf).
         string imagePath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
         string name = $"Mantle Place Site Imagery {_archive.Layout.Key.Stem}";
+
+        // The host retype is always paid and is the dominant cost, so the work count is 1 rather
+        // than the subdivision count — the drape is slow on a terrain with no subdivisions at all.
+        if (SlowStepNotice.For(step.Kind, _terrainVertexCount, 1) is { } notice)
+        {
+            Say(notice);
+        }
 
         ImportFailureSwallower swallower = new("Applying the aerial photograph");
         using Transaction transaction = BeginTransaction("Mantle Place: satellite imagery", swallower);
