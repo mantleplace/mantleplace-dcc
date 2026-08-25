@@ -246,7 +246,17 @@ public static class SurfaceGrid
         return best >= zs.Count * IdenticalFraction;
     }
 
-    private static double MedianAbsoluteOffset(List<double> zs, double fill)
+    /// <summary>
+    /// How far a candidate fill value sits from the terrain beside it, robustly.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ The median, never the maximum — and <see cref="SurfaceTinSanitiser"/> shares it for exactly
+    /// that reason. Genuinely flat ground at the edge of a site (the Bay, in the bundle that
+    /// motivated all this) routinely has a cliff somewhere along it, so a maximum would condemn the
+    /// water along with the fill. A median asks whether the value joins the terrain beside it
+    /// <em>generally</em>, which is the question that separates the two.
+    /// </remarks>
+    internal static double MedianAbsoluteOffset(IReadOnlyList<double> zs, double fill)
     {
         if (zs.Count == 0)
         {

@@ -20,6 +20,42 @@ internal static class ImportPlannerTests
         }
         """;
 
+    /// <summary>
+    /// A <c>hosts.revit</c> block complete enough for the TIN tier to win: an origin to reduce the
+    /// DXF's absolute coordinates against, and the DXF declaring the frame it is measured in.
+    /// </summary>
+    /// <remarks>
+    /// The origin is the real one from order <c>f93bc782</c>, so the numbers here and the ones
+    /// pinned in <see cref="SurfaceTinTests"/> describe the same site.
+    /// </remarks>
+    private const string TinHostBlock = """
+        "hosts": {
+          "revit": {
+            "georeference": {
+              "crs_projected": "EPSG:32610",
+              "origin": {
+                "lon": -122.47853042317121,
+                "lat": 37.83126164839943,
+                "projected": { "epsg": 32610, "easting": 545888.5, "northing": 4187221.5, "linear_unit": "m" }
+              }
+            },
+            "toposurface_points": {
+              "path": "Surface/SurfacePoints.csv",
+              "horizontal_frame": "local_enu",
+              "units": "m",
+              "sha256": "3f00000000000000000000000000000000000000000000000000000000000000"
+            },
+            "surface_dxf": {
+              "path": "Surface/Surface.dxf",
+              "surf_type": "TIN-3DFACE",
+              "horizontal_frame": "absolute_projected",
+              "units": "m",
+              "sha256": "7c00000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        }
+        """;
+
     private static readonly string[] FullBundle =
     [
         "README.md",
@@ -345,10 +381,107 @@ internal static class ImportPlannerTests
             run.Equal(plan.AvailableButNotImported.Count, 2, "LandXML and contours are both listed");
         });
 
+        RunTinTierCases(run);
         RunParityCases(run);
         RunDrapeCases(run);
 
         return run.Report("import planner");
+    }
+
+
+    /// <summary>
+    /// Tier 1 — the surface DXF's TIN vertices — and the four ways it stands aside for the points
+    /// file rather than placing a site half a world from the project origin.
+    /// </summary>
+    private static void RunTinTierCases(TestRun run)
+    {
+        run.Case("the surface TIN is the preferred toposurface path", () =>
+        {
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}, {{TinHostBlock}}}""", FullBundle);
+
+            run.True(plan.CanImport, "can import");
+            run.True(HasStep(plan, ImportStepKind.ToposurfaceFromSurfaceTin), "the TIN step is planned");
+            run.False(
+                HasStep(plan, ImportStepKind.ToposurfaceFromPointsFile),
+                "the points file is not also imported — that would build the same terrain twice");
+            run.False(
+                HasStep(plan, ImportStepKind.ToposurfaceFromSurfaceDxf),
+                "and the DXF is not ALSO linked as CAD — it is the same file under the other kind");
+        });
+
+        run.Case("the TIN step carries the frame it will be reduced against, and its own hash", () =>
+        {
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}, {{TinHostBlock}}}""", FullBundle);
+            ImportStep? step = FindStep(plan, ImportStepKind.ToposurfaceFromSurfaceTin);
+
+            run.True(step?.Frame is not null, "the origin rides on the step, not on the shim (HPS-02)");
+            run.Equal(step?.Frame?.Epsg ?? 0, 32610, "and it is the bundle's own projected CRS");
+            run.Contains(step?.ExpectedSha256, "7c00", "the DXF's own hash gates the extraction (HPS-34)");
+            run.Equal(step?.EntryName, "Surface/Surface.dxf", "reading the TIN out of the DXF");
+        });
+
+        run.Case("a bundle that does not say what frame its DXF is in still gets its terrain", () =>
+        {
+            // ⛔ Not a refusal to import — a fall-through. Guessing the frame is how a site lands
+            // 500 km away looking like a successful import.
+            string withoutFrame = TinHostBlock.Replace(
+                "\"horizontal_frame\": \"absolute_projected\",",
+                string.Empty,
+                StringComparison.Ordinal);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}, {{withoutFrame}}}""", FullBundle);
+
+            run.True(HasStep(plan, ImportStepKind.ToposurfaceFromPointsFile), "the points file is used");
+            SkippedImport? skip = FindSkip(plan, ImportStepKind.ToposurfaceFromSurfaceTin);
+            run.Equal(
+                skip?.ReasonCode.ToString(),
+                SkipReasonCode.CoordinateSystemNotSupported.ToString(),
+                "and the TIN's absence is on the record");
+            run.Contains(skip?.Reason, "does not say what frame", "with the reason a curator can act on");
+        });
+
+        run.Case("a frame this plugin cannot read is refused rather than approximated", () =>
+        {
+            string otherFrame = TinHostBlock.Replace(
+                "\"horizontal_frame\": \"absolute_projected\",",
+                "\"horizontal_frame\": \"state_plane_grid\",",
+                StringComparison.Ordinal);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}, {{otherFrame}}}""", FullBundle);
+
+            run.True(HasStep(plan, ImportStepKind.ToposurfaceFromPointsFile), "the points file is used");
+            run.Contains(
+                FindSkip(plan, ImportStepKind.ToposurfaceFromSurfaceTin)?.Reason,
+                "state_plane_grid",
+                "and the skip quotes what the bundle actually said");
+        });
+
+        run.Case("a bundle publishing no origin falls back to the points file", () =>
+        {
+            // The points file is local_enu and needs no origin, which is exactly why it stays as
+            // tier 2 rather than being retired.
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
+
+            run.True(HasStep(plan, ImportStepKind.ToposurfaceFromPointsFile), "the points file is used");
+            SkippedImport? skip = FindSkip(plan, ImportStepKind.ToposurfaceFromSurfaceTin);
+            run.Equal(
+                skip?.ReasonCode.ToString(),
+                SkipReasonCode.NoSiteFrame.ToString(),
+                "the DXF is declared, but there is no origin to reduce its coordinates against");
+            run.Contains(skip?.Reason, "publishes no origin", "and it says so in those words");
+        });
+
+        run.Case("a DXF the archive does not carry falls back to the points file", () =>
+        {
+            string[] withoutDxf = Array.FindAll(
+                FullBundle,
+                entry => !entry.EndsWith("Surface.dxf", StringComparison.Ordinal));
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}, {{TinHostBlock}}}""", withoutDxf);
+
+            run.True(HasStep(plan, ImportStepKind.ToposurfaceFromPointsFile), "the points file is used");
+            run.Equal(
+                FindSkip(plan, ImportStepKind.ToposurfaceFromSurfaceTin)?.ReasonCode.ToString(),
+                SkipReasonCode.EntryNotInArchive.ToString(),
+                "and the TIN says the entry is missing");
+        });
     }
 
     /// <summary>

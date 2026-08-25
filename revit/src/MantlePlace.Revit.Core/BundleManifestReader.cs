@@ -35,6 +35,18 @@ public static class BundleManifestReader
     internal const string GeographicFrame = "EPSG:4326";
 
     /// <summary>
+    /// What <see cref="BundleArtifact.HorizontalFrame"/> reads on a deliverable whose coordinates are
+    /// absolute eastings and northings in the bundle's OWN projected CRS.
+    /// </summary>
+    /// <remarks>
+    /// It names a frame rather than a CRS on purpose, and there is nothing to parse an EPSG out of:
+    /// the CRS is the one the same block already publishes as
+    /// <c>hosts.revit.georeference.crs_projected</c>. Reading the token as "the origin's CRS" applies
+    /// two published statements together; it does not derive a third (<c>HPS-33</c>).
+    /// </remarks>
+    internal const string ProjectedFrame = "absolute_projected";
+
+    /// <summary>
     /// Deliverable sub-objects of the <c>hosts.revit</c> block — this host's OWN block (HPS-33). Each
     /// is optional, and each present one carries a <c>sha256</c> the schema makes required (HPS-34).
     /// </summary>
@@ -732,14 +744,15 @@ public static class BundleManifestReader
         }
 
         BundleArtifact template = shape(detail);
+        JsonElement? host = HostBlock(hostDetail, path);
         return new BundleArtifact
         {
             Path = path,
-            Sha256 = HostSha256(hostDetail, path) ?? detail?.OptionalStr("sha256"),
+            Sha256 = host?.OptionalStr("sha256") ?? detail?.OptionalStr("sha256"),
             Format = template.Format,
-            Units = template.Units,
+            Units = host?.OptionalStr("units") ?? template.Units,
             VerticalDatum = template.VerticalDatum,
-            HorizontalFrame = template.HorizontalFrame,
+            HorizontalFrame = host?.OptionalStr("horizontal_frame") ?? template.HorizontalFrame,
             Georeference = template.Georeference,
             TriangleCount = template.TriangleCount,
             FootprintCount = template.FootprintCount,
@@ -747,17 +760,26 @@ public static class BundleManifestReader
     }
 
     /// <summary>
-    /// The hash from this host's own <c>revit.*</c> sub-object, or <c>null</c> when there is no such
-    /// block or it describes a different file.
+    /// This host's own <c>hosts.revit.*</c> sub-object for an artifact, or <c>null</c> when there is
+    /// no such block or it describes a different file.
     /// </summary>
     /// <remarks>
-    /// v19 publishes the Revit deliverables' hashes here and nowhere else — <c>elevation.points_csv</c>
-    /// and <c>buildings.ifc</c> still carry none — so without this read the required-hash rule would
-    /// have nothing to bind (HPS-34). A block naming a different file is discarded for the
-    /// same reason its sibling metadata is: checking one file's bytes against another file's hash
-    /// reports a corruption that is not there.
+    /// <para>
+    /// It is where the deliverables' hashes live and, since MPB 1.0.0, where their metadata lives at
+    /// all: that release emptied the generic <c>elevation.*</c> detail blocks, so a reader taking
+    /// <c>units</c> and <c>horizontal_frame</c> from them alone now sees null for every artifact and
+    /// falls back on a delivery-wide default. The host block is this host's own and is read in
+    /// preference to the generic one (<c>HPS-33</c>, <c>HPS-36</c>) — the block's own
+    /// <c>units_note</c> says so in as many words: <em>each artifact's own <c>units</c> describes
+    /// that file</em>, and on the <c>local_ft</c> tier the artifacts and the origin genuinely differ.
+    /// </para>
+    /// <para>
+    /// A block naming a different file is discarded whole, for the reason its sibling metadata is:
+    /// checking one file's bytes against another file's hash reports a corruption that is not there,
+    /// and carrying one file's units onto another is a site imported 3.28× wrong.
+    /// </para>
     /// </remarks>
-    private static string? HostSha256(JsonElement? hostDetail, string path)
+    private static JsonElement? HostBlock(JsonElement? hostDetail, string path)
     {
         if (hostDetail is not { } block)
         {
@@ -765,7 +787,7 @@ public static class BundleManifestReader
         }
 
         string blockPath = block.Str("path");
-        return blockPath.Length > 0 && !SamePath(blockPath, path) ? null : block.OptionalStr("sha256");
+        return blockPath.Length > 0 && !SamePath(blockPath, path) ? null : block;
     }
 
     /// <summary>
