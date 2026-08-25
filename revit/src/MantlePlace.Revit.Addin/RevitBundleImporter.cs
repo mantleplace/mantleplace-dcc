@@ -1,5 +1,6 @@
 // UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Visual;
@@ -430,10 +431,16 @@ internal sealed class RevitBundleImporter(
                 ? structure.GetWidth()
                 : type.get_Parameter(BuiltInParameter.TOPOSOLID_TYPE_DEFAULT_THICKNESS_PARAM)?.AsDouble() ?? 0.0;
 
+            // Layer 0's own width, because that is the number the drape splits. Reading the total
+            // here and splitting layer 0 there is how the chooser came to prefer types the drape
+            // then refused — see the ⛔ paragraph on ToposolidTypeChoice.
+            double topLayer = structure is { LayerCount: > 0 } ? structure.GetLayerWidth(0) : thickness;
+
             candidates.Add(new CandidateToposolidType(
                 type.Id.Value,
                 type.Name,
                 thickness,
+                topLayer,
                 structure?.LayerCount ?? 0,
                 HasStructuralLayer(structure)));
         }
@@ -914,13 +921,13 @@ internal sealed class RevitBundleImporter(
             name,
             out int retypedSubDivisions,
             out int refusedSubDivisions,
-            out string? refusalReason))
+            out string? refusalReason,
+            out string layering))
         {
             transaction.RollBack();
             Say(
-                $"Skipped the satellite imagery ({step.EntryName}): the terrain's type has no material layer "
-                + "this plugin could set, or its top layer is too thin to carry a separate imagery layer, "
-                + "so it was left untouched rather than half-changed.");
+                $"Skipped the satellite imagery ({step.EntryName}): {layering}, so the terrain was left "
+                + "untouched rather than half-changed.");
             return;
         }
 
@@ -937,6 +944,11 @@ internal sealed class RevitBundleImporter(
             + (placement.ExtentFromDrapeBlock
                 ? "the bundle's own imagery extent"
                 : "the DEM's bounds, corroborated against the image's pixel grid");
+
+        // The surfaces the photograph lands on, said in the summary rather than left to a rendered
+        // view. A single-layer type wears its material on every face, so this clause is the whole
+        // answer to "is the aerial photograph smeared down the terrain's sides".
+        summary += $"; {layering}";
 
         if (retypedSubDivisions > 0)
         {
@@ -1092,17 +1104,24 @@ internal sealed class RevitBundleImporter(
     /// un-draped land-use patch — counted, not fatal, the same call <see cref="ImportSiteBoundaries"/>
     /// makes for a ring Revit declines.
     /// </returns>
+    /// <param name="layering">
+    /// What became of the drape type's layer stack, as a clause a curator can read. Set on every
+    /// path, refusals included: it is the only account of the mechanism that keeps the photograph off
+    /// the vertical faces, and until it existed the log said nothing about layering at all.
+    /// </param>
     private bool TryWearMaterial(
         Toposolid terrain,
         ElementId materialId,
         string typeName,
         out int retypedSubDivisions,
         out int refusedSubDivisions,
-        out string? refusalReason)
+        out string? refusalReason,
+        out string layering)
     {
         retypedSubDivisions = 0;
         refusedSubDivisions = 0;
         refusalReason = null;
+        layering = "the terrain has no type this plugin could read";
         HashSet<string> refusals = [];
 
         if (_document.GetElement(terrain.GetTypeId()) is not ToposolidType current)
@@ -1115,22 +1134,15 @@ internal sealed class RevitBundleImporter(
             .Cast<ToposolidType>()
             .FirstOrDefault(type => string.Equals(type.Name, typeName, StringComparison.Ordinal));
 
-        bool duplicated = false;
-        if (draped is null)
-        {
-            draped = current.Duplicate(typeName) as ToposolidType;
-            duplicated = true;
-        }
+        draped ??= current.Duplicate(typeName) as ToposolidType;
 
         if (draped is null)
         {
+            layering = $"Revit would not duplicate the terrain's type \"{current.Name}\"";
             return false;
         }
 
-        // RE-RUN GUARD: the structure is layered ONLY on the import that duplicates the type. A type
-        // found by name already carries its imagery layer, and restructuring it again would stack a
-        // second imagery layer per import — the exact hazard this guards.
-        if (duplicated && !TryLayerImagery(draped, materialId))
+        if (!TryLayerImagery(draped, materialId, out layering))
         {
             return false;
         }
@@ -1141,6 +1153,10 @@ internal sealed class RevitBundleImporter(
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
         {
+            // Overwrite what TryLayerImagery just reported: the type is correct, and the terrain
+            // still refused to wear it. Leaving the success clause here would have the log announce
+            // a layer stack on a terrain that never took it.
+            layering = $"Revit refused to put the drape type on the terrain — {ex.Message}";
             return false;
         }
 
@@ -1184,16 +1200,39 @@ internal sealed class RevitBundleImporter(
     }
 
     /// <summary>
-    /// Splits the duplicated type's top layer into a thin imagery layer over the original material —
-    /// the mechanism that keeps the photograph off the vertical faces, since a single-layer structure
+    /// Splits the drape type's top layer into a thin imagery layer over the original material — the
+    /// mechanism that keeps the photograph off the vertical faces, since a single-layer structure
     /// wears its material on every face.
     /// </summary>
     /// <returns><c>false</c> when there is no layer to split or the split refuses.</returns>
-    private static bool TryLayerImagery(ToposolidType draped, ElementId materialId)
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>The re-run guard is the structure, not the caller.</b> This used to run only on the
+    /// import that duplicated the type, on the reasoning that a type found by name must already carry
+    /// its imagery layer. That kept the guarantee it was written for — never a second imagery layer —
+    /// and bought it with an assumption nobody ever checked. A SINGLE-layer
+    /// <c>Mantle Place Site Imagery</c> type, left behind by a build predating the layering or by a
+    /// curator editing the structure, was reused verbatim on every later import: the photograph on
+    /// every vertical face, permanently, with no re-import able to repair it. Asking
+    /// <see cref="DrapeLayering.Decide"/> about layer 0's material costs one read, keeps the same
+    /// guarantee, and cannot go stale.
+    /// </para>
+    /// <para>
+    /// <b>And the write is read back.</b> <c>SetCompoundStructure</c> was the last unverified write in
+    /// this step — the drape's four texture properties are read back, and that read-back is what
+    /// caught the placement being out by a factor of twelve. The stack Revit actually stored is what
+    /// goes in the log, so "the photograph is off the sides" stops being a claim about code and
+    /// becomes a number somebody can check.
+    /// </para>
+    /// </remarks>
+    private bool TryLayerImagery(ToposolidType draped, ElementId materialId, out string layering)
     {
+        double minimum = CompoundStructure.GetMinimumLayerThickness();
+
         CompoundStructure structure = draped.GetCompoundStructure();
         if (structure is null || structure.LayerCount == 0)
         {
+            layering = "the terrain's type has no compound structure this plugin could split";
             return false;
         }
 
@@ -1209,25 +1248,94 @@ internal sealed class RevitBundleImporter(
         // are the same number, so this is also the total-preserving arithmetic. The minimum is
         // a STATIC on CompoundStructure in Revit 2025 — one host-wide floor in internal feet, not a
         // per-structure question (the compiler corrected the instance-call assumption here).
-        DrapeLayerSplit split = DrapeLayering.Split(
+        DrapeLayerDecision decision = DrapeLayering.Decide(
+            originalMaterialId == materialId,
             structure.GetLayerWidth(0),
-            CompoundStructure.GetMinimumLayerThickness());
-        if (!split.Ok)
+            minimum);
+
+        if (decision.Verdict == DrapeLayerVerdict.AlreadyLayered)
         {
+            // Write nothing. This is the anti-stacking guarantee, now derived from the structure in
+            // front of us rather than from which import happens to be running.
+            layering = $"the photograph was already the top layer of \"{draped.Name}\" from an "
+                + $"earlier import, so its structure was left alone ({DescribeLayers(structure, materialId)})";
+            Trace($"  drape: {layering}.");
+            return true;
+        }
+
+        if (decision.Verdict == DrapeLayerVerdict.Refuse)
+        {
+            layering = $"its top layer is {Mm(structure.GetLayerWidth(0))}, which cannot spare a "
+                + $"{Mm(minimum)} imagery layer and still leave twice that beneath";
+            Trace($"  drape: refused to layer \"{draped.Name}\" — {layering}.");
             return false;
         }
 
         List<CompoundStructureLayer> layers =
         [
-            new CompoundStructureLayer(split.ImageryThickness, function, materialId),
-            new CompoundStructureLayer(split.LowerThickness, function, originalMaterialId),
+            new CompoundStructureLayer(decision.ImageryThickness, function, materialId),
+            new CompoundStructureLayer(decision.LowerThickness, function, originalMaterialId),
             .. structure.GetLayers().Skip(1),
         ];
 
         structure.SetLayers(layers);
         draped.SetCompoundStructure(structure);
+
+        // Read back what Revit stored, not what we asked for.
+        CompoundStructure written = draped.GetCompoundStructure();
+        if (written is null || written.LayerCount == 0)
+        {
+            layering = "Revit stored no compound structure for the drape type";
+            Trace($"  drape: ⚠ {layering}.");
+            return false;
+        }
+
+        Trace($"  drape: \"{draped.Name}\" layers = {DescribeLayers(written, materialId)}");
+
+        List<bool> wearsImagery = [];
+        for (int layer = 0; layer < written.LayerCount; layer++)
+        {
+            wearsImagery.Add(written.GetMaterialId(layer) == materialId);
+        }
+
+        if (!DrapeLayering.ImageryIsTopAndOnly(wearsImagery))
+        {
+            // Reported, not gated: nobody has watched this API behave, and turning an unobserved
+            // read into a new refusal path is how a working drape gets declined for a reason nobody
+            // can diagnose. The read-back's job is to make the next run's log say so.
+            Trace("  drape: ⚠ the imagery material is NOT on layer 0 alone — the photograph may reach "
+                + "a vertical face. Please report this log.");
+        }
+
+        layering = $"the photograph is a {Mm(written.GetLayerWidth(0))} layer on top of the terrain's "
+            + $"own {Mm(written.GetWidth() - written.GetLayerWidth(0))}, so its sides keep the "
+            + "material they had";
         return true;
     }
+
+    /// <summary>A compound structure's layers as one log line, with the imagery layer called out.</summary>
+    private string DescribeLayers(CompoundStructure structure, ElementId materialId)
+    {
+        List<DrapeLayerLine> lines = [];
+        for (int layer = 0; layer < structure.LayerCount; layer++)
+        {
+            ElementId material = structure.GetMaterialId(layer);
+            lines.Add(new DrapeLayerLine(
+                structure.GetLayerFunction(layer).ToString(),
+                structure.GetLayerWidth(layer),
+                _document.GetElement(material) is Material named
+                    ? named.Name
+                    : (material == materialId ? "the drape material" : string.Empty)));
+        }
+
+        return DrapeLayering.Describe(lines);
+    }
+
+    /// <summary>An internal-feet thickness as the millimetres a curator judges it in.</summary>
+    private static string Mm(double internalFeet)
+        => string.Create(
+            CultureInfo.InvariantCulture,
+            $"{DrapeLayering.MillimetresFromInternalFeet(internalFeet):0.###} mm");
 
     /// <summary>
     /// Sets one appearance-asset text property, and says what it did.

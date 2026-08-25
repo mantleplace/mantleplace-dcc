@@ -3,6 +3,11 @@ namespace MantlePlace.Revit.Core;
 /// <summary>One toposolid type the project already contains, as the chooser needs to see it.</summary>
 /// <param name="Id">Revit's <c>ElementId</c> value, carried as a number so the core stays Revit-free.</param>
 /// <param name="TotalThickness">The compound structure's total width, in the caller's own unit.</param>
+/// <param name="TopLayerThickness">
+/// Layer 0's width, in the same unit. Distinct from <paramref name="TotalThickness"/> because the two
+/// answer different questions: the total sets the clearance the base plane must leave, while layer 0
+/// alone is what the drape splits. They coincide only for a single-layer type.
+/// </param>
 /// <param name="LayerCount">Zero when the type has no compound structure at all.</param>
 /// <param name="HasStructuralLayer">
 /// Whether any layer is a <c>Structure</c>. This is what separates a terrain type from a paving type.
@@ -11,6 +16,7 @@ public readonly record struct CandidateToposolidType(
     long Id,
     string Name,
     double TotalThickness,
+    double TopLayerThickness,
     int LayerCount,
     bool HasStructuralLayer);
 
@@ -26,10 +32,21 @@ public readonly record struct CandidateToposolidType(
 /// split the type at all.
 /// </para>
 /// <para>
-/// <b>The predicate is <see cref="DrapeLayering.Split"/> itself</b>, not a thickness threshold of its
-/// own. That is the point: type choice and drape-splittability then cannot disagree, because they are
-/// the same function. A separate threshold would eventually drift from it, and the symptom would be
-/// an import that builds the terrain and then declines the aerial photograph with no obvious reason.
+/// <b>The predicate is <see cref="DrapeLayering.Split"/> itself, over the same number the drape
+/// splits</b> — layer 0's width — rather than a thickness threshold of its own. That is the point:
+/// type choice and drape-splittability then cannot disagree, because they are the same function of
+/// the same input. A separate threshold would eventually drift from it, and the symptom would be an
+/// import that builds the terrain and then declines the aerial photograph with no obvious reason.
+/// </para>
+/// <para>
+/// ⛔ <b>That is exactly what had drifted.</b> This predicate was written against the structure's
+/// TOTAL width, and the drape then moved to splitting layer 0 alone (a multi-layer original keeps
+/// every layer below it untouched) without the predicate following. For any multi-layer type the two
+/// were different numbers, so the chooser could prefer a fat type whose top layer the drape then
+/// refused — and a drape refusal rolls the WHOLE drape back. It never bit only because the type this
+/// chooser picks in the metric template, "Generic - 1000mm", has one layer, where total and layer 0
+/// are the same number. Hence <see cref="CandidateToposolidType.TopLayerThickness"/>: the claim above
+/// is now true by construction instead of aspirationally.
 /// </para>
 /// <para>
 /// ⛔ <b>The first cut is whether the type has a <c>Structure</c> layer</b>, and that came out of the
@@ -107,6 +124,11 @@ public static class ToposolidTypeChoice
             || (byThickness == 0 && string.CompareOrdinal(candidate.Name, incumbent.Name) < 0);
     }
 
+    /// <summary>
+    /// Layer 0's width, not the total — the number <c>TryLayerImagery</c> actually hands
+    /// <see cref="DrapeLayering.Split"/>. See the ⛔ paragraph on this class for what happens when
+    /// these two drift apart.
+    /// </summary>
     private static bool Splittable(CandidateToposolidType type, double minimumLayerThickness)
-        => type.LayerCount > 0 && DrapeLayering.Split(type.TotalThickness, minimumLayerThickness).Ok;
+        => type.LayerCount > 0 && DrapeLayering.Split(type.TopLayerThickness, minimumLayerThickness).Ok;
 }
