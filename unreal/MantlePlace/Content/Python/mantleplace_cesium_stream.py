@@ -5,7 +5,8 @@ Stream a Mantle Place ETL bundle into Cesium for Unreal.
 Calls the C++ UMantlePlaceImporterLibrary.stream_bundle_into_cesium(zip) -- which extracts the bundle's
 own Cesium-ready quantized-mesh terrain + imagery and hosts them on a local loopback server -- then
 spawns an ACesium3DTileset (from the served layer.json URL) and a single-tile imagery raster overlay
-under the level's CesiumGeoreference, alongside Cesium World Terrain for apples-to-apples QA.
+under the level's CesiumGeoreference -- whose origin this module SETS from the bundle manifest, see
+_ensure_georeference -- alongside Cesium World Terrain for apples-to-apples QA.
 
 This is the "stream locally into Unreal via Cesium" capability that complements the native-asset import.
 Download-to-own: nothing is streamed from the platform, only from the user's local copy of the bundle.
@@ -60,6 +61,47 @@ def _find_georeference():
     return None
 
 
+def _ensure_georeference(zip_path, geoid_separation_m=0.0):
+    """Find or spawn the level's CesiumGeoreference and set its origin from the bundle manifest.
+
+    The +90 yaw in _orient_into_world_frame pivots on the tileset actor's origin at UE (0,0,0),
+    which is wherever the georeference origin says it is. That is the right pivot only when the
+    georeference origin IS the bundle's AOI origin: a hand-set or leftover origin parks the streamed
+    patch away from (0,0,0), and the yaw then swings it around the globe instead of spinning it in
+    place -- the streamed patch renders sideways at globe scale. So this module owns the origin --
+    applied from the manifest, never trusted from the level.
+
+    If the manifest origin cannot be read, the existing georeference is left untouched -- correct
+    only if it was already set to the bundle origin by hand.
+    """
+    georef = _find_georeference()
+    if georef is None:
+        unreal.log_warning("[MantlePlace] No CesiumGeoreference in the level; spawning a default one.")
+        georef = unreal.EditorActorSubsystem().spawn_actor_from_class(
+            unreal.CesiumGeoreference, unreal.Vector(0, 0, 0))
+
+    origin = _manifest_origin(zip_path) if zip_path else None
+    if origin is not None:
+        lon, lat, _ground_h = origin
+        # Height: the ELLIPSOID (0), not the ground. The level's frame carries true orthometric Z
+        # -- the imported landscape's location_z_offset_cm puts the ground at ~ground_h * 100 UE-cm
+        # -- and the bundle's terrain tiles carry those same orthometric metres, so an origin at
+        # height 0 lands the streamed ground on the imported ground. An origin at ground_h instead
+        # sinks every Cesium overlay by the full ground elevation: invisible on a sea-level AOI,
+        # kilometres on a mountain one. `geoid_separation_m` nudges the origin for content whose
+        # heights are TRUE ellipsoidal (Cesium World Terrain); elevation-only either way.
+        try:
+            georef.set_editor_property("origin_placement", unreal.OriginPlacement.CARTOGRAPHIC_ORIGIN)
+            georef.set_editor_property("origin_longitude", lon)
+            georef.set_editor_property("origin_latitude", lat)
+            georef.set_editor_property("origin_height", geoid_separation_m)
+            unreal.log("[MantlePlace] georeference origin -> {:.6f} lon, {:.6f} lat, {:.2f} m (ellipsoid)"
+                       .format(lon, lat, geoid_separation_m))
+        except Exception as exc:  # noqa: BLE001 - degrade to whatever the level already had
+            unreal.log_warning("[MantlePlace] could not set the georeference origin: {}".format(exc))
+    return georef
+
+
 def _remove_existing(label):
     eas = unreal.EditorActorSubsystem()
     for actor in eas.get_all_level_actors():
@@ -107,36 +149,50 @@ def _orient_into_world_frame(tileset):
     because components are never fully registered. Verify this yaw in a real editor session, not
     headlessly.
     """
-    tileset.set_actor_rotation(unreal.Rotator(0.0, CESIUM_TO_WORLD_YAW, 0.0), False)
+    # unreal.Rotator's POSITIONAL argument order is (roll, pitch, yaw) -- NOT C++ FRotator's
+    # (pitch, yaw, roll). A positional 90 in the middle slot is a PITCH, which tips the whole
+    # globe onto its side about the actor origin -- the tileset-sideways-at-globe-scale bug.
+    # Keywords only, here and anywhere else a Rotator is built.
+    tileset.set_actor_rotation(
+        unreal.Rotator(roll=0.0, pitch=0.0, yaw=CESIUM_TO_WORLD_YAW), False)
     unreal.log("[MantlePlace] {} yawed {:+.0f} deg: Cesium East-South-Up -> world North-East-Up."
                .format(tileset.get_actor_label(), CESIUM_TO_WORLD_YAW))
 
 
 def _manifest_origin(zip_path):
-    """(lon, lat, ground_orthometric_h_m) from the bundle manifest, or None."""
+    """(lon, lat, ground_orthometric_h_m) from the bundle manifest, or None.
+
+    MPB 1.0.0 moved everything host-specific under `hosts.<hostId>`, so the origin lives at
+    `hosts.unreal.georeference.origin`. The retired top-level `unreal` block is deliberately NOT
+    consulted -- same clean break as the C++ manifest reader; a fallback is how a clean break
+    quietly becomes dual-parsing.
+    """
     try:
         with zipfile.ZipFile(zip_path) as archive:
             manifest = json.loads(archive.read("Metadata/manifest.json"))
-        origin = manifest["unreal"]["georeference"]["origin"]
+        origin = manifest["hosts"]["unreal"]["georeference"]["origin"]
         return origin["lon"], origin["lat"], origin.get("ground_orthometric_h_m", 0.0)
     except Exception as exc:  # noqa: BLE001 - QA helper: degrade to "leave the georeference alone"
         unreal.log_warning("[MantlePlace] could not read the manifest origin: {}".format(exc))
         return None
 
 
-def stream_into_cesium(zip_path):
-    """Start the local server (C++) and wire up the Cesium tileset + imagery overlay. Returns the tileset."""
+def stream_into_cesium(zip_path, geoid_separation_m=0.0):
+    """Start the local server (C++) and wire up the Cesium tileset + imagery overlay. Returns the tileset.
+
+    Owns the CesiumGeoreference origin: sets it to the bundle manifest's AOI origin (spawning a
+    georeference if the level has none), so the streamed patch lands over UE (0,0,0) -- coincident
+    with the imported copy -- and the world-frame yaw spins it in place. The bundle's terrain tiles
+    carry orthometric metres like the level does, so leave `geoid_separation_m` at 0 for an exact
+    overlay; it exists for symmetry with ground_truth_overlay and is elevation-only either way.
+    """
     info = unreal.MantlePlaceImporterLibrary.stream_bundle_into_cesium(zip_path)
     if not info.success:
         unreal.log_error("[MantlePlace] stream failed: {}".format(info.message))
         return None
     unreal.log("[MantlePlace] {}".format(info.message))
 
-    georef = _find_georeference()
-    if georef is None:
-        unreal.log_warning("[MantlePlace] No CesiumGeoreference in the level; spawning a default one.")
-        georef = unreal.EditorActorSubsystem().spawn_actor_from_class(
-            unreal.CesiumGeoreference, unreal.Vector(0, 0, 0))
+    georef = _ensure_georeference(zip_path, geoid_separation_m)
 
     # Spawn (replace) the bundle's terrain tileset, pointed at the local server's layer.json.
     _remove_existing(_TILESET_LABEL)
@@ -199,30 +255,14 @@ def ground_truth_overlay(zip_path, geoid_separation_m=0.0):
     sign-in lives on the "Cesium" tab, which a saved layout can leave stacked behind "Cesium ion
     Assets" -- if you cannot see the button, that is why.)
 
-    `geoid_separation_m` is added to the manifest's orthometric origin height to get the ellipsoidal
-    height Cesium wants. It defaults to 0, which leaves a vertical offset of roughly the local geoid
-    separation (about -32 m around San Francisco Bay). That offset is elevation-only and cannot
-    affect the horizontal comparison this function exists for -- do not "fix" it by rotating or
-    mirroring anything.
+    The georeference origin sits at the ellipsoid (see _ensure_georeference), so level content at
+    true orthometric Z meets ion terrain at true ellipsoidal Z. `geoid_separation_m` is the local
+    geoid height (signed; about -32 m around San Francisco Bay): pass it to cancel the resulting
+    orthometric-vs-ellipsoidal offset, or leave it 0 and expect roughly that offset. Either way it
+    is elevation-only and cannot affect the horizontal comparison this function exists for -- do
+    not "fix" it by rotating or mirroring anything.
     """
-    georef = _find_georeference()
-    if georef is None:
-        unreal.log_warning("[MantlePlace] No CesiumGeoreference in the level; spawning a default one.")
-        georef = unreal.EditorActorSubsystem().spawn_actor_from_class(
-            unreal.CesiumGeoreference, unreal.Vector(0, 0, 0))
-
-    origin = _manifest_origin(zip_path) if zip_path else None
-    if origin is not None:
-        lon, lat, ground_h = origin
-        try:
-            georef.set_editor_property("origin_placement", unreal.OriginPlacement.CARTOGRAPHIC_ORIGIN)
-            georef.set_editor_property("origin_longitude", lon)
-            georef.set_editor_property("origin_latitude", lat)
-            georef.set_editor_property("origin_height", ground_h + geoid_separation_m)
-            unreal.log("[MantlePlace] georeference origin -> {:.6f} lon, {:.6f} lat, {:.2f} m"
-                       .format(lon, lat, ground_h + geoid_separation_m))
-        except Exception as exc:  # noqa: BLE001 - degrade to whatever the level already had
-            unreal.log_warning("[MantlePlace] could not set the georeference origin: {}".format(exc))
+    georef = _ensure_georeference(zip_path, geoid_separation_m)
 
     _remove_existing(_QA_TERRAIN_LABEL)
     tileset = unreal.EditorActorSubsystem().spawn_actor_from_class(
