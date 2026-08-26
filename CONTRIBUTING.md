@@ -47,20 +47,37 @@ it under Apache 2.0.
 We are not reserving the right to relicense this code. There is no CLA precisely because the only
 thing a CLA would buy here is an option we do not intend to exercise.
 
+## Everything about your pull request is public — before it is reviewed
+
+The moment you push, your **branch name** and every **commit message** are world-readable, and the
+PR **title and body** follow when you open it. A commit message can never be edited; the rest only
+with a public edit trail. So the citation rule (`CLAUDE.md` rule 1) applies to all of them, and CI
+checks all of them: no references that resolve only in a private repository — not qualified, not
+bare, not as a shorthand. A bare `#42` is fine in commit messages and PR text (it is this
+repository's own issue space); it stays forbidden in files.
+
+- **Branch names are `type/short-description`** — `fix/loopback-port-fallback`, not an issue
+  number. If the work tracks a private issue, the cross-reference belongs on the private side.
+- **Catch it before it publishes**: CI runs only after the push. Opt into the local hooks once per
+  clone — `git config core.hooksPath .githooks` — and the same gate runs at `commit -m` and
+  `git push` time, while the text is still yours alone. `--no-verify` skips them; CI still checks.
+
 ## The merge bar is the conformance suite
 
 **The objective bar is: the conformance suite passes, and behaviour it pins is not changed without
 changing a case.**
 
-Two workflows run on every pull request, on free hosted runners:
+Three workflows run on every pull request, on free hosted runners:
 
 - **`ci-manifest-conformance`** — fetches the published bundle-manifest schema, checks every
   registered host is verified against the newest version, and checks the shared corpus under
   `tools/manifest-conformance/corpus/` for integrity.
 - **`ci-revit-tests`** — builds the Revit pure core and client and drives the shared corpus through
   them on **.NET 8 and .NET 10**.
+- **`ci-public-hygiene`** — refuses references that resolve only in a private repository, in
+  tracked files and in the pull request's title, body, branch name and commit messages (see above).
 
-Both must be green. If your change makes a corpus case fail, the interesting question is whether the
+All must be green. If your change makes a corpus case fail, the interesting question is whether the
 case or the code is wrong — say which you think it is in the pull request, and why.
 
 **Adding a corpus case.** The corpus is maintainer-owned, and a case binds *every* host, not just the

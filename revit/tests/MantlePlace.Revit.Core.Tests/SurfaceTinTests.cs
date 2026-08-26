@@ -10,7 +10,8 @@ namespace MantlePlace.Revit.Core.Tests;
 /// </summary>
 /// <remarks>
 /// The numbers pinned in the frame case are measured off a real bundle
-/// (<c>Surface/Surface.dxf</c> of order <c>f93bc782</c>, EPSG:32610), not invented: its first face's
+/// (<c>Surface/Surface.dxf</c> of order <c>f93bc782</c> — Mantle Place's own first-party test site,
+/// not a customer's, which is what licenses committing it — EPSG:32610), not invented: its first face's
 /// first corner is 545177.5 E / 4187930.5 N against a published origin of 545888.5 / 4187221.5, and
 /// the points file's first row for the same ground is −712.0 / 709.0. Two independent artifacts
 /// agreeing to the metre is what says the subtraction is the right one.

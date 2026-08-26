@@ -22,6 +22,10 @@ def scan(text: str, name: str = "sample.md") -> list[str]:
         return gate.violations(path, name)
 
 
+def scan_text(text: str, label: str = "PR body") -> list[str]:
+    return gate.violations_in_text(text, label, surface="metadata")
+
+
 class RefusesPrivateReferences(unittest.TestCase):
     def test_bare_issue_number_is_refused(self):
         found = scan("This was fixed in #88, see there for the trace.\n")
@@ -120,6 +124,120 @@ class AllowsWhatIsLegitimate(unittest.TestCase):
 
     def test_html_entity_is_not_an_issue_number(self):
         self.assertEqual(scan("&#39;\n", "a.cs"), [])
+
+
+class RefusesInMetadata(unittest.TestCase):
+    """Commit messages, PR titles and bodies — public the moment they are pushed, editable never
+    (commits) or only with a public edit trail (PR text). The gate here is the last look anything
+    gets before the reference is permanent."""
+
+    def test_the_real_leak_that_reached_a_merged_commit(self):
+        # Verbatim from the commit body that sat on main. The qualified form is not better than a
+        # bare number: it hands a stranger the name of a private repository and a 404.
+        found = scan_text("Refs mantleplace-nat#90.\n")
+        self.assertEqual(len(found), 1)
+        self.assertIn("mantleplace-nat#90", found[0])
+
+    def test_an_owner_qualified_reference_to_another_repository(self):
+        found = scan_text("carried over from acme/widgets#5\n")
+        self.assertEqual(len(found), 1)
+
+    def test_a_sibling_repository_never_named_in_the_gate_still_trips(self):
+        # The pattern is structural. If this case needs a new literal in the gate's source to pass,
+        # the gate has become the very list of private names it exists to keep out of this tree.
+        found = scan_text("the fix lands in mantleplace-vault first\n")
+        self.assertEqual(len(found), 1)
+
+    def test_a_sibling_name_with_no_issue_number_is_still_a_citation(self):
+        found = scan_text("the outcome goes into the mantleplace-nat first-import runbook\n")
+        self.assertEqual(len(found), 1)
+
+    def test_the_shorthand_forms_that_reached_a_pull_request_body(self):
+        # "nat PR #68" and "nat #68" — the observed shapes. Lowercase and followed by a reference,
+        # so prose about NAT traversal never trips (asserted on the other side).
+        self.assertEqual(len(scan_text("Ported from nat PR #68, before the move.\n")), 1)
+        self.assertEqual(len(scan_text("was produced on nat #68 against this code\n")), 1)
+
+    def test_decision_log_id_is_refused_here_too(self):
+        found = scan_text("Implements the decision recorded there as D-CX; the bump follows.\n")
+        self.assertEqual(len(found), 1)
+        self.assertIn("D-CX", found[0])
+
+    def test_metadata_findings_carry_the_label_they_were_given(self):
+        # "PR body:3:" is what lets a CI failure point at the field to edit rather than at a file
+        # that does not exist.
+        found = gate.violations_in_text("fine\nfine\nsee mantleplace-nat#1\n", "PR body",
+                                        surface="metadata")
+        self.assertTrue(found[0].startswith("PR body:3:"))
+
+
+class AllowsInMetadata(unittest.TestCase):
+    def test_a_bare_number_is_this_repositorys_own_voice(self):
+        # The semantic split from the file surface, and the reason the two pattern sets must never
+        # be merged: in a commit message or PR body, #12 is the native way to cite THIS repository's
+        # own issue, and GitHub appends "(#NN)" to every squash-merge subject.
+        self.assertEqual(scan_text("closes #12\n"), [])
+        self.assertEqual(scan_text("fix(revit): build from the TIN (#27)\n"), [])
+
+    def test_this_repository_may_cite_itself_by_full_name(self):
+        self.assertEqual(scan_text("supersedes mantleplace-dcc#27\n"), [])
+        self.assertEqual(scan_text("supersedes mantleplace/mantleplace-dcc#27\n"), [])
+
+    def test_the_tracked_artifact_stems_that_forced_the_allowlist(self):
+        # `.mantleplace-import.log` and `mantleplace-terrain*.log` are product filenames tracked in
+        # this tree. A commit touching that code will name them; refusing that teaches people to
+        # reword truthful messages, which is the beginning of the end of the gate.
+        self.assertEqual(scan_text("stop rotating .mantleplace-import.log on failure\n"), [])
+        self.assertEqual(scan_text("the probe writes mantleplace-terrain-probe.log beside it\n"), [])
+
+    def test_networking_prose_is_not_a_repository(self):
+        self.assertEqual(scan_text("NAT traversal is out of scope for the loopback server\n"), [])
+        self.assertEqual(scan_text("gnat swarms are not a nat concern\n"), [])
+
+    def test_a_code_span_is_how_this_rule_documents_itself(self):
+        # The escape hatch that lets a PR body explain what the gate refuses without tripping it —
+        # the same reasoning as the file surface's code-span exemption.
+        self.assertEqual(scan_text("the gate refuses `mantleplace-nat#90` shapes\n"), [])
+
+    def test_a_public_url_fragment_is_not_a_cross_repository_reference(self):
+        self.assertEqual(scan_text("see https://mantle.place/spec#3 for the block\n"), [])
+
+
+class BranchNames(unittest.TestCase):
+    """A branch name is published by the push, listed by the API, and rendered forever in the header
+    of any pull request it opens. It is the one surface with a shape rule as well as pattern rules:
+    the convention is type/short-description, and an issue number is not a description."""
+
+    def test_the_real_branch_that_encoded_a_private_issue(self):
+        found = gate.branch_name_violations("fix/88-subdivision-drape-refusal")
+        self.assertEqual(len(found), 1)
+
+    def test_a_numeric_segment_anywhere_is_refused_not_just_first(self):
+        self.assertEqual(len(gate.branch_name_violations("backport/88-drape/retry")), 1)
+        self.assertEqual(len(gate.branch_name_violations("fix/88")), 1)
+
+    def test_a_sibling_repository_name_in_a_branch_is_a_citation(self):
+        self.assertEqual(len(gate.branch_name_violations("sync/mantleplace-vault-pin")), 1)
+
+    def test_digits_inside_a_word_are_a_version_not_an_issue(self):
+        # ue5-8, net10, mpb-1.0.0 — the digits that belong in branch names. The rule is anchored to
+        # the start of a path segment because that is where an issue number lands.
+        self.assertEqual(gate.branch_name_violations("feature/ue5-8-support"), [])
+        self.assertEqual(gate.branch_name_violations("chore/net10-bump"), [])
+        self.assertEqual(gate.branch_name_violations("feat/mpb-1.0.0-floor"), [])
+
+
+class SurfacesStaySeparate(unittest.TestCase):
+    """Each surface's pattern set is calibrated to what renders there. These two cases pin the
+    calibration so a refactor cannot quietly merge the sets in either direction."""
+
+    def test_the_file_surface_never_learns_the_sibling_pattern(self):
+        # In a tracked file, `mantleplace-import.log` appears as plain prose far more often than a
+        # sibling repo name ever could; the file surface's patterns stay as they are.
+        self.assertEqual(scan("The importer writes .mantleplace-import.log beside the zip.\n"), [])
+
+    def test_the_metadata_surface_never_learns_the_bare_number_pattern(self):
+        self.assertEqual(scan_text("see #91 for the trace\n"), [])
 
 
 if __name__ == "__main__":

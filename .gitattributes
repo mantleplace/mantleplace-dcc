@@ -28,3 +28,7 @@
 *.bat       text eol=crlf
 *.ps1       text eol=crlf
 *.uplugin   text eol=lf
+
+# Hooks run under sh on every platform, Git for Windows included; a CRLF checkout breaks them
+# with an error that names no file. LF always.
+.githooks/* text eol=lf
