@@ -68,8 +68,8 @@ def _ensure_georeference(zip_path, geoid_separation_m=0.0):
     which is wherever the georeference origin says it is. That is the right pivot only when the
     georeference origin IS the bundle's AOI origin: a hand-set or leftover origin parks the streamed
     patch away from (0,0,0), and the yaw then swings it around the globe instead of spinning it in
-    place. So this module owns the origin -- applied from the manifest, never trusted from the
-    level (issue #30).
+    place -- the streamed patch renders sideways at globe scale. So this module owns the origin --
+    applied from the manifest, never trusted from the level.
 
     If the manifest origin cannot be read, the existing georeference is left untouched -- correct
     only if it was already set to the bundle origin by hand.
@@ -151,8 +151,8 @@ def _orient_into_world_frame(tileset):
     """
     # unreal.Rotator's POSITIONAL argument order is (roll, pitch, yaw) -- NOT C++ FRotator's
     # (pitch, yaw, roll). A positional 90 in the middle slot is a PITCH, which tips the whole
-    # globe onto its side about the actor origin (issue #30). Keywords only, here and anywhere
-    # else a Rotator is built.
+    # globe onto its side about the actor origin -- the tileset-sideways-at-globe-scale bug.
+    # Keywords only, here and anywhere else a Rotator is built.
     tileset.set_actor_rotation(
         unreal.Rotator(roll=0.0, pitch=0.0, yaw=CESIUM_TO_WORLD_YAW), False)
     unreal.log("[MantlePlace] {} yawed {:+.0f} deg: Cesium East-South-Up -> world North-East-Up."
