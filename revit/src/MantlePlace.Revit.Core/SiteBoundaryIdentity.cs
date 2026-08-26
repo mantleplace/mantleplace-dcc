@@ -81,6 +81,38 @@ public static class SiteBoundaryIdentity
     }
 
     /// <summary>
+    /// Whether a subdivision's Comments string is a stamp THIS plugin wrote for THIS bundle.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The drape needs this because it cannot use <c>ChangeTypeId</c>: a subdivision is a typeless
+    /// element, so the material goes on the instance, and the instance has to be found. Finding it by
+    /// stamp rather than by an id remembered from this session is what makes a RE-import able to
+    /// repair un-draped patches — the remembered list is empty whenever the boundaries already exist,
+    /// so a second import used to drape nothing at all while reporting success.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The stem half is what keeps the trespass rule.</b> A curator's own subdivision carries no
+    /// stamp, and another order's carries a different stem, so neither can match. That is the same
+    /// line this plugin draws when it declines to edit the project's own toposolid type: touch what
+    /// this import owns, and nothing else.
+    /// </para>
+    /// </remarks>
+    public static bool IsStampFor(string? comments, string cacheKeyStem)
+    {
+        ArgumentNullException.ThrowIfNull(cacheKeyStem);
+
+        // Ordinal over the whole prefix INCLUDING the separator. Without the trailing "/", stem
+        // "abc" would claim stem "abcdef"'s subdivisions — and cache-key stems are truncated
+        // hashes, where one being a prefix of another is a collision waiting rather than a
+        // hypothetical.
+        string prefix = Prefix + cacheKeyStem + "/";
+        return comments is not null
+            && comments.StartsWith(prefix, StringComparison.Ordinal)
+            && comments.Length > prefix.Length;
+    }
+
+    /// <summary>
     /// One token per feature, guaranteed pairwise distinct: two features named "Zone A" must not
     /// share a stamp, or the second import would recreate whichever one lost the race.
     /// </summary>

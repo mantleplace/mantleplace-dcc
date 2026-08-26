@@ -16,6 +16,7 @@ exitCode |= ImportStepLifetimeTests.Run();
 exitCode |= PngHeaderTests.Run();
 exitCode |= SiteBoundaryIdentityTests.Run();
 exitCode |= DrapeLayeringTests.Run();
+exitCode |= SubDivisionDrapeTests.Run();
 exitCode |= TerrainBaseTests.Run();
 exitCode |= SurfaceSanitiserTests.Run();
 exitCode |= ImportFailurePolicyTests.Run();

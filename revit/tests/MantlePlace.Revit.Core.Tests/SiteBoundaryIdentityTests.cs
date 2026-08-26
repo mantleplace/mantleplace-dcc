@@ -130,6 +130,38 @@ internal static class SiteBoundaryIdentityTests
             run.Equal(created.Count, 0, "padding does not manufacture a new boundary");
         });
 
+        run.Case("IsStampFor recognises this bundle's own subdivisions", () =>
+        {
+            // The drape's re-find. A subdivision is typeless, so the material goes on the instance,
+            // and the instance has to be located on a RE-import where nothing was created.
+            run.True(SiteBoundaryIdentity.IsStampFor($"Mantle Place Site Boundary {Stem}/Zone A", Stem),
+                "a stamp this plugin wrote for this bundle");
+            run.True(SiteBoundaryIdentity.IsStampFor($"Mantle Place Site Boundary {Stem}/3", Stem),
+                "a positional stamp counts the same");
+        });
+
+        run.Case("IsStampFor refuses anything this import does not own", () =>
+        {
+            // ⛔ The trespass rule, as assertions. Draping a curator's subdivision is the same
+            // trespass this plugin refuses when it declines to edit the project's own toposolid type.
+            run.False(SiteBoundaryIdentity.IsStampFor(null, Stem), "no comments at all");
+            run.False(SiteBoundaryIdentity.IsStampFor(string.Empty, Stem), "empty comments");
+            run.False(SiteBoundaryIdentity.IsStampFor("Ridge line, do not move", Stem),
+                "a curator's own note");
+            run.False(SiteBoundaryIdentity.IsStampFor("Mantle Place Site Boundary other-order/Zone A", Stem),
+                "another order's subdivision, sitting on the same terrain");
+        });
+
+        run.Case("IsStampFor does not let one stem claim another's", () =>
+        {
+            // Cache-key stems are truncated hashes. One being a prefix of another is a collision
+            // waiting, not a hypothetical, and without the separator "abc" would claim "abcdef".
+            run.False(SiteBoundaryIdentity.IsStampFor("Mantle Place Site Boundary abcdef/Zone A", "abc"),
+                "a longer stem is not this one");
+            run.False(SiteBoundaryIdentity.IsStampFor("Mantle Place Site Boundary abc/", "abc"),
+                "the stem with an empty feature token is not an identity");
+        });
+
         return run.Report("site boundary identity");
     }
 }

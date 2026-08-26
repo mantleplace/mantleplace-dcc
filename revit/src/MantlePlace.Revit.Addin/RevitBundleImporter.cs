@@ -67,10 +67,15 @@ internal sealed class RevitBundleImporter(
     private int? _terrainVertexCount;
 
     /// <summary>
-    /// The subdivisions this import created, so the drape retypes exactly these and no others.
-    /// Remembered, not re-found: <c>GetSubDivisionIds</c> returns curator-drawn subdivisions too, and
-    /// retyping one of those is the trespass this list exists to refuse.
+    /// The subdivisions this import created, as a supplement to finding them by stamp.
     /// </summary>
+    /// <remarks>
+    /// It is no longer the drape's only source — see <c>DrapeableSubDivisionIds</c>. This list is
+    /// empty on a re-import, because boundaries that already exist are not created again, and a drape
+    /// driven by it alone therefore touched nothing while reporting success. What it still covers is
+    /// the subdivision this import created but could not stamp: it is not findable by stamp, and
+    /// without this list it would not be draped on the very import that made it.
+    /// </remarks>
     private readonly List<ElementId> _createdSubDivisionIds = [];
 
     /// <summary>Trunk height as a fraction of total height — the rest is crown.</summary>
@@ -651,7 +656,8 @@ internal sealed class RevitBundleImporter(
                 Toposolid subdivision = terrain.CreateSubDivision(_document, [CurveLoop.Create(edges)]);
                 created++;
 
-                // Remembered, not re-found: the drape retypes exactly these.
+                // Remembered for the drape, which prefers the stamp below but cannot use it for a
+                // subdivision that fails to take one.
                 _createdSubDivisionIds.Add(subdivision.Id);
 
                 // The plugin's first parameter write. Comments is the subdivision's identity for the
@@ -990,7 +996,7 @@ internal sealed class RevitBundleImporter(
             terrain,
             materialId,
             name,
-            out int retypedSubDivisions,
+            out int drapedSubDivisions,
             out int refusedSubDivisions,
             out string? refusalReason,
             out string layering))
@@ -1021,17 +1027,13 @@ internal sealed class RevitBundleImporter(
         // answer to "is the aerial photograph smeared down the terrain's sides".
         summary += $"; {layering}";
 
-        if (retypedSubDivisions > 0)
-        {
-            summary += $"; also draped {retypedSubDivisions:N0} site boundary subdivision(s) this import created";
-        }
-
-        if (refusedSubDivisions > 0)
-        {
-            summary += $"; Revit declined to retype {refusedSubDivisions:N0} subdivision(s), which keep "
-                + "their original look and show through the photograph as untextured patches"
-                + (refusalReason is null ? string.Empty : $" — Revit said: {refusalReason}");
-        }
+        // Composed in the pure core, where a test asserts the sentence. It used to be assembled
+        // here from a bare count, and a count was the entire record of the defect that made this
+        // step's subdivisions invisible for two sessions.
+        summary += SubDivisionDrape.Clause(
+            drapedSubDivisions,
+            refusedSubDivisions,
+            refusalReason is null ? [] : [refusalReason]) ?? string.Empty;
 
         Say(summary + ".");
 
@@ -1184,12 +1186,12 @@ internal sealed class RevitBundleImporter(
         Toposolid terrain,
         ElementId materialId,
         string typeName,
-        out int retypedSubDivisions,
+        out int drapedSubDivisions,
         out int refusedSubDivisions,
         out string? refusalReason,
         out string layering)
     {
-        retypedSubDivisions = 0;
+        drapedSubDivisions = 0;
         refusedSubDivisions = 0;
         refusalReason = null;
         layering = "the terrain has no type this plugin could read";
@@ -1231,36 +1233,62 @@ internal sealed class RevitBundleImporter(
             return false;
         }
 
-        // Only the subdivisions THIS import created — retyping a curator-drawn one is the trespass
-        // this refuses, the same way it declines to edit the project's own type.
+        // ⛔ NOT ChangeTypeId. A toposolid subdivision is a TYPELESS element: GetTypeId() is
+        // InvalidElementId, Element.IsValidType is false for every candidate singly and in bulk, and
+        // ChangeTypeId throws "This Element cannot have type assigned" — it refuses the operation,
+        // not the type. Measured on order eb00f56f, 2026-08-25, four of four; the same run ruled out
+        // both rival explanations, retyping the host having left every subdivision id resolving and
+        // a single-layer type having been refused identically.
         //
-        // ⚠ The first run that got this far had all seventeen refused, and the count was the whole
-        // of what was recorded: Revit's own message went into the catch and nowhere else, so the
-        // model showed brown patches through the photograph and the log could not say why. Whatever
-        // the cause turns out to be, the exception text is the only thing that names it, and a
-        // second live import is far too expensive to spend on re-learning that it failed.
-        foreach (ElementId subdivisionId in _createdSubDivisionIds)
+        // So the material goes on the INSTANCE, which is the shape an element with no type has to
+        // use. It is also the cheaper of the two mechanisms that work: Paint needs get_Geometry plus
+        // a search across 2,725 faces for the upward one, and stores its result per-face where a
+        // toposolid regeneration is free to drop it. This is one parameter write that survives.
+        foreach (ElementId subdivisionId in DrapeableSubDivisionIds(terrain))
         {
-            if (_document.GetElement(subdivisionId) is not Toposolid subdivision)
+            if (_document.GetElement(subdivisionId) is not Element subdivision)
             {
-                // Retyping the host may regenerate its subdivisions, which would leave these
-                // remembered ids pointing at nothing. Distinct from a refusal, and worth telling
-                // apart, because the fix for it is to retype the subdivisions FIRST.
                 refusedSubDivisions++;
-                Trace($"  drape: subdivision {subdivisionId.Value} is no longer in the document — "
-                    + "retyping the host appears to have replaced it.");
+                Trace($"  drape: subdivision {subdivisionId.Value} is no longer in the document.");
+                refusals.Add("a subdivision vanished mid-import");
+                continue;
+            }
+
+            if (subdivision.get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL) is not { IsReadOnly: false } material)
+            {
+                refusedSubDivisions++;
+                Trace($"  drape: subdivision {subdivisionId.Value} has no writable Material parameter.");
+                refusals.Add("a subdivision had no writable Material parameter");
                 continue;
             }
 
             try
             {
-                subdivision.ChangeTypeId(draped.Id);
-                retypedSubDivisions++;
+                bool wrote = material.Set(materialId);
+
+                // ⛔ Read back. The same four texture properties two methods down are read back for
+                // the same reason, and that read-back is what caught the drape going in as feet and
+                // tiling the photograph twelve times across the site. A Set returning true is a
+                // claim about the call, not about what Revit stored.
+                ElementId stored = subdivision
+                    .get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL)
+                    ?.AsElementId() ?? ElementId.InvalidElementId;
+
+                if (wrote && stored == materialId)
+                {
+                    drapedSubDivisions++;
+                    continue;
+                }
+
+                refusedSubDivisions++;
+                Trace($"  drape: subdivision {subdivisionId.Value} did not keep the material — "
+                    + $"Set returned {wrote}, reads back {stored.Value}.");
+                refusals.Add("the material did not hold on a subdivision");
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
                 refusedSubDivisions++;
-                Trace($"  drape: Revit refused to retype subdivision {subdivisionId.Value} — "
+                Trace($"  drape: Revit refused the material on subdivision {subdivisionId.Value} — "
                     + $"{ex.GetType().Name}: {ex.Message}");
                 refusals.Add(ex.Message);
             }
@@ -1268,6 +1296,57 @@ internal sealed class RevitBundleImporter(
 
         refusalReason = refusals.Count == 0 ? null : string.Join(" / ", refusals);
         return true;
+    }
+
+    /// <summary>
+    /// The subdivisions this drape may touch: the ones this plugin created for THIS bundle.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Found by the stamp written into Comments, not only by the ids remembered from this session.
+    /// That distinction is a bug fix in its own right: <see cref="SiteBoundaryIdentity.NewFeatures"/>
+    /// suppresses boundaries that already exist, so on a RE-import the remembered list is empty — and
+    /// the drape step used to walk it, touch nothing, and still report success. A model left with
+    /// un-draped patches could not be repaired by importing again, which is the one remedy a curator
+    /// would reach for.
+    /// </para>
+    /// <para>
+    /// The remembered ids are still unioned in, for the subdivisions this import could not stamp.
+    /// Those are already reported as "will not be recognised by a re-import"; without the union they
+    /// would silently not be draped either, on the very import that made them.
+    /// </para>
+    /// <para>
+    /// ⛔ A curator's own subdivision carries no stamp, and another order's carries a different stem,
+    /// so neither is ever in this set. It is the same line this plugin draws when it declines to
+    /// edit the project's own toposolid type: touch what this import owns, and nothing else.
+    /// </para>
+    /// </remarks>
+    private List<ElementId> DrapeableSubDivisionIds(Toposolid terrain)
+    {
+        List<ElementId> ids = [];
+        HashSet<ElementId> seen = [];
+
+        foreach (ElementId id in terrain.GetSubDivisionIds())
+        {
+            if (_document.GetElement(id) is Element subdivision
+                && SiteBoundaryIdentity.IsStampFor(
+                    subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString(),
+                    _archive.Layout.Key.Stem)
+                && seen.Add(id))
+            {
+                ids.Add(id);
+            }
+        }
+
+        foreach (ElementId id in _createdSubDivisionIds)
+        {
+            if (seen.Add(id))
+            {
+                ids.Add(id);
+            }
+        }
+
+        return ids;
     }
 
     /// <summary>
