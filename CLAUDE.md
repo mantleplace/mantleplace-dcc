@@ -51,6 +51,10 @@ deleted. So:
   the integer era. `frozen.lock.json` beside them names every version that exists. Internal trackers, internal documents and internal repositories are not citable
   here — not by URL, not by path, not by issue number. A bare `#42` in a Markdown file auto-links to
   *this* repo's issue 42, which is worse than dangling: it is wrong and it looks deliberate.
+  **This one is checked**, by `ci-public-hygiene` — it was prose alone until a private tracker's
+  issue number reached a committed test comment and sat on `main`. Markdown link targets, code
+  spans, `host #2` and hex colours are exempt structurally; state the reasoning in prose instead of
+  citing what a reader cannot open.
 - **Rule ids are fine, links to them are not.** `HPS-40`, `DOC-06` and the like are stable
   identifiers and stay as prose. Do not turn them into paths.
 - **No credentials, ever, including in binary assets.** `.uasset` files serialize property values, so
@@ -141,11 +145,10 @@ even when the arithmetic is correct.
 
 ## CI
 
-Two workflows, both on free hosted runners, both required checks on `main`, together the merge bar:
-`ci-manifest-conformance` and `ci-revit-tests`. **Neither may carry a `paths:` filter on
-`pull_request`** — a required check that is path-filtered never reports on a pull request outside its
-paths, so the check sits pending forever and nothing can merge. (`stale.yml` is tracker hygiene, not
-a gate.)
+Three workflows, all on free hosted runners, together the merge bar: `ci-manifest-conformance`,
+`ci-revit-tests` and `ci-public-hygiene`. **None may carry a `paths:` filter on `pull_request`** — a
+required check that is path-filtered never reports on a pull request outside its paths, so the check
+sits pending forever and nothing can merge. (`stale.yml` is tracker hygiene, not a gate.)
 
 **C++ formatting** is [`unreal/.clang-format`](unreal/.clang-format), for new code only: the existing
 files predate it and are not clean against it. Nothing in CI checks formatting, and a reformat sweep

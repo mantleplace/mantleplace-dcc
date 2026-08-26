@@ -43,8 +43,9 @@ internal static class SlowStepNoticeTests
 
         run.Case("the imagery drape announces itself too — the fix is not half of one", () =>
         {
-            // ⛔ #89's second correction: the drape's ChangeTypeId costs nearly as much as creating
-            // all 17 subdivisions, so a notice on the boundaries alone leaves half the freeze silent.
+            // ⛔ The measurement's second correction: the drape's ChangeTypeId costs nearly as much
+            // as creating all 17 subdivisions, so a notice on the boundaries alone leaves half the
+            // freeze silent.
             string? notice = SlowStepNotice.For(ImportStepKind.ImageryDrape, 80_372, 1);
             run.True(notice is not null, "the drape is announced");
             run.Contains(notice, "80,372", "it names the terrain's point count");

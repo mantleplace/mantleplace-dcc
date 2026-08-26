@@ -1,0 +1,49 @@
+# Public hygiene — refuse references that only resolve inside a private repository.
+#
+# Everything in this repository is world-readable, permanently. CLAUDE.md has always said so and has
+# always named the sharpest case: a bare hash-number reference auto-links to an issue in THIS
+# repository, which is worse than dangling, because a reader following it lands somewhere real and
+# unrelated.
+#
+# That was prose, and prose is not an enforcer. A private tracker's issue number reached a committed
+# test comment and sat on main. This job is the difference between a rule and a gate — the same
+# reason ci-manifest-conformance exists beside the sentence describing the contract.
+#
+# NO paths: FILTER ON pull_request, deliberately, and for the reason spelled out in
+# ci-revit-tests.yml: a required check that is path-filtered never reports on a pull request outside
+# its paths, so the check sits pending forever and nothing can merge. The gate is cheap — it reads
+# tracked text files and talks to nothing — so running it on every pull request costs seconds.
+#
+# Hosted runner, stdlib only, no network. It cannot be broken by a registry outage or by the
+# platform publishing anything.
+name: ci-public-hygiene
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-public-hygiene-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  references:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The gate's own cases first, and they assert BOTH directions. A gate that flags a Markdown
+      # anchor or a hex colour is a gate somebody switches off within a week, and then it misses
+      # the thing it was written for.
+      - name: Unit-test the gate
+        working-directory: tools/public-hygiene
+        run: python -m unittest discover -p "test_*.py" -v
+
+      - name: Check every tracked file
+        run: python tools/public-hygiene/check_public_references.py
