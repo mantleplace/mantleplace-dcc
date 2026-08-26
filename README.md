@@ -122,7 +122,7 @@ unreal/MantlePlace/            the Unreal plugin — MantlePlaceRuntime + Mantle
 revit/                         the Revit plugin — pure Core, Client, Addin shim, headless tests
 spec/                          the published MPB format spec — prose, policy, changelog
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
-.github/workflows/             the two public CI gates, plus tracker hygiene
+.github/workflows/             the three public CI gates, plus tracker hygiene
 ```
 
 Start with each host's own docs: [`revit/README.md`](revit/README.md) for Revit; for Unreal, the
@@ -153,8 +153,10 @@ python tools/manifest-conformance/check_manifest_conformance.py
 
 ## CI, and what it does not cover
 
-Two workflows run on every pull request, on free hosted runners: `ci-manifest-conformance` and
-`ci-revit-tests`. Together they are the objective merge bar.
+Three workflows run on every pull request, on free hosted runners: `ci-manifest-conformance`,
+`ci-revit-tests` and `ci-public-hygiene` — the last checks tracked files *and* the pull request's
+title, body, branch name and commit messages for references that resolve only in a private
+repository (see [CONTRIBUTING.md](CONTRIBUTING.md)). Together they are the objective merge bar.
 
 **The Unreal compile is not among them.** It needs a licensed engine on Windows, and attaching a
 self-hosted runner to a public repository would let a fork's pull request execute on the build

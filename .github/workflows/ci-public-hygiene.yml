@@ -15,11 +15,15 @@
 # tracked text files and talks to nothing — so running it on every pull request costs seconds.
 #
 # Hosted runner, stdlib only, no network. It cannot be broken by a registry outage or by the
-# platform publishing anything.
+# platform publishing anything. The pull-request surfaces (title, body, branch name, commit
+# messages) come from the event payload and the local clone — still no network call.
 name: ci-public-hygiene
 
 on:
   pull_request:
+    # The default types omit `edited`. Without it, a title or body edited after the checks went
+    # green is never re-checked — which is exactly when a private reference gets pasted in.
+    types: [opened, edited, reopened, synchronize]
   push:
     branches: [main]
   workflow_dispatch:
@@ -33,6 +37,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the commit-message check needs to walk the pull request's own commits
+          # while excluding everything reachable from main. The repo is small; this costs little.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -47,3 +55,39 @@ jobs:
 
       - name: Check every tracked file
         run: python tools/public-hygiene/check_public_references.py
+
+      # The metadata surfaces. Everything below reads the event payload or the clone — no network.
+      #
+      # ⛔ PR title, body and head_ref are attacker-controlled on a fork's pull request. They reach
+      # the shell ONLY through env, never interpolated into `run:` — an expression inside the
+      # script text would hand the author of a hostile PR body a shell on this runner.
+      # Both fields are checked before the step exits — the default shell runs -e, and a title
+      # finding aborting before the body is read would cost the author a second round trip to
+      # learn what the first run already knew.
+      - name: Check the pull request title and body
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          status=0
+          printf '%s' "$PR_TITLE" | python tools/public-hygiene/check_public_references.py --stdin --label "PR title" || status=1
+          printf '%s' "$PR_BODY" | python tools/public-hygiene/check_public_references.py --stdin --label "PR body" || status=1
+          exit $status
+
+      - name: Check the branch name
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: python tools/public-hygiene/check_public_references.py --branch-name "$HEAD_REF"
+
+      # `head --not base origin/main`, NOT `base..head`: a branch that merged a newer main would
+      # pull main's own history into the plain range, and main's history contains messages that
+      # predate this gate and are accepted as record. The exclusion confines the check to commits
+      # this pull request is actually introducing.
+      - name: Check the commit messages this pull request introduces
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python tools/public-hygiene/check_public_references.py --commit-range "$HEAD_SHA" --not "$BASE_SHA" origin/main

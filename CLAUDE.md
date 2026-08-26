@@ -26,7 +26,9 @@ unreal/MantlePlace/            the UE 5.8 plugin, folder + .uplugin — PascalCa
 revit/                         the Revit plugin: pure Core, Client, Addin shim, headless tests
 spec/                          the public MPB format spec — prose only; the schema stays remote
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
-.github/workflows/             the two public CI gates, plus the stale-tracker job
+tools/public-hygiene/          the private-reference gate + its cases
+.githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
+.github/workflows/             the three public CI gates, plus the stale-tracker job
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md  CLAUDE.md
 ```
 
@@ -50,11 +52,18 @@ deleted. So:
   pre-history and `{X.Y.Z}.json` for the MPB semver era — no `v` prefix, the `v` belonged to
   the integer era. `frozen.lock.json` beside them names every version that exists. Internal trackers, internal documents and internal repositories are not citable
   here — not by URL, not by path, not by issue number. A bare `#42` in a Markdown file auto-links to
-  *this* repo's issue 42, which is worse than dangling: it is wrong and it looks deliberate.
-  **This one is checked**, by `ci-public-hygiene` — it was prose alone until a private tracker's
-  issue number reached a committed test comment and sat on `main`. Markdown link targets, code
-  spans, `host #2` and hex colours are exempt structurally; state the reasoning in prose instead of
-  citing what a reader cannot open.
+  *this* repo's issue 42, which is worse than dangling: it is wrong and it looks deliberate. The
+  qualified form (`repo#42`) is forbidden the same, by explicit decision: it hands a stranger a
+  private repository's name and a 404. The rule covers **every public surface** — files, commit
+  messages, pull request titles and bodies, and branch names (`type/short-description`, never an
+  issue number; the cross-reference lives in the private side's pin-bump PR). One split: in a
+  commit message or PR body, a bare `#42` is this repo's native self-reference and is fine.
+  **This one is checked**, by `ci-public-hygiene` — its `references` job is a required check on
+  `main` — after being prose alone until a private tracker's issue number reached a committed test
+  comment and sat on `main`. Markdown link targets, code spans, `host #2` and hex colours are
+  exempt structurally; state the reasoning in prose instead of citing what a reader cannot open.
+  CI runs after a push has already published; opt into the pre-publication hooks once per clone
+  with `git config core.hooksPath .githooks`.
 - **Rule ids are fine, links to them are not.** `HPS-40`, `DOC-06` and the like are stable
   identifiers and stay as prose. Do not turn them into paths.
 - **No credentials, ever, including in binary assets.** `.uasset` files serialize property values, so

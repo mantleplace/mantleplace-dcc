@@ -1,0 +1,22 @@
+#!/bin/sh
+# Refuse a commit message that cites what only resolves in a private repository — BEFORE the commit
+# exists. A commit message can never be edited once pushed; CI can only block the merge, by which
+# time the message is already world-readable. This hook is the one look that happens first.
+#
+# Opt in once per clone:  git config core.hooksPath .githooks
+# Escape hatch:           git commit --no-verify   (the CI gate still runs)
+
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON=python3
+elif command -v python >/dev/null 2>&1; then
+    PYTHON=python
+else
+    # Fail closed. A hook that silently passes when its tool is missing is a hook that teaches
+    # you it ran when it did not. The gate is stdlib-only: any Python at all is enough.
+    echo "commit-msg: python not found; the public-reference gate cannot run." >&2
+    echo "Install Python or commit with --no-verify (CI will still check)." >&2
+    exit 1
+fi
+
+exec "$PYTHON" "$(git rev-parse --show-toplevel)/tools/public-hygiene/check_public_references.py" \
+    --commit-msg-file "$1"

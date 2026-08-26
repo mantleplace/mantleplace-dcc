@@ -25,8 +25,9 @@ internal static class ImportPlannerTests
     /// DXF's absolute coordinates against, and the DXF declaring the frame it is measured in.
     /// </summary>
     /// <remarks>
-    /// The origin is the real one from order <c>f93bc782</c>, so the numbers here and the ones
-    /// pinned in <see cref="SurfaceTinTests"/> describe the same site.
+    /// The origin is the real one from order <c>f93bc782</c> — Mantle Place's own first-party test
+    /// site, not a customer's, which is what licenses committing it — so the numbers here and the
+    /// ones pinned in <see cref="SurfaceTinTests"/> describe the same site.
     /// </remarks>
     private const string TinHostBlock = """
         "hosts": {
