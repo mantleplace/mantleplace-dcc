@@ -8,6 +8,8 @@ colour gets switched off within a week, and then it misses everything.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import pathlib
 import tempfile
 import unittest
@@ -153,10 +155,24 @@ class RefusesInMetadata(unittest.TestCase):
         self.assertEqual(len(found), 1)
 
     def test_the_shorthand_forms_that_reached_a_pull_request_body(self):
-        # "nat PR #68" and "nat #68" — the observed shapes. Lowercase and followed by a reference,
-        # so prose about NAT traversal never trips (asserted on the other side).
+        # "nat PR #68" and "nat #68" — the observed shapes. Followed by a reference, so prose about
+        # NAT traversal never trips (asserted on the other side).
         self.assertEqual(len(scan_text("Ported from nat PR #68, before the move.\n")), 1)
         self.assertEqual(len(scan_text("was produced on nat #68 against this code\n")), 1)
+
+    def test_the_natural_retypings_of_the_observed_shapes_trip_too(self):
+        # English capitalizes at sentence start and repo names are case-insensitive on GitHub. A
+        # gate that transcribes the historical leak too literally teaches the workaround, not the
+        # rule.
+        self.assertEqual(len(scan_text("Ported from Nat PR #68, before the move.\n")), 1)
+        self.assertEqual(len(scan_text("ported from nat issue #68 against this code\n")), 1)
+        self.assertEqual(len(scan_text("the fix lands in Mantleplace-Vault first\n")), 1)
+
+    def test_a_sibling_sharing_an_allowlisted_stem_still_trips(self):
+        # The allowlist is two artifact FILENAMES, not two stem families. A hypothetical
+        # mantleplace-import-api is a repository name and must trip; only the `.log` shapes pass.
+        self.assertEqual(len(scan_text("mantleplace-import-api owns that half\n")), 1)
+        self.assertEqual(len(scan_text("lands in mantleplace-terrain-service first\n")), 1)
 
     def test_decision_log_id_is_refused_here_too(self):
         found = scan_text("Implements the decision recorded there as D-CX; the bump follows.\n")
@@ -202,6 +218,12 @@ class AllowsInMetadata(unittest.TestCase):
     def test_a_public_url_fragment_is_not_a_cross_repository_reference(self):
         self.assertEqual(scan_text("see https://mantle.place/spec#3 for the block\n"), [])
 
+    def test_a_language_version_is_not_a_repository(self):
+        # The Revit half of this tree is C#. "C#12" and "F#7" are language prose a commit message
+        # touching revit/ will plausibly carry; a single letter is a language, not a repository.
+        self.assertEqual(scan_text("revit: adopt C#12 collection expressions\n"), [])
+        self.assertEqual(scan_text("the F#7 sample was removed\n"), [])
+
 
 class BranchNames(unittest.TestCase):
     """A branch name is published by the push, listed by the API, and rendered forever in the header
@@ -216,6 +238,13 @@ class BranchNames(unittest.TestCase):
         self.assertEqual(len(gate.branch_name_violations("backport/88-drape/retry")), 1)
         self.assertEqual(len(gate.branch_name_violations("fix/88")), 1)
 
+    def test_dressing_the_number_up_does_not_pass_it(self):
+        # The retry shapes a developer reaches for when the bare number is refused. "#" is legal in
+        # a git ref name, and "issue-88" is the same citation wearing a word.
+        self.assertEqual(len(gate.branch_name_violations("fix/#88-subdivision-drape")), 1)
+        self.assertEqual(len(gate.branch_name_violations("fix/issue-88-subdivision-drape")), 1)
+        self.assertEqual(len(gate.branch_name_violations("fix/gh-88-subdivision-drape")), 1)
+
     def test_a_sibling_repository_name_in_a_branch_is_a_citation(self):
         self.assertEqual(len(gate.branch_name_violations("sync/mantleplace-vault-pin")), 1)
 
@@ -225,6 +254,60 @@ class BranchNames(unittest.TestCase):
         self.assertEqual(gate.branch_name_violations("feature/ue5-8-support"), [])
         self.assertEqual(gate.branch_name_violations("chore/net10-bump"), [])
         self.assertEqual(gate.branch_name_violations("feat/mpb-1.0.0-floor"), [])
+
+
+class CommitMessageFiles(unittest.TestCase):
+    """What the commit-msg hook hands over is COMMIT_EDITMSG — which is not yet the message. Git
+    strips comment lines and everything below the scissors line AFTER the hook runs, so the gate
+    must judge what will survive, not what is on disk."""
+
+    def test_comment_lines_and_the_scissors_diff_are_not_the_message(self):
+        # `git commit -v` appends the whole diff below the scissors line. Refusing a commit because
+        # the DIFF quotes a forbidden shape (editing this very test file does) teaches --no-verify.
+        editmsg = (
+            "fix: tidy the gate's own corpus\n"
+            "\n"
+            "# Please enter the commit message for your changes.\n"
+            "# On branch chore/x — mantleplace-vault-notes.txt untracked\n"
+            "# ------------------------ >8 ------------------------\n"
+            "diff --git a/t.py b/t.py\n"
+            '+        scan_text("the fix lands in mantleplace-vault first\\n")\n'
+        )
+        self.assertEqual(gate.violations_in_text(
+            gate.commit_message_body(editmsg), "commit message", surface="metadata"), [])
+
+    def test_what_survives_cleanup_is_still_judged(self):
+        editmsg = "Refs mantleplace-nat#90.\n# a comment\n"
+        found = gate.violations_in_text(
+            gate.commit_message_body(editmsg), "commit message", surface="metadata")
+        self.assertEqual(len(found), 1)
+
+    def test_an_undecodable_message_file_reports_rather_than_crashes(self):
+        # i18n.commitEncoding or a Windows editor can put cp1252 bytes in COMMIT_EDITMSG. The file
+        # surface deliberately never crashes on undecodable input; the hook path keeps that.
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "COMMIT_EDITMSG"
+            path.write_bytes("caf\xe9 fix\n".encode("cp1252"))
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(gate.main(["--commit-msg-file", str(path)]), 0)
+
+
+class ModesFailLoudly(unittest.TestCase):
+    """An empty value handed to a mode flag must be an error, never a quiet fall-through to the
+    file scan — a green 'OK: 208 file(s)' for a branch name that was never checked is the exact
+    false-green this gate exists to prevent."""
+
+    def test_an_empty_branch_name_is_an_error_not_a_file_scan(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as caught:
+                gate.main(["--branch-name", ""])
+        self.assertNotEqual(caught.exception.code, 0)
+
+    def test_a_bare_commit_range_is_an_error_not_a_file_scan(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as caught:
+                gate.main(["--commit-range"])
+        self.assertNotEqual(caught.exception.code, 0)
 
 
 class SurfacesStaySeparate(unittest.TestCase):

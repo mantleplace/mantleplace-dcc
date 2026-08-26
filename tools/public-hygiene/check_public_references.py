@@ -98,19 +98,27 @@ ISSUE_REFERENCE = re.compile(r"#\d+")
 DECISION_REFERENCE = re.compile(r"\bD-[A-Z]{2}\b")
 
 # Metadata-surface patterns. QUALIFIED_REFERENCE needs a word character hard against the hash, so
-# it never overlaps the bare form the metadata surface allows. PRIVATE_SIBLING is structural — the
-# stem plus "not this repository" — with the negative lookahead also carrying the two tracked
-# artifact-filename stems (`.mantleplace-import.log`, `mantleplace-terrain*.log`) that legitimate
-# commit messages must be able to name; its trailing (?!#) hands the qualified form to
-# QUALIFIED_REFERENCE so one token is one finding.
+# it never overlaps the bare form the metadata surface allows; a single-letter qualifier is a
+# language (`C#12`, `F#7` — the Revit half of this tree is C#), not a repository, and is waved
+# through where the pattern is applied. PRIVATE_SIBLING is structural — the stem plus "not this
+# repository" — and case-insensitive, because GitHub repo names are and English capitalizes at
+# sentence start. Its negative lookahead carries the two tracked artifact FILENAMES
+# (`.mantleplace-import.log`, `mantleplace-terrain*.log`) that legitimate commit messages must be
+# able to name — bound to the `.log` shape, so a hypothetical sibling repository sharing the stem
+# still trips. The trailing (?!#) hands the qualified form to QUALIFIED_REFERENCE so one token is
+# one finding.
 QUALIFIED_REFERENCE = re.compile(r"\b[\w.-]+(?:/[\w.-]+)?#\d+")
-PRIVATE_SIBLING = re.compile(r"\bmantleplace-(?!dcc\b|import\b|terrain\b)[a-z][a-z0-9-]*\b(?!#)")
-SHORTNAME_REFERENCE = re.compile(r"\bnat(?=\s+(?:PR\s+)?#\d+)")
+PRIVATE_SIBLING = re.compile(
+    r"(?i)\bmantleplace-(?!dcc\b|import\.log|terrain[\w-]*\.log)[a-z][a-z0-9-]*\b(?!#)"
+)
+SHORTNAME_REFERENCE = re.compile(r"\b[Nn]at(?=\s+(?:(?i:PR|issue)\s+)?#\d+)")
 OWN_REPOSITORY = frozenset({"mantleplace-dcc", "mantleplace/mantleplace-dcc"})
 
-# The shape rule for branch names: a path segment that opens with digits. Anchored to the segment
-# start so version digits inside a word (ue5-8, net10, mpb-1.0.0) stay legal.
-NUMERIC_SEGMENT = re.compile(r"(?:^|/)\d+(?:[-_/]|$)")
+# The shape rule for branch names: a path segment that opens with an issue number — bare, or
+# dressed as `#88`, "issue-88" or "gh-88", which are the retry shapes a developer reaches for when
+# the bare number is refused. Anchored to the segment start so version digits inside a word
+# (ue5-8, net10, mpb-1.0.0) stay legal.
+NUMERIC_SEGMENT = re.compile(r"(?i)(?:^|/)(?:#|(?:issue|gh)-?)?\d+(?:[-_/]|$)")
 
 # Structural exemptions, each anchored to the character sequence immediately before the match so
 # that "looks like an exemption somewhere on the line" cannot launder a real violation.
@@ -206,6 +214,10 @@ def violations_in_text(text: str, label: str, surface: str = "file") -> list[str
                 qualifier = match.group().rsplit("#", 1)[0]
                 if qualifier in OWN_REPOSITORY:
                     continue
+                if len(qualifier) == 1:
+                    # `C#12`, `F#7`: a language version, not a repository. No real repository is
+                    # cited by a single letter.
+                    continue
                 if inside_url(line, match.start()):
                     continue
                 if not exempt(line, match.start(), match.end(), spans):
@@ -262,16 +274,43 @@ def branch_name_violations(name: str) -> list[str]:
     return found
 
 
+def commit_message_body(text: str) -> str:
+    """What git will keep of COMMIT_EDITMSG. The commit-msg hook runs BEFORE cleanup: comment
+    lines and everything below the scissors line (`git commit -v` puts the whole diff there) are
+    still in the file, and judging them refuses commits over text that will never be part of the
+    message — which teaches the author --no-verify. Judge the survivor instead. Assumes the
+    default comment character; a custom core.commentChar makes this conservative, never unsafe."""
+    kept: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("#") and ">8" in line:
+            break
+        if line.startswith("#"):
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def commit_messages(log_arguments: list[str]) -> list[tuple[str, str]]:
     """(label, full message) for every commit `git log` selects. The caller passes exclusion-style
     arguments ("HEAD --not origin/main") so main's own history — which contains messages that
     predate this gate and are accepted as record — is never re-litigated."""
-    listed = subprocess.run(
-        ["git", "log", "--format=%h%x01%B%x00", *log_arguments],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
+    try:
+        listed = subprocess.run(
+            ["git", "log", "--format=%h%x01%B%x00", *log_arguments],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except subprocess.CalledProcessError as error:
+        # Fail closed, but say why: swallowing git's own "unknown revision"/"bad object" line
+        # leaves a refused push with no diagnosis and --no-verify as the only discoverable exit.
+        sys.stderr.write(error.stderr)
+        sys.stderr.write(
+            "The commit-range arguments did not resolve, so nothing was checked and this refuses "
+            "rather than passes. Fix the range (git's message above names the revision) and rerun."
+            "\n"
+        )
+        raise SystemExit(1)
     selected: list[tuple[str, str]] = []
     for record in listed.split("\0"):
         record = record.strip("\n")
@@ -312,20 +351,33 @@ def main(argv: list[str]) -> int:
     )
     arguments = parser.parse_args(argv)
 
+    # ⛔ Dispatch on "was the flag given", never on truthiness. An empty value falling through to
+    # the tree scan would print "OK: 208 file(s)" for a branch name that was never checked — a
+    # false green from the gate whose whole job is refusing false greens.
     if arguments.stdin:
         found = violations_in_text(sys.stdin.read(), arguments.label, surface="metadata")
         return report(found, 1, "text(s)")
 
-    if arguments.branch_name:
+    if arguments.branch_name is not None:
+        if not arguments.branch_name:
+            parser.error("--branch-name was given an empty value; nothing was checked")
         found = branch_name_violations(arguments.branch_name)
         return report(found, 1, "branch name(s)")
 
-    if arguments.commit_msg_file:
-        text = pathlib.Path(arguments.commit_msg_file).read_text(encoding="utf-8")
-        found = violations_in_text(text, "commit message", surface="metadata")
+    if arguments.commit_msg_file is not None:
+        if not arguments.commit_msg_file:
+            parser.error("--commit-msg-file was given an empty value; nothing was checked")
+        # errors="replace": an undecodable byte (i18n.commitEncoding, a Windows editor) must not
+        # crash the hook — the ASCII patterns still scan, same stance as the file surface's guard.
+        raw = pathlib.Path(arguments.commit_msg_file).read_text(
+            encoding="utf-8", errors="replace"
+        )
+        found = violations_in_text(commit_message_body(raw), "commit message", surface="metadata")
         return report(found, 1, "message(s)")
 
-    if arguments.commit_range:
+    if arguments.commit_range is not None:
+        if not arguments.commit_range:
+            parser.error("--commit-range needs git-log arguments, e.g. HEAD --not origin/main")
         found = []
         selected = commit_messages(arguments.commit_range)
         for label, message in selected:

@@ -22,6 +22,12 @@ GATE="$(git rev-parse --show-toplevel)/tools/public-hygiene/check_public_referen
 ZERO=0000000000000000000000000000000000000000
 status=0
 
+# origin/main excludes history that predates the gate — accepted as record, never re-litigated.
+# It is probed, not assumed: a --single-branch clone or a differently-named remote has no such
+# ref, and hardcoding it would refuse every push from that clone with a git error.
+MAIN_EXCLUDE=""
+git rev-parse -q --verify origin/main >/dev/null 2>&1 && MAIN_EXCLUDE="origin/main"
+
 while read -r local_ref local_sha remote_ref remote_sha; do
     # A deletion publishes nothing new.
     [ "$local_sha" = "$ZERO" ] && continue
@@ -31,13 +37,14 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         "$PYTHON" "$GATE" --branch-name "$branch" || status=1
     fi
 
-    # Only the commits this push would publish. origin/main is always excluded: history that
-    # predates the gate is accepted as record and must not be re-litigated on every push.
-    if [ "$remote_sha" = "$ZERO" ]; then
-        "$PYTHON" "$GATE" --commit-range "$local_sha" --not origin/main || status=1
-    else
-        "$PYTHON" "$GATE" --commit-range "$local_sha" --not "$remote_sha" origin/main || status=1
+    # Only the commits this push would publish. The remote's old tip need not exist locally
+    # (a second remote never fetched, a force-push after the remote advanced) — probe it too.
+    # A trailing --not with nothing after it is a git no-op, so empty exclusions are safe.
+    OLD_TIP=""
+    if [ "$remote_sha" != "$ZERO" ] && git cat-file -e "$remote_sha" 2>/dev/null; then
+        OLD_TIP=$remote_sha
     fi
+    "$PYTHON" "$GATE" --commit-range "$local_sha" --not $OLD_TIP $MAIN_EXCLUDE || status=1
 done
 
 exit $status

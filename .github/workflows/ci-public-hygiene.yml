@@ -61,14 +61,19 @@ jobs:
       # ⛔ PR title, body and head_ref are attacker-controlled on a fork's pull request. They reach
       # the shell ONLY through env, never interpolated into `run:` — an expression inside the
       # script text would hand the author of a hostile PR body a shell on this runner.
+      # Both fields are checked before the step exits — the default shell runs -e, and a title
+      # finding aborting before the body is read would cost the author a second round trip to
+      # learn what the first run already knew.
       - name: Check the pull request title and body
         if: github.event_name == 'pull_request'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          printf '%s' "$PR_TITLE" | python tools/public-hygiene/check_public_references.py --stdin --label "PR title"
-          printf '%s' "$PR_BODY" | python tools/public-hygiene/check_public_references.py --stdin --label "PR body"
+          status=0
+          printf '%s' "$PR_TITLE" | python tools/public-hygiene/check_public_references.py --stdin --label "PR title" || status=1
+          printf '%s' "$PR_BODY" | python tools/public-hygiene/check_public_references.py --stdin --label "PR body" || status=1
+          exit $status
 
       - name: Check the branch name
         if: github.event_name == 'pull_request'
