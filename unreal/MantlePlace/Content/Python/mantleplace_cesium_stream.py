@@ -43,6 +43,7 @@ import unreal
 
 _TILESET_LABEL = "MP_CesiumStream_Terrain"
 _QA_TERRAIN_LABEL = "MP_CesiumQA_WorldTerrain"
+_CLIP_LABEL = "MP_CesiumStream_AoiClip"
 
 #: Cesium's East-South-Up -> our North-East-Up. East(+X) -> +Y and South(+Y) -> -X, which is yaw +90.
 CESIUM_TO_WORLD_YAW = 90.0
@@ -159,6 +160,96 @@ def _orient_into_world_frame(tileset):
                .format(tileset.get_actor_label(), CESIUM_TO_WORLD_YAW))
 
 
+def _clip_to_aoi(tileset, georef, info):
+    """Cut everything outside the bundle's AOI out of the streamed tileset.
+
+    WHY this is not cosmetic. `ctb-tile -C` writes "cesium-friendly" root tiles at zoom 0-1 that
+    span the whole planet at a FLAT ZERO height (measured: 0/0/0.terrain and 0/1/0.terrain both
+    carry minimumHeight == maximumHeight == 0). Cesium loads them like any other tile, so an
+    unclipped stream renders a white sea-level shell out to the horizon, and the AOI's real terrain
+    -- Jackson sits at ~1900 m -- stands on it as a mesa whose tile skirts fall the full 1.9 km to
+    the shell. Beside the imported landscape, which is correct, that reads as the STREAM being
+    broken. It is not: the geometry outside the AOI simply has no business being drawn, because the
+    bundle only ever covered the AOI.
+
+    So the AOI rectangle becomes an ACesiumCartographicPolygon and a UCesiumPolygonRasterOverlay
+    clips to it: `invert_selection` keeps the inside and discards the outside, and
+    `exclude_selected_tiles` stops the outside tiles being fetched at all rather than fetching and
+    hiding them.
+
+    THE FRAME, which is the one thing here that is easy to get subtly wrong. Cesium builds the
+    polygon by taking each spline point's WORLD position, pushing it through the tileset's INVERSE
+    transform and asking the georeference for its lon/lat (CesiumCartographicPolygon.cpp:62-72 --
+    "the spline points should be located in the tileset exactly where they appear to be"). Our
+    tileset carries the +90 world-frame yaw, so world points have to be the georeferenced positions
+    ALREADY YAWED, or the inverse un-yaws them into a rectangle 90 degrees round the globe from the
+    AOI and the clip erases everything. Rather than pre-rotating the maths, the polygon actor is
+    given the SAME yaw as the tileset and its points are added in LOCAL space: world = yaw * local
+    then makes the round trip exact by construction, and stays exact if CESIUM_TO_WORLD_YAW ever
+    changes.
+    """
+    if not info.has_bbox:
+        unreal.log_warning(
+            "[MantlePlace] the stream reports no AOI bbox; leaving the tileset unclipped "
+            "(expect the flat zero-height root tiles out to the horizon).")
+        return None
+
+    _remove_existing(_CLIP_LABEL)
+    polygon = unreal.EditorActorSubsystem().spawn_actor_from_class(
+        unreal.CesiumCartographicPolygon, unreal.Vector(0, 0, 0),
+        unreal.Rotator(roll=0.0, pitch=0.0, yaw=CESIUM_TO_WORLD_YAW))
+    polygon.set_actor_label(_CLIP_LABEL)
+    try:
+        polygon.globe_anchor.set_editor_property("georeference", georef)
+    except Exception as exc:  # noqa: BLE001 - it resolves the level's only georeference anyway
+        unreal.log_warning("[MantlePlace] could not pin the clip polygon's georeference: {}".format(exc))
+
+    corners = (
+        (info.bbox_west_deg, info.bbox_south_deg),
+        (info.bbox_east_deg, info.bbox_south_deg),
+        (info.bbox_east_deg, info.bbox_north_deg),
+        (info.bbox_west_deg, info.bbox_north_deg),
+    )
+    spline = polygon.polygon
+    spline.clear_spline_points(False)
+    for lon, lat in corners:
+        local = georef.transform_longitude_latitude_height_position_to_unreal(
+            unreal.Vector(lon, lat, 0.0))
+        spline.add_spline_point(local, unreal.SplineCoordinateSpace.LOCAL, False)
+    spline.set_closed_loop(True, False)
+    for index in range(spline.get_number_of_spline_points()):
+        # Linear, or the spline bulges its Bezier handles outside the AOI it is meant to bound.
+        spline.set_spline_point_type(index, unreal.SplinePointType.LINEAR, False)
+    spline.update_spline()
+
+    clip = _add_raster_overlay(tileset, unreal.CesiumPolygonRasterOverlay, "MP_AoiClip")
+    if clip is None:
+        unreal.log_warning("[MantlePlace] could not create the AOI clip overlay; tileset left unclipped.")
+        return None
+    clip.set_editor_property("polygons", [polygon])
+    clip.set_editor_property("invert_selection", True)   # keep the INSIDE, discard the outside
+    clip.set_editor_property("exclude_selected_tiles", True)
+    # Same reason as the imagery overlay: the component activated with empty properties at creation,
+    # so it has to be re-added to the tileset to pick up the polygon list just set.
+    clip.refresh()
+
+    # And get the spline out of shot. A CesiumCartographicPolygon draws its spline as a white
+    # wireframe in the editor viewport, and this one sits at the ELLIPSOID -- about 1.9 km directly
+    # below a Jackson AOI -- so it films as a mystery rectangle hanging under the terrain. The
+    # overlay has already read the polygon by this point and re-reads it from the actor, not from
+    # its visibility, so hiding it costs the clip nothing.
+    try:
+        polygon.set_is_temporarily_hidden_in_editor(True)
+    except Exception as exc:  # noqa: BLE001 - a visible spline is untidy, not broken
+        unreal.log_warning("[MantlePlace] could not hide the clip spline: {}".format(exc))
+
+    unreal.log("[MantlePlace] clipped to the AOI bbox {:.6f},{:.6f} -> {:.6f},{:.6f} "
+               "(no zero-height globe shell, no 1.9 km skirts).".format(
+                   info.bbox_west_deg, info.bbox_south_deg,
+                   info.bbox_east_deg, info.bbox_north_deg))
+    return polygon
+
+
 def _manifest_origin(zip_path):
     """(lon, lat, ground_orthometric_h_m) from the bundle manifest, or None.
 
@@ -239,6 +330,11 @@ def stream_into_cesium(zip_path, geoid_separation_m=0.0):
     # the two would disagree about north while both being "correct" in their own frame.
     _orient_into_world_frame(tileset)
 
+    # AFTER the yaw, never before: the clip reads the tileset's transform when the overlay is
+    # created (CesiumPolygonRasterOverlay.cpp:24) and bakes the inverse into the polygon it builds.
+    # Clipping first would bake an identity and put the kept region 90 degrees off the AOI.
+    _clip_to_aoi(tileset, georef, info)
+
     unreal.log("[MantlePlace] Cesium stream wired -> {}".format(info.cesium_terrain_url))
     return tileset
 
@@ -293,5 +389,12 @@ def ground_truth_overlay(zip_path, geoid_separation_m=0.0):
 
 
 def stop_stream():
-    """Stop the local bundle server."""
+    """Stop the local bundle server and take the streamed actors out of the level.
+
+    Removing them is the point on camera: what was streamed is gone, what was imported is still
+    there. Leaving the clip polygon behind would also leave a stray spline in the Outliner for the
+    next take to inherit.
+    """
     unreal.MantlePlaceImporterLibrary.stop_bundle_stream()
+    for label in (_TILESET_LABEL, _CLIP_LABEL):
+        _remove_existing(label)
