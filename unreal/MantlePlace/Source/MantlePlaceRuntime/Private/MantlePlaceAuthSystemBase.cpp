@@ -101,8 +101,18 @@ void UMantlePlaceAuthSystemBase::SignInWithBrowser()
 	SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::BeginSignIn));
 	StartSignInTimeout();
 
-	UE_LOG(LogMantlePlaceAuth, Log, TEXT("Opening system browser for sign-in (loopback redirect %s)."), *RedirectUri);
-	FPlatformProcess::LaunchURL(*AuthorizeUrl, nullptr, nullptr);
+	if (bLaunchBrowserForSignIn)
+	{
+		UE_LOG(LogMantlePlaceAuth, Log, TEXT("Opening system browser for sign-in (loopback redirect %s)."), *RedirectUri);
+		FPlatformProcess::LaunchURL(*AuthorizeUrl, nullptr, nullptr);
+	}
+	else
+	{
+		// The URL carries only public OAuth material (client challenge, state,
+		// loopback redirect) — the secrets stay in this process. Logged whole so
+		// an external agent can complete the round-trip in a browser it manages.
+		UE_LOG(LogMantlePlaceAuth, Log, TEXT("Browser launch disabled; complete sign-in externally: %s"), *AuthorizeUrl);
+	}
 }
 
 void UMantlePlaceAuthSystemBase::CancelSignIn()
@@ -631,7 +641,10 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 	BoundLoopbackPort = SelectedPort;
 	SessionLoopbackPort = SelectedPort;
 
-	UE_LOG(LogTemp, Log, TEXT("Mantle Place: sign-in callback listening on http://127.0.0.1:%d%s"),
+	// LogMantlePlaceAuth, not LogTemp: this line is part of the sign-in
+	// narration, and category-filtered tooling (log scrapers, `log LogMantlePlaceAuth
+	// verbose`) should see the whole story in one category.
+	UE_LOG(LogMantlePlaceAuth, Log, TEXT("Sign-in callback listening on http://127.0.0.1:%d%s"),
 	       SelectedPort, *CallbackPath);
 
 	return true;

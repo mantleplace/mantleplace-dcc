@@ -116,6 +116,18 @@ public:
 	bool bAllowPasswordGrant = false;
 
 	/**
+	 * When false, SignInWithBrowser() prepares the full flow — loopback server,
+	 * PKCE, timeout — but does NOT open the system browser; it logs the
+	 * authorize URL instead, for an external agent to complete. The standard
+	 * headless/kiosk/CI courtesy (same shape as `gcloud auth login --no-launch-browser`):
+	 * environments where popping a browser window is wrong can still run the
+	 * exact production auth path. Defaults to true — end users keep the
+	 * one-click experience.
+	 */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Mantle Place|Auth")
+	bool bLaunchBrowserForSignIn = true;
+
+	/**
 	 * Begin a system-browser sign-in (OAuth 2.0 Authorization Code Flow + PKCE, RFC 8252).
 	 * Opens the default browser to WebLoginUrl, captures the redirect on a 127.0.0.1 loopback
 	 * server, and exchanges the code for tokens. Result is delivered via OnSignInResult.

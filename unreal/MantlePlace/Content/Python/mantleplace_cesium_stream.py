@@ -13,7 +13,8 @@ Download-to-own: nothing is streamed from the platform, only from the user's loc
 
 Usage (Python console, or an Editor Utility Widget "Stream into Cesium" button via Execute Python):
     import mantleplace_cesium_stream as mp
-    mp.stream_into_cesium(r"C:/path/to/bundle.zip")
+    mp.stream_into_cesium()                             # newest cached vault bundle (the one just imported)
+    mp.stream_into_cesium(r"C:/path/to/bundle.zip")     # or an explicit bundle .zip
     mp.ground_truth_overlay(r"C:/path/to/bundle.zip")   # Cesium World Terrain + imagery, for QA
 
 NOTE: the exact Cesium-for-Unreal Python property/enum names below are validated against v2.22.1 during
@@ -36,7 +37,9 @@ Getting the sign wrong mirrors rather than rotates, which is the whole class of 
 to prevent -- so a residual ROTATION here means this yaw is wrong, while a residual FLIP means
 something upstream is.
 """
+import glob
 import json
+import os
 import zipfile
 
 import unreal
@@ -268,8 +271,26 @@ def _manifest_origin(zip_path):
         return None
 
 
-def stream_into_cesium(zip_path, geoid_separation_m=0.0):
+def _newest_vault_cache_bundle():
+    """The most recently cached vault bundle .zip, or None.
+
+    The importer's cache (<Project>/Saved/MantlePlace/VaultCache/<orderId>/bundle.zip)
+    holds exactly the file the last import read — so "stream what I just
+    imported", the overwhelmingly common case, needs no path at all.
+    """
+    cache = os.path.join(unreal.Paths.project_saved_dir(), "MantlePlace", "VaultCache")
+    candidates = glob.glob(os.path.join(cache, "*", "bundle.zip"))
+    if not candidates:
+        return None
+    return max(candidates, key=os.path.getmtime)
+
+
+def stream_into_cesium(zip_path=None, geoid_separation_m=0.0):
     """Start the local server (C++) and wire up the Cesium tileset + imagery overlay. Returns the tileset.
+
+    With no `zip_path`, streams the newest bundle in the importer's vault cache
+    — the file the last vault import read — so the console form is simply
+    `mp.stream_into_cesium()` after an import.
 
     Owns the CesiumGeoreference origin: sets it to the bundle manifest's AOI origin (spawning a
     georeference if the level has none), so the streamed patch lands over UE (0,0,0) -- coincident
@@ -277,6 +298,14 @@ def stream_into_cesium(zip_path, geoid_separation_m=0.0):
     carry orthometric metres like the level does, so leave `geoid_separation_m` at 0 for an exact
     overlay; it exists for symmetry with ground_truth_overlay and is elevation-only either way.
     """
+    if zip_path is None:
+        zip_path = _newest_vault_cache_bundle()
+        if zip_path is None:
+            unreal.log_error(
+                "[MantlePlace] no cached vault bundle to stream — import one first, "
+                "or pass a bundle .zip path explicitly.")
+            return None
+        unreal.log("[MantlePlace] streaming the newest cached bundle: {}".format(zip_path))
     info = unreal.MantlePlaceImporterLibrary.stream_bundle_into_cesium(zip_path)
     if not info.success:
         unreal.log_error("[MantlePlace] stream failed: {}".format(info.message))

@@ -44,6 +44,8 @@
 
 #define LOCTEXT_NAMESPACE "MantlePlaceImporter"
 
+DEFINE_LOG_CATEGORY_STATIC(LogMantlePlaceImport, Log, All);
+
 namespace
 {
 	/** Read one entry out of the open zip and write it under TempDir; returns the on-disk path. */
@@ -375,6 +377,13 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			}
 		}
 	}
+
+	// The verification gate is a product claim ("verified before anything is
+	// written"), so its PASSING is narrated, not only its failure — log
+	// followers should see the gate clear before the first actor spawns.
+	UE_LOG(LogMantlePlaceImport, Log,
+		TEXT("Integrity verified: every manifest-declared sha256 matches (jobId %s)."),
+		*Manifest.JobId.Left(8));
 
 	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
 	if (World == nullptr)

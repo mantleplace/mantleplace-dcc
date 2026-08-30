@@ -641,13 +641,20 @@ void UMantlePlaceVaultImportOrchestrator::FailImport(const FString& Message)
 
 void UMantlePlaceVaultImportOrchestrator::EmitPhase(const FString& PhaseLabel, const FString& Message, float Fraction)
 {
-	if (Fraction >= 0.0f)
+	// Message-less emits are per-callback download progress ticks — dozens per
+	// second (measured: ~50 lines/s flooding the log through a 78 MB pull).
+	// The UI progress bar still gets every tick via the broadcast below; the
+	// LOG narrates transitions, which all carry a message.
+	if (!Message.IsEmpty())
 	{
-		UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("[%s] %s (%.0f%%)"), *PhaseLabel, *Message, Fraction * 100.0f);
-	}
-	else
-	{
-		UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("[%s] %s"), *PhaseLabel, *Message);
+		if (Fraction >= 0.0f)
+		{
+			UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("[%s] %s (%.0f%%)"), *PhaseLabel, *Message, Fraction * 100.0f);
+		}
+		else
+		{
+			UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("[%s] %s"), *PhaseLabel, *Message);
+		}
 	}
 	OnImportPhase.Broadcast(PhaseLabel, Message, Fraction);
 }
