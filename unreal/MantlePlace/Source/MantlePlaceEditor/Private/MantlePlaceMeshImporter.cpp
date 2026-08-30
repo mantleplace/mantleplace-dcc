@@ -24,6 +24,10 @@ namespace MantlePlaceMeshImporter
 		UAssetImportTask* Task = NewObject<UAssetImportTask>();
 		Task->Filename = GlbFile;
 		Task->DestinationPath = DestPath;
+		// Named on the way in, never renamed afterwards -- a rename here would purge the import's
+		// undo transaction. See MantlePlaceImportNaming::ImportNameFor. This reaches the glTF's
+		// StaticMesh only; anything embedded alongside it still falls to RenameToConvention below.
+		Task->DestinationName = MantlePlaceImportNaming::ImportNameFor(TEXT("SM_"), GlbFile);
 		Task->bAutomated = true;
 		Task->bReplaceExisting = true;
 		Task->bSave = false;
@@ -33,7 +37,10 @@ namespace MantlePlaceMeshImporter
 		Module.Get().ImportAssetTasks(Tasks);
 
 		// Load every imported object (mesh + embedded textures/materials) before renaming, since
-		// renaming invalidates the path strings. Then rename each to the project naming standard.
+		// renaming invalidates the path strings. The StaticMesh arrives already named (above), so
+		// RenameToConvention is a no-op for it; it is here only for embedded sub-assets, which
+		// DestinationName cannot reach. No bundle has shipped one yet -- if one does, the import's
+		// undo transaction is what pays, so fix it upstream rather than leaving the rename.
 		TArray<UObject*> Imported;
 		for (const FString& Path : Task->ImportedObjectPaths)
 		{
@@ -61,21 +68,17 @@ namespace MantlePlaceMeshImporter
 		return nullptr;
 	}
 
-	AStaticMeshActor* Import(
-		UWorld* World,
+	UStaticMesh* ImportMeshAsset(
 		const FMantlePlaceVaultManifest& Manifest,
 		const FString& GlbFile,
 		const FString& DestPackagePath,
 		bool bEnableNanite,
 		FString& OutError)
 	{
-		if (World == nullptr)
-		{
-			OutError = TEXT("No editor world to import the mesh into.");
-			return nullptr;
-		}
-
-		UStaticMesh* Mesh = ImportGlbAsset(GlbFile, DestPackagePath / TEXT("Mesh"), OutError);
+		// Separate subfolders keep the terrain's and the buildings' imported UStaticMesh names --
+		// and their embedded textures and materials -- from colliding.
+		const TCHAR* const Subfolder = bEnableNanite ? TEXT("Mesh") : TEXT("Buildings");
+		UStaticMesh* Mesh = ImportGlbAsset(GlbFile, DestPackagePath / Subfolder, OutError);
 		if (Mesh == nullptr)
 		{
 			return nullptr;
@@ -93,6 +96,26 @@ namespace MantlePlaceMeshImporter
 			Settings.bEnabled = true;
 			Mesh->SetNaniteSettings(Settings);
 			Mesh->NotifyNaniteSettingsChanged();
+		}
+
+		return Mesh;
+	}
+
+	AStaticMeshActor* Import(
+		UWorld* World,
+		const FMantlePlaceVaultManifest& Manifest,
+		UStaticMesh* Mesh,
+		FString& OutError)
+	{
+		if (World == nullptr)
+		{
+			OutError = TEXT("No editor world to import the mesh into.");
+			return nullptr;
+		}
+		if (Mesh == nullptr)
+		{
+			OutError = TEXT("No terrain mesh asset to spawn.");
+			return nullptr;
 		}
 
 		// Interchange lands glTF with East on +X / South on +Y; the world frame is North on +X.
@@ -114,8 +137,7 @@ namespace MantlePlaceMeshImporter
 	AStaticMeshActor* ImportBuildings(
 		UWorld* World,
 		const FMantlePlaceVaultManifest& Manifest,
-		const FString& GlbFile,
-		const FString& DestPackagePath,
+		UStaticMesh* Mesh,
 		FString& OutError)
 	{
 		if (World == nullptr)
@@ -123,11 +145,9 @@ namespace MantlePlaceMeshImporter
 			OutError = TEXT("No editor world to import the buildings into.");
 			return nullptr;
 		}
-
-		// Separate subfolder from the terrain mesh so the imported UStaticMesh names don't collide.
-		UStaticMesh* Mesh = ImportGlbAsset(GlbFile, DestPackagePath / TEXT("Buildings"), OutError);
 		if (Mesh == nullptr)
 		{
+			OutError = TEXT("No buildings mesh asset to spawn.");
 			return nullptr;
 		}
 

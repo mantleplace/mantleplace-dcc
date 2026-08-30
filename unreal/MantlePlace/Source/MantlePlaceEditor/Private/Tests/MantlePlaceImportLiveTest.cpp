@@ -13,6 +13,7 @@
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Editor.h"
+#include "Editor/Transactor.h" // the import must land as ONE undoable transaction
 #include "Engine/Texture2D.h"
 #include "HAL/PlatformMisc.h"
 #include "Engine/StaticMeshActor.h"
@@ -231,6 +232,25 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("import reported success"), Result.bSuccess);
 	TestTrue(TEXT("created at least 2 actors (landscape + mesh)"), Result.CreatedActors.Num() >= 2);
+
+	// The import is one undoable transaction, and it is the one Ctrl+Z takes. The claim is in
+	// ImportVaultPackage's own doc comment, and it was false for as long as the importer renamed a
+	// freshly-imported asset inside its own FScopedTransaction: FAssetRenameManager deletes the
+	// object it moved away from, ObjectTools sees that object is referenced only by the undo buffer
+	// and resets the WHOLE buffer, and the half-built import transaction goes with it. Measured
+	// 2026-08-30 on a 523-actor bundle: Ctrl+Z moved nothing, twice, and the editor log carried
+	// "Non zero active count in UTransBuffer::Reset / Reason: Delete Selected Item".
+	//
+	// Asserted by TITLE rather than by undoing: the test deliberately leaves the actors in the level
+	// for inspection, and an assertion that has to mutate the thing it is inspecting is one nobody
+	// can run twice. GetUndoContext names exactly what the next Ctrl+Z would take.
+	if (GEditor != nullptr && GEditor->Trans != nullptr)
+	{
+		TestEqual(
+			TEXT("the import is the transaction Ctrl+Z would undo"),
+			GEditor->Trans->GetUndoContext().Title.ToString(),
+			TEXT("Import Mantle Place Vault Package"));
+	}
 
 	// New-layer assertions fire only when the bundle actually ships the layer.
 	if (Manifest.bHasRoadSplines)

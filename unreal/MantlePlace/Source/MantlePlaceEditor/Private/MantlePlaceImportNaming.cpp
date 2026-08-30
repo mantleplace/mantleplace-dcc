@@ -9,6 +9,7 @@
 #include "Materials/MaterialInstanceConstant.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "UObject/Package.h"
 
@@ -26,6 +27,13 @@ namespace MantlePlaceImportNaming
 		if (Class->IsChildOf(UMaterialInterface::StaticClass())) { return TEXT("M_"); }
 		if (Class->IsChildOf(UTexture::StaticClass())) { return TEXT("T_"); }
 		return nullptr;
+	}
+
+	FString ImportNameFor(const TCHAR* Prefix, const FString& SourceFile)
+	{
+		const FString Base = FPaths::GetBaseFilename(SourceFile);
+		// Idempotent: a source file that is already named to the standard must not become T_T_Drape.
+		return Base.StartsWith(Prefix) ? Base : FString(Prefix) + Base;
 	}
 
 	void RenameToConvention(UObject* Asset)

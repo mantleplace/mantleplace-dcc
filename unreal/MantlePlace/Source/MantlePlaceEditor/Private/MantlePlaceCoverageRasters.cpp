@@ -39,6 +39,9 @@ namespace MantlePlaceCoverageRasters
 		UAssetImportTask* Task = NewObject<UAssetImportTask>();
 		Task->Filename = DiskFile;
 		Task->DestinationPath = DestPackagePath / TEXT("CoverageRasters");
+		// Named on the way in, never renamed afterwards -- a rename here would purge the import's
+		// undo transaction. See MantlePlaceImportNaming::ImportNameFor.
+		Task->DestinationName = MantlePlaceImportNaming::ImportNameFor(TEXT("T_"), DiskFile);
 		Task->bAutomated = true;
 		Task->bReplaceExisting = true;
 		Task->bSave = false;
@@ -113,7 +116,6 @@ namespace MantlePlaceCoverageRasters
 		Texture->AddAssetUserData(Data);
 
 		Texture->MarkPackageDirty();
-		MantlePlaceImportNaming::RenameToConvention(Texture);
 		return Texture;
 	}
 }
