@@ -576,6 +576,37 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
+	// --- materialize: what a NEW request would still have to ask for ------------------------
+	// The state word is not actionable on its own. `Pending` is the wire shape of both "the job
+	// row is not visible yet" (wait) and "the run we joined has ended without building this" (ask
+	// again), and only a caller that has already SEEN a run in flight can tell them apart. This
+	// table pins the value that caller acts on.
+	if (const FCase* Case = Take(TEXT("vault.materialize.outstandingVectors")))
+	{
+		const TArray<FString> Requested = VaultReadStringArrayField(Case->Payload, TEXT("requested"));
+		TestTrue(Case->What(TEXT("names a requested set")), Requested.Num() > 0);
+
+		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("vectors"));
+		TestTrue(Case->What(TEXT("has vectors")), Vectors.Num() > 0);
+		for (int32 Index = 0; Index < Vectors.Num(); ++Index)
+		{
+			const TSharedPtr<FJsonObject>& Row = Vectors[Index];
+			const FString Where = FString::Printf(TEXT("[%s] vectors[%d]"), *Case->Id, Index);
+
+			FMantlePlaceMaterializeStatus Status;
+			FString Error;
+			if (!TestTrue(Where + TEXT(" parses"),
+			              FLogic::ParseMaterializeStatus(RowBodyAsText(Row), Requested, Status, Error)))
+			{
+				continue;
+			}
+
+			TestEqual(Where + TEXT(" state"), StateName(Status.State), RowString(Row, TEXT("state")));
+			TestEqual(Where + TEXT(" outstanding"),
+			          Status.Outstanding, RowStrings(Row, TEXT("outstanding")));
+		}
+	}
+
 	// --- materialize: status vectors --------------------------------------------------------
 	if (const FCase* Case = Take(TEXT("vault.materialize.statusVectors")))
 	{

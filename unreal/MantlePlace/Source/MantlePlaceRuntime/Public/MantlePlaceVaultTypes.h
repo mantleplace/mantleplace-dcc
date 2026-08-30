@@ -396,4 +396,18 @@ struct FMantlePlaceMaterializeStatus
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	TArray<FMantlePlaceMissingDeliverable> Unproducible;
+
+	/**
+	 * What a NEW request would still have to ask for: requested, not delivered, not permanently
+	 * absent. Empty means this bundle is as complete as the request wanted it.
+	 *
+	 * The caller's business, not the derivation's, because the document alone cannot tell the two
+	 * Pending readings apart. "No job in flight and something outstanding" is the wire shape of BOTH
+	 * "the job row is not visible yet" (wait) and "the run we joined has ended without building this"
+	 * (ask again) - and a reader that only ever waits sits out its whole budget on the second. This
+	 * is the field that lets a caller who has already SEEN a job in flight tell which it is, and
+	 * re-pick. See `UMantlePlaceVaultImportOrchestrator::HandleMaterializeStatusNative`.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	TArray<FString> Outstanding;
 };

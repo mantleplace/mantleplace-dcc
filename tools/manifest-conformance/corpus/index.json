@@ -964,6 +964,15 @@
       "expectations": {}
     },
     {
+      "id": "vault.materialize.outstandingVectors",
+      "group": "vault",
+      "file": "vault/materialize-outstanding-vectors.json",
+      "expect": "vector",
+      "appliesTo": "unreal",
+      "reason": "What a NEW request would still have to ask for, derived alongside the state. The state word alone is not actionable: `Pending` is the wire shape of BOTH “the job row is not visible yet” (wait) and “the run this host joined has ended without building what it needs” (ask again), and a reader that cannot separate them polls out its whole budget on the second. Scoped to unreal because it is the only host that acts on it today — the Revit host has the same Pending fall-through and should claim this case when it grows a re-pick.",
+      "expectations": {}
+    },
+    {
       "id": "vault.materialize.statusVectors",
       "group": "vault",
       "file": "vault/materialize-status-vectors.json",

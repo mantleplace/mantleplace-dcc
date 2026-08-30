@@ -341,10 +341,44 @@ void UMantlePlaceVaultClient::RequestMaterialize(const FString& OrderId, const F
 		return;
 	}
 
+	SendMaterializeRequest(OrderId, FMantlePlaceVaultLogic::BuildMaterializeBody(Scope), Jwt);
+}
+
+void UMantlePlaceVaultClient::RequestMaterializeTokens(const FString& OrderId, const TArray<FString>& Tokens)
+{
+	FString Error;
+	FString Jwt;
+	if (!EnsureReady(Error, Jwt))
+	{
+		UE_LOG(LogMantlePlaceVault, Warning, TEXT("RequestMaterializeTokens refused: %s"), *Error);
+		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), Error);
+		return;
+	}
+
+	if (OrderId.IsEmpty())
+	{
+		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), TEXT("OrderId is required."));
+		return;
+	}
+
+	// STOP: an empty list is not "everything", it is a re-cut of what the bundle already has. The
+	// platform accepts it (an empty materialize row means "repackage only"), so it would answer 201
+	// and this host would poll a run that builds none of what it is waiting for.
+	if (Tokens.Num() == 0)
+	{
+		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(),
+		                         TEXT("No deliverables were named, so there is nothing to generate."));
+		return;
+	}
+
+	SendMaterializeRequest(OrderId, FMantlePlaceVaultLogic::BuildMaterializeBodyForTokens(Tokens), Jwt);
+}
+
+void UMantlePlaceVaultClient::SendMaterializeRequest(const FString& OrderId, const FString& Body, const FString& Jwt)
+{
 	CancelActiveRequest();
 
 	const FString Url = FMantlePlaceVaultLogic::BuildMaterializeUrl(VaultApiBaseUrl, OrderId);
-	const FString Body = FMantlePlaceVaultLogic::BuildMaterializeBody(Scope);
 
 	ActiveRequest = FHttpModule::Get().CreateRequest();
 	ActiveRequest->SetVerb(TEXT("POST"));

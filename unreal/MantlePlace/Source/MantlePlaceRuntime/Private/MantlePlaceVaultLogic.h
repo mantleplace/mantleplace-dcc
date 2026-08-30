@@ -109,6 +109,16 @@ struct FMantlePlaceVaultLogic
 	static FString BuildMaterializeBody(const FString& Scope);
 
 	/**
+	 * The same body for an ARBITRARY token list — the re-pick path.
+	 *
+	 * A host that joined a run in flight can only discover what that run left out once it ends, and
+	 * by then the platform has stopped coalescing into it. Asking again for the remainder needs a
+	 * body the scope keywords cannot express: not "unreal" (which re-asks for the five that already
+	 * landed) and not "all" (which dispatches real compute for a catalogue nobody wanted).
+	 */
+	static FString BuildMaterializeBodyForTokens(const TArray<FString>& Tokens);
+
+	/**
 	 * Parse the materialize POST response - all five shapes the platform sends.
 	 *
 	 * STOP: each outcome is keyed on ITS OWN MARKER, never on the absence of `jobId`. That inference

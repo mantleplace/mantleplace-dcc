@@ -101,6 +101,15 @@ public:
 	void RequestMaterialize(const FString& OrderId, const FString& Scope);
 
 	/**
+	 * The same request for an EXPLICIT token list - the re-pick after a joined run ends short.
+	 *
+	 * Neither scope keyword can express "the remainder": "unreal" re-asks for everything the run
+	 * did land, and "all" dispatches real compute for a catalogue nobody wanted. Result via
+	 * OnMaterializeStarted, same as RequestMaterialize.
+	 */
+	void RequestMaterializeTokens(const FString& OrderId, const TArray<FString>& Tokens);
+
+	/**
 	 * Poll a materialize job's status once (GET). A non-terminal state fires OnMaterializeProgress;
 	 * a terminal state (complete/failed) fires OnMaterializeComplete. The repeat-until-done loop is
 	 * the caller's (the orchestrator polls on an interval until complete).
@@ -189,6 +198,9 @@ private:
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	void HandleProbeResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
+	/** The POST both materialize entry points share; they differ only in the body they build. */
+	void SendMaterializeRequest(const FString& OrderId, const FString& Body, const FString& Jwt);
+
 	void HandleMaterializeStartResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	void HandleMaterializeStatusResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
