@@ -946,6 +946,21 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			FLogic::IsIncompleteBundle(Marker));
 	}
 
+	// --- The post-download self-heal verdict (vault path) --------------------------------------
+	{
+		const FString Order = TEXT("3f285101-0310-425b-b06b-bdb73b025b6a");
+		TestTrue(TEXT("Readable-but-incomplete manifest with an order id recovers"),
+			FLogic::ShouldRecoverMissingUnrealPayload(true, false, Order, false));
+		TestFalse(TEXT("A valid manifest imports, never recovers"),
+			FLogic::ShouldRecoverMissingUnrealPayload(true, true, Order, false));
+		TestFalse(TEXT("An unreadable manifest is the importer's failure to report"),
+			FLogic::ShouldRecoverMissingUnrealPayload(false, false, Order, false));
+		TestFalse(TEXT("No order id - nothing to materialize against"),
+			FLogic::ShouldRecoverMissingUnrealPayload(true, false, TEXT(""), false));
+		TestFalse(TEXT("One recovery per run - the second pass fails on the gate, never loops"),
+			FLogic::ShouldRecoverMissingUnrealPayload(true, false, Order, true));
+	}
+
 	return true;
 }
 

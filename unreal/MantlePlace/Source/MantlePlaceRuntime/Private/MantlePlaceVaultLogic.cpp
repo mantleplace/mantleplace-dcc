@@ -765,3 +765,13 @@ FString FMantlePlaceVaultLogic::DeriveTierLabel(const FMantlePlaceVaultItem& Ite
 	}
 	return IsIncompleteBundle(Item) ? TEXT("Base") : TEXT("Unreal");
 }
+
+bool FMantlePlaceVaultLogic::ShouldRecoverMissingUnrealPayload(
+	bool bManifestReadable, bool bManifestValid, const FString& OrderId, bool bAlreadyRecovered)
+{
+	// Unreadable is the importer's failure to report; valid imports. Only "read it, and it is
+	// honestly incomplete" recovers - and only with an order to materialize against, and only
+	// once, so a bundle the platform cannot complete (or a stale cache the listing cannot
+	// invalidate) fails cleanly on the importer's gate instead of looping.
+	return bManifestReadable && !bManifestValid && !OrderId.IsEmpty() && !bAlreadyRecovered;
+}
