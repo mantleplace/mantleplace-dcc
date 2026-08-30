@@ -205,4 +205,18 @@ struct FMantlePlaceVaultLogic
 
 	/** Short tier label for the list row: "Base" (needs materialize), "Unreal" (importable), or "Unknown". */
 	static FString DeriveTierLabel(const FMantlePlaceVaultItem& Item);
+
+	//~ ----- Post-download verdict (the vault path's self-heal) -----
+
+	/**
+	 * True iff a downloaded bundle whose manifest was read but found incomplete should be completed
+	 * in the cloud (materialize -> re-list -> re-download) instead of being handed to the importer,
+	 * which would fail closed on its manifest gate. The listing's completeness signal has been
+	 * wrong before (a whole-bundle alias advertised as `glb` read as a terrain mesh); this verdict
+	 * makes the downloaded bytes, not the listing, the authority. One recovery per run: with
+	 * bAlreadyRecovered the zip goes to the importer, whose gate reports the manifest's own
+	 * readiness guidance instead of looping.
+	 */
+	static bool ShouldRecoverMissingUnrealPayload(
+		bool bManifestReadable, bool bManifestValid, const FString& OrderId, bool bAlreadyRecovered);
 };

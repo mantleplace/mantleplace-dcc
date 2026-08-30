@@ -21,6 +21,13 @@ bool UMantlePlaceVaultClient::IsBundleIncomplete(const FMantlePlaceVaultItem& It
 	return FMantlePlaceVaultLogic::IsIncompleteBundle(Item);
 }
 
+bool UMantlePlaceVaultClient::ShouldRecoverMissingUnrealPayload(
+	bool bManifestReadable, bool bManifestValid, const FString& OrderId, bool bAlreadyRecovered)
+{
+	return FMantlePlaceVaultLogic::ShouldRecoverMissingUnrealPayload(
+		bManifestReadable, bManifestValid, OrderId, bAlreadyRecovered);
+}
+
 FString UMantlePlaceVaultClient::GetBundleTierLabel(const FMantlePlaceVaultItem& Item)
 {
 	return FMantlePlaceVaultLogic::DeriveTierLabel(Item);

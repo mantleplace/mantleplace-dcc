@@ -135,6 +135,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartVaultImport(const FMantlePlaceVau
 	ActiveRequestedTokens.Reset();
 	PollCount = 0;
 	ConsecutivePollFailures = 0;
+	bAttemptedMaterializeRecovery = false;
 
 	BeginItemImport();
 	return true;
@@ -148,6 +149,7 @@ void UMantlePlaceVaultImportOrchestrator::BeginItemImport()
 	if (UMantlePlaceVaultClient::IsBundleIncomplete(ActiveItem))
 	{
 		Phase = EPhase::Materializing;
+		bAttemptedMaterializeRecovery = true;
 		EmitPhase(TEXT("Generating"), FString::Printf(TEXT("Requesting Unreal formats (%s)..."), *ActiveScope), -1.0f);
 		VaultClient->RequestMaterialize(ActiveItem.OrderId, ActiveScope);
 	}
@@ -203,6 +205,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartLocalImport(const FString& ZipPat
 	ActiveRequestedTokens.Reset();
 	PollCount = 0;
 	ConsecutivePollFailures = 0;
+	bAttemptedMaterializeRecovery = false;
 
 	// Stage: copy the user's zip into a private dir so their original file is never mutated (mirrors the
 	// vault path, which downloads to the cache rather than importing in place).
@@ -246,6 +249,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartLocalImport(const FString& ZipPat
 		}
 		ActiveItem.OrderId = Manifest.OrderId;
 		Phase = EPhase::Materializing;
+		bAttemptedMaterializeRecovery = true;
 		EmitPhase(TEXT("Generating"), TEXT("This bundle is missing Unreal content - generating it in the cloud..."), -1.0f);
 		VaultClient->RequestMaterialize(ActiveItem.OrderId, ActiveScope);
 		return true;
@@ -573,6 +577,29 @@ void UMantlePlaceVaultImportOrchestrator::HandleDownloadCompleteNative(bool bSuc
 	if (!bSuccess)
 	{
 		FailImport(Message.IsEmpty() ? TEXT("Download failed.") : Message);
+		return;
+	}
+
+	// Pre-flight the manifest before announcing an import: the listing's completeness signal
+	// decided the download, but the downloaded bytes are the authority — the listing has advertised
+	// completeness a base bundle did not have. A bundle that arrived without its Unreal payload is
+	// completed in the cloud (the recovery the local-zip path has always run) rather than failing
+	// closed on the importer's manifest gate; the re-listed sha then invalidates this cached zip.
+	FMantlePlaceVaultManifest PreflightManifest;
+	FString PreflightError;
+	const bool bManifestReadable =
+		UMantlePlaceImporterLibrary::ReadVaultManifest(LocalBundlePath, PreflightManifest, PreflightError);
+	const FString RecoveryOrderId =
+		ActiveItem.OrderId.IsEmpty() ? PreflightManifest.OrderId : ActiveItem.OrderId;
+	if (UMantlePlaceVaultClient::ShouldRecoverMissingUnrealPayload(
+			bManifestReadable, PreflightManifest.bValid, RecoveryOrderId, bAttemptedMaterializeRecovery))
+	{
+		bAttemptedMaterializeRecovery = true;
+		ActiveItem.OrderId = RecoveryOrderId;
+		Phase = EPhase::Materializing;
+		EmitPhase(TEXT("Generating"),
+			TEXT("The downloaded bundle is missing Unreal content - generating it in the cloud..."), -1.0f);
+		VaultClient->RequestMaterialize(ActiveItem.OrderId, ActiveScope);
 		return;
 	}
 

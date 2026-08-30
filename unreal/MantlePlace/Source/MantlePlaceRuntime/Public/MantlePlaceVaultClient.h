@@ -127,6 +127,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
 	static FString GetBundleTierLabel(const FMantlePlaceVaultItem& Item);
 
+	/**
+	 * True iff a downloaded bundle read as incomplete should be completed in the cloud before
+	 * import. Thin wrapper over the tested vault logic so the orchestrator can decide the
+	 * post-download self-heal without the private logic header.
+	 */
+	static bool ShouldRecoverMissingUnrealPayload(
+		bool bManifestReadable, bool bManifestValid, const FString& OrderId, bool bAlreadyRecovered);
+
 	/** Implemented by the Blueprint child: vault list finished. */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Mantle Place|Vault")
 	void OnVaultListed(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message);
