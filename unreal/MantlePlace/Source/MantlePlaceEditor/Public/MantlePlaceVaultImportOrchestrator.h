@@ -238,6 +238,14 @@ private:
 	int32 ConsecutivePollFailures = 0;
 	FTSTicker::FDelegateHandle PollTicker;
 
+	/**
+	 * One cloud materialize per run, whichever path fired it. Checked before recovering a
+	 * downloaded-but-incomplete bundle, so a zip the platform cannot complete (or a stale cache a
+	 * sha-less listing cannot invalidate) fails cleanly on the importer's manifest gate instead of
+	 * looping generate -> download -> generate.
+	 */
+	bool bAttemptedMaterializeRecovery = false;
+
 	//~ Local-zip import bookkeeping (all empty/false for a vault-row import).
 	bool bLocalImport = false;    // this flow originated from a local .zip
 	FString LocalOriginalPath;    // the user's zip path (never modified) - referenced in the "unchanged" notice
