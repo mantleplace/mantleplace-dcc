@@ -48,4 +48,14 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "MantlePlace|Automation")
 	static TArray<FName> ListReachableWidgetTags();
+
+	/**
+	 * The visible text of the first REACHABLE widget tagged `Tag` — the tagged
+	 * widget's first descendant text block. Lets tooling read STATE the label
+	 * carries (the auth button is a toggle whose text is the only outward truth
+	 * of the panel's session) instead of inferring it from geometry or from
+	 * files whose lifecycle differs from the widget's.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MantlePlace|Automation")
+	static bool GetTaggedWidgetText(FName Tag, FString& OutText);
 };

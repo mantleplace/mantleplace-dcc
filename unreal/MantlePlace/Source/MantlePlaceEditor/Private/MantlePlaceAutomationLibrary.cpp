@@ -7,6 +7,7 @@
 #include "Types/ISlateMetaData.h"
 #include "Widgets/SWidget.h"
 #include "Widgets/SWindow.h"
+#include "Widgets/Text/STextBlock.h"
 
 namespace
 {
@@ -107,6 +108,59 @@ bool UMantlePlaceAutomationLibrary::GetTaggedWidgetScreenRect(
 		bFound = true;
 	});
 	return bFound;
+}
+
+namespace
+{
+	/** First text block under (or at) a widget, depth-first. */
+	TSharedPtr<STextBlock> FindTextBlock(const TSharedRef<SWidget>& Widget)
+	{
+		if (Widget->GetType() == TEXT("STextBlock"))
+		{
+			return StaticCastSharedRef<STextBlock>(Widget);
+		}
+		FChildren* Children = Widget->GetChildren();
+		if (Children != nullptr)
+		{
+			for (int32 Index = 0; Index < Children->Num(); ++Index)
+			{
+				if (TSharedPtr<STextBlock> Found = FindTextBlock(Children->GetChildAt(Index)))
+				{
+					return Found;
+				}
+			}
+		}
+		return nullptr;
+	}
+} // namespace
+
+bool UMantlePlaceAutomationLibrary::GetTaggedWidgetText(FName Tag, FString& OutText)
+{
+	if (!FSlateApplication::IsInitialized())
+	{
+		return false;
+	}
+	TArray<TSharedRef<SWindow>> Windows;
+	FSlateApplication::Get().GetAllVisibleWindowsOrdered(Windows);
+	for (const TSharedRef<SWindow>& Window : Windows)
+	{
+		TArray<TSharedRef<SWidget>> Tagged;
+		CollectTagged(Window, Tagged);
+		for (const TSharedRef<SWidget>& Widget : Tagged)
+		{
+			FGeometry Geometry;
+			if (WidgetTag(Widget) != Tag || !ReachableGeometry(Widget, Geometry))
+			{
+				continue;
+			}
+			if (const TSharedPtr<STextBlock> Text = FindTextBlock(Widget))
+			{
+				OutText = Text->GetText().ToString();
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 TArray<FName> UMantlePlaceAutomationLibrary::ListReachableWidgetTags()
