@@ -136,6 +136,9 @@ bool UMantlePlaceVaultImportOrchestrator::StartVaultImport(const FMantlePlaceVau
 	PollCount = 0;
 	ConsecutivePollFailures = 0;
 	bAttemptedMaterializeRecovery = false;
+	bMaterializeRunObserved = false;
+	MaterializeRepicks = 0;
+	LastOutstanding.Reset();
 
 	BeginItemImport();
 	return true;
@@ -206,6 +209,9 @@ bool UMantlePlaceVaultImportOrchestrator::StartLocalImport(const FString& ZipPat
 	PollCount = 0;
 	ConsecutivePollFailures = 0;
 	bAttemptedMaterializeRecovery = false;
+	bMaterializeRunObserved = false;
+	MaterializeRepicks = 0;
+	LastOutstanding.Reset();
 
 	// Stage: copy the user's zip into a private dir so their original file is never mutated (mirrors the
 	// vault path, which downloads to the cache rather than importing in place).
@@ -336,7 +342,14 @@ void UMantlePlaceVaultImportOrchestrator::SchedulePoll()
 
 	if (PollCount >= MaterializeMaxPolls)
 	{
-		FailImport(TEXT("Timed out waiting for the Unreal formats to generate."));
+		// Name the tokens. A bare "timed out" is the same sentence whether the platform was slow,
+		// the run built the wrong set, or the layer can never be produced here — and the operator
+		// reading it has no way to tell which, or what to check.
+		FailImport(LastOutstanding.Num() == 0
+		               ? TEXT("Timed out waiting for the Unreal formats to generate.")
+		               : FString::Printf(
+		                     TEXT("Timed out waiting for the Unreal formats to generate. Still missing: %s"),
+		                     *FString::Join(LastOutstanding, TEXT(", "))));
 		return;
 	}
 
@@ -398,10 +411,38 @@ void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStartedNative(bool bS
 	}
 
 	ActiveJobId = Start.JobId;
-	// Whatever the platform named as the effective set. Empty is legitimate — it means the body
-	// named none — and the client substitutes this host's own list, since the pure logic that
-	// owns it lives in the Runtime module's private headers and is not visible here.
-	ActiveRequestedTokens = Start.Tokens;
+	// The yardstick is what THIS HOST needs, and where that comes from depends on the outcome.
+	//
+	// A fresh run: Start.Tokens is the effective set the platform accepted for our own request, so
+	// it is exactly right. Empty is legitimate (the body named none) and the client substitutes
+	// this host's list, since the pure logic that owns it lives in the Runtime module's private
+	// headers and is not visible here.
+	//
+	// ⛔ A JOINED run: Start.Tokens is THAT RUN's set, which is not this host's. The platform's
+	// `tokens: 'unreal'` keyword and TargetedImportTokens() are two lists maintained in two
+	// repositories, and they have already disagreed once — the run carried a layer this importer
+	// does not use and omitted one it does. Adopting the run's set would make this import wait on
+	// layers it does not need and stop waiting on one it does, which is a quieter version of the
+	// same bug. So the host's own requirement stands, and the disagreement is settled after the run
+	// ends by re-picking whatever it left outstanding (see HandleMaterializeStatusNative).
+	if (Start.Outcome == EMantlePlaceMaterializeStartOutcome::Joined)
+	{
+		if (Start.Tokens.Num() > 0)
+		{
+			UE_LOG(LogMantlePlaceVaultImport, Log,
+			       TEXT("Joined a run building %d deliverable(s): %s"),
+			       Start.Tokens.Num(), *FString::Join(Start.Tokens, TEXT(", ")));
+		}
+		ActiveRequestedTokens.Reset();
+	}
+	else
+	{
+		ActiveRequestedTokens = Start.Tokens;
+	}
+	// A joined run was, by definition, already going — and may finish before the first poll lands,
+	// so its activeJob is never seen. Without this seed that import waits for a job that has been
+	// and gone.
+	bMaterializeRunObserved = Start.Outcome == EMantlePlaceMaterializeStartOutcome::Joined;
 	Phase = EPhase::Polling;
 	PollCount = 0;
 	ConsecutivePollFailures = 0;
@@ -429,6 +470,7 @@ void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStatusNative(bool bOk
 	}
 
 	ConsecutivePollFailures = 0;
+	LastOutstanding = Status.Outstanding;
 
 	switch (Status.State)
 	{
@@ -451,8 +493,47 @@ void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStatusNative(bool bOk
 		FailImport(Status.Message.IsEmpty() ? TEXT("Generating Unreal formats failed.") : Status.Message);
 		break;
 
-	case EMantlePlaceMaterializeState::Pending:
 	case EMantlePlaceMaterializeState::Processing:
+		bMaterializeRunObserved = true;
+		EmitPhase(TEXT("Generating"),
+			Status.Message.IsEmpty() ? TEXT("Generating Unreal formats...") : Status.Message,
+			Status.Fraction);
+		SchedulePoll();
+		break;
+
+	case EMantlePlaceMaterializeState::Pending:
+		// ⛔ Pending with nothing in flight has TWO readings and the document cannot tell them apart:
+		// the job row is not visible yet (wait — it will be), or the run we joined has ended without
+		// building what we still need (waiting is forever). Polling through the second is a
+		// ten-minute progress bar frozen at whatever fraction the joined run reached, ending in a
+		// timeout that names nothing — 83%, with the platform finished the whole time (2026-08-30).
+		//
+		// Having SEEN a run is what separates them, and the answer to the second is to ask again:
+		// the platform stops coalescing into a running row precisely because the client re-picks on
+		// completion, and this host was the one that never did.
+		if (bMaterializeRunObserved && Status.Outstanding.Num() > 0
+		    && MaterializeRepicks < MaxMaterializeRepicks)
+		{
+			++MaterializeRepicks;
+			UE_LOG(LogMantlePlaceVaultImport, Log,
+			       TEXT("The materialize run ended with %d deliverable(s) still missing; asking for them: %s"),
+			       Status.Outstanding.Num(), *FString::Join(Status.Outstanding, TEXT(", ")));
+			EmitPhase(TEXT("Generating"),
+			          FString::Printf(TEXT("That run did not include %d deliverable(s) - asking for them..."),
+			                          Status.Outstanding.Num()),
+			          Status.Fraction);
+			UnschedulePoll();
+			bMaterializeRunObserved = false;
+			Phase = EPhase::Materializing;
+			VaultClient->RequestMaterializeTokens(ActiveItem.OrderId, Status.Outstanding);
+			break;
+		}
+		EmitPhase(TEXT("Generating"),
+			Status.Message.IsEmpty() ? TEXT("Generating Unreal formats...") : Status.Message,
+			Status.Fraction);
+		SchedulePoll();
+		break;
+
 	case EMantlePlaceMaterializeState::Unknown:
 	default:
 		EmitPhase(TEXT("Generating"),
@@ -641,13 +722,20 @@ void UMantlePlaceVaultImportOrchestrator::FailImport(const FString& Message)
 
 void UMantlePlaceVaultImportOrchestrator::EmitPhase(const FString& PhaseLabel, const FString& Message, float Fraction)
 {
-	if (Fraction >= 0.0f)
+	// Message-less emits are per-callback download progress ticks — dozens per
+	// second (measured: ~50 lines/s flooding the log through a 78 MB pull).
+	// The UI progress bar still gets every tick via the broadcast below; the
+	// LOG narrates transitions, which all carry a message.
+	if (!Message.IsEmpty())
 	{
-		UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("[%s] %s (%.0f%%)"), *PhaseLabel, *Message, Fraction * 100.0f);
-	}
-	else
-	{
-		UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("[%s] %s"), *PhaseLabel, *Message);
+		if (Fraction >= 0.0f)
+		{
+			UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("[%s] %s (%.0f%%)"), *PhaseLabel, *Message, Fraction * 100.0f);
+		}
+		else
+		{
+			UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("[%s] %s"), *PhaseLabel, *Message);
+		}
 	}
 	OnImportPhase.Broadcast(PhaseLabel, Message, Fraction);
 }

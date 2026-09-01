@@ -374,20 +374,25 @@ FString FMantlePlaceVaultLogic::BuildMaterializeBody(const FString& Scope)
 	// Web contract: body { "tokens": "unreal" | "all" | PackagingFormatToken[] }. "all" passes
 	// through as the keyword (the full ON_DEMAND set); everything else sends the explicit
 	// targeted-token array so the layers this importer consumes are exactly what materializes.
+	if (!Scope.Equals(TEXT("all"), ESearchCase::IgnoreCase))
+	{
+		return BuildMaterializeBodyForTokens(TargetedImportTokens());
+	}
+
 	const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
-	if (Scope.Equals(TEXT("all"), ESearchCase::IgnoreCase))
+	Root->SetStringField(TEXT("tokens"), TEXT("all"));
+	return VaultSerializeCondensed(Root);
+}
+
+FString FMantlePlaceVaultLogic::BuildMaterializeBodyForTokens(const TArray<FString>& RequestedTokens)
+{
+	const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+	TArray<TSharedPtr<FJsonValue>> Tokens;
+	for (const FString& Token : RequestedTokens)
 	{
-		Root->SetStringField(TEXT("tokens"), TEXT("all"));
+		Tokens.Add(MakeShared<FJsonValueString>(Token));
 	}
-	else
-	{
-		TArray<TSharedPtr<FJsonValue>> Tokens;
-		for (const FString& Token : TargetedImportTokens())
-		{
-			Tokens.Add(MakeShared<FJsonValueString>(Token));
-		}
-		Root->SetArrayField(TEXT("tokens"), Tokens);
-	}
+	Root->SetArrayField(TEXT("tokens"), Tokens);
 	return VaultSerializeCondensed(Root);
 }
 
@@ -656,6 +661,11 @@ void FMantlePlaceVaultLogic::DeriveMaterializeDelivery(const TSharedPtr<FJsonObj
 			Outstanding.Add(Token);
 		}
 	}
+
+	// Reported on EVERY branch below, terminal ones included: the caller acts on it, and a field
+	// that is only populated when the derivation happens to reach a particular return is a field
+	// no caller can trust.
+	OutStatus.Outstanding = Outstanding;
 
 	const float Fraction = Requested.Num() == 0
 	                           ? -1.0f

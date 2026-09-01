@@ -39,6 +39,10 @@ void SMantlePlaceVaultRow::Construct(const FArguments& InArgs, const TSharedRef<
 			// The whole card is a clickable frame (opens details); the Import button below is a nested
 			// button that consumes its own click, so it never triggers the card's OnClicked.
 			SNew(SButton)
+			// Every card carries the same tag; tag lookup returns the first
+			// visible match, i.e. the top row — resolve-then-click tooling that
+			// needs a specific bundle should search the vault first.
+			.Tag(TEXT("MantlePlace.Vault.BundleCard"))
 			.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.CardButton"))
 			.ContentPadding(FMargin(FMantlePlaceEditorStyle::S2)) // card inner padding, symmetric 16
 			.OnClicked(this, &SMantlePlaceVaultRow::OnCardClicked)

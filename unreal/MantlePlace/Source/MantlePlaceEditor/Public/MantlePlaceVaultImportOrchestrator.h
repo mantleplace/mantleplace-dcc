@@ -239,6 +239,33 @@ private:
 	FTSTicker::FDelegateHandle PollTicker;
 
 	/**
+	 * Whether a materialize run has been OBSERVED in flight for this import, which is what makes the
+	 * two readings of a Pending status tellable apart.
+	 *
+	 * "No job running and something outstanding" is the wire shape of both "the row is not visible
+	 * yet" (the normal state in the seconds after a start) and "the run ended without building this"
+	 * (which no amount of further polling can fix). Seeded true when the start JOINED a run that was
+	 * already going, because that run may well have finished before the first poll landed.
+	 */
+	bool bMaterializeRunObserved = false;
+
+	/** Outstanding tokens as of the last status, so a timeout can NAME what it waited for. */
+	TArray<FString> LastOutstanding;
+
+	/**
+	 * Re-picks spent on this import. The platform stops folding new tokens into a run once it flips
+	 * to `running` and answers 409 instead - deliberately, because the contract is that the client
+	 * re-picks on completion. This host had no re-pick, which is how an import that joined a run
+	 * built for a DIFFERENT token set sat at 83% for its whole budget (2026-08-30).
+	 *
+	 * Bounded at one: a second run that still leaves the same tokens outstanding is the platform
+	 * saying it cannot build them, and looping generate -> poll -> generate on that answer is the
+	 * failure mode the recovery guard above already exists to prevent.
+	 */
+	int32 MaterializeRepicks = 0;
+	static constexpr int32 MaxMaterializeRepicks = 1;
+
+	/**
 	 * One cloud materialize per run, whichever path fired it. Checked before recovering a
 	 * downloaded-but-incomplete bundle, so a zip the platform cannot complete (or a stale cache a
 	 * sha-less listing cannot invalidate) fails cleanly on the importer's manifest gate instead of

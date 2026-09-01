@@ -132,6 +132,11 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 		+ SHorizontalBox::Slot().AutoWidth()
 		[
 			SNew(SButton)
+			// Automation tag: the detail page's Import. Position-independent by
+			// design — this button moves with the definition list above it (the
+			// MANIFEST row is conditional), which is exactly why tooling must
+			// resolve it by tag rather than by remembered coordinates.
+			.Tag(TEXT("MantlePlace.Vault.Import"))
 			.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Primary"))
 			.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
 			.IsEnabled(View.bPrimaryEnabled)

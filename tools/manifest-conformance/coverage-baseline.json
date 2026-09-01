@@ -215,6 +215,9 @@
       "revit",
       "unreal"
     ],
+    "vault.materialize.outstandingVectors": [
+      "unreal"
+    ],
     "vault.materialize.queued": [
       "revit",
       "unreal"

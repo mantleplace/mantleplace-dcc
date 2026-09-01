@@ -202,6 +202,10 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 		.Padding(0.f, 0.f, FMantlePlaceEditorStyle::S3, 0.f)
 		[
 			SNew(SButton)
+			// Automation tags (FTagMetaData via .Tag) name the panel's controls for
+			// tooling — screen readers and UI automation resolve widgets by tag
+			// instead of by pixel position. See UMantlePlaceAutomationLibrary.
+			.Tag(TEXT("MantlePlace.Vault.SignIn"))
 			.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Secondary"))
 			.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
 			.IsEnabled(this, &SMantlePlaceVaultPanel::IsAuthButtonEnabled)
@@ -220,6 +224,7 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 		.Padding(0.f, 0.f, FMantlePlaceEditorStyle::S2, 0.f)
 		[
 			SNew(SButton)
+			.Tag(TEXT("MantlePlace.Vault.Refresh"))
 			.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Secondary"))
 			.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
 			.OnClicked(this, &SMantlePlaceVaultPanel::OnRefreshClicked)
@@ -383,6 +388,7 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 				.VAlign(VAlign_Center)
 				[
 					SAssignNew(ZipPathText, SEditableTextBox)
+					.Tag(TEXT("MantlePlace.Vault.LocalZipPath"))
 					.HintText(LOCTEXT("ZipHint", "Path to a downloaded bundle .zip"))
 				]
 				+ SHorizontalBox::Slot()
@@ -391,6 +397,7 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 				.Padding(FMantlePlaceEditorStyle::S3, 0.f, 0.f, 0.f)
 				[
 					SNew(SButton)
+					.Tag(TEXT("MantlePlace.Vault.Browse"))
 					.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Secondary"))
 					.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
 					.OnClicked(this, &SMantlePlaceVaultPanel::OnBrowseClicked)
@@ -413,6 +420,7 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 				.VAlign(VAlign_Center)
 				[
 					SNew(SComboBox<TSharedPtr<FString>>)
+					.Tag(TEXT("MantlePlace.Vault.ImportMode"))
 					.OptionsSource(&ModeOptions)
 					.OnGenerateWidget(this, &SMantlePlaceVaultPanel::OnGenerateModeWidget)
 					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewSel, ESelectInfo::Type)
@@ -435,6 +443,7 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 				.Padding(FMantlePlaceEditorStyle::S3, 0.f, 0.f, 0.f)
 				[
 					SNew(SButton)
+					.Tag(TEXT("MantlePlace.Vault.LocalImport"))
 					.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Primary"))
 					.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
 					.IsEnabled_Lambda([this]() { return !(Controller.IsValid() && Controller->IsBusy()); })
@@ -805,8 +814,12 @@ EMantlePlaceImportMode SMantlePlaceVaultPanel::SelectedMode() const
 
 TSharedRef<SWidget> SMantlePlaceVaultPanel::OnGenerateModeWidget(TSharedPtr<FString> InMode) const
 {
+	const FString Mode = InMode.IsValid() ? *InMode : FString();
 	return SNew(STextBlock)
-		.Text(FText::FromString(InMode.IsValid() ? *InMode : FString()))
+		// Per-option tag so tooling can resolve a specific popup entry
+		// ("MantlePlace.Vault.ImportModeOption.Landscape" etc).
+		.Tag(FName(*FString::Printf(TEXT("MantlePlace.Vault.ImportModeOption.%s"), *Mode)))
+		.Text(FText::FromString(Mode))
 		.Font(FMantlePlaceEditorStyle::GetFont(EFont::Body));
 }
 

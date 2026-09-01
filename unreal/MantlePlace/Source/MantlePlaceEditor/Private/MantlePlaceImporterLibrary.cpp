@@ -19,6 +19,7 @@
 #include "Components/SplineComponent.h"
 #include "Editor.h"
 #include "Engine/DataTable.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -29,6 +30,7 @@
 #include "IDesktopPlatform.h"
 #include "Framework/Application/SlateApplication.h"
 #include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
 #include "HAL/PlatformProcess.h"
 #include "GenericPlatform/GenericPlatformFile.h"
 #include "HAL/PlatformFileManager.h"
@@ -43,6 +45,8 @@
 #include "Subsystems/EditorAssetSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "MantlePlaceImporter"
+
+DEFINE_LOG_CATEGORY_STATIC(LogMantlePlaceImport, Log, All);
 
 namespace
 {
@@ -285,6 +289,47 @@ bool UMantlePlaceImporterLibrary::ReadVaultManifest(
 	return true;
 }
 
+namespace
+{
+	/**
+	 * Keeps the Content Browser out of the shot for the duration of an import.
+	 *
+	 * UAssetToolsImpl::ImportAssetTasks already asks for no browser sync -- it hard-codes
+	 * `Params.bSyncToBrowser = false` -- but the Interchange completion path does not honour the
+	 * request. It resolves the flag as `Var ? Var->GetBool() : bSyncToBrowser` (AssetTools.cpp), so
+	 * the CVar wins over the caller and a fully automated import still pops a Content Browser over
+	 * the viewport, once per imported file. A vault bundle imports six or more.
+	 *
+	 * RAII, and deliberately not the plain set/reset pair used for the SCC checkout override above:
+	 * leaving this flag off would silently change the editor for the rest of the session, and
+	 * ImportVaultPackage returns from many places.
+	 */
+	struct FScopedNoContentBrowserSync
+	{
+		IConsoleVariable* const Var;
+		const bool bPrevious;
+
+		FScopedNoContentBrowserSync()
+			: Var(IConsoleManager::Get().FindConsoleVariable(
+				TEXT("Interchange.FeatureFlags.Import.SyncToBrowser")))
+			, bPrevious(Var != nullptr && Var->GetBool())
+		{
+			if (Var != nullptr)
+			{
+				Var->Set(false, ECVF_SetByCode);
+			}
+		}
+
+		~FScopedNoContentBrowserSync()
+		{
+			if (Var != nullptr)
+			{
+				Var->Set(bPrevious, ECVF_SetByCode);
+			}
+		}
+	};
+}
+
 FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	const FString& ZipPath,
 	EMantlePlaceImportMode Mode)
@@ -376,6 +421,13 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		}
 	}
 
+	// The verification gate is a product claim ("verified before anything is
+	// written"), so its PASSING is narrated, not only its failure — log
+	// followers should see the gate clear before the first actor spawns.
+	UE_LOG(LogMantlePlaceImport, Log,
+		TEXT("Integrity verified: every manifest-declared sha256 matches (jobId %s)."),
+		*Manifest.JobId.Left(8));
+
 	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
 	if (World == nullptr)
 	{
@@ -417,6 +469,9 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		return Result;
 	}
 
+	// Nothing this import creates should steal the viewport. See FScopedNoContentBrowserSync.
+	const FScopedNoContentBrowserSync NoBrowserSync;
+
 	// These are freshly generated assets, not yet in source control. Suppress the editor's
 	// auto-checkout-on-modify for the duration of the import so renames/edits don't spam the
 	// connected SCC provider with checkouts of files that aren't under source control. Runtime-only
@@ -436,6 +491,40 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			// selection makes that path a no-op.
 			GEditor->SelectNone(/*bNoteSelectionChange*/ false, /*bDeselectBSPSurfs*/ true, /*bWarnAboutManyActors*/ false);
 			AssetSubsystem->DeleteDirectory(DestPackagePath);
+		}
+	}
+
+	// glTF asset imports run BEFORE the transaction opens, and everything below this line is either
+	// an actor operation or an asset creation that deletes nothing.
+	//
+	// A .glb brings embedded textures and materials with it, named after the source (Terrain_texture_0),
+	// and naming those to the project standard means a rename. Renaming a freshly-imported asset
+	// inside the import's own transaction takes the whole import off the undo stack -- ObjectTools
+	// resets the entire buffer when the object it is deleting is referenced only by that buffer
+	// (see MantlePlaceImportNaming::ImportNameFor). Measured 2026-08-30 on a Both-mode import:
+	// Terrain.glb's texture rename purged the buffer and Ctrl+Z then moved nothing at all.
+	//
+	// The one thing that must still precede this is the idempotent wipe above: it force-deletes a
+	// prior import's assets, and doing it AFTER would delete what we just imported.
+	UStaticMesh* TerrainMesh = nullptr;
+	FString TerrainMeshError, TerrainMeshDisk;
+	if (bWantMesh && Manifest.bHasMesh)
+	{
+		if (ExtractEntry(Reader, Manifest.MeshPath, TempDir, TerrainMeshDisk, TerrainMeshError))
+		{
+			TerrainMesh = MantlePlaceMeshImporter::ImportMeshAsset(
+				Manifest, TerrainMeshDisk, DestPackagePath, /*bEnableNanite*/ true, TerrainMeshError);
+		}
+	}
+
+	UStaticMesh* BuildingsMesh = nullptr;
+	FString BuildingsMeshError, BuildingsMeshDisk;
+	if (Manifest.bHasBuildings)
+	{
+		if (ExtractEntry(Reader, Manifest.BuildingsPath, TempDir, BuildingsMeshDisk, BuildingsMeshError))
+		{
+			BuildingsMesh = MantlePlaceMeshImporter::ImportMeshAsset(
+				Manifest, BuildingsMeshDisk, DestPackagePath, /*bEnableNanite*/ false, BuildingsMeshError);
 		}
 	}
 
@@ -657,29 +746,24 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		}
 		else
 		{
-			FString Err, GlbDisk;
-			if (ExtractEntry(Reader, Manifest.MeshPath, TempDir, GlbDisk, Err))
+			// The asset was imported above, before the transaction; this only spawns for it.
+			FString Err = TerrainMeshError;
+			AStaticMeshActor* MeshActor = TerrainMesh != nullptr
+				? MantlePlaceMeshImporter::Import(World, Manifest, TerrainMesh, Err)
+				: nullptr;
+			if (MeshActor != nullptr)
 			{
-				if (AStaticMeshActor* MeshActor =
-						MantlePlaceMeshImporter::Import(World, Manifest, GlbDisk, DestPackagePath, /*bEnableNanite*/ true, Err))
+				DrapeTargets.Add(MeshActor);
+				if (DrapeMic != nullptr)
 				{
-					DrapeTargets.Add(MeshActor);
-					if (DrapeMic != nullptr)
-					{
-						MantlePlaceDrape::AssignMaterial(MeshActor, DrapeMic);
-					}
-					Result.CreatedActors.Add(MeshActor->GetActorLabel());
-					Log.Add(TEXT("Mesh (Terrain.glb) created."));
+					MantlePlaceDrape::AssignMaterial(MeshActor, DrapeMic);
 				}
-				else
-				{
-					Log.Add(FString::Printf(TEXT("Mesh failed: %s"), *Err));
-					bAllRequestedSucceeded = false;
-				}
+				Result.CreatedActors.Add(MeshActor->GetActorLabel());
+				Log.Add(TEXT("Mesh (Terrain.glb) created."));
 			}
 			else
 			{
-				Log.Add(Err);
+				Log.Add(FString::Printf(TEXT("Mesh failed: %s"), *Err));
 				bAllRequestedSucceeded = false;
 			}
 		}
@@ -694,12 +778,11 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// mismatch is still fail-closed — it aborts in the integrity pre-check above, before any actor.)
 	if (Manifest.bHasBuildings)
 	{
-		FString Err, BuildingsDisk;
-		AStaticMeshActor* BuildingsActor = nullptr;
-		if (ExtractEntry(Reader, Manifest.BuildingsPath, TempDir, BuildingsDisk, Err))
-		{
-			BuildingsActor = MantlePlaceMeshImporter::ImportBuildings(World, Manifest, BuildingsDisk, DestPackagePath, Err);
-		}
+		// The asset was imported above, before the transaction; this only spawns for it.
+		FString Err = BuildingsMeshError;
+		AStaticMeshActor* BuildingsActor = BuildingsMesh != nullptr
+			? MantlePlaceMeshImporter::ImportBuildings(World, Manifest, BuildingsMesh, Err)
+			: nullptr;
 		if (BuildingsActor != nullptr)
 		{
 			Result.CreatedActors.Add(BuildingsActor->GetActorLabel());
@@ -804,8 +887,16 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				const FString AssetName = FString::Printf(TEXT("DT_TreePoints_%s"), *Manifest.JobId.Left(8));
 				const FString PackageName = DestPackagePath / TEXT("Landcover") / AssetName;
 				UPackage* Package = CreatePackage(*PackageName);
-				UDataTable* Table = NewObject<UDataTable>(Package, FName(*AssetName), RF_Public | RF_Standalone | RF_Transactional);
+				// RF_Transactional is set AFTER RowStruct, not passed to NewObject. A transactional
+				// object constructed while a transaction is open is serialized into the undo buffer
+				// there and then, and UDataTable::Serialize logs an Error when it is written with no
+				// RowStruct -- which is precisely its state on the line between these two. Latent
+				// until the import's transaction started surviving to the end (see
+				// MantlePlaceImportNaming::ImportNameFor); before that the buffer was purged out
+				// from under it and the snapshot never happened.
+				UDataTable* Table = NewObject<UDataTable>(Package, FName(*AssetName), RF_Public | RF_Standalone);
 				Table->RowStruct = FMantlePlaceTreePointRow::StaticStruct();
+				Table->SetFlags(RF_Transactional);
 				for (int32 RowIndex = 0; RowIndex < Rows.Num(); ++RowIndex)
 				{
 					Table->AddRow(FName(*FString::Printf(TEXT("Tree_%d"), RowIndex)), Rows[RowIndex]);
