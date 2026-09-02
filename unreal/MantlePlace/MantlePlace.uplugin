@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 2,
-	"VersionName": "0.2.0",
+	"Version": 3,
+	"VersionName": "0.3.0",
 	"FriendlyName": "Mantle Place",
 	"Description": "Imports Mantle Place bundles - real-world terrain, imagery, buildings and site vectors, placed in the level's own coordinate system.",
 	"Category": "Mantle Place",
