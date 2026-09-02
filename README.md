@@ -10,8 +10,10 @@ tools designers actually work in.
 
 Licensed under [Apache 2.0](LICENSE). The name is not covered — see [TRADEMARK.md](TRADEMARK.md).
 
-<!-- media slot: hero GIF — draw an AOI on mantle.place, import the bundle, orbit the finished
-     landscape in the Unreal editor. Keep it under a few MB; this repo has no LFS on purpose. -->
+![Drawing an area of interest on mantle.place: the price updates with every size step, and a 2 km² box is free](https://mantle.place/media/importer/hero-draw-to-price.gif)
+
+*Draw the area, watch the price follow it, land under 2 km² and the order is free. Every capture on
+this page is the live platform and the released plugin, recorded in one unattended pass.*
 
 ## What these plugins do
 
@@ -75,8 +77,10 @@ produced by the same pipeline as a paid order.
    - **Revit:** `Mantle Place ▸ Bundles ▸ Import bundle zip`, or set `MANTLEPLACE_BUNDLE_ZIP` and the
      picker is skipped entirely, so the import runs unattended from a script.
 
-<!-- media slot: screenshot — the imported result in UE 5.8: the Landscape with painted weight
-     layers and the imagery drape, viewport + outliner visible. -->
+![The imported result in UE 5.8: a single Landscape with the imagery drape, buildings and road splines, the Mantle Place vault panel docked on the left and the outliner on the right](https://mantle.place/media/importer/unreal-landscape-import.jpg)
+
+*The same order in UE 5.8 a few minutes later: one `ALandscape` with its imagery drape, the buildings
+and splines on it, and the vault panel that pulled it in docked like any other tab.*
 
 ### What a downloaded bundle obliges you to do
 
@@ -104,16 +108,19 @@ Beside that, the plugin ships a streaming path built as a QA tool:
 starts a **local loopback tile server** that hosts the bundle's own Cesium-ready quantized-mesh
 terrain and imagery, then spawns a `Cesium3DTileset` pointed at it — so
 [Cesium for Unreal](https://cesium.com/platform/cesium-for-unreal/) (validated against 2.22.1)
-streams your bundle next to the imported copy, with Cesium World Terrain alongside for
-apples-to-apples comparison. Nothing streams from the Mantle Place platform; the server reads only
-the local zip you already own.
+streams your bundle next to the imported copy. A separate helper in the same script can add Cesium
+World Terrain alongside for an apples-to-apples check; that one needs a Cesium ion account, the
+loopback stream does not. Nothing streams from the Mantle Place platform; the server reads only the
+local zip you already own.
 
 The two paths do different jobs, and that is the point. Streaming answers *look at it now*; the
 import answers *keep it — offline, forever, no token*. Cesium for Unreal is the natural companion
 for the first job, and this plugin exists for the second.
 
-<!-- media slot: GIF — the side-by-side: the streamed tileset and the imported Landscape of the
-     same AOI in one viewport, camera panning between them. -->
+![The same bundle twice in one viewport: streamed through Cesium for Unreal from a local loopback server, and imported as an owned Landscape](https://mantle.place/media/importer/cesium-side-by-side.gif)
+
+*One bundle, two delivery models, one viewport: the loopback tileset streams the bundle's own terrain
+and imagery beside the imported Landscape.*
 
 ## Repository layout
 
