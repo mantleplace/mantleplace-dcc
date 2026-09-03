@@ -15,6 +15,9 @@ Licensed under [Apache 2.0](LICENSE). The name is not covered — see [TRADEMARK
 *Draw the area, watch the price follow it, land under 2 km² and the order is free. Every capture on
 this page is the live platform and the released plugin, recorded in one unattended pass.*
 
+The whole pass, as one film (1:48, silent): **[Mantle Place for Unreal Engine: draw a site, own it
+in UE](https://youtu.be/oJJM80M88Rw)**.
+
 ## What these plugins do
 
 A **Mantle Place Bundle (MPB)** is a zip of pre-derived, host-ready geospatial artifacts — a
