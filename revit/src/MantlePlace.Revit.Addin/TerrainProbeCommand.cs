@@ -45,10 +45,18 @@ namespace MantlePlace.Revit.Addin;
 /// deleted the arms whose question is answered.
 /// </para>
 /// <para>
+/// A fourth arrived when the drape worked and the terrain still read as a faceted mosaic. Vertex
+/// placement was ruled out by observation — the mosaic survived the move to the TIN — leaving how
+/// Revit shades the triangles rather than where they are. <see cref="ProbeSmoothedSurface"/> asks
+/// the two things that decide the fix: whether Revit 2025's smooth-shading setting is per document
+/// or per toposolid, and whether it disturbs the drape it would be turned on underneath.
+/// </para>
+/// <para>
 /// <b>Deletion trigger:</b> this command is diagnostic scaffolding, not product. Delete this file
-/// and its ribbon button once <em>all three</em> questions are settled by recorded probe runs — the
+/// and its ribbon button once <em>all four</em> questions are settled by recorded probe runs — the
 /// two base-plane ones above with <see cref="TerrainBasePlanner"/>'s default arm chosen on that
-/// evidence, and the subdivision material with its mechanism chosen. A shipped diagnostics command
+/// evidence, the subdivision material with its mechanism chosen, and the smooth-shading scope with
+/// the importer walking the subdivisions or not on that evidence. A shipped diagnostics command
 /// that outlived its question is UI debt, and extending its life without extending this trigger is
 /// how it becomes permanent.
 /// </para>
@@ -182,6 +190,8 @@ public sealed class TerrainProbeCommand : IExternalCommand
         DescribeDrapeMaterials(document, report);
 
         ProbeSubDivisionMaterial(document, report);
+
+        ProbeSmoothedSurface(document, report);
 
         using LocalBundleArchive archive = LocalBundleArchive.Open(zipPath);
         if (archive.Manifest is not { } manifest)
@@ -800,6 +810,193 @@ public sealed class TerrainProbeCommand : IExternalCommand
         {
             report.AppendLine(CultureInfo.InvariantCulture,
                 $"          Paint THREW {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Is Revit's toposolid smooth shading off in this project, does it turn on, and does the drape
+    /// survive it?
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The terrain renders as a faceted mosaic over a 0.30 m/px photograph. Building it from the
+    /// surface DXF's TIN was expected to fix that and did not, which rules out vertex placement by
+    /// observation rather than by argument: <c>Toposolid.Create</c> takes points and re-triangulates,
+    /// so the mesh is triangles either way, and what is left is how Revit <em>shades</em> them.
+    /// <c>Toposolid.SetSmoothedSurface</c> arrived in Revit 2025 named for exactly that distinction.
+    /// </para>
+    /// <para>
+    /// <b>The scope question is already settled and is not asked here.</b> Both members are
+    /// <b>static</b> and take only a <c>Document</c> — there is no element argument, so there is no
+    /// per-toposolid setting for the subdivisions to need. That was answered by the compiler
+    /// (<c>CS0176</c>) and by reflection over Revit 2025's <c>RevitAPI.dll</c>, at no cost at all,
+    /// and an arm that still asked it would be the scaffolding this file's deletion trigger exists
+    /// to prevent.
+    /// </para>
+    /// <para>
+    /// What is left is what a signature cannot answer, and both halves are seconds here against
+    /// 8–17 minutes per hypothesis anywhere else:
+    /// </para>
+    /// <list type="number">
+    /// <item>
+    /// <b>Is it off, and does it turn on?</b> The issue's claim is that whatever Revit's default is,
+    /// it is a default nobody chose. That is a claim about this document and it has never been read.
+    /// Setting it and reading it back also proves the pair works in this Revit build before a
+    /// ten-minute import bets on it.
+    /// </item>
+    /// <item>
+    /// <b>Does it disturb the drape?</b> Autodesk's own note says surface patterns stop drawing and
+    /// paint and graphic overrides are ignored while smoothing is on. The drape rides
+    /// <c>TOPOSOLID_SUBDIVIDE_MATERIAL</c> — an instance material, not paint — so it should survive,
+    /// and "should" is what this reads back instead of asserting. It settles one more thing in
+    /// passing: if smoothing ignores paint, then <c>Document.Paint</c> is no longer the escalation
+    /// <see cref="PaintTopFace"/> measured it to be, and that has to be known before anything ever
+    /// falls back to it.
+    /// </item>
+    /// </list>
+    /// <para>
+    /// ⛔ The write is inside a transaction rolled back in a <c>finally</c>, so the curator's project
+    /// keeps its own setting — which matters more here than anywhere else in this file, because this
+    /// is the one setting that would change how every toposolid in their model looks.
+    /// </para>
+    /// </remarks>
+    private static void ProbeSmoothedSurface(Document document, StringBuilder report)
+    {
+        report.AppendLine("TOPOSOLID SMOOTH SHADING — everything below is rolled back");
+        report.AppendLine("  (scope is not in question: both API members are static and take only a Document,");
+        report.AppendLine("   so the setting is document-wide and no subdivision needs it in its own right.)");
+
+        bool before;
+        try
+        {
+            before = Toposolid.IsSmoothedSurfaceEnabled(document);
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
+                                       or ArgumentException
+                                       or InvalidOperationException)
+        {
+            // Would mean this Revit does not carry the 2025 pair, which answers the whole question
+            // in one line rather than throwing away the rest of the probe.
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"  This Revit would not report the setting — {ex.GetType().Name}: {ex.Message}");
+            report.AppendLine();
+            return;
+        }
+
+        // The whole point of the line: "off" is only interesting if nobody chose it, and this probe
+        // is the first thing that has ever read it.
+        string note = before
+            ? "   <- something has already turned it on in this project"
+            : "   <- the default, and a default nobody chose";
+        report.AppendLine(CultureInfo.InvariantCulture,
+            $"  BEFORE: IsSmoothedSurfaceEnabled = {before}{note}");
+
+        Toposolid? terrain = TerrainToposolid(document);
+        IList<ElementId> subdivisions = terrain?.GetSubDivisionIds() ?? [];
+        report.AppendLine(CultureInfo.InvariantCulture,
+            $"  terrain: {(terrain is null ? "none in this project" : $"id {terrain.Id.Value}")}; "
+            + $"subdivisions: {subdivisions.Count:N0}");
+
+        ImportFailureSwallower swallower = new("Smooth shading probe");
+        Transaction transaction = new(document, "Mantle Place smooth shading probe");
+
+        try
+        {
+            transaction.Start();
+
+            FailureHandlingOptions options = transaction.GetFailureHandlingOptions();
+            options.SetFailuresPreprocessor(swallower);
+            options.SetForcedModalHandling(false);
+            options.SetClearAfterRollback(true);
+            transaction.SetFailureHandlingOptions(options);
+
+            Toposolid.SetSmoothedSurface(document, true);
+
+            // ⛔ Read back inside the transaction. A Set that returns without complaint and stores
+            // nothing is the drape's texture-distance defect, and it is invisible without this line.
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"  AFTER SetSmoothedSurface(document, true): reads {Toposolid.IsSmoothedSurfaceEnabled(document)}");
+
+            // The drape, re-read under smoothing. Expected to hold, because the drape reaches a
+            // subdivision through an instance material rather than through paint — and Autodesk's
+            // note that paint is ignored under smoothing is exactly why "expected" is not measured.
+            report.AppendLine("  DRAPE UNDER SMOOTHING — TOPOSOLID_SUBDIVIDE_MATERIAL re-read:");
+            if (subdivisions.Count == 0)
+            {
+                report.AppendLine("      no subdivisions on this terrain to re-read.");
+            }
+
+            foreach (ElementId id in subdivisions)
+            {
+                if (document.GetElement(id) is not Element subdivision)
+                {
+                    report.AppendLine(CultureInfo.InvariantCulture, $"      {id.Value}: does not resolve.");
+                    continue;
+                }
+
+                ElementId stored = subdivision.get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL)
+                    ?.AsElementId() ?? ElementId.InvalidElementId;
+
+                report.AppendLine(CultureInfo.InvariantCulture,
+                    $"      {id.Value}: material {stored.Value} \"{document.GetElement(stored)?.Name ?? string.Empty}\"");
+            }
+
+            if (terrain is not null)
+            {
+                report.AppendLine(CultureInfo.InvariantCulture,
+                    $"  terrain type under smoothing: \"{document.GetElement(terrain.GetTypeId())?.Name}\"");
+            }
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
+                                       or ArgumentException
+                                       or InvalidOperationException)
+        {
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"  THREW {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            // ⛔ Never committed, on any path — the ribbon setting included, which is the one thing
+            // in this file a curator would notice across their whole project.
+            transaction.RollBack();
+            transaction.Dispose();
+        }
+
+        report.AppendLine(CultureInfo.InvariantCulture,
+            $"  ROLLED BACK: reads {SmoothedQuietly(document)} again (expected {before}).");
+
+        foreach (string line in swallower.Lines)
+        {
+            report.AppendLine(CultureInfo.InvariantCulture, $"      {line}");
+        }
+
+        if (swallower.SawError)
+        {
+            report.AppendLine(CultureInfo.InvariantCulture, $"      Revit verbatim: {swallower.FirstErrorText}");
+        }
+
+        report.AppendLine();
+    }
+
+    /// <summary>
+    /// The smoothing setting, with an unreadable one reported as text rather than thrown.
+    /// </summary>
+    /// <remarks>
+    /// Used for the post-rollback line, where the probe is proving it left nothing behind. A throw
+    /// there would replace that proof with a stack trace, which is the one outcome that would make
+    /// this command unsafe to run in a curator's project.
+    /// </remarks>
+    private static string SmoothedQuietly(Document document)
+    {
+        try
+        {
+            return Toposolid.IsSmoothedSurfaceEnabled(document).ToString();
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
+                                       or ArgumentException
+                                       or InvalidOperationException)
+        {
+            return $"unreadable ({ex.GetType().Name})";
         }
     }
 

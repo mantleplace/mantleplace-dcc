@@ -423,6 +423,13 @@ internal sealed class RevitBundleImporter(
         Say(plan.Explanation
             + $" Type \"{type.Name}\"; terrain spans {UnitUtils.ConvertFromInternalUnits(relief.MinZ, UnitTypeId.Meters):0.##}"
             + $" m to {UnitUtils.ConvertFromInternalUnits(relief.MaxZ, UnitTypeId.Meters):0.##} m.");
+
+        // ⛔ In its own transaction, after this one committed. The terrain cost minutes to commit on
+        // a large site, and a display setting Revit might refuse must not be able to take it down.
+        // Once is enough: the setting is document-wide, so the boundaries and the drape that follow
+        // have nothing left to smooth.
+        EnsureSmoothedSurface();
+
         return true;
     }
 
@@ -451,6 +458,125 @@ internal sealed class RevitBundleImporter(
         Level created = Level.Create(_document, elevation);
         created.Name = TerrainBasePlanner.DedicatedLevelName;
         return created.Id;
+    }
+
+    /// <summary>
+    /// Turns on Revit's toposolid smooth shading, so the ground shades as a surface rather than as
+    /// the triangles Revit re-triangulated it into.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>This is a display setting, and it is the terrain's entire appearance.</b>
+    /// <c>Toposolid.Create</c> takes an <c>IList&lt;XYZ&gt;</c> and re-triangulates, so a toposolid is
+    /// a triangulated mesh no matter where its vertices came from; what decides whether a curator
+    /// sees ground or a faceted mosaic is whether Revit shades across those triangles or per face.
+    /// Moving the vertex source to the surface DXF's TIN did not change that and could not have —
+    /// the mosaic outlived it — which is what
+    /// <see href="https://help.autodesk.com/cloudhelp/2025/ENU/Revit-WhatsNew/files/GUID-50FB6EAF-5308-487B-9BF0-A59C36126B96.htm">Revit
+    /// 2025's Toposolid Enhancements</see> added this setting for.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>It is document-wide, and the signature is the proof.</b>
+    /// <c>Toposolid.SetSmoothedSurface(Document, bool)</c> and
+    /// <c>Toposolid.IsSmoothedSurfaceEnabled(Document)</c> are <b>static</b> and take only the
+    /// document — there is no element argument to pass, so there is no per-toposolid setting and
+    /// nothing for this method to walk. One call covers the terrain, every site-boundary subdivision
+    /// and every toposolid the curator modelled. That is why this is called once, from the terrain
+    /// step, and not again after the boundaries or the drape: a later <c>ChangeTypeId</c>
+    /// regenerates an <em>element</em>, and there is no element state here for it to drop.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>Because it is document-wide, it costs the curator something.</b> While it is on Revit
+    /// does not draw toposolid surface patterns and ignores paint and graphic overrides on them —
+    /// on their toposolids as well as this import's. So the outcome is announced rather than
+    /// buried, in <see cref="TerrainSmoothing"/>'s words: what changed, what it costs, and where to
+    /// reverse it. A silent project-wide switch is how a plugin gets blamed for a project that
+    /// "went wrong" three weeks later.
+    /// </para>
+    /// <para>
+    /// It also runs in a transaction of its own, after the terrain's has committed. The terrain
+    /// commit costs minutes on a large site, and a display setting Revit might refuse must not be
+    /// able to take that down with it.
+    /// </para>
+    /// </remarks>
+    private void EnsureSmoothedSurface()
+    {
+        bool wasEnabled;
+        try
+        {
+            wasEnabled = Toposolid.IsSmoothedSurfaceEnabled(_document);
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
+                                       or ArgumentException
+                                       or InvalidOperationException)
+        {
+            // Read before written, so a Revit that does not carry the 2025 pair leaves the terrain
+            // exactly as it found it rather than half-set.
+            Trace($"  smoothing: this Revit would not report the setting — {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        if (wasEnabled)
+        {
+            // An earlier import, or the curator. Either way it is already what this wants, and a
+            // redundant write to a project-wide setting is not worth an undo entry.
+            Trace("  smoothing: already on for this project. Nothing written.");
+            return;
+        }
+
+        ImportFailureSwallower swallower = new("Smoothing the terrain surface");
+        using Transaction transaction = BeginTransaction("Mantle Place: terrain smooth shading", swallower);
+
+        try
+        {
+            Toposolid.SetSmoothedSurface(_document, true);
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
+                                       or ArgumentException
+                                       or InvalidOperationException)
+        {
+            transaction.RollBack();
+
+            if (TerrainSmoothing.Notice(wasEnabled, isEnabled: false, ex.Message) is { } refused)
+            {
+                Say(refused);
+            }
+
+            return;
+        }
+
+        if (!CommitAndReport(transaction, swallower))
+        {
+            // Nothing more to say: the commit was refused, the swallower has already said in Revit's
+            // own words why, and the shading is simply unchanged. The defect sentence below would
+            // report a value that did not hold, when what actually happened is a rollback.
+            return;
+        }
+
+        // ⛔ Read back AFTER the commit. The drape's texture distances went in as feet, returned
+        // success, and tiled the photograph twelve times across the site; the only reason anybody
+        // found out is that somebody read the value back. A bool is no different.
+        bool isEnabled;
+        try
+        {
+            isEnabled = Toposolid.IsSmoothedSurfaceEnabled(_document);
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
+                                       or ArgumentException
+                                       or InvalidOperationException)
+        {
+            // Unreadable after a committed write is not "probably fine". Reported as not held,
+            // which is the conservative half and the one a curator can act on.
+            Trace($"  smoothing: unreadable after the commit — {ex.GetType().Name}: {ex.Message}");
+            isEnabled = false;
+        }
+
+        if (TerrainSmoothing.Notice(wasEnabled, isEnabled, null) is { } notice)
+        {
+            Say(notice);
+        }
+
+        Trace($"  smoothing: was {wasEnabled}, now {isEnabled} (document-wide; static API, no per-element state).");
     }
 
     /// <summary>Every level in the project, as the pure planner needs to see it.</summary>

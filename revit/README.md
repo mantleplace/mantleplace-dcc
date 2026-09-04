@@ -37,9 +37,13 @@ Remove (`HPS-44`).
   re-baseline is not merely old, it is written in a dialect this reader does not speak;
 - builds the terrain from the TIN in `Surface/Surface.dxf` — its vertices are placed adaptively,
   dense on slopes and sparse on flats, where `Surface/SurfacePoints.csv` is a perfectly regular
-  lattice whose cells are cocircular and therefore degenerate to triangulate, which is what made the
-  imported ground read as faceted no matter how well the imagery was draped. It is also the cheaper
-  of the two: on the bundle this was measured against, 75,203 TIN vertices against the grid's 80,940;
+  lattice whose cells are cocircular and therefore degenerate to triangulate, so the triangulator
+  picks slivers and fans by tie-break. It is also the cheaper of the two: on the bundle this was
+  measured against, 75,203 TIN vertices against the grid's 80,940.
+  ⚠ **This is not what made the imported ground read as faceted, and an earlier version of this
+  list said it was.** The mosaic outlived the move to the TIN. `Toposolid.Create` takes points and
+  re-triangulates, so a toposolid is a triangulated mesh whatever the vertex source is — the
+  faceting was Revit shading per face, and it is the setting below that fixes it;
 - falls back to the points file when the DXF is missing, or when the bundle publishes no origin to
   reduce its absolute coordinates against — the points file is already local, so it needs none — and
   falls back again to linking the DXF as CAD when neither surface can be built. Whichever tier is
@@ -59,6 +63,14 @@ Remove (`HPS-44`).
   never repainted. The rectangle the image is pinned to is not taken on trust: the only extent this
   host may read is undeclared by the published schema, so it is used only when the image's own pixel
   grid times `imagery.gsd_m` reproduces it, and refused with a stated reason when it does not;
+- turns on Revit 2025's **toposolid smooth shading**, so the ground shades as a surface rather than
+  as flat triangles. ⚠ It is a **project-wide display setting** — `Toposolid.SetSmoothedSurface` is
+  static and takes only a `Document`, so there is no per-toposolid version of it — and while it is
+  on Revit does not draw toposolid surface patterns and ignores paint and graphic overrides on them,
+  on your own toposolids as much as on the imported ground. So the import log says it turned the
+  setting on, says what that costs, and names the ribbon path
+  (Massing & Site ▸ Model Site ▸ Toposolid Smooth Shading) to turn it back off. It is read back after
+  the commit rather than assumed, it is left alone when it is already on, and it is never turned off;
 - refuses to import anything at all when an artifact's bytes do not match the `sha256` its own
   manifest publishes, before a single element is created (⛔`HPS-26`);
 - tells you what it did **not** import and why, using the manifest's own
