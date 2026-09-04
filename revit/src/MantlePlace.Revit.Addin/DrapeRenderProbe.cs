@@ -123,7 +123,7 @@ internal static class DrapeRenderProbe
         {
             Scene scene = BuildScene(document, terrain, type, drape, others, report);
 
-            foreach (Experiment experiment in Experiments())
+            foreach (Experiment experiment in Selected())
             {
                 RunOne(scene, experiment, outputDirectory);
             }
@@ -167,6 +167,23 @@ internal static class DrapeRenderProbe
         yield return new("11-off-realistic-selfillum100-sun0", "smoothing off, Realistic, self-illuminating at 100 cd/m2 and sunlight 0", false, DisplayStyle.Realistic, 0, scene => SelfIlluminate(scene, 100.0));
         yield return new("12-on-realistic-selfillum100", "smoothing on, Realistic, self-illuminating at 100 cd/m2", true, DisplayStyle.Realistic, null, scene => SelfIlluminate(scene, 100.0));
         yield return new("13-on-realistic-finishlayer", "smoothing on, Realistic, top layer function Finish1 instead of Structure", true, DisplayStyle.Realistic, null, FinishLayer);
+        yield return new("14-on-realistic-bboxoffsets", "smoothing on, Realistic, real-world offsets measured from each toposolid's bounding-box corner", true, DisplayStyle.Realistic, null, BoundingBoxRelativeOffsets);
+        yield return new("15-off-realistic-bboxoffsets", "control: smoothing off with the same bounding-box-relative offsets", false, DisplayStyle.Realistic, null, BoundingBoxRelativeOffsets);
+    }
+
+    /// <summary>Set to a comma-separated list of name prefixes to render only those experiments.</summary>
+    internal const string OnlyVariable = "MANTLEPLACE_PROBE_RENDER_ONLY";
+
+    private static IEnumerable<Experiment> Selected()
+    {
+        string? only = Environment.GetEnvironmentVariable(OnlyVariable);
+        if (string.IsNullOrWhiteSpace(only))
+        {
+            return Experiments();
+        }
+
+        string[] prefixes = only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return Experiments().Where(experiment => prefixes.Any(prefix => experiment.Name.StartsWith(prefix, StringComparison.Ordinal)));
     }
 
     private static void RunOne(Scene scene, Experiment experiment, string outputDirectory)
@@ -206,6 +223,10 @@ internal static class DrapeRenderProbe
 
                 experiment.Tweak?.Invoke(scene);
 
+                // Inside the transaction: Regenerate is a modification as far as Revit is concerned,
+                // and outside one it throws "Modification of the document is forbidden".
+                document.Regenerate();
+
                 TransactionStatus status = transaction.Commit();
                 foreach (string line in swallower.Lines)
                 {
@@ -218,8 +239,6 @@ internal static class DrapeRenderProbe
                     return;
                 }
             }
-
-            document.Regenerate();
 
             report.AppendLine(CultureInfo.InvariantCulture,
                 $"      applied in {clock.Elapsed.TotalSeconds:N1} s; smoothing reads {Toposolid.IsSmoothedSurfaceEnabled(document)}, "
@@ -482,6 +501,103 @@ internal static class DrapeRenderProbe
         Asset? bitmap = editable.FindByName(Generic.GenericDiffuse)?.GetSingleConnectedAsset();
         edit(editable, bitmap);
         scope.Commit(true);
+    }
+
+    /// <summary>
+    /// The measured hypothesis: under smooth shading Revit measures a real-world texture offset from
+    /// the element's bounding-box minimum corner rather than from the project origin. So the ground
+    /// gets its offsets shifted by its own corner, and every subdivision gets a duplicate of the
+    /// drape material shifted by ITS corner, since one material cannot carry two offsets.
+    /// </summary>
+    private static void BoundingBoxRelativeOffsets(Scene scene)
+    {
+        Document document = scene.Document;
+
+        // ⛔ Duplicate for the subdivisions BEFORE shifting the ground's own asset: a copy taken
+        // afterwards inherits the ground's already-shifted offsets and lands half an image out.
+        List<(Toposolid Subdivision, Material Copy)> copies = [];
+        int index = 0;
+        foreach (ElementId subdivisionId in scene.Terrain.GetSubDivisionIds())
+        {
+            index++;
+            if (document.GetElement(subdivisionId) is not Toposolid subdivision)
+            {
+                continue;
+            }
+
+            if (document.GetElement(scene.Drape.AppearanceAssetId) is not AppearanceAssetElement asset)
+            {
+                scene.Report.AppendLine("      the drape material has no appearance asset to duplicate.");
+                return;
+            }
+
+            string name = $"{scene.Drape.Name} probe subdivision {index}";
+            Material copy = scene.Drape.Duplicate(name);
+            copy.AppearanceAssetId = asset.Duplicate(name).Id;
+
+            Parameter? parameter = subdivision.get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL);
+            if (parameter is null || parameter.IsReadOnly || !parameter.Set(copy.Id))
+            {
+                scene.Report.AppendLine(CultureInfo.InvariantCulture,
+                    $"      subdivision {subdivisionId.Value}: the Material parameter would not take the copy.");
+                continue;
+            }
+
+            copies.Add((subdivision, copy));
+        }
+
+        ShiftOffsets(scene, scene.Drape, scene.Terrain, "ground");
+        foreach ((Toposolid subdivision, Material copy) in copies)
+        {
+            ShiftOffsets(scene, copy, subdivision, $"subdivision {subdivision.Id.Value}");
+        }
+    }
+
+    /// <summary>Subtracts the element's bounding-box minimum from the bitmap's real-world offsets.</summary>
+    private static void ShiftOffsets(Scene scene, Material material, Element element, string label)
+    {
+        BoundingBoxXYZ? box = element.get_BoundingBox(null);
+        if (box is null)
+        {
+            scene.Report.AppendLine(CultureInfo.InvariantCulture, $"      {label}: no bounding box, offsets left alone.");
+            return;
+        }
+
+        double minXm = UnitUtils.ConvertFromInternalUnits(box.Min.X, UnitTypeId.Meters);
+        double minYm = UnitUtils.ConvertFromInternalUnits(box.Min.Y, UnitTypeId.Meters);
+
+        using AppearanceAssetEditScope scope = new(scene.Document);
+        Asset editable = scope.Start(material.AppearanceAssetId);
+        Asset? bitmap = editable.FindByName(Generic.GenericDiffuse)?.GetSingleConnectedAsset();
+        if (bitmap is null)
+        {
+            scope.Cancel();
+            scene.Report.AppendLine(CultureInfo.InvariantCulture, $"      {label}: no diffuse bitmap, offsets left alone.");
+            return;
+        }
+
+        string x = Shift(bitmap, UnifiedBitmap.TextureRealWorldOffsetX, minXm);
+        string y = Shift(bitmap, UnifiedBitmap.TextureRealWorldOffsetY, minYm);
+        scope.Commit(true);
+
+        scene.Report.AppendLine(CultureInfo.InvariantCulture,
+            $"      {label}: bbox min ({minXm:0.0}, {minYm:0.0}) m; {x}; {y}");
+    }
+
+    private static string Shift(Asset bitmap, string propertyName, double byMetres)
+    {
+        if (bitmap.FindByName(propertyName) is not AssetPropertyDistance distance || distance.IsReadOnly)
+        {
+            return $"{propertyName} not writable";
+        }
+
+        ForgeTypeId unit = distance.GetUnitTypeId();
+        bool known = unit is not null && UnitUtils.IsUnit(unit);
+        double wasMetres = known ? UnitUtils.Convert(distance.Value, unit!, UnitTypeId.Meters) : UnitUtils.ConvertFromInternalUnits(distance.Value, UnitTypeId.Meters);
+        double nowMetres = wasMetres - byMetres;
+        distance.Value = known ? UnitUtils.Convert(nowMetres, UnitTypeId.Meters, unit!) : UnitUtils.ConvertToInternalUnits(nowMetres, UnitTypeId.Meters);
+        double readBack = known ? UnitUtils.Convert(distance.Value, unit!, UnitTypeId.Meters) : UnitUtils.ConvertFromInternalUnits(distance.Value, UnitTypeId.Meters);
+        return $"{propertyName} {wasMetres:0.0} -> {readBack:0.0} m";
     }
 
     /// <summary>
