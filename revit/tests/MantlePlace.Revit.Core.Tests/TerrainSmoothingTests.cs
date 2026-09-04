@@ -120,42 +120,46 @@ internal static class TerrainSmoothingTests
             run.Contains(notice, "smooth shading", "the success sentence, not a refusal");
         });
 
-        run.Case("a draped terrain with smoothing ON gets the loud sentence", () =>
+        run.Case("a draped terrain with smoothing ON says the photograph is placed for it", () =>
         {
-            // ⛔ The case that cost a whole session. Smoothing and a real-world-scaled photograph
-            // cannot coexist: the imagery renders as four quarters meeting at a cross. A curator who
-            // has the setting on has no way whatsoever to connect that to a ribbon toggle, so this
-            // sentence has to name the symptom they can see, not just the setting.
+            // ⛔ The case that cost two sessions. The photograph is placed for the smoothed renderer,
+            // whose offset origin is the element's corner, and the switch that changes the origin
+            // belongs to the curator — so the sentence has to say what turning it off will look
+            // like, in the shape they would recognise.
             string notice = TerrainSmoothing.DrapeNotice(isEnabled: true);
 
-            run.Contains(notice, "four quarters", "the symptom, in the shape they will recognise");
-            run.Contains(notice, TerrainSmoothing.RibbonPath, "the switch that fixes it");
-            run.Contains(notice, "has not changed the setting for you",
-                "that the plugin declined to trespass on a project-wide setting");
+            run.Contains(notice, "placed for Revit's toposolid smooth shading", "which renderer");
+            run.Contains(notice, "four quarters", "the symptom of turning it off");
+            run.Contains(notice, TerrainSmoothing.RibbonPath, "where the switch is");
+            run.Contains(notice, "Turn it back on", "the remedy");
+            run.True(notice.Contains("cannot", StringComparison.Ordinal) == false,
+                "no longer claims the two cannot be had together");
         });
 
-        run.Case("a draped terrain with smoothing OFF explains why the ground is faceted", () =>
+        run.Case("a draped terrain with smoothing OFF is the loud case, and says to import again", () =>
         {
-            // The ordinary path, and it still owes an explanation: the faceting is the very thing
-            // the issue was raised about, so silence here reads as the defect being unaddressed.
+            // Revit refused or did not hold the setting, so the photograph went in for flat shading.
+            // A curator who later flips the switch by hand would scramble it — the sentence has to
+            // hand them the way out.
             string notice = TerrainSmoothing.DrapeNotice(isEnabled: false);
 
-            run.Contains(notice, "flat triangles", "the appearance being explained");
-            run.Contains(notice, "deliberately left it off", "that this was a choice, not an omission");
-            run.Contains(notice, "breaks the mapping", "the reason for that choice");
-            run.Contains(notice, TerrainSmoothing.RibbonPath, "where to overrule it");
+            run.Contains(notice, "could not turn it on", "why the ground is faceted");
+            run.Contains(notice, "mosaic", "what the curator will actually see");
+            run.Contains(notice, "placed for flat shading", "which renderer the photograph fits");
+            run.Contains(notice, "import this bundle again", "the remedy after turning it on by hand");
+            run.Contains(notice, TerrainSmoothing.RibbonPath, "where the switch is");
         });
 
-        run.Case("the two drape sentences are different, and neither is empty", () =>
+        run.Case("the two drape sentences are different, and only the refused one is a warning", () =>
         {
             string on = TerrainSmoothing.DrapeNotice(isEnabled: true);
             string off = TerrainSmoothing.DrapeNotice(isEnabled: false);
 
             run.True(on.Length > 0 && off.Length > 0, "both states say something");
-            run.True(on != off, "the loud case and the ordinary case do not share a sentence");
-            run.True(on.StartsWith("⚠", StringComparison.Ordinal),
-                "only the case that needs the curator to act is marked as a warning");
-            run.False(off.StartsWith("⚠", StringComparison.Ordinal),
+            run.True(on != off, "the ordinary case and the refused case do not share a sentence");
+            run.True(off.StartsWith("⚠", StringComparison.Ordinal),
+                "the case where the photograph is on a mosaic is the warning");
+            run.False(on.StartsWith("⚠", StringComparison.Ordinal),
                 "the ordinary case is not dressed up as a warning");
         });
 

@@ -14,19 +14,20 @@ namespace MantlePlace.Revit.Core;
 /// curator modelled themselves.
 /// </para>
 /// <para>
-/// ⛔ <b>It cannot be used on a terrain wearing an aerial photograph, and that was measured rather
+/// ⛔ <b>It changes where Revit measures a real-world texture from, and that was measured rather
 /// than reasoned.</b> Autodesk documents that smoothing stops toposolid surface patterns drawing and
-/// makes Revit ignore paint and graphic overrides. It does one more thing they do not document: it
-/// breaks the mapping of a real-world-scaled bitmap. On a 1,419 × 1,413 m site the photograph
-/// rendered as four quadrants meeting at a hard cross, each showing different ground, from the same
-/// material and the same four texture properties that render correctly with smoothing off. So the
-/// choice is not "smooth or faceted". It is "smooth ground under a scrambled photograph, or faceted
-/// ground under a correct one", and a site model exists to be accurate before it is pretty.
+/// makes Revit ignore paint and graphic overrides. It does one more thing they do not document:
+/// under flat shading a real-world-scaled bitmap's offset is measured from the project origin, per
+/// face, in each face's own plane — which is the mosaic the faceting complaint was about — and under
+/// smooth shading from the element's bounding-box corner, continuously. Written for the wrong origin
+/// the photograph rolls by half its size and shows as four quarters meeting at a cross. Written for
+/// the right one it sits within 1.6 m of the published photograph on smooth ground
+/// (<see cref="DrapeAnchor"/>). So the import turns smoothing on and places the photograph for it.
 /// </para>
 /// <para>
-/// Hence two sentences rather than one. The import enables smoothing only where there is no
-/// photograph to lose, and where there is one it says so — including the case that matters most, a
-/// curator who already has smoothing on and is about to wonder why their imagery arrived in pieces.
+/// Hence two sentences rather than one: the one for turning the setting on, and the one that tells
+/// a curator the photograph is placed for it — because the switch is theirs, and turning it off
+/// scrambles the imagery in a way nothing else would explain.
 /// </para>
 /// <para>
 /// Composed here rather than in the shim for the reason <see cref="SubDivisionDrape"/> was: a
@@ -98,33 +99,33 @@ public static class TerrainSmoothing
     }
 
     /// <summary>
-    /// The sentence for a terrain that <b>is</b> wearing the aerial photograph, where smoothing and
-    /// the drape cannot both be had.
+    /// The sentence for a terrain that <b>is</b> wearing the aerial photograph, saying which
+    /// renderer the photograph was placed for and what the switch will do to it.
     /// </summary>
     /// <param name="isEnabled">
-    /// Whether the project currently has smooth shading on. <c>true</c> is the loud case: the
-    /// photograph this import just laid will not render correctly until it is turned off, and the
-    /// curator is the only one who can decide to do that.
+    /// Whether the project has smooth shading on, read back after the import tried to turn it on.
+    /// <c>false</c> is the loud case: Revit refused or did not hold the setting, so the photograph
+    /// was placed for flat shading, and a curator who later turns smoothing on by hand will
+    /// scramble it unless they import again.
     /// </param>
     /// <returns>A complete sentence. Never null — both states are worth a line here.</returns>
     /// <remarks>
-    /// ⛔ The plugin does not turn the setting off on the curator's behalf, even in the loud case.
-    /// It is project-wide, they may have set it deliberately for toposolids that have nothing to do
-    /// with this import, and silently reversing someone's display setting is the same trespass as
-    /// silently setting it. Naming exactly what is wrong and exactly where the switch is leaves the
-    /// decision where it belongs and still ends the mystery.
+    /// ⛔ The plugin does not turn the setting off on the curator's behalf. It is project-wide, they
+    /// may have set it deliberately for toposolids that have nothing to do with this import, and
+    /// silently reversing someone's display setting is the same trespass as silently setting it.
+    /// Naming exactly what the switch does to the photograph leaves the decision where it belongs.
     /// </remarks>
     public static string DrapeNotice(bool isEnabled)
         => isEnabled
-            ? "⚠ This project has Revit's toposolid smooth shading ON, and the aerial photograph will "
-                + "not render correctly while it is. Smoothing breaks the mapping of a real-world-scaled "
-                + "image: the photograph appears as four quarters meeting at a cross, each showing the "
-                + $"wrong ground. Turn it off under {RibbonPath} and the imagery reads correctly again. "
-                + "The plugin has not changed the setting for you, because it is project-wide and "
-                + "affects every toposolid you own."
-            : "The ground shades as flat triangles rather than as a smooth surface. Revit's toposolid "
-                + "smooth shading is what fixes that, and this import deliberately left it off: it "
-                + "breaks the mapping of the aerial photograph, which then renders as four quarters "
-                + "meeting at a cross, each showing the wrong ground. If you would rather have smooth "
-                + $"ground than correct imagery, the setting is under {RibbonPath}.";
+            ? "The aerial photograph is placed for Revit's toposolid smooth shading, which is on. "
+                + $"⚠ Leave it on while you need the imagery ({RibbonPath}): under flat shading Revit "
+                + "measures a real-world texture from the project origin, under smooth shading from "
+                + "each toposolid's own corner, and the photograph is placed for the second — turned "
+                + "off, it appears as four quarters meeting at a cross, each showing the wrong ground. "
+                + "Turn it back on and it reads correctly again."
+            : "⚠ Revit's toposolid smooth shading is off and this import could not turn it on, so the "
+                + "aerial photograph was placed for flat shading: positioned correctly, but every "
+                + "triangle carries its own slice of it and the ground reads as a mosaic. If you turn "
+                + $"smooth shading on by hand ({RibbonPath}), import this bundle again so the "
+                + "photograph is re-placed for it.";
 }

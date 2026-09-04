@@ -64,20 +64,24 @@ Remove (`HPS-44`).
   never repainted. The rectangle the image is pinned to is not taken on trust: the only extent this
   host may read is undeclared by the published schema, so it is used only when the image's own pixel
   grid times `imagery.gsd_m` reproduces it, and refused with a stated reason when it does not;
-- turns on Revit 2025's **toposolid smooth shading** — but **only when the import laid no aerial
-  photograph**, because the two cannot be had together. Smoothing removes the flat-triangle shading;
-  it also breaks the mapping of a real-world-scaled bitmap, and the drape then renders as four
-  quarters meeting at a hard cross, each showing the wrong ground. That was measured by rendering one
-  view twice, and it is an **undocumented** cost on top of the ones Autodesk does publish (surface
-  patterns stop drawing, paint and graphic overrides are ignored). Faced with smooth ground under a
-  scrambled photograph or faceted ground under a correct one, this host takes the correct photograph.
-  So: no imagery in the bundle and the ground is smoothed, with the log naming what the project-wide
-  setting costs and the ribbon path
-  (Massing & Site ▸ Model Site ▸ Toposolid Smooth Shading) that reverses it; imagery in the bundle
-  and the setting is left exactly as you had it, with the log explaining the trade — loudly if you
-  already had smoothing on, since your photograph will be in quarters and nothing else would tell you
-  why. It is read back after the commit rather than assumed, and the plugin never turns it off,
-  because it is project-wide and reaches every toposolid you own;
+- turns on Revit 2025's **toposolid smooth shading** and **anchors the photograph for it**. The
+  faceting is not lighting: under flat shading Revit maps a real-world-scaled bitmap per face, in each
+  face's own plane, so every triangle carries its own slice of the image and the ground reads as a
+  mosaic that no view style, sun setting or self-illumination touches. Smooth shading maps it
+  continuously — but measures `texture_RealWorldOffset` from the **element's bounding-box corner**
+  rather than from the project origin, which is undocumented and is why a drape written for the
+  origin renders as four quarters meeting at a cross the moment smoothing is on. Measured by
+  exporting one view under both settings and matching every region against the published
+  photograph: anchored to the corner, the photograph sits within 1.6 m of the truth everywhere, on
+  smooth ground. So the import turns the setting on **first**, reads it back, and writes the offsets
+  for the renderer that will draw them — the terrain from its corner, and every site-boundary
+  subdivision from its own, each with its own material, since one material carries one offset. The
+  log says which origin each was written for and names the ribbon switch
+  (Massing & Site ▸ Model Site ▸ Toposolid Smooth Shading) with what turning it off will do to the
+  imagery. The setting is project-wide, so the log names the documented costs too (surface patterns
+  stop drawing, paint and graphic overrides are ignored), and the plugin never turns it off. Where
+  Revit refuses the setting, the photograph is anchored to the origin instead and the log says to
+  import again after turning smoothing on by hand;
 - refuses to import anything at all when an artifact's bytes do not match the `sha256` its own
   manifest publishes, before a single element is created (⛔`HPS-26`);
 - tells you what it did **not** import and why, using the manifest's own

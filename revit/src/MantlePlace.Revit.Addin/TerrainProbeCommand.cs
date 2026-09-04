@@ -865,16 +865,16 @@ public sealed class TerrainProbeCommand : IExternalCommand
     {
         report.AppendLine("TOPOSOLID SMOOTH SHADING — read only, nothing is written");
         report.AppendLine("  (document-wide: both API members are static and take only a Document.)");
-        report.AppendLine("  (incompatible with the imagery drape: measured — smoothing breaks the");
-        report.AppendLine("   real-world bitmap mapping into four quadrants. The importer smooths");
-        report.AppendLine("   only ground that carries no photograph.)");
+        report.AppendLine("  (it moves the origin of a real-world texture offset: flat shading measures");
+        report.AppendLine("   from the project origin per face, smooth shading from the element's");
+        report.AppendLine("   bounding-box corner. The importer turns it on and anchors the drape for it.)");
 
         try
         {
             bool enabled = Toposolid.IsSmoothedSurfaceEnabled(document);
             string reading = enabled
-                ? "ON  <- an imagery drape in this project will render as four quarters at a cross"
-                : "OFF <- ground shades as flat triangles; an imagery drape renders correctly";
+                ? "ON  <- a drape anchored to the element's corner renders correctly; one anchored to the origin shows four quarters at a cross"
+                : "OFF <- ground reads as a mosaic; a drape anchored to the origin is positioned correctly at the large scale";
             report.AppendLine(CultureInfo.InvariantCulture,
                 $"  IsSmoothedSurfaceEnabled = {reading}");
         }

@@ -18,6 +18,7 @@ exitCode |= SiteBoundaryIdentityTests.Run();
 exitCode |= DrapeLayeringTests.Run();
 exitCode |= SubDivisionDrapeTests.Run();
 exitCode |= TerrainSmoothingTests.Run();
+exitCode |= DrapeAnchorTests.Run();
 exitCode |= TerrainBaseTests.Run();
 exitCode |= SurfaceSanitiserTests.Run();
 exitCode |= ImportFailurePolicyTests.Run();

@@ -36,14 +36,14 @@ internal static class DrapeRenderProbe
     private const int PixelSize = 1800;
 
     /// <summary>One arrangement of the terrain, named for the PNG it produces.</summary>
-    /// <param name="Smoothed">The document-wide smooth-shading setting for this render.</param>
+    /// <param name="Smoothed">The document-wide smooth-shading setting for this render, or null to leave it as found.</param>
     /// <param name="Style">The view's display style for this render.</param>
     /// <param name="Sunlight">A sunlight/shadow intensity override, or null to leave the view's.</param>
     /// <param name="Tweak">A change to the material or type, applied inside the transaction.</param>
     private sealed record Experiment(
         string Name,
         string Description,
-        bool Smoothed,
+        bool? Smoothed,
         DisplayStyle Style,
         int? Sunlight,
         Action<Scene>? Tweak);
@@ -154,6 +154,7 @@ internal static class DrapeRenderProbe
     /// <summary>The arrangements, in the order they are rendered. Material and type edits come last.</summary>
     private static IEnumerable<Experiment> Experiments()
     {
+        yield return new("00-asis-realistic", "as found: nothing changed, Realistic — what the last import actually left", null, DisplayStyle.Realistic, null, null);
         yield return new("01-off-realistic", "baseline: smoothing off, Realistic", false, DisplayStyle.Realistic, null, null);
         yield return new("02-on-realistic", "smoothing on, Realistic — the four-quadrant failure", true, DisplayStyle.Realistic, null, null);
         yield return new("03-off-textures", "smoothing off, Textures style", false, DisplayStyle.Textures, null, null);
@@ -209,7 +210,10 @@ internal static class DrapeRenderProbe
                 options.SetClearAfterRollback(true);
                 transaction.SetFailureHandlingOptions(options);
 
-                Toposolid.SetSmoothedSurface(document, experiment.Smoothed);
+                if (experiment.Smoothed is { } smoothed)
+                {
+                    Toposolid.SetSmoothedSurface(document, smoothed);
+                }
 
                 foreach (View3D view in new[] { scene.Top, scene.Oblique })
                 {

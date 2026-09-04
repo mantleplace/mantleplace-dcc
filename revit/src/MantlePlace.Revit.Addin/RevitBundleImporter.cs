@@ -79,15 +79,15 @@ internal sealed class RevitBundleImporter(
     private readonly List<ElementId> _createdSubDivisionIds = [];
 
     /// <summary>
-    /// Whether this import left an aerial photograph on the terrain.
+    /// Whether the smooth-shading decision has been made, and said, for this import.
     /// </summary>
     /// <remarks>
-    /// Set only where the drape actually committed, never where it was merely planned. It is
-    /// what <see cref="SettleSmoothedSurface"/> turns on, and a drape that was rolled back has
-    /// left no imagery to protect — so treating a planned-but-failed drape as applied would cost
-    /// a curator the smooth ground they could have had.
+    /// <see cref="EnsureSmoothedSurface"/> runs twice: inside the drape step, before the photograph
+    /// is written, so it is anchored for the renderer that will actually draw it; and after every
+    /// step, for a bundle with no photograph at all. The second call must neither retry a refusal
+    /// nor repeat the sentence.
     /// </remarks>
-    private bool _drapeApplied;
+    private bool _smoothingSettled;
 
     /// <summary>Trunk height as a fraction of total height — the rest is crown.</summary>
     private const double TrunkHeightFraction = 0.35;
@@ -161,10 +161,9 @@ internal sealed class RevitBundleImporter(
         {
             ExecuteSteps(plan);
 
-            // ⛔ After every step, never inside one. Whether the ground may be smoothed depends on
-            // whether it ended up wearing the aerial photograph, and the drape is the LAST step —
-            // so a terrain step that decided this for itself would be deciding it before the fact.
-            SettleSmoothedSurface();
+            // After every step as well as inside the drape step: a bundle with no photograph still
+            // gets smooth ground, and for the bundle that had one this is a no-op read.
+            EnsureSmoothedSurface();
         }
         finally
         {
@@ -471,56 +470,45 @@ internal sealed class RevitBundleImporter(
     }
 
     /// <summary>
-    /// Decides what happens to Revit's toposolid smooth shading, once every step has run.
+    /// Turns on Revit's toposolid smooth shading for a project with ground, once, and reports
+    /// whether it is on.
     /// </summary>
     /// <remarks>
     /// <para>
     /// ⛔ <b>Smoothing is a display setting, and it is the terrain's entire appearance.</b>
     /// <c>Toposolid.Create</c> takes an <c>IList&lt;XYZ&gt;</c> and re-triangulates, so a toposolid is
     /// a triangulated mesh no matter where its vertices came from. What decides whether a curator
-    /// sees ground or a faceted mosaic is whether Revit shades across those triangles or per face.
-    /// Moving the vertex source to the surface DXF's TIN did not change that and could not have —
-    /// the mosaic outlived it — which is what
+    /// sees ground or a mosaic is how Revit maps and shades those triangles. Moving the vertex
+    /// source to the surface DXF's TIN did not change that and could not have — the mosaic outlived
+    /// it — which is what
     /// <see href="https://help.autodesk.com/cloudhelp/2025/ENU/Revit-WhatsNew/files/GUID-50FB6EAF-5308-487B-9BF0-A59C36126B96.htm">Revit
     /// 2025's Toposolid Enhancements</see> added the setting for.
     /// </para>
     /// <para>
-    /// ⛔ <b>And it cannot be used on ground wearing the aerial photograph.</b> Measured on a
-    /// 1,419 × 1,413 m site: with smoothing off the drape renders correctly and the ground is
-    /// faceted; with smoothing on the facets go and the photograph renders as four quadrants meeting
-    /// at a hard cross, each showing different ground. Same material, same four real-world texture
-    /// properties, same element. Autodesk documents that smoothing suppresses toposolid surface
-    /// patterns and ignores paint and graphic overrides; breaking a real-world-scaled bitmap is an
-    /// undocumented fourth cost, and it is the one that matters to this plugin.
-    /// </para>
-    /// <para>
-    /// So the rule is: smooth the ground only when there is no photograph to lose. A site model is
-    /// accurate before it is pretty, and a scrambled aerial photograph is a wrong model rather than
-    /// an ugly one. Where a drape WAS applied, the setting is left exactly as the curator had it and
-    /// the log explains the trade in <see cref="TerrainSmoothing"/>'s words — loudly when smoothing
-    /// is already on, because that curator is about to receive imagery in quarters and would
-    /// otherwise have no way at all to connect it to a ribbon toggle.
+    /// ⛔ <b>The photograph is placed for whichever renderer this leaves in charge.</b> The two
+    /// measure a real-world texture offset from different origins (<see cref="DrapeAnchor"/>), so
+    /// this runs BEFORE the drape's material is written and its answer is what the offsets are
+    /// computed from. An earlier version of this plugin turned smoothing on after the drape, saw
+    /// the photograph arrive as four quarters at a cross, and concluded the two were incompatible;
+    /// they are not — the drape was simply written for the other origin.
     /// </para>
     /// <para>
     /// ⛔ <b>The plugin never turns the setting off.</b> It is document-wide and reaches every
-    /// toposolid the curator owns, so reversing it silently is the same trespass as setting it
-    /// silently. Saying what is wrong and where the switch is leaves the decision where it belongs.
-    /// </para>
-    /// <para>
-    /// It is document-wide by signature, not by inference: <c>SetSmoothedSurface(Document, bool)</c>
-    /// and <c>IsSmoothedSurfaceEnabled(Document)</c> are <b>static</b> and take no element. There is
-    /// no per-toposolid setting, so there is nothing here to walk — the subdivisions and the terrain
-    /// are covered by the one call.
+    /// toposolid the curator owns, so reversing it silently would be the same trespass as setting
+    /// it silently. It is document-wide by signature, not by inference:
+    /// <c>SetSmoothedSurface(Document, bool)</c> and <c>IsSmoothedSurfaceEnabled(Document)</c> are
+    /// <b>static</b> and take no element, so there is nothing here to walk.
     /// </para>
     /// </remarks>
-    private void SettleSmoothedSurface()
+    /// <returns>Whether smooth shading is on now — read back, never assumed.</returns>
+    private bool EnsureSmoothedSurface()
     {
         // No ground, nothing to shade. A bundle whose terrain step was skipped or refused must not
         // have a project-wide display setting changed on its behalf.
         if (!HasTerrain())
         {
             Trace("  smoothing: this import left no terrain, so the setting was not touched.");
-            return;
+            return false;
         }
 
         bool enabled;
@@ -535,25 +523,30 @@ internal sealed class RevitBundleImporter(
             // Read before written, so a Revit without the 2025 pair leaves the project exactly as it
             // found it rather than half-set.
             Trace($"  smoothing: this Revit would not report the setting - {ex.GetType().Name}: {ex.Message}");
-            return;
-        }
-
-        if (_drapeApplied)
-        {
-            // The photograph wins. Nothing is written on this path at all — not even to turn the
-            // setting off, which would be trespass on a project-wide switch.
-            Say(TerrainSmoothing.DrapeNotice(enabled));
-            Trace($"  smoothing: left as-is ({enabled}) because this import draped imagery on the terrain.");
-            return;
+            return false;
         }
 
         if (enabled)
         {
-            // An earlier import, or the curator. Either way it is already what this wants, and a
-            // redundant write to a project-wide setting is not worth an undo entry.
-            Trace("  smoothing: already on for this project. Nothing written.");
-            return;
+            // An earlier import, the curator, or this import's own first call. Either way it is
+            // already what this wants, and a redundant write to a project-wide setting is not worth
+            // an undo entry.
+            if (!_smoothingSettled)
+            {
+                Trace("  smoothing: already on for this project. Nothing written.");
+            }
+
+            _smoothingSettled = true;
+            return true;
         }
+
+        if (_smoothingSettled)
+        {
+            // Asked once, refused once, said once. Asking again would only repeat the sentence.
+            return false;
+        }
+
+        _smoothingSettled = true;
 
         ImportFailureSwallower swallower = new("Smoothing the terrain surface");
         using Transaction transaction = BeginTransaction("Mantle Place: terrain smooth shading", swallower);
@@ -573,7 +566,7 @@ internal sealed class RevitBundleImporter(
                 Say(refused);
             }
 
-            return;
+            return false;
         }
 
         if (!CommitAndReport(transaction, swallower))
@@ -581,7 +574,7 @@ internal sealed class RevitBundleImporter(
             // Nothing more to say: the commit was refused, the swallower has already said in Revit's
             // own words why, and the shading is simply unchanged. The defect sentence below would
             // report a value that did not hold, when what actually happened is a rollback.
-            return;
+            return false;
         }
 
         // ⛔ Read back AFTER the commit. The drape's texture distances went in as feet, returned
@@ -608,6 +601,7 @@ internal sealed class RevitBundleImporter(
         }
 
         Trace($"  smoothing: turned on, reads back {isEnabled} (document-wide; no per-element state).");
+        return isEnabled;
     }
 
     /// <summary>Whether this project has ground for the smoothing decision to be about.</summary>
@@ -1134,6 +1128,13 @@ internal sealed class RevitBundleImporter(
         string imagePath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
         string name = $"Mantle Place Site Imagery {_archive.Layout.Key.Stem}";
 
+        // ⛔ BEFORE the material is written, because the offsets depend on the answer. Under smooth
+        // shading Revit measures a real-world texture offset from the element's bounding-box corner;
+        // under flat shading from the project origin (DrapeAnchor). The photograph has to be placed
+        // for the renderer that will draw it, so the setting is decided first and read back.
+        bool smoothed = EnsureSmoothedSurface();
+        DrapeOffset groundAnchor = AnchorFor(terrain, "the terrain", placement, smoothed);
+
         // The host retype is always paid and is the dominant cost, so the work count is 1 rather
         // than the subdivision count — the drape is slow on a terrain with no subdivisions at all.
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, 1) is { } notice)
@@ -1144,7 +1145,7 @@ internal sealed class RevitBundleImporter(
         ImportFailureSwallower swallower = new("Applying the aerial photograph");
         using Transaction transaction = BeginTransaction("Mantle Place: satellite imagery", swallower);
 
-        ElementId materialId = DrapeMaterialId(name, imagePath, placement, out string? misplaced);
+        ElementId materialId = DrapeMaterialId(name, imagePath, placement, groundAnchor, out string? misplaced);
         if (materialId == ElementId.InvalidElementId)
         {
             transaction.RollBack();
@@ -1154,10 +1155,14 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
+        // One material carries one offset, and under smooth shading every subdivision's offset is
+        // its own — so each gets its own material, anchored to its own corner. Under flat shading
+        // the origin is shared and so is the material.
         if (!TryWearMaterial(
             terrain,
             materialId,
             name,
+            subdivision => smoothed ? SubDivisionMaterialId(subdivision, name, imagePath, placement) : materialId,
             out int drapedSubDivisions,
             out int refusedSubDivisions,
             out string? refusalReason,
@@ -1176,10 +1181,6 @@ internal sealed class RevitBundleImporter(
             // the rollback took all of it.
             return;
         }
-
-        // ⛔ Here, after the commit stood — not where the drape was planned. This is what tells
-        // SettleSmoothedSurface there is now a photograph on the ground that smoothing would break.
-        _drapeApplied = true;
 
         string summary =
             $"Draped the satellite imagery from {step.EntryName} over the terrain — {placement.PixelSize} pixels "
@@ -1213,6 +1214,60 @@ internal sealed class RevitBundleImporter(
                 + "will repeat or sit off the ground it belongs to. This is a plugin defect — please "
                 + "report it with this log.");
         }
+
+        // The photograph is placed for one renderer, and the curator owns the switch between the
+        // two. Said here, after the drape, so the sentence follows the thing it is about.
+        Say(TerrainSmoothing.DrapeNotice(smoothed));
+    }
+
+    /// <summary>
+    /// The <c>texture_RealWorldOffset</c> pair for one element, from its bounding box and the
+    /// smooth-shading state — decided in <see cref="DrapeAnchor"/>, read here.
+    /// </summary>
+    /// <remarks>
+    /// An element with no bounding box gets the origin-anchored offset and a trace line saying so;
+    /// under smooth shading that photograph will be misplaced on it, and the log records why rather
+    /// than the plugin guessing a corner.
+    /// </remarks>
+    private DrapeOffset AnchorFor(Element element, string label, DrapePlacement placement, bool smoothed)
+    {
+        BoundingBoxXYZ? box = element.get_BoundingBox(null);
+        if (box is null)
+        {
+            Trace($"  drape: {label} has no bounding box, so its offset is anchored to the origin.");
+            return DrapeAnchor.For(placement, smoothShading: false, 0.0, 0.0);
+        }
+
+        double minXm = InternalToMetres(box.Min.X);
+        double minYm = InternalToMetres(box.Min.Y);
+        DrapeOffset anchor = DrapeAnchor.For(placement, smoothed, minXm, minYm);
+        Trace("  " + DrapeAnchor.Describe(label, placement, smoothed, minXm, minYm, anchor));
+        return anchor;
+    }
+
+    /// <summary>
+    /// A subdivision's own drape material: the ground's image and scale, anchored to the
+    /// subdivision's corner, named by the subdivision's stamp so a re-import reuses it.
+    /// </summary>
+    private ElementId SubDivisionMaterialId(Element subdivision, string name, string imagePath, DrapePlacement placement)
+    {
+        string token = SiteBoundaryIdentity.Token(
+            subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString(),
+            _archive.Layout.Key.Stem)
+            ?? subdivision.Id.Value.ToString(CultureInfo.InvariantCulture);
+
+        // Revit refuses these in an element name; anything else in a feature name is kept.
+        string safe = string.Concat(token.Select(c => @"\:{}[]|;<>?`~".Contains(c) ? '-' : c));
+        string materialName = $"{name} boundary {safe}";
+
+        DrapeOffset anchor = AnchorFor(subdivision, $"subdivision {subdivision.Id.Value}", placement, smoothed: true);
+        ElementId id = DrapeMaterialId(materialName, imagePath, placement, anchor, out string? misplaced);
+        if (misplaced is not null)
+        {
+            Trace($"  drape: ⚠ subdivision {subdivision.Id.Value}'s photograph is not pinned where it should be: {misplaced}");
+        }
+
+        return id;
     }
 
     /// <summary>
@@ -1228,6 +1283,7 @@ internal sealed class RevitBundleImporter(
         string name,
         string imagePath,
         DrapePlacement placement,
+        DrapeOffset anchor,
         out string? misplaced)
     {
         misplaced = null;
@@ -1292,17 +1348,18 @@ internal sealed class RevitBundleImporter(
             }
 
             // Real-world scale is the ground the image spans; the offset is where its lower-left
-            // corner sits in the project's own frame. Together they are the whole placement.
+            // corner sits, measured from whichever origin the renderer uses (DrapeAnchor). Together
+            // they are the whole placement.
             (string Name, double Metres, DistanceWrite Result)[] writes =
             [
                 ("width", placement.WidthM,
                     SetDistance(bitmap, UnifiedBitmap.TextureRealWorldScaleX, placement.WidthM)),
                 ("height", placement.HeightM,
                     SetDistance(bitmap, UnifiedBitmap.TextureRealWorldScaleY, placement.HeightM)),
-                ("west edge", placement.LeftM,
-                    SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetX, placement.LeftM)),
-                ("south edge", placement.BottomM,
-                    SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetY, placement.BottomM)),
+                ("west edge", anchor.Xm,
+                    SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetX, anchor.Xm)),
+                ("south edge", anchor.Ym,
+                    SetDistance(bitmap, UnifiedBitmap.TextureRealWorldOffsetY, anchor.Ym)),
             ];
 
             foreach ((_, _, DistanceWrite result) in writes)
@@ -1352,6 +1409,7 @@ internal sealed class RevitBundleImporter(
         Toposolid terrain,
         ElementId materialId,
         string typeName,
+        Func<Element, ElementId> materialFor,
         out int drapedSubDivisions,
         out int refusedSubDivisions,
         out string? refusalReason,
@@ -1430,7 +1488,8 @@ internal sealed class RevitBundleImporter(
 
             try
             {
-                bool wrote = material.Set(materialId);
+                ElementId wanted = materialFor(subdivision);
+                bool wrote = material.Set(wanted);
 
                 // ⛔ Read back. The same four texture properties two methods down are read back for
                 // the same reason, and that read-back is what caught the drape going in as feet and
@@ -1440,7 +1499,7 @@ internal sealed class RevitBundleImporter(
                     .get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL)
                     ?.AsElementId() ?? ElementId.InvalidElementId;
 
-                if (wrote && stored == materialId)
+                if (wrote && stored == wanted)
                 {
                     drapedSubDivisions++;
                     continue;
