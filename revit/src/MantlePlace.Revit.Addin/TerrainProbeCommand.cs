@@ -108,6 +108,13 @@ public sealed class TerrainProbeCommand : IExternalCommand
         try
         {
             Probe(document, zipPath, report);
+
+            // Opt-in, and never from the ribbon alone: renders a dozen arrangements of the terrain
+            // to PNG so the smooth-shading trade can be judged by eye rather than by argument.
+            if (Environment.GetEnvironmentVariable(DrapeRenderProbe.DirectoryVariable) is { Length: > 0 } renderDirectory)
+            {
+                DrapeRenderProbe.Run(document, renderDirectory, report);
+            }
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
                                        or InvalidOperationException
