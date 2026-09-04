@@ -45,12 +45,21 @@ namespace MantlePlace.Revit.Addin;
 /// deleted the arms whose question is answered.
 /// </para>
 /// <para>
+/// A fourth arrived when the drape worked and the terrain still read as a faceted mosaic. Vertex
+/// placement was ruled out by observation — the mosaic survived the move to the TIN — leaving how
+/// Revit shades the triangles rather than where they are. That one is settled too, and settled
+/// against the obvious fix: Revit 2025's smooth-shading setting removes the faceting and breaks the
+/// aerial photograph while it is on. <see cref="ProbeSmoothedSurface"/> kept only the reporting
+/// half, having deleted the arms whose question is answered.
+/// </para>
+/// <para>
 /// <b>Deletion trigger:</b> this command is diagnostic scaffolding, not product. Delete this file
-/// and its ribbon button once <em>all three</em> questions are settled by recorded probe runs — the
+/// and its ribbon button once <em>all four</em> questions are settled by recorded probe runs — the
 /// two base-plane ones above with <see cref="TerrainBasePlanner"/>'s default arm chosen on that
-/// evidence, and the subdivision material with its mechanism chosen. A shipped diagnostics command
-/// that outlived its question is UI debt, and extending its life without extending this trigger is
-/// how it becomes permanent.
+/// evidence, the subdivision material with its mechanism chosen, and the smooth-shading trade
+/// recorded with the importer's rule chosen on it. Three of the four are now settled; the base-plane
+/// pair is what still holds this file open. A shipped diagnostics command that outlived its question
+/// is UI debt, and extending its life without extending this trigger is how it becomes permanent.
 /// </para>
 /// </remarks>
 [Transaction(TransactionMode.Manual)]
@@ -99,6 +108,13 @@ public sealed class TerrainProbeCommand : IExternalCommand
         try
         {
             Probe(document, zipPath, report);
+
+            // Opt-in, and never from the ribbon alone: renders a dozen arrangements of the terrain
+            // to PNG so the smooth-shading trade can be judged by eye rather than by argument.
+            if (Environment.GetEnvironmentVariable(DrapeRenderProbe.DirectoryVariable) is { Length: > 0 } renderDirectory)
+            {
+                DrapeRenderProbe.Run(document, renderDirectory, report);
+            }
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
                                        or InvalidOperationException
@@ -182,6 +198,8 @@ public sealed class TerrainProbeCommand : IExternalCommand
         DescribeDrapeMaterials(document, report);
 
         ProbeSubDivisionMaterial(document, report);
+
+        ProbeSmoothedSurface(document, report);
 
         using LocalBundleArchive archive = LocalBundleArchive.Open(zipPath);
         if (archive.Manifest is not { } manifest)
@@ -800,6 +818,129 @@ public sealed class TerrainProbeCommand : IExternalCommand
         {
             report.AppendLine(CultureInfo.InvariantCulture,
                 $"          Paint THREW {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The smooth-shading setting as it stands, and an inventory of every toposolid in the project.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Both of the questions this arm was built to ask are answered, so it no longer asks
+    /// them.</b> It reports instead. Kept in that reduced form because the two facts below are the
+    /// ones a confusing screenshot needs before anybody theorises about it, and both are free.
+    /// </para>
+    /// <para>
+    /// <b>Answered 1 — scope.</b> <c>SetSmoothedSurface</c> and <c>IsSmoothedSurfaceEnabled</c> are
+    /// <b>static</b> and take only a <c>Document</c>. The setting is document-wide; there is no
+    /// per-toposolid state, so no subdivision ever needs the call in its own right. The compiler
+    /// settled that in one build, at no cost.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Answered 2 — it is incompatible with the drape.</b> Measured on a 1,419 × 1,413 m site
+    /// by rendering the same view twice: smoothing off gives a correct, continuous photograph on
+    /// faceted ground; smoothing on gives smooth ground under a photograph broken into four
+    /// quadrants meeting at a hard cross, each showing different terrain. Same material, same four
+    /// real-world texture properties, same element — only the setting differs. Autodesk documents
+    /// that smoothing suppresses toposolid surface patterns and ignores paint and graphic overrides;
+    /// breaking a real-world-scaled bitmap is an undocumented fourth cost. The importer therefore
+    /// smooths only ground with no photograph on it, and this arm is what would catch that changing
+    /// in a future Revit.
+    /// </para>
+    /// <para>
+    /// The inventory is the new half. A project that has been imported into more than once can hold
+    /// more toposolids than a reader expects, and "how many terrains are actually here" is a
+    /// question that has now been asked from a screenshot twice. A subdivision is itself a
+    /// <c>Toposolid</c>, so the distinction is drawn the way the importer draws it — anything listed
+    /// in another toposolid's <c>GetSubDivisionIds()</c> is a subdivision, and whatever is left is
+    /// ground.
+    /// </para>
+    /// <para>
+    /// ⛔ Nothing here opens a transaction at all now. The arm that did has served its purpose and is
+    /// gone, which also removes the one place in this file that could have altered a project-wide
+    /// display setting.
+    /// </para>
+    /// </remarks>
+    private static void ProbeSmoothedSurface(Document document, StringBuilder report)
+    {
+        report.AppendLine("TOPOSOLID SMOOTH SHADING — read only, nothing is written");
+        report.AppendLine("  (document-wide: both API members are static and take only a Document.)");
+        report.AppendLine("  (it moves the origin of a real-world texture offset: flat shading measures");
+        report.AppendLine("   from the project origin per face, smooth shading from the element's");
+        report.AppendLine("   bounding-box corner. The importer turns it on and anchors the drape for it.)");
+
+        try
+        {
+            bool enabled = Toposolid.IsSmoothedSurfaceEnabled(document);
+            string reading = enabled
+                ? "ON  <- a drape anchored to the element's corner renders correctly; one anchored to the origin shows four quarters at a cross"
+                : "OFF <- ground reads as a mosaic; a drape anchored to the origin is positioned correctly at the large scale";
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"  IsSmoothedSurfaceEnabled = {reading}");
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
+                                       or ArgumentException
+                                       or InvalidOperationException)
+        {
+            // Would mean this Revit does not carry the 2025 pair, which is worth one line rather
+            // than the loss of the inventory below.
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"  This Revit would not report the setting — {ex.GetType().Name}: {ex.Message}");
+        }
+
+        ReportToposolidInventory(document, report);
+        report.AppendLine();
+    }
+
+    /// <summary>
+    /// Every toposolid in the project, split into ground and subdivisions, with its footprint.
+    /// </summary>
+    /// <remarks>
+    /// The footprint is what makes the list readable: a second toposolid the size of the site is a
+    /// duplicate terrain from an earlier import and a real problem, while one a tenth of that size
+    /// is a subdivision or a curator's own modelling and is not. Reporting only ids would leave that
+    /// distinction to be guessed at from a screenshot, which is exactly what this is replacing.
+    /// </remarks>
+    private static void ReportToposolidInventory(Document document, StringBuilder report)
+    {
+        List<Toposolid> all = [.. new FilteredElementCollector(document)
+            .OfClass(typeof(Toposolid))
+            .Cast<Toposolid>()];
+
+        HashSet<ElementId> subdivisionIds = [];
+        foreach (Toposolid toposolid in all)
+        {
+            foreach (ElementId id in toposolid.GetSubDivisionIds())
+            {
+                subdivisionIds.Add(id);
+            }
+        }
+
+        int ground = all.Count(toposolid => !subdivisionIds.Contains(toposolid.Id));
+        report.AppendLine(CultureInfo.InvariantCulture,
+            $"  TOPOSOLIDS: {all.Count:N0} total — {ground:N0} ground, {subdivisionIds.Count:N0} subdivision(s)");
+
+        if (ground > 1)
+        {
+            // Said plainly, because it is the reading that changes what someone does next: two
+            // full-size terrains stacked will z-fight and no amount of material work will fix it.
+            report.AppendLine("      ⚠ more than one ground toposolid — check the footprints below "
+                + "for a duplicate terrain left by an earlier import.");
+        }
+
+        foreach (Toposolid toposolid in all)
+        {
+            BoundingBoxXYZ? box = toposolid.get_BoundingBox(null);
+            string footprint = box is null
+                ? "no bounding box"
+                : string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{UnitUtils.ConvertFromInternalUnits(box.Max.X - box.Min.X, UnitTypeId.Meters):0.#} x "
+                    + $"{UnitUtils.ConvertFromInternalUnits(box.Max.Y - box.Min.Y, UnitTypeId.Meters):0.#} m");
+
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"      {toposolid.Id.Value}: {(subdivisionIds.Contains(toposolid.Id) ? "subdivision" : "GROUND     ")}  "
+                + $"{footprint}  type \"{document.GetElement(toposolid.GetTypeId())?.Name ?? "(none)"}\"");
         }
     }
 

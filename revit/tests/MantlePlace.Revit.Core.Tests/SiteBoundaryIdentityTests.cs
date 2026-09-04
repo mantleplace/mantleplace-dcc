@@ -162,6 +162,17 @@ internal static class SiteBoundaryIdentityTests
                 "the stem with an empty feature token is not an identity");
         });
 
+        run.Case("the token is the part of an owned stamp after the stem, and nothing else's", () =>
+        {
+            // What names a subdivision's own drape material, so a re-import finds it by name.
+            string stamp = SiteBoundaryIdentity.Stamp("eb00f56f", "Zone A", 1);
+
+            run.True(SiteBoundaryIdentity.Token(stamp, "eb00f56f") == "Zone A", "the feature token");
+            run.True(SiteBoundaryIdentity.Token(stamp, "other") is null, "another order's stem owns nothing");
+            run.True(SiteBoundaryIdentity.Token("a curator's note", "eb00f56f") is null, "an unstamped element");
+            run.True(SiteBoundaryIdentity.Token(null, "eb00f56f") is null, "no comments at all");
+        });
+
         return run.Report("site boundary identity");
     }
 }

@@ -118,8 +118,12 @@ do **not** cross over.
   `GeometryCreationUtilities.CreateBlendGeometry`, and — added with the imagery drape —
   `AppearanceAssetEditScope`, the `UnifiedBitmap` schema and `ToposolidType.Duplicate` compile but
   have not yet been executed inside Revit. Compiling is worth more than nothing: it is what caught
-  `AssetEditScope` not existing (it is `AppearanceAssetEditScope`) and what surfaced
-  `AssetPropertyDistance.GetUnitTypeId()`, which replaced a guess about texture units with a read.
+  `AssetEditScope` not existing (it is `AppearanceAssetEditScope`), what surfaced
+  `AssetPropertyDistance.GetUnitTypeId()`, which replaced a guess about texture units with a read,
+  and what settled the scope of `Toposolid.SetSmoothedSurface` in one build — `CS0176` says it is
+  **static**, so the setting is per document and the code that would have walked the subdivisions
+  was never written. Reflection tells you a member exists; only the compiler tells you how it is
+  shaped, and `GetMembers()` will happily list a static method as though it were an instance one.
   Treat their behaviour as unverified until a real import proves it — and note that `Toposolid`
   itself is Revit 2024+, so the 2025 floor is also the floor for the topo path. There is a way to
   drive them without a human: set `MANTLEPLACE_BUNDLE_ZIP` and the import command skips its file

@@ -37,9 +37,14 @@ Remove (`HPS-44`).
   re-baseline is not merely old, it is written in a dialect this reader does not speak;
 - builds the terrain from the TIN in `Surface/Surface.dxf` — its vertices are placed adaptively,
   dense on slopes and sparse on flats, where `Surface/SurfacePoints.csv` is a perfectly regular
-  lattice whose cells are cocircular and therefore degenerate to triangulate, which is what made the
-  imported ground read as faceted no matter how well the imagery was draped. It is also the cheaper
-  of the two: on the bundle this was measured against, 75,203 TIN vertices against the grid's 80,940;
+  lattice whose cells are cocircular and therefore degenerate to triangulate, so the triangulator
+  picks slivers and fans by tie-break. It is also the cheaper of the two: on the bundle this was
+  measured against, 75,203 TIN vertices against the grid's 80,940.
+  ⚠ **This is not what made the imported ground read as faceted, and an earlier version of this
+  list said it was.** The mosaic outlived the move to the TIN. `Toposolid.Create` takes points and
+  re-triangulates, so a toposolid is a triangulated mesh whatever the vertex source is — the faceting
+  is Revit shading per face, and the only thing that changes it is the smooth-shading setting below,
+  which cannot be used on ground wearing a photograph;
 - falls back to the points file when the DXF is missing, or when the bundle publishes no origin to
   reduce its absolute coordinates against — the points file is already local, so it needs none — and
   falls back again to linking the DXF as CAD when neither surface can be built. Whichever tier is
@@ -59,6 +64,24 @@ Remove (`HPS-44`).
   never repainted. The rectangle the image is pinned to is not taken on trust: the only extent this
   host may read is undeclared by the published schema, so it is used only when the image's own pixel
   grid times `imagery.gsd_m` reproduces it, and refused with a stated reason when it does not;
+- turns on Revit 2025's **toposolid smooth shading** and **anchors the photograph for it**. The
+  faceting is not lighting: under flat shading Revit maps a real-world-scaled bitmap per face, in each
+  face's own plane, so every triangle carries its own slice of the image and the ground reads as a
+  mosaic that no view style, sun setting or self-illumination touches. Smooth shading maps it
+  continuously — but measures `texture_RealWorldOffset` from the **element's bounding-box corner**
+  rather than from the project origin, which is undocumented and is why a drape written for the
+  origin renders as four quarters meeting at a cross the moment smoothing is on. Measured by
+  exporting one view under both settings and matching every region against the published
+  photograph: anchored to the corner, the photograph sits within 1.6 m of the truth everywhere, on
+  smooth ground. So the import turns the setting on **first**, reads it back, and writes the offsets
+  for the renderer that will draw them — the terrain from its corner, and every site-boundary
+  subdivision from its own, each with its own material, since one material carries one offset. The
+  log says which origin each was written for and names the ribbon switch
+  (Massing & Site ▸ Model Site ▸ Toposolid Smooth Shading) with what turning it off will do to the
+  imagery. The setting is project-wide, so the log names the documented costs too (surface patterns
+  stop drawing, paint and graphic overrides are ignored), and the plugin never turns it off. Where
+  Revit refuses the setting, the photograph is anchored to the origin instead and the log says to
+  import again after turning smoothing on by hand;
 - refuses to import anything at all when an artifact's bytes do not match the `sha256` its own
   manifest publishes, before a single element is created (⛔`HPS-26`);
 - tells you what it did **not** import and why, using the manifest's own

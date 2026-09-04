@@ -98,6 +98,21 @@ public static class SiteBoundaryIdentity
     /// this import owns, and nothing else.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The per-feature token of a stamp this import owns — the part after the stem — or <c>null</c>
+    /// for any other Comments. What names a subdivision's own drape material, so a re-import finds
+    /// the material it made rather than growing another.
+    /// </summary>
+    public static string? Token(string? comments, string cacheKeyStem)
+    {
+        if (!IsStampFor(comments, cacheKeyStem))
+        {
+            return null;
+        }
+
+        return comments![(Prefix + cacheKeyStem + "/").Length..];
+    }
+
     public static bool IsStampFor(string? comments, string cacheKeyStem)
     {
         ArgumentNullException.ThrowIfNull(cacheKeyStem);
