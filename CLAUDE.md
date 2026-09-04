@@ -135,6 +135,20 @@ plugin reads them and applies them verbatim.
 This is enforced at review, permanently. A patch that computes a placement value locally is refused
 even when the arithmetic is correct.
 
+## Finishing a session
+
+A session finishes what it starts. An item may outlive the session only if it (1) needs a decision
+only the founder can make, (2) needs access the agent does not have, (3) touches a file this repo's
+law forbids editing, or (4) sits outside the session's working tree, where fixing it would put
+unrelated changes in the diff. Nothing else qualifies — not size, not risk, not "the founder might
+not want it." Where checks exist, closed out means the checks pass; if they cannot be made to pass,
+that is (2), and it is raised when it is hit, not at the end.
+
+There is no standing "next steps" or "outstanding" section. One appears only when an item passes one
+of the four tests, or when the founder asks — and each item names the test it claims. Work resolved
+on the agent's own judgment is disclosed in writing (commit body, ledger, or manifest), never saved
+up for the closing message.
+
 ## Where knowledge lives
 
 - **The contract** → the published JSON Schema series, cited by public URL. It is the authority; never
