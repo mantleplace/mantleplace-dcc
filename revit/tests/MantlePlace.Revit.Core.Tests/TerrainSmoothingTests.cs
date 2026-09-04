@@ -120,6 +120,45 @@ internal static class TerrainSmoothingTests
             run.Contains(notice, "smooth shading", "the success sentence, not a refusal");
         });
 
+        run.Case("a draped terrain with smoothing ON gets the loud sentence", () =>
+        {
+            // ⛔ The case that cost a whole session. Smoothing and a real-world-scaled photograph
+            // cannot coexist: the imagery renders as four quarters meeting at a cross. A curator who
+            // has the setting on has no way whatsoever to connect that to a ribbon toggle, so this
+            // sentence has to name the symptom they can see, not just the setting.
+            string notice = TerrainSmoothing.DrapeNotice(isEnabled: true);
+
+            run.Contains(notice, "four quarters", "the symptom, in the shape they will recognise");
+            run.Contains(notice, TerrainSmoothing.RibbonPath, "the switch that fixes it");
+            run.Contains(notice, "has not changed the setting for you",
+                "that the plugin declined to trespass on a project-wide setting");
+        });
+
+        run.Case("a draped terrain with smoothing OFF explains why the ground is faceted", () =>
+        {
+            // The ordinary path, and it still owes an explanation: the faceting is the very thing
+            // the issue was raised about, so silence here reads as the defect being unaddressed.
+            string notice = TerrainSmoothing.DrapeNotice(isEnabled: false);
+
+            run.Contains(notice, "flat triangles", "the appearance being explained");
+            run.Contains(notice, "deliberately left it off", "that this was a choice, not an omission");
+            run.Contains(notice, "breaks the mapping", "the reason for that choice");
+            run.Contains(notice, TerrainSmoothing.RibbonPath, "where to overrule it");
+        });
+
+        run.Case("the two drape sentences are different, and neither is empty", () =>
+        {
+            string on = TerrainSmoothing.DrapeNotice(isEnabled: true);
+            string off = TerrainSmoothing.DrapeNotice(isEnabled: false);
+
+            run.True(on.Length > 0 && off.Length > 0, "both states say something");
+            run.True(on != off, "the loud case and the ordinary case do not share a sentence");
+            run.True(on.StartsWith("⚠", StringComparison.Ordinal),
+                "only the case that needs the curator to act is marked as a warning");
+            run.False(off.StartsWith("⚠", StringComparison.Ordinal),
+                "the ordinary case is not dressed up as a warning");
+        });
+
         return run.Report("terrain smooth shading reporting");
     }
 }

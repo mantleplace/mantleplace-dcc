@@ -42,8 +42,9 @@ Remove (`HPS-44`).
   measured against, 75,203 TIN vertices against the grid's 80,940.
   ⚠ **This is not what made the imported ground read as faceted, and an earlier version of this
   list said it was.** The mosaic outlived the move to the TIN. `Toposolid.Create` takes points and
-  re-triangulates, so a toposolid is a triangulated mesh whatever the vertex source is — the
-  faceting was Revit shading per face, and it is the setting below that fixes it;
+  re-triangulates, so a toposolid is a triangulated mesh whatever the vertex source is — the faceting
+  is Revit shading per face, and the only thing that changes it is the smooth-shading setting below,
+  which cannot be used on ground wearing a photograph;
 - falls back to the points file when the DXF is missing, or when the bundle publishes no origin to
   reduce its absolute coordinates against — the points file is already local, so it needs none — and
   falls back again to linking the DXF as CAD when neither surface can be built. Whichever tier is
@@ -63,14 +64,20 @@ Remove (`HPS-44`).
   never repainted. The rectangle the image is pinned to is not taken on trust: the only extent this
   host may read is undeclared by the published schema, so it is used only when the image's own pixel
   grid times `imagery.gsd_m` reproduces it, and refused with a stated reason when it does not;
-- turns on Revit 2025's **toposolid smooth shading**, so the ground shades as a surface rather than
-  as flat triangles. ⚠ It is a **project-wide display setting** — `Toposolid.SetSmoothedSurface` is
-  static and takes only a `Document`, so there is no per-toposolid version of it — and while it is
-  on Revit does not draw toposolid surface patterns and ignores paint and graphic overrides on them,
-  on your own toposolids as much as on the imported ground. So the import log says it turned the
-  setting on, says what that costs, and names the ribbon path
-  (Massing & Site ▸ Model Site ▸ Toposolid Smooth Shading) to turn it back off. It is read back after
-  the commit rather than assumed, it is left alone when it is already on, and it is never turned off;
+- turns on Revit 2025's **toposolid smooth shading** — but **only when the import laid no aerial
+  photograph**, because the two cannot be had together. Smoothing removes the flat-triangle shading;
+  it also breaks the mapping of a real-world-scaled bitmap, and the drape then renders as four
+  quarters meeting at a hard cross, each showing the wrong ground. That was measured by rendering one
+  view twice, and it is an **undocumented** cost on top of the ones Autodesk does publish (surface
+  patterns stop drawing, paint and graphic overrides are ignored). Faced with smooth ground under a
+  scrambled photograph or faceted ground under a correct one, this host takes the correct photograph.
+  So: no imagery in the bundle and the ground is smoothed, with the log naming what the project-wide
+  setting costs and the ribbon path
+  (Massing & Site ▸ Model Site ▸ Toposolid Smooth Shading) that reverses it; imagery in the bundle
+  and the setting is left exactly as you had it, with the log explaining the trade — loudly if you
+  already had smoothing on, since your photograph will be in quarters and nothing else would tell you
+  why. It is read back after the commit rather than assumed, and the plugin never turns it off,
+  because it is project-wide and reaches every toposolid you own;
 - refuses to import anything at all when an artifact's bytes do not match the `sha256` its own
   manifest publishes, before a single element is created (⛔`HPS-26`);
 - tells you what it did **not** import and why, using the manifest's own

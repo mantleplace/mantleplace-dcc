@@ -78,6 +78,17 @@ internal sealed class RevitBundleImporter(
     /// </remarks>
     private readonly List<ElementId> _createdSubDivisionIds = [];
 
+    /// <summary>
+    /// Whether this import left an aerial photograph on the terrain.
+    /// </summary>
+    /// <remarks>
+    /// Set only where the drape actually committed, never where it was merely planned. It is
+    /// what <see cref="SettleSmoothedSurface"/> turns on, and a drape that was rolled back has
+    /// left no imagery to protect — so treating a planned-but-failed drape as applied would cost
+    /// a curator the smooth ground they could have had.
+    /// </remarks>
+    private bool _drapeApplied;
+
     /// <summary>Trunk height as a fraction of total height — the rest is crown.</summary>
     private const double TrunkHeightFraction = 0.35;
 
@@ -149,6 +160,11 @@ internal sealed class RevitBundleImporter(
         try
         {
             ExecuteSteps(plan);
+
+            // ⛔ After every step, never inside one. Whether the ground may be smoothed depends on
+            // whether it ended up wearing the aerial photograph, and the drape is the LAST step —
+            // so a terrain step that decided this for itself would be deciding it before the fact.
+            SettleSmoothedSurface();
         }
         finally
         {
@@ -424,12 +440,6 @@ internal sealed class RevitBundleImporter(
             + $" Type \"{type.Name}\"; terrain spans {UnitUtils.ConvertFromInternalUnits(relief.MinZ, UnitTypeId.Meters):0.##}"
             + $" m to {UnitUtils.ConvertFromInternalUnits(relief.MaxZ, UnitTypeId.Meters):0.##} m.");
 
-        // ⛔ In its own transaction, after this one committed. The terrain cost minutes to commit on
-        // a large site, and a display setting Revit might refuse must not be able to take it down.
-        // Once is enough: the setting is document-wide, so the boundaries and the drape that follow
-        // have nothing left to smooth.
-        EnsureSmoothedSurface();
-
         return true;
     }
 
@@ -461,62 +471,83 @@ internal sealed class RevitBundleImporter(
     }
 
     /// <summary>
-    /// Turns on Revit's toposolid smooth shading, so the ground shades as a surface rather than as
-    /// the triangles Revit re-triangulated it into.
+    /// Decides what happens to Revit's toposolid smooth shading, once every step has run.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ⛔ <b>This is a display setting, and it is the terrain's entire appearance.</b>
+    /// ⛔ <b>Smoothing is a display setting, and it is the terrain's entire appearance.</b>
     /// <c>Toposolid.Create</c> takes an <c>IList&lt;XYZ&gt;</c> and re-triangulates, so a toposolid is
-    /// a triangulated mesh no matter where its vertices came from; what decides whether a curator
+    /// a triangulated mesh no matter where its vertices came from. What decides whether a curator
     /// sees ground or a faceted mosaic is whether Revit shades across those triangles or per face.
     /// Moving the vertex source to the surface DXF's TIN did not change that and could not have —
     /// the mosaic outlived it — which is what
     /// <see href="https://help.autodesk.com/cloudhelp/2025/ENU/Revit-WhatsNew/files/GUID-50FB6EAF-5308-487B-9BF0-A59C36126B96.htm">Revit
-    /// 2025's Toposolid Enhancements</see> added this setting for.
+    /// 2025's Toposolid Enhancements</see> added the setting for.
     /// </para>
     /// <para>
-    /// ⛔ <b>It is document-wide, and the signature is the proof.</b>
-    /// <c>Toposolid.SetSmoothedSurface(Document, bool)</c> and
-    /// <c>Toposolid.IsSmoothedSurfaceEnabled(Document)</c> are <b>static</b> and take only the
-    /// document — there is no element argument to pass, so there is no per-toposolid setting and
-    /// nothing for this method to walk. One call covers the terrain, every site-boundary subdivision
-    /// and every toposolid the curator modelled. That is why this is called once, from the terrain
-    /// step, and not again after the boundaries or the drape: a later <c>ChangeTypeId</c>
-    /// regenerates an <em>element</em>, and there is no element state here for it to drop.
+    /// ⛔ <b>And it cannot be used on ground wearing the aerial photograph.</b> Measured on a
+    /// 1,419 × 1,413 m site: with smoothing off the drape renders correctly and the ground is
+    /// faceted; with smoothing on the facets go and the photograph renders as four quadrants meeting
+    /// at a hard cross, each showing different ground. Same material, same four real-world texture
+    /// properties, same element. Autodesk documents that smoothing suppresses toposolid surface
+    /// patterns and ignores paint and graphic overrides; breaking a real-world-scaled bitmap is an
+    /// undocumented fourth cost, and it is the one that matters to this plugin.
     /// </para>
     /// <para>
-    /// ⚠ <b>Because it is document-wide, it costs the curator something.</b> While it is on Revit
-    /// does not draw toposolid surface patterns and ignores paint and graphic overrides on them —
-    /// on their toposolids as well as this import's. So the outcome is announced rather than
-    /// buried, in <see cref="TerrainSmoothing"/>'s words: what changed, what it costs, and where to
-    /// reverse it. A silent project-wide switch is how a plugin gets blamed for a project that
-    /// "went wrong" three weeks later.
+    /// So the rule is: smooth the ground only when there is no photograph to lose. A site model is
+    /// accurate before it is pretty, and a scrambled aerial photograph is a wrong model rather than
+    /// an ugly one. Where a drape WAS applied, the setting is left exactly as the curator had it and
+    /// the log explains the trade in <see cref="TerrainSmoothing"/>'s words — loudly when smoothing
+    /// is already on, because that curator is about to receive imagery in quarters and would
+    /// otherwise have no way at all to connect it to a ribbon toggle.
     /// </para>
     /// <para>
-    /// It also runs in a transaction of its own, after the terrain's has committed. The terrain
-    /// commit costs minutes on a large site, and a display setting Revit might refuse must not be
-    /// able to take that down with it.
+    /// ⛔ <b>The plugin never turns the setting off.</b> It is document-wide and reaches every
+    /// toposolid the curator owns, so reversing it silently is the same trespass as setting it
+    /// silently. Saying what is wrong and where the switch is leaves the decision where it belongs.
+    /// </para>
+    /// <para>
+    /// It is document-wide by signature, not by inference: <c>SetSmoothedSurface(Document, bool)</c>
+    /// and <c>IsSmoothedSurfaceEnabled(Document)</c> are <b>static</b> and take no element. There is
+    /// no per-toposolid setting, so there is nothing here to walk — the subdivisions and the terrain
+    /// are covered by the one call.
     /// </para>
     /// </remarks>
-    private void EnsureSmoothedSurface()
+    private void SettleSmoothedSurface()
     {
-        bool wasEnabled;
+        // No ground, nothing to shade. A bundle whose terrain step was skipped or refused must not
+        // have a project-wide display setting changed on its behalf.
+        if (!HasTerrain())
+        {
+            Trace("  smoothing: this import left no terrain, so the setting was not touched.");
+            return;
+        }
+
+        bool enabled;
         try
         {
-            wasEnabled = Toposolid.IsSmoothedSurfaceEnabled(_document);
+            enabled = Toposolid.IsSmoothedSurfaceEnabled(_document);
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
                                        or ArgumentException
                                        or InvalidOperationException)
         {
-            // Read before written, so a Revit that does not carry the 2025 pair leaves the terrain
-            // exactly as it found it rather than half-set.
-            Trace($"  smoothing: this Revit would not report the setting — {ex.GetType().Name}: {ex.Message}");
+            // Read before written, so a Revit without the 2025 pair leaves the project exactly as it
+            // found it rather than half-set.
+            Trace($"  smoothing: this Revit would not report the setting - {ex.GetType().Name}: {ex.Message}");
             return;
         }
 
-        if (wasEnabled)
+        if (_drapeApplied)
+        {
+            // The photograph wins. Nothing is written on this path at all — not even to turn the
+            // setting off, which would be trespass on a project-wide switch.
+            Say(TerrainSmoothing.DrapeNotice(enabled));
+            Trace($"  smoothing: left as-is ({enabled}) because this import draped imagery on the terrain.");
+            return;
+        }
+
+        if (enabled)
         {
             // An earlier import, or the curator. Either way it is already what this wants, and a
             // redundant write to a project-wide setting is not worth an undo entry.
@@ -537,7 +568,7 @@ internal sealed class RevitBundleImporter(
         {
             transaction.RollBack();
 
-            if (TerrainSmoothing.Notice(wasEnabled, isEnabled: false, ex.Message) is { } refused)
+            if (TerrainSmoothing.Notice(wasEnabled: false, isEnabled: false, ex.Message) is { } refused)
             {
                 Say(refused);
             }
@@ -565,19 +596,24 @@ internal sealed class RevitBundleImporter(
                                        or ArgumentException
                                        or InvalidOperationException)
         {
-            // Unreadable after a committed write is not "probably fine". Reported as not held,
-            // which is the conservative half and the one a curator can act on.
-            Trace($"  smoothing: unreadable after the commit — {ex.GetType().Name}: {ex.Message}");
+            // Unreadable after a committed write is not "probably fine". Reported as not held, which
+            // is the conservative half and the one a curator can act on.
+            Trace($"  smoothing: unreadable after the commit - {ex.GetType().Name}: {ex.Message}");
             isEnabled = false;
         }
 
-        if (TerrainSmoothing.Notice(wasEnabled, isEnabled, null) is { } notice)
+        if (TerrainSmoothing.Notice(wasEnabled: false, isEnabled, null) is { } notice)
         {
             Say(notice);
         }
 
-        Trace($"  smoothing: was {wasEnabled}, now {isEnabled} (document-wide; static API, no per-element state).");
+        Trace($"  smoothing: turned on, reads back {isEnabled} (document-wide; no per-element state).");
     }
+
+    /// <summary>Whether this project has ground for the smoothing decision to be about.</summary>
+    private bool HasTerrain()
+        => _document.GetElement(
+            _terrainId != ElementId.InvalidElementId ? _terrainId : TerrainToposolidId()) is Toposolid;
 
     /// <summary>Every level in the project, as the pure planner needs to see it.</summary>
     private List<CandidateLevel> CollectLevels()
@@ -1140,6 +1176,10 @@ internal sealed class RevitBundleImporter(
             // the rollback took all of it.
             return;
         }
+
+        // ⛔ Here, after the commit stood — not where the drape was planned. This is what tells
+        // SettleSmoothedSurface there is now a photograph on the ground that smoothing would break.
+        _drapeApplied = true;
 
         string summary =
             $"Draped the satellite imagery from {step.EntryName} over the terrain — {placement.PixelSize} pixels "
