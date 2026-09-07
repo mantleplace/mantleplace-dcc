@@ -100,6 +100,25 @@ runs unattended from a Revit journal or a tester script. An unattended run raise
 writes `<zip>.mantleplace-import.log` beside the bundle instead, because a `TaskDialog` during
 journal playback is never dismissed.
 
+⛔ **Load the add-in by hand once after every deploy, before the first unattended run.** The
+assemblies are unsigned, so the first time Revit loads a *newly built* shim it raises
+**Security — Unsigned Add-In**, once per Revit version. Journal playback does not answer it, and
+the failure does not look like a failure: Revit carries on **without the add-in loaded**, the
+journal runs to its end and reports `finished journal file playback`, the `Jrn.RibbonEvent` lines
+name ribbon buttons that were never created, and nothing happens — no import, no log, no error.
+Answering **Always Load** once per version is remembered for that build; the next build prompts
+again, because the trust is per assembly and the assembly changed. Getting past it is a click, and
+there is no way to do it from a journal — which is the same reason the release gate below is a
+person launching all three Revits rather than a script.
+
+The ribbon events a playback journal needs, for reference — the tab, panel and button names come
+from `MantlePlaceApplication`:
+
+```
+Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Mantle Place%Bundles%MantlePlaceImportLocalBundle:MantlePlace.Revit.Addin.ImportLocalBundleCommand"
+Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Mantle Place%Bundles%MantlePlaceProbeTerrain:MantlePlace.Revit.Addin.TerrainProbeCommand"
+```
+
 ## Layout
 
 ```
