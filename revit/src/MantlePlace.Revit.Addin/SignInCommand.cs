@@ -15,18 +15,38 @@ namespace MantlePlace.Revit.Addin;
 /// the button.
 /// </para>
 /// <para>
-/// The sign-in is awaited on a background thread and only the report comes back here. It touches no
-/// <see cref="Document"/>, so it needs no <c>ExternalEvent</c> — that machinery arrives with the
-/// vault browser, which does.
+/// The command STARTS the sign-in and returns. <see cref="IExternalCommand.Execute"/> is
+/// synchronous and the browser round-trip is not, so waiting for it here froze the whole
+/// application for up to the five-minute timeout. Progress and cancellation live on
+/// <see cref="SignInWindow"/>, which is modeless, so Revit stays usable while the curator is in
+/// their browser.
+/// </para>
+/// <para>
+/// It touches no <see cref="Document"/>, so it needs no <c>ExternalEvent</c> — that machinery
+/// arrives with the vault browser, which does.
 /// </para>
 /// </remarks>
 [Transaction(TransactionMode.ReadOnly)]
 [Regeneration(RegenerationOption.Manual)]
 public sealed class SignInCommand : IExternalCommand
 {
+    /// <summary>
+    /// The one sign-in window, if one is open. A second click focuses it rather than starting a
+    /// second browser round-trip that would race the first for the same loopback callback.
+    /// </summary>
+    private static SignInWindow? _window;
+
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
     {
+        ArgumentNullException.ThrowIfNull(commandData);
+
         AuthSession session = MantlePlaceApplication.Session;
+
+        if (_window is not null)
+        {
+            _window.Activate();
+            return Result.Succeeded;
+        }
 
         if (session.State == AuthState.Authenticated)
         {
@@ -55,46 +75,21 @@ public sealed class SignInCommand : IExternalCommand
             return Result.Cancelled;
         }
 
-        // Blocking the UI thread on the browser round-trip would freeze Revit for up to the
-        // five-minute timeout. GetAwaiter().GetResult() after a Task.Run keeps the wait off the
-        // dispatcher; the modeless progress surface arrives with the vault browser.
-        AuthOutcome outcome = Task.Run(() => session.SignInAsync()).GetAwaiter().GetResult();
+        // Start the flow and hand it to a modeless window. What this command must NOT do is wait
+        // for it: Execute runs on Revit's UI thread, so blocking here -- which is what
+        // Task.Run(...).GetAwaiter().GetResult() did, whatever the thread the work ran on -- froze
+        // the application until the browser came back or the five-minute timeout expired.
+        _window = new SignInWindow(session, commandData.Application.MainWindowHandle);
+        _window.Closed += (_, _) => _window = null;
+        _window.Show();
 
-        if (outcome.Cancelled)
-        {
-            // HPS-09: timing out is a cancellation, not a failure. A curator who wandered off comes
-            // back to a signed-out plugin, not an error they have to dismiss.
-            return Result.Cancelled;
-        }
+        // Discarded deliberately: the outcome is reported on the window, and RunAsync lets no
+        // exception escape. Awaiting it here would reintroduce exactly the freeze this removes.
+        _ = _window.RunAsync();
 
-        if (!outcome.Succeeded)
-        {
-            message = outcome.Message;
-            return Result.Failed;
-        }
-
-        new TaskDialog("Mantle Place")
-        {
-            MainInstruction = "Signed in.",
-            MainContent = Describe(session),
-        }.Show();
-
+        // Succeeded means "the command ran", not "the curator is signed in" -- that answer does not
+        // exist yet, and a synchronous command cannot wait for it without freezing Revit.
         return Result.Succeeded;
-    }
-
-    /// <summary>
-    /// Says plainly whether the session survives a restart (<c>HPS-16</c>).
-    /// </summary>
-    private static string Describe(AuthSession session)
-    {
-        string who = session.UserEmail.Length > 0
-            ? $"Signed in as {session.UserEmail}."
-            : "Signed in.";
-
-        return session.IsPersistent
-            ? who
-            : who + " This machine has no secure credential store, so you will need to sign in again "
-                + "next time Revit starts.";
     }
 }
 
