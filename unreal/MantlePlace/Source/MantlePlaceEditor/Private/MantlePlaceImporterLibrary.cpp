@@ -6,6 +6,7 @@
 #include "MantlePlaceCoverageRasters.h"
 #include "MantlePlaceDrape.h"
 #include "MantlePlaceImportManifest.h"
+#include "MantlePlaceImportNaming.h"
 #include "MantlePlaceLandscapeImporter.h"
 #include "MantlePlaceLandscapeWeightsLogic.h"
 #include "MantlePlaceLocalTileServer.h"
@@ -384,7 +385,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// level otherwise). Verbatim and unqualified: Parse has already refused everything that is not
 	// a semver string, so by here this is always MAJOR.MINOR.PATCH.
 	Log.Add(FString::Printf(TEXT("Bundle manifest version %s (jobId %s)."),
-		*Manifest.Version, *Manifest.JobId.Left(8)));
+		*Manifest.Version, *MantlePlaceImportNaming::ShortIdentity(Manifest.JobId)));
 
 	// --- Fail-closed integrity check: the downloaded bytes must match the manifest's declared sha256
 	// before anything is imported. A corrupt/truncated/tampered download aborts here, creating nothing.
@@ -426,7 +427,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// followers should see the gate clear before the first actor spawns.
 	UE_LOG(LogMantlePlaceImport, Log,
 		TEXT("Integrity verified: every manifest-declared sha256 matches (jobId %s)."),
-		*Manifest.JobId.Left(8));
+		*MantlePlaceImportNaming::ShortIdentity(Manifest.JobId));
 
 	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
 	if (World == nullptr)
@@ -437,7 +438,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 
 	const FString TempDir = FPaths::ProjectSavedDir() / TEXT("MantlePlace") / TEXT("ImportTmp") / Manifest.JobId;
 	PlatformFile.CreateDirectoryTree(*TempDir);
-	const FString DestPackagePath = FString::Printf(TEXT("/Game/MantlePlace/%s"), *Manifest.JobId.Left(8));
+	const FString DestPackagePath = MantlePlaceImportNaming::ImportRoot(
+		MantlePlaceImportNaming::DefaultContentRoot(), Manifest.JobId);
 
 	// Decide up-front what each requested representation needs. If NOTHING requested can be produced
 	// (e.g. a Mesh import of a Cesium-terrain-only v8 bundle that ships no Terrain.glb), bail BEFORE the
@@ -537,11 +539,11 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// bundle spawned, so re-importing replaces them instead of stacking duplicate (coincident)
 	// actors. Both importers label their actors "MP_<Type>_<jobId8>".
 	{
-		const FString JobIdShort = Manifest.JobId.Left(8);
-		const FString LandscapeLabel = FString::Printf(TEXT("MP_Landscape_%s"), *JobIdShort);
-		const FString MeshLabel = FString::Printf(TEXT("MP_Mesh_%s"), *JobIdShort);
-		const FString BuildingsLabel = FString::Printf(TEXT("MP_Buildings_%s"), *JobIdShort);
-		const FString RoadSplinePrefix = FString::Printf(TEXT("MP_RoadSpline_%s_"), *JobIdShort);
+		using namespace MantlePlaceImportNaming;
+		const FString LandscapeLabel = ActorLabel(EActorKind::Landscape, Manifest.JobId);
+		const FString MeshLabel = ActorLabel(EActorKind::Mesh, Manifest.JobId);
+		const FString BuildingsLabel = ActorLabel(EActorKind::Buildings, Manifest.JobId);
+		const FString RoadSplinePrefix = RoadSplineLabelPrefix(Manifest.JobId);
 		TArray<AActor*> StaleActors;
 		for (TActorIterator<AActor> It(World); It; ++It)
 		{
@@ -821,7 +823,6 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		}
 		if (bParsed)
 		{
-			const FString JobIdShort = Manifest.JobId.Left(8);
 			int32 SplineIndex = 0;
 			for (const FMantlePlaceRoadSpline& Spline : Splines)
 			{
@@ -843,7 +844,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				}
 				SplineComponent->UpdateSpline();
 
-				SplineActor->SetActorLabel(FString::Printf(TEXT("MP_RoadSpline_%s_%03d"), *JobIdShort, SplineIndex++));
+				SplineActor->SetActorLabel(
+				    MantlePlaceImportNaming::RoadSplineLabel(Manifest.JobId, SplineIndex++));
 				SplineActor->Tags.Add(FName(*FString::Printf(TEXT("width_m=%.1f"), Spline.WidthMEstimated)));
 				if (!Spline.RoadClass.IsEmpty())
 				{
@@ -884,8 +886,11 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			}
 			else
 			{
-				const FString AssetName = FString::Printf(TEXT("DT_TreePoints_%s"), *Manifest.JobId.Left(8));
-				const FString PackageName = DestPackagePath / TEXT("Landcover") / AssetName;
+				const FString AssetName = MantlePlaceImportNaming::TreePointsTableName(Manifest.JobId);
+				const FString PackageName =
+					MantlePlaceImportNaming::SubfolderPath(
+						DestPackagePath, MantlePlaceImportNaming::ESubfolder::Landcover)
+					/ AssetName;
 				UPackage* Package = CreatePackage(*PackageName);
 				// RF_Transactional is set AFTER RowStruct, not passed to NewObject. A transactional
 				// object constructed while a transaction is open is serialized into the undo buffer
@@ -899,7 +904,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				Table->SetFlags(RF_Transactional);
 				for (int32 RowIndex = 0; RowIndex < Rows.Num(); ++RowIndex)
 				{
-					Table->AddRow(FName(*FString::Printf(TEXT("Tree_%d"), RowIndex)), Rows[RowIndex]);
+					Table->AddRow(
+						FName(*MantlePlaceImportNaming::TreePointsRowName(RowIndex)), Rows[RowIndex]);
 				}
 				FAssetRegistryModule::AssetCreated(Table);
 				Table->MarkPackageDirty();
@@ -1088,7 +1094,7 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 	Info.BboxNorthDeg = Manifest.BboxNorthDeg;
 	Info.Message = FString::Printf(
 		TEXT("Streaming bundle %s on %s (%d Cesium terrain tiles). Cesium3DTileset Url -> %s"),
-		*Manifest.JobId.Left(8), *BaseUrl, Manifest.CesiumTerrainTileCount, *Info.CesiumTerrainUrl);
+		*MantlePlaceImportNaming::ShortIdentity(Manifest.JobId), *BaseUrl, Manifest.CesiumTerrainTileCount, *Info.CesiumTerrainUrl);
 	return Info;
 }
 

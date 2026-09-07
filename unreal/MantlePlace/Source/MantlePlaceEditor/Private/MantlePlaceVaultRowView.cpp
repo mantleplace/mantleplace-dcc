@@ -199,7 +199,8 @@ FMantlePlaceVaultDetailView BuildVaultDetailView(const FMantlePlaceVaultItem& It
 	View.Codename = CapitalizeWords(Label);
 	View.OrderLine = Item.OrderId.IsEmpty()
 		? FString()
-		: FString::Printf(TEXT("order #%s"), *Item.OrderId.Left(12));
+		// A vault-row caption, not a name written into a user's project.
+		: FString::Printf(TEXT("order #%s"), *Item.OrderId.Left(12));  // naming-gate: allow caption, not a generated name
 
 	const FMantlePlaceVaultStatusView StatusView = GetVaultStatusView(Item.Status);
 	View.StatusLabel = StatusView.Label;

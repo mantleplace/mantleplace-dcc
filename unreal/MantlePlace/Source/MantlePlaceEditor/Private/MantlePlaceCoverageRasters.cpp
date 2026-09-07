@@ -38,10 +38,11 @@ namespace MantlePlaceCoverageRasters
 
 		UAssetImportTask* Task = NewObject<UAssetImportTask>();
 		Task->Filename = DiskFile;
-		Task->DestinationPath = DestPackagePath / TEXT("CoverageRasters");
+		Task->DestinationPath = MantlePlaceImportNaming::SubfolderPath(
+			DestPackagePath, MantlePlaceImportNaming::ESubfolder::CoverageRasters);
 		// Named on the way in, never renamed afterwards -- a rename here would purge the import's
 		// undo transaction. See MantlePlaceImportNaming::ImportNameFor.
-		Task->DestinationName = MantlePlaceImportNaming::ImportNameFor(TEXT("T_"), DiskFile);
+		Task->DestinationName = MantlePlaceImportNaming::TextureName(DiskFile);
 		Task->bAutomated = true;
 		Task->bReplaceExisting = true;
 		Task->bSave = false;

@@ -3,6 +3,7 @@
 #include "MantlePlaceLandscapeImporter.h"
 
 #include "MantlePlaceImportManifest.h"
+#include "MantlePlaceImportNaming.h"
 #include "MantlePlaceLandscapeWeightsLogic.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -106,9 +107,12 @@ namespace MantlePlaceLandscapeImporter
 	static ULandscapeLayerInfoObject* GetOrCreateLayerInfo(
 		const FString& Material, const FString& DestPackagePath)
 	{
-		const FString AssetName = FString::Printf(TEXT("LI_%s"), *Material);
-		const FString PackageName = DestPackagePath / TEXT("Landcover") / AssetName;
-		const FString ObjectPath = FString::Printf(TEXT("%s.%s"), *PackageName, *AssetName);
+		const FString AssetName = MantlePlaceImportNaming::LayerInfoName(Material);
+		const FString PackageName =
+			MantlePlaceImportNaming::SubfolderPath(
+				DestPackagePath, MantlePlaceImportNaming::ESubfolder::Landcover)
+			/ AssetName;
+		const FString ObjectPath = MantlePlaceImportNaming::ObjectPathOf(PackageName, AssetName);
 
 		if (ULandscapeLayerInfoObject* Existing = LoadObject<ULandscapeLayerInfoObject>(nullptr, *ObjectPath))
 		{
@@ -282,7 +286,8 @@ namespace MantlePlaceLandscapeImporter
 			FlushRenderingCommands();
 		}
 
-		Landscape->SetActorLabel(FString::Printf(TEXT("MP_Landscape_%s"), *Manifest.JobId.Left(8)));
+		Landscape->SetActorLabel(MantlePlaceImportNaming::ActorLabel(
+			MantlePlaceImportNaming::EActorKind::Landscape, Manifest.JobId));
 		return Landscape;
 	}
 }

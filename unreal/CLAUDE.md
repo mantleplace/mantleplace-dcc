@@ -69,6 +69,9 @@ it is not part of an offline sweep.
 ```bash
 # The cross-host contract gate (Python 3.12, standard library, offline for the corpus half).
 python ../tools/manifest-conformance/check_manifest_conformance.py
+
+# The generated-name drift gate. Text-only, no engine — run it before you push.
+python ../tools/unreal-naming/check_generated_names.py
 ```
 
 ## Naming
@@ -140,10 +143,17 @@ prefix literal and no subfolder literal at a call site — a convention with no 
 definition rots at the first patch that does not know about it, and a naming regression compiles
 cleanly.
 
-> **Not yet conformed.** The standard above is the target. The tree currently keys generated content
-> on the build rather than the order, sets no outliner folder at all, repeats the identity in two
-> asset names, and spells the root and subfolder literals at each call site. The importer is being
-> conformed to it; do not read the current code as the reference.
+Two things check it. `MantlePlace.Import.Naming` asserts the exact strings the module produces, and
+`tools/unreal-naming/check_generated_names.py` refuses a `/Game/` literal, a bare prefix, an `MP_`
+label, a subfolder path segment or an inline identity truncation anywhere else. The second exists
+because the first only runs where an engine does — a line added at a call site would otherwise reach
+`main` unchallenged. A line that genuinely needs one can carry `// naming-gate: allow <reason>`; the
+reason is required.
+
+> **Not yet conformed.** Two parts of the standard above are still ahead of the code: generated
+> content is keyed on the build rather than the order, and no outliner folder is set at all. The
+> content root is not yet a setting, and the identity still repeats in two asset names. Everything
+> else — the prefix table, the subfolder layout, one place for every name — is in place.
 
 ## Things that will bite you
 

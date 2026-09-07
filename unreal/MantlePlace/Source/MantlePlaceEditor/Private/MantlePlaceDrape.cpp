@@ -33,10 +33,11 @@ namespace MantlePlaceDrape
 
 		UAssetImportTask* Task = NewObject<UAssetImportTask>();
 		Task->Filename = ImageryFile;
-		Task->DestinationPath = DestPackagePath / TEXT("Imagery");
+		Task->DestinationPath = MantlePlaceImportNaming::SubfolderPath(
+			DestPackagePath, MantlePlaceImportNaming::ESubfolder::Imagery);
 		// Named on the way in, never renamed afterwards -- a rename here would purge the import's
 		// undo transaction. See MantlePlaceImportNaming::ImportNameFor.
-		Task->DestinationName = MantlePlaceImportNaming::ImportNameFor(TEXT("T_"), ImageryFile);
+		Task->DestinationName = MantlePlaceImportNaming::TextureName(ImageryFile);
 		Task->bAutomated = true;
 		Task->bReplaceExisting = true;
 		Task->bSave = false;
@@ -83,9 +84,10 @@ namespace MantlePlaceDrape
 
 		FAssetToolsModule& Module = FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools"));
 
-		const FString AssetName = FString::Printf(TEXT("MI_Drape_%s"), *Manifest.JobId.Left(8));
-		const FString MicPackage = DestPackagePath / TEXT("Imagery");
-		const FString MicObjectPath = FString::Printf(TEXT("%s/%s.%s"), *MicPackage, *AssetName, *AssetName);
+		const FString AssetName = MantlePlaceImportNaming::DrapeMaterialName(Manifest.JobId);
+		const FString MicPackage = MantlePlaceImportNaming::SubfolderPath(
+			DestPackagePath, MantlePlaceImportNaming::ESubfolder::Imagery);
+		const FString MicObjectPath = MantlePlaceImportNaming::ObjectPathIn(MicPackage, AssetName);
 
 		// Idempotent: reuse the MIC on re-import (CreateAsset can't prompt-overwrite unattended).
 		UMaterialInstanceConstant* Mic = LoadObject<UMaterialInstanceConstant>(nullptr, *MicObjectPath);

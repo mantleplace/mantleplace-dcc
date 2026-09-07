@@ -1,0 +1,54 @@
+# Unreal naming — refuse a generated name or package path built anywhere but the naming module.
+#
+# `unreal/CLAUDE.md` states what the Unreal importer names inside a user's project, and ADR 0003
+# records why that standard lives in this repository. Both are prose, and prose is not an enforcer.
+# The tree they describe had already drifted before either existed: four asset prefixes in a table
+# and three more invented at call sites, the content root respelled once and the identity truncation
+# respelled eight times.
+#
+# The reason this needs a GATE rather than review is specific to this host. Nothing in public CI
+# compiles the Unreal plugin — it needs a licensed engine on Windows, and a self-hosted runner on a
+# public repository would let a fork's pull request execute on the build machine. So a naming
+# regression here compiles cleanly wherever it is eventually built, produces no warning, and is
+# discovered by a user looking at their own outliner. This job is the only automated thing standing
+# in front of that.
+#
+# It is text-only: it reads .cpp and .h files and talks to nothing. No engine, no network, seconds on
+# a free hosted runner. The C++ side of the same standard — the exact strings the module produces —
+# is asserted by MantlePlace.Import.Naming, which runs where an engine exists.
+#
+# NO paths: FILTER ON pull_request, deliberately, for the reason spelled out in ci-revit-tests.yml
+# and ci-public-hygiene.yml: a required check that is path-filtered never reports on a pull request
+# outside its paths, so the check sits pending forever and nothing can merge.
+name: ci-unreal-naming
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-unreal-naming-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generated-names:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The gate's own cases first, and they assert BOTH directions. Half of them are
+      # false-positive cases — the plugin's own mount path, a subfolder word used as a UI string, a
+      # paint layer name read from the manifest — because a gate that fires on a legitimate line is
+      # a gate somebody silences wholesale, and then it guards nothing.
+      - name: Unit-test the gate
+        working-directory: tools/unreal-naming
+        run: python -m unittest discover -p "test_*.py" -v
+
+      - name: Check generated names
+        run: python tools/unreal-naming/check_generated_names.py
