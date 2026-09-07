@@ -555,28 +555,9 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 			*Missing));
 	}
 
-	// ==========================================================================================
-	// Host-local: Supabase endpoint construction and base-URL validation
-	// ==========================================================================================
-	// Which GoTrue path this host calls, and how it defends against a half-typed base URL, are
-	// deployment plumbing rather than cross-host protocol (DOC-06).
-	{
-		const FString Expected = TEXT("https://abc.supabase.co/auth/v1/token?grant_type=password");
-		TestEqual(TEXT("Password URL from clean base"),
-			FLogic::BuildPasswordGrantUrl(TEXT("https://abc.supabase.co")), Expected);
-		TestEqual(TEXT("Password URL trims whitespace + multiple slashes"),
-			FLogic::BuildPasswordGrantUrl(TEXT("  https://abc.supabase.co//  ")), Expected);
-		TestEqual(TEXT("Refresh URL"),
-			FLogic::BuildRefreshGrantUrl(TEXT("https://abc.supabase.co")),
-			FString(TEXT("https://abc.supabase.co/auth/v1/token?grant_type=refresh_token")));
-		TestEqual(TEXT("pkce token url"),
-			FLogic::BuildPkceTokenUrl(TEXT("https://abc.supabase.co")),
-			FString(TEXT("https://abc.supabase.co/auth/v1/token?grant_type=pkce")));
-	}
-
-	// A scheme-only value (a half-typed "https:" left in a BP default or ini) used to slip through
-	// an IsEmpty() check and build the hostless URL "https:/auth/v1/token", which DNS-fails and was
-	// reported as the misleading "Network error: no response from the platform."
+	// A scheme-only value (a half-typed "https:" left in a config) slips through an IsEmpty() check
+	// and builds a hostless URL, which DNS-fails and used to be reported as the misleading
+	// "Network error: no response from the platform." The vault base URL is still checked with it.
 	{
 		TestTrue(TEXT("Full https base is valid"), FLogic::IsValidBaseUrl(TEXT("https://abc.supabase.co")));
 		TestTrue(TEXT("Trailing slash is valid"), FLogic::IsValidBaseUrl(TEXT("https://abc.supabase.co/")));
@@ -594,10 +575,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 
 	// Request bodies: assert fields, not byte order.
 	{
-		const FString Body = FLogic::BuildPasswordGrantBody(TEXT("user@example.com"), TEXT("hunter2"));
-		TestEqual(TEXT("Password body email"), ReadStringField(Body, TEXT("email")), FString(TEXT("user@example.com")));
-		TestEqual(TEXT("Password body password"), ReadStringField(Body, TEXT("password")), FString(TEXT("hunter2")));
-
 		TestEqual(TEXT("Refresh body token"),
 			ReadStringField(FLogic::BuildRefreshGrantBody(TEXT("refresh-abc-123")), TEXT("refresh_token")),
 			FString(TEXT("refresh-abc-123")));

@@ -59,8 +59,8 @@ void UMantlePlaceAuthSystemBase::SignInWithBrowser()
 
 	if (WebLoginUrl.IsEmpty())
 	{
-		const FString Msg = TEXT("Browser sign-in is misconfigured: set WebLoginUrl (the mantle.place native-login URL) "
-			"in DefaultGame.ini [/Script/MantlePlaceRuntime.MantlePlaceAuthSystemBase] or the BP child's class defaults.");
+		const FString Msg = TEXT("Browser sign-in is misconfigured: WebLoginUrl (the mantle.place native-login "
+			"URL) has been cleared. It has a working default; nothing needs to set it.");
 		UE_LOG(LogMantlePlaceAuth, Error, TEXT("%s"), *Msg);
 		SetAuthState(EMantlePlaceAuthState::Failed);
 		OnSignInResult(false, Msg);
@@ -144,9 +144,7 @@ void UMantlePlaceAuthSystemBase::TryRestoreSession()
 		return;
 	}
 
-	FString Url;
-	bool bAnonKey = false;
-	if (!ResolveRefreshEndpoint(Url, bAnonKey))
+	if (RefreshEndpointUrl.IsEmpty())
 	{
 		LastAuthError = TEXT("Mantle Place sign-in is not configured on this install.");
 		UE_LOG(LogMantlePlaceAuth, Error, TEXT("TryRestoreSession: %s"), *LastAuthError);
@@ -159,55 +157,7 @@ void UMantlePlaceAuthSystemBase::TryRestoreSession()
 	SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::BeginRestore));
 
 	const FString Body = FMantlePlaceAuthLogic::BuildRefreshGrantBody(StoredRefresh);
-	SendAuthRequest(Url, Body, ERequestKind::Restore, bAnonKey);
-}
-
-void UMantlePlaceAuthSystemBase::SignIn(const FString& Email, const FString& Password)
-{
-	if (!bAllowPasswordGrant)
-	{
-		const FString Msg = TEXT("Password sign-in is disabled. Use SignInWithBrowser() (OAuth 2.0 + PKCE).");
-		UE_LOG(LogMantlePlaceAuth, Warning, TEXT("%s"), *Msg);
-		OnSignInResult(false, Msg);
-		return;
-	}
-
-	if (AuthState == EMantlePlaceAuthState::Authenticating || AuthState == EMantlePlaceAuthState::Refreshing)
-	{
-		UE_LOG(LogMantlePlaceAuth, Warning, TEXT("SignIn ignored: an auth request is already in flight."));
-		return;
-	}
-
-	if (!FMantlePlaceAuthLogic::IsValidBaseUrl(PlatformApiBaseUrl) || SupabaseAnonKey.IsEmpty())
-	{
-		// Fail fast and loud on a misconfigured endpoint. A scheme-only value (e.g. a half-typed
-		// "https:") would otherwise build the hostless URL "https:/auth/v1/token" and surface the
-		// misleading "Network error: no response from the platform" after a DNS timeout.
-		const FString Msg = FString::Printf(
-			TEXT("Auth is misconfigured: PlatformApiBaseUrl ('%s') must be a full http(s) URL with a host "
-			     "(e.g. https://<ref>.supabase.co) and SupabaseAnonKey must be set. Set them in DefaultGame.ini "
-			     "[/Script/MantlePlaceRuntime.MantlePlaceAuthSystemBase] or the BP child's class defaults."),
-			*PlatformApiBaseUrl);
-		UE_LOG(LogMantlePlaceAuth, Error, TEXT("%s"), *Msg);
-		SetAuthState(EMantlePlaceAuthState::Failed);
-		OnSignInResult(false, Msg);
-		return;
-	}
-
-	if (Email.IsEmpty() || Password.IsEmpty())
-	{
-		const FString Msg = TEXT("Email and password are required.");
-		UE_LOG(LogMantlePlaceAuth, Warning, TEXT("%s"), *Msg);
-		SetAuthState(EMantlePlaceAuthState::Failed);
-		OnSignInResult(false, Msg);
-		return;
-	}
-
-	SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::BeginSignIn));
-
-	const FString Url = FMantlePlaceAuthLogic::BuildPasswordGrantUrl(PlatformApiBaseUrl);
-	const FString Body = FMantlePlaceAuthLogic::BuildPasswordGrantBody(Email, Password);
-	SendAuthRequest(Url, Body, ERequestKind::SignIn, /*bAttachAnonKey=*/true);
+	SendAuthRequest(RefreshEndpointUrl, Body, ERequestKind::Restore);
 }
 
 void UMantlePlaceAuthSystemBase::SignOut()
@@ -244,9 +194,7 @@ void UMantlePlaceAuthSystemBase::RefreshToken()
 		return;
 	}
 
-	FString Url;
-	bool bAnonKey = false;
-	if (!ResolveRefreshEndpoint(Url, bAnonKey))
+	if (RefreshEndpointUrl.IsEmpty())
 	{
 		LastAuthError = TEXT("Mantle Place sign-in is not configured on this install.");
 		UE_LOG(LogMantlePlaceAuth, Error, TEXT("RefreshToken: %s"), *LastAuthError);
@@ -262,7 +210,7 @@ void UMantlePlaceAuthSystemBase::RefreshToken()
 	SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::BeginRefresh));
 
 	const FString Body = FMantlePlaceAuthLogic::BuildRefreshGrantBody(Tokens.RefreshToken);
-	SendAuthRequest(Url, Body, ERequestKind::Refresh, bAnonKey);
+	SendAuthRequest(RefreshEndpointUrl, Body, ERequestKind::Refresh);
 }
 
 bool UMantlePlaceAuthSystemBase::IsAuthenticated() const
@@ -280,29 +228,7 @@ void UMantlePlaceAuthSystemBase::BeginDestroy()
 	Super::BeginDestroy();
 }
 
-bool UMantlePlaceAuthSystemBase::ResolveRefreshEndpoint(FString& OutUrl, bool& bOutAttachAnonKey) const
-{
-	// The broker route is the default and the one an unconfigured install has. Falling back to the
-	// identity provider only when the broker was explicitly cleared keeps the developer escape
-	// hatch without making it the path everyone silently depends on.
-	if (!RefreshEndpointUrl.IsEmpty())
-	{
-		OutUrl = RefreshEndpointUrl;
-		bOutAttachAnonKey = false;
-		return true;
-	}
-
-	if (FMantlePlaceAuthLogic::IsValidBaseUrl(PlatformApiBaseUrl) && !SupabaseAnonKey.IsEmpty())
-	{
-		OutUrl = FMantlePlaceAuthLogic::BuildRefreshGrantUrl(PlatformApiBaseUrl);
-		bOutAttachAnonKey = true;
-		return true;
-	}
-
-	return false;
-}
-
-void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FString& Body, ERequestKind Kind, bool bAttachAnonKey)
+void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FString& Body, ERequestKind Kind)
 {
 	// Defensively drop any stale request before launching a new one.
 	CancelActiveRequest();
@@ -312,14 +238,6 @@ void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FStri
 	ActiveRequest->SetURL(Url);
 	ActiveRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	ActiveRequest->SetHeader(TEXT("Accept"), TEXT("application/json"));
-	// The anon key authenticates identity-provider-direct calls only. The broker routes have no
-	// use for it, and sending a configured value to an endpoint that does not want it is a habit
-	// worth not having.
-	if (bAttachAnonKey && !SupabaseAnonKey.IsEmpty())
-	{
-		ActiveRequest->SetHeader(TEXT("apikey"), SupabaseAnonKey);
-		ActiveRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *SupabaseAnonKey));
-	}
 	ActiveRequest->SetContentAsString(Body);
 
 	// Capture a weak pointer, never raw `this`: the request completes across frames and the
@@ -785,16 +703,8 @@ void UMantlePlaceAuthSystemBase::StopLoopbackServer()
 
 void UMantlePlaceAuthSystemBase::BeginPkceTokenExchange(const FString& AuthCode)
 {
-	// Prefer the configured web token endpoint; fall back to Supabase-direct PKCE exchange.
-	FString Url = TokenEndpointUrl;
-	if (Url.IsEmpty())
-	{
-		Url = FMantlePlaceAuthLogic::BuildPkceTokenUrl(PlatformApiBaseUrl);
-	}
 	const FString Body = FMantlePlaceAuthLogic::BuildPkceTokenBody(AuthCode, PendingCodeVerifier);
-	// The PKCE exchange goes to the broker by default and identity-provider-direct only when
-	// TokenEndpointUrl was explicitly cleared; the anon key belongs to the latter.
-	SendAuthRequest(Url, Body, ERequestKind::PkceExchange, /*bAttachAnonKey=*/TokenEndpointUrl.IsEmpty());
+	SendAuthRequest(TokenEndpointUrl, Body, ERequestKind::PkceExchange);
 }
 
 void UMantlePlaceAuthSystemBase::AbortBrowserSignIn(const FString& Message, bool bUserAborted)

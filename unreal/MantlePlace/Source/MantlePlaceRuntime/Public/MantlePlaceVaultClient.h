@@ -39,7 +39,7 @@ DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStatusNative, bo
  * OnPresignedUrlProbed events to drive UI.
  *
  * Configure via DefaultGame.ini [/Script/MantlePlaceRuntime.MantlePlaceVaultClient]:
- * VaultApiBaseUrl (the Mantle Place web app host - distinct from the Supabase auth URL).
+ * VaultApiBaseUrl (the Mantle Place web app host).
  */
 UCLASS(BlueprintType, Blueprintable, config = Game)
 class MANTLEPLACERUNTIME_API UMantlePlaceVaultClient : public UObject

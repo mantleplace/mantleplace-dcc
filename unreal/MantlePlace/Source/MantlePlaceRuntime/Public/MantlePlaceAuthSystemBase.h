@@ -30,26 +30,20 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FMantlePlaceOnTokenRefreshedNative, bool /*b
 /**
  * C++ base for the Mantle Place auth system.
  *
- * Owns the auth LOGIC: it signs in against the Mantle Place platform API (Supabase
- * GoTrue) over HTTP with a JWT, caches the session token in memory, and exposes auth
- * state. The deterministic core (URL/body construction, response parsing, expiry, the
- * state machine) lives in the headless-testable FMantlePlaceAuthLogic; this class
- * is the thin impure shim that issues requests and fires Blueprint events.
+ * Owns the auth LOGIC: OAuth 2.0 Authorization Code + PKCE through the system browser, the token
+ * set in memory, and the auth state. The deterministic core (URL/body construction, response
+ * parsing, expiry arithmetic, the rejection classifier, the state machine) lives in the
+ * headless-testable FMantlePlaceAuthLogic; this class is the thin impure shim that issues the
+ * requests and fires the events.
  *
- * A human reparents a Blueprint child (BP_MantlePlaceAuthSystemBase) onto this base
- * and wires only the surface — which widget shows on failure, success transitions, etc.
- * See Docs/Auth-Reparent.md.
+ * Every route this class talks to is a public mantle.place route, compiled in. There is no
+ * packaging-time secret and no identity-provider-direct path: a plugin that cannot sign in, stay
+ * signed in, or sign out without a config file is a plugin that cannot do those things, and for
+ * anyone who had not packaged the plugin that is exactly what used to happen.
  *
- * Endpoint classification (mirrors the Revit host's MantlePlaceEndpoints):
- * the public mantle.place routes (WebLoginUrl, TokenEndpointUrl) are compiled in — they are
- * public URLs, and a plugin that cannot sign in without a config file is a plugin that cannot
- * sign in. PlatformApiBaseUrl + SupabaseAnonKey have NO default and are not in this plugin:
- * they are hydrated from the consuming project's DefaultGame.ini section
- * [/Script/MantlePlaceRuntime.MantlePlaceAuthSystemBase] at packaging time. Sign-in works
- * without them (the browser flow brokers through mantle.place); token refresh/restore is
- * Supabase-direct and reports a named misconfiguration when they are absent. The anon key is
- * a public client key; never place a service-role/secret key here — and never bake either
- * value into the BP child's class defaults, which ship with the plugin.
+ * The surface is native Slate (SMantlePlaceVaultPanel). There is no Blueprint child: the editor's
+ * one session is owned by UMantlePlaceAuthSubsystem, which has a startup moment a Blueprint graph
+ * cannot offer. See Docs/Platform-Contract.md for what mantle.place must serve.
  */
 UCLASS(Blueprintable, config = Game)
 class MANTLEPLACERUNTIME_API UMantlePlaceAuthSystemBase : public UObject
@@ -57,22 +51,6 @@ class MANTLEPLACERUNTIME_API UMantlePlaceAuthSystemBase : public UObject
 	GENERATED_BODY()
 
 public:
-	/**
-	 * Supabase project URL, e.g. https://<ref>.supabase.co (no trailing slash required).
-	 * Capture-sensitive: no default here — hydrated from the consuming project's config at
-	 * packaging time (see the class comment). Never commit a value into this plugin.
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Mantle Place|Auth")
-	FString PlatformApiBaseUrl;
-
-	/**
-	 * Supabase anon (public) API key, sent as the apikey / bearer header (Supabase-direct calls
-	 * only). Capture-sensitive like PlatformApiBaseUrl: no default here, hydrated from the
-	 * consuming project's config at packaging time.
-	 */
-	UPROPERTY(EditDefaultsOnly, Config, Category = "Mantle Place|Auth")
-	FString SupabaseAnonKey;
-
 	/**
 	 * The mantle.place hosted native-login URL the system browser is sent to — the OAuth
 	 * authorization endpoint. PKCE + redirect params are appended at runtime.
@@ -82,9 +60,7 @@ public:
 	FString WebLoginUrl = TEXT("https://mantle.place/auth/native");
 
 	/**
-	 * Endpoint for the PKCE code→token exchange. Public route, compiled in. When explicitly
-	 * configured empty, falls back to Supabase-direct
-	 * ({PlatformApiBaseUrl}/auth/v1/token?grant_type=pkce).
+	 * Endpoint for the PKCE code→token exchange. Public route, compiled in.
 	 */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Mantle Place|Auth")
 	FString TokenEndpointUrl = TEXT("https://mantle.place/api/v1/auth/native/token");
@@ -93,12 +69,10 @@ public:
 	 * Endpoint that exchanges a stored refresh token for a new access token. Public route,
 	 * compiled in, and the reason a curator with no packaging-time configuration can stay signed in.
 	 *
-	 * Refresh and restore used to be identity-provider-direct ONLY, which needed PlatformApiBaseUrl
-	 * and SupabaseAnonKey - values hydrated at packaging time and absent from a plain clone. So
-	 * sign-in worked config-free and restore did not, on the machine of everyone who had not
-	 * packaged the plugin. The Revit host added this same route for the same reason.
-	 *
-	 * When explicitly configured empty, falls back to the identity-provider-direct grant.
+	 * Refresh and restore used to be identity-provider-direct, which needed values hydrated at
+	 * packaging time and absent from a plain clone: sign-in worked config-free and restore did not,
+	 * on the machine of everyone who had not packaged the plugin. The Revit host has the same route
+	 * for the same reason.
 	 */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Mantle Place|Auth")
 	FString RefreshEndpointUrl = TEXT("https://mantle.place/api/v1/auth/native/refresh");
@@ -127,10 +101,6 @@ public:
 	/** Seconds to wait for the browser round-trip before a sign-in times out. */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Mantle Place|Auth")
 	int32 SignInTimeoutSeconds = 300;
-
-	/** When false (default), legacy password SignIn() is disabled in favor of SignInWithBrowser(). */
-	UPROPERTY(EditDefaultsOnly, Config, Category = "Mantle Place|Auth")
-	bool bAllowPasswordGrant = false;
 
 	/**
 	 * When false, SignInWithBrowser() prepares the full flow — loopback server,
@@ -163,13 +133,6 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Auth")
 	void TryRestoreSession();
-
-	/**
-	 * Begin a legacy email/password sign-in (direct password grant). Disabled unless
-	 * bAllowPasswordGrant is true — prefer SignInWithBrowser. Result via OnSignInResult.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Auth")
-	void SignIn(const FString& Email, const FString& Password);
 
 	/** Clear the cached session locally. Always succeeds; fires OnSignOutComplete. */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Auth")
@@ -256,14 +219,8 @@ private:
 	/** Which auth grant a given HTTP exchange represents (selects the completion behavior). */
 	enum class ERequestKind : uint8 { SignIn, Refresh, Restore, PkceExchange };
 
-	/**
-	 * Build, configure, and send a POST auth request; routes completion to HandleAuthResponse.
-	 *
-	 * bAttachAnonKey is true only for identity-provider-direct calls, which authenticate with the
-	 * publishable anon key. The broker routes do not take it, and sending it there would leak a
-	 * configured value to an endpoint that has no use for it.
-	 */
-	void SendAuthRequest(const FString& Url, const FString& Body, ERequestKind Kind, bool bAttachAnonKey);
+	/** Build, configure, and send a POST auth request; routes completion to HandleAuthResponse. */
+	void SendAuthRequest(const FString& Url, const FString& Body, ERequestKind Kind);
 
 	/** HTTP completion handler (game thread). Parses the response and fires the relevant event. */
 	void HandleAuthResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
@@ -279,12 +236,6 @@ private:
 	 * failure keeps it.
 	 */
 	void HandleAuthFailure(const FString& Message, ERequestKind Kind, bool bDefinitive);
-
-	/**
-	 * Pick the endpoint a refresh or restore should use. False when neither is configured.
-	 * bOutAttachAnonKey is true only for the identity-provider-direct fallback.
-	 */
-	bool ResolveRefreshEndpoint(FString& OutUrl, bool& bOutAttachAnonKey) const;
 
 	/** Fire OnTokenRefreshed and its native counterpart together. Every settle path goes through here. */
 	void NotifyTokenRefreshed(bool bSuccess);
