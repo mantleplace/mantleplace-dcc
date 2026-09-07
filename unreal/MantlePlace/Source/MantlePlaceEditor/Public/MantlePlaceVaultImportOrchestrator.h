@@ -77,6 +77,16 @@ public:
 	 * called, the orchestrator lazily creates a plain UMantlePlaceAuthSystemBase (which still reads the
 	 * DefaultGame.ini auth config from its CDO) on first use.
 	 */
+	/**
+	 * Rebuild an auth session from the stored refresh token, if there is one.
+	 *
+	 * Called when the vault surface opens, NOT at editor startup: the vault browser is the only
+	 * thing that needs a session, so an editor the user never points at the vault makes no auth
+	 * request at all. Silently does nothing when no credential is stored.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
+	void TryRestoreSession();
+
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	void Initialize(UMantlePlaceAuthSystemBase* InAuthSystem);
 

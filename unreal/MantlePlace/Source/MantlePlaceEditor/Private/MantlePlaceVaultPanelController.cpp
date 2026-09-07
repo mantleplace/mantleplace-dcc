@@ -39,6 +39,11 @@ bool UMantlePlaceVaultPanelController::IsSignedIn() const
 	return Orchestrator && Orchestrator->IsSignedIn();
 }
 
+void UMantlePlaceVaultPanelController::TryRestoreSession()
+{
+	if (Orchestrator) { Orchestrator->TryRestoreSession(); }
+}
+
 bool UMantlePlaceVaultPanelController::IsBusy() const
 {
 	return Orchestrator && Orchestrator->IsBusy();

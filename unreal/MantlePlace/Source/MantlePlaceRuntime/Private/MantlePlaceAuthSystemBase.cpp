@@ -43,7 +43,10 @@ DEFINE_LOG_CATEGORY_STATIC(LogMantlePlaceAuth, Log, All);
 namespace
 {
 	/** Secret-store key under which the refresh token is persisted. */
-	const FString GRefreshTokenKey(TEXT("refresh_token"));
+	// The storage key, and therefore the file name. Spelled exactly as the Revit host spells it:
+	// both hosts read and write ONE credential per OS user, so a difference of one character here
+	// is two sessions that never see each other.
+	const FString GRefreshTokenKey(TEXT("refresh-token"));
 }
 
 void UMantlePlaceAuthSystemBase::SignInWithBrowser()

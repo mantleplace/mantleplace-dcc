@@ -8,7 +8,9 @@
  * Platform-abstracted at-rest store for a single auth secret (the OAuth refresh token).
  *
  * The Windows implementation encrypts the value with DPAPI (CryptProtectData) bound to the
- * current Windows user, then writes the ciphertext under the project's Saved/ directory.
+ * current Windows user, then writes the ciphertext under the per-OS-user Mantle Place auth
+ * directory - the same location, and the same file name, the Revit host uses, so one sign-in on a
+ * machine is one sign-in for every host on it.
  * Platforms without a secure-store implementation get a fail-safe no-op: nothing is written
  * (a plaintext secret on disk is never an option), so the user simply re-authenticates each
  * launch. The access token (short-lived JWT) is intentionally NOT stored — it stays in memory
