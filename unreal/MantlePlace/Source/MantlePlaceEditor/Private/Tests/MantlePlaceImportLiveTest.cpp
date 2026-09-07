@@ -132,6 +132,37 @@ namespace MantlePlaceImportLiveTest
 	}
 
 	/**
+	 * Every landscape component of `Landscape`, wherever the world happened to put it.
+	 *
+	 * Deliberately NOT `ALandscape::LandscapeComponents`. That array holds only the components
+	 * owned by the ALandscape actor itself, and a World Partition world distributes them across
+	 * ALandscapeStreamingProxy actors instead -- so reading the actor's own array there yields an
+	 * empty set and every readback below silently measures nothing. ULandscapeInfo is the
+	 * whole-landscape view: ForAllLandscapeComponents walks the ALandscape *and* every loaded
+	 * streaming proxy, making it a superset of the actor array in both world configurations. It
+	 * also null-filters, so what comes back needs no further guarding.
+	 *
+	 * "Loaded" is the standing caveat: an unloaded World Partition cell contributes components to
+	 * nobody, so a caller needing the whole landscape must keep its cells loaded.
+	 */
+	TArray<ULandscapeComponent*> GatherLandscapeComponents(ALandscape* Landscape)
+	{
+		TArray<ULandscapeComponent*> Components;
+		if (Landscape == nullptr)
+		{
+			return Components;
+		}
+		if (ULandscapeInfo* Info = Landscape->GetLandscapeInfo())
+		{
+			Info->ForAllLandscapeComponents([&Components](ULandscapeComponent* Component)
+				{
+					Components.Add(Component);
+				});
+		}
+		return Components;
+	}
+
+	/**
 	 * Is this a CI run? Keyed on `CI`, which every mainstream CI provider sets and which no
 	 * developer shell sets by accident; presence is the signal, the value is not read.
 	 *
@@ -430,14 +461,26 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 	// component must NOT be left on the engine default surface (the symptom of the "material needs a
 	// manual re-apply" bug). This guards the plumbing headlessly; pixel-accurate render timing (does it
 	// show on the import frame with no re-apply / refresh) is verified live in the editor.
-	if (Landscape != nullptr && Landscape->LandscapeComponents.Num() > 0)
+	//
+	// The component set is ASSERTED, not used as a silent precondition. This block used to open
+	// `if (Landscape->LandscapeComponents.Num() > 0)` and fall straight through an empty array --
+	// so in exactly the world configuration that hides the components from that array (World
+	// Partition, which owns them via streaming proxies) the drape check went vacuous rather than
+	// red. A skipped gate and a passed gate are the same green; this one now fails loudly.
+	if (Landscape != nullptr)
 	{
-		ULandscapeComponent* Component = Landscape->LandscapeComponents[0];
-		UMaterialInstance* Instance = Component ? Component->GetMaterialInstance(0, /*InDynamic*/ false) : nullptr;
-		UMaterial* Base = Instance ? Instance->GetMaterial() : nullptr;
-		TestNotNull(TEXT("landscape component has a material instance"), Instance);
-		TestTrue(TEXT("landscape component material is not the engine default surface"),
-			Base != nullptr && Base != UMaterial::GetDefaultMaterial(MD_Surface));
+		const TArray<ULandscapeComponent*> Components =
+			MantlePlaceImportLiveTest::GatherLandscapeComponents(Landscape);
+		if (TestTrue(TEXT("the imported landscape has at least one component to read the drape from"),
+				Components.Num() > 0))
+		{
+			ULandscapeComponent* Component = Components[0];
+			UMaterialInstance* Instance = Component->GetMaterialInstance(0, /*InDynamic*/ false);
+			UMaterial* Base = Instance ? Instance->GetMaterial() : nullptr;
+			TestNotNull(TEXT("landscape component has a material instance"), Instance);
+			TestTrue(TEXT("landscape component material is not the engine default surface"),
+				Base != nullptr && Base != UMaterial::GetDefaultMaterial(MD_Surface));
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -516,15 +559,20 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		{
 			TArray<FVector> Samples;
 			constexpr int32 VertexStride = 8;
-			for (ULandscapeComponent* Component : Landscape->LandscapeComponents)
+			// Read through ULandscapeInfo, not ALandscape::LandscapeComponents -- see
+			// GatherLandscapeComponents. The two tallies below exist so that a failure says WHICH way it
+			// broke: no components reached us at all (they are owned somewhere this view cannot see, or
+			// the landscape never registered) versus components arrived but every one of them had no
+			// readable height data (an edit-layer / flush problem). Those two want opposite fixes, and
+			// the bare vertex count that used to be reported here could not tell them apart.
+			const TArray<ULandscapeComponent*> Components = GatherLandscapeComponents(Landscape);
+			int32 NumWithoutHeightData = 0;
+			for (ULandscapeComponent* Component : Components)
 			{
-				if (Component == nullptr)
-				{
-					continue;
-				}
 				FLandscapeComponentDataInterface Data(Component, /*MipLevel*/ 0, /*WorkOnEditingLayer*/ false);
 				if (Data.GetRawHeightData() == nullptr)
 				{
+					++NumWithoutHeightData;
 					continue;
 				}
 				const int32 SizeVerts = Component->ComponentSizeQuads + 1;
@@ -540,7 +588,9 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			if (Samples.Num() < GridN * GridN * 4)
 			{
 				AddError(FString::Printf(
-					TEXT("Orientation gate: only %d landscape vertices were readable."), Samples.Num()));
+					TEXT("Orientation gate: only %d landscape vertices were readable "
+						 "(%d component(s) via ULandscapeInfo, %d of them with no raw height data)."),
+					Samples.Num(), Components.Num(), NumWithoutHeightData));
 			}
 			else
 			{
