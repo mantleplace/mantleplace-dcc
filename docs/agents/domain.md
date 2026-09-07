@@ -39,6 +39,13 @@ Two concurrent branches will both pick the same next free number, because both w
 picked it. That is how `0002` came to name two records: they merged twelve seconds apart. **Re-check
 `docs/adr/` on `main` immediately before merging an ADR**, and renumber if something landed first.
 
+**Adding an ADR is two edits, not one.** Root [`CLAUDE.md`](../../CLAUDE.md)'s "Where knowledge
+lives" carries a one-line index of the ADRs — not their filenames, which the directory already
+gives, but the words a reader arrives with ("re-import replaces", "re-import refuses"). It is a
+cache and it is kept deliberately, because a bare directory link left a cross-host question four
+hops from the root. A cache with no keeper rots, so this is its keeper: land the ADR and the index
+line together, in the same commit.
+
 Where a collision has already merged, the record whose number is cited **bare** in prose keeps it,
 and the one cited only through Markdown links is renumbered. Links are updated mechanically and fail
 loudly; a bare `ADR 0002` in a code comment is updated by hand or not at all, and a stale one points

@@ -39,7 +39,10 @@ CONTEXT.md  CLAUDE.md
 
 **The rule for every future top-level addition:** *a top-level folder is a DCC host or a cross-host
 concern, nothing else.* Names are spelled out in full — `mantleplace`, never `mp`. `max/`,
-`blender/`, `rhino/` are created when they have real content, never as empty placeholders. **That
+`blender/`, `rhino/` are created when they have real content, never as empty placeholders — and
+"real content" means the triad every layer here is built as (an impure host shim, a pure logic core,
+and a headless test of that core — [CONTRIBUTING.md](CONTRIBUTING.md#style-and-shape)) plus the new
+folder's own `<host>/CLAUDE.md`. **That
 rule governs this repository and its code** — paths, folders, modules, symbols — **not the strings a
 plugin writes into a user's project.** A host may abbreviate where a user reads the name in a cramped
 host UI; Unreal does, on actor labels, and only there
@@ -129,11 +132,13 @@ gate: for Revit the gate is the ribbon loading and one real import completing in
 
 **There are no Git LFS patterns in this repository, on purpose** — a stranger's first clone must not
 be a multi-hundred-megabyte pull; the binaries that are here — one `.uasset`, three fonts, three PNG
-icons — total well under 1.2 MB and are plain git blobs. **Do not add a new binary type without
-asking:** git decides
+icons — total well under 1.2 MB and are plain git blobs. **Ask before you `git add` any binary, a
+new file of a type already here included:** the axis is bytes, not novelty, and the budget being
+protected is a stranger's first clone rather than a list of blessed extensions. Git decides
 text-vs-binary at `git add` time, and a binary committed here is in the history forever with no later
-fix that is not a force-push. **No engine binaries, no compiled plugins, no test bundles, no sample
-assets, and no sample bundles — ever.** The last one has teeth: real geospatial data carries licence
+fix that is not a force-push. There is deliberately **no stated per-file size threshold** — nobody
+has set one — which is exactly why the answer is to ask rather than to judge. **No engine binaries,
+no compiled plugins, no test bundles, no sample assets, and no sample bundles — ever.** The last one has teeth: real geospatial data carries licence
 obligations, and shipping a bundle is redistributing it. The docs show generation instead.
 
 ## The boundary that keeps this client thin
@@ -162,11 +167,22 @@ in writing (commit body, ledger, or manifest), never saved up for the closing me
 
 ## CI
 
-Four workflows, all on free hosted runners, together the merge bar: `ci-manifest-conformance`,
-`ci-revit-tests`, `ci-public-hygiene` and `ci-unreal-naming`. **None may carry a `paths:` filter on
-`pull_request`** — a required check that is path-filtered never reports on a pull request outside its
-paths, so the check sits pending forever and nothing can merge. (`stale.yml` is tracker hygiene, not
-a gate.) **Never attach a self-hosted runner to this repository:** a fork's pull request would
+Four workflows run on every pull request, all on free hosted runners: `ci-manifest-conformance`,
+`ci-revit-tests`, `ci-public-hygiene` and `ci-unreal-naming`. (`stale.yml` is tracker hygiene, not a
+gate.)
+
+**A workflow name is not a check name.** Branch protection matches *jobs*, and the mapping is not
+one-to-one — `ci-revit-tests` contributes two. The four required checks on `main` are
+`conformance`, `pure-core`, `pure-core-windows` and `references`; read them from the repository
+rather than from this list, with
+`gh api repos/mantleplace/mantleplace-dcc/branches/main/protection`. Note what is **absent**:
+`generated-names`, the `ci-unreal-naming` job, reports on every pull request but is not a required
+check, so the one automated guard in front of an Unreal naming regression cannot currently block a
+merge.
+
+**No workflow may carry a `paths:` filter on `pull_request`** — a required check that is
+path-filtered never reports on a pull request outside its paths, so the check sits pending forever
+and nothing can merge. (A `paths:` filter on `push` is fine; `ci-revit-tests` has one.) **Never attach a self-hosted runner to this repository:** a fork's pull request would
 execute on the build machine. The Unreal compile stays on private infrastructure for exactly that
 reason, so a green pull request here can still break the engine build — an accepted, published lag
 ([README](README.md#ci-and-what-it-does-not-cover)). **C++ formatting** is
@@ -182,18 +198,30 @@ Most facts already have exactly one home. Find it before writing a fact down any
 - **What a word means** → [`CONTEXT.md`](CONTEXT.md) — the glossary, and only that; no rule, no
   decision, no implementation detail. A term belongs there once the same word has meant two things
   to two people.
-- **Why a decision was taken** → [`docs/adr/`](docs/adr/), numbered and append-only. Only for
-  decisions hard to reverse, surprising without the context, and the result of a real trade-off; an
-  ADR is not a design document.
+- **Why a decision was taken** → [`docs/adr/`](docs/adr/), numbered and append-only. Today:
+  **0001** per-host release tracks and the missing `v` · **0002** Unreal import identity, where a
+  **re-import replaces** · **0003** naming authority and the `MP_` prefix · **0004** Revit terrain
+  identity, where a **re-import refuses** — 0002's bug in the other host with the opposite remedy ·
+  **0005** release installs are copy-first. Write one only for a decision hard to reverse,
+  surprising without the context, and the result of a real trade-off; an ADR is not a design
+  document.
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
   authority; never restate a value it owns, and never hardcode a version in prose — the version each
   host is verified against lives in
   [`tools/manifest-conformance/verified-against.json`](tools/manifest-conformance/verified-against.json),
   where CI checks it.
-- **The bundle format, in public prose** → [`spec/`](spec/) — what a bundle is, the compatibility
-  policy, the consolidated changelog, what conformance means. **Descriptive**: it never restates a
-  field, an enum, a constraint or a version; the changelog is the one place versions appear, as
-  dated history.
+- **The bundle format, in public prose** → [`spec/`](spec/), **descriptive** — it never restates a
+  field, an enum, a constraint or a version:
+  - [`format.md`](spec/format.md) — the zip layout, **the pointer doctrine** (find every file by a
+    manifest pointer value, never by folder name), the `hosts.<hostId>` block boundary a consumer
+    may not cross, **sha256 present / absent / required-and-missing**, and apply-placement-verbatim.
+  - [`compatibility.md`](spec/compatibility.md) — what MAJOR/MINOR/PATCH mean, and what to do with
+    **an unknown field, an unknown enum value, or an unknown higher major**.
+  - [`conformance.md`](spec/conformance.md) — what claiming a corpus group obliges you to.
+    **Adding a corpus case** starts here and continues in
+    [`corpus/README.md`](tools/manifest-conformance/corpus/README.md); the corpus is normative and
+    maintainer-owned, so a case is proposed by pull request, never forked.
+  - [`changelog.md`](spec/changelog.md) — the one place versions appear, as dated history.
 - **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id. Its *portable*
   half is published as [`spec/`](spec/); the vault-client half stays private, and `HPS-NN` ids are
   for internal prose, not for the public spec.
@@ -206,7 +234,10 @@ Most facts already have exactly one home. Find it before writing a fact down any
   `spec/`, which describes the format, and not here.
 - **Issues, labels, triage** → [`docs/agents/`](docs/agents/) — see "Agent skills" below.
 - **What the plugins do, and how to build them** → [`README.md`](README.md).
-- **Governance** → [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
+- **Governance, and what this repo refuses** → [`CONTRIBUTING.md`](CONTRIBUTING.md) (the merge bar,
+  DCO sign-off, and the patches declined unread), [`SECURITY.md`](SECURITY.md) — **the auth flow
+  (PKCE, the loopback redirect listener, the token grant, the auth state machine) and the secret
+  stores are closed to outside patches: a defect there is a private report, not a pull request**,
   [`TRADEMARK.md`](TRADEMARK.md).
 
 ## Agent skills

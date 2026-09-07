@@ -5,6 +5,13 @@ description: The cross-host sign-in contract both host plugins depend on — the
 
 # What the platform must serve for either host plugin to sign in
 
+⛔ **This document describes what the platform must serve. The client code that consumes it — PKCE,
+the loopback redirect listener, the token grant, the auth state machine, and the secret stores that
+hold the refresh token — is closed to outside patches. A defect in it is a private security report,
+not a pull request ([`SECURITY.md`](../SECURITY.md)).** A fix in a public PR is the disclosure, and
+it lands before anyone can ship the mitigation. This warning is here because this file is where
+someone about to touch that code most plausibly stops first.
+
 Neither host plugin holds a secret and neither derives an endpoint. Every route they talk to is a
 public `mantle.place` route compiled into the plugin, and every one of them has to exist for a user
 to sign in, stay signed in, or sign out. This file is the list, so that a route going missing is a
@@ -12,8 +19,12 @@ thing someone can look up rather than a thing a curator reports as "it asks me t
 time".
 
 The two hosts are not two independent clients of this contract. They share one credential per OS
-user — the same `%LOCALAPPDATA%\MantlePlace\auth\refresh-token.bin` — so a change in what the
-platform answers reaches both at once, and a rejection either one misreads costs the curator the
+user — the same `%LOCALAPPDATA%\MantlePlace\auth\refresh-token.bin`, written through the per-OS-user
+secret store (DPAPI on Windows), with the access token held in memory and never written at all. A
+machine with no secure store degrades to memory-only auth and says so, rather than putting the
+credential somewhere less safe; [`SECURITY.md`](../SECURITY.md) states that as a promise this
+project invites you to falsify. Because the credential is shared, a change in what the platform
+answers reaches both hosts at once, and a rejection either one misreads costs the curator the
 session in both. That is why this document is cross-host and lives at the repository root rather
 than under a host folder.
 

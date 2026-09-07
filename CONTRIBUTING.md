@@ -107,13 +107,13 @@ than anything else you can do.
 
 ## What does not go in this repository
 
-- **No binaries beyond what is already here.** No engine binaries, no compiled plugins, no test
-  bundles, no sample models, no sample assets. This repository must stay something a stranger can
-  clone in seconds.
+- **No new binaries without asking first** — a new file of a type already here included, not just a
+  new type. No engine binaries, no compiled plugins, no test bundles, no sample models, no sample
+  assets. The constraint is total clone size, not a list of blessed extensions: this repository must
+  stay something a stranger can clone in seconds. There are no Git LFS patterns here on purpose, and
+  a binary committed without one is in the history permanently.
 - **No sample bundles, ever.** Not a small one, not a trimmed one. The docs show you how to *generate*
   one instead — see the [README](README.md). This is deliberate and is not negotiable per-PR.
-- **No new binary file types** without asking first. There are no Git LFS patterns here on purpose,
-  and a binary committed without one is in the history permanently.
 - **No auth or secret-store patches.** See [SECURITY.md](SECURITY.md) — report, don't patch.
 - **No derived numbers.** The plugins apply placement values the platform publishes; they do not
   re-derive them. A patch that computes a survey point, an EPSG zone or a landscape scale locally
