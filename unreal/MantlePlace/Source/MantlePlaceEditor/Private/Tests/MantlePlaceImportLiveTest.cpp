@@ -6,6 +6,7 @@
 
 #include "MantlePlaceImporterLibrary.h"
 #include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest (base-bundle skip + layer presence)
+#include "MantlePlaceImportNaming.h"   // subfolder layout, so this asserts the standard not a copy of it
 #include "MantlePlaceVaultTypes.h"     // MantlePlaceMinSupportedManifestVersion (stale-fixture skip)
 #include "MantlePlaceImportTypes.h"
 #include "MantlePlaceCoverageRasterLogic.h"  // IsCoverageRaster (which layers to expect)
@@ -361,8 +362,11 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		TMap<FString, UTexture2D*> ByLayer;
 		if (ExpectedLayers.Num() > 0)
 		{
-			const FString CoveragePath =
-				FString::Printf(TEXT("/Game/MantlePlace/%s/CoverageRasters"), *Manifest.JobId.Left(8));
+			// From the result, not rebuilt here: the import decides where its content went (the order,
+			// not the job, and beneath a configurable root), and a test that re-derives that path is a
+			// test that passes while the importer writes somewhere else.
+			const FString CoveragePath = MantlePlaceImportNaming::SubfolderPath(
+				Result.ContentPath, MantlePlaceImportNaming::ESubfolder::CoverageRasters);
 			FAssetRegistryModule& Registry =
 				FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
 			TArray<FAssetData> Assets;

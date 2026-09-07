@@ -27,6 +27,100 @@ bool FMantlePlaceImportNamingTest::RunTest(const FString& Parameters)
 	// A representative identity: long enough that truncation bites, and hex so it reads like one.
 	const FString Identity = TEXT("a1b2c3d4e5f6a7b8");
 
+	// --- Which identity wins ------------------------------------------------------------------
+	{
+		const FString OrderId = TEXT("ord-11112222-3333");
+		const FString ManifestSha = TEXT("deadbeefcafef00ddeadbeefcafef00ddeadbeefcafef00ddeadbeefcafef00d");
+
+		// The order, always, when there is one. It is the only one of the two that survives a
+		// rebuild, which is the entire point of ADR 0002.
+		TestEqual(TEXT("the order wins when the bundle names one"),
+			ResolveIdentity(OrderId, ManifestSha), OrderId);
+
+		// A bundle with no order is a local or admin bundle: there is no order for it to be a
+		// rebuild OF, so a content hash is the honest identity.
+		TestEqual(TEXT("no order falls back to the manifest hash"),
+			ResolveIdentity(FString(), ManifestSha), ManifestSha);
+
+		// An unusable order does not poison the fallback.
+		TestEqual(TEXT("an unusable order still falls back"),
+			ResolveIdentity(TEXT("../.."), ManifestSha), ManifestSha);
+
+		// Neither usable is an EMPTY identity, which the caller must refuse rather than default.
+		TestTrue(TEXT("neither usable yields nothing"),
+			ResolveIdentity(FString(), FString()).IsEmpty());
+
+		// The job id is never consulted. Asserted by construction: ResolveIdentity has no parameter
+		// for it, and this line is here so that adding one is a visible decision.
+		TestEqual(TEXT("two bundles of one order share an identity regardless of build"),
+			ResolveIdentity(OrderId, TEXT("1111111111111111111111111111111111111111111111111111111111111111")),
+			ResolveIdentity(OrderId, TEXT("2222222222222222222222222222222222222222222222222222222222222222")));
+	}
+
+	// --- What may be an identity ----------------------------------------------------------------
+	{
+		TestTrue(TEXT("a hex digest is usable"), IsUsableIdentity(TEXT("a1b2c3d4e5f6")));
+		TestTrue(TEXT("a dashed order id is usable"), IsUsableIdentity(TEXT("ord-1111-2222")));
+		TestTrue(TEXT("underscores are usable"), IsUsableIdentity(TEXT("order_11112222")));
+
+		// Each of these becomes a path segment of a directory the importer FORCE-DELETES. They are
+		// refused rather than sanitised: rewriting one invents an identity nobody chose, and the
+		// rewrite is what would silently point the delete somewhere else.
+		TestFalse(TEXT("empty is refused"), IsUsableIdentity(FString()));
+		TestFalse(TEXT("too short is refused"), IsUsableIdentity(TEXT("abc")));
+		TestFalse(TEXT("a parent traversal is refused"), IsUsableIdentity(TEXT("../../etc")));
+		TestFalse(TEXT("a slash is refused"), IsUsableIdentity(TEXT("aaaaaaaa/bbbb")));
+		TestFalse(TEXT("a backslash is refused"), IsUsableIdentity(TEXT("aaaaaaaa\\bbbb")));
+		TestFalse(TEXT("a dot is refused"), IsUsableIdentity(TEXT("aaaaaaaa.bbbb")));
+		TestFalse(TEXT("whitespace is refused"), IsUsableIdentity(TEXT("aaaaaaaa bbbb")));
+		TestFalse(TEXT("a colon is refused"), IsUsableIdentity(TEXT("C:aaaaaaaa")));
+	}
+
+	// --- What may be a content root -------------------------------------------------------------
+	{
+		TestTrue(TEXT("the default is usable"), IsUsableContentRoot(DefaultContentRoot()));
+		TestTrue(TEXT("a studio root is usable"), IsUsableContentRoot(TEXT("/Game/Studio/Geo")));
+
+		TestFalse(TEXT("empty is refused"), IsUsableContentRoot(FString()));
+		TestFalse(TEXT("a bare slash is refused"), IsUsableContentRoot(TEXT("/")));
+		TestFalse(TEXT("no mount point is refused"), IsUsableContentRoot(TEXT("Game/MantlePlace")));
+		TestFalse(TEXT("a trailing slash is refused"), IsUsableContentRoot(TEXT("/Game/MantlePlace/")));
+		TestFalse(TEXT("a doubled slash is refused"), IsUsableContentRoot(TEXT("/Game//MantlePlace")));
+		TestFalse(TEXT("a parent traversal is refused"), IsUsableContentRoot(TEXT("/Game/../Engine")));
+
+		// An unusable configured root falls back rather than failing the import. The importer
+		// creates and force-deletes a directory beneath this; a malformed root is not a thing to
+		// resolve creatively.
+		TestEqual(TEXT("an unusable configured root falls back to the default"),
+			ResolveContentRoot(TEXT("/")), FString(DefaultContentRoot()));
+		TestEqual(TEXT("an empty setting falls back to the default"),
+			ResolveContentRoot(FString()), FString(DefaultContentRoot()));
+		TestEqual(TEXT("a usable configured root is honoured"),
+			ResolveContentRoot(TEXT("/Game/Studio/Geo")), FString(TEXT("/Game/Studio/Geo")));
+	}
+
+	// --- Placement in the level -----------------------------------------------------------------
+	{
+		TestEqual(TEXT("outliner folder"),
+			OutlinerFolder(Identity), FString(TEXT("MantlePlace/a1b2c3d4")));
+
+		// Fixed top segment, deliberately: the content root is configurable, so a folder-borne
+		// marker would vanish for exactly the studios that setting exists for.
+		TestTrue(TEXT("the outliner folder does not follow the content root"),
+			OutlinerFolder(Identity).StartsWith(TEXT("MantlePlace/")));
+
+		// The tag carries the FULL identity, not the truncation — it is what re-import matches on,
+		// and matching on eight characters would let a colliding order's actors be destroyed.
+		TestEqual(TEXT("import tag"),
+			ImportTag(Identity), FString(TEXT("mantleplace_import=a1b2c3d4e5f6a7b8")));
+		TestTrue(TEXT("the tag starts with the prefix"),
+			ImportTag(Identity).StartsWith(ImportTagPrefix(), ESearchCase::CaseSensitive));
+		TestNotEqual(TEXT("two identities that share a FOLDER do not share a TAG"),
+			ImportTag(TEXT("a1b2c3d4-one")), ImportTag(TEXT("a1b2c3d4-two")));
+		TestEqual(TEXT("but they do share a folder, which is why the tag carries the full id"),
+			OutlinerFolder(TEXT("a1b2c3d4-one")), OutlinerFolder(TEXT("a1b2c3d4-two")));
+	}
+
 	// --- Identity ---------------------------------------------------------------------------
 	{
 		TestEqual(TEXT("identity truncates to eight"), ShortIdentity(Identity), FString(TEXT("a1b2c3d4")));
@@ -111,10 +205,12 @@ bool FMantlePlaceImportNamingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("backslashes resolve the same as forward slashes"),
 			TextureName(TEXT("C:\\tmp\\Imagery\\Imagery.png")), TextureName(TEXT("C:/tmp/Imagery/Imagery.png")));
 
+		// The identity does NOT appear in a leaf asset name — the folder already carries it, and
+		// repeating it made `MI_Drape_a1b2c3d4` unreadable in a material picker.
 		TestEqual(TEXT("drape material instance"),
-			DrapeMaterialName(Identity), FString(TEXT("MI_Drape_a1b2c3d4")));
+			DrapeMaterialName(), FString(TEXT("MI_Drape")));
 		TestEqual(TEXT("tree points table"),
-			TreePointsTableName(Identity), FString(TEXT("DT_TreePoints_a1b2c3d4")));
+			TreePointsTableName(), FString(TEXT("DT_TreePoints")));
 		TestEqual(TEXT("tree points row"), TreePointsRowName(0), FString(TEXT("Tree_0")));
 		TestEqual(TEXT("tree points row, later"), TreePointsRowName(1234), FString(TEXT("Tree_1234")));
 	}

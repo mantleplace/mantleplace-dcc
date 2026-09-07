@@ -84,7 +84,7 @@ namespace MantlePlaceDrape
 
 		FAssetToolsModule& Module = FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools"));
 
-		const FString AssetName = MantlePlaceImportNaming::DrapeMaterialName(Manifest.JobId);
+		const FString AssetName = MantlePlaceImportNaming::DrapeMaterialName();
 		const FString MicPackage = MantlePlaceImportNaming::SubfolderPath(
 			DestPackagePath, MantlePlaceImportNaming::ESubfolder::Imagery);
 		const FString MicObjectPath = MantlePlaceImportNaming::ObjectPathIn(MicPackage, AssetName);

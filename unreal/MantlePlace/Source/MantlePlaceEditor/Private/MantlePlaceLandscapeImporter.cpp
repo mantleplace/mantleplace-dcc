@@ -286,8 +286,9 @@ namespace MantlePlaceLandscapeImporter
 			FlushRenderingCommands();
 		}
 
-		Landscape->SetActorLabel(MantlePlaceImportNaming::ActorLabel(
-			MantlePlaceImportNaming::EActorKind::Landscape, Manifest.JobId));
+		// Not labelled here. Every actor an import creates is labelled, tagged and filed into its
+		// outliner folder by one function in MantlePlaceImporterLibrary, so a new actor type cannot
+		// be added and forget one of the three.
 		return Landscape;
 	}
 }

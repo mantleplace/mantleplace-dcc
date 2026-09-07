@@ -6,7 +6,9 @@
 #include "MantlePlaceCoverageRasters.h"
 #include "MantlePlaceDrape.h"
 #include "MantlePlaceImportManifest.h"
+#include "MantlePlaceEditorSettings.h"
 #include "MantlePlaceImportNaming.h"
+#include "MantlePlaceImportProvenance.h"
 #include "MantlePlaceLandscapeImporter.h"
 #include "MantlePlaceLandscapeWeightsLogic.h"
 #include "MantlePlaceLocalTileServer.h"
@@ -331,6 +333,25 @@ namespace
 	};
 }
 
+namespace
+{
+	/**
+	 * Label an actor, mark it as this import's, and file it in the outliner. One function, called
+	 * for every actor an import creates, so a new actor type cannot be added and forget one of the
+	 * three -- and in particular cannot forget the tag, which is what re-import matches on.
+	 */
+	void ClaimImportedActor(AActor* Actor, const FString& Identity, const FString& Label)
+	{
+		if (Actor == nullptr)
+		{
+			return;
+		}
+		Actor->SetActorLabel(Label);
+		Actor->Tags.AddUnique(FName(*MantlePlaceImportNaming::ImportTag(Identity)));
+		Actor->SetFolderPath(FName(*MantlePlaceImportNaming::OutlinerFolder(Identity)));
+	}
+}
+
 FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	const FString& ZipPath,
 	EMantlePlaceImportMode Mode)
@@ -436,10 +457,34 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		return Result;
 	}
 
-	const FString TempDir = FPaths::ProjectSavedDir() / TEXT("MantlePlace") / TEXT("ImportTmp") / Manifest.JobId;
+	// The identity everything below is keyed on: the ORDER when the bundle names one, and
+	// otherwise a content hash of the manifest. NEVER the job id — the manifest documents it as
+	// changing on every rebuild, so keying on it made re-materialising an order create a second
+	// folder and a second landscape while the wipe below looked at a path nobody used (ADR 0002).
+	// The manifest bytes are already in memory from the parse above, so the hash costs no I/O.
+	const FString Identity = MantlePlaceImportNaming::ResolveIdentity(
+		Manifest.OrderId, MantlePlaceSha256::HexDigest(ManifestBytes));
+	if (!MantlePlaceImportNaming::IsUsableIdentity(Identity))
+	{
+		// Refused, not defaulted. The identity becomes a path segment of a directory this function
+		// FORCE-DELETES; an empty one collapses that path onto the content root, where the delete
+		// would reach every import in the project.
+		Result.Message = TEXT(
+			"This bundle carries neither a usable order id nor a hashable manifest, so there is no "
+			"safe name for its content folder. Nothing has been imported.");
+		return Result;
+	}
+
+	const FString ContentRoot = UMantlePlaceEditorSettings::ResolveGeneratedContentRoot();
+	const FString DestPackagePath = MantlePlaceImportNaming::ImportRoot(ContentRoot, Identity);
+	Result.Identity = Identity;
+	Result.ContentPath = DestPackagePath;
+
+	// Keyed on the identity rather than the raw job id, which is an unvalidated string out of
+	// bundle JSON being used as a directory name.
+	const FString TempDir = FPaths::ProjectSavedDir() / TEXT("MantlePlace") / TEXT("ImportTmp")
+		/ MantlePlaceImportNaming::ShortIdentity(Identity);
 	PlatformFile.CreateDirectoryTree(*TempDir);
-	const FString DestPackagePath = MantlePlaceImportNaming::ImportRoot(
-		MantlePlaceImportNaming::DefaultContentRoot(), Manifest.JobId);
 
 	// Decide up-front what each requested representation needs. If NOTHING requested can be produced
 	// (e.g. a Mesh import of a Cesium-terrain-only v8 bundle that ships no Terrain.glb), bail BEFORE the
@@ -481,11 +526,36 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	UEditorLoadingSavingSettings* LoadSaveSettings = GetMutableDefault<UEditorLoadingSavingSettings>();
 	LoadSaveSettings->SetAutomaticallyCheckoutOnAssetModificationOverride(false);
 
-	// Idempotent re-import: wipe any prior content for this bundle so reimported assets land on
+	// Idempotent re-import: wipe any prior content for THIS order so reimported assets land on
 	// clean names (Interchange re-creates source-named assets that the importer then renames).
+	//
+	// Guarded, because the folder is named by the TRUNCATED identity and the delete is a force-
+	// delete. Two identities sharing eight characters name the same folder, and without the
+	// provenance record this would silently destroy a different order's imported content. The
+	// record is read from outside the content tree on purpose — reading an asset inside a folder
+	// we are about to force-delete is the hazard described at the delete itself.
 	if (UEditorAssetSubsystem* AssetSubsystem = GEditor->GetEditorSubsystem<UEditorAssetSubsystem>())
 	{
-		if (AssetSubsystem->DoesDirectoryExist(DestPackagePath))
+		const bool bFolderExists = AssetSubsystem->DoesDirectoryExist(DestPackagePath);
+		MantlePlaceImportProvenance::FRecord Prior;
+		const bool bHasRecord = MantlePlaceImportProvenance::Read(Identity, Prior);
+		const MantlePlaceImportProvenance::EVerdict Verdict =
+			MantlePlaceImportProvenance::Classify(bFolderExists, bHasRecord, Prior, Identity);
+
+		const FString Refusal =
+			MantlePlaceImportProvenance::ExplainRefusal(Verdict, Prior, DestPackagePath);
+		if (!Refusal.IsEmpty())
+		{
+			// Before the transaction opens and before anything is created, so a refusal changes
+			// nothing at all.
+			// Restore the editor's own setting rather than forcing it on: this path changes
+			// nothing, so it must leave nothing changed either.
+			LoadSaveSettings->ResetAutomaticallyCheckoutOnAssetModificationOverride();
+			Result.Message = Refusal;
+			return Result;
+		}
+
+		if (Verdict == MantlePlaceImportProvenance::EVerdict::SameIdentity)
 		{
 			// Clear the editor selection first: DeleteDirectory force-deletes, and force-deleting a
 			// selected/referenced asset drives UpdatePivotLocationForSelection over a now-stale typed-
@@ -535,20 +605,23 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	TArray<AActor*> DrapeTargets;
 	bool bAllRequestedSucceeded = true;
 
-	// Idempotent re-import (actors): remove any Landscape/Mesh actors a PRIOR import of this same
-	// bundle spawned, so re-importing replaces them instead of stacking duplicate (coincident)
-	// actors. Both importers label their actors "MP_<Type>_<jobId8>".
+	// Idempotent re-import (actors): remove the actors a PRIOR import of this same ORDER spawned,
+	// so re-importing replaces them instead of stacking duplicate (coincident) actors.
+	//
+	// Matched on the import TAG rather than the label. A label is a thing a user edits: renaming an
+	// actor in the outliner used to break that user's own next re-import, silently, and then stack a
+	// second landscape on top of the first. A tag is not surfaced for editing, carries the FULL
+	// identity rather than its truncation, and survives the actor being dragged elsewhere.
+	//
+	// Its absence is also the legacy signal: an actor from 0.3.0 or earlier has an MP_* label and no
+	// tag, so it is not matched here — and the content guard above has already refused the import
+	// rather than leaving those actors orphaned beside new ones.
 	{
-		using namespace MantlePlaceImportNaming;
-		const FString LandscapeLabel = ActorLabel(EActorKind::Landscape, Manifest.JobId);
-		const FString MeshLabel = ActorLabel(EActorKind::Mesh, Manifest.JobId);
-		const FString BuildingsLabel = ActorLabel(EActorKind::Buildings, Manifest.JobId);
-		const FString RoadSplinePrefix = RoadSplineLabelPrefix(Manifest.JobId);
+		const FName ImportTagName(*MantlePlaceImportNaming::ImportTag(Identity));
 		TArray<AActor*> StaleActors;
 		for (TActorIterator<AActor> It(World); It; ++It)
 		{
-			const FString Label = It->GetActorLabel();
-			if (Label == LandscapeLabel || Label == MeshLabel || Label == BuildingsLabel || Label.StartsWith(RoadSplinePrefix))
+			if (It->Tags.Contains(ImportTagName))
 			{
 				StaleActors.Add(*It);
 			}
@@ -636,6 +709,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				if (ALandscape* Landscape = MantlePlaceLandscapeImporter::Import(
 						World, Manifest, HeightmapDisk, DrapeMic, WeightPlanes, DestPackagePath, Err))
 				{
+					ClaimImportedActor(Landscape, Identity, MantlePlaceImportNaming::ActorLabel(
+						MantlePlaceImportNaming::EActorKind::Landscape, Identity));
 					DrapeTargets.Add(Landscape);
 					Result.CreatedActors.Add(Landscape->GetActorLabel());
 					Log.Add(FString::Printf(TEXT("Landscape created (%dx%d)."), Manifest.Resolution, Manifest.Resolution));
@@ -760,6 +835,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				{
 					MantlePlaceDrape::AssignMaterial(MeshActor, DrapeMic);
 				}
+				ClaimImportedActor(MeshActor, Identity, MantlePlaceImportNaming::ActorLabel(
+					MantlePlaceImportNaming::EActorKind::Mesh, Identity));
 				Result.CreatedActors.Add(MeshActor->GetActorLabel());
 				Log.Add(TEXT("Mesh (Terrain.glb) created."));
 			}
@@ -787,6 +864,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			: nullptr;
 		if (BuildingsActor != nullptr)
 		{
+			ClaimImportedActor(BuildingsActor, Identity, MantlePlaceImportNaming::ActorLabel(
+				MantlePlaceImportNaming::EActorKind::Buildings, Identity));
 			Result.CreatedActors.Add(BuildingsActor->GetActorLabel());
 			Log.Add(TEXT("Buildings (Buildings.glb) created."));
 		}
@@ -844,8 +923,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				}
 				SplineComponent->UpdateSpline();
 
-				SplineActor->SetActorLabel(
-				    MantlePlaceImportNaming::RoadSplineLabel(Manifest.JobId, SplineIndex++));
+				ClaimImportedActor(SplineActor, Identity,
+				    MantlePlaceImportNaming::RoadSplineLabel(Identity, SplineIndex++));
 				SplineActor->Tags.Add(FName(*FString::Printf(TEXT("width_m=%.1f"), Spline.WidthMEstimated)));
 				if (!Spline.RoadClass.IsEmpty())
 				{
@@ -886,7 +965,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			}
 			else
 			{
-				const FString AssetName = MantlePlaceImportNaming::TreePointsTableName(Manifest.JobId);
+				const FString AssetName = MantlePlaceImportNaming::TreePointsTableName();
 				const FString PackageName =
 					MantlePlaceImportNaming::SubfolderPath(
 						DestPackagePath, MantlePlaceImportNaming::ESubfolder::Landcover)
@@ -960,6 +1039,29 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 
 	Result.bSuccess = bAllRequestedSucceeded && Result.CreatedActors.Num() > 0;
 	Result.Message = FString::Join(Log, TEXT("\n"));
+
+	// Record what this folder is, so the next import of a DIFFERENT order that happens to share
+	// these eight characters is refused instead of force-deleting this one. Written only on
+	// success: a record for content that was never created would refuse a later import of the
+	// order that legitimately owns the folder.
+	if (Result.bSuccess)
+	{
+		MantlePlaceImportProvenance::FRecord Record;
+		Record.Identity = Identity;
+		Record.SchemeVersion = MantlePlaceImportProvenance::CurrentSchemeVersion;
+		Record.ContentRoot = ContentRoot;
+		Record.JobId = Manifest.JobId;
+		if (!MantlePlaceImportProvenance::Write(Record))
+		{
+			// Non-fatal, and said out loud rather than swallowed: the import is complete and
+			// correct, but without the record a later import that collides on the short identity
+			// refuses rather than replaces, and this content then looks like legacy content.
+			UE_LOG(LogMantlePlaceImport, Warning,
+				TEXT("Import succeeded but its provenance record could not be written to %s. A "
+					 "future re-import of this order will refuse rather than replace it."),
+				*MantlePlaceImportProvenance::RecordPath(Identity));
+		}
+	}
 	return Result;
 }
 
@@ -1050,7 +1152,10 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 
 	// Lay the bundle's Cesium-ready artifacts on disk (the per-bundle temp dir the importer already uses)
 	// for the local tile server to host.
-	const FString TempDir = FPaths::ProjectSavedDir() / TEXT("MantlePlace") / TEXT("ImportTmp") / Manifest.JobId;
+	// Keyed on the identity, not the raw job id: a directory name out of unvalidated bundle JSON.
+	const FString TempDir = FPaths::ProjectSavedDir() / TEXT("MantlePlace") / TEXT("ImportTmp")
+		/ MantlePlaceImportNaming::ShortIdentity(MantlePlaceImportNaming::ResolveIdentity(
+			Manifest.OrderId, MantlePlaceSha256::HexDigest(ManifestBytes)));
 	PlatformFile.CreateDirectoryTree(*TempDir);
 	const TArray<FString> Prefixes = { TerrainPrefix, TEXT("Imagery/") };
 	if (ExtractSubtree(Reader, Prefixes, TempDir) == 0)
