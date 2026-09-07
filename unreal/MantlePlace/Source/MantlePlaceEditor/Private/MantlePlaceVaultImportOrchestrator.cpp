@@ -2,6 +2,7 @@
 
 #include "MantlePlaceVaultImportOrchestrator.h"
 
+#include "MantlePlaceAuthSubsystem.h"
 #include "MantlePlaceAuthSystemBase.h"
 #include "MantlePlaceVaultClient.h"
 #include "MantlePlaceBundleCache.h"
@@ -73,9 +74,20 @@ void UMantlePlaceVaultImportOrchestrator::EnsureClients()
 {
 	if (AuthSystem == nullptr)
 	{
-		// No explicit auth injected: create the C++ base, which reads the DefaultGame.ini
-		// [/Script/MantlePlaceRuntime.MantlePlaceAuthSystemBase] config from its CDO (WebLoginUrl,
-		// TokenEndpointUrl, PlatformApiBaseUrl, SupabaseAnonKey, loopback ports).
+		// No explicit auth injected: take the editor's ONE session from the subsystem that owns it.
+		// This used to be NewObject<UMantlePlaceAuthSystemBase>(this), which made the session a
+		// child of the vault panel and gave a second vault tab a second, independent session
+		// writing the same refresh-token file.
+		if (UMantlePlaceAuthSubsystem* AuthSubsystem = UMantlePlaceAuthSubsystem::Get())
+		{
+			AuthSystem = AuthSubsystem->GetAuthSystem();
+		}
+	}
+	if (AuthSystem == nullptr)
+	{
+		// No editor: a commandlet or a test drove us directly. Fall back to a private instance so
+		// headless paths keep working - there is no shared session to contend with when there is
+		// no editor, so a local one is correct rather than a compromise.
 		AuthSystem = NewObject<UMantlePlaceAuthSystemBase>(this);
 	}
 

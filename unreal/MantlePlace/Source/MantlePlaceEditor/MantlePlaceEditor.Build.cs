@@ -24,6 +24,7 @@ public class MantlePlaceEditor : ModuleRules
 				"Engine",
 				"MantlePlaceRuntime", // auth base + vault client + bundle cache the vault-import orchestrator drives
 				"UnrealEd",      // FScopedTransaction, GEditor, factories, FActorLabelUtilities
+				"EditorSubsystem", // UEditorSubsystem: UMantlePlaceAuthSubsystem holds the editor's one auth session
 				"AssetTools",    // FAssetToolsModule: import tasks + CreateAsset
 				"AssetRegistry", // FAssetRegistryModule::AssetCreated for the landscape layer-info assets
 				"Landscape",     // ALandscapeProxy::Import, ULandscapeInfo, ULandscapeSubsystem
