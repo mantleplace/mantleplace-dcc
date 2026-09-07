@@ -121,6 +121,31 @@ This applies to any consumer of this repo. The Mantle Place project tree mounts 
 `unreal/Plugins/MantlePlaceDcc/` and documents the full loop on its side; the rule above is what
 matters wherever you are.
 
+## Worktrees and branches
+
+Worktrees are created by hand, as **siblings of `main`** — never inside the repository:
+
+```bash
+git worktree add ../<dir> -b <type>/<short-description>
+```
+
+- **The branch name is `type/short-description`.** No path segment starts with an issue number;
+  the cross-reference belongs in the pull request body.
+- **The directory name is the branch name with `/` replaced by `-`**, so the folder beside `main`
+  always names the branch it holds. `feat/auth-thing` → `../feat-auth-thing`. A folder whose name
+  does not resolve to its branch is a defect, not a style choice.
+- **Do not use `claude --worktree` or the `EnterWorktree` tool here.** Both are hard-coded to
+  `<repo-root>/.claude/worktrees/<name>` and to a branch named `worktree-<name>` with `/` flattened
+  to `+`. Neither is configurable, and both break the two rules above.
+- **A worktree is retired when its pull request merges:** `git worktree remove <dir>` then
+  `git branch -d <branch>`. Nothing does this for you — Claude Code's periodic sweep removes only
+  the worktrees it created itself and never touches one made with `git worktree add`. A worktree
+  that outlives its merged pull request is the thing this rule exists to prevent.
+- **In this repository the location rule has teeth.** This tree is mounted inside a consuming
+  Unreal project's `Plugins/` directory, where plugin discovery is a recursive scan. A worktree
+  under `<repo-root>/.claude/worktrees/` would put a second `unreal/MantlePlace/MantlePlace.uplugin`
+  inside that scan — a duplicate plugin the editor would discover and nobody would think to look for.
+
 ## Releases
 
 **One release track per host.** Tags are `<host>-<version>` — `revit-0.1.0`, `unreal-0.4.0` — with
