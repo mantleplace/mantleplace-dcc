@@ -27,7 +27,7 @@ namespace MantlePlaceMeshImporter
 		// Named on the way in, never renamed afterwards -- a rename here would purge the import's
 		// undo transaction. See MantlePlaceImportNaming::ImportNameFor. This reaches the glTF's
 		// StaticMesh only; anything embedded alongside it still falls to RenameToConvention below.
-		Task->DestinationName = MantlePlaceImportNaming::ImportNameFor(TEXT("SM_"), GlbFile);
+		Task->DestinationName = MantlePlaceImportNaming::StaticMeshName(GlbFile);
 		Task->bAutomated = true;
 		Task->bReplaceExisting = true;
 		Task->bSave = false;
@@ -77,8 +77,11 @@ namespace MantlePlaceMeshImporter
 	{
 		// Separate subfolders keep the terrain's and the buildings' imported UStaticMesh names --
 		// and their embedded textures and materials -- from colliding.
-		const TCHAR* const Subfolder = bEnableNanite ? TEXT("Mesh") : TEXT("Buildings");
-		UStaticMesh* Mesh = ImportGlbAsset(GlbFile, DestPackagePath / Subfolder, OutError);
+		const MantlePlaceImportNaming::ESubfolder Subfolder = bEnableNanite
+			? MantlePlaceImportNaming::ESubfolder::Mesh
+			: MantlePlaceImportNaming::ESubfolder::Buildings;
+		UStaticMesh* Mesh = ImportGlbAsset(
+			GlbFile, MantlePlaceImportNaming::SubfolderPath(DestPackagePath, Subfolder), OutError);
 		if (Mesh == nullptr)
 		{
 			return nullptr;
@@ -130,7 +133,8 @@ namespace MantlePlaceMeshImporter
 
 		Actor->SetMobility(EComponentMobility::Static);
 		Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
-		Actor->SetActorLabel(FString::Printf(TEXT("MP_Mesh_%s"), *Manifest.JobId.Left(8)));
+		Actor->SetActorLabel(MantlePlaceImportNaming::ActorLabel(
+			MantlePlaceImportNaming::EActorKind::Mesh, Manifest.JobId));
 		return Actor;
 	}
 
@@ -164,7 +168,8 @@ namespace MantlePlaceMeshImporter
 
 		Actor->SetMobility(EComponentMobility::Static);
 		Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
-		Actor->SetActorLabel(FString::Printf(TEXT("MP_Buildings_%s"), *Manifest.JobId.Left(8)));
+		Actor->SetActorLabel(MantlePlaceImportNaming::ActorLabel(
+			MantlePlaceImportNaming::EActorKind::Buildings, Manifest.JobId));
 		return Actor;
 	}
 }

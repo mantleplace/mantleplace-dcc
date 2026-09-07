@@ -27,10 +27,10 @@ revit/                         the Revit plugin: pure Core, Client, Addin shim, 
 spec/                          the public MPB format spec — prose only; the schema stays remote
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
 tools/public-hygiene/          the private-reference gate + its cases
+tools/unreal-naming/           the generated-name drift gate + its cases
 docs/adr/                      architecture decision records, numbered and cross-host
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
-.github/workflows/             the three public CI gates, plus the stale-tracker job
-docs/adr/                      architecture decision records — why a thing is the way it is
+.github/workflows/             the four public CI gates, plus the stale-tracker job
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
 CONTEXT.md  CLAUDE.md
 ```
@@ -189,8 +189,9 @@ even when the arithmetic is correct.
 
 ## CI
 
-Three workflows, all on free hosted runners, together the merge bar: `ci-manifest-conformance`,
-`ci-revit-tests` and `ci-public-hygiene`. **None may carry a `paths:` filter on `pull_request`** — a
+Four workflows, all on free hosted runners, together the merge bar: `ci-manifest-conformance`,
+`ci-revit-tests`, `ci-public-hygiene` and `ci-unreal-naming`. **None may carry a `paths:` filter on
+`pull_request`** — a
 required check that is path-filtered never reports on a pull request outside its paths, so the check
 sits pending forever and nothing can merge. (`stale.yml` is tracker hygiene, not a gate.)
 

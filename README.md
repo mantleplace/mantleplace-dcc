@@ -188,10 +188,13 @@ python tools/manifest-conformance/check_manifest_conformance.py
 
 ## CI, and what it does not cover
 
-Three workflows run on every pull request, on free hosted runners: `ci-manifest-conformance`,
-`ci-revit-tests` and `ci-public-hygiene` — the last checks tracked files *and* the pull request's
-title, body, branch name and commit messages for references that resolve only in a private
-repository (see [CONTRIBUTING.md](CONTRIBUTING.md)). Together they are the objective merge bar.
+Four workflows run on every pull request, on free hosted runners: `ci-manifest-conformance`,
+`ci-revit-tests`, `ci-public-hygiene` and `ci-unreal-naming`. The third checks tracked files *and*
+the pull request's title, body, branch name and commit messages for references that resolve only in
+a private repository (see [CONTRIBUTING.md](CONTRIBUTING.md)). The fourth refuses a generated asset
+name or package path built anywhere but the Unreal naming module — text-only, and the one automated
+check standing in front of a naming regression, since nothing here compiles the plugin. Together
+they are the objective merge bar.
 
 **The Unreal compile is not among them.** It needs a licensed engine on Windows, and attaching a
 self-hosted runner to a public repository would let a fork's pull request execute on the build
