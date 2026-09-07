@@ -756,12 +756,24 @@ FReply SMantlePlaceVaultPanel::OnRefreshClicked()
 void SMantlePlaceVaultPanel::UpdateHeaderState()
 {
 	const bool bSignedIn = Controller.IsValid() && Controller->IsSignedIn();
-	if (HeaderStatus.IsValid())
+	if (!HeaderStatus.IsValid())
 	{
-		HeaderStatus->SetText(bSignedIn
-			? LOCTEXT("SignedIn", "Signed in.")
-			: LOCTEXT("SignInPrompt", "Sign in to load your vault."));
+		return;
 	}
+
+	if (bSignedIn)
+	{
+		HeaderStatus->SetText(LOCTEXT("SignedIn", "Signed in."));
+		return;
+	}
+
+	// Say WHY, when there is a why. A restore that failed used to leave this on its neutral prompt
+	// and the reason in a log line, which is indistinguishable to the user from never having been
+	// signed in - and is why a broken refresh went unreported for as long as it did.
+	const FString Reason = Controller.IsValid() ? Controller->GetLastAuthError() : FString();
+	HeaderStatus->SetText(Reason.IsEmpty()
+		? LOCTEXT("SignInPrompt", "Sign in to load your vault.")
+		: FText::FromString(Reason));
 }
 
 FReply SMantlePlaceVaultPanel::OnBrowseClicked()

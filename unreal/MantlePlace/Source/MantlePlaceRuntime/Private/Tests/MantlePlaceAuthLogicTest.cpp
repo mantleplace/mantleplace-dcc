@@ -511,6 +511,42 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
+	// --- Definitive rejection vs transient failure ---------------------------------------------
+	//
+	// Host-local rather than corpus-driven: the corpus binds every host, and the Revit host has not
+	// implemented this classification yet. It is proposed there as a case once both hosts agree.
+	//
+	// The asymmetry under test is deliberate. Treating a transient failure as definitive throws
+	// away a working session over a dropped packet; treating a definitive rejection as transient
+	// retries a dead credential forever and never prompts the sign-in that would fix it. Only the
+	// second is silent, so everything unrecognised is transient.
+	{
+		TestTrue(TEXT("invalid_grant at 400 is definitive"),
+			FLogic::IsDefinitiveRejection(400, TEXT("{\"error\":\"invalid_grant\"}")));
+		TestTrue(TEXT("invalid_grant at 401 is definitive"),
+			FLogic::IsDefinitiveRejection(401, TEXT("{\"error\":\"invalid_grant\"}")));
+		TestTrue(TEXT("error_code carries the verdict too"),
+			FLogic::IsDefinitiveRejection(400, TEXT("{\"error_code\":\"refresh_token_not_found\"}")));
+		TestTrue(TEXT("a used rotated token is definitive"),
+			FLogic::IsDefinitiveRejection(400, TEXT("{\"error_code\":\"refresh_token_already_used\"}")));
+		TestTrue(TEXT("the code match is case-insensitive"),
+			FLogic::IsDefinitiveRejection(400, TEXT("{\"error\":\"Invalid_Grant\"}")));
+
+		TestFalse(TEXT("500 is never definitive, whatever the body says"),
+			FLogic::IsDefinitiveRejection(500, TEXT("{\"error\":\"invalid_grant\"}")));
+		TestFalse(TEXT("503 is transient"),
+			FLogic::IsDefinitiveRejection(503, TEXT("{\"error\":\"unavailable\"}")));
+		TestFalse(TEXT("a client error with an unrecognised code is transient"),
+			FLogic::IsDefinitiveRejection(400, TEXT("{\"error\":\"rate_limited\"}")));
+		TestFalse(TEXT("an unreadable body is transient - a proxy error page lands here"),
+			FLogic::IsDefinitiveRejection(401, TEXT("<html>Gateway</html>")));
+		TestFalse(TEXT("an empty body is transient"),
+			FLogic::IsDefinitiveRejection(400, FString()));
+		TestFalse(TEXT("prose is not a verdict: error_description alone does not decide"),
+			FLogic::IsDefinitiveRejection(400,
+				TEXT("{\"error_description\":\"Invalid Refresh Token: Already Used\"}")));
+	}
+
 	// --- HPS-41 coverage guard ----------------------------------------------------------------
 	for (const FString& Missing : UndrivenCases(Cases, Driven))
 	{

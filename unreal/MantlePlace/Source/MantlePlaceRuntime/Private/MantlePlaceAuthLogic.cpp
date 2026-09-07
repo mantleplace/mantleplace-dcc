@@ -351,6 +351,56 @@ bool FMantlePlaceAuthLogic::ParseErrorResponse(const FString& JsonStr, FString& 
 	return false;
 }
 
+bool FMantlePlaceAuthLogic::IsDefinitiveRejection(int32 HttpStatus, const FString& Body)
+{
+	// Only the platform saying "this grant is bad" counts. A 500, a 502 from something in front of
+	// the platform, or a transport failure that never produced a status at all, are all transient.
+	if (HttpStatus != 400 && HttpStatus != 401)
+	{
+		return false;
+	}
+
+	const TSharedPtr<FJsonObject> Root = DeserializeObject(Body);
+	if (!Root.IsValid())
+	{
+		// A client-error status we cannot read is still not proof the credential is dead - an HTML
+		// error page from a proxy lands here. Keep the token.
+		return false;
+	}
+
+	// Read the CODE fields, never the human-readable description: error_description is prose that
+	// changes between platform versions, and matching on prose is how this kind of check quietly
+	// stops working.
+	static const TCHAR* const CodeKeys[] = { TEXT("error"), TEXT("error_code"), TEXT("code") };
+
+	// GoTrue's spellings for "that refresh token is not one I will honour".
+	static const TCHAR* const DefinitiveCodes[] = {
+		TEXT("invalid_grant"),
+		TEXT("invalid_refresh_token"),
+		TEXT("refresh_token_not_found"),
+		TEXT("refresh_token_already_used")
+	};
+
+	for (const TCHAR* const Key : CodeKeys)
+	{
+		FString Value;
+		if (!Root->TryGetStringField(Key, Value) || Value.IsEmpty())
+		{
+			continue;
+		}
+		const FString Lowered = Value.ToLower();
+		for (const TCHAR* const Code : DefinitiveCodes)
+		{
+			if (Lowered == Code)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 bool FMantlePlaceAuthLogic::IsExpired(const FDateTime& NowUtc, const FDateTime& ExpiresAtUtc)
 {
 	return (NowUtc + FTimespan::FromSeconds(ExpirySkewSeconds)) >= ExpiresAtUtc;

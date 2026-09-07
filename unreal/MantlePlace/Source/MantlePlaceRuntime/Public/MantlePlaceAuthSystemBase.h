@@ -87,6 +87,20 @@ public:
 	FString TokenEndpointUrl = TEXT("https://mantle.place/api/v1/auth/native/token");
 
 	/**
+	 * Endpoint that exchanges a stored refresh token for a new access token. Public route,
+	 * compiled in, and the reason a curator with no packaging-time configuration can stay signed in.
+	 *
+	 * Refresh and restore used to be identity-provider-direct ONLY, which needed PlatformApiBaseUrl
+	 * and SupabaseAnonKey - values hydrated at packaging time and absent from a plain clone. So
+	 * sign-in worked config-free and restore did not, on the machine of everyone who had not
+	 * packaged the plugin. The Revit host added this same route for the same reason.
+	 *
+	 * When explicitly configured empty, falls back to the identity-provider-direct grant.
+	 */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Mantle Place|Auth")
+	FString RefreshEndpointUrl = TEXT("https://mantle.place/api/v1/auth/native/refresh");
+
+	/**
 	 * Explicit loopback ports for the redirect callback server, tried in order.
 	 *
 	 * LEAVE EMPTY (the default). The operating system then picks a free port each session, which is
@@ -193,6 +207,17 @@ public:
 	/** Native auth-state broadcast for C++/Slate observers (see the delegate note above). */
 	FMantlePlaceOnAuthStateChangedNative OnAuthStateChangedNative;
 
+	/**
+	 * Why the last auth attempt failed, in words fit to show a user. Empty when nothing has failed
+	 * since the last success.
+	 *
+	 * A failed restore used to be invisible: the state went to Failed, the panel rendered Failed as
+	 * a plain "Sign In" button, and the reason existed only in a log line nobody reads. A silent
+	 * failure has no bug report attached to it, which is why this defect survived as long as it did.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Auth")
+	const FString& GetLastAuthError() const { return LastAuthError; }
+
 	//~ Begin UObject interface
 	virtual void BeginDestroy() override;
 	//~ End UObject interface
@@ -201,16 +226,38 @@ private:
 	/** Which auth grant a given HTTP exchange represents (selects the completion behavior). */
 	enum class ERequestKind : uint8 { SignIn, Refresh, Restore, PkceExchange };
 
-	/** Build, configure, and send a POST auth request; routes completion to HandleAuthResponse. */
-	void SendAuthRequest(const FString& Url, const FString& Body, ERequestKind Kind);
+	/**
+	 * Build, configure, and send a POST auth request; routes completion to HandleAuthResponse.
+	 *
+	 * bAttachAnonKey is true only for identity-provider-direct calls, which authenticate with the
+	 * publishable anon key. The broker routes do not take it, and sending it there would leak a
+	 * configured value to an endpoint that has no use for it.
+	 */
+	void SendAuthRequest(const FString& Url, const FString& Body, ERequestKind Kind, bool bAttachAnonKey);
 
 	/** HTTP completion handler (game thread). Parses the response and fires the relevant event. */
 	void HandleAuthResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response,
 		bool bConnectedSuccessfully, ERequestKind Kind);
 
-	/** Apply a failed-outcome state transition and fire the relevant event. */
-	void HandleAuthFailure(const FString& Message, ERequestKind Kind);
+	/**
+	 * Apply a failed-outcome state transition and fire the relevant event.
+	 *
+	 * bDefinitive says the platform rejected the grant itself rather than failing to answer. It is
+	 * always false for a sign-in (there is no stored credential at stake yet) and is the deciding
+	 * fact for a refresh or restore: a definitive rejection discards the stored token, a transient
+	 * failure keeps it.
+	 */
+	void HandleAuthFailure(const FString& Message, ERequestKind Kind, bool bDefinitive);
+
+	/**
+	 * Pick the endpoint a refresh or restore should use. False when neither is configured.
+	 * bOutAttachAnonKey is true only for the identity-provider-direct fallback.
+	 */
+	bool ResolveRefreshEndpoint(FString& OutUrl, bool& bOutAttachAnonKey) const;
+
+	/** Discard the stored refresh token. Only ever called on a definitive rejection or a sign-out. */
+	void ForgetStoredSession();
 
 	/** Unbind + cancel + reset any in-flight request. */
 	void CancelActiveRequest();
@@ -292,4 +339,7 @@ private:
 
 	/** Encrypted at-rest store for the refresh token (DPAPI on Windows). */
 	TSharedPtr<IMantlePlaceSecretStore> SecretStore;
+
+	/** Backing store for GetLastAuthError. */
+	FString LastAuthError;
 };

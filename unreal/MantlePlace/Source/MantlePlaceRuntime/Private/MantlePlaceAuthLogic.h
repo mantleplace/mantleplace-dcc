@@ -79,6 +79,22 @@ struct FMantlePlaceAuthLogic
 	 * Parse a GoTrue error body into a human-readable message. Tries the known key variants
 	 * (error_description / msg / message / error_code / error). Returns false if none present.
 	 */
+	/**
+	 * Does this failed grant response mean the refresh token is permanently unusable?
+	 *
+	 * The distinction is the whole point: a refresh that fails because the network is down says
+	 * nothing about the credential and must NOT discard it, while a refresh the platform rejects
+	 * outright means the stored token can never work again and keeping it produces a client that
+	 * retries a corpse on every launch, fails silently, and never asks for the sign-in that would
+	 * fix it. That is the shape of the defect this fixes.
+	 *
+	 * Definitive requires BOTH a client-error status and an error code naming the grant itself.
+	 * Anything else - 5xx, a timeout, a proxy's HTML error page, a 400 whose body we cannot read -
+	 * is transient by default, because the cost of guessing wrong in that direction is one extra
+	 * sign-in, and the cost of guessing wrong in the other is a session lost to a blip.
+	 */
+	static bool IsDefinitiveRejection(int32 HttpStatus, const FString& Body);
+
 	static bool ParseErrorResponse(const FString& JsonStr, FString& OutError);
 
 	/**

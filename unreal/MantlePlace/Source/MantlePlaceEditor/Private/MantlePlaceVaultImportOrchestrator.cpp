@@ -50,6 +50,11 @@ void UMantlePlaceVaultImportOrchestrator::TryRestoreSession()
 	}
 }
 
+FString UMantlePlaceVaultImportOrchestrator::GetLastAuthError() const
+{
+	return AuthSystem != nullptr ? AuthSystem->GetLastAuthError() : FString();
+}
+
 bool UMantlePlaceVaultImportOrchestrator::IsSignedIn() const
 {
 	return AuthSystem != nullptr && AuthSystem->IsAuthenticated();
