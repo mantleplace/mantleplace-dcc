@@ -16,6 +16,10 @@
       "revit",
       "unreal"
     ],
+    "auth.rejectionClassification": [
+      "revit",
+      "unreal"
+    ],
     "auth.stateMachine": [
       "revit",
       "unreal"

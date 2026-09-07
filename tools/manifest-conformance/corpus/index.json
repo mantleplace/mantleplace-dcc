@@ -60,6 +60,13 @@
       "reason": "PKCE is the one place where a plausible-looking implementation is silently insecure. The RFC 7636 Appendix B pair proves S256 end to end; the base64url triples catch the padding and +/ substitution bugs that make a verifier fail server-side."
     },
     {
+      "id": "auth.rejectionClassification",
+      "group": "auth",
+      "file": "auth/rejection-classification-vectors.json",
+      "expect": "vector",
+      "reason": "Whether a failed refresh discards the stored credential or keeps it. The two failure modes are not symmetric: reading a transient failure as definitive costs a working session to a dropped packet, while reading a definitive rejection as transient retries a dead credential at every launch and never prompts the sign-in that would fix it. Only the second is silent. Host-invariant deliberately - the codes are a platform contract, and a host that honours a fifth spelling locally has forked it."
+    },
+    {
       "id": "auth.stateMachine",
       "group": "auth",
       "file": "auth/state-machine.json",

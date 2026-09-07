@@ -513,38 +513,48 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 
 	// --- Definitive rejection vs transient failure ---------------------------------------------
 	//
-	// Host-local rather than corpus-driven: the corpus binds every host, and the Revit host has not
-	// implemented this classification yet. It is proposed there as a case once both hosts agree.
-	//
 	// The asymmetry under test is deliberate. Treating a transient failure as definitive throws
 	// away a working session over a dropped packet; treating a definitive rejection as transient
 	// retries a dead credential forever and never prompts the sign-in that would fix it. Only the
 	// second is silent, so everything unrecognised is transient.
+	//
+	// Corpus-driven, since both hosts now implement this identically: the codes are a platform
+	// contract, so a host that starts honouring a fifth spelling fails here rather than drifting
+	// away from its sibling in silence. It was a host-local table on both sides until then.
+	if (const FCase* Case = Take(TEXT("auth.rejectionClassification")))
 	{
-		TestTrue(TEXT("invalid_grant at 400 is definitive"),
-			FLogic::IsDefinitiveRejection(400, TEXT("{\"error\":\"invalid_grant\"}")));
-		TestTrue(TEXT("invalid_grant at 401 is definitive"),
-			FLogic::IsDefinitiveRejection(401, TEXT("{\"error\":\"invalid_grant\"}")));
-		TestTrue(TEXT("error_code carries the verdict too"),
-			FLogic::IsDefinitiveRejection(400, TEXT("{\"error_code\":\"refresh_token_not_found\"}")));
-		TestTrue(TEXT("a used rotated token is definitive"),
-			FLogic::IsDefinitiveRejection(400, TEXT("{\"error_code\":\"refresh_token_already_used\"}")));
-		TestTrue(TEXT("the code match is case-insensitive"),
-			FLogic::IsDefinitiveRejection(400, TEXT("{\"error\":\"Invalid_Grant\"}")));
+		TArray<FString> CodeKeys;
+		TArray<FString> DefinitiveCodes;
+		if (Case->PayloadObject.IsValid())
+		{
+			Case->PayloadObject->TryGetStringArrayField(TEXT("codeKeys"), CodeKeys);
+			Case->PayloadObject->TryGetStringArrayField(TEXT("definitiveCodes"), DefinitiveCodes);
+		}
+		TestTrue(Case->What(TEXT("declares the code keys")), CodeKeys.Num() > 0);
+		TestTrue(Case->What(TEXT("declares the definitive codes")), DefinitiveCodes.Num() > 0);
 
-		TestFalse(TEXT("500 is never definitive, whatever the body says"),
-			FLogic::IsDefinitiveRejection(500, TEXT("{\"error\":\"invalid_grant\"}")));
-		TestFalse(TEXT("503 is transient"),
-			FLogic::IsDefinitiveRejection(503, TEXT("{\"error\":\"unavailable\"}")));
-		TestFalse(TEXT("a client error with an unrecognised code is transient"),
-			FLogic::IsDefinitiveRejection(400, TEXT("{\"error\":\"rate_limited\"}")));
-		TestFalse(TEXT("an unreadable body is transient - a proxy error page lands here"),
-			FLogic::IsDefinitiveRejection(401, TEXT("<html>Gateway</html>")));
-		TestFalse(TEXT("an empty body is transient"),
-			FLogic::IsDefinitiveRejection(400, FString()));
-		TestFalse(TEXT("prose is not a verdict: error_description alone does not decide"),
-			FLogic::IsDefinitiveRejection(400,
-				TEXT("{\"error_description\":\"Invalid Refresh Token: Already Used\"}")));
+		// Every key x code pair, rather than the diagonal this suite used to hand-write.
+		const int32 MatrixStatus =
+			static_cast<int32>(RowNumber(Case->PayloadObject, TEXT("matrixStatus"), 400.0));
+		for (const FString& Key : CodeKeys)
+		{
+			for (const FString& Code : DefinitiveCodes)
+			{
+				const FString Body = FString::Printf(TEXT("{\"%s\":\"%s\"}"), *Key, *Code);
+				TestTrue(
+					Case->What(*FString::Printf(TEXT("%d %s is definitive"), MatrixStatus, *Body)),
+					FLogic::IsDefinitiveRejection(MatrixStatus, Body));
+			}
+		}
+
+		for (const TSharedPtr<FJsonObject>& Row : Rows(*Case, TEXT("vectors")))
+		{
+			const FString Body = RowBodyAsText(Row);
+			const int32 Status = static_cast<int32>(RowNumber(Row, TEXT("status")));
+			TestTrue(
+				Case->What(*FString::Printf(TEXT("%d %s"), Status, *Body)),
+				FLogic::IsDefinitiveRejection(Status, Body) == RowBool(Row, TEXT("definitive")));
+		}
 	}
 
 	// --- HPS-41 coverage guard ----------------------------------------------------------------
