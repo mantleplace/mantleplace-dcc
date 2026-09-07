@@ -29,7 +29,8 @@ tools/manifest-conformance/    the contract gate + the shared conformance corpus
 tools/public-hygiene/          the private-reference gate + its cases
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
 .github/workflows/             the three public CI gates, plus the stale-tracker job
-LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md  CLAUDE.md
+LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
+CONTEXT.md  CLAUDE.md
 ```
 
 **The rule for every future top-level addition:** *a top-level folder is a DCC host or a cross-host
@@ -148,6 +149,9 @@ even when the arithmetic is correct.
 - **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id. Its *portable*
   half — what any consumer owes a manifest — is now published as `spec/`; the vault-client half
   stays private, and `HPS-NN` ids are for internal prose, not for the public spec.
+- **What the words mean** → [`CONTEXT.md`](CONTEXT.md) — the glossary, and only that. It settles which
+  of two words to use and what each one denotes; it holds no implementation detail, no rule and no
+  decision. A term belongs there once the same word has meant two things to two people.
 - **What the plugins do, and how to build them** → [`README.md`](README.md).
 - **Governance** → [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
   [`TRADEMARK.md`](TRADEMARK.md).
