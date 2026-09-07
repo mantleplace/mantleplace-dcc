@@ -155,6 +155,7 @@ void UMantlePlaceAuthSystemBase::TryRestoreSession()
 	}
 
 	Tokens.RefreshToken = StoredRefresh;
+	PresentedRefreshToken = StoredRefresh;
 	SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::BeginRestore));
 
 	const FString Body = FMantlePlaceAuthLogic::BuildRefreshGrantBody(StoredRefresh);
@@ -252,6 +253,11 @@ void UMantlePlaceAuthSystemBase::RefreshToken()
 		NotifyTokenRefreshed(false);
 		return;
 	}
+
+	// Take the freshest token before spending a round trip on it: the other host may have rotated
+	// since this process last refreshed, and the copy in memory would then already be dead.
+	Tokens.RefreshToken = ReadFreshestRefreshToken();
+	PresentedRefreshToken = Tokens.RefreshToken;
 
 	SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::BeginRefresh));
 
@@ -380,6 +386,7 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 	// Success — overwrite the token set, but keep the prior refresh_token when the response omits a
 	// new one, and stamp absolute expiry from wall-clock now.
 	LastAuthError.Reset();
+	bRotationRetryUsed = false;
 
 	const FString PriorRefreshToken = Tokens.RefreshToken;
 	Tokens = MoveTemp(NewTokens);
@@ -451,6 +458,31 @@ void UMantlePlaceAuthSystemBase::HandleAuthFailure(const FString& Message, ERequ
 		// The in-memory token set goes either way - it is unusable now regardless.
 		Tokens.Reset();
 		ExpiresAtUtc = FDateTime(0);
+
+		if (bDefinitive && !bRotationRetryUsed)
+		{
+			// Before believing a rejection, check whether the other host rotated the credential
+			// between our read and this answer. If the store now holds something else, the
+			// platform rejected a token that is merely superseded - discarding the session here
+			// would sign the user out of both hosts because the other one refreshed first.
+			const FString Freshest = ReadFreshestRefreshToken();
+			if (!Freshest.IsEmpty() && Freshest != PresentedRefreshToken)
+			{
+				bRotationRetryUsed = true;
+				UE_LOG(LogMantlePlaceAuth, Log,
+					TEXT("Refresh rejected a superseded token; the other host rotated it. Retrying once."));
+
+				// Leave the in-flight renewal state before re-entering. TryRestoreSession declines
+				// while a renewal is running, and we are still inside the one that just failed --
+				// without this the retry would silently do nothing at all.
+				SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::SignOut));
+
+				// Deliberately no NotifyTokenRefreshed here: this renewal has not settled, it has
+				// been retried. Whoever is waiting hears about it when the retry finishes.
+				TryRestoreSession();
+				return;
+			}
+		}
 
 		if (bDefinitive)
 		{
@@ -815,6 +847,23 @@ void UMantlePlaceAuthSystemBase::NotifyTokenRefreshed(bool bSuccess)
 	// event goes first to preserve the ordering the BP surface has always seen.
 	OnTokenRefreshed(bSuccess);
 	OnTokenRefreshedNative.Broadcast(bSuccess);
+}
+
+FString UMantlePlaceAuthSystemBase::ReadFreshestRefreshToken()
+{
+	EnsureSecretStore();
+
+	FString Stored;
+	if (SecretStore.IsValid() && SecretStore->Load(GRefreshTokenKey, Stored) && !Stored.IsEmpty())
+	{
+		// The store wins when they disagree. One machine identity means the other host may have
+		// rotated since we last read, and presenting the token we happen to be holding would be
+		// presenting a superseded one - which a rotating platform rejects, and which we would then
+		// have to distinguish from a genuinely dead session.
+		return Stored;
+	}
+
+	return Tokens.RefreshToken;
 }
 
 void UMantlePlaceAuthSystemBase::ForgetStoredSession()

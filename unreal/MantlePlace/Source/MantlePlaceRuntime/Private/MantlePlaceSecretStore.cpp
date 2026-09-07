@@ -4,6 +4,7 @@
 
 #include "MantlePlaceBundleCacheLogic.h" // SanitizeKeySegment / Sha256Hex - the shared HPS-30 mapping
 
+#include "HAL/CriticalSection.h" // FSystemWideCriticalSection: the cross-process store lock
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/FileHelper.h"
@@ -65,8 +66,30 @@ namespace
 class FMantlePlaceSecretStoreWindows : public IMantlePlaceSecretStore
 {
 public:
+	/**
+	 * Hold the cross-host store lock for the duration of one access.
+	 *
+	 * A rotation is a read-modify-write on a file two host plugins share, so without this a Revit
+	 * refresh and an Unreal refresh can interleave and leave the file holding a token neither
+	 * process believes in. The wait is bounded: a lock we cannot take in five seconds is one whose
+	 * holder has died or hung, and proceeding unserialised is strictly better than refusing to sign
+	 * the user in at all - the failure this guards against is rare, and the failure it would
+	 * otherwise cause is total.
+	 */
+	struct FScopedStoreLock
+	{
+		FScopedStoreLock()
+			: Lock(FString(IMantlePlaceSecretStore::LockName), FTimespan::FromSeconds(5.0))
+		{
+		}
+
+		FSystemWideCriticalSection Lock;
+	};
+
 	virtual bool Save(const FString& Key, const FString& PlaintextValue) override
 	{
+		FScopedStoreLock StoreLock;
+
 		const FTCHARToUTF8 Utf8(*PlaintextValue);
 
 		DATA_BLOB In;
@@ -98,6 +121,8 @@ public:
 
 	virtual bool Load(const FString& Key, FString& OutPlaintextValue) override
 	{
+		FScopedStoreLock StoreLock;
+
 		TArray<uint8> Blob;
 		if (!FFileHelper::LoadFileToArray(Blob, *ResolveSecretPath(Key)) || Blob.Num() == 0)
 		{
@@ -130,6 +155,8 @@ public:
 
 	virtual void Clear(const FString& Key) override
 	{
+		FScopedStoreLock StoreLock;
+
 		IFileManager::Get().Delete(*ResolveSecretPath(Key), /*RequireExists=*/false, /*EvenReadOnly=*/true, /*Quiet=*/true);
 	}
 
