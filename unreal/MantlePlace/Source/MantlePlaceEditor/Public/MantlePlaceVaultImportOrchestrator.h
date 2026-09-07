@@ -30,8 +30,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMantlePlaceOnAuthChangedBP, EMantle
  * binds the three Blueprint-assignable events below.
  *
  * Owns a UMantlePlaceVaultClient + UMantlePlaceBundleCache and observes them through their native
- * (C++) completion delegates. The auth source (a BP_MantlePlaceAuthSystemBase instance the EUW
- * signs in) is injected via Initialize and supplies the JWT for the vault calls.
+ * (C++) completion delegates. It does NOT own the auth source: that is the editor's single session,
+ * held by UMantlePlaceAuthSubsystem and resolved in EnsureClients. Initialize still accepts an
+ * explicit auth source, for headless callers and tests that have no editor to ask.
  */
 UCLASS(BlueprintType, Blueprintable)
 class MANTLEPLACEEDITOR_API UMantlePlaceVaultImportOrchestrator : public UObject
