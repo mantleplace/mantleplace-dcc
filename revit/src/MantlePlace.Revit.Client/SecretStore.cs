@@ -16,6 +16,20 @@ namespace MantlePlace.Revit.Client;
 public interface ISecretStore
 {
     /// <summary>
+    /// Name of the system-wide mutex serialising access to the stored credential.
+    /// </summary>
+    /// <remarks>
+    /// One machine identity means both host plugins read and write ONE file, so a rotation is a
+    /// read-modify-write two processes can interleave. The Unreal host takes this same lock through
+    /// the engine's FSystemWideCriticalSection, which on Windows is a plain named mutex in the
+    /// session namespace -- the same primitive a .NET Mutex of this name joins. It lives on the
+    /// interface rather than on the Windows implementation because it is a cross-host contract
+    /// rather than a platform detail, and because a lock the two hosts spell differently is no lock
+    /// at all.
+    /// </remarks>
+    const string LockName = "MantlePlace.Auth.SecretStore";
+
+    /// <summary>
     /// Whether a saved secret will survive the process. <c>false</c> means the UI should say
     /// "you will need to sign in again next session" rather than implying persistence it does not
     /// have.
@@ -101,6 +115,50 @@ public sealed class DpapiSecretStore : ISecretStore
     /// <summary>As the default constructor, with an explicit directory. For tests.</summary>
     public DpapiSecretStore(string root) => _root = root;
 
+    /// <summary>
+    /// Holds the cross-host store lock for one access, or proceeds without it after five seconds.
+    /// </summary>
+    /// <remarks>
+    /// A lock nobody releases in five seconds belongs to a process that has died or hung, and
+    /// proceeding unserialised is strictly better than refusing to sign the curator in: the failure
+    /// this guards against is rare, and the failure it would otherwise cause is total. An abandoned
+    /// mutex (holder died mid-write) throws and is treated the same way -- we hold it either way.
+    /// </remarks>
+    private static Mutex? AcquireLock()
+    {
+        Mutex mutex = new(initiallyOwned: false, ISecretStore.LockName);
+        try
+        {
+            mutex.WaitOne(TimeSpan.FromSeconds(5));
+        }
+        catch (AbandonedMutexException)
+        {
+            // Ownership transferred to us regardless; the file may be half-written, and the caller
+            // reading a corrupt blob already degrades to "no stored session" (HPS-17).
+        }
+
+        return mutex;
+    }
+
+    private static void ReleaseLock(Mutex? mutex)
+    {
+        if (mutex is null)
+        {
+            return;
+        }
+
+        try
+        {
+            mutex.ReleaseMutex();
+        }
+        catch (ApplicationException)
+        {
+            // Not the owner -- the wait timed out and we proceeded anyway. Nothing to release.
+        }
+
+        mutex.Dispose();
+    }
+
     public bool IsPersistent => true;
 
     public bool Save(string key, string secret)
@@ -112,6 +170,7 @@ public sealed class DpapiSecretStore : ISecretStore
             return false;
         }
 
+        Mutex? storeLock = AcquireLock();
         try
         {
             Directory.CreateDirectory(_root);
@@ -122,6 +181,10 @@ public sealed class DpapiSecretStore : ISecretStore
         {
             return false;
         }
+        finally
+        {
+            ReleaseLock(storeLock);
+        }
     }
 
     public bool TryLoad(string key, out string secret)
@@ -129,6 +192,7 @@ public sealed class DpapiSecretStore : ISecretStore
         secret = string.Empty;
 
         byte[] encrypted;
+        Mutex? storeLock = AcquireLock();
         try
         {
             string path = PathFor(key);
@@ -142,6 +206,10 @@ public sealed class DpapiSecretStore : ISecretStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return false;
+        }
+        finally
+        {
+            ReleaseLock(storeLock);
         }
 
         if (!TryUnprotect(encrypted, out byte[] plain))
@@ -157,6 +225,7 @@ public sealed class DpapiSecretStore : ISecretStore
 
     public void Clear(string key)
     {
+        Mutex? storeLock = AcquireLock();
         try
         {
             string path = PathFor(key);
@@ -170,6 +239,10 @@ public sealed class DpapiSecretStore : ISecretStore
             // Sign-out has already dropped the in-memory tokens. A file that would not delete is
             // worth no dialog: the blob is useless without this plugin, and the next Save
             // overwrites it.
+        }
+        finally
+        {
+            ReleaseLock(storeLock);
         }
     }
 

@@ -126,6 +126,81 @@ public static class TokenGrants
         => now.AddSeconds(expiresInSeconds);
 
     /// <summary>
+    /// Grant error codes that mean the refresh token itself is finished, not that the platform was
+    /// briefly unable to answer.
+    /// </summary>
+    private static readonly string[] DefinitiveCodes =
+    [
+        "invalid_grant",
+        "invalid_refresh_token",
+        "refresh_token_not_found",
+        "refresh_token_already_used",
+    ];
+
+    /// <summary>
+    /// Does this failed grant response mean the refresh token is permanently unusable?
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The distinction decides whether the stored credential is discarded. A refresh that fails
+    /// because the network is down says nothing about the credential and must not cost the curator
+    /// their session; a refresh the platform rejects outright means the stored token can never work
+    /// again, and keeping it produces a plugin that retries a dead credential at every launch, fails
+    /// silently each time, and never asks for the sign-in that would fix it.
+    /// </para>
+    /// <para>
+    /// Definitive needs BOTH a client-error status and an error <b>code</b> naming the grant. Never
+    /// the human-readable description: that is prose which changes between platform versions, and
+    /// matching on prose is how a check like this quietly stops working.
+    /// </para>
+    /// <para>
+    /// Everything unrecognised is transient, deliberately. Reading a transient failure as definitive
+    /// costs a working session to a dropped packet; reading a definitive one as transient costs a
+    /// retry. Only the first is silent.
+    /// </para>
+    /// </remarks>
+    public static bool IsDefinitiveRejection(int httpStatus, string? body)
+    {
+        if (httpStatus is not (400 or 401) || string.IsNullOrWhiteSpace(body))
+        {
+            return false;
+        }
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(body);
+        }
+        catch (JsonException)
+        {
+            // A client-error status we cannot read is still not proof the credential is dead --
+            // a proxy's HTML error page lands here. Keep the token.
+            return false;
+        }
+
+        using (document)
+        {
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            foreach (string key in (string[])["error", "error_code", "code"])
+            {
+                if (document.RootElement.TryGetProperty(key, out JsonElement value)
+                    && value.ValueKind == JsonValueKind.String
+                    && value.GetString() is { Length: > 0 } code
+                    && Array.Exists(DefinitiveCodes, c => string.Equals(c, code, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Reduces a grant error body to one message, or <c>null</c> when the body states no error.
     /// </summary>
     /// <remarks>
