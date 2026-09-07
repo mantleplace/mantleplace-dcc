@@ -191,6 +191,43 @@ private:
 	/** Validate config + auth and fetch the JWT; fills OutError on failure. */
 	bool EnsureReady(FString& OutError, FString& OutJwt) const;
 
+	/**
+	 * How to run the operation currently in flight again, captured when it was sent.
+	 *
+	 * The completion handlers do not keep the arguments they were called with - HandleDownloadResponse
+	 * has no idea which order id it is answering for - so a request that has to be replayed after a
+	 * token renewal has to have said how, before it went out.
+	 */
+	TFunction<void()> LastOperation;
+
+	/** The operation waiting on an in-flight renewal. Runs, once, when that renewal settles. */
+	TFunction<void()> PendingReplayOperation;
+
+	/**
+	 * Renewals performed since the last successful vault response.
+	 *
+	 * Bounds the retry at exactly one. Without it a platform answering 401 to everything - a
+	 * revoked account, a misconfigured vault base URL pointed at something that always refuses -
+	 * would renew, replay, renew, replay, forever, and each renewal is a network round trip.
+	 */
+	int32 RenewalsSinceSuccess = 0;
+
+	/** Subscription to the auth system's refresh-settled signal; bound lazily, once. */
+	FDelegateHandle RefreshSettledHandle;
+
+	/**
+	 * Ask for a token renewal and replay Replay when it settles.
+	 *
+	 * Returns true when the operation has been deferred, in which case the caller must NOT report a
+	 * failure - the operation has not failed, it is waiting. Returns false when there is nothing to
+	 * renew from, the retry budget is spent, or no auth system is attached, and the caller should
+	 * report its error as usual.
+	 */
+	bool DeferUntilRenewed(TFunction<void()> Replay);
+
+	/** Run the deferred operation, or let it fail honestly, once a renewal has settled. */
+	void HandleRefreshSettled(bool bSuccess);
+
 	/** HTTP completion handlers (game thread): parse + fire the relevant event. */
 	void HandleListResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);

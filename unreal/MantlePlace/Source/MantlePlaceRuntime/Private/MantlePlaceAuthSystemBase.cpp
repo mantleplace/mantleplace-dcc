@@ -140,7 +140,7 @@ void UMantlePlaceAuthSystemBase::TryRestoreSession()
 	if (!SecretStore.IsValid() || !SecretStore->Load(GRefreshTokenKey, StoredRefresh) || StoredRefresh.IsEmpty())
 	{
 		// No stored session to restore — not an error.
-		OnTokenRefreshed(false);
+		NotifyTokenRefreshed(false);
 		return;
 	}
 
@@ -150,7 +150,7 @@ void UMantlePlaceAuthSystemBase::TryRestoreSession()
 	{
 		LastAuthError = TEXT("Mantle Place sign-in is not configured on this install.");
 		UE_LOG(LogMantlePlaceAuth, Error, TEXT("TryRestoreSession: %s"), *LastAuthError);
-		OnTokenRefreshed(false);
+		NotifyTokenRefreshed(false);
 		return;
 	}
 
@@ -239,7 +239,7 @@ void UMantlePlaceAuthSystemBase::RefreshToken()
 	if (AuthState != EMantlePlaceAuthState::Authenticated || Tokens.RefreshToken.IsEmpty())
 	{
 		UE_LOG(LogMantlePlaceAuth, Warning, TEXT("RefreshToken ignored: no active session to refresh."));
-		OnTokenRefreshed(false);
+		NotifyTokenRefreshed(false);
 		return;
 	}
 
@@ -249,7 +249,7 @@ void UMantlePlaceAuthSystemBase::RefreshToken()
 	{
 		LastAuthError = TEXT("Mantle Place sign-in is not configured on this install.");
 		UE_LOG(LogMantlePlaceAuth, Error, TEXT("RefreshToken: %s"), *LastAuthError);
-		OnTokenRefreshed(false);
+		NotifyTokenRefreshed(false);
 		return;
 	}
 
@@ -412,7 +412,7 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 		SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::RefreshSucceeded));
 		UE_LOG(LogMantlePlaceAuth, Log, TEXT("Token %s succeeded."),
 			Kind == ERequestKind::Restore ? TEXT("restore") : TEXT("refresh"));
-		OnTokenRefreshed(true);
+		NotifyTokenRefreshed(true);
 		break;
 	}
 }
@@ -472,7 +472,7 @@ void UMantlePlaceAuthSystemBase::HandleAuthFailure(const FString& Message, ERequ
 			SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::RefreshFailed));
 		}
 
-		OnTokenRefreshed(false);
+		NotifyTokenRefreshed(false);
 		break;
 	}
 }
@@ -807,6 +807,14 @@ void UMantlePlaceAuthSystemBase::EnsureSecretStore()
 	{
 		SecretStore = MakeShareable(IMantlePlaceSecretStore::Create().Release());
 	}
+}
+
+void UMantlePlaceAuthSystemBase::NotifyTokenRefreshed(bool bSuccess)
+{
+	// One funnel, so the native listeners can never be forgotten at a new call site. The Blueprint
+	// event goes first to preserve the ordering the BP surface has always seen.
+	OnTokenRefreshed(bSuccess);
+	OnTokenRefreshedNative.Broadcast(bSuccess);
 }
 
 void UMantlePlaceAuthSystemBase::ForgetStoredSession()

@@ -63,18 +63,98 @@ bool UMantlePlaceVaultClient::EnsureReady(FString& OutError, FString& OutJwt) co
 	return true;
 }
 
+bool UMantlePlaceVaultClient::DeferUntilRenewed(TFunction<void()> Replay)
+{
+	if (AuthSystem == nullptr || !Replay)
+	{
+		return false;
+	}
+
+	// Nothing to renew from. "Signed out" and "signed in with a stale access token" look the same
+	// at the vault call site, and only the second is worth waiting for.
+	if (!AuthSystem->CanRenewSession())
+	{
+		return false;
+	}
+
+	// Exactly one renewal between successful responses. A platform answering 401 to everything
+	// would otherwise renew and replay forever, a round trip at a time.
+	if (RenewalsSinceSuccess >= 1)
+	{
+		return false;
+	}
+	++RenewalsSinceSuccess;
+
+	LastOperation = nullptr;
+	PendingReplayOperation = MoveTemp(Replay);
+
+	if (!RefreshSettledHandle.IsValid())
+	{
+		RefreshSettledHandle = AuthSystem->OnTokenRefreshedNative.AddUObject(
+			this, &UMantlePlaceVaultClient::HandleRefreshSettled);
+	}
+
+	// Single-flight. Two operations that both see an expired token must produce ONE renewal: a
+	// rotating platform honours the first refresh and rejects the second as already-used, and the
+	// rejection classifier would correctly read that as a dead credential and discard a session
+	// that was never actually dead.
+	if (!AuthSystem->IsRefreshInFlight())
+	{
+		if (AuthSystem->GetAuthState() == EMantlePlaceAuthState::Authenticated)
+		{
+			AuthSystem->RefreshToken();
+		}
+		else
+		{
+			AuthSystem->TryRestoreSession();
+		}
+	}
+
+	return true;
+}
+
+void UMantlePlaceVaultClient::HandleRefreshSettled(bool /*bSuccess*/)
+{
+	TFunction<void()> Replay = MoveTemp(PendingReplayOperation);
+	PendingReplayOperation = nullptr;
+
+	if (!Replay)
+	{
+		return;
+	}
+
+	// Replayed either way, success or failure. On failure the renewal has already cleared the
+	// tokens, so the replayed call falls straight through EnsureReady and reports the refusal on
+	// the operation's own channel - which is what the caller is waiting to hear. Reporting it from
+	// here instead would mean knowing which of the four completion signals to fire.
+	Replay();
+}
+
 void UMantlePlaceVaultClient::ListVault()
 {
 	const TArray<FMantlePlaceVaultItem> Empty;
+
+	TWeakObjectPtr<UMantlePlaceVaultClient> WeakSelf(this);
+	TFunction<void()> Replay = [WeakSelf]()
+	{
+		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->ListVault(); }
+	};
 
 	FString Error;
 	FString Jwt;
 	if (!EnsureReady(Error, Jwt))
 	{
+		if (DeferUntilRenewed(Replay))
+		{
+			return; // not a failure - waiting on a renewal
+		}
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("ListVault refused: %s"), *Error);
 		NotifyVaultListed(false, Empty, Error);
 		return;
 	}
+
+	// Captured before the send: the completion handler will not know how to run this again.
+	LastOperation = MoveTemp(Replay);
 
 	CancelActiveRequest();
 
@@ -106,16 +186,29 @@ void UMantlePlaceVaultClient::ListVault()
 
 void UMantlePlaceVaultClient::GetPresignedUrl(const FString& OrderId, const FString& Format)
 {
+	TWeakObjectPtr<UMantlePlaceVaultClient> WeakSelf(this);
+	TFunction<void()> Replay = [WeakSelf, OrderId, Format]()
+	{
+		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->GetPresignedUrl(OrderId, Format); }
+	};
+
 	const FMantlePlacePresignedDownload Empty;
 
 	FString Error;
 	FString Jwt;
 	if (!EnsureReady(Error, Jwt))
 	{
+		if (DeferUntilRenewed(Replay))
+		{
+			return; // not a failure - waiting on a renewal
+		}
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("GetPresignedUrl refused: %s"), *Error);
 		NotifyPresigned(false, Empty, Error);
 		return;
 	}
+
+	// Captured before the send: the completion handler will not know how to run this again.
+	LastOperation = MoveTemp(Replay);
 
 	if (OrderId.IsEmpty())
 	{
@@ -221,6 +314,13 @@ void UMantlePlaceVaultClient::HandleListResponse(
 
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
+		// An expired access token looks exactly like this. Renew once and run the operation again;
+		// LastOperation is how it was sent, captured before it went out.
+		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
+		{
+			return;
+		}
+
 		FString Error;
 		FString Code;
 		if (!FMantlePlaceVaultLogic::ParseErrorBody(Content, Error, Code))
@@ -270,6 +370,13 @@ void UMantlePlaceVaultClient::HandleDownloadResponse(
 
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
+		// An expired access token looks exactly like this. Renew once and run the operation again;
+		// LastOperation is how it was sent, captured before it went out.
+		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
+		{
+			return;
+		}
+
 		FString Error;
 		FString Code;
 		if (!FMantlePlaceVaultLogic::ParseErrorBody(Content, Error, Code))
@@ -319,14 +426,27 @@ void UMantlePlaceVaultClient::HandleProbeResponse(
 
 void UMantlePlaceVaultClient::RequestMaterialize(const FString& OrderId, const FString& Scope)
 {
+	TWeakObjectPtr<UMantlePlaceVaultClient> WeakSelf(this);
+	TFunction<void()> Replay = [WeakSelf, OrderId, Scope]()
+	{
+		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->RequestMaterialize(OrderId, Scope); }
+	};
+
 	FString Error;
 	FString Jwt;
 	if (!EnsureReady(Error, Jwt))
 	{
+		if (DeferUntilRenewed(Replay))
+		{
+			return; // not a failure - waiting on a renewal
+		}
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("RequestMaterialize refused: %s"), *Error);
 		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), Error);
 		return;
 	}
+
+	// Captured before the send: the completion handler will not know how to run this again.
+	LastOperation = MoveTemp(Replay);
 
 	if (OrderId.IsEmpty())
 	{
@@ -346,14 +466,27 @@ void UMantlePlaceVaultClient::RequestMaterialize(const FString& OrderId, const F
 
 void UMantlePlaceVaultClient::RequestMaterializeTokens(const FString& OrderId, const TArray<FString>& Tokens)
 {
+	TWeakObjectPtr<UMantlePlaceVaultClient> WeakSelf(this);
+	TFunction<void()> Replay = [WeakSelf, OrderId, Tokens]()
+	{
+		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->RequestMaterializeTokens(OrderId, Tokens); }
+	};
+
 	FString Error;
 	FString Jwt;
 	if (!EnsureReady(Error, Jwt))
 	{
+		if (DeferUntilRenewed(Replay))
+		{
+			return; // not a failure - waiting on a renewal
+		}
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("RequestMaterializeTokens refused: %s"), *Error);
 		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), Error);
 		return;
 	}
+
+	// Captured before the send: the completion handler will not know how to run this again.
+	LastOperation = MoveTemp(Replay);
 
 	if (OrderId.IsEmpty())
 	{
@@ -407,6 +540,12 @@ void UMantlePlaceVaultClient::SendMaterializeRequest(const FString& OrderId, con
 
 void UMantlePlaceVaultClient::GetMaterializeStatus(const FString& OrderId, const TArray<FString>& Requested)
 {
+	TWeakObjectPtr<UMantlePlaceVaultClient> WeakSelf(this);
+	TFunction<void()> Replay = [WeakSelf, OrderId, Requested]()
+	{
+		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->GetMaterializeStatus(OrderId, Requested); }
+	};
+
 	// An empty set means the caller had nothing better; fall back to this host's own list rather
 	// than polling with no yardstick, which can never conclude.
 	PendingStatusTokens = Requested.Num() > 0 ? Requested : FMantlePlaceVaultLogic::TargetedImportTokens();
@@ -417,10 +556,17 @@ void UMantlePlaceVaultClient::GetMaterializeStatus(const FString& OrderId, const
 	FString Jwt;
 	if (!EnsureReady(Error, Jwt))
 	{
+		if (DeferUntilRenewed(Replay))
+		{
+			return; // not a failure - waiting on a renewal
+		}
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("GetMaterializeStatus refused: %s"), *Error);
 		NotifyMaterializeStatus(false, Empty, Error);
 		return;
 	}
+
+	// Captured before the send: the completion handler will not know how to run this again.
+	LastOperation = MoveTemp(Replay);
 
 	if (OrderId.IsEmpty())
 	{
@@ -476,6 +622,13 @@ void UMantlePlaceVaultClient::HandleMaterializeStartResponse(
 	const bool bAcceptedCode = EHttpResponseCodes::IsOk(ResponseCode) || ResponseCode == EHttpResponseCodes::Conflict;
 	if (!bAcceptedCode)
 	{
+		// An expired access token looks exactly like this. Renew once and run the operation again;
+		// LastOperation is how it was sent, captured before it went out.
+		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
+		{
+			return;
+		}
+
 		FString Error;
 		FString Code;
 		if (!FMantlePlaceVaultLogic::ParseErrorBody(Content, Error, Code))
@@ -536,6 +689,13 @@ void UMantlePlaceVaultClient::HandleMaterializeStatusResponse(
 
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
+		// An expired access token looks exactly like this. Renew once and run the operation again;
+		// LastOperation is how it was sent, captured before it went out.
+		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
+		{
+			return;
+		}
+
 		FString Error;
 		FString Code;
 		if (!FMantlePlaceVaultLogic::ParseErrorBody(Content, Error, Code))
@@ -559,24 +719,48 @@ void UMantlePlaceVaultClient::HandleMaterializeStatusResponse(
 
 void UMantlePlaceVaultClient::NotifyVaultListed(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message)
 {
+	if (bSuccess)
+	{
+		// The vault answered. Whatever renewal was spent getting here has done its job, and the
+		// next 401 is a new problem rather than a loop.
+		RenewalsSinceSuccess = 0;
+	}
 	OnVaultListedNative.Broadcast(bSuccess, Bundles, Message);
 	OnVaultListed(bSuccess, Bundles, Message);
 }
 
 void UMantlePlaceVaultClient::NotifyPresigned(bool bSuccess, const FMantlePlacePresignedDownload& Download, const FString& Message)
 {
+	if (bSuccess)
+	{
+		// The vault answered. Whatever renewal was spent getting here has done its job, and the
+		// next 401 is a new problem rather than a loop.
+		RenewalsSinceSuccess = 0;
+	}
 	OnPresignedUrlReadyNative.Broadcast(bSuccess, Download, Message);
 	OnPresignedUrlReady(bSuccess, Download, Message);
 }
 
 void UMantlePlaceVaultClient::NotifyMaterializeStarted(bool bSuccess, const FMantlePlaceMaterializeStart& Start, const FString& Message)
 {
+	if (bSuccess)
+	{
+		// The vault answered. Whatever renewal was spent getting here has done its job, and the
+		// next 401 is a new problem rather than a loop.
+		RenewalsSinceSuccess = 0;
+	}
 	OnMaterializeStartedNative.Broadcast(bSuccess, Start, Message);
 	OnMaterializeStarted(bSuccess, Start, Message);
 }
 
 void UMantlePlaceVaultClient::NotifyMaterializeStatus(bool bOk, const FMantlePlaceMaterializeStatus& Status, const FString& Message)
 {
+	if (bOk)
+	{
+		// The vault answered. Whatever renewal was spent getting here has done its job, and the
+		// next 401 is a new problem rather than a loop.
+		RenewalsSinceSuccess = 0;
+	}
 	OnMaterializeStatusNative.Broadcast(bOk, Status, Message);
 
 	// Route the Blueprint surface: a failed poll or a non-terminal state is "progress"; a terminal
