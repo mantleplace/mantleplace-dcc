@@ -49,6 +49,14 @@ Remove (`HPS-44`).
   reduce its absolute coordinates against — the points file is already local, so it needs none — and
   falls back again to linking the DXF as CAD when neither surface can be built. Whichever tier is
   used, it says which and why;
+- **is repeatable.** A second import of the same bundle recognises the ground it built — the terrain
+  carries a stamp naming the order and the surface build, the way the site-boundary subdivisions
+  already do — and reuses it instead of laying a second terrain on top of the first. Where the ground
+  came from an *earlier build* of the same order it stops and names the toposolid to delete rather
+  than either stacking or deleting: a curator's buildings and views may be standing on it, and this
+  plugin does not remove ground it did not create in that run. A toposolid it does not recognise —
+  yours, another order's, or one from an import that predates the stamp — is left alone and reported.
+  See [ADR 0004](../docs/adr/0004-revit-terrain-identity.md);
 - links `Site/Site.ifc` as a coordinated reference;
 - sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
   this host's own block — falling back to `delivery.local_origin` on a bundle whose own block

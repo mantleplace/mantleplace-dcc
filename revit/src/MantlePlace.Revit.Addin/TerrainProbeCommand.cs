@@ -939,9 +939,23 @@ public sealed class TerrainProbeCommand : IExternalCommand
                     $"{UnitUtils.ConvertFromInternalUnits(box.Max.X - box.Min.X, UnitTypeId.Meters):0.#} x "
                     + $"{UnitUtils.ConvertFromInternalUnits(box.Max.Y - box.Min.Y, UnitTypeId.Meters):0.#} m");
 
+            bool isSubdivision = subdivisionIds.Contains(toposolid.Id);
+            string? comments = toposolid
+                .get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString();
+
+            // The stamp, for ground only: it is what a re-import matches on, so "which of these two
+            // grounds does the plugin think is its own" is answerable from the probe rather than by
+            // running an import to find out. A subdivision's stamp is already covered above.
+            string identity = isSubdivision
+                ? string.Empty
+                : TerrainIdentity.IsStamp(comments)
+                    ? $"  stamp \"{comments}\""
+                    : "  UNSTAMPED (a re-import treats it as not its own)";
+
             report.AppendLine(CultureInfo.InvariantCulture,
-                $"      {toposolid.Id.Value}: {(subdivisionIds.Contains(toposolid.Id) ? "subdivision" : "GROUND     ")}  "
-                + $"{footprint}  type \"{document.GetElement(toposolid.GetTypeId())?.Name ?? "(none)"}\"");
+                $"      {toposolid.Id.Value}: {(isSubdivision ? "subdivision" : "GROUND     ")}  "
+                + $"{footprint}  type \"{document.GetElement(toposolid.GetTypeId())?.Name ?? "(none)"}\""
+                + $"{identity}");
         }
     }
 

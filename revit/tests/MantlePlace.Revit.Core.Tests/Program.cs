@@ -15,6 +15,7 @@ exitCode |= CacheKeySanitiserTests.Run();
 exitCode |= ImportStepLifetimeTests.Run();
 exitCode |= PngHeaderTests.Run();
 exitCode |= SiteBoundaryIdentityTests.Run();
+exitCode |= TerrainIdentityTests.Run();
 exitCode |= DrapeLayeringTests.Run();
 exitCode |= SubDivisionDrapeTests.Run();
 exitCode |= TerrainSmoothingTests.Run();
