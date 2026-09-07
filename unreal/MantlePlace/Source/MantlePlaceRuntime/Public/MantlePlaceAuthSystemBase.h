@@ -24,6 +24,9 @@ class IMantlePlaceSecretStore;
  */
 DECLARE_MULTICAST_DELEGATE_OneParam(FMantlePlaceOnAuthStateChangedNative, EMantlePlaceAuthState /*NewState*/);
 
+/** Native counterpart of OnTokenRefreshed - C++/Slate cannot bind a BlueprintImplementableEvent. */
+DECLARE_MULTICAST_DELEGATE_OneParam(FMantlePlaceOnTokenRefreshedNative, bool /*bSuccess*/);
+
 /**
  * C++ base for the Mantle Place auth system.
  *
@@ -208,6 +211,33 @@ public:
 	FMantlePlaceOnAuthStateChangedNative OnAuthStateChangedNative;
 
 	/**
+	 * Fired when a refresh or restore settles, successfully or not.
+	 *
+	 * The Blueprint-facing OnTokenRefreshed is a BlueprintImplementableEvent and so cannot be
+	 * subscribed to from C++ or Slate - the same reason OnAuthStateChangedNative exists beside
+	 * OnAuthStateChanged. The vault client needs this one to know when a renewal it asked for has
+	 * finished, so it can replay the request that provoked it.
+	 */
+	FMantlePlaceOnTokenRefreshedNative OnTokenRefreshedNative;
+
+	/**
+	 * True while a refresh or restore is in flight.
+	 *
+	 * Callers use it to JOIN an existing renewal rather than starting a second one: two vault
+	 * operations that both see an expired token must produce one refresh, not two, or the second
+	 * presents a refresh token the first has already rotated away.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Auth")
+	bool IsRefreshInFlight() const { return AuthState == EMantlePlaceAuthState::Refreshing; }
+
+	/**
+	 * True when there is a refresh token to renew from, whether or not the access token is still
+	 * good. Distinguishes "signed out" from "signed in but needs a new access token".
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Auth")
+	bool CanRenewSession() const { return !Tokens.RefreshToken.IsEmpty(); }
+
+	/**
 	 * Why the last auth attempt failed, in words fit to show a user. Empty when nothing has failed
 	 * since the last success.
 	 *
@@ -255,6 +285,9 @@ private:
 	 * bOutAttachAnonKey is true only for the identity-provider-direct fallback.
 	 */
 	bool ResolveRefreshEndpoint(FString& OutUrl, bool& bOutAttachAnonKey) const;
+
+	/** Fire OnTokenRefreshed and its native counterpart together. Every settle path goes through here. */
+	void NotifyTokenRefreshed(bool bSuccess);
 
 	/** Discard the stored refresh token. Only ever called on a definitive rejection or a sign-out. */
 	void ForgetStoredSession();
