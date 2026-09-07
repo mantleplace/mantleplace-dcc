@@ -1,4 +1,6 @@
 ---
+name: adr-0005-release-installs-are-copy-first
+description: The Revit release tells a curator to copy the files first and offers the installer script second, because execution policy and Mark-of-the-Web block a downloaded script on the machines this ships into — even though the maintainer deploy script argues the reverse. Read before editing the packaging instructions, the installer, or the deploy script's guidance.
 status: accepted
 ---
 

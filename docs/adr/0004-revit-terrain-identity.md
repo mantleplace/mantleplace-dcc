@@ -1,4 +1,6 @@
 ---
+name: adr-0004-revit-terrain-identity
+description: Revit stamps the ground toposolid with an order stem plus a build token, and a stale stamp is **refused with an explanation rather than replaced**, because deleting a curator's ground takes their hosted work and subdivisions with it. Read before touching Revit terrain, drape or site-boundary identity — this is ADR 0002's bug in the other host with the opposite remedy, so do not bring Unreal's force-delete across.
 status: accepted
 ---
 

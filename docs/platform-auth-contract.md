@@ -1,10 +1,32 @@
-# What the platform must serve for the Unreal plugin to sign in
+---
+name: platform-auth-contract
+description: The cross-host sign-in contract both host plugins depend on — the three public routes, the token response fields, and which rejection codes mean *this credential is dead* rather than *try again*. Read from Unreal or Revit work alike when touching sign-in, token refresh, sign-out, or the single stored credential the two hosts share per machine user.
+---
 
-This plugin holds no secret and derives no endpoint. Every route it talks to is a public
-`mantle.place` route compiled into `UMantlePlaceAuthSystemBase`, and every one of them has to exist
-for a user to sign in, stay signed in, or sign out. This file is the list, so that a route going
-missing is a thing someone can look up rather than a thing a curator reports as "it asks me to sign
-in every time".
+# What the platform must serve for either host plugin to sign in
+
+⛔ **This document describes what the platform must serve. The client code that consumes it — PKCE,
+the loopback redirect listener, the token grant, the auth state machine, and the secret stores that
+hold the refresh token — is closed to outside patches. A defect in it is a private security report,
+not a pull request ([`SECURITY.md`](../SECURITY.md)).** A fix in a public PR is the disclosure, and
+it lands before anyone can ship the mitigation. This warning is here because this file is where
+someone about to touch that code most plausibly stops first.
+
+Neither host plugin holds a secret and neither derives an endpoint. Every route they talk to is a
+public `mantle.place` route compiled into the plugin, and every one of them has to exist for a user
+to sign in, stay signed in, or sign out. This file is the list, so that a route going missing is a
+thing someone can look up rather than a thing a curator reports as "it asks me to sign in every
+time".
+
+The two hosts are not two independent clients of this contract. They share one credential per OS
+user — the same `%LOCALAPPDATA%\MantlePlace\auth\refresh-token.bin`, written through the per-OS-user
+secret store (DPAPI on Windows), with the access token held in memory and never written at all. A
+machine with no secure store degrades to memory-only auth and says so, rather than putting the
+credential somewhere less safe; [`SECURITY.md`](../SECURITY.md) states that as a promise this
+project invites you to falsify. Because the credential is shared, a change in what the platform
+answers reaches both hosts at once, and a rejection either one misreads costs the curator the
+session in both. That is why this document is cross-host and lives at the repository root rather
+than under a host folder.
 
 There is no packaging-time configuration for auth. There used to be — refresh and restore were
 identity-provider-direct and needed values hydrated into the consuming project's `DefaultGame.ini`,
@@ -13,6 +35,15 @@ causes of the sign-in-every-session defect, and the fix was to delete the path r
 it better.
 
 ## The routes
+
+The property names below are the **Unreal** spelling: `UPROPERTY`s on `UMantlePlaceAuthSystemBase`,
+each a public default compiled in and overridable through config to aim the plugin at a
+non-production stack. Revit spells the same three the same way, with the same defaults, in
+[`MantlePlaceEndpoints`](../revit/src/MantlePlace.Revit.Client/MantlePlaceEndpoints.cs) — alongside
+`ApiBaseUrl`, `https://mantle.place`, which is the vault client's base rather than part of sign-in.
+Revit's overrides are read from `%LOCALAPPDATA%\MantlePlace\config.json`, a file nothing produces at
+packaging time and whose absence, unreadability or malformation falls back to the compiled defaults
+rather than throwing. Neither host's override is a secret; it is a way to point somewhere else.
 
 **Native login** — `WebLoginUrl`, default `https://mantle.place/auth/native`.
 
@@ -38,7 +69,9 @@ one that is exercised least during development, because signing in freshly never
 
 `access_token`, `refresh_token`, `expires_in`, and a `user` object. `expires_in` is seconds and
 relative; a response that omits it, or gives a non-positive value, is read as one hour. A response
-that omits `refresh_token` leaves the stored one in place rather than clearing it.
+that omits `refresh_token` leaves the stored one in place rather than clearing it. A response that
+carries no `access_token` is a failure in both hosts however successful the rest of the body looks —
+returning success there would leave every later request unauthenticated with no visible cause.
 
 ## What a rejection has to say
 
@@ -60,6 +93,11 @@ description:
 A new spelling for "this grant is dead" is therefore a breaking change on the platform side even
 though nothing in the schema moves: the client reads it as transient and keeps retrying.
 
+Both hosts implement exactly this list — Revit in
+[`TokenGrants.IsDefinitiveRejection`](../revit/src/MantlePlace.Revit.Core/TokenGrant.cs), Unreal in
+`FMantlePlaceAuthLogic` — so a code added on one side and not the other is a divergence, not a
+host-specific nicety.
+
 ## Rotation
 
 Both host plugins share one credential per OS user, so both may present the same refresh token. If
@@ -70,15 +108,17 @@ revoked session rather than collapsing both into one code.
 
 ## Sign-out
 
-Sign-out is currently **local only**: the plugin clears the stored credential and forgets the
-session, and the refresh token remains valid at the platform until it ages out. Closing that gap
-needs a revocation route, which does not exist yet. It is worth stating plainly rather than leaving
-implied, because a user who signs out reasonably believes the credential stopped working.
+Sign-out is currently **local only** in both hosts: the plugin clears the stored credential and
+forgets the session, and the refresh token remains valid at the platform until it ages out. Closing
+that gap needs a revocation route, which does not exist yet. It is worth stating plainly rather than
+leaving implied, because a user who signs out reasonably believes the credential stopped working.
 
-## Verifying by hand
+## Verifying by hand, in Unreal
 
 None of this runs in CI: the Unreal compile is private, and the auth flow needs a real account and a
-live platform. What a person can check on a machine with the plugin installed:
+live platform. The steps below are the **Unreal** procedure — step 4 is the one that crosses hosts,
+and it is the only check that proves the shared credential is real. What a person can check on a
+machine with the plugin installed:
 
 1. Sign in from the vault panel. The system browser opens, and the panel lists the vault when it
    returns.

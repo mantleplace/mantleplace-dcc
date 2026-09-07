@@ -43,7 +43,8 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FMantlePlaceOnTokenRefreshedNative, bool /*b
  *
  * The surface is native Slate (SMantlePlaceVaultPanel). There is no Blueprint child: the editor's
  * one session is owned by UMantlePlaceAuthSubsystem, which has a startup moment a Blueprint graph
- * cannot offer. See Docs/Platform-Contract.md for what mantle.place must serve.
+ * cannot offer. See docs/platform-auth-contract.md, at the repository root, for what mantle.place
+ * must serve — it is cross-host, and the Revit plugin reads the same rejection codes.
  */
 UCLASS(Blueprintable, config = Game)
 class MANTLEPLACERUNTIME_API UMantlePlaceAuthSystemBase : public UObject

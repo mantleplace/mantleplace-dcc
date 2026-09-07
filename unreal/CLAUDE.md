@@ -1,3 +1,8 @@
+---
+name: unreal-host-onboarding
+description: Onboarding for the Unreal plugin — UE 5.8 and Interchange, the two modules, how to drive the headless automation tests, the generated-name standard and where imported content lands, and the traps (CI never compiles this plugin, nothing the importer generates is saved, the identity is not the job id). Read first for any change under `unreal/`.
+---
+
 # Mantle Place for Unreal — agent onboarding
 
 Read the repo root [`CLAUDE.md`](../CLAUDE.md) first. This folder is one host among several; the
@@ -204,6 +209,9 @@ top of the first.
   host is verified against lives in
   [`verified-against.json`](../tools/manifest-conformance/verified-against.json), never in prose.
 - Cross-host normative rules → the Host Plugin Standard, cited by `HPS-NN` id.
+- Signing in, tokens, refresh, sign-out — what the platform must serve →
+  [`docs/platform-auth-contract.md`](../docs/platform-auth-contract.md). Cross-host: Revit reads the
+  same rejection codes from the same routes, and both hosts share one stored credential.
 - Shared domain vocabulary → [`CONTEXT.md`](../CONTEXT.md).
 - Why a decision was taken → [`docs/adr/`](../docs/adr/).
 - What this plugin does and how to build it → [`README.md`](../README.md).

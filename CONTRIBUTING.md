@@ -67,7 +67,7 @@ repository's own issue space); it stays forbidden in files.
 **The objective bar is: the conformance suite passes, and behaviour it pins is not changed without
 changing a case.**
 
-Three workflows run on every pull request, on free hosted runners:
+Four workflows run on every pull request, on free hosted runners:
 
 - **`ci-manifest-conformance`** — fetches the published bundle-manifest schema, checks every
   registered host is verified against the newest version, and checks the shared corpus under
@@ -76,6 +76,10 @@ Three workflows run on every pull request, on free hosted runners:
   them on **.NET 8 and .NET 10**.
 - **`ci-public-hygiene`** — refuses references that resolve only in a private repository, in
   tracked files and in the pull request's title, body, branch name and commit messages (see above).
+- **`ci-unreal-naming`** — refuses a generated asset name or package path built anywhere but the
+  Unreal naming module. Text-only, no engine, seconds on a hosted runner — and the only automated
+  check standing in front of a naming regression, because nothing in public CI compiles the Unreal
+  plugin (see below).
 
 All must be green. If your change makes a corpus case fail, the interesting question is whether the
 case or the code is wrong — say which you think it is in the pull request, and why.
@@ -103,13 +107,13 @@ than anything else you can do.
 
 ## What does not go in this repository
 
-- **No binaries beyond what is already here.** No engine binaries, no compiled plugins, no test
-  bundles, no sample models, no sample assets. This repository must stay something a stranger can
-  clone in seconds.
+- **No new binaries without asking first** — a new file of a type already here included, not just a
+  new type. No engine binaries, no compiled plugins, no test bundles, no sample models, no sample
+  assets. The constraint is total clone size, not a list of blessed extensions: this repository must
+  stay something a stranger can clone in seconds. There are no Git LFS patterns here on purpose, and
+  a binary committed without one is in the history permanently.
 - **No sample bundles, ever.** Not a small one, not a trimmed one. The docs show you how to *generate*
   one instead — see the [README](README.md). This is deliberate and is not negotiable per-PR.
-- **No new binary file types** without asking first. There are no Git LFS patterns here on purpose,
-  and a binary committed without one is in the history permanently.
 - **No auth or secret-store patches.** See [SECURITY.md](SECURITY.md) — report, don't patch.
 - **No derived numbers.** The plugins apply placement values the platform publishes; they do not
   re-derive them. A patch that computes a survey point, an EPSG zone or a landscape scale locally

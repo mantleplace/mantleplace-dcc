@@ -1,4 +1,6 @@
 ---
+name: adr-0001-per-host-release-tracks
+description: Why each DCC host gets its own release track, tagged `<host>-<version>` with no `v`, and why the first three bare tags stay exactly as published. Read when tagging a release, naming a release asset, or proposing a shared version number or a changelog file.
 status: accepted
 ---
 

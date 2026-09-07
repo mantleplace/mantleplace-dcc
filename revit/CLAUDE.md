@@ -1,3 +1,8 @@
+---
+name: revit-host-onboarding
+description: Onboarding for the Revit plugin — the 2025/2026/2027 range and why it compiles against 2025's API, the pure Core / Client / Addin-shim split, the `HPS-NN` rules this tree turns on, and the traps (CI never builds the shim, unexecuted Revit API calls, the maintainer-owned corpus). Read first for any change under `revit/`.
+---
+
 # Mantle Place for Revit — agent onboarding
 
 Read the repo root [`CLAUDE.md`](../CLAUDE.md) first. This folder is one host among several; the
@@ -72,17 +77,18 @@ test of it.
 
 ## Commands
 
-- **Quote paths with spaces** — `C:\Program Files\Autodesk\...`.
-- If the SDK is a per-user install, put `~/.dotnet` on `PATH` for the session first.
+**Build and test commands have one home: [`README.md` ▸ Build and test](./README.md#build-and-test)**
+— the suite on both target frameworks, the full build including the shim, the `RevitApiDir` override,
+and what to do when the SDK is a per-user install. They are not repeated here, because a second copy
+is what drifts: the suite multi-targets `net8.0;net10.0`, so a `dotnet run` without `-f` cannot choose
+a framework and fails outright.
+
+**Quote paths with spaces** — `C:\Program Files\Autodesk\...`.
+
+The cross-host contract gate has no home in the README, so it is here (Python, offline for the corpus
+half):
 
 ```bash
-# Pure core + conformance suite. No Revit required; this is what CI runs.
-dotnet run --project tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj
-
-# Everything including the shim. Requires a local Revit install.
-dotnet build MantlePlace.Revit.slnx
-
-# The cross-host contract gate (Python, offline for the corpus half).
 python ../tools/manifest-conformance/check_manifest_conformance.py
 ```
 
@@ -137,4 +143,7 @@ do **not** cross over.
   version this host is verified against lives in
   [`verified-against.json`](../tools/manifest-conformance/verified-against.json), never in prose.
 - Cross-host normative rules → the Host Plugin Standard, cited by `HPS-NN` id.
+- Signing in, tokens, refresh, sign-out — what the platform must serve →
+  [`docs/platform-auth-contract.md`](../docs/platform-auth-contract.md). Cross-host: `TokenGrant.cs`
+  and `PlatformError.cs` implement it, and both hosts share one stored credential.
 - What this plugin does and how to build it → [`README.md`](./README.md).

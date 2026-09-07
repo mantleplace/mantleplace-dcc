@@ -17,6 +17,9 @@ __pycache__/
 *.py[cod]
 .venv/
 
+# Agent scratch. Working notes and throwaway scripts, never part of the published tree.
+.scratch/
+
 # Editor / OS
 .vs/
 .vscode/
