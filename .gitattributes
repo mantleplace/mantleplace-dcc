@@ -26,8 +26,13 @@
 # ---------------------------------------------------------------------------
 *.sh        text eol=lf
 *.bat       text eol=crlf
+*.cmd       text eol=crlf
 *.ps1       text eol=crlf
 *.uplugin   text eol=lf
+
+# Ships inside the Revit release zip and gets opened in Notepad by someone who did not choose an
+# editor. Not *.txt — the two font licence texts under unreal/ keep the bytes their authors wrote.
+revit/packaging/README.txt text eol=crlf
 
 # Hooks run under sh on every platform, Git for Windows included; a CRLF checkout breaks them
 # with an error that names no file. LF always.

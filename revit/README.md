@@ -166,12 +166,47 @@ exactly like a code bug: a fix present in `git` and absent in the symptom, with 
 the only tell. **When a bug reproduces against code that already contains its fix, check the
 deployed timestamp before anything else.**
 
+The version now travels with the build — `<Version>` in [`Directory.Build.props`](./Directory.Build.props)
+is its one home, the deploy script prints it, and it opens both the import log and the terrain probe
+report. That answers a different question from the timestamp and does not replace it: within one
+release the version is constant, so a maintainer iterating locally still has only the timestamp,
+while a stranger's log now says which build they are running without anyone having to ask.
+
 `MantlePlace.addin` names the assembly without a path, so Revit resolves it beside the manifest.
 
 **One build, three hosts, and that is a claim to be tested rather than assumed.** Before a release,
 drop the same output into each folder above, launch that Revit, and confirm the ribbon appears and an
 import completes. The 2027 leg is the one that matters most: it is the only one where a .NET 8
 assembly is loaded by a .NET 10 runtime.
+
+## Packaging a release
+
+```powershell
+./tools/Package-MantlePlaceRevit.ps1
+```
+
+Builds `Release`, assembles `MantlePlace-Revit-<version>.zip` into `dist/`, and prints its sha256.
+Inside: a `Contents` folder holding everything Revit loads, with `README.txt`, `Install.cmd` and
+`Deploy-MantlePlaceRevit.ps1` above it. `Contents` is Autodesk's own bundle folder name, so shipping
+this as a `.bundle` later is adding a `PackageContents.xml` rather than rearranging the archive.
+
+`Deploy-MantlePlaceRevit.ps1` ships in the zip **verbatim** — one script, two callers, reached with
+`-PayloadDirectory`. That is deliberate and it is the only test coverage an installer can have here:
+CI can never run it, because CI can never build this add-in.
+
+The packaging materials live in [`packaging/`](./packaging/). `README.txt` leads with a manual copy
+and offers the script second — see [ADR 0002](../docs/adr/0002-release-installs-are-copy-first.md)
+before "fixing" that, because it contradicts the deploy script's own advice on purpose.
+
+**Packaging is not the gate.** The zip proves the plugin compiles. What proves it works is the
+three-host check above, run against *that zip* rather than a `bin/` folder, plus `ci-revit-tests`
+green on both target frameworks. `MANTLEPLACE_BUNDLE_ZIP` skips the file picker, so each leg can be
+driven unattended rather than clicked. The release track is `revit-<version>` — no `v`, and not
+Unreal's number ([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)).
+
+A release published with paths that failed the gate says so in its body, precisely, rather than
+quietly. The floor below which there is no release at all: the ribbon loads in all three, and one
+import completes end to end in all three.
 
 ## Conformance
 

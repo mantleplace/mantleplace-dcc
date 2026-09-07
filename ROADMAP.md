@@ -24,7 +24,12 @@ planned it.
   The quarter also opens a spike on **Mesh Terrain** (Experimental in UE 5.8) as the forward
   terrain path alongside the `ALandscape` default.
 - **Packaged releases** — versioned GitHub Releases carrying a built plugin, with the packaging
-  step automated so a release is repeatable rather than an event.
+  step automated so a release is repeatable rather than an event. The scheme is settled: one release
+  track per host, tagged `<host>-<version>`
+  ([ADR 0001](docs/adr/0001-per-host-release-tracks.md)). Revit's packaging is scripted
+  (`revit/tools/Package-MantlePlaceRevit.ps1`) and its first release is the proof; Unreal's
+  packaging is still assembled by hand and is what remains of this item. Neither can ever run in
+  public CI — both need a licensed install this repository must not put on a runner.
 - **Unreal quickstart tutorial** — the missing walk-through from empty project to imported site,
   plus the README's screenshot and GIF slots filled with real captures.
 
