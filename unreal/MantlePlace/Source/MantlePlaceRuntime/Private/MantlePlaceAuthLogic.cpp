@@ -251,24 +251,6 @@ bool FMantlePlaceAuthLogic::IsValidBaseUrl(const FString& BaseUrl)
 	return !Host.IsEmpty();
 }
 
-FString FMantlePlaceAuthLogic::BuildPasswordGrantUrl(const FString& BaseUrl)
-{
-	return NormalizeBaseUrl(BaseUrl) + TEXT("/auth/v1/token?grant_type=password");
-}
-
-FString FMantlePlaceAuthLogic::BuildRefreshGrantUrl(const FString& BaseUrl)
-{
-	return NormalizeBaseUrl(BaseUrl) + TEXT("/auth/v1/token?grant_type=refresh_token");
-}
-
-FString FMantlePlaceAuthLogic::BuildPasswordGrantBody(const FString& Email, const FString& Password)
-{
-	const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
-	Root->SetStringField(TEXT("email"), Email);
-	Root->SetStringField(TEXT("password"), Password);
-	return SerializeCondensed(Root);
-}
-
 FString FMantlePlaceAuthLogic::BuildRefreshGrantBody(const FString& RefreshToken)
 {
 	const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
@@ -561,11 +543,6 @@ FString FMantlePlaceAuthLogic::BuildAuthorizeUrl(const FString& WebLoginBaseUrl,
 	return FString::Printf(
 		TEXT("%s%cresponse_type=code&code_challenge=%s&code_challenge_method=S256&redirect_uri=%s&state=%s"),
 		*Base, Separator, *PercentEncode(CodeChallenge), *PercentEncode(RedirectUri), *PercentEncode(State));
-}
-
-FString FMantlePlaceAuthLogic::BuildPkceTokenUrl(const FString& BaseUrl)
-{
-	return NormalizeBaseUrl(BaseUrl) + TEXT("/auth/v1/token?grant_type=pkce");
 }
 
 FString FMantlePlaceAuthLogic::BuildPkceTokenBody(const FString& AuthCode, const FString& CodeVerifier)

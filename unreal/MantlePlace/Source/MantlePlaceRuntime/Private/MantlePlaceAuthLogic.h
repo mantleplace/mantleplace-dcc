@@ -7,7 +7,7 @@
 #include "MantlePlaceAuthTypes.h"
 
 /**
- * Pure (engine-/network-free) auth logic for the Mantle Place platform (Supabase GoTrue).
+ * Pure (engine-/network-free) auth logic for the Mantle Place platform.
  *
  * Everything here is deterministic and headless-testable: URL/body construction, response
  * parsing, token-expiry math, and the auth state machine. The UObject shim
@@ -61,12 +61,7 @@ struct FMantlePlaceAuthLogic
 	 */
 	static bool IsValidBaseUrl(const FString& BaseUrl);
 
-	/** Supabase GoTrue endpoints (password / refresh-token grants). */
-	static FString BuildPasswordGrantUrl(const FString& BaseUrl);
-	static FString BuildRefreshGrantUrl(const FString& BaseUrl);
-
-	/** JSON request bodies (condensed). */
-	static FString BuildPasswordGrantBody(const FString& Email, const FString& Password);
+	/** Refresh-grant JSON request body (condensed): {"refresh_token":..}. */
 	static FString BuildRefreshGrantBody(const FString& RefreshToken);
 
 	/**
@@ -185,9 +180,6 @@ struct FMantlePlaceAuthLogic
 	 */
 	static FString BuildAuthorizeUrl(const FString& WebLoginBaseUrl, const FString& RedirectUri,
 		const FString& CodeChallenge, const FString& State);
-
-	/** Supabase-direct PKCE token-exchange endpoint (used when no web TokenEndpointUrl is configured). */
-	static FString BuildPkceTokenUrl(const FString& BaseUrl);
 
 	/** PKCE code→token exchange JSON body: {"auth_code":..,"code_verifier":..}. */
 	static FString BuildPkceTokenBody(const FString& AuthCode, const FString& CodeVerifier);

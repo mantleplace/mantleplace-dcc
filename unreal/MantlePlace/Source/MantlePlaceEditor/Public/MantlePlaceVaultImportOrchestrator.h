@@ -72,10 +72,10 @@ public:
 	FMantlePlaceOnAuthChangedBP OnAuthChanged;
 
 	/**
-	 * Wire an explicit signed-in auth source (e.g. a BP_MantlePlaceAuthSystemBase instance for richer
-	 * auth-state UI) whose JWT authorizes the vault calls, and construct the clients. Optional: if never
-	 * called, the orchestrator lazily creates a plain UMantlePlaceAuthSystemBase (which still reads the
-	 * DefaultGame.ini auth config from its CDO) on first use.
+	 * Wire an explicit signed-in auth source (for a headless caller or a test that has no editor
+	 * auth-state UI) whose JWT authorizes the vault calls, and construct the clients. Optional: if
+	 * never called, the orchestrator takes the editor's one session from UMantlePlaceAuthSubsystem,
+	 * or creates a private instance when there is no editor at all.
 	 */
 	/**
 	 * Rebuild an auth session from the stored refresh token, if there is one.

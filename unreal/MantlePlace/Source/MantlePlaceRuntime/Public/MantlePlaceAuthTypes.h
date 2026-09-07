@@ -6,7 +6,7 @@
 #include "MantlePlaceAuthTypes.generated.h"
 
 /**
- * Authentication state for the Mantle Place platform (Supabase GoTrue) auth system.
+ * Authentication state for the Mantle Place auth system.
  * Exposed to Blueprint so the surface (BP child) can react to state changes.
  */
 UENUM(BlueprintType)
