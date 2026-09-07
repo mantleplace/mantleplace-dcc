@@ -144,22 +144,21 @@ void UMantlePlaceAuthSystemBase::TryRestoreSession()
 		return;
 	}
 
-	if (!FMantlePlaceAuthLogic::IsValidBaseUrl(PlatformApiBaseUrl) || SupabaseAnonKey.IsEmpty())
+	FString Url;
+	bool bAnonKey = false;
+	if (!ResolveRefreshEndpoint(Url, bAnonKey))
 	{
-		UE_LOG(LogMantlePlaceAuth, Error,
-			TEXT("TryRestoreSession: auth is misconfigured (PlatformApiBaseUrl='%s')."), *PlatformApiBaseUrl);
+		LastAuthError = TEXT("Mantle Place sign-in is not configured on this install.");
+		UE_LOG(LogMantlePlaceAuth, Error, TEXT("TryRestoreSession: %s"), *LastAuthError);
 		OnTokenRefreshed(false);
 		return;
 	}
 
-	// The stored token is a Supabase refresh token regardless of how sign-in was performed, so a
-	// cold restore exchanges it directly against Supabase's refresh-token grant.
 	Tokens.RefreshToken = StoredRefresh;
 	SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::BeginRestore));
 
-	const FString Url = FMantlePlaceAuthLogic::BuildRefreshGrantUrl(PlatformApiBaseUrl);
 	const FString Body = FMantlePlaceAuthLogic::BuildRefreshGrantBody(StoredRefresh);
-	SendAuthRequest(Url, Body, ERequestKind::Restore);
+	SendAuthRequest(Url, Body, ERequestKind::Restore, bAnonKey);
 }
 
 void UMantlePlaceAuthSystemBase::SignIn(const FString& Email, const FString& Password)
@@ -207,7 +206,7 @@ void UMantlePlaceAuthSystemBase::SignIn(const FString& Email, const FString& Pas
 
 	const FString Url = FMantlePlaceAuthLogic::BuildPasswordGrantUrl(PlatformApiBaseUrl);
 	const FString Body = FMantlePlaceAuthLogic::BuildPasswordGrantBody(Email, Password);
-	SendAuthRequest(Url, Body, ERequestKind::SignIn);
+	SendAuthRequest(Url, Body, ERequestKind::SignIn, /*bAttachAnonKey=*/true);
 }
 
 void UMantlePlaceAuthSystemBase::SignOut()
@@ -222,11 +221,8 @@ void UMantlePlaceAuthSystemBase::SignOut()
 	Tokens.Reset();
 	ExpiresAtUtc = FDateTime(0);
 
-	EnsureSecretStore();
-	if (SecretStore.IsValid())
-	{
-		SecretStore->Clear(GRefreshTokenKey);
-	}
+	ForgetStoredSession();
+	LastAuthError.Reset();
 
 	SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::SignOut));
 	OnSignOutComplete();
@@ -247,19 +243,20 @@ void UMantlePlaceAuthSystemBase::RefreshToken()
 		return;
 	}
 
-	if (!FMantlePlaceAuthLogic::IsValidBaseUrl(PlatformApiBaseUrl) || SupabaseAnonKey.IsEmpty())
+	FString Url;
+	bool bAnonKey = false;
+	if (!ResolveRefreshEndpoint(Url, bAnonKey))
 	{
-		UE_LOG(LogMantlePlaceAuth, Error,
-			TEXT("RefreshToken: auth is misconfigured (PlatformApiBaseUrl='%s')."), *PlatformApiBaseUrl);
+		LastAuthError = TEXT("Mantle Place sign-in is not configured on this install.");
+		UE_LOG(LogMantlePlaceAuth, Error, TEXT("RefreshToken: %s"), *LastAuthError);
 		OnTokenRefreshed(false);
 		return;
 	}
 
 	SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::BeginRefresh));
 
-	const FString Url = FMantlePlaceAuthLogic::BuildRefreshGrantUrl(PlatformApiBaseUrl);
 	const FString Body = FMantlePlaceAuthLogic::BuildRefreshGrantBody(Tokens.RefreshToken);
-	SendAuthRequest(Url, Body, ERequestKind::Refresh);
+	SendAuthRequest(Url, Body, ERequestKind::Refresh, bAnonKey);
 }
 
 bool UMantlePlaceAuthSystemBase::IsAuthenticated() const
@@ -277,7 +274,29 @@ void UMantlePlaceAuthSystemBase::BeginDestroy()
 	Super::BeginDestroy();
 }
 
-void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FString& Body, ERequestKind Kind)
+bool UMantlePlaceAuthSystemBase::ResolveRefreshEndpoint(FString& OutUrl, bool& bOutAttachAnonKey) const
+{
+	// The broker route is the default and the one an unconfigured install has. Falling back to the
+	// identity provider only when the broker was explicitly cleared keeps the developer escape
+	// hatch without making it the path everyone silently depends on.
+	if (!RefreshEndpointUrl.IsEmpty())
+	{
+		OutUrl = RefreshEndpointUrl;
+		bOutAttachAnonKey = false;
+		return true;
+	}
+
+	if (FMantlePlaceAuthLogic::IsValidBaseUrl(PlatformApiBaseUrl) && !SupabaseAnonKey.IsEmpty())
+	{
+		OutUrl = FMantlePlaceAuthLogic::BuildRefreshGrantUrl(PlatformApiBaseUrl);
+		bOutAttachAnonKey = true;
+		return true;
+	}
+
+	return false;
+}
+
+void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FString& Body, ERequestKind Kind, bool bAttachAnonKey)
 {
 	// Defensively drop any stale request before launching a new one.
 	CancelActiveRequest();
@@ -287,9 +306,10 @@ void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FStri
 	ActiveRequest->SetURL(Url);
 	ActiveRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	ActiveRequest->SetHeader(TEXT("Accept"), TEXT("application/json"));
-	// The anon key authenticates Supabase-direct calls (password/refresh/restore, and the PKCE
-	// fallback). It is unnecessary — and harmlessly ignored — for the web-broker token endpoint.
-	if (!SupabaseAnonKey.IsEmpty())
+	// The anon key authenticates identity-provider-direct calls only. The broker routes have no
+	// use for it, and sending a configured value to an endpoint that does not want it is a habit
+	// worth not having.
+	if (bAttachAnonKey && !SupabaseAnonKey.IsEmpty())
 	{
 		ActiveRequest->SetHeader(TEXT("apikey"), SupabaseAnonKey);
 		ActiveRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *SupabaseAnonKey));
@@ -311,7 +331,8 @@ void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FStri
 
 	if (!ActiveRequest->ProcessRequest())
 	{
-		HandleAuthFailure(TEXT("Failed to start the HTTP request."), Kind);
+		// The request never left the process, so nothing was rejected. Transient by definition.
+		HandleAuthFailure(TEXT("Could not start the request to mantle.place."), Kind, /*bDefinitive=*/false);
 	}
 }
 
@@ -326,7 +347,8 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 	// Axis 1: transport failure (no response reached us).
 	if (!bConnectedSuccessfully || !Response.IsValid())
 	{
-		HandleAuthFailure(TEXT("Network error: no response from the platform."), Kind);
+		// No response at all: the platform never got the chance to reject anything.
+		HandleAuthFailure(TEXT("Could not reach mantle.place."), Kind, /*bDefinitive=*/false);
 		return;
 	}
 
@@ -339,9 +361,9 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 		FString Error;
 		if (!FMantlePlaceAuthLogic::ParseErrorResponse(Content, Error))
 		{
-			Error = FString::Printf(TEXT("HTTP %d"), ResponseCode);
+			Error = FString::Printf(TEXT("mantle.place refused this request (HTTP %d)."), ResponseCode);
 		}
-		HandleAuthFailure(Error, Kind);
+		HandleAuthFailure(Error, Kind, FMantlePlaceAuthLogic::IsDefinitiveRejection(ResponseCode, Content));
 		return;
 	}
 
@@ -350,12 +372,15 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 	FString ParseError;
 	if (!FMantlePlaceAuthLogic::ParseTokenResponse(Content, NewTokens, ParseError))
 	{
-		HandleAuthFailure(ParseError, Kind);
+		// A 2xx we could not parse is a platform-side surprise, not a verdict on the credential.
+		HandleAuthFailure(ParseError, Kind, /*bDefinitive=*/false);
 		return;
 	}
 
 	// Success — overwrite the token set, but keep the prior refresh_token when the response omits a
 	// new one, and stamp absolute expiry from wall-clock now.
+	LastAuthError.Reset();
+
 	const FString PriorRefreshToken = Tokens.RefreshToken;
 	Tokens = MoveTemp(NewTokens);
 	Tokens.RefreshToken = FMantlePlaceAuthLogic::ChooseRefreshToken(Tokens.RefreshToken, PriorRefreshToken);
@@ -392,8 +417,12 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 	}
 }
 
-void UMantlePlaceAuthSystemBase::HandleAuthFailure(const FString& Message, ERequestKind Kind)
+void UMantlePlaceAuthSystemBase::HandleAuthFailure(const FString& Message, ERequestKind Kind, bool bDefinitive)
 {
+	// Whatever happens below, the reason is now answerable. A surface that renders Failed as a
+	// plain "Sign In" button with nothing else to say is how this went unreported for months.
+	LastAuthError = Message;
+
 	switch (Kind)
 	{
 	case ERequestKind::SignIn:
@@ -414,19 +443,35 @@ void UMantlePlaceAuthSystemBase::HandleAuthFailure(const FString& Message, ERequ
 		break;
 
 	case ERequestKind::Refresh:
-		UE_LOG(LogMantlePlaceAuth, Warning, TEXT("Auth refresh failed: %s"), *Message);
-		SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::RefreshFailed));
-		OnTokenRefreshed(false);
-		break;
-
 	case ERequestKind::Restore:
-		// A cold restore failed: drop the (stale/unreachable) in-memory token. We deliberately keep
-		// the persisted copy so a transient startup network blip doesn't force a re-login next launch;
-		// a genuinely dead token is overwritten on the next successful browser sign-in.
-		UE_LOG(LogMantlePlaceAuth, Warning, TEXT("Session restore failed: %s"), *Message);
+		UE_LOG(LogMantlePlaceAuth, Warning, TEXT("Auth %s failed (%s): %s"),
+			Kind == ERequestKind::Restore ? TEXT("restore") : TEXT("refresh"),
+			bDefinitive ? TEXT("rejected") : TEXT("transient"), *Message);
+
+		// The in-memory token set goes either way - it is unusable now regardless.
 		Tokens.Reset();
 		ExpiresAtUtc = FDateTime(0);
-		SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::RefreshFailed));
+
+		if (bDefinitive)
+		{
+			// The platform says this refresh token will never work again. Keeping it produces a
+			// client that retries a dead credential on every launch, fails silently each time, and
+			// never asks for the sign-in that would fix it.
+			ForgetStoredSession();
+			LastAuthError = FString::Printf(
+				TEXT("%s Sign in again to continue."), *Message);
+
+			// Reuse SignOut rather than inventing an event: the session HAS ended, which is what
+			// that transition already means, and the state table is a cross-host corpus fixture
+			// that both plugins must move together.
+			SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::SignOut));
+		}
+		else
+		{
+			// Transient. The stored credential is untouched: a network blip must not cost a session.
+			SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::RefreshFailed));
+		}
+
 		OnTokenRefreshed(false);
 		break;
 	}
@@ -715,7 +760,9 @@ void UMantlePlaceAuthSystemBase::BeginPkceTokenExchange(const FString& AuthCode)
 		Url = FMantlePlaceAuthLogic::BuildPkceTokenUrl(PlatformApiBaseUrl);
 	}
 	const FString Body = FMantlePlaceAuthLogic::BuildPkceTokenBody(AuthCode, PendingCodeVerifier);
-	SendAuthRequest(Url, Body, ERequestKind::PkceExchange);
+	// The PKCE exchange goes to the broker by default and identity-provider-direct only when
+	// TokenEndpointUrl was explicitly cleared; the anon key belongs to the latter.
+	SendAuthRequest(Url, Body, ERequestKind::PkceExchange, /*bAttachAnonKey=*/TokenEndpointUrl.IsEmpty());
 }
 
 void UMantlePlaceAuthSystemBase::AbortBrowserSignIn(const FString& Message, bool bUserAborted)
@@ -759,6 +806,15 @@ void UMantlePlaceAuthSystemBase::EnsureSecretStore()
 	if (!SecretStore.IsValid())
 	{
 		SecretStore = MakeShareable(IMantlePlaceSecretStore::Create().Release());
+	}
+}
+
+void UMantlePlaceAuthSystemBase::ForgetStoredSession()
+{
+	EnsureSecretStore();
+	if (SecretStore.IsValid())
+	{
+		SecretStore->Clear(GRefreshTokenKey);
 	}
 }
 

@@ -44,6 +44,11 @@ void UMantlePlaceVaultPanelController::TryRestoreSession()
 	if (Orchestrator) { Orchestrator->TryRestoreSession(); }
 }
 
+FString UMantlePlaceVaultPanelController::GetLastAuthError() const
+{
+	return Orchestrator ? Orchestrator->GetLastAuthError() : FString();
+}
+
 bool UMantlePlaceVaultPanelController::IsBusy() const
 {
 	return Orchestrator && Orchestrator->IsBusy();

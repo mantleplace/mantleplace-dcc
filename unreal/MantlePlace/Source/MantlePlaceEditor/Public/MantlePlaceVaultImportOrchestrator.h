@@ -87,6 +87,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	void TryRestoreSession();
 
+	/** Why the last auth attempt failed, in words fit to show a user. Empty when nothing failed. */
+	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
+	FString GetLastAuthError() const;
+
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	void Initialize(UMantlePlaceAuthSystemBase* InAuthSystem);
 

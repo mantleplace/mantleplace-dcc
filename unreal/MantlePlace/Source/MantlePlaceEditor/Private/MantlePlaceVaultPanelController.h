@@ -51,6 +51,7 @@ public:
 	//~ Pass-throughs the panel / rows call.
 	bool IsSignedIn() const;
 	void TryRestoreSession();
+	FString GetLastAuthError() const;
 	bool IsBusy() const;
 	void SignIn();
 	void SignOut();
