@@ -1,0 +1,105 @@
+{
+  "$comment": [
+    "Definitive rejection versus transient failure: does a failed refresh mean the stored",
+    "credential is dead, or only that the platform could not answer right now?",
+    "",
+    "This is the one auth decision whose two failure modes are not symmetric. Reading a",
+    "transient failure as definitive throws away a working session over a dropped packet.",
+    "Reading a definitive rejection as transient retries a dead credential at every launch,",
+    "fails silently each time, and never asks for the sign-in that would fix it. Only the",
+    "second is silent, so everything unrecognised is transient.",
+    "",
+    "Both registered hosts implemented this independently and identically before it was lifted",
+    "here. That agreement is the thing this case exists to keep: the codes below are a platform",
+    "contract, and a host that adds a fifth spelling locally has forked the contract."
+  ],
+
+  "codeKeys": ["error", "error_code", "code"],
+
+  "definitiveCodes": [
+    "invalid_grant",
+    "invalid_refresh_token",
+    "refresh_token_not_found",
+    "refresh_token_already_used"
+  ],
+
+  "matrixStatus": 400,
+  "matrixNote": "Every codeKey x definitiveCode pair at matrixStatus must classify as definitive. The cross product is the point: each host had a hand-written table that covered a diagonal of it.",
+
+  "vectors": [
+    {
+      "status": 401,
+      "body": { "error": "invalid_grant" },
+      "definitive": true,
+      "note": "401 is the other client-error status that can carry a verdict"
+    },
+    {
+      "status": 400,
+      "body": { "error": "Invalid_Grant" },
+      "definitive": true,
+      "note": "the code match is case-insensitive"
+    },
+    {
+      "status": 500,
+      "body": { "error": "invalid_grant" },
+      "definitive": false,
+      "note": "a 5xx is never definitive whatever the body says - the platform is not answering, and its proxy may have written this body"
+    },
+    {
+      "status": 503,
+      "body": { "error": "unavailable" },
+      "definitive": false
+    },
+    {
+      "status": 200,
+      "body": { "error": "invalid_grant" },
+      "definitive": false,
+      "note": "a success status is not a rejection at all"
+    },
+    {
+      "status": 400,
+      "body": { "error": "rate_limited" },
+      "definitive": false,
+      "note": "a client error with an unrecognised code is transient - back off, do not discard"
+    },
+    {
+      "status": 400,
+      "body": { "error_description": "Invalid Refresh Token: Already Used" },
+      "definitive": false,
+      "note": "prose is not a verdict. error_description changes between platform versions, and matching on it is how this check quietly stops working"
+    },
+    {
+      "status": 400,
+      "body": { "error": "" },
+      "definitive": false,
+      "note": "an empty code states nothing"
+    },
+    {
+      "status": 400,
+      "body": { "error": { "code": "invalid_grant" } },
+      "definitive": false,
+      "note": "a definitive code nested one level down is not this key's value; a reader that searches the body rather than reading the field would fail here"
+    },
+    {
+      "status": 401,
+      "body": "<html>Gateway Timeout</html>",
+      "raw": true,
+      "definitive": false,
+      "note": "an unreadable body is transient - a proxy error page lands here with a client-error status"
+    },
+    {
+      "status": 400,
+      "body": "",
+      "raw": true,
+      "definitive": false,
+      "note": "an empty body is transient"
+    },
+    {
+      "status": 400,
+      "body": "[{\"error\":\"invalid_grant\"}]",
+      "raw": true,
+      "definitive": false,
+      "note": "valid JSON that is not an object. The definitive code is present as text, so a reader doing a substring search over the body reports this as definitive and discards a live credential"
+    }
+  ]
+}

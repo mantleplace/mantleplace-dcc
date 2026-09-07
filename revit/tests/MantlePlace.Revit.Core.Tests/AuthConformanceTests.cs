@@ -8,7 +8,7 @@ namespace MantlePlace.Revit.Core.Tests;
 /// Drives the shared corpus' <c>auth</c> group (<c>HPS-40</c>, <c>HPS-41</c>).
 /// </summary>
 /// <remarks>
-/// All four cases are <c>expect: "vector"</c>, so there are no <c>expectations</c> keys for
+/// All five cases are <c>expect: "vector"</c>, so there are no <c>expectations</c> keys for
 /// <c>HPS-46</c>'s asserted-keys check to bind. <see cref="VectorDocument"/> applies the same idea
 /// one level down: every value in every file must be read by something, or the case fails with the
 /// path. Without it a suite could drive row 0 of the state-validation table and skip row 3 — the
@@ -45,6 +45,9 @@ internal static class AuthConformanceTests
                         break;
                     case "auth.tokenResponseVectors":
                         DriveTokenResponses(run, vectors.Root);
+                        break;
+                    case "auth.rejectionClassification":
+                        DriveRejectionClassification(run, vectors.Root);
                         break;
                     case "auth.stateMachine":
                         DriveStateMachine(run, vectors.Root);
@@ -183,6 +186,51 @@ internal static class AuthConformanceTests
                 AuthCallbackQuery.IsStateValid(expected, received),
                 row.Bool("valid") ?? false,
                 $"state '{expected}' vs '{received}'");
+        }
+    }
+
+    /// <summary>
+    /// Drives <c>auth.rejectionClassification</c>: does a failed grant mean the stored
+    /// credential is permanently dead, or only that the platform could not answer?
+    /// </summary>
+    /// <remarks>
+    /// This was a host-local table on both sides, each carrying a comment asking the next
+    /// person to keep it in step with the other host by hand. The codes are a platform
+    /// contract, so the table belongs upstream: a host that starts honouring a fifth spelling
+    /// now fails here instead of diverging quietly, which is the whole reason the corpus
+    /// exists.
+    /// </remarks>
+    private static void DriveRejectionClassification(TestRun run, VectorNode root)
+    {
+        int matrixStatus = root.Int("matrixStatus") ?? -1;
+
+        // Every key x code pair, rather than the diagonal each host happened to hand-write.
+        foreach (VectorNode key in root.Items("codeKeys"))
+        {
+            string codeKey = key.AsString()!;
+            foreach (VectorNode code in root.Items("definitiveCodes"))
+            {
+                string definitiveCode = code.AsString()!;
+                string body = "{\"" + codeKey + "\":\"" + definitiveCode + "\"}";
+                run.True(
+                    TokenGrants.IsDefinitiveRejection(matrixStatus, body),
+                    $"{matrixStatus} {body} is definitive");
+            }
+        }
+
+        foreach (VectorNode vector in root.Items("vectors"))
+        {
+            bool raw = vector.Bool("raw") ?? false;
+            string body = raw
+                ? vector.Element.GetProperty("body").GetString() ?? string.Empty
+                : vector.Element.GetProperty("body").GetRawText();
+            vector.MarkConsumed("body");
+
+            int status = vector.Int("status") ?? -1;
+            run.Equal(
+                TokenGrants.IsDefinitiveRejection(status, body),
+                vector.Bool("definitive") ?? false,
+                $"{status} {body}");
         }
     }
 
