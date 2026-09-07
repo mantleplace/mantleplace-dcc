@@ -43,18 +43,93 @@ namespace MantlePlaceImportNaming
 	// --- Identity -----------------------------------------------------------------------------
 
 	/**
+	 * The identity everything one import generates is keyed on: the ORDER when the bundle names
+	 * one, and otherwise a content hash of the bundle's own manifest.
+	 *
+	 * Never the job id, which the manifest itself documents as changing on every rebuild. Keyed on
+	 * a job, re-materialising an order produced a second folder and a second landscape while the
+	 * re-import wipe looked at a path nobody was using any more. See ADR 0002.
+	 *
+	 * The fallback is a hash because a bundle with no order id is a locally produced or admin
+	 * bundle, where "a different build is a different thing" is the honest semantics — there is no
+	 * order for it to be a rebuild OF. The manifest is what gets hashed, not the whole zip: it
+	 * declares every artifact's own sha256, so it is a content hash of the bundle by proxy, and it
+	 * is already in memory when the importer needs this.
+	 *
+	 * Returns empty when neither input is usable. An empty identity is refusable, not a default —
+	 * see IsUsableIdentity.
+	 */
+	FString ResolveIdentity(const FString& OrderId, const FString& ManifestSha256);
+
+	/**
+	 * Whether an identity is safe to key content on AND safe as a single path segment.
+	 *
+	 * Both halves matter and the second is the sharp one. An order id arrives from bundle JSON, and
+	 * the identity becomes a package-path segment of a directory the importer FORCE-DELETES on
+	 * re-import. An empty one collapses that path to the content root, so the delete reaches every
+	 * import the project has; a `..` in one walks it somewhere else entirely. Refuse rather than
+	 * sanitise: a bundle whose identity is unusable is a bundle we do not understand, and quietly
+	 * rewriting it into something that looks fine is how the delete ends up pointed at the wrong
+	 * directory with nobody having decided that.
+	 */
+	bool IsUsableIdentity(const FString& Identity);
+
+	/**
 	 * The short form of an import identity, as it appears in a folder name and an actor label.
 	 *
 	 * Truncating is a readability choice with a sharp edge: two identities sharing a short form
 	 * share a folder, and that folder is force-deleted on re-import. Whatever calls this owes the
-	 * caller a check that the folder it is about to wipe belongs to the identity it thinks it does.
+	 * caller a check that the folder it is about to wipe belongs to the identity it thinks it does
+	 * — that is what the provenance record in MantlePlaceImportProvenance is for.
 	 */
 	FString ShortIdentity(const FString& Identity);
+
+	// --- Placement in the level -----------------------------------------------------------------
+
+	/**
+	 * The World Outliner folder every actor of one import goes into: `MantlePlace/<shortIdentity>`.
+	 *
+	 * Deliberately NOT derived from the configured content root. Outliner folders have no project
+	 * layout policy to collide with, so there is nothing for a setting to resolve — and keeping the
+	 * top segment fixed leaves one predictable marker for support no matter how a project is
+	 * configured. Which is also why the actor labels keep their prefix: see ADR 0003.
+	 */
+	FString OutlinerFolder(const FString& Identity);
+
+	/**
+	 * The actor tag that marks an actor as belonging to one import: `mantleplace_import=<identity>`.
+	 *
+	 * This, not the label, is what re-import matches on. A label is a thing a user edits — renaming
+	 * an actor in the outliner used to break that user's own next re-import, silently, and then
+	 * stack a duplicate landscape on the first. A tag is not surfaced for editing, carries the FULL
+	 * identity rather than the truncation, and survives the actor being dragged to another folder.
+	 *
+	 * Its ABSENCE is also the legacy signal: an actor from 0.3.0 or earlier has an `MP_*` label and
+	 * no tag at all, which is how the importer recognises content it must not silently adopt.
+	 */
+	FString ImportTag(const FString& Identity);
+
+	/** The tag prefix alone, for finding this plugin's actors regardless of identity. */
+	FString ImportTagPrefix();
 
 	// --- Package paths ------------------------------------------------------------------------
 
 	/** The default content root, before any project setting overrides it. */
 	const TCHAR* DefaultContentRoot();
+
+	/**
+	 * Whether a configured content root is usable as the parent of a directory the importer
+	 * force-deletes.
+	 *
+	 * Requires a mount point and at least one segment beneath it — `/Game` alone is refused, and
+	 * that refusal is the point rather than pedantry: the importer creates `<root>/<identity>` and
+	 * deletes it, so a root of `/Game` is fine, but a root that is EMPTY or a bare `/` would put
+	 * the delete somewhere it must never reach. No trailing slash, no relative segments.
+	 */
+	bool IsUsableContentRoot(const FString& ContentRoot);
+
+	/** The configured root when it is usable, and the default when it is not. */
+	FString ResolveContentRoot(const FString& ConfiguredRoot);
 
 	/** `<ContentRoot>/<shortIdentity>` — everything one import generates lives beneath this. */
 	FString ImportRoot(const FString& ContentRoot, const FString& Identity);
@@ -93,8 +168,13 @@ namespace MantlePlaceImportNaming
 	/** `SM_<sourceBasename>` — an imported static mesh. */
 	FString StaticMeshName(const FString& SourceFile);
 
-	/** `MI_Drape_<shortIdentity>` — the drape material instance. */
-	FString DrapeMaterialName(const FString& Identity);
+	/**
+	 * `MI_Drape` — the drape material instance.
+	 *
+	 * The identity does NOT appear here. It is already the folder this sits in, and repeating it in
+	 * the leaf is what made `MI_Drape_a1b2c3d4` unreadable in a material picker.
+	 */
+	FString DrapeMaterialName();
 
 	/**
 	 * `LI_<material>` — the layer info asset for one paint layer.
@@ -105,8 +185,8 @@ namespace MantlePlaceImportNaming
 	 */
 	FString LayerInfoName(const FString& Material);
 
-	/** `DT_TreePoints_<shortIdentity>` — the foliage-point data table. */
-	FString TreePointsTableName(const FString& Identity);
+	/** `DT_TreePoints` — the foliage-point data table. The folder carries the identity. */
+	FString TreePointsTableName();
 
 	/** `Tree_<index>` — one row of that table. */
 	FString TreePointsRowName(int32 RowIndex);

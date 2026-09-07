@@ -21,6 +21,7 @@ public class MantlePlaceEditor : ModuleRules
 			new string[]
 			{
 				"CoreUObject",
+				"DeveloperSettings", // UDeveloperSettings: the generated-content-root project setting
 				"Engine",
 				"MantlePlaceRuntime", // auth base + vault client + bundle cache the vault-import orchestrator drives
 				"UnrealEd",      // FScopedTransaction, GEditor, factories, FActorLabelUtilities

@@ -69,6 +69,18 @@ class RefusedTests(GateTestCase):
                 self.assertEqual(code, 1, f"{subfolder} should be refused")
                 self.assertIn("[subfolder]", out)
 
+    def test_an_outliner_folder_literal_is_refused(self) -> None:
+        self.write("Importer.cpp", 'A->SetFolderPath(FName(TEXT("MantlePlace/abc")));\n')
+        code, out = self.run_gate()
+        self.assertEqual(code, 1)
+        self.assertIn("[outliner-folder]", out)
+
+    def test_the_import_tag_literal_is_refused(self) -> None:
+        self.write("Importer.cpp", 'A->Tags.Add(FName(TEXT("mantleplace_import=abc")));\n')
+        code, out = self.run_gate()
+        self.assertEqual(code, 1)
+        self.assertIn("[import-tag]", out)
+
     def test_identity_truncation_is_refused(self) -> None:
         for expression in ("Manifest.JobId.Left(8)", "Manifest.OrderId.Left(8)", "Identity.Left(12)"):
             with self.subTest(expression=expression):
@@ -141,6 +153,20 @@ class AllowedTests(GateTestCase):
     def test_a_paint_layer_name_read_from_the_manifest_is_left_alone(self) -> None:
         """HPS-33: the layer name is applied verbatim. Reading one is not naming one."""
         self.write("Landscape.cpp", "LayerInfo->SetLayerName(FName(*Material), false);\n")
+        code, out = self.run_gate()
+        self.assertEqual(code, 0, out)
+
+    def test_an_on_disk_folder_of_the_same_name_is_left_alone(self) -> None:
+        """The bundle cache lives at MantlePlace/VaultCache on disk. Not an outliner folder."""
+        self.write("Cache.cpp", 'const FString Sub = TEXT("MantlePlace/VaultCache");\n')
+        code, out = self.run_gate()
+        self.assertEqual(code, 0, out)
+
+    def test_a_folder_path_from_the_naming_module_is_left_alone(self) -> None:
+        self.write(
+            "Importer.cpp",
+            "A->SetFolderPath(FName(*MantlePlaceImportNaming::OutlinerFolder(Identity)));\n",
+        )
         code, out = self.run_gate()
         self.assertEqual(code, 0, out)
 

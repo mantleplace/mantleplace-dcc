@@ -68,6 +68,57 @@ namespace MantlePlaceImportNaming
 
 		// The abbreviation permitted on outliner-visible labels, and only there. See ADR 0003.
 		const TCHAR* const ActorLabelPrefix = TEXT("MP_");
+
+		// The fixed top segment of the outliner folder. Spelled in full: this is a folder name a
+		// user reads with room to read it, not a label in a narrow column.
+		const TCHAR* const OutlinerRoot = TEXT("MantlePlace");
+
+		// Tags follow the idiom the road splines already use: lower_snake key, `=`, value.
+		const TCHAR* const ImportTagKey = TEXT("mantleplace_import");
+
+		// An identity has to survive being a single package-path segment of a directory that gets
+		// force-deleted. Letters, digits, and the three separators an order id or a hash can
+		// contain. Everything else — a slash, a colon, a dot, whitespace — is refused rather than
+		// stripped, because stripping invents an identity nobody chose.
+		bool IsUsableIdentityChar(const TCHAR Char)
+		{
+			return FChar::IsAlnum(Char) || Char == TEXT('-') || Char == TEXT('_') || Char == TEXT('+');
+		}
+
+		// Long enough that the truncation to eight is meaningful, and long enough that a stray
+		// fragment of a field cannot pass for one.
+		constexpr int32 MinIdentityLength = 8;
+	}
+
+	bool IsUsableIdentity(const FString& Identity)
+	{
+		if (Identity.Len() < MinIdentityLength)
+		{
+			return false;
+		}
+		for (const TCHAR Char : Identity)
+		{
+			if (!IsUsableIdentityChar(Char))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	FString ResolveIdentity(const FString& OrderId, const FString& ManifestSha256)
+	{
+		// The order first, always: it is the only one of the two that is stable across a rebuild,
+		// which is the whole point of ADR 0002.
+		if (IsUsableIdentity(OrderId))
+		{
+			return OrderId;
+		}
+		if (IsUsableIdentity(ManifestSha256))
+		{
+			return ManifestSha256;
+		}
+		return FString();
 	}
 
 	FString ShortIdentity(const FString& Identity)
@@ -75,9 +126,61 @@ namespace MantlePlaceImportNaming
 		return Identity.Left(8);
 	}
 
+	FString OutlinerFolder(const FString& Identity)
+	{
+		return FString(OutlinerRoot) / ShortIdentity(Identity);
+	}
+
+	FString ImportTag(const FString& Identity)
+	{
+		return ImportTagPrefix() + Identity;
+	}
+
+	FString ImportTagPrefix()
+	{
+		return FString::Printf(TEXT("%s="), ImportTagKey);
+	}
+
 	const TCHAR* DefaultContentRoot()
 	{
 		return TEXT("/Game/MantlePlace");
+	}
+
+	bool IsUsableContentRoot(const FString& ContentRoot)
+	{
+		if (ContentRoot.Len() < 2 || !ContentRoot.StartsWith(TEXT("/")))
+		{
+			return false;
+		}
+		if (ContentRoot.EndsWith(TEXT("/")))
+		{
+			return false;
+		}
+		TArray<FString> Segments;
+		ContentRoot.ParseIntoArray(Segments, TEXT("/"), /*InCullEmpty*/ false);
+		// ParseIntoArray on a leading-slash path yields an empty first element; every element after
+		// it must be a real segment. An empty one means a doubled slash, which would collapse.
+		for (int32 Index = 1; Index < Segments.Num(); ++Index)
+		{
+			const FString& Segment = Segments[Index];
+			if (Segment.IsEmpty() || Segment == TEXT(".") || Segment == TEXT(".."))
+			{
+				return false;
+			}
+			for (const TCHAR Char : Segment)
+			{
+				if (!IsUsableIdentityChar(Char) && Char != TEXT('.'))
+				{
+					return false;
+				}
+			}
+		}
+		return Segments.Num() >= 2;
+	}
+
+	FString ResolveContentRoot(const FString& ConfiguredRoot)
+	{
+		return IsUsableContentRoot(ConfiguredRoot) ? ConfiguredRoot : FString(DefaultContentRoot());
 	}
 
 	FString ImportRoot(const FString& ContentRoot, const FString& Identity)
@@ -117,9 +220,9 @@ namespace MantlePlaceImportNaming
 		return ImportNameFor(TEXT("SM_"), SourceFile);
 	}
 
-	FString DrapeMaterialName(const FString& Identity)
+	FString DrapeMaterialName()
 	{
-		return FString::Printf(TEXT("MI_Drape_%s"), *ShortIdentity(Identity));
+		return TEXT("MI_Drape");
 	}
 
 	FString LayerInfoName(const FString& Material)
@@ -127,9 +230,9 @@ namespace MantlePlaceImportNaming
 		return FString::Printf(TEXT("LI_%s"), *Material);
 	}
 
-	FString TreePointsTableName(const FString& Identity)
+	FString TreePointsTableName()
 	{
-		return FString::Printf(TEXT("DT_TreePoints_%s"), *ShortIdentity(Identity));
+		return TEXT("DT_TreePoints");
 	}
 
 	FString TreePointsRowName(int32 RowIndex)

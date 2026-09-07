@@ -35,9 +35,21 @@ struct FMantlePlaceImportResult
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
 	TArray<FString> CreatedActors;
 
-	/** The bundle's jobId (from the manifest), for reference. */
+	/** The bundle's jobId (from the manifest), for reference. Never what content is keyed on. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
 	FString JobId;
+
+	/**
+	 * The order this content is keyed on -- the order id, or a content hash for a bundle that
+	 * names no order. Its first eight characters are the content folder and the outliner folder,
+	 * and the whole of it is the actor tag a re-import matches on. See ADR 0002.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
+	FString Identity;
+
+	/** Where generated content was written, after the project's content-root setting. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
+	FString ContentPath;
 };
 
 /**

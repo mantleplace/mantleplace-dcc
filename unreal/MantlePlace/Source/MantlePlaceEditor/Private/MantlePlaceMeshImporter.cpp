@@ -133,8 +133,7 @@ namespace MantlePlaceMeshImporter
 
 		Actor->SetMobility(EComponentMobility::Static);
 		Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
-		Actor->SetActorLabel(MantlePlaceImportNaming::ActorLabel(
-			MantlePlaceImportNaming::EActorKind::Mesh, Manifest.JobId));
+		// Labelled, tagged and filed by the caller. See MantlePlaceLandscapeImporter::Import.
 		return Actor;
 	}
 
@@ -168,8 +167,7 @@ namespace MantlePlaceMeshImporter
 
 		Actor->SetMobility(EComponentMobility::Static);
 		Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
-		Actor->SetActorLabel(MantlePlaceImportNaming::ActorLabel(
-			MantlePlaceImportNaming::EActorKind::Buildings, Manifest.JobId));
+		// Labelled, tagged and filed by the caller.
 		return Actor;
 	}
 }

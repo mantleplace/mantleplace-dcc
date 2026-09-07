@@ -27,6 +27,8 @@ So this gate enforces the "nowhere else" half, which is the half a reviewer cann
   * `.Left(8)` on a job or order id. The truncation is what makes two identities collide in one
     folder, and a folder that is force-deleted; it gets one definition, with the hazard documented
     on it.
+  * An outliner folder path, and the import tag. The tag is what re-import matches on, so a second
+    place that spells it is a second thing that decides which actors get destroyed.
 
 What is deliberately NOT refused: names the importer READS rather than writes. A paint layer's name
 arrives in the manifest and is applied verbatim (HPS-33), and the drape material template is shipped
@@ -81,6 +83,20 @@ RULES: list[tuple[str, re.Pattern[str], str]] = [
         "subfolder",
         re.compile(r'/\s*TEXT\(\s*"(?:' + "|".join(SUBFOLDERS) + r')"\s*\)'),
         "a subfolder name as a path segment - use MantlePlaceImportNaming::SubfolderPath()",
+    ),
+    (
+        "outliner-folder",
+        # Matched at the CALL, not by the folder's spelling: "MantlePlace/..." is also a legitimate
+        # on-disk cache subdirectory, and a rule that could not tell the two apart would be a rule
+        # that gets switched off.
+        re.compile(r"SetFolderPath\([^)]*TEXT\("),
+        "an outliner folder built from a literal - use MantlePlaceImportNaming::OutlinerFolder()",
+    ),
+    (
+        "import-tag",
+        re.compile(r"mantleplace_import"),
+        "the import tag - use MantlePlaceImportNaming::ImportTag(), which is what re-import "
+        "matches on",
     ),
     (
         "identity-truncation",

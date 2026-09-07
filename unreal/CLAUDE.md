@@ -117,10 +117,13 @@ a glTF brings with it.
 <ContentRoot>/<identity>/Landcover        one layer info per paint layer, plus the tree points table
 ```
 
-- `<ContentRoot>` defaults to `/Game/MantlePlace` and is a **project** setting — Project Settings →
-  Plugins → Mantle Place, `config=Game`, checked into `DefaultGame.ini`. Deliberately not per-user:
-  two developers with different roots in one project produce two copies of the same import that
-  neither one's re-import will clean up.
+- `<ContentRoot>` defaults to `/Game/MantlePlace` and is a **project** setting —
+  `UMantlePlaceEditorSettings`, Project Settings → Plugins → Mantle Place, `config=Game`, checked
+  into `DefaultGame.ini`. Deliberately not per-user: two developers with different roots in one
+  project produce two copies of the same import that neither one's re-import will clean up. An
+  unusable value falls back to the default rather than failing the import, because the importer
+  creates and force-deletes a directory beneath it and a malformed root is not something to resolve
+  creatively.
 - `<identity>` identifies the *order*, not the build that produced it. See
   [ADR 0002](../docs/adr/0002-import-identity.md) — this is the part most likely to be got wrong, and
   getting it wrong duplicates a user's landscape silently.
@@ -150,10 +153,24 @@ because the first only runs where an engine does — a line added at a call site
 `main` unchallenged. A line that genuinely needs one can carry `// naming-gate: allow <reason>`; the
 reason is required.
 
-> **Not yet conformed.** Two parts of the standard above are still ahead of the code: generated
-> content is keyed on the build rather than the order, and no outliner folder is set at all. The
-> content root is not yet a setting, and the identity still repeats in two asset names. Everything
-> else — the prefix table, the subfolder layout, one place for every name — is in place.
+### Re-import, and the two things that make it safe
+
+Re-importing an order **replaces** its content: the destination directory is force-deleted and
+rebuilt, because Interchange re-creates source-named assets. Two things stand in front of that
+delete, and neither is optional.
+
+**A provenance record**, written outside the content tree under the project's `Saved` directory. The
+folder is named by the *truncated* identity, so two orders sharing eight characters name one folder;
+the record holds the full identity, and a mismatch refuses instead of deleting. It lives outside the
+content because it has to be readable at the moment the importer is deciding whether to delete that
+content — loading an asset inside a folder about to be force-deleted is the hazard documented at the
+delete itself. Its absence is also how content from 0.3.0 and earlier is recognised: that content is
+refused, with its path, rather than adopted or silently replaced.
+
+**An actor tag**, `mantleplace_import=<identity>`, carrying the full identity. This, not the label,
+is what the stale-actor sweep matches. Labels are user-editable, and matching on them meant a user
+who renamed an actor in the outliner broke their own next re-import and got a second landscape on
+top of the first.
 
 ## Things that will bite you
 
@@ -165,9 +182,12 @@ reason is required.
 - **Nothing the importer generates is ever saved.** There is no `SavePackage` call in the plugin;
   every import task sets `bSave = false` and generated packages are only marked dirty. A doc comment
   or two says "saved" and is wrong. A user who closes without saving loses the import.
-- **Actor labels are load-bearing today.** Re-import finds prior content by string-matching actor
-  labels, so a user who renames an actor in the outliner silently breaks their own re-import. This is
-  being moved onto an actor tag; until then, treat a label template as an interface.
+- **The identity is not the job id, and this is the mistake to expect.** `FMantlePlaceVaultManifest`
+  offers `JobId` first and it reads like the obvious key. It changes on every rebuild. Anything
+  keyed on it duplicates a user's content instead of replacing it, silently, and the symptom shows
+  up one refresh later. `MantlePlaceImportNaming::ResolveIdentity` is the only place that decides.
+- **The actor tag is load-bearing; the label is not.** Re-import matches the tag. Change the label
+  format freely; change the tag and you have changed which actors a re-import destroys.
 - **Re-import wipes before it writes.** Interchange re-creates source-named assets, so the importer
   force-deletes the destination directory first. Anything that widens what the destination path can
   be widens what that delete can reach — guard the inputs to it, not the delete.

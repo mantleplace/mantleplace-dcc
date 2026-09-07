@@ -48,6 +48,24 @@ _TILESET_LABEL = "MP_CesiumStream_Terrain"
 _QA_TERRAIN_LABEL = "MP_CesiumQA_WorldTerrain"
 _CLIP_LABEL = "MP_CesiumStream_AoiClip"
 
+#: The World Outliner folder these actors are filed into. Streaming has no bundle identity to key
+#: a per-import folder on -- it imports no assets and spawns at most one set of actors at a time --
+#: so it gets one fixed folder beside the importer's per-order ones. The alternative, leaving them
+#: at the outliner root while every imported actor gains a folder, would read as less organised
+#: than before. The labels are unchanged: they are already correct under the scheme in
+#: unreal/CLAUDE.md, where MP_ is the permitted marker on an outliner-visible label.
+_OUTLINER_FOLDER = "MantlePlace/Stream"
+
+
+def _file_in_outliner(actor):
+    """Put a spawned actor in the Mantle Place folder. Never fatal: a failure here costs tidiness."""
+    try:
+        actor.set_folder_path(_OUTLINER_FOLDER)
+    except Exception as exc:  # noqa: BLE001 - older Cesium/UE actor types may not expose it
+        unreal.log_warning(
+            "[MantlePlace] could not file {} in the outliner: {}".format(
+                actor.get_actor_label(), exc))
+
 #: Cesium's East-South-Up -> our North-East-Up. East(+X) -> +Y and South(+Y) -> -X, which is yaw +90.
 CESIUM_TO_WORLD_YAW = 90.0
 
@@ -202,6 +220,7 @@ def _clip_to_aoi(tileset, georef, info):
         unreal.CesiumCartographicPolygon, unreal.Vector(0, 0, 0),
         unreal.Rotator(roll=0.0, pitch=0.0, yaw=CESIUM_TO_WORLD_YAW))
     polygon.set_actor_label(_CLIP_LABEL)
+    _file_in_outliner(polygon)
     try:
         polygon.globe_anchor.set_editor_property("georeference", georef)
     except Exception as exc:  # noqa: BLE001 - it resolves the level's only georeference anyway
@@ -319,6 +338,7 @@ def stream_into_cesium(zip_path=None, geoid_separation_m=0.0):
     tileset = unreal.EditorActorSubsystem().spawn_actor_from_class(
         unreal.Cesium3DTileset, unreal.Vector(0, 0, 0))
     tileset.set_actor_label(_TILESET_LABEL)
+    _file_in_outliner(tileset)
     try:
         tileset.set_editor_property("tileset_source", unreal.TilesetSource.FROM_URL)
     except Exception as exc:
@@ -393,6 +413,7 @@ def ground_truth_overlay(zip_path, geoid_separation_m=0.0):
     tileset = unreal.EditorActorSubsystem().spawn_actor_from_class(
         unreal.Cesium3DTileset, unreal.Vector(0, 0, 0))
     tileset.set_actor_label(_QA_TERRAIN_LABEL)
+    _file_in_outliner(tileset)
     try:
         tileset.set_editor_property("tileset_source", unreal.TilesetSource.FROM_CESIUM_ION)
         tileset.set_editor_property("ion_asset_id", ION_ASSET_WORLD_TERRAIN)
