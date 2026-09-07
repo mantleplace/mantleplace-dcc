@@ -98,3 +98,55 @@ _Avoid_: package, asset, dataset, download
 Bringing a bundle the user already holds into the open document. Deliberately requires no account, no
 sign-in and no server call — it is not a vault operation and must never acquire one.
 _Avoid_: load, ingest, sync
+
+### Orders and builds
+
+These two were one word for a long time, and a host plugin that keys anything on the wrong one
+duplicates a user's content instead of replacing it.
+
+**Order**:
+What a customer asked the platform for. Stable: the same order rebuilt and re-delivered is still that
+order, and it is what a user thinks of as owning.
+_Avoid_: purchase, request, job
+
+**Job**:
+One run of the platform's pipeline that produces a bundle. Rebuilding an order produces a new job, so
+a job identifies a *build* and never a thing a customer owns.
+_Avoid_: build, run, materialization, order
+
+**AOI**:
+The area of interest an order covers.
+_Avoid_: region, extent, tile, site
+
+### What a bundle carries
+
+**Manifest**:
+The document inside a bundle that declares what shipped and the pre-derived values a host must apply.
+The published schema, not this repository, is its authority.
+_Avoid_: metadata, index, descriptor
+
+**Landscape layer block**:
+One named division of a bundle's landscape data — the material weights, and the coverage rasters
+beside them. Its name is a manifest key.
+_Avoid_: layer
+
+**Paint layer**:
+One named material a landscape surface is painted with, carried as a weight channel. Its name comes
+from the platform and a host applies it exactly as given, because that name is what a landscape
+material binds to. A paint layer is not a landscape layer block; the paint layers all live inside one
+of them.
+_Avoid_: layer, landscape layer, material layer, landcover class
+
+**Band legend**:
+The fixed order of the paint layers, published in the manifest. It says which weight channel is which
+material, so a host never infers that from a filename.
+_Avoid_: channel map, material list, band order
+
+**Coverage raster**:
+A single-purpose raster describing the ground — slope, water, canopy and their like — delivered for a
+host to use as data. Distinct from the paint layers, which describe how the ground looks.
+_Avoid_: mask, layer, overlay
+
+**Drape**:
+Imagery laid over terrain as its surface appearance.
+_Avoid_: overlay, texture, basemap
