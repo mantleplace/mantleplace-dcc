@@ -16,6 +16,20 @@
   -->
 
   <PropertyGroup>
+    <!--
+      The Revit plugin's version, and its ONE home. It flows into all three assemblies, into the
+      import log and the terrain probe report (PluginVersion), and into the release tag and asset
+      name, which are `revit-<this>` and `MantlePlace-Revit-<this>.zip`: string equality, no `v`,
+      no second place to forget. See docs/adr/0001-per-host-release-tracks.md.
+
+      Unset, this is not blank: MSBuild defaults it to 1.0.0, so every build before this line
+      claimed to be a 1.0. Revit's own version series starts here, at 0.1.0, and does not track
+      Unreal's: the hosts release on separate clocks and share a contract, not a number.
+    -->
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

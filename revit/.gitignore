@@ -22,3 +22,7 @@ packages/
 # A Revit add-in is loaded by dropping a manifest in %APPDATA%\Autodesk\Revit\Addins\<year>\.
 # A locally-edited copy pointing at a developer's own output path must not come back here.
 *.addin.local
+
+# Release zips built by tools/Package-MantlePlaceRevit.ps1. A built plugin is never committed —
+# see the root CLAUDE.md on binaries. The artifact's home is a GitHub release, not the history.
+dist/

@@ -27,6 +27,7 @@ revit/                         the Revit plugin: pure Core, Client, Addin shim, 
 spec/                          the public MPB format spec — prose only; the schema stays remote
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
 tools/public-hygiene/          the private-reference gate + its cases
+docs/adr/                      architecture decision records, numbered and cross-host
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
 .github/workflows/             the three public CI gates, plus the stale-tracker job
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
@@ -109,6 +110,23 @@ on your machine and unfetchable for everyone else.
 This applies to any consumer of this repo. The Mantle Place project tree mounts it at
 `unreal/Plugins/MantlePlaceDcc/` and documents the full loop on its side; the rule above is what
 matters wherever you are.
+
+## Releases
+
+**One release track per host.** Tags are `<host>-<version>` — `revit-0.1.0`, `unreal-0.4.0` — with
+no `v`: the version in a tag is the exact string the artifact declares, so tag-matches-artifact is a
+string equality. The first three tags (`v0.1.0`–`v0.3.0`) are Unreal's pre-history and stay exactly
+as published; nothing is renamed. Each release body is that track's changelog *and* its provenance
+record — source commit, sha256, and what was and was not verified — and links back to the previous
+release of the same track. There is no changelog file. See
+[`docs/adr/0001-per-host-release-tracks.md`](docs/adr/0001-per-host-release-tracks.md).
+
+**No release can be built or gated in public CI, and none ever will be.** Both hosts need a licensed
+install on the build machine — Unreal an engine, Revit `RevitAPI.dll` from Revit 2025 — and a
+self-hosted runner is forbidden here (see below). Packaging runs privately;
+`revit/tools/Package-MantlePlaceRevit.ps1` is the repeatable half for Revit. Packaging is not the
+gate: for Revit the gate is the ribbon loading and one real import completing in **2025, 2026 and
+2027**, which no machine without all three can claim.
 
 ## Binaries
 

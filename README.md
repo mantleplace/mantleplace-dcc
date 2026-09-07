@@ -60,6 +60,31 @@ That means a second implementer is possible, and welcome. If you write a third-p
 [`spec/`](spec/) is the document and the corpus is the test you can run against it — neither
 requires reading a line of our plugin code.
 
+## Install a built plugin
+
+[**Releases**](https://github.com/mantleplace/mantleplace-dcc/releases) carry a built plugin per
+host, so neither host needs a compiler to try.
+
+**Each host has its own release track**, with its own version series and its own cadence — the hosts
+share the manifest contract, not a version number, and their release gates have nothing in common
+(Unreal's is a private licensed engine compile; Revit's is a human launching three Revit versions).
+Tags name the track: `unreal-0.4.0`, `revit-0.1.0`. There is no `v` — the version in a tag is the
+exact string the artifact itself declares. The reasoning, and why the first three tags are bare
+`v0.1.0`–`v0.3.0`, is in [ADR 0001](docs/adr/0001-per-host-release-tracks.md).
+
+| Host | Asset | Install |
+| --- | --- | --- |
+| Unreal | `MantlePlace-UE5.8-Win64-<version>.zip` | Extract into a project's `Plugins/` directory and open the project. No compilation step. |
+| Revit | `MantlePlace-Revit-<version>.zip` | Copy the `Contents` folder's files into `%APPDATA%\Autodesk\Revit\Addins\<year>\`, for each of 2025/2026/2027 you use — or double-click `Install.cmd`. No admin rights, and no .NET install: Revit brings its own. |
+
+The Revit package leads with the manual copy rather than the script on purpose
+([ADR 0002](docs/adr/0002-release-installs-are-copy-first.md)) — Windows blocks downloaded scripts by
+default, and a folder copy works on every machine including the locked-down ones.
+
+Each release body is that track's changelog and its provenance record: the source commit, the
+artifact's sha256, and what was and was not verified. Building from source stays fully supported and
+is what [Building](#building) below covers.
+
 ## Get a real bundle in minutes
 
 **There are no sample bundles in this repository, and there never will be** — no trimmed one, no small

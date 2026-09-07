@@ -129,7 +129,8 @@ public sealed class TerrainProbeCommand : IExternalCommand
 
     private static void Probe(Document document, string zipPath, StringBuilder report)
     {
-        report.AppendLine("Mantle Place terrain probe. Nothing in this project was changed.");
+        report.AppendLine(CultureInfo.InvariantCulture,
+            $"Mantle Place {PluginVersion.Current} terrain probe. Nothing in this project was changed.");
         report.AppendLine(CultureInfo.InvariantCulture, $"Document: {document.Title}");
         report.AppendLine();
 

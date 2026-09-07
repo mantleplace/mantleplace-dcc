@@ -34,7 +34,8 @@ internal sealed class ImportLog(string zipPath)
         {
             File.WriteAllText(
                 _path,
-                $"Mantle Place bundle import, started {DateTime.Now:yyyy-MM-dd HH:mm:ss}."
+                $"Mantle Place {PluginVersion.Current} bundle import, "
+                    + $"started {DateTime.Now:yyyy-MM-dd HH:mm:ss}."
                     + Environment.NewLine
                     + _zipPath
                     + Environment.NewLine);
