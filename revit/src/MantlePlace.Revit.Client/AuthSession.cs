@@ -76,6 +76,21 @@ public sealed class AuthSession : IDisposable
     /// <summary>Whether a stored session would survive a restart (<c>HPS-16</c>).</summary>
     public bool IsPersistent => _secrets.IsPersistent;
 
+    /// <summary>
+    /// True when there is a refresh token to renew from, whether or not the access token is still
+    /// good. Distinguishes "signed out" from "signed in, needs a new access token".
+    /// </summary>
+    public bool CanRenewSession
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _refreshToken.Length > 0;
+            }
+        }
+    }
+
     /// <summary>The bearer token, or empty. Memory-only (<c>HPS-15</c>).</summary>
     public string AccessToken
     {

@@ -390,17 +390,11 @@ internal sealed class VaultBrowserWindow : Window
             return false;
         }
 
-        if (_session.IsAccessTokenExpired(DateTimeOffset.UtcNow))
-        {
-            Report("Renewing your sign-in…");
-            AuthOutcome renewed = await _session.RefreshAsync().ConfigureAwait(true);
-            if (!renewed.Succeeded)
-            {
-                Report(renewed.Message.Length > 0 ? renewed.Message : "Your sign-in expired. Sign in again.");
-                return false;
-            }
-        }
-
+        // Renewal used to be decided here, from the clock, before each operation. It has moved to
+        // VaultClient.SendAsync, which renews on a 401 and sends the request again. Two reasons: a
+        // wall-clock check is a guess about a decision the platform is already making and cannot see
+        // a long poll cross the expiry boundary mid-flight; and this is the Addin, the one layer CI
+        // never builds, which is the last place the most important auth decision should live.
         _work = new CancellationTokenSource();
         _cancel.IsEnabled = true;
         Report(message);
