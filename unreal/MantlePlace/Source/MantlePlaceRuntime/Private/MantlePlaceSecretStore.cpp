@@ -2,7 +2,10 @@
 
 #include "MantlePlaceSecretStore.h"
 
+#include "MantlePlaceBundleCacheLogic.h" // SanitizeKeySegment / Sha256Hex - the shared HPS-30 mapping
+
 #include "HAL/FileManager.h"
+#include "HAL/PlatformProcess.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
@@ -10,16 +13,41 @@ DEFINE_LOG_CATEGORY_STATIC(LogMantlePlaceSecret, Log, All);
 
 namespace
 {
-	/** Resolve the on-disk path for a secret Key, under the ignored Saved/MantlePlace directory. */
+	/**
+	 * Resolve the on-disk path for a secret Key, under the per-OS-user Mantle Place auth directory.
+	 *
+	 * This is deliberately NOT a per-project location. It used to be
+	 * FPaths::ProjectSavedDir()/MantlePlace/secret_<key>.bin, which scoped the credential to one
+	 * Unreal project directory: a curator signed in again for every project, and lost the session
+	 * entirely whenever Saved/ was cleaned. It also put the file somewhere the Revit host could
+	 * never look, so the two hosts could not share a session even in principle.
+	 *
+	 * The key-to-filename mapping matches the Revit host's exactly - the same HPS-30 sanitisation
+	 * the bundle cache uses, with the same short digest of the RAW key appended when the mapping
+	 * was lossy. Both hosts must derive the same name from the same key, or "one machine identity"
+	 * is quietly two.
+	 */
 	FString ResolveSecretPath(const FString& Key)
 	{
-		FString Safe;
-		Safe.Reserve(Key.Len());
-		for (const TCHAR Ch : Key)
+		const FString Stem = FMantlePlaceBundleCacheLogic::SanitizeKeySegment(Key);
+
+		FString FileName = Stem;
+		if (Stem != Key)
 		{
-			Safe.AppendChar(FChar::IsAlnum(Ch) ? Ch : TEXT('_'));
+			const FTCHARToUTF8 Utf8(*Key);
+			const FString Digest = FMantlePlaceBundleCacheLogic::Sha256Hex(
+				reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length());
+			FileName = Stem + TEXT("_") + Digest.Left(8);
 		}
-		return FPaths::ProjectSavedDir() / TEXT("MantlePlace") / FString::Printf(TEXT("secret_%s.bin"), *Safe);
+
+		const FString Root = FString(FPlatformProcess::UserSettingsDir());
+		if (Root.IsEmpty())
+		{
+			// No per-user settings location on this platform. Returning an empty path makes Save
+			// fail honestly rather than writing the credential somewhere arbitrary.
+			return FString();
+		}
+		return Root / TEXT("MantlePlace") / TEXT("auth") / (FileName + TEXT(".bin"));
 	}
 }
 

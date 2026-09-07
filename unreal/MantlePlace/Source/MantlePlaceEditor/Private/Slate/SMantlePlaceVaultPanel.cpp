@@ -111,10 +111,20 @@ void SMantlePlaceVaultPanel::Construct(const FArguments& InArgs)
 	ShowList();
 	UpdateHeaderState();
 
-	// A cached session (DPAPI token) means we can list straight away.
+	// A cached session means we can list straight away. When there is no live session yet, ask for
+	// one to be rebuilt from the stored refresh token: this is the first moment anything in the
+	// editor actually needs auth, which is why the request is made here and not at startup.
+	//
+	// Restoring succeeds asynchronously, and HandleAuthChanged lists on reaching Authenticated, so
+	// there is nothing to wait for here. A restore with no stored credential is a no-op and leaves
+	// the header on its signed-out copy.
 	if (Controller->IsSignedIn())
 	{
 		Controller->RefreshVaultList();
+	}
+	else
+	{
+		Controller->TryRestoreSession();
 	}
 }
 

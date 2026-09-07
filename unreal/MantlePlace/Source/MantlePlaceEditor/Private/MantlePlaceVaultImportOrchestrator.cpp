@@ -41,6 +41,15 @@ void UMantlePlaceVaultImportOrchestrator::SignOut()
 	}
 }
 
+void UMantlePlaceVaultImportOrchestrator::TryRestoreSession()
+{
+	EnsureClients();
+	if (AuthSystem != nullptr)
+	{
+		AuthSystem->TryRestoreSession();
+	}
+}
+
 bool UMantlePlaceVaultImportOrchestrator::IsSignedIn() const
 {
 	return AuthSystem != nullptr && AuthSystem->IsAuthenticated();
