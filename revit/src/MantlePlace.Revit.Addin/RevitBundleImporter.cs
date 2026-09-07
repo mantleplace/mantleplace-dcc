@@ -251,6 +251,11 @@ internal sealed class RevitBundleImporter(
     /// </summary>
     private void ImportToposurfaceFromPoints(ImportStep step)
     {
+        if (TerrainToBuild(step) is not { } stamp)
+        {
+            return;
+        }
+
         string csvPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
         string? parseError = SurfacePointsReader.TryParse(File.ReadAllText(csvPath), out IReadOnlyList<SurfacePoint> points);
         if (parseError is not null)
@@ -267,7 +272,7 @@ internal sealed class RevitBundleImporter(
             Say(cleaned.Explanation);
         }
 
-        BuildTerrain(points, LinearUnits.MetresPerUnit(step.Units), step.EntryName, "points");
+        BuildTerrain(points, LinearUnits.MetresPerUnit(step.Units), step.EntryName, "points", stamp);
     }
 
     /// <summary>
@@ -281,6 +286,11 @@ internal sealed class RevitBundleImporter(
     /// </remarks>
     private void ImportToposurfaceFromTin(ImportStep step)
     {
+        if (TerrainToBuild(step) is not { } stamp)
+        {
+            return;
+        }
+
         if (step.Frame is not { } frame)
         {
             // The planner does not emit this step without a frame. Stated rather than assumed,
@@ -323,7 +333,62 @@ internal sealed class RevitBundleImporter(
 
         // 1.0, not step.Units: SurfaceTinFrame consumed the artifact's unit when it subtracted the
         // origin, exactly as TreePointsReader does, so these coordinates are already metres.
-        BuildTerrain(vertices, 1.0, step.EntryName, "TIN vertices");
+        BuildTerrain(vertices, 1.0, step.EntryName, "TIN vertices", stamp);
+    }
+
+    /// <summary>
+    /// The terrain step's re-import guard: the stamp a new toposolid must carry, or <c>null</c> when
+    /// this bundle's ground is already in the project and nothing is to be built.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ Before the artifact is extracted or parsed, not after. Every other repeatable step in this
+    /// import already asks "is it already here" — the IFC link, the terrain base level, the drape's
+    /// duplicated type, the site-boundary subdivisions — and the terrain was the one that never did,
+    /// so a second import laid a whole second ground on the first and the boundary guard above it
+    /// silently rebuilt its entire set against the new one. Guarding here also means a re-import
+    /// never pays to unzip and triangulate a surface it is not going to use.
+    /// </para>
+    /// <para>
+    /// The three arms are <see cref="TerrainIdentity.Decide"/>'s and the reasoning lives there. What
+    /// the shim adds is the two facts only a document can answer — which toposolids are ground, and
+    /// what each one's Comments says — and the assignment below.
+    /// </para>
+    /// </remarks>
+    private string? TerrainToBuild(ImportStep step)
+    {
+        List<ExistingTerrain> grounds = [];
+        foreach (Toposolid ground in GroundToposolids())
+        {
+            grounds.Add(new ExistingTerrain(
+                ground.Id.Value,
+                ground.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString()));
+        }
+
+        TerrainDecision decision = TerrainIdentity.Decide(
+            grounds,
+            _archive.Layout.Key.Stem,
+            step.ExpectedSha256);
+
+        if (decision.Explanation.Length > 0)
+        {
+            Say(decision.Explanation);
+        }
+
+        if (decision.Disposition == TerrainDisposition.Create)
+        {
+            return decision.Stamp;
+        }
+
+        // Reuse and refusal alike leave this bundle's existing ground as the terrain every later step
+        // works on. Without this the boundary and drape steps fall back to "the first toposolid that
+        // is not a subdivision", which in a project holding a curator's own ground as well is a
+        // coin toss — and the right answer is already known here.
+        _terrainId = new ElementId(decision.ExistingElementId);
+
+        // _terrainVertexCount is deliberately left null: this run did not read a points file, so it
+        // has no count, and SlowStepNotice says so rather than inventing one.
+        return null;
     }
 
     /// <summary>
@@ -334,7 +399,8 @@ internal sealed class RevitBundleImporter(
         IReadOnlyList<SurfacePoint> points,
         double metresPerUnit,
         string entryName,
-        string noun)
+        string noun,
+        string stamp)
     {
         if (ChooseToposolidType() is not { } chosenType)
         {
@@ -372,7 +438,7 @@ internal sealed class RevitBundleImporter(
             return;
         }
 
-        if (!TryBuildTerrain(plan, chosenType, revitPoints, relief))
+        if (!TryBuildTerrain(plan, chosenType, revitPoints, relief, stamp))
         {
             // ⛔ The retry is not defensive coding. Toposolid.Create takes no offset argument, so the
             // height offset can only be written after the element exists — and whether Revit
@@ -383,7 +449,7 @@ internal sealed class RevitBundleImporter(
             TerrainBasePlan escalated = TerrainBasePlanner.Escalate(plan, relief);
             Say(escalated.Explanation);
 
-            if (!TryBuildTerrain(escalated, chosenType, revitPoints, relief))
+            if (!TryBuildTerrain(escalated, chosenType, revitPoints, relief, stamp))
             {
                 Say("The terrain could not be built on either base plane, so this project has no "
                     + "ground. The rest of the bundle was still imported.");
@@ -402,7 +468,8 @@ internal sealed class RevitBundleImporter(
         TerrainBasePlan plan,
         CandidateToposolidType type,
         IList<XYZ> revitPoints,
-        TerrainRelief relief)
+        TerrainRelief relief,
+        string stamp)
     {
         ImportFailureSwallower swallower = new("Building the terrain");
         using Transaction transaction = BeginTransaction("Mantle Place: terrain from points file", swallower);
@@ -423,12 +490,26 @@ internal sealed class RevitBundleImporter(
             _document.Regenerate();
         }
 
+        // The terrain's identity for the NEXT import. A ground it could not stamp is still kept —
+        // the terrain is real and the rest of the bundle drapes onto it — it just cannot be
+        // recognised later, and that is said in the log rather than hidden. Same contract as the
+        // subdivisions' Comments, and the same failure mode if it is skipped: a second import that
+        // builds a second ground.
+        Parameter? comments = terrain.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS);
+        bool stamped = comments is not null && !comments.IsReadOnly && comments.Set(stamp);
+
         // Captured BEFORE the commit: a rolled-back element cannot be asked for its id.
         ElementId built = terrain.Id;
 
         if (!CommitAndReport(transaction, swallower))
         {
             return false;
+        }
+
+        if (!stamped)
+        {
+            Say("The terrain could not be stamped with this bundle's identity, so a re-import will "
+                + "not recognise it and will build a second ground alongside it.");
         }
 
         // Remembered, not re-found: the site-boundary step drapes its rings onto THIS toposolid, and
@@ -2181,11 +2262,11 @@ internal sealed class RevitBundleImporter(
     }
 
     /// <summary>
-    /// The first toposolid that is a TERRAIN — a subdivision is itself a <see cref="Toposolid"/>, so
-    /// a bare first-of-class collector can hand back a site-limit patch instead of the ground it
-    /// sits on. Anything listed in another toposolid's <c>GetSubDivisionIds()</c> is excluded.
+    /// Every toposolid that is a TERRAIN — a subdivision is itself a <see cref="Toposolid"/>, so a
+    /// bare collector hands back site-limit patches alongside the ground they sit on. Anything
+    /// listed in another toposolid's <c>GetSubDivisionIds()</c> is excluded.
     /// </summary>
-    private ElementId TerrainToposolidId()
+    private List<Toposolid> GroundToposolids()
     {
         List<Toposolid> toposolids = new FilteredElementCollector(_document)
             .OfClass(typeof(Toposolid))
@@ -2201,7 +2282,28 @@ internal sealed class RevitBundleImporter(
             }
         }
 
-        return toposolids.FirstOrDefault(toposolid => !subdivisionIds.Contains(toposolid.Id))?.Id
-            ?? ElementId.InvalidElementId;
+        return [.. toposolids.Where(toposolid => !subdivisionIds.Contains(toposolid.Id))];
+    }
+
+    /// <summary>
+    /// The ground a step works on when this run did not build one — a bundle whose plan carries
+    /// boundaries or a drape but no surface.
+    /// </summary>
+    /// <remarks>
+    /// This bundle's own stamped terrain first. A project can legitimately hold more than one ground
+    /// — a curator's, an adjacent order's — and "whichever the collector enumerated first" is a coin
+    /// toss dressed as a lookup. The unstamped fallback stays for the project whose terrain predates
+    /// stamping, where a coin toss with one coin is the right answer.
+    /// </remarks>
+    private ElementId TerrainToposolidId()
+    {
+        List<Toposolid> grounds = GroundToposolids();
+        string stem = _archive.Layout.Key.Stem;
+
+        Toposolid? mine = grounds.FirstOrDefault(ground => TerrainIdentity.IsStampFor(
+            ground.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString(),
+            stem));
+
+        return (mine ?? grounds.FirstOrDefault())?.Id ?? ElementId.InvalidElementId;
     }
 }

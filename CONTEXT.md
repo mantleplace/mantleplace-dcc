@@ -150,3 +150,23 @@ _Avoid_: mask, layer, overlay
 **Drape**:
 Imagery laid over terrain as its surface appearance.
 _Avoid_: overlay, texture, basemap
+
+### What a host builds from a bundle
+
+**Terrain**:
+The ground surface a host builds from a bundle's surface artifact, and the thing an import owns. In
+Revit it is one toposolid; in Unreal it is the landscape. One bundle has exactly one.
+_Avoid_: topo, toposurface, mesh, DEM
+
+**Ground**:
+A toposolid's *role* in a Revit document — one that is not another toposolid's subdivision. Every
+terrain is a ground; a project can hold grounds this import did not make, and counting them is how a
+duplicate terrain is detected. Say ground when the question is "what kind of toposolid is this", and
+terrain when the question is "whose surface is this".
+_Avoid_: main toposolid, base toposolid, alternate
+
+**Stamp**:
+The identity a host writes onto something it created so its next import recognises it. It names the
+order and, for the terrain, the build — never the element id, which identifies a run rather than a
+document.
+_Avoid_: tag, marker, label, key
