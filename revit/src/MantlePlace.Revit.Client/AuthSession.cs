@@ -21,6 +21,16 @@ public readonly record struct AuthOutcome(bool Succeeded, bool Cancelled, string
 }
 
 /// <summary>
+/// A grant request that did not succeed, and whether the platform rejected the GRANT or merely
+/// failed to answer.
+/// </summary>
+/// <remarks>
+/// The two want opposite handling -- discard the stored credential, or keep it -- so they cannot
+/// share a return type that is just a message. See <see cref="TokenGrants.IsDefinitiveRejection"/>.
+/// </remarks>
+internal readonly record struct GrantFailure(string Message, bool IsDefinitive);
+
+/// <summary>
 /// The one auth session for the Revit process: browser sign-in, refresh, restore, sign-out.
 /// </summary>
 /// <remarks>
@@ -150,11 +160,13 @@ public sealed class AuthSession : IDisposable
             return AuthOutcome.Failed(result.Message);
         }
 
-        string? failure = await ExchangeCodeAsync(result.Callback!.Code, verifier, signIn.Token).ConfigureAwait(false);
-        if (failure is not null)
+        GrantFailure? failure = await ExchangeCodeAsync(result.Callback!.Code, verifier, signIn.Token).ConfigureAwait(false);
+        if (failure is { } exchangeFailure)
         {
+            // No stored credential is at stake yet, so the definitive/transient split does not
+            // apply to a sign-in: there is nothing to discard or keep.
             Raise(AuthEvent.SignInFailed);
-            return AuthOutcome.Failed(failure);
+            return AuthOutcome.Failed(exchangeFailure.Message);
         }
 
         Raise(AuthEvent.SignInSucceeded);
@@ -197,17 +209,10 @@ public sealed class AuthSession : IDisposable
             return AuthOutcome.Abandoned;
         }
 
-        string? failure = await RefreshGrantAsync(stored, cancellationToken).ConfigureAwait(false);
-        if (failure is not null)
+        GrantFailure? failure = await RefreshGrantAsync(stored, cancellationToken).ConfigureAwait(false);
+        if (failure is { } restoreFailure)
         {
-            lock (_gate)
-            {
-                _accessToken = string.Empty;
-                _expiresAt = DateTimeOffset.MinValue;
-            }
-
-            Raise(AuthEvent.RefreshFailed);
-            return AuthOutcome.Failed(failure);
+            return FailRenewal(restoreFailure, stored);
         }
 
         Raise(AuthEvent.RefreshSucceeded);
@@ -217,11 +222,10 @@ public sealed class AuthSession : IDisposable
     /// <summary>Mints a fresh access token from the refresh token.</summary>
     public async Task<AuthOutcome> RefreshAsync(CancellationToken cancellationToken = default)
     {
-        string refreshToken;
-        lock (_gate)
-        {
-            refreshToken = _refreshToken;
-        }
+        // Take the freshest token before spending a round trip on it. Both hosts share one
+        // credential per OS user, so the other one may have rotated since this process last
+        // refreshed, and the copy in memory would then already be dead.
+        string refreshToken = ReadFreshestRefreshToken();
 
         if (refreshToken.Length == 0)
         {
@@ -233,9 +237,96 @@ public sealed class AuthSession : IDisposable
             return AuthOutcome.Abandoned;
         }
 
-        string? failure = await RefreshGrantAsync(refreshToken, cancellationToken).ConfigureAwait(false);
-        Raise(failure is null ? AuthEvent.RefreshSucceeded : AuthEvent.RefreshFailed);
-        return failure is null ? AuthOutcome.Ok : AuthOutcome.Failed(failure);
+        lock (_gate)
+        {
+            _refreshToken = refreshToken;
+        }
+
+        GrantFailure? failure = await RefreshGrantAsync(refreshToken, cancellationToken).ConfigureAwait(false);
+        if (failure is { } refreshFailure)
+        {
+            return FailRenewal(refreshFailure, refreshToken);
+        }
+
+        Raise(AuthEvent.RefreshSucceeded);
+        return AuthOutcome.Ok;
+    }
+
+    /// <summary>
+    /// The freshest refresh token available: the stored one when it differs from the one held in
+    /// memory, because a difference means the other host rotated it since this process last looked.
+    /// </summary>
+    private string ReadFreshestRefreshToken()
+    {
+        string inMemory;
+        lock (_gate)
+        {
+            inMemory = _refreshToken;
+        }
+
+        return _secrets.TryLoad(RefreshTokenKey, out string stored) && stored.Length > 0
+            ? stored
+            : inMemory;
+    }
+
+    /// <summary>
+    /// Settles a failed refresh or restore: keep the stored credential, or discard it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A transient failure keeps it, always. A network blip must never cost a curator their session,
+    /// which is why a failed restore has always left the stored copy alone.
+    /// </para>
+    /// <para>
+    /// A definitive rejection discards it -- but only after checking whether the OTHER host rotated
+    /// the credential between our read and the platform's answer. If the store now holds something
+    /// else, the platform rejected a token that is merely superseded, and discarding here would sign
+    /// the curator out of both hosts because Unreal happened to refresh first. That case retries
+    /// once, with the token the other host wrote.
+    /// </para>
+    /// </remarks>
+    private AuthOutcome FailRenewal(GrantFailure failure, string presented)
+    {
+        lock (_gate)
+        {
+            _accessToken = string.Empty;
+            _expiresAt = DateTimeOffset.MinValue;
+        }
+
+        if (!failure.IsDefinitive)
+        {
+            Raise(AuthEvent.RefreshFailed);
+            return AuthOutcome.Failed(failure.Message);
+        }
+
+        string freshest = ReadFreshestRefreshToken();
+        if (freshest.Length > 0 && !string.Equals(freshest, presented, StringComparison.Ordinal))
+        {
+            // Superseded, not dead. Leave the state settled so the retry is allowed to begin, then
+            // renew again with what the other host wrote. One hop only: the retry presents the
+            // freshest token there is, and a rejection of THAT is about the session.
+            Raise(AuthEvent.SignOut);
+            lock (_gate)
+            {
+                _refreshToken = freshest;
+            }
+
+            return AuthOutcome.Abandoned;
+        }
+
+        // The platform says this refresh token will never work again. Keeping it produces a plugin
+        // that retries a dead credential at every launch and never asks for the sign-in that would
+        // fix it (⛔HPS-17).
+        lock (_gate)
+        {
+            _refreshToken = string.Empty;
+        }
+
+        UserEmail = string.Empty;
+        _secrets.Clear(RefreshTokenKey);
+        Raise(AuthEvent.SignOut);
+
+        return AuthOutcome.Failed($"{failure.Message} Sign in again to continue.");
     }
 
     /// <summary>Drops the session and clears the store (<c>HPS-17</c>).</summary>
@@ -263,7 +354,7 @@ public sealed class AuthSession : IDisposable
         }
     }
 
-    private async Task<string?> ExchangeCodeAsync(string code, string verifier, CancellationToken cancellationToken)
+    private async Task<GrantFailure?> ExchangeCodeAsync(string code, string verifier, CancellationToken cancellationToken)
     {
         string body = JsonSerializer.Serialize(new Dictionary<string, string>
         {
@@ -275,7 +366,7 @@ public sealed class AuthSession : IDisposable
             .ConfigureAwait(false);
     }
 
-    private async Task<string?> RefreshGrantAsync(string refreshToken, CancellationToken cancellationToken)
+    private async Task<GrantFailure?> RefreshGrantAsync(string refreshToken, CancellationToken cancellationToken)
     {
         // Supabase-direct when this machine has the project configured -- unchanged behaviour for
         // every install that already works. Otherwise the web broker, which needs no local config:
@@ -297,7 +388,7 @@ public sealed class AuthSession : IDisposable
     /// <summary>
     /// Posts a grant request and applies the response. <c>null</c> on success.
     /// </summary>
-    private async Task<string?> PostGrantAsync(
+    private async Task<GrantFailure?> PostGrantAsync(
         string url,
         string body,
         string? apiKey,
@@ -315,9 +406,11 @@ public sealed class AuthSession : IDisposable
         }
 
         string responseBody;
+        int status;
         try
         {
             using HttpResponseMessage response = await Http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            status = (int)response.StatusCode;
             responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -326,12 +419,13 @@ public sealed class AuthSession : IDisposable
         }
         catch (HttpRequestException ex)
         {
-            return $"Could not reach mantle.place to complete sign-in: {ex.Message}";
+            // Nothing was rejected -- nothing was answered. Transient by definition.
+            return new GrantFailure($"Could not reach mantle.place: {ex.Message}", IsDefinitive: false);
         }
 
         if (TokenGrants.TryParse(responseBody, out TokenGrant? grant) is { } failure)
         {
-            return failure;
+            return new GrantFailure(failure, TokenGrants.IsDefinitiveRejection(status, responseBody));
         }
 
         Apply(grant!);

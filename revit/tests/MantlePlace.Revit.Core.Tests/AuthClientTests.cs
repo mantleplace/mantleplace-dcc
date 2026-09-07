@@ -33,6 +33,52 @@ internal static class AuthClientTests
 
     private static void RunCases(TestRun run, string sandbox)
     {
+        run.Case("a rejection of the grant is told apart from a failure to answer", () =>
+        {
+            // The asymmetry is the point. Reading a transient failure as definitive costs a working
+            // session to a dropped packet; reading a definitive one as transient retries a dead
+            // credential forever and never prompts the sign-in that would fix it. Only the second is
+            // silent, so everything unrecognised is transient.
+            //
+            // Kept in step with the Unreal host's FMantlePlaceAuthLogic::IsDefinitiveRejection case
+            // for case. Host-local on both sides for now; a corpus case once the two have agreed
+            // long enough to be worth binding every future host to.
+            run.True(TokenGrants.IsDefinitiveRejection(400, """{"error":"invalid_grant"}"""),
+                "invalid_grant at 400 is definitive");
+            run.True(TokenGrants.IsDefinitiveRejection(401, """{"error":"invalid_grant"}"""),
+                "and at 401");
+            run.True(TokenGrants.IsDefinitiveRejection(400, """{"error_code":"refresh_token_not_found"}"""),
+                "error_code carries the verdict too");
+            run.True(TokenGrants.IsDefinitiveRejection(400, """{"error_code":"refresh_token_already_used"}"""),
+                "a rotated token that was already spent is definitive");
+            run.True(TokenGrants.IsDefinitiveRejection(400, """{"error":"Invalid_Grant"}"""),
+                "the code match is case-insensitive");
+
+            run.False(TokenGrants.IsDefinitiveRejection(500, """{"error":"invalid_grant"}"""),
+                "500 is never definitive, whatever the body claims");
+            run.False(TokenGrants.IsDefinitiveRejection(503, """{"error":"unavailable"}"""),
+                "503 is transient");
+            run.False(TokenGrants.IsDefinitiveRejection(400, """{"error":"rate_limited"}"""),
+                "a client error with an unrecognised code is transient");
+            run.False(TokenGrants.IsDefinitiveRejection(401, "<html>Gateway</html>"),
+                "an unreadable body is transient - a proxy error page lands here");
+            run.False(TokenGrants.IsDefinitiveRejection(400, ""),
+                "an empty body is transient");
+            run.False(
+                TokenGrants.IsDefinitiveRejection(400,
+                    """{"error_description":"Invalid Refresh Token: Already Used"}"""),
+                "prose is not a verdict: error_description alone does not decide");
+        });
+
+        run.Case("both hosts spell the store lock the same way", () =>
+        {
+            // A lock the two hosts name differently is no lock at all, and nothing would fail
+            // visibly -- the interleaving it guards against needs both hosts, a rotating platform
+            // and unlucky timing. This is the cheapest place to notice a rename.
+            run.Equal(ISecretStore.LockName, "MantlePlace.Auth.SecretStore",
+                "and the Unreal host's IMantlePlaceSecretStore::LockName is this literal");
+        });
+
         run.Case("the null store fails honestly rather than downgrading (HPS-16)", () =>
         {
             NullSecretStore store = new();
