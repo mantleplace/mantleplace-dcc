@@ -23,13 +23,26 @@ bounded contexts, and the vocabulary is deliberately shared across them.
 ├── docs/adr/
 │   ├── 0001-per-host-release-tracks.md
 │   ├── 0002-import-identity.md
-│   └── ...
+│   ├── 0003-naming-authority-and-mp-prefix.md
+│   ├── 0004-revit-terrain-identity.md
+│   └── 0005-release-installs-are-copy-first.md
 ├── revit/          host
 └── unreal/         host
 ```
 
 Each host folder carries its own `CLAUDE.md` with toolchain specifics. Those are instructions, not
 domain docs — read them for how to build, not for what a word means.
+
+## ADR numbers are unique, and that is checked at merge
+
+Two concurrent branches will both pick the same next free number, because both were right when they
+picked it. That is how `0002` came to name two records: they merged twelve seconds apart. **Re-check
+`docs/adr/` on `main` immediately before merging an ADR**, and renumber if something landed first.
+
+Where a collision has already merged, the record whose number is cited **bare** in prose keeps it,
+and the one cited only through Markdown links is renumbered. Links are updated mechanically and fail
+loudly; a bare `ADR 0002` in a code comment is updated by hand or not at all, and a stale one points
+silently at the wrong record.
 
 ## Use the glossary's vocabulary
 

@@ -78,7 +78,7 @@ exact string the artifact itself declares. The reasoning, and why the first thre
 | Revit | `MantlePlace-Revit-<version>.zip` | Copy the `Contents` folder's files into `%APPDATA%\Autodesk\Revit\Addins\<year>\`, for each of 2025/2026/2027 you use — or double-click `Install.cmd`. No admin rights, and no .NET install: Revit brings its own. |
 
 The Revit package leads with the manual copy rather than the script on purpose
-([ADR 0002](docs/adr/0002-release-installs-are-copy-first.md)) — Windows blocks downloaded scripts by
+([ADR 0005](docs/adr/0005-release-installs-are-copy-first.md)) — Windows blocks downloaded scripts by
 default, and a folder copy works on every machine including the locked-down ones.
 
 Each release body is that track's changelog and its provenance record: the source commit, the

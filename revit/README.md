@@ -203,7 +203,7 @@ this as a `.bundle` later is adding a `PackageContents.xml` rather than rearrang
 CI can never run it, because CI can never build this add-in.
 
 The packaging materials live in [`packaging/`](./packaging/). `README.txt` leads with a manual copy
-and offers the script second — see [ADR 0002](../docs/adr/0002-release-installs-are-copy-first.md)
+and offers the script second — see [ADR 0005](../docs/adr/0005-release-installs-are-copy-first.md)
 before "fixing" that, because it contradicts the deploy script's own advice on purpose.
 
 **Packaging is not the gate.** The zip proves the plugin compiles. What proves it works is the
