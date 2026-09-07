@@ -19,6 +19,17 @@
 class IMantlePlaceSecretStore
 {
 public:
+	/**
+	 * Name of the system-wide mutex serialising access to the stored credential.
+	 *
+	 * One machine identity means both host plugins read and write ONE file, so a rotation is a
+	 * read-modify-write two processes can interleave. On Windows this is a plain named mutex in the
+	 * session namespace (CreateMutex with no Global\ prefix), which a .NET Mutex of the same name
+	 * joins - the Revit host takes this same lock, and the name is shared rather than derived
+	 * precisely so that stays true.
+	 */
+	static constexpr const TCHAR* LockName = TEXT("MantlePlace.Auth.SecretStore");
+
 	virtual ~IMantlePlaceSecretStore() = default;
 
 	/** Encrypt and persist PlaintextValue under Key. Returns false if storage is unavailable. */

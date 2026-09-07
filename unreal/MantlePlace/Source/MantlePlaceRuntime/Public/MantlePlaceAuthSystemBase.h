@@ -289,6 +289,12 @@ private:
 	/** Fire OnTokenRefreshed and its native counterpart together. Every settle path goes through here. */
 	void NotifyTokenRefreshed(bool bSuccess);
 
+	/**
+	 * The freshest refresh token available: the stored one when it differs from the one in memory,
+	 * because a difference means the other host rotated it since we last looked.
+	 */
+	FString ReadFreshestRefreshToken();
+
 	/** Discard the stored refresh token. Only ever called on a definitive rejection or a sign-out. */
 	void ForgetStoredSession();
 
@@ -375,4 +381,16 @@ private:
 
 	/** Backing store for GetLastAuthError. */
 	FString LastAuthError;
+
+	/**
+	 * The refresh token actually sent on the request now in flight.
+	 *
+	 * Kept so a rejection can be checked against what the store holds NOW. If the two differ, the
+	 * other host rotated between our read and the platform's answer, and the rejection is about a
+	 * token that is already superseded rather than about the session.
+	 */
+	FString PresentedRefreshToken;
+
+	/** One rotation-loss retry per successful renewal, so two hosts cannot ping-pong indefinitely. */
+	bool bRotationRetryUsed = false;
 };
