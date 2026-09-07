@@ -157,11 +157,16 @@ unreal/MantlePlace/            the Unreal plugin — MantlePlaceRuntime + Mantle
 revit/                         the Revit plugin — pure Core, Client, Addin shim, headless tests
 spec/                          the published MPB format spec — prose, policy, changelog
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
-.github/workflows/             the three public CI gates, plus tracker hygiene
+tools/public-hygiene/          the private-reference gate + its cases
+tools/unreal-naming/           the generated-name drift gate + its cases
+docs/                          the ADRs, the shared sign-in contract, the agent docs
+.githooks/                     opt-in pre-publication hooks running the hygiene gate
+.github/workflows/             the four public CI gates, plus tracker hygiene
 ```
 
 Start with each host's own docs: [`revit/README.md`](revit/README.md) for Revit; for Unreal, the
-plugin source and [`unreal/MantlePlace/Docs/`](unreal/MantlePlace/Docs/).
+plugin source. Sign-in is shared by both hosts and documented once, in
+[`docs/platform-auth-contract.md`](docs/platform-auth-contract.md).
 
 ## Building
 

@@ -1,3 +1,8 @@
+---
+name: domain-docs
+description: How the engineering skills read this repository's domain documentation — one root glossary and one cross-host ADR directory, and no per-host bounded contexts. Read before exploring the codebase, naming a domain concept, adding an ADR (its number collides at merge unless re-checked), or when your work contradicts a recorded decision.
+---
+
 # Domain docs
 
 How the engineering skills consume this repo's domain documentation when exploring the codebase.
@@ -20,12 +25,7 @@ bounded contexts, and the vocabulary is deliberately shared across them.
 ```
 /
 ├── CONTEXT.md
-├── docs/adr/
-│   ├── 0001-per-host-release-tracks.md
-│   ├── 0002-import-identity.md
-│   ├── 0003-naming-authority-and-mp-prefix.md
-│   ├── 0004-revit-terrain-identity.md
-│   └── 0005-release-installs-are-copy-first.md
+├── docs/adr/       every ADR, numbered — read the directory, not a list kept here
 ├── revit/          host
 └── unreal/         host
 ```

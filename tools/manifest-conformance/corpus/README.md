@@ -99,8 +99,8 @@ agree, and the case file says so.
 
 ## Version
 
-Fixtures are written against manifest **1.0.0**, and the readers' version floor is **1.0.0** too.
-Everything below the floor is in the reject set: clean break, one supported version (`HPS-31`). The
+Fixtures are written against the pinned manifest version, and the readers' floor is that same
+version. Everything below it is in the reject set: clean break, one supported version (`HPS-31`). The
 floor and the pin are deliberately split — `index.json`'s `manifestVersion` is the pin, and
 `verified-against.json` records each host's own.
 

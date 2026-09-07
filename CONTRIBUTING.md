@@ -67,7 +67,7 @@ repository's own issue space); it stays forbidden in files.
 **The objective bar is: the conformance suite passes, and behaviour it pins is not changed without
 changing a case.**
 
-Three workflows run on every pull request, on free hosted runners:
+Four workflows run on every pull request, on free hosted runners:
 
 - **`ci-manifest-conformance`** — fetches the published bundle-manifest schema, checks every
   registered host is verified against the newest version, and checks the shared corpus under
@@ -76,6 +76,10 @@ Three workflows run on every pull request, on free hosted runners:
   them on **.NET 8 and .NET 10**.
 - **`ci-public-hygiene`** — refuses references that resolve only in a private repository, in
   tracked files and in the pull request's title, body, branch name and commit messages (see above).
+- **`ci-unreal-naming`** — refuses a generated asset name or package path built anywhere but the
+  Unreal naming module. Text-only, no engine, seconds on a hosted runner — and the only automated
+  check standing in front of a naming regression, because nothing in public CI compiles the Unreal
+  plugin (see below).
 
 All must be green. If your change makes a corpus case fail, the interesting question is whether the
 case or the code is wrong — say which you think it is in the pull request, and why.

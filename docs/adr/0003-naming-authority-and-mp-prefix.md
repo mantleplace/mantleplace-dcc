@@ -1,4 +1,6 @@
 ---
+name: adr-0003-naming-authority-and-mp-prefix
+description: The Unreal asset-naming standard is this repository's own, written out in `unreal/CLAUDE.md` rather than cited from an internal style guide, and `MP_` is permitted on outliner-visible actor labels and nowhere else. Read before changing a generated asset name or prefix, or when the `MP_` label looks like it contradicts the root rule that names are spelled out in full.
 status: accepted
 ---
 

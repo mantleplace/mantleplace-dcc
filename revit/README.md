@@ -303,14 +303,15 @@ misconfiguration naming a file that no packaging step produced. That path is gon
 the broker, always, so the route nearly every install actually uses is also the one exercised in
 development, and there is no packaging-time secret in the auth path at all.
 
-Every key in that file is an override for a compiled default (`webLoginUrl`,
-`tokenEndpointUrl`, `refreshEndpointUrl`, `apiBaseUrl`, `loopbackPorts`, `callbackPath`,
-`signInTimeoutSeconds`) and is how a dev build points at a non-production stack. `loopbackPorts` is
-the `HPS-06a` override: leave it out and the OS assigns the sign-in callback port, which is what
-keeps sign-in clear of Windows' shifting reserved ranges and lets Revit and Unreal be signed in at
-the same time. Absent or malformed, the file is ignored and the
-defaults stand — this is read during Revit's add-in load, where throwing costs the ribbon button and
-explains nothing.
+One optional file remains: `%LOCALAPPDATA%\MantlePlace\config.json`, overrides layered over the
+compiled defaults when it is present, and nothing installs it. Every key in it is an override for one
+of those defaults (`webLoginUrl`, `tokenEndpointUrl`, `refreshEndpointUrl`, `apiBaseUrl`,
+`loopbackPorts`, `callbackPath`, `signInTimeoutSeconds`) and is how a dev build points at a
+non-production stack. `loopbackPorts` is the `HPS-06a` override: leave it out and the OS assigns
+the sign-in callback port, which is what keeps sign-in clear of Windows' shifting reserved ranges
+and lets Revit and Unreal be signed in at the same time. Absent or malformed, the file is ignored
+and the defaults stand — this is read during Revit's add-in load, where throwing costs the ribbon
+button and explains nothing.
 
 ## The contract gap, and how it closed
 

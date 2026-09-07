@@ -1,4 +1,6 @@
 ---
+name: adr-0002-import-identity
+description: Unreal keys imported content on the order rather than the build that produced it, so re-importing **replaces** the prior content instead of stacking a second landscape on the first. Read before touching Unreal import naming, the re-import wipe or its provenance record — and note that Revit met the same bug and resolved it the opposite way in ADR 0004, which refuses instead of replacing.
 status: accepted
 ---
 

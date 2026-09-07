@@ -1,3 +1,8 @@
+---
+name: issue-tracker
+description: This repository's tracker is GitHub issues driven by the `gh` CLI — the exact commands for creating, reading, listing, labelling, commenting on and closing one, plus the flag saying external pull requests are not a triage surface. Read before filing, triaging or fetching a ticket, and for what is safe to type into a world-readable issue body.
+---
+
 # Issue tracker: GitHub
 
 Issues for this repo live as GitHub issues on `mantleplace/mantleplace-dcc`. Use the `gh` CLI for all
@@ -31,14 +36,15 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## What this repo's own rules add
 
-This tracker is **public**, and so is everything written to it. Root [`CLAUDE.md`](../../CLAUDE.md)
-governs, and two of its rules bite here in particular:
+This tracker is **public**, and so is everything written to it: a title, a body and every comment are
+world-readable the moment they are posted, and there is no draft state before that. Nothing that
+resolves only inside a private repository goes into one — not by URL, not by path, not by issue
+number, not as `repo#42`. What is refused, on which surface and with which exemptions is
+[`public-surface.md`](public-surface.md); root [`CLAUDE.md`](../../CLAUDE.md) governs.
 
-- **A bare `#42` in an issue body, a comment, a commit message or a PR body is this repo's own
-  self-reference and is fine.** In a *file* it is not: `ci-public-hygiene` treats it as a dangling or
-  wrong link. Never cite a private tracker in either place, by number, by URL or by `repo#42`.
-- **Branch names carry no issue number** — `type/short-description`. The cross-reference lives in the
-  PR body.
+The one split worth knowing before you type: **a bare `#42` in an issue body, a comment, a commit
+message or a PR body is this repo's own self-reference and is fine.** In a *file* it is not, and
+`ci-public-hygiene` refuses it there.
 
 Commits are signed off (`git commit -s`, DCO, no CLA — see [`CONTRIBUTING.md`](../../CONTRIBUTING.md)).
 

@@ -1,3 +1,8 @@
+---
+name: triage-labels
+description: Maps the skills' five canonical triage state roles and two categories to the label strings that actually exist on this tracker, and names the two labels that are not triage roles at all and only exempt an issue from the stale job. Read before applying, removing or reasoning about a label.
+---
+
 # Triage labels
 
 The engineering skills speak in terms of five canonical triage roles plus two categories. This file

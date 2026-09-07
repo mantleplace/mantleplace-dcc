@@ -30,6 +30,7 @@ tools/public-hygiene/          the private-reference gate + its cases
 tools/unreal-naming/           the generated-name drift gate + its cases
 docs/adr/                      architecture decision records, numbered and cross-host
 docs/agents/                   how the engineering skills read this repo — tracker, labels, domain
+docs/platform-auth-contract.md sign-in and tokens — the one contract both hosts implement
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
 .github/workflows/             the four public CI gates, plus the stale-tracker job
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
@@ -38,50 +39,26 @@ CONTEXT.md  CLAUDE.md
 
 **The rule for every future top-level addition:** *a top-level folder is a DCC host or a cross-host
 concern, nothing else.* Names are spelled out in full — `mantleplace`, never `mp`. `max/`,
-`blender/`, `rhino/` are created when they have real content, never as empty placeholders.
-
-**That rule governs this repository and its code** — paths, folders, modules, symbols — **not the
-strings a plugin writes into a user's project.** A host may abbreviate where a user reads the name in
-a cramped host UI; Unreal does, on actor labels, and only there
+`blender/`, `rhino/` are created when they have real content, never as empty placeholders. **That
+rule governs this repository and its code** — paths, folders, modules, symbols — **not the strings a
+plugin writes into a user's project.** A host may abbreviate where a user reads the name in a cramped
+host UI; Unreal does, on actor labels, and only there
 ([ADR 0003](docs/adr/0003-naming-authority-and-mp-prefix.md)). Do not "fix" one by citing the other.
-
-Each host folder carries its own `CLAUDE.md` with the toolchain specifics: read
-[`unreal/CLAUDE.md`](unreal/CLAUDE.md) or [`revit/CLAUDE.md`](revit/CLAUDE.md) before touching that
-host. The standard for what a host names inside a user's project lives in that host's file.
 
 ## The three rules
 
 ### 1. Everything here is public
 
 Anything you write lands in a world-readable repository, permanently, whether or not it is later
-deleted. So:
-
-- **Cite only public URLs.** The bundle-manifest schema series at
-  `https://mantle.place/.well-known/schemas/bundle-manifest/` is public and is the
-  authority on the contract. Two filename families are served: `v{N}.json` for the integer
-  pre-history and `{X.Y.Z}.json` for the MPB semver era — no `v` prefix, the `v` belonged to
-  the integer era. `frozen.lock.json` beside them names every version that exists. Internal trackers, internal documents and internal repositories are not citable
-  here — not by URL, not by path, not by issue number. A bare `#42` in a Markdown file auto-links to
-  *this* repo's issue 42, which is worse than dangling: it is wrong and it looks deliberate. The
-  qualified form (`repo#42`) is forbidden the same, by explicit decision: it hands a stranger a
-  private repository's name and a 404. The rule covers **every public surface** — files, commit
-  messages, pull request titles and bodies, and branch names (`type/short-description`, never an
-  issue number; the cross-reference lives in the private side's pin-bump PR). One split: in a
-  commit message or PR body, a bare `#42` is this repo's native self-reference and is fine.
-  **This one is checked**, by `ci-public-hygiene` — its `references` job is a required check on
-  `main` — after being prose alone until a private tracker's issue number reached a committed test
-  comment and sat on `main`. Markdown link targets, code spans, `host #2` and hex colours are
-  exempt structurally; state the reasoning in prose instead of citing what a reader cannot open.
-  CI runs after a push has already published; opt into the pre-publication hooks once per clone
-  with `git config core.hooksPath .githooks`.
-- **Rule ids are fine, links to them are not.** `HPS-40`, `DOC-06` and the like are stable
-  identifiers and stay as prose. Do not turn them into paths.
-- **No credentials, ever, including in binary assets.** `.uasset` files serialize property values, so
-  a URL typed into any asset's defaults is *in the file*, unreadable in review and permanent in
-  history. The auth path no longer has a capture-sensitive value to misplace — every route it uses is
-  a public one compiled in — but anything of that kind is
-  hydrated at packaging time from the build's secret store and must never be set in a committed
-  asset.
+deleted — across five surfaces: tracked files, commit messages, pull request titles, pull request
+bodies and branch names. Internal trackers, internal documents and internal repositories are not
+citable here, not by URL, not by path, not by issue number; a bare `#42` in a Markdown file
+auto-links to *this* repo's issue 42, which is worse than dangling. Credentials never, including in
+`.uasset` files, which serialize property values. **This one is checked**, by `ci-public-hygiene`,
+whose `references` job is a required check on `main`. **Before writing on any of those five
+surfaces, read [`docs/agents/public-surface.md`](docs/agents/public-surface.md)** — what is refused,
+the one split that makes a bare `#42` fine in a commit message, the structural exemptions, and the
+pre-publication hook that catches a violation before a push publishes it.
 
 ### 2. Confirm the repo before any write command
 
@@ -123,59 +100,41 @@ matters wherever you are.
 
 ## Worktrees and branches
 
-Worktrees are created by hand, as **siblings of `main`** — never inside the repository:
-
-```bash
-git worktree add ../<dir> -b <type>/<short-description>
-```
-
-- **The branch name is `type/short-description`.** No path segment starts with an issue number;
-  the cross-reference belongs in the pull request body.
-- **The directory name is the branch name with `/` replaced by `-`**, so the folder beside `main`
-  always names the branch it holds. `feat/auth-thing` → `../feat-auth-thing`. A folder whose name
-  does not resolve to its branch is a defect, not a style choice.
-- **Do not use `claude --worktree` or the `EnterWorktree` tool here.** Both are hard-coded to
-  `<repo-root>/.claude/worktrees/<name>` and to a branch named `worktree-<name>` with `/` flattened
-  to `+`. Neither is configurable, and both break the two rules above.
-- **A worktree is retired when its pull request merges:** `git worktree remove <dir>` then
-  `git branch -d <branch>`. Nothing does this for you — Claude Code's periodic sweep removes only
-  the worktrees it created itself and never touches one made with `git worktree add`. A worktree
-  that outlives its merged pull request is the thing this rule exists to prevent.
-- **In this repository the location rule has teeth.** This tree is mounted inside a consuming
-  Unreal project's `Plugins/` directory, where plugin discovery is a recursive scan. A worktree
-  under `<repo-root>/.claude/worktrees/` would put a second `unreal/MantlePlace/MantlePlace.uplugin`
-  inside that scan — a duplicate plugin the editor would discover and nobody would think to look for.
+Worktrees are created by hand with `git worktree add ../<dir> -b <type>/<short-description>`, as
+**siblings of `main`** — never inside the repository. The directory name is the branch name with `/`
+replaced by `-`, so the folder always names the branch it holds; a folder whose name does not resolve
+to its branch is a defect, not a style choice. **Do not use `claude --worktree` or the
+`EnterWorktree` tool here:** both are hard-coded to `<repo-root>/.claude/worktrees/<name>` and to a
+branch named `worktree-<name>`, neither is configurable, and the location rule has teeth here — this
+tree is mounted inside a consuming Unreal project's `Plugins/` directory, where plugin discovery is a
+recursive scan, so a worktree under the repo root would put a second `MantlePlace.uplugin` inside
+that scan. Retire a worktree when its pull request merges — `git worktree remove <dir>` then
+`git branch -d <branch>`. Nothing does this for you: Claude Code's periodic sweep removes only the
+worktrees it created itself and never touches one made with `git worktree add`.
 
 ## Releases
 
-**One release track per host.** Tags are `<host>-<version>` — `revit-0.1.0`, `unreal-0.4.0` — with
-no `v`: the version in a tag is the exact string the artifact declares, so tag-matches-artifact is a
-string equality. The first three tags (`v0.1.0`–`v0.3.0`) are Unreal's pre-history and stay exactly
-as published; nothing is renamed. Each release body is that track's changelog *and* its provenance
-record — source commit, sha256, and what was and was not verified — and links back to the previous
-release of the same track. There is no changelog file. See
-[`docs/adr/0001-per-host-release-tracks.md`](docs/adr/0001-per-host-release-tracks.md).
-
-**No release can be built or gated in public CI, and none ever will be.** Both hosts need a licensed
-install on the build machine — Unreal an engine, Revit `RevitAPI.dll` from Revit 2025 — and a
-self-hosted runner is forbidden here (see below). Packaging runs privately;
-`revit/tools/Package-MantlePlaceRevit.ps1` is the repeatable half for Revit. Packaging is not the
+**One release track per host.** Tags are `<host>-<version>` — `revit-0.1.0`, `unreal-0.4.0` — no
+`v`, so tag-matches-artifact is a string equality; `v0.1.0`–`v0.3.0` are Unreal's pre-history and are
+never renamed. Each release body is that track's changelog *and* its provenance record; there is no
+changelog file. **No release can be built or gated in public CI, and none ever will be** — both hosts
+need a licensed install on the build machine (Unreal an engine, Revit `RevitAPI.dll` from Revit
+2025), and a self-hosted runner is forbidden here, so packaging runs privately. Packaging is not the
 gate: for Revit the gate is the ribbon loading and one real import completing in **2025, 2026 and
-2027**, which no machine without all three can claim.
+2027**, which no machine without all three can claim. See
+[`docs/adr/0001-per-host-release-tracks.md`](docs/adr/0001-per-host-release-tracks.md), and
+`revit/tools/Package-MantlePlaceRevit.ps1` for the repeatable half.
 
 ## Binaries
 
-**There are no Git LFS patterns in this repository, on purpose.** A stranger's first clone must not
-be a multi-hundred-megabyte pull. The binaries that are here — one `.uasset` file, three fonts,
-three PNG icons — total well under 1.2 MB and are plain git blobs.
-
-**Do not add a new binary type without asking.** Git decides text-vs-binary at `git add` time, and a
-binary committed here is in the history forever; there is no later fix that is not a force-push. If a
-real need for LFS arises, that is a decision to take deliberately, once, rather than by accident.
-
-**No engine binaries, no compiled plugins, no test bundles, no sample assets, and no sample bundles —
-ever.** The last one is a rule with teeth: real geospatial data carries licence obligations, and
-shipping a bundle is redistributing it. The docs show generation instead.
+**There are no Git LFS patterns in this repository, on purpose** — a stranger's first clone must not
+be a multi-hundred-megabyte pull; the binaries that are here — one `.uasset`, three fonts, three PNG
+icons — total well under 1.2 MB and are plain git blobs. **Do not add a new binary type without
+asking:** git decides
+text-vs-binary at `git add` time, and a binary committed here is in the history forever with no later
+fix that is not a force-push. **No engine binaries, no compiled plugins, no test bundles, no sample
+assets, and no sample bundles — ever.** The last one has teeth: real geospatial data carries licence
+obligations, and shipping a bundle is redistributing it. The docs show generation instead.
 
 ## The boundary that keeps this client thin
 
@@ -196,72 +155,68 @@ only the founder can make, (2) needs access the agent does not have, (3) touches
 law forbids editing, or (4) sits outside the session's working tree, where fixing it would put
 unrelated changes in the diff. Nothing else qualifies — not size, not risk, not "the founder might
 not want it." Where checks exist, closed out means the checks pass; if they cannot be made to pass,
-that is (2), and it is raised when it is hit, not at the end.
-
-There is no standing "next steps" or "outstanding" section. One appears only when an item passes one
-of the four tests, or when the founder asks — and each item names the test it claims. Work resolved
-on the agent's own judgment is disclosed in writing (commit body, ledger, or manifest), never saved
-up for the closing message.
-
-## Where knowledge lives
-
-- **The contract** → the published JSON Schema series, cited by public URL. It is the authority; never
-  restate a value the schema owns. The version each host is verified against lives in
-  [`tools/manifest-conformance/verified-against.json`](tools/manifest-conformance/verified-against.json),
-  where CI checks it — never hardcode a version in prose.
-- **The format, in public prose** → [`spec/`](spec/) — what a bundle is, the compatibility policy,
-  the consolidated changelog, what conformance means. It is **descriptive**: it explains blocks and
-  doctrine and never restates a field, an enum, a constraint or a version. The one place versions
-  appear is the changelog, as dated history.
-- **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id. Its *portable*
-  half — what any consumer owes a manifest — is now published as `spec/`; the vault-client half
-  stays private, and `HPS-NN` ids are for internal prose, not for the public spec.
-- **What the words mean** → [`CONTEXT.md`](CONTEXT.md) — the glossary, and only that. It settles which
-  of two words to use and what each one denotes; it holds no implementation detail, no rule and no
-  decision. A term belongs there once the same word has meant two things to two people.
-- **What the plugins do, and how to build them** → [`README.md`](README.md).
-- **Governance** → [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
-  [`TRADEMARK.md`](TRADEMARK.md).
-- **Why a decision was taken** → [`docs/adr/`](docs/adr/), numbered and append-only. Only for
-  decisions that are hard to reverse, surprising without the context, and the result of a real
-  trade-off — the obvious choice needs no record, and an ADR is not a design document.
-- **What a host writes into a *user's* project** → that host's own `CLAUDE.md`
-  ([`unreal/`](unreal/CLAUDE.md), [`revit/`](revit/CLAUDE.md)). Not `spec/`, which describes the
-  format, and not here.
+that is (2), and it is raised when it is hit, not at the end. There is no standing "next steps" or
+"outstanding" section: one appears only when an item passes one of the four tests or the founder
+asks, and each item names the test it claims. Work resolved on the agent's own judgment is disclosed
+in writing (commit body, ledger, or manifest), never saved up for the closing message.
 
 ## CI
 
 Four workflows, all on free hosted runners, together the merge bar: `ci-manifest-conformance`,
 `ci-revit-tests`, `ci-public-hygiene` and `ci-unreal-naming`. **None may carry a `paths:` filter on
-`pull_request`** — a
-required check that is path-filtered never reports on a pull request outside its paths, so the check
-sits pending forever and nothing can merge. (`stale.yml` is tracker hygiene, not a gate.)
+`pull_request`** — a required check that is path-filtered never reports on a pull request outside its
+paths, so the check sits pending forever and nothing can merge. (`stale.yml` is tracker hygiene, not
+a gate.) **Never attach a self-hosted runner to this repository:** a fork's pull request would
+execute on the build machine. The Unreal compile stays on private infrastructure for exactly that
+reason, so a green pull request here can still break the engine build — an accepted, published lag
+([README](README.md#ci-and-what-it-does-not-cover)). **C++ formatting** is
+[`unreal/.clang-format`](unreal/.clang-format), for new code only; nothing in CI checks it and a
+reformat sweep is refused.
 
-**C++ formatting** is [`unreal/.clang-format`](unreal/.clang-format), for new code only: the existing
-files predate it and are not clean against it. Nothing in CI checks formatting, and a reformat sweep
-is refused — see [CONTRIBUTING.md](CONTRIBUTING.md).
+## Where knowledge lives
 
-**Never attach a self-hosted runner to this repository.** A fork's pull request would execute on the
-build machine. The Unreal compile stays on private infrastructure for exactly this reason, which
-means a green pull request here can still break the engine build — an accepted, published lag
-([README](README.md#ci-and-what-it-does-not-cover)).
+Most facts already have exactly one home. Find it before writing a fact down anywhere else.
+
+- **Writing anything public** — a file, a commit message, a PR title or body, a branch name →
+  [`docs/agents/public-surface.md`](docs/agents/public-surface.md).
+- **What a word means** → [`CONTEXT.md`](CONTEXT.md) — the glossary, and only that; no rule, no
+  decision, no implementation detail. A term belongs there once the same word has meant two things
+  to two people.
+- **Why a decision was taken** → [`docs/adr/`](docs/adr/), numbered and append-only. Only for
+  decisions hard to reverse, surprising without the context, and the result of a real trade-off; an
+  ADR is not a design document.
+- **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
+  authority; never restate a value it owns, and never hardcode a version in prose — the version each
+  host is verified against lives in
+  [`tools/manifest-conformance/verified-against.json`](tools/manifest-conformance/verified-against.json),
+  where CI checks it.
+- **The bundle format, in public prose** → [`spec/`](spec/) — what a bundle is, the compatibility
+  policy, the consolidated changelog, what conformance means. **Descriptive**: it never restates a
+  field, an enum, a constraint or a version; the changelog is the one place versions appear, as
+  dated history.
+- **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id. Its *portable*
+  half is published as [`spec/`](spec/); the vault-client half stays private, and `HPS-NN` ids are
+  for internal prose, not for the public spec.
+- **Signing in, tokens, refresh, sign-out** →
+  [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md) — what `mantle.place` must
+  serve for either host to sign in and stay signed in, and which rejections are definitive. Both
+  hosts implement it against one shared credential, so it is cross-host, not Unreal's.
+- **Building, testing, or what a host writes into a *user's* project** → that host's own `CLAUDE.md`
+  ([`unreal/`](unreal/CLAUDE.md), [`revit/`](revit/CLAUDE.md)), read before touching that host. Not
+  `spec/`, which describes the format, and not here.
+- **Issues, labels, triage** → [`docs/agents/`](docs/agents/) — see "Agent skills" below.
+- **What the plugins do, and how to build them** → [`README.md`](README.md).
+- **Governance** → [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
+  [`TRADEMARK.md`](TRADEMARK.md).
 
 ## Agent skills
 
-Configuration the engineering skills read before they act. These files describe how *this* repo is
-worked, not what it contains — the map of what it contains is "Where knowledge lives" above.
+Configuration the engineering skills read before they act — how *this* repo is worked, not what it
+contains.
 
-### Issue tracker
-
-GitHub issues on `mantleplace/mantleplace-dcc`, via the `gh` CLI; external pull requests are **not**
-a triage surface. See [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
-
-### Triage labels
-
-The five canonical state roles and two categories, each label string equal to its own name. See
-[`docs/agents/triage-labels.md`](docs/agents/triage-labels.md).
-
-### Domain docs
-
-Single-context: one [`CONTEXT.md`](CONTEXT.md) and one [`docs/adr/`](docs/adr/) at the root, both
-cross-host. See [`docs/agents/domain.md`](docs/agents/domain.md).
+- **Issue tracker** → [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). GitHub issues
+  on `mantleplace/mantleplace-dcc`, via `gh`; external PRs are **not** a triage surface.
+- **Triage labels** → [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md). Five state
+  roles and two categories, each label string equal to its own name.
+- **Domain docs** → [`docs/agents/domain.md`](docs/agents/domain.md). Single-context: one
+  [`CONTEXT.md`](CONTEXT.md) and one [`docs/adr/`](docs/adr/), both cross-host.
