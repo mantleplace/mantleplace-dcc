@@ -29,6 +29,7 @@ tools/manifest-conformance/    the contract gate + the shared conformance corpus
 tools/public-hygiene/          the private-reference gate + its cases
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
 .github/workflows/             the three public CI gates, plus the stale-tracker job
+docs/adr/                      architecture decision records — why a thing is the way it is
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
 CONTEXT.md  CLAUDE.md
 ```
@@ -37,8 +38,14 @@ CONTEXT.md  CLAUDE.md
 concern, nothing else.* Names are spelled out in full — `mantleplace`, never `mp`. `max/`,
 `blender/`, `rhino/` are created when they have real content, never as empty placeholders.
 
-Each host folder carries its own `CLAUDE.md` with the toolchain specifics. For Revit, read
-[`revit/CLAUDE.md`](revit/CLAUDE.md).
+**That rule governs this repository and its code** — paths, folders, modules, symbols — **not the
+strings a plugin writes into a user's project.** A host may abbreviate where a user reads the name in
+a cramped host UI; Unreal does, on actor labels, and only there
+([ADR 0003](docs/adr/0003-naming-authority-and-mp-prefix.md)). Do not "fix" one by citing the other.
+
+Each host folder carries its own `CLAUDE.md` with the toolchain specifics: read
+[`unreal/CLAUDE.md`](unreal/CLAUDE.md) or [`revit/CLAUDE.md`](revit/CLAUDE.md) before touching that
+host. The standard for what a host names inside a user's project lives in that host's file.
 
 ## The three rules
 
@@ -155,6 +162,12 @@ even when the arithmetic is correct.
 - **What the plugins do, and how to build them** → [`README.md`](README.md).
 - **Governance** → [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
   [`TRADEMARK.md`](TRADEMARK.md).
+- **Why a decision was taken** → [`docs/adr/`](docs/adr/), numbered and append-only. Only for
+  decisions that are hard to reverse, surprising without the context, and the result of a real
+  trade-off — the obvious choice needs no record, and an ADR is not a design document.
+- **What a host writes into a *user's* project** → that host's own `CLAUDE.md`
+  ([`unreal/`](unreal/CLAUDE.md), [`revit/`](revit/CLAUDE.md)). Not `spec/`, which describes the
+  format, and not here.
 
 ## CI
 
