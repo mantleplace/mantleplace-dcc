@@ -292,11 +292,22 @@ public sealed class VaultClient
         HttpMethod method,
         string url,
         string? jsonBody,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool isRetry = false)
     {
         string accessToken = _session.AccessToken;
         if (accessToken.Length == 0)
         {
+            // No access token, but a stored session to rebuild one from: a restore that has not run
+            // yet, or a token that aged out while the window sat open. Renew rather than telling a
+            // signed-in curator to sign in.
+            if (!isRetry && _session.CanRenewSession
+                && (await _session.RefreshAsync(cancellationToken).ConfigureAwait(false)).Succeeded)
+            {
+                return await SendAsync(method, url, jsonBody, cancellationToken, isRetry: true)
+                    .ConfigureAwait(false);
+            }
+
             return (0, string.Empty, "Sign in to Mantle Place first.");
         }
 
@@ -314,6 +325,26 @@ public sealed class VaultClient
             using HttpResponseMessage response = await Http.SendAsync(request, cancellationToken)
                 .ConfigureAwait(false);
             string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            // An access token that aged out mid-session looks exactly like this. Renew once and send
+            // the request again, rather than handing the curator "sign in first" while a perfectly
+            // good refresh token sits on disk.
+            //
+            // Asking the platform beats guessing from the clock: a pre-flight expiry check is a
+            // guess about a decision the platform is already making, and it cannot see a token
+            // revoked a second after it was checked. A long materialize poll can cross the boundary
+            // mid-flight, which no check before the first request would catch.
+            //
+            // Once only, and only when a renewal is possible. RefreshAsync declines while another
+            // renewal is in flight -- a second caller gets Abandoned and reports the refusal rather
+            // than starting a competing refresh, because two refreshes present the same token and a
+            // rotating platform rejects the second as already-used.
+            if ((int)response.StatusCode == 401 && !isRetry && _session.CanRenewSession
+                && (await _session.RefreshAsync(cancellationToken).ConfigureAwait(false)).Succeeded)
+            {
+                return await SendAsync(method, url, jsonBody, cancellationToken, isRetry: true)
+                    .ConfigureAwait(false);
+            }
 
             return ((int)response.StatusCode, body, null);
         }
