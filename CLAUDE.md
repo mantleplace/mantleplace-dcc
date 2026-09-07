@@ -29,6 +29,7 @@ tools/manifest-conformance/    the contract gate + the shared conformance corpus
 tools/public-hygiene/          the private-reference gate + its cases
 tools/unreal-naming/           the generated-name drift gate + its cases
 docs/adr/                      architecture decision records, numbered and cross-host
+docs/agents/                   how the engineering skills read this repo — tracker, labels, domain
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
 .github/workflows/             the four public CI gates, plus the stale-tracker job
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
@@ -205,3 +206,23 @@ is refused — see [CONTRIBUTING.md](CONTRIBUTING.md).
 build machine. The Unreal compile stays on private infrastructure for exactly this reason, which
 means a green pull request here can still break the engine build — an accepted, published lag
 ([README](README.md#ci-and-what-it-does-not-cover)).
+
+## Agent skills
+
+Configuration the engineering skills read before they act. These files describe how *this* repo is
+worked, not what it contains — the map of what it contains is "Where knowledge lives" above.
+
+### Issue tracker
+
+GitHub issues on `mantleplace/mantleplace-dcc`, via the `gh` CLI; external pull requests are **not**
+a triage surface. See [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
+
+### Triage labels
+
+The five canonical state roles and two categories, each label string equal to its own name. See
+[`docs/agents/triage-labels.md`](docs/agents/triage-labels.md).
+
+### Domain docs
+
+Single-context: one [`CONTEXT.md`](CONTEXT.md) and one [`docs/adr/`](docs/adr/) at the root, both
+cross-host. See [`docs/agents/domain.md`](docs/agents/domain.md).
