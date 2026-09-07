@@ -76,7 +76,9 @@ deleted. So:
 - **Rule ids are fine, links to them are not.** `HPS-40`, `DOC-06` and the like are stable
   identifiers and stay as prose. Do not turn them into paths.
 - **No credentials, ever, including in binary assets.** `.uasset` files serialize property values, so
-  a URL typed into a Blueprint's class defaults is *in the file*. Capture-sensitive values are
+  a URL typed into any asset's defaults is *in the file*, unreadable in review and permanent in
+  history. The auth path no longer has a capture-sensitive value to misplace — every route it uses is
+  a public one compiled in — but anything of that kind is
   hydrated at packaging time from the build's secret store and must never be set in a committed
   asset.
 
@@ -138,8 +140,8 @@ gate: for Revit the gate is the ribbon loading and one real import completing in
 ## Binaries
 
 **There are no Git LFS patterns in this repository, on purpose.** A stranger's first clone must not
-be a multi-hundred-megabyte pull. The binaries that are here — two `.uasset` files, three fonts,
-three PNG icons — total about 1.2 MB and are plain git blobs.
+be a multi-hundred-megabyte pull. The binaries that are here — one `.uasset` file, three fonts,
+three PNG icons — total well under 1.2 MB and are plain git blobs.
 
 **Do not add a new binary type without asking.** Git decides text-vs-binary at `git add` time, and a
 binary committed here is in the history forever; there is no later fix that is not a force-push. If a

@@ -10,16 +10,6 @@ namespace MantlePlace.Revit.Client;
 /// The two public mantle.place routes are compiled in: they are public URLs, they change only with
 /// a deploy, and a plugin that cannot sign in without a config file is a plugin that cannot sign in.
 /// </para>
-/// <para>
-/// <b><see cref="SupabaseUrl"/> and <see cref="SupabaseAnonKey"/> have no default and are not in
-/// this repo.</b> Token REFRESH still goes Supabase-direct — there is no
-/// <c>/api/v1/auth/native/refresh</c> — so the plugin needs the project URL and the public anon key
-/// the way the Unreal plugin needs them in <c>DefaultGame.ini</c>. They are hydrated into
-/// <c>%LOCALAPPDATA%\MantlePlace\config.json</c> at packaging time from the build's secret store,
-/// which is the single source of truth for every value of this kind. Absent, sign-in still works and
-/// refresh
-/// reports a named misconfiguration rather than a bare 401.
-/// </para>
 /// </remarks>
 public sealed class MantlePlaceEndpoints
 {
@@ -44,12 +34,6 @@ public sealed class MantlePlaceEndpoints
 
     /// <summary>The platform API the vault client talks to.</summary>
     public string ApiBaseUrl { get; init; } = "https://mantle.place";
-
-    /// <summary>Supabase project URL, for the direct refresh call. Empty until configured.</summary>
-    public string SupabaseUrl { get; init; } = string.Empty;
-
-    /// <summary>Supabase anon (public) key. A publishable client key — never a service-role key.</summary>
-    public string SupabaseAnonKey { get; init; } = string.Empty;
 
     /// <summary>
     /// Explicit loopback ports to try, in order (<c>HPS-06</c>). <b>Empty by default, which means
@@ -119,8 +103,6 @@ public sealed class MantlePlaceEndpoints
                 TokenEndpointUrl = Override(root, "tokenEndpointUrl", defaults.TokenEndpointUrl),
                 RefreshEndpointUrl = Override(root, "refreshEndpointUrl", defaults.RefreshEndpointUrl),
                 ApiBaseUrl = Override(root, "apiBaseUrl", defaults.ApiBaseUrl),
-                SupabaseUrl = Override(root, "supabaseUrl", defaults.SupabaseUrl),
-                SupabaseAnonKey = Override(root, "supabaseAnonKey", defaults.SupabaseAnonKey),
                 LoopbackPorts = OverridePorts(root, defaults.LoopbackPorts),
                 CallbackPath = Override(root, "callbackPath", defaults.CallbackPath),
                 SignInTimeoutSeconds = OverrideInt(root, "signInTimeoutSeconds", defaults.SignInTimeoutSeconds),
@@ -129,21 +111,6 @@ public sealed class MantlePlaceEndpoints
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             return defaults;
-        }
-    }
-
-    /// <summary>
-    /// The Supabase-direct refresh URL, or <c>null</c> when Supabase is not configured — in which
-    /// case <see cref="RefreshEndpointUrl"/> is used instead.
-    /// </summary>
-    public string? RefreshTokenUrl
-    {
-        get
-        {
-            string? normalised = MantlePlace.Revit.Core.AuthUrls.NormaliseBaseUrl(SupabaseUrl);
-            return normalised is null || SupabaseAnonKey.Length == 0
-                ? null
-                : normalised + "/auth/v1/token?grant_type=refresh_token";
         }
     }
 

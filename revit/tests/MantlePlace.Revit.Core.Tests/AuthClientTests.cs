@@ -116,9 +116,10 @@ internal static class AuthClientTests
                 endpoints.RefreshEndpointUrl,
                 "https://mantle.place/api/v1/auth/native/refresh",
                 "refresh reaches the broker with nothing on disk");
-            run.True(
-                endpoints.RefreshTokenUrl is null,
-                "and the Supabase-direct route stays unconfigured until Supabase is set");
+            run.Equal(
+                endpoints.ApiBaseUrl,
+                "https://mantle.place",
+                "and every route the plugin needs has a working default");
         });
 
         run.Case("a config file overrides, and a broken one does not take the plugin down", () =>
@@ -129,8 +130,7 @@ internal static class AuthClientTests
                 """
                 {
                   "webLoginUrl": "https://dev.example/auth/native",
-                  "supabaseUrl": "https://ref.supabase.co/",
-                  "supabaseAnonKey": "anon",
+                  "refreshEndpointUrl": "https://dev.example/api/v1/auth/native/refresh",
                   "loopbackPorts": [52000, 52001]
                 }
                 """);
@@ -143,9 +143,9 @@ internal static class AuthClientTests
                 "an unmentioned key keeps its default");
             run.Equal(overridden.LoopbackPorts.Count, 2, "ports overridden");
             run.Equal(
-                overridden.RefreshTokenUrl,
-                "https://ref.supabase.co/auth/v1/token?grant_type=refresh_token",
-                "the trailing slash is normalised away rather than doubling");
+                overridden.RefreshEndpointUrl,
+                "https://dev.example/api/v1/auth/native/refresh",
+                "the refresh route points at the same stack as the login route");
 
             // This runs during Revit's add-in load. Throwing there costs the ribbon button and tells
             // the curator nothing.
@@ -155,15 +155,6 @@ internal static class AuthClientTests
                 MantlePlaceEndpoints.Load(broken).WebLoginUrl,
                 "https://mantle.place/auth/native",
                 "a malformed config falls back to the defaults");
-        });
-
-        run.Case("a hostless Supabase URL is refused rather than DNS-failing later", () =>
-        {
-            string path = Path.Combine(sandbox, "hostless.json");
-            File.WriteAllText(path, """{ "supabaseUrl": "https:", "supabaseAnonKey": "anon" }""");
-            run.True(
-                MantlePlaceEndpoints.Load(path).RefreshTokenUrl is null,
-                "'https:' would concatenate into the hostless 'https:/auth/v1/token'");
         });
 
         run.Case("the loopback listener binds before anything opens a browser (HPS-06)", () =>

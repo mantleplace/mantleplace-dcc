@@ -270,19 +270,13 @@ still open.
 **Nothing is required.** Sign-in and token refresh both reach mantle.place on compiled-in routes,
 so a curator installs the add-in and signs in with no file to obtain and nothing to configure.
 
-Refresh used to be Supabase-direct only, which meant a machine without the project URL and anon key
-could sign in once and then lose the session at access-token expiry — reporting a misconfiguration
-naming a file that no packaging step produced. Supabase-direct is still **preferred** when those two
-values are present, so an install that already has them is unaffected:
+Refresh used to be identity-provider-direct only, which meant a machine without the project URL and
+anon key could sign in once and then lose the session at access-token expiry — reporting a
+misconfiguration naming a file that no packaging step produced. That path is gone: refresh goes to
+the broker, always, so the route nearly every install actually uses is also the one exercised in
+development, and there is no packaging-time secret in the auth path at all.
 
-```json
-{
-  "supabaseUrl": "https://<ref>.supabase.co",
-  "supabaseAnonKey": "<anon key>"
-}
-```
-
-Every other key in that file is an override for a compiled default (`webLoginUrl`,
+Every key in that file is an override for a compiled default (`webLoginUrl`,
 `tokenEndpointUrl`, `refreshEndpointUrl`, `apiBaseUrl`, `loopbackPorts`, `callbackPath`,
 `signInTimeoutSeconds`) and is how a dev build points at a non-production stack. `loopbackPorts` is
 the `HPS-06a` override: leave it out and the OS assigns the sign-in callback port, which is what

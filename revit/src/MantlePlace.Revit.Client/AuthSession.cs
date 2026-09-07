@@ -377,27 +377,23 @@ public sealed class AuthSession : IDisposable
             ["code_verifier"] = verifier,
         });
 
-        return await PostGrantAsync(_endpoints.TokenEndpointUrl, body, apiKey: null, cancellationToken)
+        return await PostGrantAsync(_endpoints.TokenEndpointUrl, body, cancellationToken)
             .ConfigureAwait(false);
     }
 
     private async Task<GrantFailure?> RefreshGrantAsync(string refreshToken, CancellationToken cancellationToken)
     {
-        // Supabase-direct when this machine has the project configured -- unchanged behaviour for
-        // every install that already works. Otherwise the web broker, which needs no local config:
-        // sign-in already reaches mantle.place with nothing on disk, and a session that can be
-        // started but not renewed is worse than one that cannot be started at all, because it dies
-        // mid-import with a message about a file the curator was never given.
-        (string url, string? apiKey) = _endpoints.RefreshTokenUrl is { } supabaseUrl
-            ? (supabaseUrl, _endpoints.SupabaseAnonKey)
-            : (_endpoints.RefreshEndpointUrl, (string?)null);
-
+        // The broker, always. There used to be an identity-provider-direct path taken when this
+        // machine had the project URL and anon key configured, which meant the route nearly every
+        // install actually uses was the one exercised least in development. It also put a
+        // packaging-time secret in the auth path for a call the broker makes anyway.
         string body = JsonSerializer.Serialize(new Dictionary<string, string>
         {
             ["refresh_token"] = refreshToken,
         });
 
-        return await PostGrantAsync(url, body, apiKey, cancellationToken).ConfigureAwait(false);
+        return await PostGrantAsync(_endpoints.RefreshEndpointUrl, body, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -406,19 +402,12 @@ public sealed class AuthSession : IDisposable
     private async Task<GrantFailure?> PostGrantAsync(
         string url,
         string body,
-        string? apiKey,
         CancellationToken cancellationToken)
     {
         using HttpRequestMessage request = new(HttpMethod.Post, url)
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
-
-        if (!string.IsNullOrEmpty(apiKey))
-        {
-            request.Headers.TryAddWithoutValidation("apikey", apiKey);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        }
 
         string responseBody;
         int status;
