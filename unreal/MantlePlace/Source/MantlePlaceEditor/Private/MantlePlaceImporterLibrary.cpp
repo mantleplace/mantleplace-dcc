@@ -839,9 +839,15 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			if (MeshActor != nullptr)
 			{
 				DrapeTargets.Add(MeshActor);
-				if (DrapeMic != nullptr)
+				if (DrapeMic != nullptr && !MantlePlaceDrape::AssignMaterial(MeshActor, DrapeMic))
 				{
-					MantlePlaceDrape::AssignMaterial(MeshActor, DrapeMic);
+					// The mesh imported and is in the level; only the imagery is missing. Said in
+					// the import log rather than only in the output log, because "the terrain is
+					// grey" is what the user actually sees and this is the sentence that explains
+					// it. AssignMaterial has already logged which of its refusals this was.
+					Log.Add(TEXT("WARNING: the imagery drape could not be assigned to the terrain "
+								 "mesh — see the output log for which engine property is missing."));
+					bAllRequestedSucceeded = false;
 				}
 				ClaimImportedActor(MeshActor, Identity, MantlePlaceImportNaming::ActorLabel(
 					MantlePlaceImportNaming::EActorKind::Mesh, Identity));
