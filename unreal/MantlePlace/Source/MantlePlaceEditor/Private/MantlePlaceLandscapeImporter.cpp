@@ -15,11 +15,15 @@
 #include "LandscapeInfo.h"
 #include "LandscapeLayerInfoObject.h"
 #include "Materials/MaterialInstanceConstant.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/FileHelper.h"
+#include "Misc/ScopedSlowTask.h"
 #include "Modules/ModuleManager.h"
 #include "RenderingThread.h"  // FlushRenderingCommands
 #include "ShaderCompiler.h"   // GShaderCompilingManager
 #include "UObject/Package.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogMantlePlaceLandscape, Log, All);
 
 namespace MantlePlaceLandscapeImporter
 {
@@ -274,18 +278,63 @@ namespace MantlePlaceLandscapeImporter
 		// re-apply or a level reload was triggering). A prior post-Import PostEditChangeProperty attempt
 		// "didn't take" for the same reason: it recreated render state still before the shaders were
 		// ready. The fix is to finish the shaders first, THEN rebuild + recreate.
+		//
+		// This blocks, and it is the longest thing an import does. It stays INSIDE the import
+		// transaction, and the reasoning above is why: the whole sequence exists because the scene
+		// proxy snapshots component materials at construction, so the finish, the rebuild and the
+		// flush have to happen between Import() building those components and control returning to
+		// the importer. Moving any of the three outside the transaction moves it after the actor
+		// operations that follow, which is the ordering the "didn't take" attempt already
+		// demonstrated does not work. So the second option in the report is taken instead: it is
+		// never a silent freeze.
+		//
+		// The progress is not decoration. There is no measured share of import time to tune against
+		// — that needs a real bundle in a real editor — and the instruction was not to tune blind.
+		// These log lines ARE the measurement: the next import on a machine that has a bundle prints
+		// how long each of the three steps took, and whoever has those numbers can decide whether
+		// anything further is worth doing. Until then the editor says what it is waiting for.
 		if (DrapeMaterial != nullptr)
 		{
+			FScopedSlowTask ShaderTask(3.0f, NSLOCTEXT("MantlePlaceImporter", "CompilingLandscapeShaders",
+				"Mantle Place: compiling landscape material shaders..."));
+			ShaderTask.MakeDialog();
+
 			// 1) Block until the landscape combination shaders kicked off by Import() have compiled.
+			ShaderTask.EnterProgressFrame(1.0f, NSLOCTEXT("MantlePlaceImporter", "FinishingShaderCompilation",
+				"Mantle Place: waiting for landscape shaders to finish compiling..."));
+			const double CompileStart = FPlatformTime::Seconds();
 			if (GShaderCompilingManager != nullptr)
 			{
+				UE_LOG(LogMantlePlaceLandscape, Log,
+					TEXT("Waiting for the landscape's combination shaders to finish compiling before "
+						 "rebuilding its material instances. The editor is blocked until they do; the "
+						 "line that follows says for how long."));
 				GShaderCompilingManager->FinishAllCompilation();
 			}
+			const double CompileSeconds = FPlatformTime::Seconds() - CompileStart;
+
 			// 2) Rebuild the combination + per-component material instances from a clean slate (true
 			//    invalidates the cached combination map) and recreate render state for every component.
+			ShaderTask.EnterProgressFrame(1.0f, NSLOCTEXT("MantlePlaceImporter", "RebuildingMaterialInstances",
+				"Mantle Place: rebuilding landscape material instances..."));
+			const double RebuildStart = FPlatformTime::Seconds();
 			Landscape->UpdateAllComponentMaterialInstances(/*bInInvalidateCombinationMaterials*/ true);
+			const double RebuildSeconds = FPlatformTime::Seconds() - RebuildStart;
+
 			// 3) Let the render thread apply the recreated proxies before we hand control back.
+			ShaderTask.EnterProgressFrame(1.0f, NSLOCTEXT("MantlePlaceImporter", "FlushingRenderCommands",
+				"Mantle Place: applying the drape..."));
+			const double FlushStart = FPlatformTime::Seconds();
 			FlushRenderingCommands();
+			const double FlushSeconds = FPlatformTime::Seconds() - FlushStart;
+
+			// One line, all three numbers, so the share of import time this accounts for is a fact
+			// somebody can read off a log rather than a thing to guess at.
+			UE_LOG(LogMantlePlaceLandscape, Log,
+				TEXT("Landscape drape ready: shader compilation %.2fs, material instance rebuild %.2fs, "
+					 "render flush %.2fs (%.2fs total)."),
+				CompileSeconds, RebuildSeconds, FlushSeconds,
+				CompileSeconds + RebuildSeconds + FlushSeconds);
 		}
 
 		// Not labelled here. Every actor an import creates is labelled, tagged and filed into its

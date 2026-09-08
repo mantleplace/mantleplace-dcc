@@ -40,17 +40,30 @@ class MANTLEPLACEEDITOR_API UMantlePlaceVaultImportOrchestrator : public UObject
 	GENERATED_BODY()
 
 public:
-	/** Seconds between materialize status polls. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Mantle Place|Vault")
-	float MaterializePollIntervalSeconds = 3.0f;
+	// The three poll numbers below are project settings now (Project Settings -> Plugins -> Mantle
+	// Place), not literals compiled into this class. They stay here as PER-ORCHESTRATOR OVERRIDES so
+	// a Blueprint or a test that already set one keeps winning; zero means "unset — use the project
+	// setting", which is what an untouched orchestrator now has. Read them through the three
+	// Resolve* accessors below rather than directly: those are what apply the fallback.
 
-	/** Give up after this many polls (interval x this ~= the materialize timeout). */
+	/** Seconds between materialize status polls. 0 = use the project setting. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Mantle Place|Vault")
-	int32 MaterializeMaxPolls = 200;
+	float MaterializePollIntervalSeconds = 0.0f;
 
-	/** Tolerate this many consecutive failed status polls (transient network) before failing. */
+	/** Give up after this many polls (interval x this ~= the materialize timeout). 0 = project setting. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Mantle Place|Vault")
-	int32 MaxConsecutivePollFailures = 5;
+	int32 MaterializeMaxPolls = 0;
+
+	/** Tolerate this many consecutive failed status polls before failing. 0 = project setting.
+	 *  A deliberate "fail on the first failure" is expressed by the project setting, not here —
+	 *  this field cannot distinguish that from "unset", and the project setting can. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Mantle Place|Vault")
+	int32 MaxConsecutivePollFailures = 0;
+
+	/** This orchestrator's override if it has one, the project setting otherwise. */
+	float ResolvePollIntervalSeconds() const;
+	int32 ResolveMaxPolls() const;
+	int32 ResolveMaxConsecutivePollFailures() const;
 
 	/** Fired when a vault list finishes (user refresh or the internal post-materialize re-list). */
 	UPROPERTY(BlueprintAssignable, Category = "Mantle Place|Vault")

@@ -20,6 +20,8 @@
 #include "UObject/UnrealType.h"
 #include "UObject/UObjectGlobals.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogMantlePlaceDrape, Log, All);
+
 namespace MantlePlaceDrape
 {
 	// The drape material template (authored in-editor). Loaded at runtime; a missing template
@@ -136,11 +138,19 @@ namespace MantlePlaceDrape
 		return Mic;
 	}
 
-	void AssignMaterial(AActor* Target, UMaterialInstanceConstant* Mic)
+	const TCHAR* const LandscapeMaterialPropertyName = TEXT("LandscapeMaterial");
+
+	bool IsLandscapeMaterialPropertyResolvable()
+	{
+		return FindFProperty<FProperty>(
+			ALandscapeProxy::StaticClass(), FName(LandscapeMaterialPropertyName)) != nullptr;
+	}
+
+	bool AssignMaterial(AActor* Target, UMaterialInstanceConstant* Mic)
 	{
 		if (Target == nullptr || Mic == nullptr)
 		{
-			return;
+			return false;
 		}
 
 		if (ALandscapeProxy* Proxy = Cast<ALandscapeProxy>(Target))
@@ -156,16 +166,52 @@ namespace MantlePlaceDrape
 			// ALandscape::Import (see MantlePlaceLandscapeImporter::Import) — assigning it on the
 			// import frame does not take at render time. The vault importer therefore drapes the
 			// landscape at creation and only uses this path for static meshes.
+			//
+			// Reflection is invisible to the compiler, so an engine rename cannot be caught at build
+			// time. It used to be a hard `check`, which turned that rename into a crash in a user's
+			// editor session, mid-import, with their content half-created. Fail closed instead: no
+			// drape, one error line naming the property and the engine version this was verified
+			// against, and an import that still completes. IsLandscapeMaterialPropertyResolvable is
+			// the same lookup asked ahead of time, so the automation suite goes red first.
 			FProperty* const MaterialProperty =
-				FindFieldChecked<FProperty>(Proxy->GetClass(), FName(TEXT("LandscapeMaterial")));
+				FindFProperty<FProperty>(Proxy->GetClass(), FName(LandscapeMaterialPropertyName));
+			if (MaterialProperty == nullptr)
+			{
+				UE_LOG(LogMantlePlaceDrape, Error,
+					TEXT("Cannot drape landscape \"%s\": this engine build exposes no \"%s\" property on "
+						 "%s. The drape material was not assigned; the geometry is otherwise unaffected. "
+						 "This plugin is verified against UE 5.8 — if the engine has renamed the "
+						 "property, MantlePlaceDrape::LandscapeMaterialPropertyName is the one place to "
+						 "change."),
+					*Target->GetName(), LandscapeMaterialPropertyName, *Proxy->GetClass()->GetName());
+				return false;
+			}
 			Proxy->PreEditChange(MaterialProperty);
 			Proxy->LandscapeMaterial = Mic;
 			FPropertyChangedEvent MaterialChangedEvent(MaterialProperty);
 			Proxy->PostEditChangeProperty(MaterialChangedEvent);
+			return true;
 		}
-		else if (AStaticMeshActor* MeshActor = Cast<AStaticMeshActor>(Target))
+
+		if (AStaticMeshActor* MeshActor = Cast<AStaticMeshActor>(Target))
 		{
-			MeshActor->GetStaticMeshComponent()->SetMaterial(0, Mic);
+			UStaticMeshComponent* const Component = MeshActor->GetStaticMeshComponent();
+			if (Component == nullptr)
+			{
+				UE_LOG(LogMantlePlaceDrape, Error,
+					TEXT("Cannot drape \"%s\": the static mesh actor has no mesh component."),
+					*Target->GetName());
+				return false;
+			}
+			Component->SetMaterial(0, Mic);
+			return true;
 		}
+
+		// Every actor kind this importer spawns is handled above. A new one arriving here is a gap
+		// in this function, not a bundle problem, so it says so rather than returning quietly.
+		UE_LOG(LogMantlePlaceDrape, Error,
+			TEXT("Cannot drape \"%s\": %s is not an actor type this importer knows how to drape."),
+			*Target->GetName(), *Target->GetClass()->GetName());
+		return false;
 	}
 }

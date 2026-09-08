@@ -51,8 +51,33 @@ struct FMantlePlaceWeightPlane
  *    504 * 2.8373 = 1430 m wide, which is exactly the 143 columns of its 143x142 weight raster at
  *    10 m. So sampling is a corner-to-corner nearest neighbour over normalised grid coordinates —
  *    no extent arithmetic (the layers publish none), and no assumption that the grids share a
- *    resolution. Nearest neighbour, not bilinear: these are categorical coverage fractions, and
- *    interpolating across a class boundary invents a blend the source never claimed.
+ *    resolution.
+ *
+ * **Nearest neighbour, not bilinear, and this is a decision rather than an omission.** It was
+ * revisited directly — would continuous weights read better resampled bilinearly, keeping
+ * categorical ones nearest? — and the answer is no, for a reason that is about the contract rather
+ * than about image quality:
+ *
+ *  - **Nothing in the manifest says which a band is.** `ue_ready[].value_mapping` is keyed by
+ *    encoding, and the one these arrive in — `png-8bit-rgba` — carries `bands` and nothing else: the
+ *    four channel names, in order. There is no continuity flag, no units, no class list. The
+ *    encodings that DO carry that meaning exist (`png-8bit-indexed` publishes its class codes,
+ *    `png-16bit-grayscale` its range and units), so the contract's silence here is a silence, not an
+ *    oversight to read through.
+ *  - **Deciding it locally is deriving.** Classifying a band as continuous from its name, its
+ *    histogram, or a guess about what the platform's material library means is exactly the
+ *    "computes a value locally" that the boundary rule refuses, and it would be refused at review
+ *    even if the classification were right — see the root CLAUDE.md. A blend applied to a band that
+ *    turns out to be categorical invents a class the source never claimed, silently, in a weightmap
+ *    a user then paints against.
+ *  - **There is no measurement to justify it.** The instruction was not to tune blind, and the only
+ *    honest measurement — the same AOI resampled both ways, looked at in the editor — needs a real
+ *    bundle and a running editor.
+ *
+ * What would reopen it: the manifest publishing the distinction. If a future `value_mapping` for
+ * this encoding says a band is continuous, then applying bilinear to that band is *applying* a
+ * published value rather than deriving one, and `SampleIndex` is the single seam where it goes —
+ * everything above it is already per-band.
  */
 struct FMantlePlaceLandscapeWeightsLogic
 {
@@ -86,6 +111,9 @@ struct FMantlePlaceLandscapeWeightsLogic
 	 * Nearest-neighbour source index for one axis: post `Post` of `PostCount` maps to a pixel of
 	 * `PixelCount` covering the same span, corner to corner. Post 0 lands on pixel 0 and the last
 	 * post on the last pixel, whichever way the two counts differ.
+	 *
+	 * This is the one seam a per-band bilinear would go through, if the contract ever publishes
+	 * which bands are continuous. See the note on the struct for why it does not today.
 	 */
 	static int32 SampleIndex(int32 Post, int32 PostCount, int32 PixelCount);
 };

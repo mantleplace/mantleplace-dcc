@@ -125,6 +125,23 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 		// A single post has nowhere to interpolate to; a zero-width raster has nothing to read.
 		TestEqual(TEXT("one post"), FMantlePlaceLandscapeWeightsLogic::SampleIndex(0, 1, 143), 0);
 		TestEqual(TEXT("no pixels"), FMantlePlaceLandscapeWeightsLogic::SampleIndex(2, 3, 0), 0);
+
+		// Nearest neighbour, asserted as such. A post that falls between two source pixels takes ONE
+		// of them, never a blend of both: 11 posts over 2 pixels puts posts 0-4 on pixel 0 and 5-10
+		// on pixel 1, with nothing in between and no third value anywhere.
+		//
+		// This is the decision recorded on FMantlePlaceLandscapeWeightsLogic, asserted so that a
+		// change to bilinear cannot land as a quiet edit to the arithmetic. The manifest publishes no
+		// flag saying which bands are continuous, and deciding it here would be deriving a value the
+		// contract did not publish; if it ever does publish one, this is the assertion to come back
+		// to, and it should then be a per-band choice rather than a change to every band at once.
+		for (int32 Post = 0; Post <= 10; ++Post)
+		{
+			const int32 Index = FMantlePlaceLandscapeWeightsLogic::SampleIndex(Post, 11, 2);
+			TestEqual(
+				FString::Printf(TEXT("post %d lands on exactly one source pixel"), Post),
+				Index, Post < 5 ? 0 : 1);
+		}
 	}
 
 	// --- The real shape: a 2x2 raster resampled onto a 3x3 Landscape, TRANSPOSED --------------
