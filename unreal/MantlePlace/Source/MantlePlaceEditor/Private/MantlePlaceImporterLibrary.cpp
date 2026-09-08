@@ -14,6 +14,7 @@
 #include "MantlePlaceLocalTileServer.h"
 #include "MantlePlaceMeshImporter.h"
 #include "MantlePlaceRoadSplinesLogic.h"
+#include "MantlePlaceScopedRestore.h"
 #include "MantlePlaceSha256.h"
 #include "MantlePlaceTreePointsLogic.h"
 #include "MantlePlaceLandcoverTypes.h" // runtime: FMantlePlaceTreePointRow
@@ -521,10 +522,19 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 
 	// These are freshly generated assets, not yet in source control. Suppress the editor's
 	// auto-checkout-on-modify for the duration of the import so renames/edits don't spam the
-	// connected SCC provider with checkouts of files that aren't under source control. Runtime-only
-	// override; reset before returning.
+	// connected SCC provider with checkouts of files that aren't under source control.
+	//
+	// The override is EDITOR-WIDE and outlives this function, so restoring it is not optional and is
+	// not this function's to forget. It used to be a Set here and a Reset before each return, which
+	// is correct only for the exit paths that existed when it was written -- everything below this
+	// line returns from several places, and the next one added would have leaked the override into
+	// the rest of the session with nothing to notice it. The guard makes "restored on every exit
+	// path" a property of the scope instead of a thing to remember; see FMantlePlaceScopedRestore
+	// and MantlePlace.Import.ScopedRestore.
 	UEditorLoadingSavingSettings* LoadSaveSettings = GetMutableDefault<UEditorLoadingSavingSettings>();
 	LoadSaveSettings->SetAutomaticallyCheckoutOnAssetModificationOverride(false);
+	const FMantlePlaceScopedRestore RestoreAutoCheckout(
+		[LoadSaveSettings] { LoadSaveSettings->ResetAutomaticallyCheckoutOnAssetModificationOverride(); });
 
 	// Idempotent re-import: wipe any prior content for THIS order so reimported assets land on
 	// clean names (Interchange re-creates source-named assets that the importer then renames).
@@ -547,10 +557,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		if (!Refusal.IsEmpty())
 		{
 			// Before the transaction opens and before anything is created, so a refusal changes
-			// nothing at all.
-			// Restore the editor's own setting rather than forcing it on: this path changes
-			// nothing, so it must leave nothing changed either.
-			LoadSaveSettings->ResetAutomaticallyCheckoutOnAssetModificationOverride();
+			// nothing at all -- including the auto-checkout override, which RestoreAutoCheckout
+			// puts back on the way out of this return.
 			Result.Message = Refusal;
 			return Result;
 		}
@@ -1034,8 +1042,6 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		}
 		// else: a drape was requested but the material failed to build — the error was logged above.
 	}
-
-	LoadSaveSettings->ResetAutomaticallyCheckoutOnAssetModificationOverride();
 
 	Result.bSuccess = bAllRequestedSucceeded && Result.CreatedActors.Num() > 0;
 	Result.Message = FString::Join(Log, TEXT("\n"));
