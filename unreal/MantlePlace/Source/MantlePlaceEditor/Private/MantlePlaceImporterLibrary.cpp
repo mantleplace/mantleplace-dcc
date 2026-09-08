@@ -3,6 +3,7 @@
 #include "MantlePlaceImporterLibrary.h"
 
 #include "MantlePlaceCoverageRasterLogic.h"
+#include "MantlePlaceCesiumAvailabilityLogic.h"
 #include "MantlePlaceCoverageRasters.h"
 #include "MantlePlaceDrape.h"
 #include "MantlePlaceImportManifest.h"
@@ -15,6 +16,7 @@
 #include "MantlePlaceMeshImporter.h"
 #include "MantlePlaceRoadSplinesLogic.h"
 #include "MantlePlaceScopedRestore.h"
+#include "MantlePlaceStreamStaging.h"
 #include "MantlePlaceSha256.h"
 #include "MantlePlaceTreePointsLogic.h"
 #include "MantlePlaceLandcoverTypes.h" // runtime: FMantlePlaceTreePointRow
@@ -155,93 +157,94 @@ namespace
 	}
 
 	/**
-	 * Rewrite a quantized-mesh layer.json `available` array to list exactly the tiles present on disk.
+	 * Correct a quantized-mesh layer.json `available` array to list exactly the tiles present on disk,
+	 * and say in the log whether it needed correcting at all.
 	 *
-	 * ETL bundles ship a layer.json whose low-zoom `available` rectangles declare the whole-world pyramid
-	 * (e.g. level 1 claims x[0..3] y[0..1] = 8 tiles) while only the single AOI-ancestor tile per level is
-	 * actually written. Cesium for Unreal trusts `available`, requests the declared-but-absent siblings,
-	 * gets 404s, and aborts with "Errors loading quantized mesh terrain" — nothing renders. The web
-	 * app compensates by rewriting `available`; this plugin's self-contained local server must do the
-	 * same. We emit one inclusive 1x1 rectangle per present tile, grouped by zoom. The present tiles form a
-	 * connected descent chain to the AOI (every tile's parent exists), so refinement still works. This is
-	 * a workaround for an upstream packaging defect (the bundle's own layer.json is wrong) — report it
-	 * upstream rather than treating this as the final home of the fix. Best-effort: on any failure the original
-	 * file is left untouched and streaming proceeds (Cesium will 404 the siblings as before).
+	 * ETL bundles ship a layer.json whose low-zoom `available` rectangles declare the whole-world
+	 * pyramid (e.g. level 1 claims x[0..3] y[0..1] = 8 tiles) while only the single AOI-ancestor tile
+	 * per level is actually written. Cesium for Unreal trusts `available`, requests the
+	 * declared-but-absent siblings, gets 404s, and aborts with "Errors loading quantized mesh terrain"
+	 * — nothing renders. The web app compensates by rewriting `available`; this plugin's
+	 * self-contained local server must do the same. We emit one inclusive 1x1 rectangle per present
+	 * tile, grouped by zoom. The present tiles form a connected descent chain to the AOI (every tile's
+	 * parent exists), so refinement still works.
+	 *
+	 * This is a workaround for an upstream packaging defect — the bundle's own layer.json is wrong —
+	 * and upstream is the fix's home. Which raises the question this function now answers rather than
+	 * assumes: **is the defect still there?** It cannot be answered from the source, only from a
+	 * bundle, so the answer is logged on every stream. A bundle whose availability already matches its
+	 * tiles is written out loud as such and nothing is rewritten: that log line is the evidence this
+	 * code can be deleted. A bundle that does not match reports the two counts, which is the evidence
+	 * an upstream report needs — "declares 8, ships 1" is a bug report, "availability is wrong" is not.
+	 *
+	 * Best-effort in both directions: on any failure the original file is left untouched and streaming
+	 * proceeds (Cesium will 404 the siblings as before). Returns true if the file was rewritten.
 	 */
-	void RewriteCesiumTerrainAvailability(const FString& LayerJsonPath)
+	bool RewriteCesiumTerrainAvailability(const FString& LayerJsonPath, const FString& JobId)
 	{
 		FString JsonText;
 		if (!FFileHelper::LoadFileToString(JsonText, *LayerJsonPath))
 		{
-			return;
+			return false;
 		}
 		TSharedPtr<FJsonObject> Root;
 		const TSharedRef<TJsonReader<>> JsonReader = TJsonReaderFactory<>::Create(JsonText);
 		if (!FJsonSerializer::Deserialize(JsonReader, Root) || !Root.IsValid())
 		{
-			return;
+			return false;
 		}
 
-		// Collect present tiles: <TerrainDir>/{z}/{x}/{y}.terrain. Derive z/x/y from the path components
-		// (robust to separator style) rather than string-relativizing.
+		// Collect present tiles: <TerrainDir>/{z}/{x}/{y}.terrain.
 		const FString TerrainDir = FPaths::GetPath(LayerJsonPath);
 		TArray<FString> TileFiles;
 		IFileManager::Get().FindFilesRecursive(TileFiles, *TerrainDir, TEXT("*.terrain"), /*Files*/ true, /*Dirs*/ false);
-		if (TileFiles.Num() == 0)
-		{
-			return;
-		}
 
-		TMap<int32, TArray<TTuple<int32, int32>>> TilesByZoom;
-		int32 MaxZoom = -1;
+		TArray<FMantlePlaceCesiumTile> Tiles;
+		Tiles.Reserve(TileFiles.Num());
 		for (const FString& TilePath : TileFiles)
 		{
-			const FString YStr = FPaths::GetBaseFilename(TilePath);          // {y}
-			const FString XDir = FPaths::GetPath(TilePath);                  // .../{z}/{x}
-			const FString XStr = FPaths::GetCleanFilename(XDir);             // {x}
-			const FString ZStr = FPaths::GetCleanFilename(FPaths::GetPath(XDir)); // {z}
-			if (!ZStr.IsNumeric() || !XStr.IsNumeric() || !YStr.IsNumeric())
+			FMantlePlaceCesiumTile Tile;
+			if (FMantlePlaceCesiumAvailabilityLogic::ParseTilePath(TilePath, Tile))
 			{
-				continue;
+				Tiles.Add(Tile);
 			}
-			const int32 Z = FCString::Atoi(*ZStr);
-			const int32 X = FCString::Atoi(*XStr);
-			const int32 Y = FCString::Atoi(*YStr);
-			TilesByZoom.FindOrAdd(Z).Add(MakeTuple(X, Y));
-			MaxZoom = FMath::Max(MaxZoom, Z);
 		}
-		if (MaxZoom < 0)
+		if (Tiles.Num() == 0)
 		{
-			return;
+			return false;
 		}
 
-		TArray<TSharedPtr<FJsonValue>> Available;
-		Available.Reserve(MaxZoom + 1);
-		for (int32 Z = 0; Z <= MaxZoom; ++Z)
+		int64 DeclaredTileCount = 0;
+		if (FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(Root, Tiles, DeclaredTileCount))
 		{
-			TArray<TSharedPtr<FJsonValue>> LevelRects;
-			if (const TArray<TTuple<int32, int32>>* Level = TilesByZoom.Find(Z))
-			{
-				for (const TTuple<int32, int32>& XY : *Level)
-				{
-					const TSharedPtr<FJsonObject> Rect = MakeShared<FJsonObject>();
-					Rect->SetNumberField(TEXT("startX"), XY.Get<0>());
-					Rect->SetNumberField(TEXT("startY"), XY.Get<1>());
-					Rect->SetNumberField(TEXT("endX"), XY.Get<0>());
-					Rect->SetNumberField(TEXT("endY"), XY.Get<1>());
-					LevelRects.Add(MakeShared<FJsonValueObject>(Rect));
-				}
-			}
-			Available.Add(MakeShared<FJsonValueArray>(LevelRects));
+			// The signal that this workaround has outlived the defect. If it appears for every bundle
+			// a user streams, delete this function and its call — that is what item 3 of the
+			// hardening batch asked to be verified, and this is the verification.
+			UE_LOG(LogMantlePlaceImport, Log,
+				TEXT("Cesium terrain availability for job %s already lists exactly the %d tiles "
+					 "present; no rewrite was needed. If this holds for every bundle, the "
+					 "availability workaround can be removed."),
+				*JobId, Tiles.Num());
+			return false;
 		}
-		Root->SetArrayField(TEXT("available"), Available);
+
+		// The upstream evidence, with the numbers in it.
+		UE_LOG(LogMantlePlaceImport, Warning,
+			TEXT("Cesium terrain layer.json for job %s declares %lld tiles but the bundle ships %d. "
+				 "Rewriting availability so Cesium does not 404 its way to a load error. This is an "
+				 "upstream packaging defect in the bundle, not an import fault — report it with this "
+				 "line."),
+			*JobId, DeclaredTileCount, Tiles.Num());
+
+		Root->SetArrayField(TEXT("available"), FMantlePlaceCesiumAvailabilityLogic::BuildAvailability(Tiles));
 
 		FString OutText;
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutText);
-		if (FJsonSerializer::Serialize(Root.ToSharedRef(), Writer))
+		if (!FJsonSerializer::Serialize(Root.ToSharedRef(), Writer))
 		{
-			FFileHelper::SaveStringToFile(OutText, *LayerJsonPath);
+			return false;
 		}
+		return FFileHelper::SaveStringToFile(OutText, *LayerJsonPath);
 	}
 
 	// The local Cesium stream server outlives StreamBundleIntoCesium so Cesium keeps fetching tiles.
@@ -1162,23 +1165,76 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 		return Info;
 	}
 
-	// Lay the bundle's Cesium-ready artifacts on disk (the per-bundle temp dir the importer already uses)
-	// for the local tile server to host.
 	// Keyed on the identity, not the raw job id: a directory name out of unvalidated bundle JSON.
-	const FString TempDir = FPaths::ProjectSavedDir() / TEXT("MantlePlace") / TEXT("ImportTmp")
-		/ MantlePlaceImportNaming::ShortIdentity(MantlePlaceImportNaming::ResolveIdentity(
-			Manifest.OrderId, MantlePlaceSha256::HexDigest(ManifestBytes)));
-	PlatformFile.CreateDirectoryTree(*TempDir);
-	const TArray<FString> Prefixes = { TerrainPrefix, TEXT("Imagery/") };
-	if (ExtractSubtree(Reader, Prefixes, TempDir) == 0)
+	// Refused when neither the order nor the manifest digest yields a usable one, for the same reason
+	// the native import refuses it — this path creates and clears a directory named by it.
+	const FString ManifestSha256 = MantlePlaceSha256::HexDigest(ManifestBytes);
+	const FString Identity =
+		MantlePlaceImportNaming::ResolveIdentity(Manifest.OrderId, ManifestSha256);
+	if (!MantlePlaceImportNaming::IsUsableIdentity(Identity))
 	{
-		Info.Message = FString::Printf(TEXT("Bundle declares Cesium terrain but no %s entries were extracted."), *TerrainPrefix);
+		Info.Message = TEXT("Bundle carries neither a usable order id nor a readable manifest digest, "
+			"so there is no safe name for its staging directory. Nothing was extracted.");
 		return Info;
 	}
 
-	// Correct the bundle's over-declared `available` so Cesium only requests tiles that exist (see
-	// RewriteCesiumTerrainAvailability). Without this the tileset 404s its way to a load error.
-	RewriteCesiumTerrainAvailability(FPaths::Combine(TempDir, Manifest.CesiumTerrainPath));
+	// Lay the bundle's Cesium-ready artifacts on disk for the local tile server to host — once per
+	// bundle rather than once per stream. Extracting every tile and rescanning the whole tile tree on
+	// each "Stream into Cesium" of the SAME bundle is work with no output, and the rescan is the
+	// expensive half. The record beside the directory says which bundle is staged there; anything
+	// that does not match exactly re-stages, because this directory is scratch and rebuilding it
+	// costs an extraction while serving a stale one serves the wrong terrain.
+	const FString StageDir = MantlePlaceStreamStaging::StagingDir(Identity);
+	const FString TerrainRootOnDisk = FPaths::Combine(StageDir, Manifest.CesiumTerrainPath);
+
+	MantlePlaceStreamStaging::FRecord Incoming;
+	Incoming.Identity = Identity;
+	Incoming.ManifestSha256 = ManifestSha256;
+	Incoming.TerrainPrefix = TerrainPrefix;
+	Incoming.CesiumTerrainPath = Manifest.CesiumTerrainPath;
+	Incoming.SchemeVersion = MantlePlaceStreamStaging::CurrentSchemeVersion;
+
+	MantlePlaceStreamStaging::FRecord Staged;
+	const bool bHasRecord = MantlePlaceStreamStaging::Read(Identity, Staged);
+	const MantlePlaceStreamStaging::EVerdict Verdict = MantlePlaceStreamStaging::Classify(
+		bHasRecord, Staged, Incoming, PlatformFile.FileExists(*TerrainRootOnDisk));
+
+	if (Verdict == MantlePlaceStreamStaging::EVerdict::Stage)
+	{
+		// Cleared, not merged into. A rebuild of the same order lands in the same directory, and the
+		// availability rewrite declares every .terrain file it finds beneath it — so a previous
+		// build's leftover tiles would be declared available and served as this build's.
+		PlatformFile.DeleteDirectoryRecursively(*StageDir);
+		PlatformFile.CreateDirectoryTree(*StageDir);
+
+		const TArray<FString> Prefixes = { TerrainPrefix, TEXT("Imagery/") };
+		Incoming.EntryCount = ExtractSubtree(Reader, Prefixes, StageDir);
+		if (Incoming.EntryCount == 0)
+		{
+			Info.Message = FString::Printf(TEXT("Bundle declares Cesium terrain but no %s entries were extracted."), *TerrainPrefix);
+			return Info;
+		}
+
+		// Correct the bundle's over-declared `available` so Cesium only requests tiles that exist,
+		// and log whether it needed correcting — see RewriteCesiumTerrainAvailability.
+		RewriteCesiumTerrainAvailability(TerrainRootOnDisk, Manifest.JobId);
+
+		if (!MantlePlaceStreamStaging::Write(Incoming))
+		{
+			// Non-fatal, and said out loud rather than swallowed: this stream is complete and
+			// correct, and the only cost is that the next stream of this bundle stages it again.
+			UE_LOG(LogMantlePlaceImport, Warning,
+				TEXT("Streaming staged correctly but its record could not be written to %s; the next "
+					 "stream of this bundle will extract it again."),
+				*MantlePlaceStreamStaging::RecordPath(Identity));
+		}
+	}
+	else
+	{
+		UE_LOG(LogMantlePlaceImport, Log,
+			TEXT("Reusing the %d entries already staged for this bundle at %s."),
+			Staged.EntryCount, *StageDir);
+	}
 
 	// Start (or restart) the loopback server rooted at the extracted bundle dir. Try a small port range
 	// so a busy default port doesn't block streaming.
@@ -1189,7 +1245,7 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 	FString BaseUrl, ServerError;
 	for (uint32 Port = 8088; Port <= 8095 && BaseUrl.IsEmpty(); ++Port)
 	{
-		BaseUrl = GBundleStreamServer->Start(TempDir, Port, ServerError);
+		BaseUrl = GBundleStreamServer->Start(StageDir, Port, ServerError);
 	}
 	if (BaseUrl.IsEmpty())
 	{
