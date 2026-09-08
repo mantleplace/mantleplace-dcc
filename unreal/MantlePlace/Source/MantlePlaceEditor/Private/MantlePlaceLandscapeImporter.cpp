@@ -99,10 +99,12 @@ namespace MantlePlaceLandscapeImporter
 	}
 
 	/**
-	 * One saved ULandscapeLayerInfoObject per material. Nothing in this plugin created one before, so
-	 * this is where a weight plane becomes something the engine (and the Landscape editor, and PCG's
-	 * layer sampling) can address by name. Idempotent by load-first, like the drape MIC: a re-import
-	 * of the same bundle reuses the asset rather than colliding on the object name.
+	 * One ULandscapeLayerInfoObject per material, created in its own package and marked dirty --
+	 * never saved, like everything else this importer generates. Nothing in this plugin created one
+	 * before, so this is where a weight plane becomes something the engine (and the Landscape
+	 * editor, and PCG's layer sampling) can address by name. Idempotent by load-first, like the
+	 * drape MIC: a re-import of the same bundle reuses the asset rather than colliding on the
+	 * object name.
 	 */
 	static ULandscapeLayerInfoObject* GetOrCreateLayerInfo(
 		const FString& Material, const FString& DestPackagePath)

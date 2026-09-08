@@ -185,8 +185,8 @@ top of the first.
   locally before you claim it works, and be suspicious of a type widening, which compiles at some
   call sites and silently rots others.
 - **Nothing the importer generates is ever saved.** There is no `SavePackage` call in the plugin;
-  every import task sets `bSave = false` and generated packages are only marked dirty. A doc comment
-  or two says "saved" and is wrong. A user who closes without saving loses the import.
+  every import task sets `bSave = false` and generated packages are only marked dirty. A user who
+  closes without saving loses the import.
 - **The identity is not the job id, and this is the mistake to expect.** `FMantlePlaceVaultManifest`
   offers `JobId` first and it reads like the obvious key. It changes on every rebuild. Anything
   keyed on it duplicates a user's content instead of replacing it, silently, and the symptom shows
