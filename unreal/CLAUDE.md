@@ -51,9 +51,9 @@ MantlePlace/Content/Python/              the Cesium streaming helper. Spawns act
 
 **Put the decision in a `*Logic` translation unit.** That is the pattern already here —
 `MantlePlaceLandscapeWeightsLogic`, `MantlePlaceCoverageRasterLogic`, `MantlePlaceRoadSplinesLogic`,
-`MantlePlaceTreePointsLogic`, `MantlePlaceVaultLogic`, `MantlePlaceAuthLogic`,
-`MantlePlaceBundleCacheLogic` — and each one has a headless test beside it. The importer *executes*;
-the Logic unit *decides*. The test question is the design question: if asserting it needs a running
+`MantlePlaceTreePointsLogic`, `MantlePlaceDrapeAlignmentLogic`, `MantlePlaceIntegrityLogic`,
+`MantlePlaceVaultLogic`, `MantlePlaceAuthLogic`, `MantlePlaceBundleCacheLogic` — and each one has a
+headless test beside it. The importer *executes*; the Logic unit *decides*. The test question is the design question: if asserting it needs a running
 editor and a real bundle, it is in the wrong translation unit.
 
 This matters more here than it would elsewhere, because **CI never compiles this plugin** (below).

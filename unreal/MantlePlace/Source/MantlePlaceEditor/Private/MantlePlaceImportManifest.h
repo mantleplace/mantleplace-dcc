@@ -112,6 +112,15 @@ struct FMantlePlaceVaultManifest
 	double GroundOrthometricHM = 0.0; // elevation at the centroid (= mesh ground z=0 reference)
 	FString PlanetShape;            // contract: "Flat" only; Parse rejects any other value
 
+	// `elevation.dem.bounds_target_crs` is DECLINED by this host, not overlooked — see
+	// docs/adr/0006-unreal-declines-elevation-bounds-target-crs.md. It is the delivered DEM grid's
+	// bounds in the DELIVERY frame, host-neutral and addressed to nobody in particular, while this
+	// host is already given every ground extent it applies inside `hosts.unreal`: the drape's in
+	// `imagery_drape.extent` and the heightmap's in `heightmap.landscape_transform`. Reading it
+	// would give placement two sources of truth and this host no authority to reconcile them
+	// (HPS-33). There is deliberately no field for it: a parsed field with no reader is exactly the
+	// "published and ignored" state that record exists to close.
+
 	// --- Imagery drape (-> Texture2D + drape material) ---------------------------------
 	bool bHasDrape = false;
 	FString DrapePath;              // in-zip path, e.g. "Imagery/Imagery.png"
@@ -120,6 +129,11 @@ struct FMantlePlaceVaultManifest
 	double DrapeRightM = 0.0;
 	double DrapeTopM = 0.0;
 	FString DrapeSha256;            // sha256 of the raw imagery PNG bytes; empty if the manifest omits it
+	FString DrapeAlignment;         // `alignment` verbatim: the ETL's truthful drape-vs-heightmap extent
+	                                 // descriptor. A FREE STRING by contract, matched on its prefix and
+	                                 // never on the whole value -- the divergent shape embeds measured
+	                                 // numbers. Classified by FMantlePlaceDrapeAlignmentLogic; a "matches"
+	                                 // claim the extents below refute is refused by Parse.
 
 	// --- Mesh alternative (-> static mesh) ---------------------------------------------
 	bool bHasMesh = false;
@@ -136,7 +150,15 @@ struct FMantlePlaceVaultManifest
 	// This host's own tree-points pointer. Absent means the bundle simply has no tree points, not
 	// an error — do not fall back to `layout.tree_points` or `landcover.tree_points` (HPS-33).
 	bool bHasFoliagePoints = false;
-	FString FoliagePointsPath; // in-zip path, e.g. "Landcover/TreePoints.csv" (unreal.foliage_points.path)
+	FString FoliagePointsPath;   // in-zip path, e.g. "Landcover/TreePoints.csv" (unreal.foliage_points.path)
+	FString FoliagePointsSha256; // sha256 of the CSV bytes (unreal.foliage_points.sha256). OPTIONAL in the
+	                              // schema -- the facts come from a best-effort sidecar -- so empty means
+	                              // "valid but unverified", never corrupt. Taken off THIS host's block:
+	                              // `landcover.tree_points` carries the same digest addressed to someone
+	                              // else, and reading it would be crossing a block boundary (HPS-33).
+	int32 FoliagePointsCount = 0; // unreal.foliage_points.point_count; 0 when the manifest omits it. The
+	                              // parsed row count is checked against this after the CSV is read -- a
+	                              // digest proves the bytes, and only the count proves the ROWS survived.
 
 	// --- Landscape layers (-> Landscape weightmap layers; unreal.landscape_layers) ------
 	// Landscape-paintable rasters this host is addressed by name. All of them are parsed and

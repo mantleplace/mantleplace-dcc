@@ -27,8 +27,13 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 
 		TArray<FMantlePlaceTreePointRow> Rows;
 		FString Error;
-		TestTrue(TEXT("csv parses"), FMantlePlaceTreePointsLogic::ParseCsv(
-		                                 Csv, OriginEastingM, OriginNorthingM, Rows, Error));
+		// point_count 0 == the manifest published none, so no cross-check runs here. The count
+		// table itself is a shared vector (corpus case manifest.treePointsRowCount) rather than a
+		// literal in this file — what stays here is the frame math, which is this host's own.
+		TestTrue(TEXT("csv parses"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(
+		        Csv, OriginEastingM, OriginNorthingM, /*DeclaredPointCount*/ 0, Rows, Error)
+		        == EMantlePlaceTreePointsOutcome::Parsed);
 		TestEqual(TEXT("no parse error"), Error, FString());
 		TestEqual(TEXT("3 valid rows (malformed skipped)"), Rows.Num(), 3);
 
@@ -55,10 +60,19 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 	{
 		TArray<FMantlePlaceTreePointRow> Rows;
 		FString Error;
-		TestFalse(TEXT("wrong header fails"), FMantlePlaceTreePointsLogic::ParseCsv(
-		                                          TEXT("lon,lat,z\n1,2,3\n"), OriginEastingM, OriginNorthingM, Rows, Error));
-		TestFalse(TEXT("empty text fails"), FMantlePlaceTreePointsLogic::ParseCsv(
-		                                        FString(), OriginEastingM, OriginNorthingM, Rows, Error));
+		// A drifted column contract is its OWN outcome, not the count mismatch: the importer skips
+		// the layer here and fails the import there, so a reader that collapses the two either
+		// reports a good bundle as failed or a truncated one as fine.
+		TestTrue(TEXT("wrong header is HeaderUnrecognised"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(
+		        TEXT("lon,lat,z\n1,2,3\n"), OriginEastingM, OriginNorthingM,
+		        /*DeclaredPointCount*/ 0, Rows, Error)
+		        == EMantlePlaceTreePointsOutcome::HeaderUnrecognised);
+		TestFalse(TEXT("and it says why"), Error.IsEmpty());
+		TestTrue(TEXT("empty text is HeaderUnrecognised too"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(
+		        FString(), OriginEastingM, OriginNorthingM, /*DeclaredPointCount*/ 0, Rows, Error)
+		        == EMantlePlaceTreePointsOutcome::HeaderUnrecognised);
 	}
 
 	return true;

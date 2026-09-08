@@ -4,8 +4,11 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "MantlePlaceDrapeAlignmentLogic.h" // the alignment descriptor the corpus pins the shapes of
 #include "MantlePlaceImportManifest.h"
+#include "MantlePlaceIntegrityLogic.h"      // which payloads the pre-check covers, as a list
 #include "MantlePlaceLandscapeWeightsLogic.h" // the band legend the corpus states the answer for
+#include "MantlePlaceTreePointsLogic.h"     // the row-count cross-check the vector table drives
 #include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion
 #include "Tests/MantlePlaceConformanceCorpus.h"
 
@@ -56,6 +59,15 @@ const TCHAR* const ConsumedExpectationKeys[] = {
 	TEXT("roadSplinesSha256"),
 	TEXT("hasFoliagePoints"),
 	TEXT("foliagePointsPath"),
+	TEXT("foliagePointsSha256"),
+	TEXT("foliagePointsPointCount"),
+	TEXT("integrityCheckedFoliagePoints"),
+	TEXT("integrityVerifiedPaths"),
+	TEXT("drapeAlignment"),
+	TEXT("drapeAlignmentShape"),
+	TEXT("drapeAlignmentWarns"),
+	TEXT("drapeAlignmentMeasured"),
+	TEXT("drapeAlignmentMeasuredTolerance"),
 	TEXT("hasLandscapeLayers"),
 	TEXT("landscapeLayerNames"),
 	TEXT("landscapeLayers"),
@@ -385,6 +397,23 @@ void AssertMaterialWeightBands(
 	}
 }
 
+/** The corpus's name for a classified alignment shape. One mapping, so a rename in the enum turns
+ *  the suite red rather than quietly re-labelling what the corpus pins. */
+const TCHAR* AlignmentShapeName(EMantlePlaceDrapeAlignment Shape)
+{
+	switch (Shape)
+	{
+	case EMantlePlaceDrapeAlignment::Absent:       return TEXT("absent");
+	case EMantlePlaceDrapeAlignment::Matches:      return TEXT("matches");
+	case EMantlePlaceDrapeAlignment::Unverified:   return TEXT("unverified");
+	case EMantlePlaceDrapeAlignment::Diverges:     return TEXT("diverges");
+	case EMantlePlaceDrapeAlignment::Unrecognised: return TEXT("unrecognised");
+	}
+	// A shape added to the enum and not to the corpus's vocabulary fails loudly here rather than
+	// being mapped onto a name the corpus already uses.
+	return TEXT("?");
+}
+
 /** Apply every expectation the case declares to a parsed manifest. */
 void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantlePlaceVaultManifest& M)
 {
@@ -406,6 +435,8 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 	AssertStringExpectation(T, Case, TEXT("roadSplinesPath"), M.RoadSplinesPath);
 	AssertStringExpectation(T, Case, TEXT("roadSplinesSha256"), M.RoadSplinesSha256);
 	AssertStringExpectation(T, Case, TEXT("foliagePointsPath"), M.FoliagePointsPath);
+	AssertStringExpectation(T, Case, TEXT("foliagePointsSha256"), M.FoliagePointsSha256);
+	AssertStringExpectation(T, Case, TEXT("drapeAlignment"), M.DrapeAlignment);
 	AssertStringExpectation(T, Case, TEXT("cesiumTerrainPath"), M.CesiumTerrainPath);
 	AssertStringExpectation(
 		T, Case, TEXT("cesiumTerrainPrefix"),
@@ -458,6 +489,29 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 	AssertStringArrayExpectation(T, Case, TEXT("landscapeLayerNames"), LayerNames);
 	AssertLandscapeLayers(T, Case, M);
 	AssertMaterialWeightBands(T, Case, M);
+
+	// --- The tree-points payload's own two facts -------------------------------------------
+	// An empty digest means the manifest declared none, so the check is SKIPPED — "valid but
+	// unverified", never "verified" and never "corrupt". Same shape as integrityCheckedMesh, and
+	// deliberately so: this payload used to be the one that had no such state at all.
+	AssertIntExpectation(T, Case, TEXT("foliagePointsPointCount"), M.FoliagePointsCount);
+	AssertBoolExpectation(
+		T, Case, TEXT("integrityCheckedFoliagePoints"), !M.FoliagePointsSha256.IsEmpty());
+
+	// And the list itself, so "the tree points are in the integrity chain" is an assertion rather
+	// than a claim about a boolean expression nobody can walk.
+	AssertStringArrayExpectation(
+		T, Case, TEXT("integrityVerifiedPaths"), FMantlePlaceIntegrityLogic::VerifiablePaths(M));
+
+	// --- The drape's alignment descriptor ---------------------------------------------------
+	const FMantlePlaceDrapeAlignment Alignment =
+		FMantlePlaceDrapeAlignmentLogic::Classify(M.DrapeAlignment);
+	AssertStringExpectation(
+		T, Case, TEXT("drapeAlignmentShape"), FString(AlignmentShapeName(Alignment.Shape)));
+	AssertBoolExpectation(T, Case, TEXT("drapeAlignmentWarns"), Alignment.ShouldWarn());
+	// The measured figures, pinned so a reader that echoes the sentence without reading it fails.
+	AssertTupleExpectation(T, Case, TEXT("drapeAlignmentMeasured"), TEXT("drapeAlignmentMeasuredTolerance"),
+		{ Alignment.CoveredPercent, Alignment.OvershootRatio });
 }
 } // namespace
 
@@ -586,6 +640,78 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 	else
 	{
 		AddError(TEXT("corpus case manifest.materializationSignals has gone missing"));
+	}
+
+	// --- point_count against the rows a reader really produced -------------------------------
+	// The other half of the tree-points integrity story. The digest (asserted through
+	// integrityVerifiedPaths above) proves the bytes; this proves the rows this reader made of
+	// them, which a digest cannot — a column-contract drift parses to a shorter table with the
+	// hash still matching, because one malformed row is skipped rather than failing the layer.
+	if (const FCase* Case = FindCase(Cases, TEXT("manifest.treePointsRowCount")))
+	{
+		Driven.Add(Case->Id);
+		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("rows"));
+		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
+		for (const TSharedPtr<FJsonObject>& Row : Vectors)
+		{
+			const FString Name = RowString(Row, TEXT("name"));
+			const FString Csv = RowString(Row, TEXT("csv"));
+			const int32 Declared = static_cast<int32>(RowNumber(Row, TEXT("declaredPointCount")));
+			const FString ExpectedOutcome = RowString(Row, TEXT("outcome"));
+			const FString ErrorContains = RowString(Row, TEXT("errorContains"));
+
+			// The origin is the reference fixture's, so a row's coordinates land where the rest of
+			// the corpus says they land; this table is about the COUNT, not the frame math.
+			TArray<FMantlePlaceTreePointRow> Parsed;
+			FString Error;
+			const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
+				Csv, 441959.5, 4014372.5, Declared, Parsed, Error);
+
+			const TCHAR* ActualOutcome = TEXT("?");
+			switch (Outcome)
+			{
+			case EMantlePlaceTreePointsOutcome::Parsed:             ActualOutcome = TEXT("parsed"); break;
+			case EMantlePlaceTreePointsOutcome::HeaderUnrecognised: ActualOutcome = TEXT("headerUnrecognised"); break;
+			case EMantlePlaceTreePointsOutcome::CountMismatch:      ActualOutcome = TEXT("countMismatch"); break;
+			}
+			TestEqual(
+				FString::Printf(TEXT("[%s] \"%s\" outcome"), *Case->Id, *Name),
+				FString(ActualOutcome), ExpectedOutcome);
+
+			if (Outcome == EMantlePlaceTreePointsOutcome::Parsed)
+			{
+				int32 ExpectedRows = 0;
+				if (Row.IsValid() && Row->TryGetNumberField(TEXT("parsedRows"), ExpectedRows))
+				{
+					TestEqual(
+						FString::Printf(TEXT("[%s] \"%s\" row count"), *Case->Id, *Name),
+						Parsed.Num(), ExpectedRows);
+				}
+			}
+			else
+			{
+				// Every non-parsed outcome must SAY why; a bare "tree points failed" leaves a user
+				// with no way to tell a drifted column from a truncated download.
+				TestFalse(
+					FString::Printf(TEXT("[%s] \"%s\" states a reason"), *Case->Id, *Name),
+					Error.IsEmpty());
+				TestEqual(
+					FString::Printf(TEXT("[%s] \"%s\" discards the rows it will not stand behind"),
+						*Case->Id, *Name),
+					Parsed.Num(), 0);
+				if (!ErrorContains.IsEmpty())
+				{
+					TestTrue(
+						FString::Printf(TEXT("[%s] \"%s\" message contains \"%s\" (got: %s)"),
+							*Case->Id, *Name, *ErrorContains, *Error),
+						Error.Contains(ErrorContains));
+				}
+			}
+		}
+	}
+	else
+	{
+		AddError(TEXT("corpus case manifest.treePointsRowCount has gone missing"));
 	}
 
 	// Vector cases' `expectations`, swept once every id-dispatched assertion above has run. HPS-46

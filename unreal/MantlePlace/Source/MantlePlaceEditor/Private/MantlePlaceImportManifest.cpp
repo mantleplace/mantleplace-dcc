@@ -2,6 +2,7 @@
 
 #include "MantlePlaceImportManifest.h"
 
+#include "MantlePlaceDrapeAlignmentLogic.h" // the `alignment` descriptor is classified, not skimmed
 #include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion (the MPB clean-break floor)
 
 #include "Dom/JsonObject.h"
@@ -544,6 +545,10 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		const TSharedPtr<FJsonObject> D = *DrapePtr;
 		M.DrapePath = GetString(D, TEXT("source"));
 		M.DrapeSha256 = GetString(D, TEXT("sha256")); // verified against the extracted bytes at import
+		// Kept verbatim; the prefix match that gives it meaning lives in the logic unit, and the
+		// self-consistency gate that can refuse it runs at the end of Parse, once the heightmap's
+		// AOI rectangle is known.
+		M.DrapeAlignment = GetString(D, TEXT("alignment"));
 		const TArray<TSharedPtr<FJsonValue>>* Extent = nullptr;
 		if (D->TryGetArrayField(TEXT("extent"), Extent) && Extent != nullptr && Extent->Num() == 4)
 		{
@@ -589,6 +594,12 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	if (const TSharedPtr<FJsonObject>* FoliagePointsPtr = GetObject(Unreal, TEXT("foliage_points")))
 	{
 		M.FoliagePointsPath = GetString(*FoliagePointsPtr, TEXT("path"));
+		// Both OPTIONAL in the schema, on purpose: the facts come from a best-effort sidecar, so
+		// requiring them would refuse bundles that are perfectly importable. Absent therefore means
+		// "unknown" and never "corrupt" (spec/format.md section 5) — the digest is skipped and the
+		// row count is not cross-checked, and the importer says which of the two it did.
+		M.FoliagePointsSha256 = GetString(*FoliagePointsPtr, TEXT("sha256"));
+		M.FoliagePointsCount = GetInt(*FoliagePointsPtr, TEXT("point_count"));
 	}
 	M.bHasFoliagePoints = !M.FoliagePointsPath.IsEmpty();
 
@@ -698,6 +709,19 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 				TEXT("Heightmap resolution %d != component_count_x(%d)*quads_per_component(%d)+1 = %d."),
 				M.Resolution, M.ComponentCountX, M.GetQuadsPerComponent(), Derived);
 			return M;
+		}
+	}
+
+	// The drape's alignment descriptor against the two rectangles the manifest publishes for
+	// itself. Nothing is re-derived here: both rectangles are published values, and this only asks
+	// whether the bundle's own claim about them is true. A "matches" claim they refute is refused,
+	// because that bundle imports looking correct and is silently mis-draped.
+	{
+		const FMantlePlaceDrapeAlignment Alignment =
+			FMantlePlaceDrapeAlignmentLogic::Classify(M.DrapeAlignment);
+		if (!FMantlePlaceDrapeAlignmentLogic::CheckAgainstExtents(M, Alignment, OutError))
+		{
+			return M; // bValid stays false
 		}
 	}
 

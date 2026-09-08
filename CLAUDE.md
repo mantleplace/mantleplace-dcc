@@ -202,7 +202,9 @@ Most facts already have exactly one home. Find it before writing a fact down any
   **0001** per-host release tracks and the missing `v` · **0002** Unreal import identity, where a
   **re-import replaces** · **0003** naming authority and the `MP_` prefix · **0004** Revit terrain
   identity, where a **re-import refuses** — 0002's bug in the other host with the opposite remedy ·
-  **0005** release installs are copy-first. Write one only for a decision hard to reverse,
+  **0005** release installs are copy-first · **0006** Unreal **declines**
+  `elevation.dem.bounds_target_crs` while Revit consumes it, and why the asymmetry is the contract
+  rather than a disagreement. Write one only for a decision hard to reverse,
   surprising without the context, and the result of a real trade-off; an ADR is not a design
   document.
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the

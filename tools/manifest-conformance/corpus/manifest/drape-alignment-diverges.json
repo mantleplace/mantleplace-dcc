@@ -1,0 +1,65 @@
+{
+  "version": "1.0.0",
+  "job_id": "fixture-mpb-drape-diverges",
+  "hosts": {
+    "unreal": {
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "origin": {
+          "lon": -105.64620798739834,
+          "lat": 36.27254939041837,
+          "utm": {
+            "epsg": 32613,
+            "easting_m": 441959.49999999854,
+            "northing_m": 4014372.4999999995
+          },
+          "ground_orthometric_h_m": 2640.955078125
+        },
+        "planet_shape": "Flat",
+        "is_projected": true
+      },
+      "heightmap": {
+        "path": "Elevation/Heightmap.png",
+        "format": "png-16bit-grayscale",
+        "resolution": 1009,
+        "row0_is_north": true,
+        "native_gsd_m": 1,
+        "landscape_post_spacing_m": 1.4136904761904763,
+        "uint16_mapping": {
+          "z_min_m": 2577.826171875,
+          "z_max_m": 2962.585693359375,
+          "datum": "EGM2008-orthometric",
+          "to_meters": "z_m = z_min_m + (u16/65535)*(z_max_m - z_min_m)",
+          "quantization_step_m": 0.005871053963292515
+        },
+        "landscape_transform": {
+          "z_scale_percent": 75.14834403991699,
+          "scale_x_percent": 141.36904761904762,
+          "scale_y_percent": 138.98809523809524,
+          "location_z_offset_cm": 277020.59326171875,
+          "section_size_quads": 63,
+          "sections_per_component": 2,
+          "component_count_x": 8,
+          "component_count_y": 8
+        },
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "imagery_drape": {
+        "source": "Imagery/Drape.png",
+        "format": "png-rgb-8bit",
+        "derive_in_plugin": false,
+        "effective_gsd_m": 0.6,
+        "extent_crs": "EPSG:32613",
+        "extent": [
+          441159.49999999854,
+          4013882.4999999995,
+          442759.49999999854,
+          4014862.4999999995
+        ],
+        "alignment": "diverges from heightmap extent (imagery covers 68.9% of the heightmap, overshoot 1.12×)",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  }
+}

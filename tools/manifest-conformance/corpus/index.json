@@ -11,14 +11,14 @@
     "checks the CI gate applies are check_manifest_conformance.py's. Nothing here restates them.",
     "",
     "Case fields:",
-    "  id              stable, dotted, never renumbered \u2014 host suites name it in failures.",
+    "  id              stable, dotted, never renumbered — host suites name it in failures.",
     "  group           manifest | vault | auth | cache | digest | projection.",
     "  file            path relative to corpus/.",
-    "  expect          accept  \u2014 the parser MUST accept and produce `expectations`.",
-    "                  reject  \u2014 the parser MUST refuse; `errorContains` if the message matters.",
+    "  expect          accept  — the parser MUST accept and produce `expectations`.",
+    "                  reject  — the parser MUST refuse; `errorContains` if the message matters.",
     "                            A reject case MAY still carry `expectations` for values the",
     "                            parser is required to have read BEFORE refusing (HPS-37).",
-    "                  vector  \u2014 a known-answer table, not a single document to parse.",
+    "                  vector  — a known-answer table, not a single document to parse.",
     "  reason          why the case exists. Required: a fixture nobody can explain gets",
     "                  deleted the first time it is inconvenient.",
     "  appliesTo       this case asserts ONE host's manifest block; other hosts skip it",
@@ -27,12 +27,12 @@
     "  errorContains   substring the refusal message must contain (optional).",
     "  malformedJson   this file is deliberately not valid JSON (optional).",
     "  manifestVersion the bundle-manifest version this case's file carries (optional). Checked",
-    "                  by check_manifest_conformance.py against the file's own `version` field \u2014",
+    "                  by check_manifest_conformance.py against the file's own `version` field —",
     "                  a case whose declared and actual versions disagree is corpus rot, caught",
     "                  before any host suite sees it.",
     "",
     "Top-level fields:",
-    "  corpusVersion   the shape of THIS index's case fields \u2014 bumped on a breaking change to",
+    "  corpusVersion   the shape of THIS index's case fields — bumped on a breaking change to",
     "                  what a field means, not on adding cases. Each host pins the corpusVersion",
     "                  it was last reviewed against in verified-against.json",
     "                  (`verifiedAgainstCorpusVersion`); check_manifest_conformance.py fails a",
@@ -106,7 +106,7 @@
       "group": "manifest",
       "file": "manifest/base-on-demand.json",
       "expect": "reject",
-      "reason": "A base bundle carries no host block yet. It is not importable, but bbox/layout/order_id MUST still be parsed so streaming and the vault join key survive \u2014 the early return must not skip them.",
+      "reason": "A base bundle carries no host block yet. It is not importable, but bbox/layout/order_id MUST still be parsed so streaming and the vault join key survive — the early return must not skip them.",
       "manifestVersion": "1.0.0",
       "expectations": {
         "orderId": "ord-abc123",
@@ -138,7 +138,7 @@
       "expect": "accept",
       "manifestVersion": "1.0.0",
       "appliesTo": "unreal",
-      "reason": "Regression guard: the pre-history anonymous `dcc_readiness.mesh_import` is RETIRED \u2014 readiness lives at `hosts.<hostId>.readiness` \u2014 and a stray one must be ignored, never used as a fallback. A fallback ladder here is how a clean break quietly becomes dual-parsing (HPS-31).",
+      "reason": "Regression guard: the pre-history anonymous `dcc_readiness.mesh_import` is RETIRED — readiness lives at `hosts.<hostId>.readiness` — and a stray one must be ignored, never used as a fallback. A fallback ladder here is how a clean break quietly becomes dual-parsing (HPS-31).",
       "expectations": {
         "meshAbsentReason": "",
         "hasMesh": true
@@ -175,7 +175,7 @@
       "expect": "accept",
       "manifestVersion": "1.0.0",
       "appliesTo": "unreal",
-      "reason": "`hosts.revit` is ANOTHER host's block. This fixture states the two georeferences in conflict on purpose \u2014 `hosts.unreal.georeference` is metric UTM, `hosts.revit.georeference` a State Plane foot zone \u2014 so a reader that keys placement off whichever it finds first reports 2231 and fails. HPS-33: apply your own block, never merge or re-derive from a sibling.",
+      "reason": "`hosts.revit` is ANOTHER host's block. This fixture states the two georeferences in conflict on purpose — `hosts.unreal.georeference` is metric UTM, `hosts.revit.georeference` a State Plane foot zone — so a reader that keys placement off whichever it finds first reports 2231 and fails. HPS-33: apply your own block, never merge or re-derive from a sibling.",
       "expectations": {
         "hasMesh": true,
         "integrityCheckedMesh": false,
@@ -189,7 +189,7 @@
       "expect": "accept",
       "manifestVersion": "1.0.0",
       "appliesTo": "revit",
-      "reason": "v19 publishes the Revit deliverables' sha256 inside the `revit` block and NOWHERE else \u2014 `elevation.points_csv` and `buildings.ifc` still carry none. A host that keeps reading the hash off the v18 detail block surfaces three unverifiable artifacts while every other assertion stays green, which is the hole this case exists to close. HPS-33: read your OWN block, verbatim.",
+      "reason": "v19 publishes the Revit deliverables' sha256 inside the `revit` block and NOWHERE else — `elevation.points_csv` and `buildings.ifc` still carry none. A host that keeps reading the hash off the v18 detail block surfaces three unverifiable artifacts while every other assertion stays green, which is the hole this case exists to close. HPS-33: read your OWN block, verbatim.",
       "expectations": {
         "toposurfacePointsSha256": "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "surfaceDxfSha256": "7cbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -203,7 +203,7 @@
       "expect": "accept",
       "manifestVersion": "1.0.0",
       "appliesTo": "revit",
-      "reason": "The mirror of manifest.revitBlockIgnored, pointed the other way: this fixture states THREE origins in conflict on purpose \u2014 `hosts.unreal.georeference.origin.utm` (metric UTM), `delivery.local_origin` (metric UTM, host-neutral) and `hosts.revit.georeference.origin.projected` (State Plane feet) \u2014 and Revit must report the one addressed to it. Before it had a block of its own this host had only `delivery.local_origin`, emitted on the `local_ft` tier ALONE, so a metric-tier bundle carried no survey point and the model was imported not georeferenced at all; reading the own block as PRIMARY with delivery as the fallback is what closes that without a coordinated pipeline release. Note `grid_rotation_deg` is deliberately non-zero. The emitters reproject per-vertex so today's bundles publish 0.0, and a fixture that agreed would be passed by a host that hardcodes zero and never reads the field \u2014 the value is here to be carried, not to be plausible. `linear_unit` is on the ORIGIN and differs from the artifacts' own `units` on this tier, which is the pair a host must not collapse: reading a State Plane foot origin as metres places the site 3.28\u00d7 out.",
+      "reason": "The mirror of manifest.revitBlockIgnored, pointed the other way: this fixture states THREE origins in conflict on purpose — `hosts.unreal.georeference.origin.utm` (metric UTM), `delivery.local_origin` (metric UTM, host-neutral) and `hosts.revit.georeference.origin.projected` (State Plane feet) — and Revit must report the one addressed to it. Before it had a block of its own this host had only `delivery.local_origin`, emitted on the `local_ft` tier ALONE, so a metric-tier bundle carried no survey point and the model was imported not georeferenced at all; reading the own block as PRIMARY with delivery as the fallback is what closes that without a coordinated pipeline release. Note `grid_rotation_deg` is deliberately non-zero. The emitters reproject per-vertex so today's bundles publish 0.0, and a fixture that agreed would be passed by a host that hardcodes zero and never reads the field — the value is here to be carried, not to be plausible. `linear_unit` is on the ORIGIN and differs from the artifacts' own `units` on this tier, which is the pair a host must not collapse: reading a State Plane foot origin as metres places the site 3.28× out.",
       "expectations": {
         "surveyPointEpsg": 2231,
         "surveyPointEasting": 1450131.2,
@@ -227,7 +227,7 @@
       "group": "manifest",
       "file": "manifest/full.json",
       "expect": "accept",
-      "reason": "The reference accept shape, lifted from the platform's reference fixture. A host that parses this correctly has the whole `hosts.unreal` block, its `readiness` verdicts and the placement math covered. It carries `landscape_layers` in full: all eight sub-blocks, each with its source raster's hash and its UE-ready PNG companions, whose `value_mapping` shape follows the companion's `encoding`. The companions are declared 143x142 against a 1009-post heightmap deliberately - the weight rasters ride the DEM's grid, not the Landscape's, so a host that assumes the two match is wrong. Every placement tuple here (landscapeScale, landscapeSpawnLocation, drapeWorldRect*) is in the HOST ENGINE's axis order, which for Unreal is left-handed North=+X / East=+Y. The manifest names its own grid axes the other way round (`scale_x_percent` and `component_count_x` describe EASTING), so these tuples read as swapped against the source fields on purpose \u2014 that swap is the thing under test. Mapping East to +X instead swaps two axes of a Z-up frame, which is a reflection rather than a rotation, and mirrors the whole import.",
+      "reason": "The reference accept shape, lifted from the platform's reference fixture. A host that parses this correctly has the whole `hosts.unreal` block, its `readiness` verdicts and the placement math covered. It carries `landscape_layers` in full: all eight sub-blocks, each with its source raster's hash and its UE-ready PNG companions, whose `value_mapping` shape follows the companion's `encoding`. The companions are declared 143x142 against a 1009-post heightmap deliberately - the weight rasters ride the DEM's grid, not the Landscape's, so a host that assumes the two match is wrong. Every placement tuple here (landscapeScale, landscapeSpawnLocation, drapeWorldRect*) is in the HOST ENGINE's axis order, which for Unreal is left-handed North=+X / East=+Y. The manifest names its own grid axes the other way round (`scale_x_percent` and `component_count_x` describe EASTING), so these tuples read as swapped against the source fields on purpose — that swap is the thing under test. Mapping East to +X instead swaps two axes of a Z-up frame, which is a reflection rather than a rotation, and mirrors the whole import.",
       "manifestVersion": "1.0.0",
       "expectations": {
         "quadsPerComponent": 126,
@@ -543,7 +543,13 @@
             "image": "Landcover/MaterialWeights_5_8.png",
             "channel": 3
           }
-        ]
+        ],
+        "drapeAlignment": "matches heightmap AOI-UTM extent",
+        "drapeAlignmentShape": "matches",
+        "drapeAlignmentWarns": false,
+        "foliagePointsSha256": "",
+        "foliagePointsPointCount": 0,
+        "integrityCheckedFoliagePoints": false
       },
       "appliesTo": "unreal"
     },
@@ -552,7 +558,7 @@
       "group": "manifest",
       "file": "manifest/heightmap-missing-sha.json",
       "expect": "reject",
-      "reason": "The heightmap sha256 has been required since v17 and remains so \u2014 refuse to import unverifiable bytes.",
+      "reason": "The heightmap sha256 has been required since v17 and remains so — refuse to import unverifiable bytes.",
       "manifestVersion": "1.0.0",
       "errorContains": "unreal.heightmap has no sha256",
       "appliesTo": "unreal"
@@ -627,7 +633,7 @@
       "expect": "reject",
       "manifestVersion": "1.0.0",
       "appliesTo": "revit",
-      "reason": "The schema lists `sha256` in the `required` set of every `hosts.revit.*` deliverable it publishes, so a present block without one is a producer bug. A host that keeps treating it as optional imports unverifiable bytes and reports them as fine \u2014 the asymmetry HPS-34 draws between a hash that was never published (skipped, valid-but-unverified) and one that was promised and is missing (refuse).",
+      "reason": "The schema lists `sha256` in the `required` set of every `hosts.revit.*` deliverable it publishes, so a present block without one is a producer bug. A host that keeps treating it as optional imports unverifiable bytes and reports them as fine — the asymmetry HPS-34 draws between a hash that was never published (skipped, valid-but-unverified) and one that was promised and is missing (refuse).",
       "errorContains": "revit.surface_dxf has no sha256"
     },
     {
@@ -671,7 +677,7 @@
       "file": "manifest/reject-v17.json",
       "expect": "reject",
       "manifestVersion": 17,
-      "reason": "Clean break: v17 was the supported version until the v18 hygiene bump and is now refused like any other old version. Nothing about the shape changed enough to matter \u2014 the point is that 'nearly current' gets no special treatment.",
+      "reason": "Clean break: v17 was the supported version until the v18 hygiene bump and is now refused like any other old version. Nothing about the shape changed enough to matter — the point is that 'nearly current' gets no special treatment.",
       "errorContains": "no longer supported"
     },
     {
@@ -697,7 +703,7 @@
       "group": "manifest",
       "file": "manifest/heightmap-resolution-mismatch.json",
       "expect": "reject",
-      "reason": "component_count_x * (sections_per_component * section_size_quads) + 1 MUST equal resolution. 4*126+1 = 505, not 512 \u2014 an internally inconsistent manifest is a producer bug and must not be papered over.",
+      "reason": "component_count_x * (sections_per_component * section_size_quads) + 1 MUST equal resolution. 4*126+1 = 505, not 512 — an internally inconsistent manifest is a producer bug and must not be papered over.",
       "manifestVersion": "1.0.0",
       "errorContains": "resolution",
       "appliesTo": "unreal"
@@ -707,7 +713,7 @@
       "group": "manifest",
       "file": "manifest/road-splines-geojson-wins.json",
       "expect": "accept",
-      "reason": "Layer selection is by name AND format \u2014 a decoy `road` layer and a sibling gpkg must both lose to road_splines/geojson.",
+      "reason": "Layer selection is by name AND format — a decoy `road` layer and a sibling gpkg must both lose to road_splines/geojson.",
       "manifestVersion": "1.0.0",
       "expectations": {
         "roadSplinesPath": "Vector/RoadSplines.geojson",
@@ -730,14 +736,14 @@
       "group": "manifest",
       "file": "manifest/materialization-signals.json",
       "expect": "vector",
-      "reason": "HPS-47: 'is this bundle materialized' is decided from the neutral signals (a non-empty `hosts` object, or a non-empty vector.layers array), never from a host's own content. The other-host and unknown-host rows catch a host keying off its own block \u2014 the coincidence found holding up the road-splines cases, made a rule."
+      "reason": "HPS-47: 'is this bundle materialized' is decided from the neutral signals (a non-empty `hosts` object, or a non-empty vector.layers array), never from a host's own content. The other-host and unknown-host rows catch a host keying off its own block — the coincidence found holding up the road-splines cases, made a rule."
     },
     {
       "id": "projection.lonLatToUtm",
       "group": "projection",
       "file": "projection/lonlat-utm.json",
       "expect": "vector",
-      "reason": "The lon/lat <-> UTM known-answer pin. A host that gets the false northing or the zone wrong places geometry kilometres away while every test that does not check numbers still passes \u2014 the definition of a silent failure."
+      "reason": "The lon/lat <-> UTM known-answer pin. A host that gets the false northing or the zone wrong places geometry kilometres away while every test that does not check numbers still passes — the definition of a silent failure."
     },
     {
       "id": "vault.download.missingUrl",
@@ -770,7 +776,7 @@
       "group": "vault",
       "file": "vault/error-body-precedence.json",
       "expect": "vector",
-      "reason": "ONE precedence order for every platform error-body parser, auth and vault alike (HPS-48) \u2014 the split this case used to document is resolved. The competing-key vectors pin the order; the machine-readable `code` (refunded / revoked on a 410) is a separate read that drives UI and is unaffected."
+      "reason": "ONE precedence order for every platform error-body parser, auth and vault alike (HPS-48) — the split this case used to document is resolved. The competing-key vectors pin the order; the machine-readable `code` (refunded / revoked on a 410) is a separate read that drives UI and is unaffected."
     },
     {
       "id": "vault.list.empty",
@@ -787,7 +793,7 @@
       "group": "vault",
       "file": "vault/list-full-and-legacy.json",
       "expect": "accept",
-      "reason": "null means UNKNOWN, not absent and not zero. The legacy row must survive with every `has\u2026` companion false \u2014 a host that coerces null to 0 will later claim a size mismatch against a bundle it never knew the size of.",
+      "reason": "null means UNKNOWN, not absent and not zero. The legacy row must survive with every `has…` companion false — a host that coerces null to 0 will later claim a size mismatch against a bundle it never knew the size of.",
       "expectations": {
         "itemCount": 2,
         "items": [
@@ -825,7 +831,7 @@
                 "byteSize": 0
               }
             ],
-            "downloadFormatsNote": "byteSize 0 means UNRECORDED, not an empty file \u2014 a host that hides zero-size formats hides half the download menu."
+            "downloadFormatsNote": "byteSize 0 means UNRECORDED, not an empty file — a host that hides zero-size formats hides half the download menu."
           },
           {
             "orderId": "leg1",
@@ -866,7 +872,7 @@
       "file": "vault/tier-label.json",
       "expect": "accept",
       "appliesTo": "unreal",
-      "reason": "The tier label is ONE host's answer: its whole discriminator is the presence of `glb` \u2014 the Unreal terrain mesh \u2014 so it cannot ride a host-invariant case (HPS-41). Three rows for the three branches: empty formats is UNKNOWN (the base_on_demand marker, which advertises nothing yet), formats without `glb` is Base, and `glb` present is the full Unreal set. A host that collapses the first two loses the difference between 'nothing is known' and 'known to be partial' \u2014 which is the difference between materializing and importing.",
+      "reason": "The tier label is ONE host's answer: its whole discriminator is the presence of `glb` — the Unreal terrain mesh — so it cannot ride a host-invariant case (HPS-41). Three rows for the three branches: empty formats is UNKNOWN (the base_on_demand marker, which advertises nothing yet), formats without `glb` is Base, and `glb` present is the full Unreal set. A host that collapses the first two loses the difference between 'nothing is known' and 'known to be partial' — which is the difference between materializing and importing.",
       "expectations": {
         "itemCount": 3,
         "tierLabels": [
@@ -889,7 +895,7 @@
       "group": "vault",
       "file": "vault/materialize-start-already-running.json",
       "expect": "accept",
-      "reason": "THE single-flight 409 shape. Recognised by BODY, not by status code, and reported as SUCCESS \u2014 the caller joins the running job instead of erroring or starting a second.",
+      "reason": "THE single-flight 409 shape. Recognised by BODY, not by status code, and reported as SUCCESS — the caller joins the running job instead of erroring or starting a second.",
       "expectations": {
         "jobId": "job-existing",
         "alreadyRunning": true
@@ -919,11 +925,15 @@
       "group": "vault",
       "file": "vault/materialize-start-noop.json",
       "expect": "accept",
-      "reason": "Nothing left to build is a SUCCESS that names no job. The platform answers this way when everything asked for is already delivered, or when the rest can never be produced for this area. A host that reads the absence of a job id as a failure refuses the one response meaning 'your bundle is ready' \u2014 and where the download only happens past this parse, that host cannot import at all.",
+      "reason": "Nothing left to build is a SUCCESS that names no job. The platform answers this way when everything asked for is already delivered, or when the rest can never be produced for this area. A host that reads the absence of a job id as a failure refuses the one response meaning 'your bundle is ready' — and where the download only happens past this parse, that host cannot import at all.",
       "expectations": {
         "outcome": "NothingToDo",
         "jobId": "",
-        "tokens": ["elevation.points_csv", "elevation.surface_dxf", "imagery.drape_png"]
+        "tokens": [
+          "elevation.points_csv",
+          "elevation.surface_dxf",
+          "imagery.drape_png"
+        ]
       }
     },
     {
@@ -935,7 +945,10 @@
       "expectations": {
         "outcome": "Queued",
         "jobId": "",
-        "tokens": ["buildings.ifc", "elevation.landxml"]
+        "tokens": [
+          "buildings.ifc",
+          "elevation.landxml"
+        ]
       }
     },
     {
@@ -948,7 +961,9 @@
         "outcome": "Joined",
         "jobId": "job-existing",
         "alreadyRunning": true,
-        "tokens": ["buildings.ifc"]
+        "tokens": [
+          "buildings.ifc"
+        ]
       }
     },
     {
@@ -956,7 +971,7 @@
       "group": "vault",
       "file": "vault/materialize-start-active-job-no-id.json",
       "expect": "accept",
-      "reason": "A single-flight refusal may report the running job WITHOUT naming it \u2014 `activeJobId` is null. This is still a join, not an error: polling is keyed on the ORDER, not the job (the status request never took a job id), so an unnamed run is fully followable. A host that refuses here tells a curator to retry a build that is already going, which is the failure HPS-24 exists to prevent.",
+      "reason": "A single-flight refusal may report the running job WITHOUT naming it — `activeJobId` is null. This is still a join, not an error: polling is keyed on the ORDER, not the job (the status request never took a job id), so an unnamed run is fully followable. A host that refuses here tells a curator to retry a build that is already going, which is the failure HPS-24 exists to prevent.",
       "expectations": {
         "outcome": "Joined",
         "jobId": ""
@@ -967,7 +982,7 @@
       "group": "vault",
       "file": "vault/materialize-delivery-vectors.json",
       "expect": "vector",
-      "reason": "Polling this endpoint returns a DELIVERY-STATE document \u2014 delivered / notDelivered / activeJob \u2014 with no status word anywhere, so completion is derived rather than read. This table is that derivation. It is also the more truthful reading: a run reports `completed` even when every token's emit failed, so delivery is proof of production and a job status is not.",
+      "reason": "Polling this endpoint returns a DELIVERY-STATE document — delivered / notDelivered / activeJob — with no status word anywhere, so completion is derived rather than read. This table is that derivation. It is also the more truthful reading: a run reports `completed` even when every token's emit failed, so delivery is proof of production and a job status is not.",
       "expectations": {}
     },
     {
@@ -991,7 +1006,7 @@
       "group": "vault",
       "file": "vault/materialize-token-list.json",
       "expect": "vector",
-      "reason": "The reference host's token list, shown as the SHAPE a host must send: an explicit array it owns. The server-side `\"unreal\"` keyword expands to only four core tokens and would silently drop the vector and landcover layers \u2014 which is exactly why the list is client-owned. Each host substitutes its own tokens; only the shape is normative."
+      "reason": "The reference host's token list, shown as the SHAPE a host must send: an explicit array it owns. The server-side `\"unreal\"` keyword expands to only four core tokens and would silently drop the vector and landcover layers — which is exactly why the list is client-owned. Each host substitutes its own tokens; only the shape is normative."
     },
     {
       "id": "vault.reject.notJson",
@@ -1014,7 +1029,7 @@
       "file": "manifest/reject-v18.json",
       "expect": "reject",
       "manifestVersion": 18,
-      "reason": "Clean break: v18 \u2014 the per-host dcc_readiness hygiene bump \u2014 predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed. The integer era is pre-history now; a host reads the version's JSON TYPE and refuses the whole family below its floor (HPS-31). Re-procurement, not dual-parsing, is how a bundle at rest crosses the break.",
+      "reason": "Clean break: v18 — the per-host dcc_readiness hygiene bump — predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed. The integer era is pre-history now; a host reads the version's JSON TYPE and refuses the whole family below its floor (HPS-31). Re-procurement, not dual-parsing, is how a bundle at rest crosses the break.",
       "errorContains": "no longer supported"
     },
     {
@@ -1023,7 +1038,7 @@
       "file": "manifest/reject-v19.json",
       "expect": "reject",
       "manifestVersion": 19,
-      "reason": "Clean break: v19 \u2014 the last version of the integer pre-history \u2014 predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed. The integer era is pre-history now; a host reads the version's JSON TYPE and refuses the whole family below its floor (HPS-31). Re-procurement, not dual-parsing, is how a bundle at rest crosses the break.",
+      "reason": "Clean break: v19 — the last version of the integer pre-history — predates the MPB 1.0.0 floor and MUST be refused outright, not best-effort parsed. The integer era is pre-history now; a host reads the version's JSON TYPE and refuses the whole family below its floor (HPS-31). Re-procurement, not dual-parsing, is how a bundle at rest crosses the break.",
       "errorContains": "no longer supported"
     },
     {
@@ -1061,6 +1076,113 @@
       "manifestVersion": "01.0.0",
       "reason": "Semver near-miss: semver forbids a leading zero and the platform's publisher and gate enforce it, so \"01.0.0\" MUST be refused. Both first-party hosts accepted it until a test caught the drift — this case is what keeps it caught, for every host at once.",
       "errorContains": "no longer supported"
+    },
+    {
+      "id": "manifest.foliagePointsVerified",
+      "group": "manifest",
+      "file": "manifest/foliage-points-verified.json",
+      "expect": "accept",
+      "reason": "`hosts.unreal.foliage_points` publishes a sha256 and a point_count, and both were read by nothing: the tree-points CSV was the ONE payload an importer brought in unverified while every other one rode the integrity chain. Both facts live in THIS host's block on purpose -- the same values also sit under `landcover.tree_points`, addressed to nobody in particular, and a host bound to its own block (HPS-33) cannot reach them there. The case pins that the CSV is in the set of payloads a conformant reader verifies before it writes anything, which is the claim the integrity chain makes and could not previously honour.",
+      "manifestVersion": "1.0.0",
+      "appliesTo": "unreal",
+      "expectations": {
+        "hasFoliagePoints": true,
+        "foliagePointsPath": "Landcover/TreePoints.csv",
+        "foliagePointsSha256": "e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4",
+        "foliagePointsPointCount": 4821,
+        "integrityCheckedFoliagePoints": true,
+        "integrityVerifiedPaths": [
+          "Elevation/Heightmap.png",
+          "Landcover/TreePoints.csv"
+        ]
+      }
+    },
+    {
+      "id": "manifest.foliagePointsUnverified",
+      "group": "manifest",
+      "file": "manifest/foliage-points-unverified.json",
+      "expect": "accept",
+      "reason": "The same block with neither optional fact. Both are OPTIONAL in the schema because they come from a best-effort sidecar, so their absence is UNKNOWN and never CORRUPT (format.md section 5): the bundle still imports, the digest check is skipped rather than failed, and no row count is cross-checked. The third state is the one hosts collapse -- reporting this payload as verified is a lie, and reporting it as corrupt makes every sidecar-less bundle un-importable.",
+      "manifestVersion": "1.0.0",
+      "appliesTo": "unreal",
+      "expectations": {
+        "hasFoliagePoints": true,
+        "foliagePointsPath": "Landcover/TreePoints.csv",
+        "foliagePointsSha256": "",
+        "foliagePointsPointCount": 0,
+        "integrityCheckedFoliagePoints": false,
+        "integrityVerifiedPaths": [
+          "Elevation/Heightmap.png"
+        ]
+      }
+    },
+    {
+      "id": "manifest.treePointsRowCount",
+      "group": "manifest",
+      "file": "manifest/tree-points-row-count.json",
+      "expect": "vector",
+      "reason": "`point_count` against the rows a reader really produced. The digest and the count answer different questions: sha256 proves the bytes, the count proves the rows this reader made of them. Skipping a malformed row is correct -- one bad row must not drop the layer -- and it is exactly what turns a column-contract drift into a shorter table whose digest still matches. A declared count of 0 means unknown and cross-checks nothing, which is the row a reader treating it as 'expect zero rows' fails.",
+      "appliesTo": "unreal"
+    },
+    {
+      "id": "manifest.drapeAlignmentDiverges",
+      "group": "manifest",
+      "file": "manifest/drape-alignment-diverges.json",
+      "expect": "accept",
+      "reason": "`imagery_drape.alignment` is a FREE STRING the schema says to match on its PREFIX, because the divergent shape embeds the ETL's measured figures. Left opaque, a partially-covering drape imports silently misaligned and the failure looks like nothing at all. The import PROCEEDS -- the UV transform already rides the declared extents, so the placement is right and only the user is missing a fact -- and the reader surfaces the covered percentage and the overshoot ratio it read out of the sentence. Anchored reads, not positional ones: the figures are pinned so a reader that echoes the string without parsing it fails here.",
+      "manifestVersion": "1.0.0",
+      "appliesTo": "unreal",
+      "expectations": {
+        "hasDrape": true,
+        "drapeAlignment": "diverges from heightmap extent (imagery covers 68.9% of the heightmap, overshoot 1.12×)",
+        "drapeAlignmentShape": "diverges",
+        "drapeAlignmentWarns": true,
+        "drapeAlignmentMeasured": [
+          68.9,
+          1.12
+        ],
+        "drapeAlignmentMeasuredTolerance": 1e-09
+      }
+    },
+    {
+      "id": "manifest.drapeAlignmentUnverified",
+      "group": "manifest",
+      "file": "manifest/drape-alignment-unverified.json",
+      "expect": "accept",
+      "reason": "The shape the ETL emits when it had no heightmap extent to compare against. It is not a warning and not a defect: nothing is known, so nothing is claimed. A reader that treats every non-matching shape as a problem cries wolf on this one, and a reader that treats it as 'matches' claims a check the producer said it could not perform.",
+      "manifestVersion": "1.0.0",
+      "appliesTo": "unreal",
+      "expectations": {
+        "hasDrape": true,
+        "drapeAlignment": "unverified — heightmap extent unavailable",
+        "drapeAlignmentShape": "unverified",
+        "drapeAlignmentWarns": false
+      }
+    },
+    {
+      "id": "manifest.drapeAlignmentUnknownShape",
+      "group": "manifest",
+      "file": "manifest/drape-alignment-unknown-shape.json",
+      "expect": "accept",
+      "reason": "A fourth shape, from a producer newer than the reader. The descriptor is informational -- nothing about the import transform is decided from it -- so an unrecognised value is echoed opaquely and the bundle imports (compatibility.md section 3). Refusing here would make every additive minor a breaking release, and branching only on the shapes a reader knows shows a user nothing at all for the shape it does not.",
+      "manifestVersion": "1.0.0",
+      "appliesTo": "unreal",
+      "expectations": {
+        "hasDrape": true,
+        "drapeAlignment": "clipped to heightmap extent (a shape published after this plugin version)",
+        "drapeAlignmentShape": "unrecognised",
+        "drapeAlignmentWarns": false
+      }
+    },
+    {
+      "id": "manifest.reject.drapeAlignmentContradiction",
+      "group": "manifest",
+      "file": "manifest/drape-alignment-contradiction.json",
+      "expect": "reject",
+      "reason": "The bundle declares its imagery matches the heightmap extent while its own two rectangles say it covers about half of it. Nothing is re-derived to catch this -- both rectangles are published values and the reader only asks whether the bundle's claim about them is true. It is the one alignment case that fails CLOSED, because a bundle whose own numbers refute its own claim imports looking correct and is silently mis-draped, which is the failure that looks like nothing. The slack is 1%: the reference bundle's imagery is ~0.1% short of its AOI and truthfully says 'matches', so a reader comparing exactly refuses a good bundle.",
+      "manifestVersion": "1.0.0",
+      "errorContains": "contradicts itself",
+      "appliesTo": "unreal"
     }
   ]
 }
