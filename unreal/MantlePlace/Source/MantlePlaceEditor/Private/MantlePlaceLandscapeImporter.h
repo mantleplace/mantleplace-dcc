@@ -25,8 +25,8 @@ namespace MantlePlaceLandscapeImporter
 	 * landscape, so the material must be in hand before this call (pass nullptr for no drape).
 	 *
 	 * WeightPlanes (may be empty) are the `unreal.landscape_layers.material_weights` planes built by
-	 * FMantlePlaceLandscapeWeightsLogic. One saved ULandscapeLayerInfoObject per plane is created
-	 * under DestPackagePath and handed to Import() alongside the height data, so the weights land in
+	 * FMantlePlaceLandscapeWeightsLogic. One ULandscapeLayerInfoObject per plane is created under
+	 * DestPackagePath and handed to Import() alongside the height data, so the weights land in
 	 * the Landscape's own weightmaps at creation. Painting them at creation is the only cheap moment:
 	 * ALandscape::Import allocates the weightmap textures, and adding a layer afterwards means
 	 * reallocating them per component.

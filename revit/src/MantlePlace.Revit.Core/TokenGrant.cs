@@ -32,10 +32,9 @@ public static class TokenGrants
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A constant with no override, deliberately. The reference host's pure logic takes this as a
-    /// parameter defaulting to 60 and its shim passes <c>0</c>, silently disabling the skew.
-    /// Host #2 does not reproduce that: with no parameter there is nowhere for a caller to
-    /// put a zero, so the bug is unrepresentable rather than merely absent.
+    /// A constant with no override, deliberately. With no parameter there is nowhere for a caller
+    /// to put a zero, so a skew silently disabled at one call site is unrepresentable here rather
+    /// than merely absent.
     /// </para>
     /// <para>
     /// <c>HPS-11</c> says "at least 60 seconds". If a longer skew is ever wanted it is a change to
