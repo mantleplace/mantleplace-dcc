@@ -6,6 +6,7 @@
 #include "MantlePlaceAuthSystemBase.h"
 #include "MantlePlaceVaultClient.h"
 #include "MantlePlaceBundleCache.h"
+#include "MantlePlaceEditorSettings.h"
 #include "MantlePlaceImporterLibrary.h"
 #include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest (local-zip inspection)
 #include "MantlePlaceSha256.h"         // whole-bundle sha256 for the no-orderId local match
@@ -362,11 +363,35 @@ void UMantlePlaceVaultImportOrchestrator::BeginPresign()
 	VaultClient->GetPresignedBundleUrl(ActiveItem.OrderId); // -> HandlePresignedNative
 }
 
+float UMantlePlaceVaultImportOrchestrator::ResolvePollIntervalSeconds() const
+{
+	// A positive field is a deliberate per-orchestrator override; zero is the untouched default and
+	// means "whatever the project says". The project setting applies its own usability rule, so an
+	// unusable ini value falls back to the shipped number rather than reaching the ticker.
+	return MaterializePollIntervalSeconds > 0.0f
+		? UMantlePlaceEditorSettings::UsableMaterializePollIntervalSeconds(MaterializePollIntervalSeconds)
+		: UMantlePlaceEditorSettings::ResolveMaterializePollIntervalSeconds();
+}
+
+int32 UMantlePlaceVaultImportOrchestrator::ResolveMaxPolls() const
+{
+	return MaterializeMaxPolls > 0
+		? UMantlePlaceEditorSettings::UsableMaterializeMaxPolls(MaterializeMaxPolls)
+		: UMantlePlaceEditorSettings::ResolveMaterializeMaxPolls();
+}
+
+int32 UMantlePlaceVaultImportOrchestrator::ResolveMaxConsecutivePollFailures() const
+{
+	return MaxConsecutivePollFailures > 0
+		? UMantlePlaceEditorSettings::UsableMaxConsecutivePollFailures(MaxConsecutivePollFailures)
+		: UMantlePlaceEditorSettings::ResolveMaxConsecutivePollFailures();
+}
+
 void UMantlePlaceVaultImportOrchestrator::SchedulePoll()
 {
 	UnschedulePoll();
 
-	if (PollCount >= MaterializeMaxPolls)
+	if (PollCount >= ResolveMaxPolls())
 	{
 		// Name the tokens. A bare "timed out" is the same sentence whether the platform was slow,
 		// the run built the wrong set, or the layer can never be produced here — and the operator
@@ -379,7 +404,8 @@ void UMantlePlaceVaultImportOrchestrator::SchedulePoll()
 		return;
 	}
 
-	const float Delay = FMath::Max(0.5f, MaterializePollIntervalSeconds);
+	// The half-second floor moved into the setting's usability rule, which is where it is asserted.
+	const float Delay = ResolvePollIntervalSeconds();
 	TWeakObjectPtr<UMantlePlaceVaultImportOrchestrator> WeakThis(this);
 	PollTicker = FTSTicker::GetCoreTicker().AddTicker(TEXT("MantlePlaceMaterializePoll"), Delay,
 		[WeakThis](float) -> bool
@@ -485,7 +511,7 @@ void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStatusNative(bool bOk
 
 	if (!bOk)
 	{
-		if (++ConsecutivePollFailures > MaxConsecutivePollFailures)
+		if (++ConsecutivePollFailures > ResolveMaxConsecutivePollFailures())
 		{
 			FailImport(Message.IsEmpty() ? TEXT("Lost contact while generating Unreal formats.") : Message);
 			return;

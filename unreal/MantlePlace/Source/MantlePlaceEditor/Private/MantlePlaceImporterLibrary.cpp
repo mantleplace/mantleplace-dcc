@@ -1242,14 +1242,26 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 	{
 		GBundleStreamServer = MakeUnique<FMantlePlaceLocalTileServer>();
 	}
+	// The first port and how many to try are project settings (Project Settings -> Plugins -> Mantle
+	// Place); the scan is kept as the fallback it always was. A busy port is a local condition —
+	// another editor, another tool — and a stream that gave up on it would have nothing useful to
+	// say; the setting is for a whole class of machine with something else on the default.
+	int32 FirstPort = 0;
+	int32 PortCount = 0;
+	UMantlePlaceEditorSettings::ResolveLocalTileServerPortScan(FirstPort, PortCount);
+
 	FString BaseUrl, ServerError;
-	for (uint32 Port = 8088; Port <= 8095 && BaseUrl.IsEmpty(); ++Port)
+	for (int32 Offset = 0; Offset < PortCount && BaseUrl.IsEmpty(); ++Offset)
 	{
-		BaseUrl = GBundleStreamServer->Start(StageDir, Port, ServerError);
+		BaseUrl = GBundleStreamServer->Start(StageDir, static_cast<uint32>(FirstPort + Offset), ServerError);
 	}
 	if (BaseUrl.IsEmpty())
 	{
-		Info.Message = FString::Printf(TEXT("Failed to start local tile server: %s"), *ServerError);
+		// Naming the range makes the next step obvious: it is a setting, and the user can move it.
+		Info.Message = FString::Printf(
+			TEXT("Failed to start local tile server on any port from %d to %d: %s. Change the first "
+				 "port or the scan count under Project Settings -> Plugins -> Mantle Place."),
+			FirstPort, FirstPort + PortCount - 1, *ServerError);
 		return Info;
 	}
 

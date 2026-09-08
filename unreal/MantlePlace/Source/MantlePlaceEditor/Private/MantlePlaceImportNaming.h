@@ -81,6 +81,26 @@ namespace MantlePlaceImportNaming
 	 * share a folder, and that folder is force-deleted on re-import. Whatever calls this owes the
 	 * caller a check that the folder it is about to wipe belongs to the identity it thinks it does
 	 * — that is what the provenance record in MantlePlaceImportProvenance is for.
+	 *
+	 * **Full-identity disambiguation is deliberately not built.** The question was asked directly,
+	 * and this is the answer, recorded here so it is not re-asked from scratch:
+	 *
+	 *  - A collision is *detected and refused*, not silently absorbed. The provenance record holds
+	 *    the untruncated identity, `Classify` returns `DifferentIdentity` for a folder belonging to
+	 *    another order, and the import stops before the transaction opens with a sentence naming the
+	 *    folder. That is what failing loudly looks like here.
+	 *  - Nothing else keyed on the short form can lose data. The outliner folder and the actor label
+	 *    are cosmetic; re-import matches the `mantleplace_import=<identity>` tag, which carries the
+	 *    identity in full. The stream staging directory used to be an exception and is not any more
+	 *    — it is named by the full identity, because the availability rewrite declares every tile
+	 *    beneath it and a collision there would have served one bundle's tiles as another's.
+	 *  - No collision has been demonstrated, and the remedy has a cost paid by everyone. A folder
+	 *    named by a full order id or a 64-character digest is what a user then reads in their
+	 *    Content Browser and their outliner, forever, to protect against a case that has not
+	 *    happened and that already refuses rather than destroys.
+	 *
+	 * What would reopen it: an actual collision, or a second consumer of the short form that can
+	 * lose something. Demonstrate either and the trade changes.
 	 */
 	FString ShortIdentity(const FString& Identity);
 
