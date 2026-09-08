@@ -4,10 +4,11 @@
 
 #include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest::ProjectedToUeCm
 
-bool FMantlePlaceTreePointsLogic::ParseCsv(
+EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
     const FString& CsvText,
     double OriginEastingM,
     double OriginNorthingM,
+    int32 DeclaredPointCount,
     TArray<FMantlePlaceTreePointRow>& OutRows,
     FString& OutError)
 {
@@ -19,7 +20,7 @@ bool FMantlePlaceTreePointsLogic::ParseCsv(
 	{
 		OutError = TEXT("TreePoints.csv header is missing or not the expected "
 		                "\"x,y,ground_z,height_m,crown_radius_m\" (ETL column contract changed?).");
-		return false;
+		return EMantlePlaceTreePointsOutcome::HeaderUnrecognised;
 	}
 
 	OutRows.Reserve(Lines.Num() - 1);
@@ -46,5 +47,18 @@ bool FMantlePlaceTreePointsLogic::ParseCsv(
 		Row.GroundZM = static_cast<float>(GroundZM);
 		OutRows.Add(Row);
 	}
-	return true;
+
+	// The manifest's own row count, checked against what this reader produced. A mismatch is a
+	// failure rather than a warning: the rows it did produce are a silent subset of the layer, and
+	// a foliage scatter built from a subset looks like a sparse forest, not like an error.
+	if (DeclaredPointCount > 0 && OutRows.Num() != DeclaredPointCount)
+	{
+		OutError = FString::Printf(
+		    TEXT("TreePoints.csv parsed %d row(s) but the manifest declares point_count %d. The "
+		         "payload and the manifest disagree; refusing to import a subset of the layer."),
+		    OutRows.Num(), DeclaredPointCount);
+		OutRows.Reset();
+		return EMantlePlaceTreePointsOutcome::CountMismatch;
+	}
+	return EMantlePlaceTreePointsOutcome::Parsed;
 }

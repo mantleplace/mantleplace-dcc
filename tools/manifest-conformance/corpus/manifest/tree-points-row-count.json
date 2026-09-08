@@ -1,0 +1,68 @@
+{
+  "$comment": [
+    "`hosts.unreal.foliage_points.point_count` against the rows a reader actually produced from",
+    "Landcover/TreePoints.csv. The digest and the count answer different questions and a reader",
+    "needs both: sha256 proves the BYTES are the bytes the platform hashed, and point_count proves",
+    "the ROWS survived this reader's parse of them. A reader that skips rows it cannot parse — the",
+    "right behaviour, since one bad row must not drop the layer — turns a column-contract drift into",
+    "a shorter table with the digest still matching, and nothing anywhere says so.",
+    "",
+    "Zero means UNKNOWN, never zero rows. Both facts are optional in the schema (they come from a",
+    "best-effort sidecar), so a bundle that publishes no count is imported and cross-checked against",
+    "nothing — the same 'valid but unverified' state an absent digest produces, and never an error.",
+    "",
+    "`outcome` is three-valued on purpose, because the two ways of not producing a table are not the",
+    "same news. `countMismatch` is a failure of the IMPORT: the rows that parsed are a silent subset,",
+    "and a scatter built from a subset reads as a sparse forest rather than as an error.",
+    "`headerUnrecognised` is a SKIP: the ETL changed this payload's shape, which is no reason to",
+    "report the terrain and the imagery beside it as failed. A reader that collapses the two either",
+    "reports a good bundle as failed or a truncated one as fine.",
+    "",
+    "`csv` is the payload verbatim, newlines included. `parsedRows` is what a conformant reader",
+    "returns on a `parsed` outcome; it is not asserted on the others, where the rows are discarded.",
+    "A refusal must NAME the declared count, so a user can see the two numbers that disagree."
+  ],
+  "columns": [
+    "x",
+    "y",
+    "ground_z",
+    "height_m",
+    "crown_radius_m"
+  ],
+  "rows": [
+    {
+      "name": "declared count agrees with the parsed rows",
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n441959.50,4014372.50,2640.96,12.40,4.34\n442059.50,4014272.50,,8.00,2.80\n441859.50,4014472.50,2650.00,3.10,1.09\n",
+      "declaredPointCount": 3,
+      "outcome": "parsed",
+      "parsedRows": 3
+    },
+    {
+      "name": "no declared count means no cross-check, and never a failure",
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n441959.50,4014372.50,2640.96,12.40,4.34\n442059.50,4014272.50,,8.00,2.80\n",
+      "declaredPointCount": 0,
+      "outcome": "parsed",
+      "parsedRows": 2
+    },
+    {
+      "name": "a row this reader could not parse makes the count fall short, and that fails the import",
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n441959.50,4014372.50,2640.96,12.40,4.34\nnot,a,valid,row,here\n441859.50,4014472.50,2650.00,3.10,1.09\n",
+      "declaredPointCount": 3,
+      "outcome": "countMismatch",
+      "errorContains": "point_count 3"
+    },
+    {
+      "name": "a payload with more rows than declared is a disagreement too, not a bonus",
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n441959.50,4014372.50,2640.96,12.40,4.34\n442059.50,4014272.50,,8.00,2.80\n441859.50,4014472.50,2650.00,3.10,1.09\n",
+      "declaredPointCount": 2,
+      "outcome": "countMismatch",
+      "errorContains": "point_count 2"
+    },
+    {
+      "name": "a drifted column contract is a SKIP, not a count failure",
+      "csv": "lon,lat,z\n-105.6,36.3,2640.9\n",
+      "declaredPointCount": 3,
+      "outcome": "headerUnrecognised"
+    }
+  ]
+}

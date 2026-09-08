@@ -5,10 +5,12 @@
 #include "MantlePlaceCoverageRasterLogic.h"
 #include "MantlePlaceCoverageRasters.h"
 #include "MantlePlaceDrape.h"
+#include "MantlePlaceDrapeAlignmentLogic.h"
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceEditorSettings.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportProvenance.h"
+#include "MantlePlaceIntegrityLogic.h"
 #include "MantlePlaceLandscapeImporter.h"
 #include "MantlePlaceLandscapeWeightsLogic.h"
 #include "MantlePlaceLocalTileServer.h"
@@ -410,45 +412,46 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 
 	// --- Fail-closed integrity check: the downloaded bytes must match the manifest's declared sha256
 	// before anything is imported. A corrupt/truncated/tampered download aborts here, creating nothing.
-	// Exception: the tree-points CSV has no manifest pointer and therefore no declared sha256 — it
-	// imports unverified until the platform ships landcover pointer blocks.
+	// WHICH payloads are in the chain is decided in the pure logic unit and walked here, rather than
+	// being a boolean expression written out at this call site. That expression is how the tree-points
+	// CSV came to be the one artifact imported unverified while the manifest had been publishing a
+	// digest for it: a payload left out of a hand-written chain is invisible, and nothing fails.
 	{
-		FString IntegrityError;
-		if ((Manifest.bHasHeightmap && !VerifyEntrySha256(Reader, Manifest.HeightmapPath, Manifest.HeightmapSha256, IntegrityError)) || (Manifest.bHasDrape && !VerifyEntrySha256(Reader, Manifest.DrapePath, Manifest.DrapeSha256, IntegrityError)) || (Manifest.bHasMesh && !VerifyEntrySha256(Reader, Manifest.MeshPath, Manifest.MeshSha256, IntegrityError)) || (Manifest.bHasBuildings && !VerifyEntrySha256(Reader, Manifest.BuildingsPath, Manifest.BuildingsSha256, IntegrityError)) || (Manifest.bHasRoadSplines && !VerifyEntrySha256(Reader, Manifest.RoadSplinesPath, Manifest.RoadSplinesSha256, IntegrityError)))
+		const TArray<FMantlePlaceDeclaredArtifact> Declared =
+			FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(Manifest);
+		int32 VerifiedCount = 0;
+		int32 UnverifiableCount = 0;
+		for (const FMantlePlaceDeclaredArtifact& Artifact : Declared)
 		{
-			Result.Message = FString::Printf(TEXT("Integrity check failed: %s"), *IntegrityError);
-			return Result;
-		}
-
-		// The landscape layers are a loop rather than another term in the chain above: there are up
-		// to eight of them, each with its own source raster and its UE-ready companions. Every
-		// declared hash is checked, including the seven layers this importer parses but does not yet
-		// apply — the check is on the bundle's bytes, not on what today's importer happens to read,
-		// and the schema states outright that these are verified fail-closed before any actor spawns.
-		for (const FMantlePlaceLandscapeLayer& Layer : Manifest.LandscapeLayers)
-		{
-			if (!VerifyEntrySha256(Reader, Layer.Path, Layer.Sha256, IntegrityError))
+			FString IntegrityError;
+			if (!VerifyEntrySha256(Reader, Artifact.Path, Artifact.Sha256, IntegrityError))
 			{
 				Result.Message = FString::Printf(TEXT("Integrity check failed: %s"), *IntegrityError);
 				return Result;
 			}
-			for (const FMantlePlaceUeReadyRaster& Raster : Layer.UeReady)
+			// A payload the manifest published no digest for is skipped, not passed: "valid but
+			// unverified" is a third state, and collapsing it into "verified" is a lie the log then
+			// tells the user (spec/format.md section 5).
+			if (Artifact.IsVerifiable())
 			{
-				if (!VerifyEntrySha256(Reader, Raster.Path, Raster.Sha256, IntegrityError))
-				{
-					Result.Message = FString::Printf(TEXT("Integrity check failed: %s"), *IntegrityError);
-					return Result;
-				}
+				++VerifiedCount;
+			}
+			else
+			{
+				++UnverifiableCount;
 			}
 		}
-	}
 
-	// The verification gate is a product claim ("verified before anything is
-	// written"), so its PASSING is narrated, not only its failure — log
-	// followers should see the gate clear before the first actor spawns.
-	UE_LOG(LogMantlePlaceImport, Log,
-		TEXT("Integrity verified: every manifest-declared sha256 matches (jobId %s)."),
-		*MantlePlaceImportNaming::ShortIdentity(Manifest.JobId));
+		// The verification gate is a product claim ("verified before anything is written"), so its
+		// PASSING is narrated, not only its failure — log followers should see the gate clear before
+		// the first actor spawns. It counts both states, because a bundle whose payloads are half
+		// unverifiable is a fact about that bundle, not about this check.
+		UE_LOG(LogMantlePlaceImport, Log,
+			TEXT("Integrity verified: %d of %d declared payload(s) matched their manifest sha256, "
+				 "%d carried no digest and are valid but unverified (jobId %s)."),
+			VerifiedCount, Declared.Num(), UnverifiableCount,
+			*MantlePlaceImportNaming::ShortIdentity(Manifest.JobId));
+	}
 
 	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
 	if (World == nullptr)
@@ -946,6 +949,10 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// layer. Absence means the bundle simply doesn't ship the layer (base tier / treeless AOI), not
 	// an error. Rows land in a UDataTable under the bundle's content folder: PCG-ready scatter
 	// input, no actors spawned.
+	//
+	// The bytes reaching here have already been through the integrity pre-check above, so this
+	// layer is no longer the unverified exception in the chain. What is still checked HERE is the
+	// row count: the digest proves the bytes, the count proves the rows this reader made of them.
 	if (Manifest.bHasFoliagePoints)
 	{
 		TArray<uint8> CsvBytes;
@@ -958,9 +965,22 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			FString CsvText, TreesError;
 			FFileHelper::BufferToString(CsvText, CsvBytes.GetData(), CsvBytes.Num());
 			TArray<FMantlePlaceTreePointRow> Rows;
-			if (!FMantlePlaceTreePointsLogic::ParseCsv(
-			        CsvText, Manifest.OriginEastingM, Manifest.OriginNorthingM, Rows, TreesError))
+			const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
+			    CsvText, Manifest.OriginEastingM, Manifest.OriginNorthingM,
+			    Manifest.FoliagePointsCount, Rows, TreesError);
+			if (Outcome == EMantlePlaceTreePointsOutcome::CountMismatch)
 			{
+				// A count that disagrees with the payload FAILS the import rather than skipping the
+				// layer: the rows that did parse are a silent subset, and a scatter built from a
+				// subset reads as a sparse forest rather than as an error.
+				Log.Add(FString::Printf(TEXT("Tree points FAILED: %s"), *TreesError));
+				bAllRequestedSucceeded = false;
+			}
+			else if (Outcome != EMantlePlaceTreePointsOutcome::Parsed)
+			{
+				// A drifted column contract stays a SKIP, as it always has been. It says the ETL
+				// changed this payload's shape, which is not a reason to report the terrain, the
+				// imagery and the buildings beside it as failed.
 				Log.Add(FString::Printf(TEXT("Tree points skipped: %s"), *TreesError));
 			}
 			else
@@ -988,7 +1008,15 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				}
 				FAssetRegistryModule::AssetCreated(Table);
 				Table->MarkPackageDirty();
-				Log.Add(FString::Printf(TEXT("Tree points imported (%d rows -> %s)."), Rows.Num(), *AssetName));
+				// Three states, said out loud. A payload the platform published no digest for is
+				// VALID BUT UNVERIFIED — reporting it as verified is a lie and reporting it as
+				// corrupt makes every sidecar-less bundle un-importable (spec/format.md section 5).
+				Log.Add(FString::Printf(
+					TEXT("Tree points imported (%d rows -> %s, %s)."),
+					Rows.Num(), *AssetName,
+					Manifest.FoliagePointsSha256.IsEmpty()
+						? TEXT("valid but unverified: the manifest publishes no digest for it")
+						: TEXT("verified against the manifest's sha256")));
 			}
 		}
 	}
@@ -1006,6 +1034,18 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		else if (DrapeMic != nullptr)
 		{
 			Log.Add(TEXT("Imagery draped onto its geographic footprint."));
+
+			// The manifest's own alignment descriptor, branched on rather than skimmed past. Until
+			// this line the string was opaque, so a partially-covering drape imported silently
+			// misaligned and the failure looked like nothing at all. The divergent shape carries
+			// the ETL's measured figures and produces a warning; the other shapes produce a note.
+			// A "matches" claim the extents refute never reaches here — Parse refuses it.
+			const FString AlignmentLine = FMantlePlaceDrapeAlignmentLogic::DescribeForLog(
+				FMantlePlaceDrapeAlignmentLogic::Classify(Manifest.DrapeAlignment));
+			if (!AlignmentLine.IsEmpty())
+			{
+				Log.Add(AlignmentLine);
+			}
 
 			// Sanity-check imagery coverage against the terrain. The drape is placed at its true
 			// geographic footprint; if the bundle's imagery spans only part of the AOI it will not

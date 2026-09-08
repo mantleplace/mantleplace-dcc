@@ -56,7 +56,22 @@
     "manifest.deliveryReasonNotProduced": [
       "unreal"
     ],
+    "manifest.drapeAlignmentDiverges": [
+      "unreal"
+    ],
+    "manifest.drapeAlignmentUnknownShape": [
+      "unreal"
+    ],
+    "manifest.drapeAlignmentUnverified": [
+      "unreal"
+    ],
     "manifest.drapeMissingSha": [
+      "unreal"
+    ],
+    "manifest.foliagePointsUnverified": [
+      "unreal"
+    ],
+    "manifest.foliagePointsVerified": [
       "unreal"
     ],
     "manifest.full": [
@@ -79,6 +94,9 @@
       "unreal"
     ],
     "manifest.planetShapeSphere": [
+      "unreal"
+    ],
+    "manifest.reject.drapeAlignmentContradiction": [
       "unreal"
     ],
     "manifest.reject.notJson": [
@@ -158,6 +176,9 @@
     ],
     "manifest.roadSplinesGpkgOnly": [
       "revit",
+      "unreal"
+    ],
+    "manifest.treePointsRowCount": [
       "unreal"
     ],
     "projection.lonLatToUtm": [
