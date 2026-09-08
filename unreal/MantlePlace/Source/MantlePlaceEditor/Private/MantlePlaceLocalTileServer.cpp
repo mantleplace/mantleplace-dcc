@@ -2,6 +2,8 @@
 
 #include "MantlePlaceLocalTileServer.h"
 
+#include "MantlePlaceLocalTileServerLogic.h"
+
 #include "HttpServerModule.h"
 #include "HttpServerResponse.h"
 #include "HttpServerRequest.h"
@@ -13,27 +15,6 @@
 #include "Modules/ModuleManager.h"
 #include "HAL/PlatformFileManager.h"
 #include "GenericPlatform/GenericPlatformFile.h"
-
-namespace
-{
-	/** Map a file extension to its content type; sets bOutGzip for on-disk-gzip quantized-mesh tiles. */
-	FString ContentTypeFor(const FString& FilePath, bool& bOutGzip)
-	{
-		bOutGzip = false;
-		const FString Ext = FPaths::GetExtension(FilePath, /*bIncludeDot*/ false).ToLower();
-		if (Ext == TEXT("terrain"))
-		{
-			// CTB writes quantized-mesh tiles gzip-compressed on disk; serve as-is and declare the
-			// encoding so the client inflates them.
-			bOutGzip = true;
-			return TEXT("application/vnd.quantized-mesh;extensions=octvertexnormals");
-		}
-		if (Ext == TEXT("json")) { return TEXT("application/json"); }
-		if (Ext == TEXT("png")) { return TEXT("image/png"); }
-		if (Ext == TEXT("jpg") || Ext == TEXT("jpeg")) { return TEXT("image/jpeg"); }
-		return TEXT("application/octet-stream");
-	}
-}
 
 FMantlePlaceLocalTileServer::~FMantlePlaceLocalTileServer()
 {
@@ -100,20 +81,11 @@ void FMantlePlaceLocalTileServer::Stop()
 
 FString FMantlePlaceLocalTileServer::ResolveFile(const FString& RequestPath) const
 {
-	// e.g. "/Terrain/14/5615/11520.terrain" -> <root>/Terrain/14/5615/11520.terrain. Reject traversal.
-	// FHttpPath normalizes to a single leading slash, so one RemoveFromStart suffices.
-	FString Rel = RequestPath;
-	Rel.RemoveFromStart(TEXT("/"));
-	if (Rel.IsEmpty() || Rel.Contains(TEXT("..")))
-	{
-		return FString();
-	}
-
-	FString Candidate = FPaths::ConvertRelativePathToFull(FPaths::Combine(RootDirAbs, Rel));
-	FPaths::NormalizeFilename(Candidate);
-
-	// Containment guard: the resolved path must stay strictly under RootDirAbs.
-	if (!Candidate.StartsWith(RootDirAbs + TEXT("/")))
+	// Which path the request names, and whether it stays inside the served root, is decided in the
+	// logic unit — it is a containment check on an attacker-shaped input, and it is asserted by
+	// MantlePlace.Import.LocalTileServerLogic. What is left here is the half that needs a disk.
+	const FString Candidate = FMantlePlaceLocalTileServerLogic::ResolveUnderRoot(RootDirAbs, RequestPath);
+	if (Candidate.IsEmpty())
 	{
 		return FString();
 	}
@@ -145,7 +117,7 @@ bool FMantlePlaceLocalTileServer::HandleRequest(const FHttpServerRequest& Reques
 	}
 
 	bool bGzip = false;
-	const FString ContentType = ContentTypeFor(File, bGzip);
+	const FString ContentType = FMantlePlaceLocalTileServerLogic::ContentTypeFor(File, bGzip);
 	TUniquePtr<FHttpServerResponse> Response = FHttpServerResponse::Create(MoveTemp(Bytes), ContentType);
 	Response->Code = EHttpServerResponseCodes::Ok;
 	if (bGzip)
