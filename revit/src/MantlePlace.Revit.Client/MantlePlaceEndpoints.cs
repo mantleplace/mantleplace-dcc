@@ -27,8 +27,9 @@ public sealed class MantlePlaceEndpoints
     /// different. When it was Supabase-direct only, a curator without
     /// <c>%LOCALAPPDATA%\MantlePlace\config.json</c> could sign in once and then lose the session
     /// at access-token expiry with a misconfiguration message they had no way to act on — and that
-    /// file has no packaging step that produces it. Supabase-direct is still preferred when the
-    /// project URL and anon key ARE configured, so no existing install changes behaviour.
+    /// file has no packaging step that produces it. The Supabase-direct path is gone rather than
+    /// deprioritised: nothing in the config file selects it, and there is no route left to select.
+    /// <c>AuthSession.RefreshGrantAsync</c> is where that is decided, and says why.
     /// </remarks>
     public string RefreshEndpointUrl { get; init; } = "https://mantle.place/api/v1/auth/native/refresh";
 
