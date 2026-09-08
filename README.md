@@ -5,8 +5,8 @@ tools designers actually work in.
 
 | Host | Where | Status |
 | --- | --- | --- |
-| **Unreal Engine 5.8** | [`unreal/MantlePlace/`](unreal/MantlePlace/) | early access |
-| **Autodesk Revit 2025 / 2026 / 2027** | [`revit/`](revit/) | early access |
+| **Unreal Engine 5.8** | [`unreal/`](unreal/README.md) | pre-1.0 |
+| **Autodesk Revit 2025 / 2026 / 2027** | [`revit/`](revit/README.md) | pre-1.0 |
 
 Licensed under [Apache 2.0](LICENSE). The name is not covered — see [TRADEMARK.md](TRADEMARK.md).
 
@@ -63,7 +63,8 @@ requires reading a line of our plugin code.
 ## Install a built plugin
 
 [**Releases**](https://github.com/mantleplace/mantleplace-dcc/releases) carry a built plugin per
-host, so neither host needs a compiler to try.
+host as each track ships, so trying one needs no compiler. Today that is Unreal: **no Revit release
+exists yet**, and Revit is source-only until the first `revit-` tag.
 
 **Each host has its own release track**, with its own version series and its own cadence — the hosts
 share the manifest contract, not a version number, and their release gates have nothing in common
@@ -74,8 +75,8 @@ exact string the artifact itself declares. The reasoning, and why the first thre
 
 | Host | Asset | Install |
 | --- | --- | --- |
-| Unreal | `MantlePlace-UE5.8-Win64-<version>.zip` | Extract into a project's `Plugins/` directory and open the project. No compilation step. |
-| Revit | `MantlePlace-Revit-<version>.zip` | Copy the `Contents` folder's files into `%APPDATA%\Autodesk\Revit\Addins\<year>\`, for each of 2025/2026/2027 you use — or double-click `Install.cmd`. No admin rights, and no .NET install: Revit brings its own. |
+| Unreal | `MantlePlace-UE5.8-Win64-<version>.zip` | Extract into a project's `Plugins/` directory and open the project. No compilation step; Windows only. Then read [`unreal/README.md`](unreal/README.md) — in particular, the importer saves nothing. |
+| Revit | `MantlePlace-Revit-<version>.zip` | **Not published yet** — source-only until a `revit-` tag ships ([build it](revit/README.md#build-and-test)). When it does: copy the `Contents` folder's files into `%APPDATA%\Autodesk\Revit\Addins\<year>\`, for each of 2025/2026/2027 you use — or double-click `Install.cmd`. No admin rights, and no .NET install: Revit brings its own. |
 
 The Revit package leads with the manual copy rather than the script on purpose
 ([ADR 0005](docs/adr/0005-release-installs-are-copy-first.md)) — Windows blocks downloaded scripts by
@@ -101,7 +102,9 @@ produced by the same pipeline as a paid order.
 2. Order a bundle for your host. The platform packages the artifacts and publishes a manifest.
 3. Either sign in from inside the plugin and use the vault browser, or download the zip and use the
    local-import path:
-   - **Unreal:** the Mantle Place panel → *Browse for vault zip*.
+   - **Unreal:** **Window ▸ Mantle Place**, then *Browse...* to pick the zip and *Import*. The
+     importer saves nothing — use **File ▸ Save All** (Ctrl+Shift+S) before closing the editor or
+     the import is lost. The rest is in [`unreal/README.md`](unreal/README.md).
    - **Revit:** `Mantle Place ▸ Bundles ▸ Import bundle zip`, or set `MANTLEPLACE_BUNDLE_ZIP` and the
      picker is skipped entirely, so the import runs unattended from a script.
 
@@ -136,10 +139,17 @@ Beside that, the plugin ships a streaming path built as a QA tool:
 starts a **local loopback tile server** that hosts the bundle's own Cesium-ready quantized-mesh
 terrain and imagery, then spawns a `Cesium3DTileset` pointed at it — so
 [Cesium for Unreal](https://cesium.com/platform/cesium-for-unreal/) (validated against 2.22.1)
-streams your bundle next to the imported copy. A separate helper in the same script can add Cesium
-World Terrain alongside for an apples-to-apples check; that one needs a Cesium ion account, the
-loopback stream does not. Nothing streams from the Mantle Place platform; the server reads only the
-local zip you already own.
+streams your bundle next to the imported copy. Cesium for Unreal is a prerequisite for this path —
+installed and enabled in the project — and the path is driven from the editor's Python console:
+
+```python
+import mantleplace_cesium_stream as mp
+mp.stream_into_cesium()                             # newest cached vault bundle (the one just imported)
+```
+
+A separate helper in the same script can add Cesium World Terrain alongside for an apples-to-apples
+check; that one needs a Cesium ion account, the loopback stream does not. Nothing streams from the
+Mantle Place platform; the server reads only the local zip you already own.
 
 The two paths do different jobs, and that is the point. Streaming answers *look at it now*; the
 import answers *keep it — offline, forever, no token*. Cesium for Unreal is the natural companion
@@ -164,9 +174,9 @@ docs/                          the ADRs, the shared sign-in contract, the agent 
 .github/workflows/             the four public CI gates, plus tracker hygiene
 ```
 
-Start with each host's own docs: [`revit/README.md`](revit/README.md) for Revit; for Unreal, the
-plugin source. Sign-in is shared by both hosts and documented once, in
-[`docs/platform-auth-contract.md`](docs/platform-auth-contract.md).
+Start with each host's own docs: [`unreal/README.md`](unreal/README.md) for Unreal and
+[`revit/README.md`](revit/README.md) for Revit. Sign-in is shared by both hosts and documented once,
+in [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md).
 
 ## Building
 
@@ -211,7 +221,7 @@ accepted lag rather than a gap we would rather you not notice.
 
 Quarter-by-quarter, in [ROADMAP.md](ROADMAP.md). The headline: **World Partition large-AOI import**
 — today an import produces a single `ALandscape`, and lifting that ceiling is the main course of the
-plugin's path from early access to 1.0 on Fab.
+plugin's path from pre-1.0 to 1.0 on Fab.
 
 ## Contributing
 
