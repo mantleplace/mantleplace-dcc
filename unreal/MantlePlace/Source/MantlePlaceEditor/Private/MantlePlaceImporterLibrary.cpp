@@ -1093,6 +1093,18 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	}
 
 	Result.bSuccess = bAllRequestedSucceeded && Result.CreatedActors.Num() > 0;
+	if (Result.bSuccess)
+	{
+		// Said in the message the user reads, not only in this file's comments: nothing this
+		// importer creates is saved -- there is no SavePackage call in the plugin, every generated
+		// package is only marked dirty -- so a user who closes the editor now loses the import with
+		// no further warning. Last line on purpose, so it is the one left on screen.
+		Log.Add(TEXT("Nothing is saved yet: the imported assets and your level stay unsaved until you use File > Save All (Ctrl+Shift+S)."));
+		UE_LOG(LogMantlePlaceImport, Log,
+			TEXT("Import complete: %d actor(s) created. Nothing is saved yet: the imported assets and "
+				 "your level stay unsaved until you use File > Save All (Ctrl+Shift+S)."),
+			Result.CreatedActors.Num());
+	}
 	Result.Message = FString::Join(Log, TEXT("\n"));
 
 	// Record what this folder is, so the next import of a DIFFERENT order that happens to share

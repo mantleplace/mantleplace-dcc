@@ -32,9 +32,11 @@ already versioned per host in `tools/manifest-conformance/verified-against.json`
 - **Keeping the `v`.** Dropped. semver.org is explicit that `v1.2.3` is not a semantic version — the
   `v` disambiguates a bare number in a flat namespace, a job the host prefix already does. Nothing
   here parses tags (there is no release workflow), and no artifact in the repository carries a `v`:
-  the `.uplugin` declares `"0.3.0"` and `revit/Directory.Build.props` declares `0.1.0`. Without it,
-  a tag is the host plus the exact string the artifact declares, so tag-matches-artifact is a string
-  equality.
+  each host's version is declared once, in the artifact itself — `VersionName` in
+  [`MantlePlace.uplugin`](../../unreal/MantlePlace/MantlePlace.uplugin) for Unreal, `Version` in
+  [`revit/Directory.Build.props`](../../revit/Directory.Build.props) for Revit — and this record
+  does not restate either. Without the `v`, a tag is the host plus the exact string the artifact
+  declares, so tag-matches-artifact is a string equality.
 
 ## Consequences
 
