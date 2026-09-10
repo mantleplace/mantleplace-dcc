@@ -1,7 +1,7 @@
 # Roadmap
 
 Where these plugins are going, a quarter at a time. The near-term arc is the **Unreal plugin from
-early access to 1.0 on Fab**, and the headline item on the way there is **World Partition import**:
+pre-1.0 to 1.0 on Fab**, and the headline item on the way there is **World Partition import**:
 real-world sites brought in as streaming World Partition worlds. Today an imported bundle becomes a
 single `ALandscape`, which is the honest ceiling on how much ground one order can practically bring
 in.
@@ -50,7 +50,7 @@ planned it.
 
 ## Q2 2027
 
-- **1.0 on Fab** — the Unreal plugin graduates early access and lists on Fab; in-repo installs keep
+- **1.0 on Fab** — the Unreal plugin reaches 1.0 and lists on Fab; in-repo installs keep
   working exactly as they do now.
 - **Documentation completion** — the full import reference for both hosts, written against the
   shipped feature set rather than ahead of it.
