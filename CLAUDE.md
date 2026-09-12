@@ -153,6 +153,11 @@ plugin reads them and applies them verbatim.
 This is enforced at review, permanently. A patch that computes a placement value locally is refused
 even when the arithmetic is correct.
 
+That is a boundary on *logic*. The boundary on *work* — which repository an item belongs to, and why
+the project you open to do the work is never the tracker for it — is
+[`docs/agents/work-routing.md`](docs/agents/work-routing.md). The two are independent: work can be
+perfectly thin and still belong somewhere else.
+
 ## Finishing a session
 
 A session finishes what it starts. An item may outlive the session only if it (1) needs a decision
@@ -193,6 +198,10 @@ reformat sweep is refused.
 
 Most facts already have exactly one home. Find it before writing a fact down anywhere else.
 
+- **Which repository a piece of work belongs to** → [`docs/agents/work-routing.md`](docs/agents/work-routing.md).
+  The test is mechanical: **work belongs to the repository whose tracked files its merge commit
+  touches**, and **the project you open to do the work is never the tracker for it**. Read it before
+  filing an issue or deciding that something you hit while working here is this repository's problem.
 - **Writing anything public** — a file, a commit message, a PR title or body, a branch name →
   [`docs/agents/public-surface.md`](docs/agents/public-surface.md).
 - **What a word means** → [`CONTEXT.md`](CONTEXT.md) — the glossary, and only that; no rule, no
@@ -204,7 +213,9 @@ Most facts already have exactly one home. Find it before writing a fact down any
   identity, where a **re-import refuses** — 0002's bug in the other host with the opposite remedy ·
   **0005** release installs are copy-first · **0006** Unreal **declines**
   `elevation.dem.bounds_target_crs` while Revit consumes it, and why the asymmetry is the contract
-  rather than a disagreement. Write one only for a decision hard to reverse,
+  rather than a disagreement · **0007** every `HPS-NN` cited in a public file must resolve in a
+  public document, so the **publicly-cited half of the standard is published here** and a private
+  rule becomes uncitable in public. Write one only for a decision hard to reverse,
   surprising without the context, and the result of a real trade-off; an ADR is not a design
   document.
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
@@ -224,9 +235,12 @@ Most facts already have exactly one home. Find it before writing a fact down any
     [`corpus/README.md`](tools/manifest-conformance/corpus/README.md); the corpus is normative and
     maintainer-owned, so a case is proposed by pull request, never forked.
   - [`changelog.md`](spec/changelog.md) — the one place versions appear, as dated history.
-- **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id. Its *portable*
-  half is published as [`spec/`](spec/); the vault-client half stays private, and `HPS-NN` ids are
-  for internal prose, not for the public spec.
+- **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id. Its master is
+  private, and [`docs/adr/0007-publicly-cited-standard-rules-are-published-here.md`](docs/adr/0007-publicly-cited-standard-rules-are-published-here.md)
+  decides that **a public file may cite only a rule whose text is public** — the publicly-cited half
+  is published here, and a rule that stays private becomes uncitable in public. Until that document
+  exists, **no public file may add an `HPS-NN` citation it does not already carry.** This is not
+  [`spec/`](spec/), whose charter is the bundle format and nothing else.
 - **Signing in, tokens, refresh, sign-out** →
   [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md) — what `mantle.place` must
   serve for either host to sign in and stay signed in, and which rejections are definitive. Both
