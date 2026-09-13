@@ -98,8 +98,9 @@ after that PR merges, and only to the merged commit on `main` — pinning to you
 on your machine and unfetchable for everyone else.
 
 This applies to any consumer of this repo. The Mantle Place project tree mounts it at
-`unreal/Plugins/MantlePlaceDcc/` and documents the full loop on its side; the rule above is what
-matters wherever you are.
+`Plugins/MantlePlaceDcc/` — the consuming project's root is an Unreal project root, so that is the
+path UE's recursive plugin scan finds it on — and documents the full loop on its side. The rule
+above is what matters wherever you are.
 
 ## Worktrees and branches
 
