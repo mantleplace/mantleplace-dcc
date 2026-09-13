@@ -47,11 +47,29 @@ is right.
 
 State the reasoning in prose instead of citing what a reader cannot open.
 
-## Rule ids are fine, links to them are not
+## Rule ids are fine, links to them are not — and an `HPS-NN` must resolve
 
 `HPS-40`, `DOC-06` and their kin are stable public identifiers and stay as prose. Do not turn them
 into paths. This is the distinction the gate draws: the id is a name the repository is expected to
 use, the link is a door a stranger cannot open.
+
+⛔ **That only holds while the text behind the id is published, so it is checked.** Every `HPS-NN`
+in a tracked file must be *stated* in [`docs/host-plugin-standard.md`](../host-plugin-standard.md),
+and `ci-public-hygiene` fails when one is not. The failure it exists to prevent is the one that
+already happened: two READMEs written for strangers told a reader that sign-in opens the system
+browser, that the refresh token is stored per-OS-user, and that a download is verified before it is
+renamed into place — each claim followed by an identifier that resolved nowhere they could reach.
+The claim and the identifier both looked authoritative, and one of them was a dead end.
+
+A **definition** is a rule statement — the id in backticks at the start of a line, followed by an em
+dash. A passing mention of another rule's precedent is not, so citing a rule nobody wrote stays
+refused. `DOC-` and other domains are **not** checked: their documents are not published here, and
+the gate refuses to imply otherwise.
+
+⚠️ This one check cannot document itself with a worked example, and that is a real asymmetry rather
+than an oversight. A refused `#NN` is written inside a code span above, because a code span is how
+the rule quotes itself and is exempt. For a rule id a code span is the *normal citation form*, so
+exempting one would gut the check — the examples live in the gate's own test corpus instead.
 
 ## The six publication surfaces
 
@@ -126,8 +144,8 @@ at packaging time from the build's secret store and must never be set in a commi
 
 ## This one is checked
 
-`ci-public-hygiene` runs the gate over the first five surfaces, and its `references` job is a
-**required check on `main`**. It became a gate after being prose alone until a private tracker's
+`ci-public-hygiene` runs the gate over the first five surfaces — and, on tracked files, the
+rule-id resolution check above. Its `references` job is a **required check on `main`**. It became a gate after being prose alone until a private tracker's
 issue number reached a committed test comment and sat on `main` — a rule nothing checks is a rule
 that decays silently and is noticed by a stranger rather than by us.
 

@@ -451,5 +451,71 @@ class TheTrackerReportSaysWhatItIs(unittest.TestCase):
         self.assertEqual(url.rsplit("issuecomment-", 1)[-1], "3344556677")
 
 
+class RuleIdsMustResolve(unittest.TestCase):
+    """`HPS-NN` is a stable public identifier and stays as prose — but only while the text behind it
+    is published. It was not, for a while, and two READMEs written for strangers cited ids that
+    resolved nowhere they could reach: the claim and the identifier both looked authoritative, and
+    one of them was a dead end. A rule nothing checks decays silently, which is how the file rule
+    became a gate; this is the same argument one layer along."""
+
+    def test_a_rule_statement_is_a_definition(self):
+        published = "⛔ `HPS-01` — Every host plugin implements four layers.\n"
+        self.assertEqual(gate.defined_rule_ids(published), {"HPS-01"})
+
+    def test_every_shape_the_document_actually_uses(self):
+        published = (
+            "⛔ `HPS-01` — hard rule, unbolded\n"
+            "`HPS-02` — plain rule\n"
+            "- ⛔ **`HPS-46a` — a bolded rule inside a list**\n"
+            "  **`HPS-46b` — indented and bolded**\n"
+        )
+        self.assertEqual(
+            gate.defined_rule_ids(published), {"HPS-01", "HPS-02", "HPS-46a", "HPS-46b"}
+        )
+
+    def test_a_passing_MENTION_is_not_a_definition(self):
+        # Otherwise "see HPS-99's precedent" would quietly license citing a rule nobody wrote.
+        published = "Resolved on `HPS-46a`'s precedent, and see `HPS-99` for the rest.\n"
+        self.assertEqual(gate.defined_rule_ids(published), set())
+
+    def test_a_cited_id_that_does_not_resolve_is_refused(self):
+        found = gate.unresolved_rule_ids(
+            "The refresh token is stored per-OS-user (`HPS-14`), verified before rename (`HPS-99`).\n",
+            "revit/README.md",
+            {"HPS-14"},
+        )
+        self.assertEqual(len(found), 1)
+        self.assertIn("HPS-99", found[0])
+        self.assertIn("revit/README.md", found[0])
+
+    def test_the_message_says_where_the_rule_should_live(self):
+        # "HPS-99 is unknown" leaves the reader guessing whether to add the citation or the rule.
+        found = gate.unresolved_rule_ids("see `HPS-99`\n", "a.md", {"HPS-14"})
+        self.assertIn(gate.PUBLISHED_STANDARD, found[0])
+
+    def test_a_resolving_id_passes_on_every_surface_a_rule_is_cited_from(self):
+        for text in (
+            "// HPS-33: applied verbatim, never re-derived\n",
+            "The manifest's values are applied verbatim (`HPS-33`).\n",
+            '{"rule": "HPS-33"}\n',
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(gate.unresolved_rule_ids(text, "a.cs", {"HPS-33"}), [])
+
+    def test_the_lettered_variants_are_distinct_ids(self):
+        # HPS-46a resolving does not make HPS-46 resolve, and the reverse: they are separate rules.
+        found = gate.unresolved_rule_ids("see `HPS-46`\n", "a.md", {"HPS-46a"})
+        self.assertEqual(len(found), 1)
+
+    def test_the_published_standard_is_not_checked_against_itself(self):
+        # It is where the rules are stated; every id in it resolves by construction, and a
+        # forward reference inside it is a drafting matter rather than a dangling citation.
+        self.assertIn(gate.PUBLISHED_STANDARD, gate.RULE_SELF_EXEMPT)
+
+    def test_several_unresolved_on_one_line_are_all_reported(self):
+        found = gate.unresolved_rule_ids("see `HPS-98` and `HPS-99`\n", "a.md", set())
+        self.assertEqual(len(found), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
