@@ -122,6 +122,41 @@ PRIVATE_SIBLING = re.compile(
 SHORTNAME_REFERENCE = re.compile(r"\b[Nn]at(?=\s+(?:(?i:PR|issue)\s+)?#\d+)")
 OWN_REPOSITORY = frozenset({"mantleplace-dcc", "mantleplace/mantleplace-dcc"})
 
+# ---------------------------------------------------------------------------------------------
+# The second rule this gate enforces: a published rule id must resolve.
+#
+# `HPS-NN` is a stable public identifier and stays as prose — that is the distinction drawn above,
+# rule ids are fine and links to them are not. It only holds while the text behind the id is
+# published, and for a while it was not: two READMEs written for strangers told a reader that
+# sign-in opens the system browser, that the refresh token is stored per-OS-user, and that a
+# download is verified before it is renamed into place — each claim followed by an identifier that
+# resolved nowhere they could reach. The claim and the identifier both looked authoritative and one
+# of them was a dead end.
+#
+# So the ids are checked the way the citations are: a rule cited anywhere in this repository must
+# be STATED in the published standard. A rule nothing checks decays silently, which is how the file
+# rule became a gate in the first place; this is the same argument one layer along.
+PUBLISHED_STANDARD = "docs/host-plugin-standard.md"
+RULE_REFERENCE = re.compile(r"\bHPS-\d+[a-z]?\b")
+
+# ⛔ A DEFINITION, not a mention. The id in backticks, at the start of a statement — line start,
+# optionally a list marker, an eye-catcher and bold — followed by the em dash every rule statement
+# uses. A looser test ("the id appears somewhere in the document") would let a passing reference to
+# a rule's precedent license citing a rule nobody ever wrote, which is the dangling reference in a
+# different disguise.
+#
+# ⚠️ Note what this file CANNOT do that the rest of it can: quote an example. A refused issue
+# reference is written inside a code span here, because a code span is how the rule documents
+# itself and is exempt. That escape does not exist for a rule id, because a code span is the NORMAL
+# citation form — exempting one would gut the check. So the examples live in the test corpus, which
+# is the one path SELF_EXEMPT names, and this comment says so rather than leaving the next reader
+# to rediscover it by tripping the gate with a worked example.
+RULE_DEFINITION = re.compile(r"(?m)^\s*(?:[-*]\s+)?(?:⛔\s*)?(?:\*\*)?`(HPS-\d+[a-z]?)`\s+—")
+
+# The standard states the rules, so every id in it resolves by construction. A forward reference
+# inside it is a drafting matter for review, not a dangling citation for a gate.
+RULE_SELF_EXEMPT = frozenset({PUBLISHED_STANDARD})
+
 # The shape rule for branch names: a path segment that opens with an issue number — bare, or
 # dressed as `#88`, "issue-88" or "gh-88", which are the retry shapes a developer reaches for when
 # the bare number is refused. Anchored to the segment start so version digits inside a word
@@ -305,6 +340,29 @@ def violations(path: pathlib.Path, relative: str, redact: bool = False) -> list[
     return violations_in_text(text, relative, surface="file", redact=redact)
 
 
+def defined_rule_ids(published: str) -> set[str]:
+    """Every rule the published standard actually states."""
+    return set(RULE_DEFINITION.findall(published))
+
+
+def unresolved_rule_ids(text: str, label: str, defined: set[str]) -> list[str]:
+    """Every `HPS-NN` in this text that the published standard does not state.
+
+    Reported per occurrence rather than per id: a file citing two unknown rules has two things to
+    fix, and collapsing them costs the author a second round trip to learn the second one.
+    """
+    found: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        for match in RULE_REFERENCE.finditer(line):
+            if match.group() in defined:
+                continue
+            found.append(
+                f"{label}:{number}: {match.group()} resolves nowhere a reader here can reach — "
+                f"state the rule in {PUBLISHED_STANDARD}, or replace the citation with prose"
+            )
+    return found
+
+
 def branch_name_violations(name: str, redact: bool = False) -> list[str]:
     """A branch name is a metadata surface with one extra rule: its shape. A path segment opening
     with digits is an issue number whatever tracker it came from, and the public remote renders it
@@ -455,6 +513,12 @@ def main(argv: list[str]) -> int:
     else:
         paths = tracked_files(root)
 
+    # The published standard, read once. Absent, every rule id in the tree is unresolved — which is
+    # the correct reading of "the document is gone" and is exactly what the gate should say, rather
+    # than passing quietly because it could not find its own reference.
+    standard = root / PUBLISHED_STANDARD
+    defined = defined_rule_ids(standard.read_text(encoding="utf-8")) if standard.is_file() else set()
+
     found = []
     checked = 0
     for path in paths:
@@ -465,7 +529,10 @@ def main(argv: list[str]) -> int:
             continue
 
         checked += 1
-        found.extend(violations(path, relative, redact=arguments.redact))
+        text = path.read_text(encoding="utf-8", errors="replace")
+        found.extend(violations_in_text(text, relative, surface="file", redact=arguments.redact))
+        if relative not in RULE_SELF_EXEMPT:
+            found.extend(unresolved_rule_ids(text, relative, defined))
 
     return report(found, checked, "file(s)")
 

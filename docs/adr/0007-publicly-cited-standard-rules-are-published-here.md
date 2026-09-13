@@ -50,8 +50,11 @@ compounds to.
   `HPS-NN` from a public file and fails when it does not resolve in the published document. A rule
   nothing checks is a rule that decays silently, which is how this repository's hygiene rule became
   a gate in the first place.
-- **Until the document exists, no public file may add an `HPS-NN` citation it does not already
-  carry.** This stops the count growing while the work is in flight.
+- ~~**Until the document exists, no public file may add an `HPS-NN` citation it does not already
+  carry.**~~ **Lifted 2026-09-12**, when [`docs/host-plugin-standard.md`](../host-plugin-standard.md)
+  was published and the gate went live. It did its job: the count did not grow while the work was in
+  flight. A citation is now free to add — and if the rule it names is not published yet, the answer
+  is to state the rule, not to drop the citation.
 
 ## What was rejected
 

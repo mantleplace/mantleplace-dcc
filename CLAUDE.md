@@ -236,12 +236,14 @@ Most facts already have exactly one home. Find it before writing a fact down any
     [`corpus/README.md`](tools/manifest-conformance/corpus/README.md); the corpus is normative and
     maintainer-owned, so a case is proposed by pull request, never forked.
   - [`changelog.md`](spec/changelog.md) — the one place versions appear, as dated history.
-- **Cross-host normative rules** → the Host Plugin Standard, cited by `HPS-NN` id. Its master is
-  private, and [`docs/adr/0007-publicly-cited-standard-rules-are-published-here.md`](docs/adr/0007-publicly-cited-standard-rules-are-published-here.md)
-  decides that **a public file may cite only a rule whose text is public** — the publicly-cited half
-  is published here, and a rule that stays private becomes uncitable in public. Until that document
-  exists, **no public file may add an `HPS-NN` citation it does not already carry.** This is not
-  [`spec/`](spec/), whose charter is the bundle format and nothing else.
+- **Cross-host normative rules** → [`docs/host-plugin-standard.md`](docs/host-plugin-standard.md),
+  cited by `HPS-NN` id. [ADR 0007](docs/adr/0007-publicly-cited-standard-rules-are-published-here.md)
+  decides that **a public file may cite only a rule whose text is public**, and `ci-public-hygiene`
+  now enforces it: an `HPS-NN` that the published standard does not state fails the gate. The
+  interim "no new citations" rule is retired — add one freely, and if the rule it names is not
+  published yet, state the rule rather than dropping the citation. This is not [`spec/`](spec/),
+  whose charter is the bundle format and nothing else; the standard says what a host must *do* with
+  a field, `spec/` says what the field is.
 - **Signing in, tokens, refresh, sign-out** →
   [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md) — what `mantle.place` must
   serve for either host to sign in and stay signed in, and which rejections are definitive. Both
