@@ -46,6 +46,13 @@ void RecordOnCurrent(const TCHAR* InPhase, double InSeconds, FString InDetail)
 	}
 }
 
+FScopedCurrentPhase::~FScopedCurrentPhase()
+{
+	// Resolved at destruction rather than at construction: the answer is the same for the whole
+	// scope, and doing it here keeps the guard a plain local with nothing to check on the way in.
+	RecordOnCurrent(Phase, FPlatformTime::Seconds() - StartSeconds, MoveTemp(Detail));
+}
+
 FScopedCurrent::FScopedCurrent(FTimeline& InTimeline)
     : Previous(GCurrent)
 {

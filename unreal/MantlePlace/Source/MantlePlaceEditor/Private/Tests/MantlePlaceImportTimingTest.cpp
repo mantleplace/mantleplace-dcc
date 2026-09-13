@@ -152,6 +152,32 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the outer timeline got nothing"), Outer.GetEntries().Num(), 0);
 	}
 
+	// --- FScopedCurrentPhase reaches the running import from another function -------------------
+	// The form a phase measured outside ImportVaultPackage's own scope must use. The first cut of
+	// the Cesium-streaming phase used the in-scope form in a function with no timeline in it and
+	// did not compile; this pins the working shape so a later edit cannot quietly swap it back.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		{
+			FScopedCurrent Publish(Timeline);
+			{
+				const FScopedCurrentPhase Measured(Phase::CesiumAvailability, TEXT("400 entries"));
+			}
+		}
+		TestEqual(TEXT("it recorded against the running import"), Timeline.GetEntries().Num(), 1);
+		if (Timeline.GetEntries().Num() == 1)
+		{
+			TestEqual(TEXT("it carries its detail"), Timeline.GetEntries()[0].Detail, FString(TEXT("400 entries")));
+		}
+	}
+
+	// --- And outside an import it is a no-op, not a crash ----------------------------------------
+	{
+		TestNull(TEXT("no import is current here"), Current());
+		const FScopedCurrentPhase Measured(Phase::CesiumAvailability);
+	}
+
 	// --- FScopedPhase records on the way out, on whichever path leaves the scope -----------------
 	{
 		FTimeline Timeline;

@@ -1326,9 +1326,14 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 		// ⛔ Hotspot: a recursive scan of the extracted terrain tree plus a JSON rewrite, once per
 		// stream. The detail carries the entry count, because the cost is a function of it and a
 		// timing line without it is not comparable between two differently sized bundles.
+		//
+		// FScopedCurrentPhase, not FScopedPhase: this is a different function from
+		// ImportVaultPackage and there is no timeline in scope here. The first cut used the
+		// in-scope form and did not compile — which is the one thing the private compile gate
+		// catches that neither review nor this repository's own CI can.
 		{
-			const MantlePlaceImportTiming::FScopedPhase AvailabilityPhase(
-				Timeline, MantlePlaceImportTiming::Phase::CesiumAvailability,
+			const MantlePlaceImportTiming::FScopedCurrentPhase AvailabilityPhase(
+				MantlePlaceImportTiming::Phase::CesiumAvailability,
 				FString::Printf(TEXT("%d entries"), Incoming.EntryCount));
 			RewriteCesiumTerrainAvailability(TerrainRootOnDisk, Manifest.JobId);
 		}
