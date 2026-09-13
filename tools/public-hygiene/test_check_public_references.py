@@ -15,6 +15,7 @@ import tempfile
 import unittest
 
 import check_public_references as gate
+import report_tracker_findings as reporter
 
 
 def scan(text: str, name: str = "sample.md") -> list[str]:
@@ -321,6 +322,133 @@ class SurfacesStaySeparate(unittest.TestCase):
 
     def test_the_metadata_surface_never_learns_the_bare_number_pattern(self):
         self.assertEqual(scan_text("see #91 for the trace\n"), [])
+
+
+class TrackerTextIsTheSixthSurface(unittest.TestCase):
+    """An issue title, an issue body and a comment are world-readable the moment they are posted,
+    with no draft state before that. They are metadata in the gate's sense, not files: a bare `#42`
+    there is this repository's own self-citation and GitHub renders it as one."""
+
+    def test_a_bare_self_citation_in_an_issue_body_stays_legal(self):
+        self.assertEqual(scan_text("Superseded by #76; take the masks there.\n", "issue #93 body"), [])
+
+    def test_the_qualified_form_is_refused_in_an_issue_body(self):
+        found = scan_text("Blocked on mantleplace-nat#113.\n", "issue #94 body")
+        self.assertEqual(len(found), 1)
+        self.assertIn("issue #94 body", found[0])
+
+    def test_a_private_sibling_name_is_refused_in_a_comment(self):
+        found = scan_text("The numbers live in mantleplace-nat.\n", "comment 5051 on issue #94")
+        self.assertEqual(len(found), 1)
+
+    def test_a_decision_log_id_is_refused_in_an_issue_title(self):
+        found = scan_text("Fold D-CX into the ignore block", "issue #94 title")
+        self.assertEqual(len(found), 1)
+
+
+class RedactedFindingsDoNotRepublish(unittest.TestCase):
+    """The tracker gate reports by posting a comment on the offending issue. A report that quoted
+    the refused token would make the gate's own comment a second, permanent copy of the thing it
+    refused — so editing the issue would no longer clean it up, which is the whole point of
+    noticing. The Actions log keeps the full detail; what gets posted does not."""
+
+    def test_the_refused_token_is_not_echoed(self):
+        found = gate.violations_in_text(
+            "Blocked on mantleplace-nat#113.\n", "issue #94 body", surface="metadata", redact=True
+        )
+        self.assertEqual(len(found), 1)
+        self.assertNotIn("mantleplace-nat", found[0])
+        self.assertNotIn("#113", found[0])
+
+    def test_a_redacted_finding_still_says_where_and_what_rule(self):
+        # A report that redacts everything is a report nobody can act on. Location and rule stay.
+        found = gate.violations_in_text(
+            "Blocked on mantleplace-nat#113.\n", "issue #94 body", surface="metadata", redact=True
+        )
+        self.assertIn("issue #94 body:1", found[0])
+        self.assertIn("another repository", found[0])
+
+    def test_every_refusal_shape_redacts(self):
+        cases = [
+            "Blocked on mantleplace-nat#113.\n",
+            "The numbers live in mantleplace-nat.\n",
+            "Recorded there as D-CX.\n",
+            "Ported from nat #68 against this code\n",
+        ]
+        for text in cases:
+            with self.subTest(text=text):
+                found = gate.violations_in_text(text, "issue body", surface="metadata", redact=True)
+                self.assertEqual(len(found), 1)
+                self.assertNotIn("mantleplace-nat", found[0])
+                self.assertNotIn("D-CX", found[0])
+                self.assertNotIn("#68", found[0])
+
+    def test_the_file_surface_redacts_too(self):
+        found = gate.violations_in_text("see #91 for the trace\n", "a.md", redact=True)
+        self.assertEqual(len(found), 1)
+        self.assertNotIn("#91", found[0])
+        self.assertIn("private tracker", found[0])
+
+    def test_unredacted_is_still_the_default(self):
+        # CI's own log names the token, because the person reading it is us.
+        found = scan_text("Blocked on mantleplace-nat#113.\n")
+        self.assertIn("mantleplace-nat#113", found[0])
+
+    def test_the_branch_shape_rule_redacts_its_name(self):
+        found = gate.branch_name_violations("88-fix-the-drape", redact=True)
+        self.assertTrue(found)
+        self.assertTrue(all("88-fix-the-drape" not in line for line in found))
+
+
+class TheTrackerReportSaysWhatItIs(unittest.TestCase):
+    """The comment this workflow posts is itself a publication. These cases pin the two properties
+    that make it safe to post: it never carries the refused token, and it never claims to have
+    prevented anything."""
+
+    def test_the_posted_body_carries_no_refused_token(self):
+        findings = gate.violations_in_text(
+            "Blocked on mantleplace-nat#113, recorded as D-CX.\n",
+            "issue 94 body",
+            surface="metadata",
+            redact=True,
+        )
+        body = reporter.FOUND_BODY.format(
+            marker=reporter.MARKER,
+            findings="\n".join(findings),
+            run_url="https://example.invalid/run/1",
+            footer=reporter.FOOTER,
+        )
+        self.assertNotIn("mantleplace-nat", body)
+        self.assertNotIn("#113", body)
+        self.assertNotIn("D-CX", body)
+
+    def test_the_posted_body_names_the_run_that_has_the_detail(self):
+        body = reporter.FOUND_BODY.format(
+            marker=reporter.MARKER,
+            findings="  issue 94 body:1: a refused token cites an issue in another repository",
+            run_url="https://example.invalid/run/1",
+            footer=reporter.FOOTER,
+        )
+        self.assertIn("https://example.invalid/run/1", body)
+
+    def test_both_bodies_say_detection_rather_than_prevention(self):
+        # A tool that implied it had blocked the post would be worse than no tool, because
+        # somebody would rely on it. The text was public before this ever ran. Both messages carry
+        # the same footer so neither can drift away from saying it.
+        self.assertIn("detection, not prevention", reporter.FOOTER)
+        self.assertIn(reporter.FOOTER, reporter.CLEAN_BODY)
+        self.assertIn("{footer}", reporter.FOUND_BODY)
+
+    def test_the_marker_is_invisible_to_a_reader_and_exact_to_match(self):
+        self.assertTrue(reporter.MARKER.startswith("<!--"))
+        self.assertTrue(reporter.MARKER.endswith("-->"))
+        self.assertIn(reporter.MARKER, reporter.CLEAN_BODY)
+
+    def test_a_comment_url_resolves_to_its_id(self):
+        # The shape gh returns. Getting this wrong would post a new comment every time instead of
+        # updating one, which is the noise the marker exists to prevent.
+        url = "https://github.com/o/r/issues/94#issuecomment-3344556677"
+        self.assertEqual(url.rsplit("issuecomment-", 1)[-1], "3344556677")
 
 
 if __name__ == "__main__":

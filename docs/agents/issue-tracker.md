@@ -46,6 +46,15 @@ The one split worth knowing before you type: **a bare `#42` in an issue body, a 
 message or a PR body is this repo's own self-reference and is fine.** In a *file* it is not, and
 `ci-public-hygiene` refuses it there.
 
+**`ci-tracker-hygiene` checks this surface, and it detects rather than prevents.** It runs the same
+checker over an issue title, an issue body and every comment, on the `issues` and `issue_comment`
+events. It cannot stop a post — by the time it runs, the text is public and indexed — so what it
+does instead is make a human look: a comment on the issue, the `public-hygiene` label, and a red
+run. The comment is updated in place, clears itself once the finding is gone, and deliberately
+**does not quote the refused token**, because it is itself public and permanent; the workflow run's
+log carries the exact text. There is no pre-publication hook for a tracker post and there cannot be
+one, so the prevention is reading [`public-surface.md`](public-surface.md) before typing.
+
 Commits are signed off (`git commit -s`, DCO, no CLA — see [`CONTRIBUTING.md`](../../CONTRIBUTING.md)).
 
 ## When a skill says "publish to the issue tracker"
