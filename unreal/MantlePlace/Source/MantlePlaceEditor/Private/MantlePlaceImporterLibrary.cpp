@@ -11,6 +11,7 @@
 #include "MantlePlaceEditorSettings.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportProvenance.h"
+#include "MantlePlaceImportTiming.h"
 #include "MantlePlaceIntegrityLogic.h"
 #include "MantlePlaceLandscapeImporter.h"
 #include "MantlePlaceLandscapeWeightsLogic.h"
@@ -45,6 +46,7 @@
 #include "Landscape.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Optional.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -365,6 +367,21 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	FMantlePlaceImportResult Result;
 	TArray<FString> Log;
 
+	// Timing runs for the WHOLE function, including every early return. An import that refuses at
+	// the integrity check is still an import somebody waited on, and "it failed after four minutes"
+	// is a different report from "it failed instantly" — so the summary is emitted by the scope
+	// guard below rather than at the success path, which would only ever measure the happy case.
+	MantlePlaceImportTiming::FTimeline Timeline;
+	Timeline.Start();
+	MantlePlaceImportTiming::FScopedCurrent PublishTimeline(Timeline);
+	FMantlePlaceScopedRestore EmitTiming([&Timeline]()
+	{
+		for (const FString& Line : Timeline.BuildSummary())
+		{
+			UE_LOG(LogMantlePlaceImport, Log, TEXT("%s"), *Line);
+		}
+	});
+
 	// --- Validate the file ---
 	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 	if (ZipPath.IsEmpty() || !PlatformFile.FileExists(*ZipPath))
@@ -374,6 +391,10 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	}
 
 	// --- Open the zip (FZipArchiveReader takes ownership of the handle) ---
+	// Scoped so the phase closes when the manifest is parsed, whichever way this block exits.
+	TOptional<MantlePlaceImportTiming::FScopedPhase> ZipPhase;
+	ZipPhase.Emplace(Timeline, MantlePlaceImportTiming::Phase::ZipAndManifest);
+
 	IFileHandle* Handle = PlatformFile.OpenRead(*ZipPath);
 	if (Handle == nullptr)
 	{
@@ -414,6 +435,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	Log.Add(FString::Printf(TEXT("Bundle manifest version %s (jobId %s)."),
 		*Manifest.Version, *MantlePlaceImportNaming::ShortIdentity(Manifest.JobId)));
 
+	ZipPhase.Reset();
+
 	// --- Fail-closed integrity check: the downloaded bytes must match the manifest's declared sha256
 	// before anything is imported. A corrupt/truncated/tampered download aborts here, creating nothing.
 	// WHICH payloads are in the chain is decided in the pure logic unit and walked here, rather than
@@ -421,6 +444,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// CSV came to be the one artifact imported unverified while the manifest had been publishing a
 	// digest for it: a payload left out of a hand-written chain is invisible, and nothing fails.
 	{
+		const MantlePlaceImportTiming::FScopedPhase IntegrityPhase(
+			Timeline, MantlePlaceImportTiming::Phase::IntegrityPrecheck);
 		const TArray<FMantlePlaceDeclaredArtifact> Declared =
 			FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(Manifest);
 		int32 VerifiedCount = 0;
@@ -576,6 +601,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			// element selection, tripping the "Element type ID 0 not registered" ensure. An empty
 			// selection makes that path a no-op.
 			GEditor->SelectNone(/*bNoteSelectionChange*/ false, /*bDeselectBSPSurfs*/ true, /*bWarnAboutManyActors*/ false);
+			const MantlePlaceImportTiming::FScopedPhase WipePhase(
+				Timeline, MantlePlaceImportTiming::Phase::Wipe, TEXT("assets"));
 			AssetSubsystem->DeleteDirectory(DestPackagePath);
 		}
 	}
@@ -596,6 +623,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	FString TerrainMeshError, TerrainMeshDisk;
 	if (bWantMesh && Manifest.bHasMesh)
 	{
+		const MantlePlaceImportTiming::FScopedPhase MeshPhase(
+			Timeline, MantlePlaceImportTiming::Phase::Artifact, TEXT("terrain mesh (glTF, Nanite)"));
 		if (ExtractEntry(Reader, Manifest.MeshPath, TempDir, TerrainMeshDisk, TerrainMeshError))
 		{
 			TerrainMesh = MantlePlaceMeshImporter::ImportMeshAsset(
@@ -607,6 +636,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	FString BuildingsMeshError, BuildingsMeshDisk;
 	if (Manifest.bHasBuildings)
 	{
+		const MantlePlaceImportTiming::FScopedPhase BuildingsPhase(
+			Timeline, MantlePlaceImportTiming::Phase::Artifact, TEXT("buildings mesh (glTF)"));
 		if (ExtractEntry(Reader, Manifest.BuildingsPath, TempDir, BuildingsMeshDisk, BuildingsMeshError))
 		{
 			BuildingsMesh = MantlePlaceMeshImporter::ImportMeshAsset(
@@ -615,6 +646,15 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	}
 
 	FScopedTransaction Transaction(LOCTEXT("ImportVaultPackage", "Import Mantle Place Vault Package"));
+
+	// ⛔ Declared immediately AFTER the transaction so it is destroyed immediately BEFORE it —
+	// locals tear down in reverse declaration order, which makes this scope end exactly where the
+	// transaction's own commit begins. Declared before it, this would close first and measure
+	// nothing. The number it reports is therefore "everything after the last artifact, up to the
+	// commit", and the commit itself lands in the unmeasured remainder; sizing the commit properly
+	// needs a guard inside FScopedTransaction, which is engine code.
+	const MantlePlaceImportTiming::FScopedPhase TransactionPhase(
+		Timeline, MantlePlaceImportTiming::Phase::TransactionClose);
 
 	TArray<AActor*> DrapeTargets;
 	bool bAllRequestedSucceeded = true;
@@ -631,6 +671,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// tag, so it is not matched here — and the content guard above has already refused the import
 	// rather than leaving those actors orphaned beside new ones.
 	{
+		const MantlePlaceImportTiming::FScopedPhase WipeActorsPhase(
+			Timeline, MantlePlaceImportTiming::Phase::Wipe, TEXT("actors"));
 		const FName ImportTagName(*MantlePlaceImportNaming::ImportTag(Identity));
 		TArray<AActor*> StaleActors;
 		for (TActorIterator<AActor> It(World); It; ++It)
@@ -657,6 +699,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	UMaterialInstanceConstant* DrapeMic = nullptr;
 	if (Manifest.bHasDrape)
 	{
+		const MantlePlaceImportTiming::FScopedPhase DrapePhase(
+			Timeline, MantlePlaceImportTiming::Phase::Artifact, TEXT("drape texture + material"));
 		FString Err, ImageryDisk;
 		if (ExtractEntry(Reader, Manifest.DrapePath, TempDir, ImageryDisk, Err))
 		{
@@ -707,6 +751,12 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				}
 				if (bDecoded)
 				{
+					// ⛔ Hotspot: nearest-neighbour resampling of every weight plane. Measured on
+					// its own rather than inside the landscape phase, because the point of the
+					// baseline is to size this against the shader stall it shares a phase with.
+					const MantlePlaceImportTiming::FScopedPhase ResamplePhase(
+						Timeline, MantlePlaceImportTiming::Phase::WeightResample,
+						FString::Printf(TEXT("%d plane(s)"), Images.Num()));
 					bDecoded = FMantlePlaceLandscapeWeightsLogic::BuildWeightPlanes(
 						*Weights, Images, Manifest.Resolution, Manifest.bRow0IsNorth, WeightPlanes, WeightsErr);
 				}
@@ -717,6 +767,9 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				}
 			}
 
+			const MantlePlaceImportTiming::FScopedPhase LandscapePhase(
+				Timeline, MantlePlaceImportTiming::Phase::Artifact,
+				FString::Printf(TEXT("landscape %dx%d"), Manifest.Resolution, Manifest.Resolution));
 			FString Err, HeightmapDisk;
 			if (ExtractEntry(Reader, Manifest.HeightmapPath, TempDir, HeightmapDisk, Err))
 			{
@@ -1269,7 +1322,16 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 
 		// Correct the bundle's over-declared `available` so Cesium only requests tiles that exist,
 		// and log whether it needed correcting — see RewriteCesiumTerrainAvailability.
-		RewriteCesiumTerrainAvailability(TerrainRootOnDisk, Manifest.JobId);
+		//
+		// ⛔ Hotspot: a recursive scan of the extracted terrain tree plus a JSON rewrite, once per
+		// stream. The detail carries the entry count, because the cost is a function of it and a
+		// timing line without it is not comparable between two differently sized bundles.
+		{
+			const MantlePlaceImportTiming::FScopedPhase AvailabilityPhase(
+				Timeline, MantlePlaceImportTiming::Phase::CesiumAvailability,
+				FString::Printf(TEXT("%d entries"), Incoming.EntryCount));
+			RewriteCesiumTerrainAvailability(TerrainRootOnDisk, Manifest.JobId);
+		}
 
 		if (!MantlePlaceStreamStaging::Write(Incoming))
 		{
