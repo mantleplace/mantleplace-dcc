@@ -4,6 +4,7 @@
 
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportNaming.h"
+#include "MantlePlaceImportTiming.h"
 #include "MantlePlaceLandscapeWeightsLogic.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -312,6 +313,15 @@ namespace MantlePlaceLandscapeImporter
 				GShaderCompilingManager->FinishAllCompilation();
 			}
 			const double CompileSeconds = FPlatformTime::Seconds() - CompileStart;
+
+			// The same number the line below already prints, reported into the running import's
+			// timeline so it appears in the summary block beside every other phase. It is measured
+			// here rather than wrapped in a FScopedPhase because the measurement already existed —
+			// the stall has been timed since the day it was found, and duplicating the clock would
+			// let the two numbers drift. Null-safe by construction: this importer is also driven by
+			// tests, where there is no import and RecordOnCurrent does nothing.
+			MantlePlaceImportTiming::RecordOnCurrent(
+				MantlePlaceImportTiming::Phase::ShaderStall, CompileSeconds);
 
 			// 2) Rebuild the combination + per-component material instances from a clean slate (true
 			//    invalidates the cached combination map) and recreate render state for every component.
