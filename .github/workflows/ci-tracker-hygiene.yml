@@ -1,0 +1,145 @@
+# Tracker hygiene — the sixth publication surface.
+#
+# docs/agents/public-surface.md named five surfaces and ci-public-hygiene covers all five: tracked
+# files, commit messages, pull request titles, pull request bodies and branch names. The issue
+# tracker is the sixth, and it was the one nothing checked.
+#
+# docs/agents/issue-tracker.md already states the rule for it, in as many words: this tracker is
+# public, everything written to it is world-readable the moment it is posted, there is no draft
+# state before that, and nothing that resolves only inside a private repository goes into one. So
+# the rule existed and nothing enforced it — which is precisely the asymmetry that made the file
+# rule a gate in the first place. A rule nothing checks is a rule that decays silently and is
+# noticed by a stranger rather than by us.
+#
+# ⛔ THIS DETECTS; IT CANNOT PREVENT. A workflow cannot block a post the way a required check
+# blocks a merge: by the time this job starts the text is already public and already indexed. So
+# the useful outcomes are the ones that make a human look — a comment on the issue, a label, and a
+# red run — and all three say "detection" rather than dress themselves up as a gate. Prevention is
+# the pre-publication story: read public-surface.md before typing, and enable the commit-msg hook.
+#
+# ⛔ THE REPORT IS ITSELF PUBLISHED, so the findings that reach the comment are --redact'ed. A
+# comment quoting the refused token would make this workflow's own comment a second, permanent copy
+# of the thing it refused, and editing the issue would then no longer clean it up. The Actions log
+# keeps the exact token, because the reader there is us.
+#
+# Hosted runner, stdlib only. The only network calls are gh's, to this repository's own API.
+name: ci-tracker-hygiene
+
+on:
+  issues:
+    # `edited` is the one that matters most: a body edited after the first check is exactly when a
+    # private reference gets pasted in. `reopened` re-reads text that may have changed while closed.
+    types: [opened, edited, reopened]
+  issue_comment:
+    # Fires for pull request comments too, and that is deliberate rather than incidental: a comment
+    # on a pull request is as world-readable as one on an issue, and ci-public-hygiene covers the
+    # PR's title and body but never its comments. Leaving them out would be an arbitrary hole in
+    # the surface this workflow exists to close.
+    types: [created, edited]
+  workflow_dispatch:
+
+# Per issue, not per ref: every run of this workflow is on the default branch, so a ref-keyed group
+# would serialize unrelated issues behind one another. Cancelling in progress is right — a rapid
+# second edit supersedes the first, and only the latest text is what stands published.
+concurrency:
+  group: ci-tracker-hygiene-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  issues: write
+  pull-requests: write # an issue_comment event on a pull request labels and comments through this
+
+jobs:
+  tracker-text:
+    runs-on: ubuntu-latest
+    # ⛔ Never re-read our own comment. Without this the workflow comments on an issue, the
+    # `issue_comment: created` event fires for that comment, and it comments again — forever. The
+    # bot's comment legitimately contains the vocabulary of the rule, so a content-based guard
+    # would be the wrong shape; the author is the reliable signal.
+    if: github.event.comment.user.login != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false # this job reads text handed to it on stdin; no payloads are involved
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The gate's own cases first, tracker-text and redaction included. A gate that posts a public
+      # comment had better be tested before it is allowed to post one.
+      - name: Unit-test the gate
+        working-directory: tools/public-hygiene
+        run: python -m unittest discover -p "test_*.py" -v
+
+      # ⛔ Issue and comment text is written by anyone on the internet. It reaches the shell ONLY
+      # through env, never interpolated into `run:` — an expression inside the script text would
+      # hand the author of a hostile issue body a shell on this runner. Same rule ci-public-hygiene
+      # applies to a fork's pull request title.
+      #
+      # The metadata pattern set is the right one and the checker needs no new rules: a bare `#42`
+      # in tracker text is this repository's own self-citation and GitHub renders it as one,
+      # exactly as in a commit message or a pull request body. The qualified form and a private
+      # repository's name stay refused.
+      #
+      # Every field is checked before the step reports, so a finding in a title never hides a
+      # second one in the body and cost the author a round trip to learn it.
+      - name: Check the tracker text this event carries
+        id: check
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          : > findings.txt
+          status=0
+
+          check() {
+            if ! printf '%s' "$2" |
+              python tools/public-hygiene/check_public_references.py \
+                --stdin --label "$1" --redact >> findings.txt
+            then
+              status=1
+            fi
+            # Unredacted, into the log only. The reader here is us, and the token is what makes a
+            # finding actionable in ten seconds rather than ten minutes.
+            printf '%s' "$2" |
+              python tools/public-hygiene/check_public_references.py --stdin --label "$1" || true
+          }
+
+          if [ "$EVENT_NAME" = "issues" ]; then
+            check "issue ${ISSUE_NUMBER} title" "$ISSUE_TITLE"
+            check "issue ${ISSUE_NUMBER} body" "$ISSUE_BODY"
+          else
+            check "comment ${COMMENT_ID} on ${ISSUE_NUMBER}" "$COMMENT_BODY"
+          fi
+
+          # Only the FINDING lines reach the comment. The checker's own summary paragraph is for a
+          # terminal, and repeating it under a heading that already says the same thing is noise.
+          grep -E '^  ' findings.txt > redacted.txt || : > redacted.txt
+
+          if [ "$status" = 0 ]; then echo "clean=true" >> "$GITHUB_OUTPUT"
+          else echo "clean=false" >> "$GITHUB_OUTPUT"; fi
+
+      # `always()`: the step above reports rather than throws, but a failure anywhere in it must not
+      # swallow the findings it had already written.
+      - name: Report on the issue
+        if: always() && github.event.issue.number
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/public-hygiene/report_tracker_findings.py \
+            --issue "${{ github.event.issue.number }}" \
+            --findings-file redacted.txt \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      # The run's own status is the third signal, and the only one visible without opening the
+      # issue. It is last so the comment is already posted when someone follows the red X.
+      - name: Fail the run when the tracker text was refused
+        if: always() && steps.check.outputs.clean == 'false'
+        run: |
+          echo "Refused private references in tracker text — the issue carries the detail." >&2
+          exit 1

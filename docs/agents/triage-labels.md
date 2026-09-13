@@ -34,5 +34,10 @@ The tracker also carries `tracking` and `confirmed`, which exempt an issue from 
 can be `confirmed` and `needs-info` at once, and neither counts as the one state role a triaged
 issue carries. Leave them alone unless the stale job is what you are reasoning about.
 
+`public-hygiene` is applied and removed by `ci-tracker-hygiene`, never by hand. It means this
+issue's own text cites something only a private repository can resolve
+([`public-surface.md`](public-surface.md)). It is also orthogonal to the table, and it clears itself
+once the text is edited — removing it manually hides a finding rather than fixing one.
+
 `bug`, `enhancement` and `wontfix` are GitHub's defaults. Edit the right-hand column if the
 vocabulary ever diverges — the left-hand column is what the skills say and does not change.

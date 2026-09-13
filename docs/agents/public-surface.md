@@ -1,6 +1,6 @@
 ---
 name: public-surface
-description: What may and may not be written into a world-readable repository — the refused citations (issue numbers, private repository names, internal decision-log ids), the five publication surfaces (files, commit messages, PR titles, PR bodies, branch names), and the structural exemptions. Read before writing a commit message, a PR title or body, a branch name, or any citation; enforced by the ci-public-hygiene gate.
+description: What may and may not be written into a world-readable repository — the refused citations (issue numbers, private repository names, internal decision-log ids), the six publication surfaces (files, commit messages, PR titles, PR bodies, branch names, and issue/comment text), and the structural exemptions. Read before writing a commit message, a PR title or body, a branch name, an issue or a comment, or any citation; enforced by the ci-public-hygiene gate on the first five and by ci-tracker-hygiene on the sixth, which detects rather than prevents.
 ---
 
 # Everything here is public
@@ -53,19 +53,38 @@ State the reasoning in prose instead of citing what a reader cannot open.
 into paths. This is the distinction the gate draws: the id is a name the repository is expected to
 use, the link is a door a stranger cannot open.
 
-## The five publication surfaces
+## The six publication surfaces
 
-A file is one surface of five. A commit message, a pull request title, a pull request body and a
-branch name are all world-readable the moment they are pushed — the branch name before any review
-exists — and a commit message can never be edited at all.
+A file is one surface of six. A commit message, a pull request title, a pull request body, a branch
+name and the issue tracker's own text are all world-readable the moment they are pushed or posted —
+the branch name before any review exists, a tracker post with no draft state at all — and a commit
+message can never be edited.
 
-| Surface | Bare `#42` | Everything else above |
-| --- | --- | --- |
-| Tracked files | refused | refused |
-| Commit messages | **allowed** | refused |
-| Pull request titles | **allowed** | refused |
-| Pull request bodies | **allowed** | refused |
-| Branch names | refused | refused |
+| Surface | Bare `#42` | Everything else above | Checked by |
+| --- | --- | --- | --- |
+| Tracked files | refused | refused | `ci-public-hygiene` |
+| Commit messages | **allowed** | refused | `ci-public-hygiene` |
+| Pull request titles | **allowed** | refused | `ci-public-hygiene` |
+| Pull request bodies | **allowed** | refused | `ci-public-hygiene` |
+| Branch names | refused | refused | `ci-public-hygiene` |
+| Issue and comment text | **allowed** | refused | `ci-tracker-hygiene` |
+
+**The sixth surface detects; it cannot prevent.** A workflow cannot block a post the way a required
+check blocks a merge — by the time it runs, the text is public and indexed. `ci-tracker-hygiene`
+therefore reports three ways, each for a different reader: **a comment on the issue** for the
+author, **the `public-hygiene` label** for anyone scanning the list or filtering with
+`gh issue list --label public-hygiene`, and **a failed run** for anyone watching Actions without
+opening the issue. The comment is updated in place rather than re-posted, and it clears itself when
+the finding is gone.
+
+⛔ **The comment never quotes the refused token.** It is itself public and permanent, so quoting
+would make it a second copy of the thing being refused — and editing the issue would then no longer
+clean it up, which is the whole point of noticing. The findings that reach it come from
+`check_public_references.py --redact`; the workflow run's log keeps the exact token, because the
+reader there is us.
+
+Prevention on this surface is the pre-publication story only: read this file before you type. There
+is no hook for a tracker post, and there cannot be one.
 
 **The one split:** in a commit message or a pull request body a bare `#42` is this repository's
 native way to cite its own issue, and GitHub appends one to every squash-merge subject — refusing it
@@ -107,10 +126,14 @@ at packaging time from the build's secret store and must never be set in a commi
 
 ## This one is checked
 
-`ci-public-hygiene` runs the gate, and its `references` job is a **required check on `main`**. It
-became a gate after being prose alone until a private tracker's issue number reached a committed test
-comment and sat on `main` — a rule nothing checks is a rule that decays silently and is noticed by a
-stranger rather than by us.
+`ci-public-hygiene` runs the gate over the first five surfaces, and its `references` job is a
+**required check on `main`**. It became a gate after being prose alone until a private tracker's
+issue number reached a committed test comment and sat on `main` — a rule nothing checks is a rule
+that decays silently and is noticed by a stranger rather than by us.
+
+`ci-tracker-hygiene` runs the same checker over the sixth, on the `issues` and `issue_comment`
+events. It is not a required check and cannot be one: there is no merge to block. Its outcome is
+the comment, the label and the red run described above.
 
 CI runs *after* a push has already published. Opt into the pre-publication hooks once per clone:
 

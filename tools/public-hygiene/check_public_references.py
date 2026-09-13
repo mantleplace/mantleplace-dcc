@@ -49,10 +49,11 @@ explicitly rather than matched by a pattern, so the exemption cannot quietly wid
 own script is deliberately NOT on the list, which is why the placeholders in this docstring are
 written inside code spans like every other quotation of the rule.
 
-Files are one surface of five. A commit message, a pull request title or body, and a branch name
-are all world-readable the moment they are pushed — the branch name before any review exists — and
-a commit message can never be edited at all. Those "metadata" surfaces carry a different pattern
-set, because what renders there differs in kind:
+Files are one surface of six. A commit message, a pull request title or body, a branch name, and
+the issue tracker's own text are all world-readable the moment they are pushed or posted — the
+branch name before any review exists, a tracker post with no draft state at all — and a commit
+message can never be edited. Those "metadata" surfaces carry a different pattern set, because what
+renders there differs in kind:
 
   #NNN            ALLOWED here. In a commit message or PR body a bare number is this repository's
                   native way to cite its own issue, and GitHub appends one to every squash-merge
@@ -69,11 +70,18 @@ set, because what renders there differs in kind:
 A branch name additionally has a shape rule: a path segment that starts with digits is an issue
 number wearing a slash, whatever tracker it came from — the convention is type/short-description.
 
+The tracker is the sixth surface and needs no new rules — an issue title, an issue body and a
+comment are metadata in exactly this sense, so they go through `--stdin` with the metadata pattern
+set. What is different is the reporting: CI cannot block a post the way a required check blocks a
+merge, because the text is already public by the time the workflow starts. So the tracker gate
+detects rather than prevents, and it reports by posting a comment on the offending issue — which is
+why `--redact` exists. See REDACTIONS.
+
 Run with no arguments to check the whole tree; pass paths to check just those. The other surfaces:
 `--stdin --label "PR body"` checks piped text, `--branch-name NAME` a ref name,
 `--commit-msg-file PATH` a message being written, and `--commit-range ARGS...` every commit
 `git log` selects — pass `HEAD --not origin/main`-style arguments so history that predates the gate
-is never re-litigated.
+is never re-litigated. Add `--redact` to any of them when the report itself will be published.
 """
 
 from __future__ import annotations
@@ -126,6 +134,32 @@ HOST_ORDINAL = re.compile(r"(?i)\bhost $")
 HTML_ENTITY = re.compile(r"&$")
 CSS_COLOUR = re.compile(r":$")
 CSS_DIGITS = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b")
+
+
+# ⛔ What a finding says when it is going to be POSTED somewhere public rather than printed into a
+# CI log. The tracker gate reports by commenting on the offending issue, and a report that quoted
+# the refused token would make that comment a second, permanent copy of the very thing it refused —
+# so editing the issue would no longer clean it up, which is the entire point of noticing. The
+# category is enough to act on; the Actions log keeps the exact token, because the reader there is
+# us.
+# Each finding's own sentence already names the category — "cites an issue in another repository",
+# "is a decision-log id" — so a category placeholder would only restate it, and stutter doing so.
+# The placeholder therefore says no more than that something was refused, and the sentence after it
+# does the explaining. The branch rule is the exception: its sentence is about the NAME's shape, so
+# it needs a subject rather than nothing.
+REDACTIONS = {
+    "issue": "a refused token",
+    "qualified": "a refused token",
+    "sibling": "a refused token",
+    "shorthand": "a refused token",
+    "decision": "a refused token",
+    "branch": "this branch name",
+}
+
+
+def shown(token: str, kind: str, redact: bool) -> str:
+    """The token itself, or the category it belongs to when the finding is going somewhere public."""
+    return REDACTIONS[kind] if redact else token
 
 
 def tracked_files(root: pathlib.Path) -> list[pathlib.Path]:
@@ -189,13 +223,19 @@ def inside_url(line: str, start: int) -> bool:
     return "://" in line[token_start:start]
 
 
-def violations_in_text(text: str, label: str, surface: str = "file") -> list[str]:
+def violations_in_text(
+    text: str, label: str, surface: str = "file", redact: bool = False
+) -> list[str]:
     """Every finding in one piece of text, labelled so the report points at what to edit.
 
     The surface picks the pattern set. "file" is tracked-file prose, where a bare number is the
-    hazard. "metadata" is a commit message, PR title or body, or branch name, where a bare number
-    is this repository's own voice and the hazards are the qualified and named shapes. The
-    exemption machinery is shared: a code span documents the rule on every surface.
+    hazard. "metadata" is a commit message, PR title or body, a branch name, or tracker text — an
+    issue title, an issue body, a comment — where a bare number is this repository's own voice and
+    the hazards are the qualified and named shapes. The exemption machinery is shared: a code span
+    documents the rule on every surface.
+
+    `redact` replaces each refused token with the category it belongs to, for a report that is
+    itself going to be published. See REDACTIONS.
     """
     found: list[str] = []
     for number, line in enumerate(text.splitlines(), start=1):
@@ -205,7 +245,8 @@ def violations_in_text(text: str, label: str, surface: str = "file") -> list[str
             for match in ISSUE_REFERENCE.finditer(line):
                 if not exempt(line, match.start(), match.end(), spans):
                     found.append(
-                        f"{label}:{number}: {match.group()} cites an issue in a private tracker; "
+                        f"{label}:{number}: {shown(match.group(), 'issue', redact)} cites an issue "
+                        f"in a private tracker; "
                         f"where GitHub renders Markdown it also auto-links to an unrelated issue "
                         f"in THIS public repository"
                     )
@@ -222,54 +263,61 @@ def violations_in_text(text: str, label: str, surface: str = "file") -> list[str
                     continue
                 if not exempt(line, match.start(), match.end(), spans):
                     found.append(
-                        f"{label}:{number}: {match.group()} cites an issue in another repository "
+                        f"{label}:{number}: {shown(match.group(), 'qualified', redact)} cites an issue "
+                        f"in another repository "
                         f"— a stranger meets a 404, and the rule forbids the citation either way"
                     )
 
             for match in PRIVATE_SIBLING.finditer(line):
                 if not exempt(line, match.start(), match.end(), spans):
                     found.append(
-                        f"{label}:{number}: {match.group()} names a private sibling repository; "
+                        f"{label}:{number}: {shown(match.group(), 'sibling', redact)} names a private "
+                        f"sibling repository; "
                         f"say which side owns the work without naming what a reader cannot open"
                     )
 
             for match in SHORTNAME_REFERENCE.finditer(line):
                 if not exempt(line, match.start(), match.end(), spans):
                     found.append(
-                        f"{label}:{number}: '{match.group()} #NN' is shorthand for a private "
+                        f"{label}:{number}: {shown(match.group() + ' #NN', 'shorthand', redact)} is "
+                        f"shorthand for a private "
                         f"repository's issue, and resolves for nobody reading this"
                     )
 
         for match in DECISION_REFERENCE.finditer(line):
             if not any(low <= match.start() < high for low, high in spans):
                 found.append(
-                    f"{label}:{number}: {match.group()} is a decision-log id from a private "
+                    f"{label}:{number}: {shown(match.group(), 'decision', redact)} is a decision-log "
+                    f"id from a private "
                     f"repository, and names a document no reader here can open"
                 )
 
     return found
 
 
-def violations(path: pathlib.Path, relative: str) -> list[str]:
+def violations(path: pathlib.Path, relative: str, redact: bool = False) -> list[str]:
     try:
         text = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         # Not text after all, so nothing renders. Silence here is correct, not a gap.
         return []
 
-    return violations_in_text(text, relative, surface="file")
+    return violations_in_text(text, relative, surface="file", redact=redact)
 
 
-def branch_name_violations(name: str) -> list[str]:
+def branch_name_violations(name: str, redact: bool = False) -> list[str]:
     """A branch name is a metadata surface with one extra rule: its shape. A path segment opening
     with digits is an issue number whatever tracker it came from, and the public remote renders it
-    in the pull request header forever — deleting the ref later does not unpublish it."""
-    found = violations_in_text(name, f"branch {name}", surface="metadata")
+    in the pull request header forever — deleting the ref later does not unpublish it.
+
+    The label carries the name itself, so it is redacted too when the report is being published."""
+    where = "branch" if redact else f"branch {name}"
+    found = violations_in_text(name, where, surface="metadata", redact=redact)
     if NUMERIC_SEGMENT.search(name):
         found.append(
-            f"branch {name}:1: a path segment starts with digits, which reads as an issue number; "
-            f"branch names here are type/short-description, and the cross-reference belongs in the "
-            f"private side's pin-bump pull request"
+            f"{where}:1: a path segment of {shown(name, 'branch', redact)} starts with digits, "
+            f"which reads as an issue number; branch names here are type/short-description, and "
+            f"the cross-reference belongs in the private side's pin-bump pull request"
         )
     return found
 
@@ -345,6 +393,12 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--branch-name", help="check one ref name, shape rule included")
     parser.add_argument("--commit-msg-file", help="check a message being written (commit-msg hook)")
     parser.add_argument(
+        "--redact",
+        action="store_true",
+        help="name each finding's category instead of quoting the refused token, for a report "
+        "that is itself going to be published",
+    )
+    parser.add_argument(
         "--commit-range",
         nargs=argparse.REMAINDER,
         help="check every commit these git-log arguments select, e.g. HEAD --not origin/main",
@@ -355,13 +409,15 @@ def main(argv: list[str]) -> int:
     # the tree scan would print "OK: 208 file(s)" for a branch name that was never checked — a
     # false green from the gate whose whole job is refusing false greens.
     if arguments.stdin:
-        found = violations_in_text(sys.stdin.read(), arguments.label, surface="metadata")
+        found = violations_in_text(
+            sys.stdin.read(), arguments.label, surface="metadata", redact=arguments.redact
+        )
         return report(found, 1, "text(s)")
 
     if arguments.branch_name is not None:
         if not arguments.branch_name:
             parser.error("--branch-name was given an empty value; nothing was checked")
-        found = branch_name_violations(arguments.branch_name)
+        found = branch_name_violations(arguments.branch_name, redact=arguments.redact)
         return report(found, 1, "branch name(s)")
 
     if arguments.commit_msg_file is not None:
@@ -372,7 +428,9 @@ def main(argv: list[str]) -> int:
         raw = pathlib.Path(arguments.commit_msg_file).read_text(
             encoding="utf-8", errors="replace"
         )
-        found = violations_in_text(commit_message_body(raw), "commit message", surface="metadata")
+        found = violations_in_text(
+            commit_message_body(raw), "commit message", surface="metadata", redact=arguments.redact
+        )
         return report(found, 1, "message(s)")
 
     if arguments.commit_range is not None:
@@ -381,7 +439,9 @@ def main(argv: list[str]) -> int:
         found = []
         selected = commit_messages(arguments.commit_range)
         for label, message in selected:
-            found.extend(violations_in_text(message, label, surface="metadata"))
+            found.extend(
+                violations_in_text(message, label, surface="metadata", redact=arguments.redact)
+            )
         return report(found, len(selected), "commit message(s)")
 
     root = pathlib.Path(
@@ -405,7 +465,7 @@ def main(argv: list[str]) -> int:
             continue
 
         checked += 1
-        found.extend(violations(path, relative))
+        found.extend(violations(path, relative, redact=arguments.redact))
 
     return report(found, checked, "file(s)")
 
