@@ -172,6 +172,34 @@ FTimeline* Current();
 /** Record against the running import, or do nothing when there is not one. */
 void RecordOnCurrent(const TCHAR* InPhase, double InSeconds, FString InDetail = FString());
 
+/**
+ * Measures one phase against whichever import is running, and records it on the way out.
+ *
+ * The counterpart to FScopedPhase, for a phase that is NOT inside ImportVaultPackage's own scope.
+ * Streaming a Cesium terrain is one: it happens in its own function, reached from the import but
+ * with no timeline in scope, and the alternative was a timing parameter on a signature that has
+ * nothing else to do with timing. Null-safe for the same reason RecordOnCurrent is — that function
+ * is also reachable from tests, where no import is running.
+ */
+class FScopedCurrentPhase
+{
+public:
+	explicit FScopedCurrentPhase(const TCHAR* InPhase, FString InDetail = FString())
+	    : Phase(InPhase), Detail(MoveTemp(InDetail)), StartSeconds(FPlatformTime::Seconds())
+	{
+	}
+
+	~FScopedCurrentPhase();
+
+	FScopedCurrentPhase(const FScopedCurrentPhase&) = delete;
+	FScopedCurrentPhase& operator=(const FScopedCurrentPhase&) = delete;
+
+private:
+	const TCHAR* Phase;
+	FString Detail;
+	double StartSeconds;
+};
+
 /** Publishes a timeline as the current one for the duration of the scope. */
 class FScopedCurrent
 {
