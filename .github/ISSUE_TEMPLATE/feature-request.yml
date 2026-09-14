@@ -1,6 +1,6 @@
 name: Feature request
 description: Something a plugin should do that it does not.
-labels: ["enhancement"]
+labels: ["enhancement", "needs-triage"]
 body:
   - type: markdown
     attributes:

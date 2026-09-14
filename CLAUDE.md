@@ -267,6 +267,7 @@ contains.
 - **Issue tracker** → [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). GitHub issues
   on `mantleplace/mantleplace-dcc`, via `gh`; external PRs are **not** a triage surface.
 - **Triage labels** → [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md). Five state
-  roles and two categories, each label string equal to its own name.
+  roles and two categories, each label string equal to its own name; plus the stale-job exemptions
+  and the `wayfinder:` planning family, both orthogonal to them.
 - **Domain docs** → [`docs/agents/domain.md`](docs/agents/domain.md). Single-context: one
   [`CONTEXT.md`](CONTEXT.md) and one [`docs/adr/`](docs/adr/), both cross-host.

@@ -1,6 +1,6 @@
 ---
 name: triage-labels
-description: Maps the skills' five canonical triage state roles and two categories to the label strings that actually exist on this tracker, and names the two labels that are not triage roles at all and only exempt an issue from the stale job. Read before applying, removing or reasoning about a label.
+description: Maps the skills' five canonical triage state roles and two categories to the label strings that actually exist on this tracker, and names the labels that are not triage roles at all, and the separate wayfinder family used for planning work. Read before applying, removing or reasoning about a label.
 ---
 
 # Triage labels
@@ -29,15 +29,35 @@ Every triaged issue carries exactly one category and one state.
 
 ## Labels that are not triage roles
 
-The tracker also carries `tracking` and `confirmed`, which exempt an issue from the stale job
-(`stale.yml` — tracker hygiene, not a merge gate). They are orthogonal to the table above: an issue
-can be `confirmed` and `needs-info` at once, and neither counts as the one state role a triaged
-issue carries. Leave them alone unless the stale job is what you are reasoning about.
+The tracker also carries `tracking`, `confirmed`, `security` and `pinned`, which exempt an issue
+from the stale job (`stale.yml` — tracker hygiene, not a merge gate). They are orthogonal to the
+table above: an issue can be `confirmed` and `needs-info` at once, and none of them counts as the
+one state role a triaged issue carries. Leave them alone unless the stale job is what you are
+reasoning about. All four exist on the tracker; `stale.yml` named `security` and `pinned` in its
+exempt lists for some time before either label was created, which made those two exemptions inert
+without erroring.
 
 `public-hygiene` is applied and removed by `ci-tracker-hygiene`, never by hand. It means this
 issue's own text cites something only a private repository can resolve
 ([`public-surface.md`](public-surface.md)). It is also orthogonal to the table, and it clears itself
 once the text is edited — removing it manually hides a finding rather than fixing one.
+
+## Wayfinder labels
+
+Planning work uses a second family: `wayfinder:map` for the map issue that indexes an effort's
+decisions, and `wayfinder:research` / `wayfinder:prototype` / `wayfinder:grilling` /
+`wayfinder:task` for its child tickets. The skill that creates them is now `/map`, but the label
+strings kept the older `wayfinder:` prefix on purpose, because they were already live on trackers
+and renaming them would have been a behaviour change rather than a rename.
+
+**A wayfinder ticket is exempt from the one-category-one-state invariant.** It is a planning
+artifact created by whoever is running the effort, not an inbound report, and triage is only ever
+for issues you did not create. It carries its wayfinder label and needs nothing else.
+
+## Deleting a label
+
+Don't, if anything has ever carried it. Removing a label strips it from every issue that used it,
+including closed ones, and the tracker is the only record that it was ever applied.
 
 `bug`, `enhancement` and `wontfix` are GitHub's defaults. Edit the right-hand column if the
 vocabulary ever diverges — the left-hand column is what the skills say and does not change.
