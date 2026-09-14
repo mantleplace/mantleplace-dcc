@@ -54,6 +54,32 @@ and renaming them would have been a behaviour change rather than a rename.
 artifact created by whoever is running the effort, not an inbound report, and triage is only ever
 for issues you did not create. It carries its wayfinder label and needs nothing else.
 
+## Host labels
+
+Which plugin an issue is about. **Orthogonal to category and state, and more than one may apply** —
+a change to the shared spec or the conformance corpus lands on several hosts at once.
+
+| Label | Host |
+| --- | --- |
+| `host:unreal` | Mantle Place for Unreal Engine |
+| `host:revit` | Mantle Place for Revit |
+| `host:rhino` | Mantle Place for Rhino |
+| `host:blender` | Mantle Place for Blender |
+| `host:max` | Mantle Place for 3ds Max |
+| `host:all` | Cross-host: every plugin host, or the shared spec, tools and corpus |
+
+`host:all` is not "I don't know which" — that is an unlabelled host, and it is a `needs-triage`
+signal. Use `host:all` when the answer is genuinely every host: the spec, the conformance corpus,
+`tools/`, the workflows, the repo's own documentation.
+
+The roster is fixed and ordered — Unreal and Revit first, then Rhino, Blender, Max — and
+`ROADMAP.md` already names the three that have no code yet. Labels exist for all five so an issue
+filed against a future host has somewhere to go; a label is not a folder, and the rule that a
+top-level folder appears only with real content is untouched by this.
+
+The bug-report template asks for the host as a required dropdown, but an issue form cannot turn that
+answer into a label. Applying it is a triage step.
+
 ## Deleting a label
 
 Don't, if anything has ever carried it. Removing a label strips it from every issue that used it,
