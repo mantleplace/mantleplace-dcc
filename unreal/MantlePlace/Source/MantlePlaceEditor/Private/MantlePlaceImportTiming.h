@@ -213,4 +213,74 @@ public:
 private:
 	FTimeline* Previous;
 };
+
+/**
+ * The machine-readable half of the timeline, for a reader that is not a person.
+ *
+ * `BuildSummary` is a block meant to be read: a prose header, a right-padded label column, a share
+ * column. Every one of those is presentation, and the first reword breaks anything parsing it
+ * without breaking anything a person notices — the numbers still print, they just stop being found.
+ * So a consumer outside this process gets a record instead, and the two audiences stop sharing one
+ * format neither is well served by.
+ *
+ * ⛔ **The record is un-thresholded, and this is not a detail.** It carries what was measured and
+ * nothing about what the measurement ought to have been. This plugin is world-readable; a bar
+ * committed here would state, permanently and in history, what is considered acceptable import cost
+ * on hardware this repository does not describe. What counts as a good timeline is a judgement, it
+ * depends on a machine and a bundle neither of which is here, and it belongs to whoever consumes
+ * this file. A headless test asserts the absence, because the edit that adds an "expected" column
+ * is one line and reads as harmless in a diff.
+ */
+
+/** What a record carries beyond the phases themselves. */
+struct FRecordContext
+{
+	/**
+	 * The bundle's file NAME, never its path. A path names a machine's directory layout, and this
+	 * record is written to be collected as a build artifact by whatever asked for it.
+	 */
+	FString Bundle;
+
+	/**
+	 * Whether the import this timeline measured reported success.
+	 *
+	 * An import that failed after four minutes is a different measurement from one that took four
+	 * minutes, and a consumer that cannot tell them apart will eventually average them.
+	 */
+	bool bSucceeded = false;
+};
+
+/**
+ * The shape name every record carries, so a consumer can refuse a shape it does not know rather
+ * than read a field that has moved. Bump it when a field changes meaning, not when one is added.
+ */
+inline const TCHAR* const RecordSchema = TEXT("mantleplace.import-timeline/1");
+
+/**
+ * The environment variable naming the directory records are written into.
+ *
+ * Opt-in, and unset by default: a plugin that scatters JSON into a curator's project earns a bug
+ * report about a folder nobody asked for. Something that wants the records says where.
+ */
+inline const TCHAR* const RecordDirectoryVariable = TEXT("MANTLEPLACE_IMPORT_TIMELINE_DIR");
+
+/** One timeline as one JSON object. Pure — no file system, no environment. */
+FString BuildRecord(const FTimeline& Timeline, const FRecordContext& Context);
+
+/** The directory named by `MANTLEPLACE_IMPORT_TIMELINE_DIR`, or empty when it is unset. */
+FString RecordDirectoryFromEnvironment();
+
+/**
+ * Write one record into `Directory`, and return the file written.
+ *
+ * Returns empty when `Directory` is empty — the opt-out path, and not a failure — and also when the
+ * write fails, which is why the caller checks the directory itself before deciding what to say. The
+ * directory is created if it does not exist: a consumer naming a path ahead of the run that fills
+ * it is the normal case.
+ *
+ * The file name is unique per call rather than fixed. One import per run is today's shape and not a
+ * guarantee, and a second import overwriting the first would leave a consumer grading the wrong one
+ * with nothing to notice.
+ */
+FString WriteRecord(const FTimeline& Timeline, const FRecordContext& Context, const FString& Directory);
 }

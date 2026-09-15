@@ -2,6 +2,14 @@
 
 #include "MantlePlaceImportTiming.h"
 
+#include "HAL/FileManager.h"
+#include "HAL/PlatformMisc.h"
+#include "Misc/DateTime.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Guid.h"
+#include "Misc/Paths.h"
+#include "Serialization/JsonWriter.h"
+
 namespace MantlePlaceImportTiming
 {
 namespace
@@ -113,5 +121,70 @@ TArray<FString> FTimeline::BuildSummary() const
 
 	Lines.Add(TEXT("-------------------------------------------------------------------"));
 	return Lines;
+}
+
+FString BuildRecord(const FTimeline& Timeline, const FRecordContext& Context)
+{
+	FString Json;
+	const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Json);
+
+	Writer->WriteObjectStart();
+	Writer->WriteValue(TEXT("schema"), FString(RecordSchema));
+	Writer->WriteValue(TEXT("writtenAtUtc"), FDateTime::UtcNow().ToIso8601());
+	Writer->WriteValue(TEXT("bundle"), Context.Bundle);
+	Writer->WriteValue(TEXT("succeeded"), Context.bSucceeded);
+
+	// Wall time, exactly as the summary block prints it, and NOT the sum of the phases below. The
+	// phases do not tile the import; a consumer that added them up would get a different number
+	// and no way to tell which one is what the import cost.
+	Writer->WriteValue(TEXT("totalWallSeconds"), Timeline.ElapsedSeconds());
+
+	// The entries as recorded, in the order recorded, one object each — including the repeats. A
+	// phase that did not run has no entry, which means "not reached" here for the same reason it
+	// does in the summary block; a zero would read as "instant".
+	Writer->WriteArrayStart(TEXT("phases"));
+	for (const FEntry& Entry : Timeline.GetEntries())
+	{
+		Writer->WriteObjectStart();
+		Writer->WriteValue(TEXT("phase"), Entry.Phase != nullptr ? FString(Entry.Phase) : FString(TEXT("(unnamed)")));
+		Writer->WriteValue(TEXT("detail"), Entry.Detail);
+		Writer->WriteValue(TEXT("seconds"), Entry.Seconds);
+		Writer->WriteObjectEnd();
+	}
+	Writer->WriteArrayEnd();
+
+	Writer->WriteObjectEnd();
+	Writer->Close();
+	return Json;
+}
+
+FString RecordDirectoryFromEnvironment()
+{
+	return FPlatformMisc::GetEnvironmentVariable(RecordDirectoryVariable);
+}
+
+FString WriteRecord(const FTimeline& Timeline, const FRecordContext& Context, const FString& Directory)
+{
+	if (Directory.IsEmpty())
+	{
+		return FString();
+	}
+
+	// Timestamp first so a directory of records sorts chronologically in a file listing, and a
+	// short guid after it because two imports in the same second are possible and a collision here
+	// would silently discard one of them.
+	const FString FileName = FString::Printf(TEXT("ImportTimeline-%s-%s.json"),
+	                                         *FDateTime::UtcNow().ToString(TEXT("%Y%m%d-%H%M%S")),
+	                                         *FGuid::NewGuid().ToString(EGuidFormats::Digits).Left(8));
+	const FString Path = FPaths::Combine(Directory, FileName);
+
+	IFileManager::Get().MakeDirectory(*Directory, /*Tree*/ true);
+	if (!FFileHelper::SaveStringToFile(BuildRecord(Timeline, Context), *Path,
+	                                   FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
+	{
+		return FString();
+	}
+
+	return Path;
 }
 }
