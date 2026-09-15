@@ -167,7 +167,7 @@ unreal/MantlePlace/            the Unreal plugin — MantlePlaceRuntime + Mantle
 revit/                         the Revit plugin — pure Core, Client, Addin shim, headless tests
 spec/                          the published MPB format spec — prose, policy, changelog
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
-tools/public-hygiene/          the private-reference gate + its cases
+tools/public-hygiene/          the private-reference and docs-integrity gates + their cases
 tools/unreal-naming/           the generated-name drift gate + its cases
 docs/                          the ADRs, the shared sign-in contract, the agent docs
 .githooks/                     opt-in pre-publication hooks running the hygiene gate
@@ -206,7 +206,9 @@ python tools/manifest-conformance/check_manifest_conformance.py
 Four workflows run on every pull request, on free hosted runners: `ci-manifest-conformance`,
 `ci-revit-tests`, `ci-public-hygiene` and `ci-unreal-naming`. The third checks tracked files *and*
 the pull request's title, body, branch name and commit messages for references that resolve only in
-a private repository (see [CONTRIBUTING.md](CONTRIBUTING.md)). The fourth refuses a generated asset
+a private repository, and checks that every relative link in a Markdown file resolves, that the
+agent-facing documents carry their frontmatter, and that the ADR index in `CLAUDE.md` still matches
+`docs/adr/` (see [CONTRIBUTING.md](CONTRIBUTING.md)). The fourth refuses a generated asset
 name or package path built anywhere but the Unreal naming module — text-only, and the one automated
 check standing in front of a naming regression, since nothing here compiles the plugin. Together
 they are the objective merge bar.

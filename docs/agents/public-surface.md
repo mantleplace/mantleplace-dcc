@@ -1,6 +1,6 @@
 ---
 name: public-surface
-description: What may and may not be written into a world-readable repository — the refused citations (issue numbers, private repository names, internal decision-log ids), the six publication surfaces (files, commit messages, PR titles, PR bodies, branch names, and issue/comment text), and the structural exemptions. Read before writing a commit message, a PR title or body, a branch name, an issue or a comment, or any citation; enforced by the ci-public-hygiene gate on the first five and by ci-tracker-hygiene on the sixth, which detects rather than prevents.
+description: What may and may not be written into a world-readable repository — the refused citations (issue numbers, private repository names, internal decision-log ids), the six publication surfaces (files, commit messages, PR titles, PR bodies, branch names, and issue/comment text), and the structural exemptions. Read before writing a commit message, a PR title or body, a branch name, an issue or a comment, or any citation; enforced by the ci-public-hygiene gate on the first five — which also refuses a reference that resolves nowhere, meaning a broken relative link, missing frontmatter on an agent-facing document, or a stale ADR index — and by ci-tracker-hygiene on the sixth, which detects rather than prevents.
 ---
 
 # Everything here is public
@@ -145,9 +145,18 @@ at packaging time from the build's secret store and must never be set in a commi
 ## This one is checked
 
 `ci-public-hygiene` runs the gate over the first five surfaces — and, on tracked files, the
-rule-id resolution check above. Its `references` job is a **required check on `main`**. It became a gate after being prose alone until a private tracker's
-issue number reached a committed test comment and sat on `main` — a rule nothing checks is a rule
-that decays silently and is noticed by a stranger rather than by us.
+rule-id resolution check above. Its `references` job is a **required check on `main`**. It became a
+gate after being prose alone until a private tracker's issue number reached a committed test comment
+and sat on `main` — a rule nothing checks is a rule that decays silently and is noticed by a stranger
+rather than by us.
+
+The same job runs a second gate,
+[`tools/public-hygiene/check_docs_integrity.py`](../../tools/public-hygiene/check_docs_integrity.py),
+whose docstring is likewise the authority on what it refuses: a relative Markdown link must resolve
+to something that exists, a document under `docs/` or a host `CLAUDE.md` must carry `name` and
+`description`, and root `CLAUDE.md`'s ADR index must still match `docs/adr/`. One job, one charter,
+read from the stranger's seat — a citation only we can follow and a link that goes nowhere are the
+same dead end.
 
 `ci-tracker-hygiene` runs the same checker over the sixth, on the `issues` and `issue_comment`
 events. It is not a required check and cannot be one: there is no merge to block. Its outcome is
