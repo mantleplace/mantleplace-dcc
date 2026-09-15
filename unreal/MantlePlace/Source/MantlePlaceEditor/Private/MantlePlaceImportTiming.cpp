@@ -46,11 +46,37 @@ void RecordOnCurrent(const TCHAR* InPhase, double InSeconds, FString InDetail)
 	}
 }
 
+void OpenPhaseOn(FTimeline* Timeline)
+{
+	if (Timeline != nullptr)
+	{
+		Timeline->OpenPhase();
+	}
+}
+
+void ClosePhaseAndRecord(FTimeline* Timeline, const TCHAR* InPhase, double InSeconds, FString InDetail)
+{
+	if (Timeline == nullptr)
+	{
+		return;
+	}
+
+	// Closed BEFORE the row is recorded, so the row is stamped at the depth it ran at rather than
+	// one level inside itself. Everything it enclosed is already in the ledger — a guard reports
+	// on the way out, so the deeper rows land first.
+	Timeline->ClosePhase();
+	Timeline->Record(InPhase, InSeconds, MoveTemp(InDetail));
+}
+
+FScopedCurrentPhase::FScopedCurrentPhase(const TCHAR* InPhase, FString InDetail)
+    : Timeline(GCurrent), Phase(InPhase), Detail(MoveTemp(InDetail)), StartSeconds(FPlatformTime::Seconds())
+{
+	OpenPhaseOn(Timeline);
+}
+
 FScopedCurrentPhase::~FScopedCurrentPhase()
 {
-	// Resolved at destruction rather than at construction: the answer is the same for the whole
-	// scope, and doing it here keeps the guard a plain local with nothing to check on the way in.
-	RecordOnCurrent(Phase, FPlatformTime::Seconds() - StartSeconds, MoveTemp(Detail));
+	ClosePhaseAndRecord(Timeline, Phase, FPlatformTime::Seconds() - StartSeconds, MoveTemp(Detail));
 }
 
 FScopedCurrent::FScopedCurrent(FTimeline& InTimeline)
@@ -74,12 +100,17 @@ TArray<FString> FTimeline::BuildSummary() const
 	// A share is only honest against a measured total, and the total is wall time rather than
 	// the sum of the phases: the phases do not tile the import, and printing a sum as if they
 	// did would quietly claim that everything is accounted for.
+	//
+	// A nested phase is indented, which is what lets a reader see at a glance that its seconds are
+	// already inside the row below it rather than beside it. The indent goes into the label before
+	// the width is taken, so the seconds column stays straight.
 	int32 LabelWidth = 0;
 	TArray<FString> Labels;
 	Labels.Reserve(Entries.Num());
 	for (const FEntry& Entry : Entries)
 	{
-		FString Label = Entry.Phase != nullptr ? FString(Entry.Phase) : TEXT("(unnamed)");
+		FString Label = FString::ChrN(2 * Entry.Depth, TEXT(' '));
+		Label += Entry.Phase != nullptr ? FString(Entry.Phase) : TEXT("(unnamed)");
 		if (!Entry.Detail.IsEmpty())
 		{
 			Label += FString::Printf(TEXT(" [%s]"), *Entry.Detail);
@@ -88,14 +119,22 @@ TArray<FString> FTimeline::BuildSummary() const
 		Labels.Add(MoveTemp(Label));
 	}
 
-	double Accounted = 0.0;
 	for (int32 Index = 0; Index < Entries.Num(); ++Index)
 	{
 		const double Seconds = Entries[Index].Seconds;
-		Accounted += Seconds;
 		const double Share = Total > 0.0 ? 100.0 * Seconds / Total : 0.0;
-		Lines.Add(FString::Printf(TEXT("  %s  %8.2fs  %5.1f%%"),
-		                          *PadTo(Labels[Index], LabelWidth), Seconds, Share));
+		FString Line = FString::Printf(TEXT("  %s  %8.2fs  %5.1f%%"),
+		                               *PadTo(Labels[Index], LabelWidth), Seconds, Share);
+
+		// Said on the row itself, not left to the indentation alone. The enclosing row is the one
+		// a reader is most likely to add to the rows above it — it is the largest — and this is
+		// the line that tells them not to.
+		const int32 Enclosed = EnclosedRowCount(Index);
+		if (Enclosed > 0)
+		{
+			Line += FString::Printf(TEXT("   (encloses the %d row(s) above)"), Enclosed);
+		}
+		Lines.Add(MoveTemp(Line));
 	}
 
 	Lines.Add(FString::Printf(TEXT("  %s  %8.2fs  100.0%%"), *PadTo(TEXT("TOTAL (wall)"), LabelWidth), Total));
@@ -103,7 +142,11 @@ TArray<FString> FTimeline::BuildSummary() const
 	// Said out loud rather than left to be inferred from a column that does not add up. The
 	// phases are the ones worth naming, not a partition of the import, so unmeasured time is
 	// expected — and a reader who does not know that reads a 60% total as a measurement bug.
-	const double Unmeasured = Total - Accounted;
+	//
+	// Against the top-level rows only. Counting the nested ones here is what made this number
+	// negative on the first run captured off a runner: time inside an enclosing phase would be
+	// subtracted from the wall clock twice.
+	const double Unmeasured = Total - AccountedSeconds();
 	if (Total > 0.0)
 	{
 		Lines.Add(FString::Printf(

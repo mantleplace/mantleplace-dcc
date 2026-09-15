@@ -650,11 +650,15 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// ⛔ Declared immediately AFTER the transaction so it is destroyed immediately BEFORE it —
 	// locals tear down in reverse declaration order, which makes this scope end exactly where the
 	// transaction's own commit begins. Declared before it, this would close first and measure
-	// nothing. The number it reports is therefore "everything after the last artifact, up to the
-	// commit", and the commit itself lands in the unmeasured remainder; sizing the commit properly
-	// needs a guard inside FScopedTransaction, which is engine code.
+	// nothing.
+	//
+	// It is an ENCLOSING phase, and the summary prints it as one: it is a function-scope local, so
+	// it spans every artifact imported below rather than the gap before the commit. It was named
+	// "transaction close" for exactly as long as it took to read one off a runner, where its rows
+	// summed to 144%. The commit itself is still unmeasured — sizing it needs a guard inside
+	// FScopedTransaction, which is engine code — so the row is named for the span it does cover.
 	const MantlePlaceImportTiming::FScopedPhase TransactionPhase(
-		Timeline, MantlePlaceImportTiming::Phase::TransactionClose);
+		Timeline, MantlePlaceImportTiming::Phase::InsideTransaction);
 
 	TArray<AActor*> DrapeTargets;
 	bool bAllRequestedSucceeded = true;
