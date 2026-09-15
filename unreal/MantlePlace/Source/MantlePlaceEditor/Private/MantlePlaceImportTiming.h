@@ -18,6 +18,14 @@
  * both runs still print, they just stop lining up. `Phase` below is the whole vocabulary, and a new
  * phase is added there rather than at a call site.
  *
+ * **Why phases nest, and why the ledger knows it.** Some phases run inside others: the shader stall
+ * is inside the landscape artifact, and every artifact imported under the transaction is inside it.
+ * The first summary ever read off a runner added all of them together, so its shares totalled 144%
+ * and its remainder printed negative. A row is therefore stamped with how many phases were open
+ * when it was recorded, and only the top-level rows are summed. The nested rows are still printed —
+ * the stall is a hotspot, and dropping it to make a column add up would hide the number the whole
+ * exercise exists to find.
+ *
  * **Why it is not behind a verbose flag.** A flag is off on the run that mattered. The cost here is
  * one `FPlatformTime::Seconds()` per phase and a handful of strings per import — against an import
  * measured in minutes — so it is cheap enough to leave on permanently, and that is the point: the
@@ -61,16 +69,32 @@ inline const TCHAR* const CesiumAvailability = TEXT("cesium availability rewrite
 /** ⛔ Hotspot 3: nearest-neighbour weight resampling. */
 inline const TCHAR* const WeightResample = TEXT("weight resample");
 
-/** Closing the import transaction. */
-inline const TCHAR* const TransactionClose = TEXT("transaction close");
+/**
+ * The span inside the import transaction — an ENCLOSING phase: every artifact imported under the
+ * transaction is recorded inside it.
+ *
+ * ⚠ It was called "transaction close" until it was first read off a runner, and that name was
+ * wrong in a way the number hid: the guard is declared at function scope, so it spans the whole
+ * transaction rather than the gap before the commit. The commit itself is not measured at all —
+ * sizing it needs a guard inside `FScopedTransaction`, which is engine code — so a row named for
+ * the close would be naming the one thing it does not contain.
+ */
+inline const TCHAR* const InsideTransaction = TEXT("inside transaction");
 }
 
-/** One measured phase. `Detail` distinguishes repeated phases — which artifact, which stream. */
+/**
+ * One measured phase.
+ *
+ * `Detail` distinguishes repeated phases — which artifact, which stream. `Depth` is how many
+ * phases were already open when this one was recorded: `0` is a phase of the import itself, `1` a
+ * phase inside one of those, and so on.
+ */
 struct FEntry
 {
 	const TCHAR* Phase = nullptr;
 	FString Detail;
 	double Seconds = 0.0;
+	int32 Depth = 0;
 };
 
 /**
@@ -91,7 +115,59 @@ public:
 
 	void Record(const TCHAR* InPhase, double InSeconds, FString InDetail = FString())
 	{
-		Entries.Add(FEntry{ InPhase, MoveTemp(InDetail), InSeconds });
+		// Field by field rather than as an aggregate: a row carries four things now, and a
+		// positional brace list is correct right up until someone inserts a member.
+		FEntry Entry;
+		Entry.Phase = InPhase;
+		Entry.Detail = MoveTemp(InDetail);
+		Entry.Seconds = InSeconds;
+		Entry.Depth = OpenPhaseCount;
+		Entries.Add(MoveTemp(Entry));
+	}
+
+	/**
+	 * Open and close a nesting level.
+	 *
+	 * ⛔ The scope guards below pair these; a call site does not. Depth is **measured** rather than
+	 * declared precisely because the phase that actually nests does not know that it does — the
+	 * shader stall is a bare `RecordOnCurrent` from the landscape importer, several frames of
+	 * stack below the artifact phase enclosing it, and no argument at that call site could say so.
+	 */
+	void OpenPhase()
+	{
+		++OpenPhaseCount;
+	}
+
+	/**
+	 * ⚠ Clamped rather than checked. An unbalanced close cannot happen through the guards, which
+	 * are the only intended callers — and this file's standing rule is that a timing call is never
+	 * the reason an import dies (see `RecordOnCurrent`). A `check()` here would trade a wrong
+	 * number for a lost import, which is the wrong way round for measurement code.
+	 */
+	void ClosePhase()
+	{
+		OpenPhaseCount = FMath::Max(0, OpenPhaseCount - 1);
+	}
+
+	/**
+	 * The import's own phases, summed — the part of the wall time that is accounted for.
+	 *
+	 * ⛔ Nested rows are deliberately left out. A phase recorded inside another is already part of
+	 * it, so adding both charges the import twice for the same seconds: that is what made the
+	 * summary's shares total 144% and its remainder print negative on the first run ever captured
+	 * off a runner.
+	 */
+	double AccountedSeconds() const
+	{
+		double Sum = 0.0;
+		for (const FEntry& Entry : Entries)
+		{
+			if (Entry.Depth == 0)
+			{
+				Sum += Entry.Seconds;
+			}
+		}
+		return Sum;
 	}
 
 	/** Wall time from `Start()` to now — the denominator every share is taken against. */
@@ -107,6 +183,26 @@ public:
 	}
 
 	/**
+	 * How many rows the row at `Index` encloses.
+	 *
+	 * They are exactly the rows immediately above it: a guard reports on the way out, so
+	 * everything it enclosed is already in the ledger, and the run ends at the first row that is
+	 * not deeper than it.
+	 *
+	 * On the ledger rather than beside the printer so it can be asserted for what it is — a count —
+	 * instead of by searching the rendered block for the sentence it produces.
+	 */
+	int32 EnclosedRowCount(int32 Index) const
+	{
+		int32 Count = 0;
+		for (int32 Back = Index - 1; Back >= 0 && Entries[Back].Depth > Entries[Index].Depth; --Back)
+		{
+			++Count;
+		}
+		return Count;
+	}
+
+	/**
 	 * The summary block, as lines. Returned rather than logged so it can be asserted headlessly
 	 * without capturing the log — the property worth testing is the shape of the block, and a
 	 * test that greps `UE_LOG` output tests the log system instead.
@@ -116,7 +212,24 @@ public:
 private:
 	TArray<FEntry> Entries;
 	double StartSeconds = 0.0;
+
+	/** How many phases are open right now. Stamped onto every row as its `Depth`. */
+	int32 OpenPhaseCount = 0;
 };
+
+/**
+ * Open a nesting level, and — its counterpart — close that level and record the phase.
+ *
+ * ⛔ The ordering rule lives here and nowhere else: the level is closed BEFORE the row is
+ * recorded, so the row lands at the depth it ran at rather than one level inside itself. Both
+ * guards below call these rather than repeating the sequence, because a second copy of an ordering
+ * rule is a second place for it to go wrong.
+ *
+ * Both are null-safe on the timeline, so a guard that never found an import to attach to opens
+ * nothing and records nothing — and, crucially, closes nothing either.
+ */
+void OpenPhaseOn(FTimeline* Timeline);
+void ClosePhaseAndRecord(FTimeline* Timeline, const TCHAR* InPhase, double InSeconds, FString InDetail);
 
 /** Measures one phase and records it on the way out, on whichever path leaves the scope. */
 class FScopedPhase
@@ -125,14 +238,12 @@ public:
 	FScopedPhase(FTimeline& InTimeline, const TCHAR* InPhase, FString InDetail = FString())
 	    : Timeline(&InTimeline), Phase(InPhase), Detail(MoveTemp(InDetail)), StartSeconds(FPlatformTime::Seconds())
 	{
+		OpenPhaseOn(Timeline);
 	}
 
 	~FScopedPhase()
 	{
-		if (Timeline != nullptr)
-		{
-			Timeline->Record(Phase, FPlatformTime::Seconds() - StartSeconds, MoveTemp(Detail));
-		}
+		ClosePhaseAndRecord(Timeline, Phase, FPlatformTime::Seconds() - StartSeconds, MoveTemp(Detail));
 	}
 
 	/**
@@ -140,7 +251,8 @@ public:
 	 * manifest phase opens before the reader it measures and closes after the manifest is parsed,
 	 * with early returns in between, and neither a plain block nor a plain local expresses that.
 	 * The moved-from guard is disarmed rather than left pointing at the timeline, which is what
-	 * stops one phase being recorded twice.
+	 * stops one phase being recorded twice — and, since the level it opened is closed by whichever
+	 * guard still owns it, stops that level being closed twice as well.
 	 */
 	FScopedPhase(FScopedPhase&& Other) noexcept
 	    : Timeline(Other.Timeline), Phase(Other.Phase), Detail(MoveTemp(Other.Detail)), StartSeconds(Other.StartSeconds)
@@ -184,10 +296,12 @@ void RecordOnCurrent(const TCHAR* InPhase, double InSeconds, FString InDetail = 
 class FScopedCurrentPhase
 {
 public:
-	explicit FScopedCurrentPhase(const TCHAR* InPhase, FString InDetail = FString())
-	    : Phase(InPhase), Detail(MoveTemp(InDetail)), StartSeconds(FPlatformTime::Seconds())
-	{
-	}
+	/**
+	 * Out of line, because it resolves the running import and the file-static holding it lives in
+	 * the .cpp. The level has to be opened here rather than at destruction: anything this phase
+	 * records inside itself has to see it already open.
+	 */
+	explicit FScopedCurrentPhase(const TCHAR* InPhase, FString InDetail = FString());
 
 	~FScopedCurrentPhase();
 
@@ -195,6 +309,17 @@ public:
 	FScopedCurrentPhase& operator=(const FScopedCurrentPhase&) = delete;
 
 private:
+	/**
+	 * ⛔ Resolved once, on the way in, and held — not looked up again on the way out.
+	 *
+	 * Looking it up twice lets the two ends disagree: no import current at construction and one
+	 * current at destruction closes a level that was never opened, and because `ClosePhase`
+	 * clamps rather than complains, every row after it is stamped one level too shallow and the
+	 * double count comes back silently. Holding the pointer makes the pair structural instead of
+	 * conditional. It cannot dangle: a timeline is a local of the import that published it, and
+	 * this guard is always inside that scope.
+	 */
+	FTimeline* Timeline;
 	const TCHAR* Phase;
 	FString Detail;
 	double StartSeconds;
