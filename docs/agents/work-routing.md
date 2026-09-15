@@ -70,8 +70,8 @@ looks settled and a stray fix arrives with no reviewer who owns it.
 
 - **Say so in the thread you are already in.** The founder routes it. That is a one-line cost.
 - **Do not describe the other repository, name it, or link to it** while doing so, on any of the
-  five publication surfaces. What is refused and where is
-  [`public-surface.md`](public-surface.md), and it is a required check on `main`.
+  six publication surfaces. What is refused and where is
+  [`public-surface.md`](public-surface.md); on the first five it is a required check on `main`.
 - **Never move an issue across the boundary with a transfer.** A transfer carries the title, the
   body and every comment in one action, and the comments are the part nobody re-reads. Re-file
   instead, writing the new body clean, and close the old one pointing at the new. A pointer from a
