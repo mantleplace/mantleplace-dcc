@@ -81,8 +81,14 @@ Four workflows run on every pull request, on free hosted runners:
   check standing in front of a naming regression, because nothing in public CI compiles the Unreal
   plugin (see below).
 
-All must be green. If your change makes a corpus case fail, the interesting question is whether the
-case or the code is wrong — say which you think it is in the pull request, and why.
+All four must be green before a maintainer merges — but that is this project's bar, not the one
+GitHub enforces. Branch protection on `main` matches *jobs*, not workflows, and `ci-unreal-naming`
+is not among them: it reports on every pull request and cannot block a merge, so the only automated
+guard in front of a naming regression is advisory. The enforced list lives in the repository rather
+than on this page — `gh api repos/mantleplace/mantleplace-dcc/branches/main/protection` prints it.
+
+If your change makes a corpus case fail, the interesting question is whether the case or the code is
+wrong — say which you think it is in the pull request, and why.
 
 **Adding a corpus case.** The corpus is maintainer-owned, and a case binds *every* host, not just the
 one you are working on. Propose a case here by pull request rather than forking a private copy; a
