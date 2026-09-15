@@ -4,6 +4,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "HAL/PlatformProcess.h"
 #include "MantlePlaceImportTiming.h"
 
 #include "Dom/JsonObject.h"
@@ -201,6 +202,191 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 	{
 		TestNull(TEXT("no import is current here"), Current());
 		const FScopedCurrentPhase Measured(Phase::CesiumAvailability);
+	}
+
+	// --- The out-of-scope form nests too ---------------------------------------------------------
+	// It reaches the running import through the same timeline, so it has to open a level on the
+	// same counter. A form that recorded without opening one would be the double-count again, just
+	// arriving from another translation unit.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		{
+			FScopedCurrent Publish(Timeline);
+			const FScopedPhase ArtifactPhase(Timeline, Phase::Artifact, TEXT("terrain mesh (glTF, Nanite)"));
+			{
+				const FScopedCurrentPhase Measured(Phase::CesiumAvailability, TEXT("400 entries"));
+			}
+		}
+
+		TestEqual(TEXT("two rows"), Timeline.GetEntries().Num(), 2);
+		if (Timeline.GetEntries().Num() == 2)
+		{
+			TestEqual(TEXT("the rewrite is nested in the artifact"), Timeline.GetEntries()[0].Depth, 1);
+			TestEqual(TEXT("the artifact phase is top level"), Timeline.GetEntries()[1].Depth, 0);
+		}
+	}
+
+	// --- A phase recorded inside another is marked as nested, and counted once -------------------
+	// The regression this pins: `transaction close` was declared at function scope and stayed alive
+	// to the end of it, so it enclosed every phase recorded after it. Those rows were counted
+	// twice — shares summed past 100% and the remainder printed negative — and a nested row moves
+	// whenever a row it encloses moves, which is what denies the hotspots an independent share.
+	//
+	// OpenPhase/ClosePhase are the guards' own bookkeeping, used directly here to build a nesting
+	// that is deterministic in seconds. A guard measures real time, which cannot be asserted on.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		Timeline.OpenPhase();
+		Timeline.Record(Phase::ShaderStall, 3.0);
+		Timeline.ClosePhase();
+		Timeline.Record(Phase::Artifact, 10.0, TEXT("landscape 2017x2017"));
+
+		TestEqual(TEXT("two rows"), Timeline.GetEntries().Num(), 2);
+		if (Timeline.GetEntries().Num() == 2)
+		{
+			TestEqual(TEXT("the enclosed row is deeper"), Timeline.GetEntries()[0].Depth, 1);
+			TestEqual(TEXT("the enclosing row is top level"), Timeline.GetEntries()[1].Depth, 0);
+		}
+
+		// 10.0, not 13.0. The stall happened *inside* the landscape import; adding both would
+		// charge the import for it twice.
+		TestEqual(TEXT("an enclosed row is not counted again"), Timeline.AccountedSeconds(), 10.0);
+	}
+
+	// --- The block says which rows enclose which ------------------------------------------------
+	// A column that sums past 100% is unusable, but so is one that silently drops the nested rows:
+	// the shader stall is a hotspot and has to stay visible. It is printed, indented, and the row
+	// that encloses it says so — the reader can see both the part and the whole.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		Timeline.OpenPhase();
+		Timeline.Record(Phase::ShaderStall, 3.0);
+		Timeline.ClosePhase();
+		Timeline.Record(Phase::Artifact, 10.0, TEXT("landscape 2017x2017"));
+
+		TestEqual(TEXT("the nested row encloses nothing"), Timeline.EnclosedRowCount(0), 0);
+		TestEqual(TEXT("the enclosing row encloses one"), Timeline.EnclosedRowCount(1), 1);
+
+		const TArray<FString> Summary = Timeline.BuildSummary();
+		TestEqual(TEXT("the stall is still a row"), RowsMentioning(Summary, Phase::ShaderStall), 1);
+		TestEqual(TEXT("the enclosing row is named as such"), RowsMentioning(Summary, TEXT("encloses")), 1);
+
+		// Indented past the top-level rows, which is what makes a nested row readable as one at a
+		// glance rather than by counting percentages.
+		int32 StallIndent = -1;
+		int32 ArtifactIndent = -1;
+		for (const FString& Line : Summary)
+		{
+			const int32 Indent = Line.Len() - Line.TrimStart().Len();
+			if (Line.Contains(Phase::ShaderStall))
+			{
+				StallIndent = Indent;
+			}
+			else if (Line.Contains(TEXT("landscape 2017x2017")))
+			{
+				ArtifactIndent = Indent;
+			}
+		}
+		TestTrue(TEXT("the nested row is indented further"), StallIndent > ArtifactIndent);
+	}
+
+	// --- Nesting is measured, not declared -------------------------------------------------------
+	// Depth comes from how many guards are open when a row is recorded, so a call site does not
+	// have to know it is nested — which matters because the one that actually is does not use a
+	// guard at all: the shader stall is a bare RecordOnCurrent from the landscape importer, inside
+	// the artifact phase that encloses it.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		{
+			FScopedCurrent Publish(Timeline);
+			const FScopedPhase ArtifactPhase(Timeline, Phase::Artifact, TEXT("landscape 2017x2017"));
+			RecordOnCurrent(Phase::ShaderStall, 3.0);
+		}
+
+		TestEqual(TEXT("both rows were recorded"), Timeline.GetEntries().Num(), 2);
+		if (Timeline.GetEntries().Num() == 2)
+		{
+			TestEqual(TEXT("the stall is nested without asking to be"), Timeline.GetEntries()[0].Depth, 1);
+			TestEqual(TEXT("the artifact phase is top level"), Timeline.GetEntries()[1].Depth, 0);
+		}
+	}
+
+	// --- The remainder is not negative, which is the symptom this all exists to remove -----------
+	// The named test from the report: one assertion over a timeline whose phases nest. It needs a
+	// real wall-time denominator, so it sleeps — the only number here that cannot be synthesised,
+	// since `ElapsedSeconds()` reads the clock. The assertion is one-sided and the sleep only ever
+	// makes the wall time longer, so a loaded machine cannot turn this red.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		FPlatformProcess::Sleep(0.05f);
+
+		Timeline.OpenPhase();
+		Timeline.Record(Phase::ShaderStall, 0.03);
+		Timeline.ClosePhase();
+		Timeline.Record(Phase::Artifact, 0.04, TEXT("landscape 2017x2017"));
+
+		// 0.05 − 0.04, not 0.05 − 0.07. Counting the nested row here is what printed −44.2% under
+		// a line promising the remainder would be positive.
+		const double Remainder = Timeline.ElapsedSeconds() - Timeline.AccountedSeconds();
+		TestTrue(TEXT("the remainder is not negative"), Remainder >= 0.0);
+	}
+
+	// --- A guard that attached to no import must not close a level it never opened ---------------
+	// The asymmetry worth pinning: resolve the running import on the way in AND again on the way
+	// out, and a guard constructed before an import but destroyed during one pops a level it never
+	// pushed. `ClosePhase` clamps rather than complains, so the damage is silent — every row after
+	// it is stamped one level too shallow, and the double count returns.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+
+		TestNull(TEXT("no import is current yet"), Current());
+		TOptional<FScopedCurrentPhase> Straggler;
+		Straggler.Emplace(Phase::CesiumAvailability, TEXT("400 entries"));
+
+		{
+			FScopedCurrent Publish(Timeline);
+			const FScopedPhase ArtifactPhase(Timeline, Phase::Artifact, TEXT("landscape 2017x2017"));
+
+			// Destroyed while an import IS running, unlike when it was constructed.
+			Straggler.Reset();
+
+			RecordOnCurrent(Phase::ShaderStall, 3.0);
+		}
+
+		TestEqual(TEXT("the straggler recorded nothing"),
+		          RowsMentioning(Timeline.BuildSummary(), Phase::CesiumAvailability), 0);
+		TestEqual(TEXT("two rows, not three"), Timeline.GetEntries().Num(), 2);
+		if (Timeline.GetEntries().Num() == 2)
+		{
+			TestEqual(TEXT("the stall is still nested"), Timeline.GetEntries()[0].Depth, 1);
+		}
+	}
+
+	// --- A guard closes its own level before recording -------------------------------------------
+	// Otherwise a phase would be stamped one level deeper than it ran, and every top-level row
+	// would read as nested inside nothing.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		{
+			const FScopedPhase Outer(Timeline, Phase::Wipe, TEXT("assets"));
+			{
+				const FScopedPhase Inner(Timeline, Phase::Artifact, TEXT("buildings mesh (glTF)"));
+			}
+		}
+
+		TestEqual(TEXT("two rows"), Timeline.GetEntries().Num(), 2);
+		if (Timeline.GetEntries().Num() == 2)
+		{
+			TestEqual(TEXT("the inner guard is nested"), Timeline.GetEntries()[0].Depth, 1);
+			TestEqual(TEXT("the outer guard is not"), Timeline.GetEntries()[1].Depth, 0);
+		}
 	}
 
 	// --- FScopedPhase records on the way out, on whichever path leaves the scope -----------------
