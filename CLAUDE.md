@@ -32,7 +32,7 @@ docs/adr/                      architecture decision records, numbered and cross
 docs/agents/                   how the engineering skills read this repo — tracker, labels, domain
 docs/platform-auth-contract.md sign-in and tokens — the one contract both hosts implement
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
-.github/workflows/             the four public CI gates, plus the stale-tracker job
+.github/workflows/             the four public CI gates, plus the stale and tracker-hygiene jobs
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
 CONTEXT.md  CLAUDE.md
 ```
@@ -53,15 +53,17 @@ host UI; Unreal does, on actor labels, and only there
 ### 1. Everything here is public
 
 Anything you write lands in a world-readable repository, permanently, whether or not it is later
-deleted — across five surfaces: tracked files, commit messages, pull request titles, pull request
-bodies and branch names. Internal trackers, internal documents and internal repositories are not
-citable here, not by URL, not by path, not by issue number; a bare `#42` in a Markdown file
-auto-links to *this* repo's issue 42, which is worse than dangling. Credentials never, including in
-`.uasset` files, which serialize property values. **This one is checked**, by `ci-public-hygiene`,
-whose `references` job is a required check on `main`. **Before writing on any of those five
-surfaces, read [`docs/agents/public-surface.md`](docs/agents/public-surface.md)** — what is refused,
-the one split that makes a bare `#42` fine in a commit message, the structural exemptions, and the
-pre-publication hook that catches a violation before a push publishes it.
+deleted — across six surfaces: tracked files, commit messages, pull request titles, pull request
+bodies, branch names and the issue tracker's own text. Internal trackers, internal documents and
+internal repositories are not citable here, not by URL, not by path, not by issue number; a bare
+`#42` in a Markdown file auto-links to *this* repo's issue 42, which is worse than dangling.
+Credentials never, including in `.uasset` files, which serialize property values. **This one is
+checked** — by `ci-public-hygiene` on the first five, whose `references` job is a required check on
+`main`, and by `ci-tracker-hygiene` on the sixth, which detects after the fact because no workflow
+can block a post. **Before writing on any of those six surfaces, read
+[`docs/agents/public-surface.md`](docs/agents/public-surface.md)** — what is refused, the one split
+that makes a bare `#42` fine in a commit message, the structural exemptions, and the pre-publication
+hook that catches a violation before a push publishes it.
 
 ### 2. Confirm the repo before any write command
 
@@ -174,8 +176,9 @@ in writing (commit body, ledger, or manifest), never saved up for the closing me
 ## CI
 
 Four workflows run on every pull request, all on free hosted runners: `ci-manifest-conformance`,
-`ci-revit-tests`, `ci-public-hygiene` and `ci-unreal-naming`. (`stale.yml` is tracker hygiene, not a
-gate.)
+`ci-revit-tests`, `ci-public-hygiene` and `ci-unreal-naming`. (`stale.yml` and
+`ci-tracker-hygiene.yml` are tracker hygiene, not gates — the second runs on issue and comment
+events, a pull request's own comments included, and it detects rather than blocks.)
 
 **A workflow name is not a check name.** Branch protection matches *jobs*, and the mapping is not
 one-to-one — `ci-revit-tests` contributes two. The four required checks on `main` are
