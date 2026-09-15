@@ -1,6 +1,6 @@
 name: Bug report
 description: Something a plugin does wrong — import, auth, vault, manifest handling.
-labels: ["bug"]
+labels: ["bug", "needs-triage"]
 body:
   - type: markdown
     attributes:
