@@ -185,6 +185,17 @@ FString BuildRecord(const FTimeline& Timeline, const FRecordContext& Context)
 	// The entries as recorded, in the order recorded, one object each — including the repeats. A
 	// phase that did not run has no entry, which means "not reached" here for the same reason it
 	// does in the summary block; a zero would read as "instant".
+	//
+	// ⛔ `depth` is what makes this array readable, and leaving it out was a real defect rather
+	// than an omission of convenience. The rows do not tile the import and they never did, but
+	// since nesting was measured they do not even partition it: a row at depth 1 is already inside
+	// the row below it at depth 0. A consumer summing `seconds` across the array therefore charges
+	// the import twice for the shader stall — the 144% total and the negative remainder the
+	// summary block was fixed for. With `depth` the same consumer filters on 0 and reaches
+	// `AccountedSeconds()`, which is the number the block prints.
+	//
+	// The accounted total itself is deliberately NOT written beside it. It is derivable from these
+	// rows, and a stored copy is a second answer that can disagree with them.
 	Writer->WriteArrayStart(TEXT("phases"));
 	for (const FEntry& Entry : Timeline.GetEntries())
 	{
@@ -192,6 +203,7 @@ FString BuildRecord(const FTimeline& Timeline, const FRecordContext& Context)
 		Writer->WriteValue(TEXT("phase"), Entry.Phase != nullptr ? FString(Entry.Phase) : FString(TEXT("(unnamed)")));
 		Writer->WriteValue(TEXT("detail"), Entry.Detail);
 		Writer->WriteValue(TEXT("seconds"), Entry.Seconds);
+		Writer->WriteValue(TEXT("depth"), Entry.Depth);
 		Writer->WriteObjectEnd();
 	}
 	Writer->WriteArrayEnd();

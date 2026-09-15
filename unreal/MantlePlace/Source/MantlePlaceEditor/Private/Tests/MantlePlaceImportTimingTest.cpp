@@ -453,6 +453,72 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
+	// --- Every entry carries the depth it ran at -------------------------------------------------
+	// The ledger and the summary block both know that a phase recorded inside another is already
+	// part of it. The record was the third consumer and did not: it wrote `phase`, `detail` and
+	// `seconds` and nothing else, so a program reading it could not tell an enclosing row from an
+	// enclosed one. Summing that array gives back the 144% total and the negative remainder — on
+	// the surface that exists precisely so a consumer need not grep the log.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		Timeline.OpenPhase();
+		Timeline.Record(Phase::ShaderStall, 3.0);
+		Timeline.ClosePhase();
+		Timeline.Record(Phase::Artifact, 10.0, TEXT("landscape 2017x2017"));
+
+		const TSharedPtr<FJsonObject> Record = ParseRecord(BuildRecord(Timeline, FRecordContext()));
+		TestNotNull(TEXT("the record parses as JSON"), Record.Get());
+		if (Record.IsValid())
+		{
+			const TArray<TSharedPtr<FJsonValue>>& Phases = Record->GetArrayField(TEXT("phases"));
+			TestEqual(TEXT("both rows are written, the nested one included"), Phases.Num(), 2);
+			if (Phases.Num() == 2)
+			{
+				TestEqual(TEXT("the enclosed row is written as nested"),
+				    Phases[0]->AsObject()->GetIntegerField(TEXT("depth")), 1);
+				TestEqual(TEXT("the enclosing row is written as top level"),
+				    Phases[1]->AsObject()->GetIntegerField(TEXT("depth")), 0);
+			}
+		}
+	}
+
+	// --- Filtering the record on depth reaches the ledger's own accounted total -------------------
+	// The property that makes the record readable at all, and the one a consumer actually needs:
+	// summing the rows at depth 0 gives the same number `AccountedSeconds()` does, which is the
+	// number the block prints. Summing every row instead charges the import twice for the stall —
+	// asserted here as the difference, so this test fails if `depth` ever stops being written.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		Timeline.Record(Phase::ZipAndManifest, 1.0);
+		Timeline.OpenPhase();
+		Timeline.Record(Phase::ShaderStall, 3.0);
+		Timeline.ClosePhase();
+		Timeline.Record(Phase::Artifact, 10.0, TEXT("landscape 2017x2017"));
+
+		const TSharedPtr<FJsonObject> Record = ParseRecord(BuildRecord(Timeline, FRecordContext()));
+		TestNotNull(TEXT("the record parses as JSON"), Record.Get());
+		if (Record.IsValid())
+		{
+			double TopLevel = 0.0;
+			double EveryRow = 0.0;
+			for (const TSharedPtr<FJsonValue>& Value : Record->GetArrayField(TEXT("phases")))
+			{
+				const TSharedPtr<FJsonObject> Row = Value->AsObject();
+				EveryRow += Row->GetNumberField(TEXT("seconds"));
+				if (Row->GetIntegerField(TEXT("depth")) == 0)
+				{
+					TopLevel += Row->GetNumberField(TEXT("seconds"));
+				}
+			}
+
+			TestEqual(TEXT("depth-0 rows sum to the ledger's accounted total"), TopLevel, Timeline.AccountedSeconds());
+			TestEqual(TEXT("which is 11.0 - the stall is inside the landscape, not beside it"), TopLevel, 11.0);
+			TestEqual(TEXT("summing every row reaches 14.0, the double count depth exists to prevent"), EveryRow, 14.0);
+		}
+	}
+
 	// --- The total is wall time here too, not the sum of the phases ------------------------------
 	// The log block says this out loud in a comment column a machine cannot read. The record has to
 	// carry the same truth, because a consumer that summed `phases` would get a different number

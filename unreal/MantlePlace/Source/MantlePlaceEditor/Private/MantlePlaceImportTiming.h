@@ -378,6 +378,14 @@ struct FRecordContext
 /**
  * The shape name every record carries, so a consumer can refuse a shape it does not know rather
  * than read a field that has moved. Bump it when a field changes meaning, not when one is added.
+ *
+ * ⚠ `depth` was added to each phase entry without a bump, under that rule. It is worth saying why,
+ * because the array did become unsummable and this looks at first like the meaning changing: the
+ * rows started nesting when nesting began to be measured, and the schema was not bumped then
+ * either. Nothing a `/1` reader already read means anything different — `phase`, `detail` and
+ * `seconds` are untouched, and a reader that ignores unknown fields is exactly as correct, or as
+ * wrong, as it was before. `depth` is the recovery of a fact the record had been dropping, not a
+ * new contract. A bump here would only force every consumer to re-pin for no semantic reason.
  */
 inline const TCHAR* const RecordSchema = TEXT("mantleplace.import-timeline/1");
 
