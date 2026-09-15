@@ -374,11 +374,39 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	MantlePlaceImportTiming::FTimeline Timeline;
 	Timeline.Start();
 	MantlePlaceImportTiming::FScopedCurrent PublishTimeline(Timeline);
-	FMantlePlaceScopedRestore EmitTiming([&Timeline]()
+	FMantlePlaceScopedRestore EmitTiming([&Timeline, &Result, &ZipPath]()
 	{
 		for (const FString& Line : Timeline.BuildSummary())
 		{
 			UE_LOG(LogMantlePlaceImport, Log, TEXT("%s"), *Line);
+		}
+
+		// And the same timeline for a reader that is not a person, when something has said where to
+		// put it. Emitted here rather than on the success path for the reason above: the run that
+		// most needs measuring is the one that failed.
+		const FString RecordDirectory = MantlePlaceImportTiming::RecordDirectoryFromEnvironment();
+		if (RecordDirectory.IsEmpty())
+		{
+			return;
+		}
+
+		MantlePlaceImportTiming::FRecordContext RecordContext;
+		RecordContext.Bundle = FPaths::GetCleanFilename(ZipPath);
+		RecordContext.bSucceeded = Result.bSuccess;
+
+		const FString Written = MantlePlaceImportTiming::WriteRecord(Timeline, RecordContext, RecordDirectory);
+		if (Written.IsEmpty())
+		{
+			// A warning, never a failure: a diagnostic that can fail an import is a worse
+			// diagnostic than none. Whoever set the variable is the one who will notice the
+			// missing file, and it is their gate that should say so.
+			UE_LOG(LogMantlePlaceImport, Warning,
+			       TEXT("Could not write the import timeline record into %s (%s)"),
+			       *RecordDirectory, MantlePlaceImportTiming::RecordDirectoryVariable);
+		}
+		else
+		{
+			UE_LOG(LogMantlePlaceImport, Log, TEXT("Import timeline record: %s"), *Written);
 		}
 	});
 
