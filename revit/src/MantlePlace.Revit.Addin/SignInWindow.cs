@@ -31,6 +31,13 @@ internal sealed class SignInWindow : Window
 {
     private readonly AuthSession _session;
 
+    /// <summary>
+    /// True while the browser round-trip is in flight — which is the only time closing this window
+    /// means "stop". After it clears there is nothing to cancel, and asking for one anyway is what
+    /// used to take Revit down.
+    /// </summary>
+    private bool _running;
+
     private readonly TextBlock _status = new()
     {
         TextWrapping = TextWrapping.Wrap,
@@ -68,13 +75,47 @@ internal sealed class SignInWindow : Window
 
         Content = BuildLayout();
 
-        _cancel.Click += (_, _) => _session.CancelSignIn();
-        _close.Click += (_, _) => Close();
+        _cancel.Click += (_, _) => Guarded(() => _session.CancelSignIn());
+        _close.Click += (_, _) => Guarded(Close);
 
         // Closing the window while the browser round-trip is still running cancels it. Unlike the
         // vault browser, where closing detaches from an import that should finish on its own, a
         // sign-in nobody is waiting for has nothing to finish for.
-        Closed += (_, _) => _session.CancelSignIn();
+        //
+        // The _running test is the other half of that sentence, and it used to be missing: once the
+        // sign-in has finished there is nothing to cancel, and cancelling anyway reached into a
+        // CancellationTokenSource that SignInAsync had already disposed. Pressing Close on a
+        // SUCCESSFUL sign-in therefore threw out of this handler and terminated Revit.
+        Closed += (_, _) => Guarded(() =>
+        {
+            if (_running)
+            {
+                _session.CancelSignIn();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Runs a handler body without letting it escape into the dispatcher.
+    /// </summary>
+    /// <remarks>
+    /// These three handlers are the only entry points into this window that <see cref="RunAsync"/>'s
+    /// own catch does not cover — it protects the task, and the task is over by the time the curator
+    /// reaches for a button. A throw from here lands on Revit's message pump, which has no filter a
+    /// third-party add-in participates in, so the whole application goes down over a sign-in dialog.
+    /// </remarks>
+    private void Guarded(Action body)
+    {
+        try
+        {
+            body();
+        }
+        catch (Exception ex)
+        {
+            // The window may already be closing, in which case this is the last word nobody reads.
+            // Saying it anyway costs nothing and beats a silent swallow when it is still on screen.
+            Settle($"Sign-in did not finish cleanly: {ex.Message}");
+        }
     }
 
     private UIElement BuildLayout()
@@ -105,11 +146,17 @@ internal sealed class SignInWindow : Window
     /// </remarks>
     internal async Task RunAsync()
     {
+        _running = true;
         try
         {
             // ConfigureAwait(true): resume on the WPF dispatcher, because everything after this
             // line touches the window.
             AuthOutcome outcome = await _session.SignInAsync().ConfigureAwait(true);
+
+            // Cleared here rather than only in the finally, because the cancelled branch below
+            // closes the window from inside this try. The await returning means the round-trip is
+            // over whichever way it went, so from this line on there is nothing left to cancel.
+            _running = false;
 
             if (outcome.Cancelled)
             {
@@ -132,6 +179,11 @@ internal sealed class SignInWindow : Window
         catch (Exception ex)
         {
             Settle($"Sign-in did not complete: {ex.Message}");
+        }
+        finally
+        {
+            // Backstop for the throwing path, where the assignment above was never reached.
+            _running = false;
         }
     }
 

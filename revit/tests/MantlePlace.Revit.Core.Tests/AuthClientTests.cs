@@ -168,6 +168,42 @@ internal static class AuthClientTests
             }
         });
 
+        run.Case("cancelling after a finished sign-in is a no-op, not a crash", () =>
+        {
+            // The regression. SignInAsync used to hold its CancellationTokenSource in a `using`
+            // while ALSO publishing it to a field, so every exit disposed the source and left the
+            // field pointing at it. CancelSignIn then called Cancel() on a disposed source, which
+            // throws ObjectDisposedException -- and the caller is the sign-in window's Closed
+            // handler, so the throw landed on Revit's dispatcher and terminated the process.
+            // Journals across Revit 2025, 2026 and 2027 all recorded it as ExceptionCode=0xe0434352,
+            // an unhandled managed exception, moments after a SUCCESSFUL sign-in.
+            //
+            // A successful sign-in needs a browser, so this drives the same disposal through the
+            // bind-failure exit instead: same `finally`, same field, same stale source afterwards.
+            string occupiedConfig = Path.Combine(sandbox, "occupied-port.json");
+            using LoopbackRedirectListener? squatter = LoopbackRedirectListener.StartEphemeral("/callback");
+            run.True(squatter is not null, "something is holding the only port the session may use");
+
+            File.WriteAllText(
+                occupiedConfig,
+                $$"""
+                {
+                  "loopbackPorts": [{{squatter!.Port}}]
+                }
+                """);
+
+            AuthSession session = new(MantlePlaceEndpoints.Load(occupiedConfig), new NullSecretStore());
+            AuthOutcome outcome = session.SignInAsync().GetAwaiter().GetResult();
+            run.False(outcome.Succeeded, "the sign-in could not bind, so it failed before any browser");
+
+            // Both of these reach the same field. The window's Close button raises the first; the
+            // ribbon's Sign out button raises the second.
+            run.True(NoThrow(session.CancelSignIn), "Close after a finished sign-in does not throw");
+            run.True(NoThrow(session.SignOut), "Sign out after a finished sign-in does not throw");
+
+            session.Dispose();
+        });
+
         run.Case("a port lost between probe and bind is retried with a different one", () =>
         {
             // The probe closes its socket before the real listener binds, so another process can
@@ -312,6 +348,27 @@ internal static class AuthClientTests
             run.True(store.TryLoad("../../escaped", out string loaded), "and it reads back");
             run.Equal(loaded, "secret", "round-tripped through the sanitised name");
         });
+    }
+
+    /// <summary>
+    /// True when <paramref name="body"/> completes without throwing.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately total. The assertion is "this does not take the process down", and narrowing to
+    /// <see cref="ObjectDisposedException"/> would let the next lifetime bug through under a
+    /// different exception type while the case still read as covering it.
+    /// </remarks>
+    private static bool NoThrow(Action body)
+    {
+        try
+        {
+            body();
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     private static void TryDelete(string directory)

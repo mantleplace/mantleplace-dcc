@@ -66,7 +66,16 @@ public sealed class AuthSession : IDisposable
         _secrets = secrets;
     }
 
-    /// <summary>Raised whenever <see cref="State"/> changes, so the ribbon can follow.</summary>
+    /// <summary>Raised whenever <see cref="State"/> changes.</summary>
+    /// <remarks>
+    /// ⚠ <b>Raised on whatever thread finished the work, which is a thread-pool thread for every
+    /// transition a sign-in or a refresh produces</b> — every await beneath this type is
+    /// <c>ConfigureAwait(false)</c>. A subscriber must marshal before it touches anything owned by
+    /// the host. In Revit that means an <c>ExternalEvent</c> for the document API (see
+    /// <c>BundleImportEventHandler</c>) and the window's dispatcher for UI; touching a ribbon
+    /// <c>PushButton</c> straight from this callback is a main-thread violation, and Revit answers
+    /// those by terminating the process.
+    /// </remarks>
     public event EventHandler<AuthState>? StateChanged;
 
     public AuthState State { get; private set; } = AuthStateMachine.Initial;
@@ -123,69 +132,92 @@ public sealed class AuthSession : IDisposable
             return AuthOutcome.Abandoned;
         }
 
-        using CancellationTokenSource signIn = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // NOT a `using`. The field and the object have to die together: a `using` here disposed the
+        // source on every exit while _signIn went on pointing at it, and the next CancelSignIn --
+        // which is what the sign-in window's Close button raises -- threw ObjectDisposedException out
+        // of a WPF event handler on Revit's dispatcher and terminated the process. The lifetime is
+        // owned by the finally below instead, where the field is cleared in the same breath.
+        CancellationTokenSource signIn = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         lock (_gate)
         {
             _signIn?.Dispose();
             _signIn = signIn;
         }
 
-        // Bind BEFORE opening the browser (HPS-06). Ephemeral unless a machine has forced explicit
-        // ports; a browser sent to a redirect nothing is listening for just hangs on a blank tab.
-        using LoopbackRedirectListener? listener = _endpoints.LoopbackPorts.Count > 0
-            ? LoopbackRedirectListener.Start(_endpoints.LoopbackPorts, _endpoints.CallbackPath)
-            : LoopbackRedirectListener.StartEphemeral(_endpoints.CallbackPath);
-
-        if (listener is null)
+        try
         {
-            Raise(AuthEvent.SignInFailed);
-            return AuthOutcome.Failed(DescribeBindFailure(_endpoints.LoopbackPorts));
+            // Bind BEFORE opening the browser (HPS-06). Ephemeral unless a machine has forced explicit
+            // ports; a browser sent to a redirect nothing is listening for just hangs on a blank tab.
+            using LoopbackRedirectListener? listener = _endpoints.LoopbackPorts.Count > 0
+                ? LoopbackRedirectListener.Start(_endpoints.LoopbackPorts, _endpoints.CallbackPath)
+                : LoopbackRedirectListener.StartEphemeral(_endpoints.CallbackPath);
+
+            if (listener is null)
+            {
+                Raise(AuthEvent.SignInFailed);
+                return AuthOutcome.Failed(DescribeBindFailure(_endpoints.LoopbackPorts));
+            }
+
+            string verifier = PkceCodes.MakeCodeVerifier();
+            string challenge = PkceCodes.MakeCodeChallengeS256(verifier);
+            string state = PkceCodes.MakeState();
+
+            string authorizeUrl = AuthUrls.BuildAuthorizeUrl(
+                _endpoints.WebLoginUrl,
+                listener.RedirectUri,
+                challenge,
+                state);
+
+            if (!TryOpenBrowser(authorizeUrl, out string browserError))
+            {
+                Raise(AuthEvent.SignInFailed);
+                return AuthOutcome.Failed(browserError);
+            }
+
+            LoopbackResult result = await listener
+                .WaitForCallbackAsync(state, TimeSpan.FromSeconds(_endpoints.SignInTimeoutSeconds), signIn.Token)
+                .ConfigureAwait(false);
+
+            if (result.Outcome is null)
+            {
+                // Timeout or explicit cancel. Neither latches Failed (HPS-09, HPS-12).
+                Raise(AuthEvent.Cancel);
+                return AuthOutcome.Abandoned;
+            }
+
+            if (!result.HasCode)
+            {
+                Raise(AuthEvent.SignInFailed);
+                return AuthOutcome.Failed(result.Message);
+            }
+
+            GrantFailure? failure = await ExchangeCodeAsync(result.Callback!.Code, verifier, signIn.Token).ConfigureAwait(false);
+            if (failure is { } exchangeFailure)
+            {
+                // No stored credential is at stake yet, so the definitive/transient split does not
+                // apply to a sign-in: there is nothing to discard or keep.
+                Raise(AuthEvent.SignInFailed);
+                return AuthOutcome.Failed(exchangeFailure.Message);
+            }
+
+            Raise(AuthEvent.SignInSucceeded);
+            return AuthOutcome.Ok;
         }
-
-        string verifier = PkceCodes.MakeCodeVerifier();
-        string challenge = PkceCodes.MakeCodeChallengeS256(verifier);
-        string state = PkceCodes.MakeState();
-
-        string authorizeUrl = AuthUrls.BuildAuthorizeUrl(
-            _endpoints.WebLoginUrl,
-            listener.RedirectUri,
-            challenge,
-            state);
-
-        if (!TryOpenBrowser(authorizeUrl, out string browserError))
+        finally
         {
-            Raise(AuthEvent.SignInFailed);
-            return AuthOutcome.Failed(browserError);
+            // Reference identity, not a bare null: the state machine refuses a concurrent sign-in
+            // today, but if that ever changes, clearing a LATER flow's source would silently disarm
+            // a Cancel button that still has something to cancel.
+            lock (_gate)
+            {
+                if (ReferenceEquals(_signIn, signIn))
+                {
+                    _signIn = null;
+                }
+            }
+
+            signIn.Dispose();
         }
-
-        LoopbackResult result = await listener
-            .WaitForCallbackAsync(state, TimeSpan.FromSeconds(_endpoints.SignInTimeoutSeconds), signIn.Token)
-            .ConfigureAwait(false);
-
-        if (result.Outcome is null)
-        {
-            // Timeout or explicit cancel. Neither latches Failed (HPS-09, HPS-12).
-            Raise(AuthEvent.Cancel);
-            return AuthOutcome.Abandoned;
-        }
-
-        if (!result.HasCode)
-        {
-            Raise(AuthEvent.SignInFailed);
-            return AuthOutcome.Failed(result.Message);
-        }
-
-        GrantFailure? failure = await ExchangeCodeAsync(result.Callback!.Code, verifier, signIn.Token).ConfigureAwait(false);
-        if (failure is { } exchangeFailure)
-        {
-            // No stored credential is at stake yet, so the definitive/transient split does not
-            // apply to a sign-in: there is nothing to discard or keep.
-            Raise(AuthEvent.SignInFailed);
-            return AuthOutcome.Failed(exchangeFailure.Message);
-        }
-
-        Raise(AuthEvent.SignInSucceeded);
-        return AuthOutcome.Ok;
     }
 
     /// <summary>
@@ -195,7 +227,28 @@ public sealed class AuthSession : IDisposable
     {
         lock (_gate)
         {
+            CancelInFlight();
+        }
+    }
+
+    /// <summary>
+    /// Cancels the in-flight sign-in if there is one. Caller holds <c>_gate</c>.
+    /// </summary>
+    /// <remarks>
+    /// A cancel that arrives after the flow is over is a no-op, not an error, and both callers reach
+    /// this from a ribbon command or a window handler where a throw is expensive out of proportion
+    /// to the mistake. <see cref="SignInAsync"/> nulls the field as it disposes, so this catch should
+    /// now be unreachable; it stays because the cost of being wrong about that was a terminated
+    /// Revit rather than a logged warning.
+    /// </remarks>
+    private void CancelInFlight()
+    {
+        try
+        {
             _signIn?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
         }
     }
 
@@ -349,7 +402,7 @@ public sealed class AuthSession : IDisposable
     {
         lock (_gate)
         {
-            _signIn?.Cancel();
+            CancelInFlight();
             _accessToken = string.Empty;
             _refreshToken = string.Empty;
             _expiresAt = DateTimeOffset.MinValue;

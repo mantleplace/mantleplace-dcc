@@ -27,6 +27,7 @@ exitCode |= SlowStepNoticeTests.Run();
 exitCode |= ReadinessReasonTests.Run();
 exitCode |= LocalBundleArchiveTests.Run();
 exitCode |= VectorDocumentSelfTests.Run();
+exitCode |= AddinFaultTests.Run();
 exitCode |= AuthConformanceTests.Run();
 exitCode |= AuthClientTests.Run();
 exitCode |= VaultConformanceTests.Run();

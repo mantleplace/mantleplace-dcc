@@ -1,6 +1,9 @@
+using System.Diagnostics;
 using System.Reflection;
+using System.Windows.Threading;
 using Autodesk.Revit.UI;
 using MantlePlace.Revit.Client;
+using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
@@ -14,6 +17,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
     private static BundleCache? _cache;
     private static ExternalEvent? _importEvent;
     private static BundleImportEventHandler? _importHandler;
+
+    /// <summary>Revit's UI dispatcher, held only so the handler below can be detached again.</summary>
+    private static Dispatcher? _uiDispatcher;
 
     /// <summary>
     /// The one session for this Revit process.
@@ -71,9 +77,64 @@ public sealed class MantlePlaceApplication : IExternalApplication
         });
     }
 
+    /// <summary>
+    /// Keeps a throw out of one of our own UI handlers from terminating Revit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An unhandled exception on the dispatcher is how a sign-in dialog took the whole application
+    /// down: the throw left a <c>Window.Closed</c> handler, reached Revit's message pump, and Revit
+    /// answered the only way it can — "an unrecoverable error has occurred", process terminated,
+    /// with the add-in that caused it named nowhere. A modeless window has no outer <c>try</c> the
+    /// way <c>IExternalCommand.Execute</c> does, so without this there is no layer between a handler
+    /// and the end of the session.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>It marks a fault handled only when a frame on the stack is ours</b>
+    /// (<see cref="AddinFaults.IsOurs"/>). The dispatcher is Revit's, not this add-in's, and
+    /// swallowing Revit's own exceptions would leave the application running on state it had already
+    /// given up on — a worse outcome than the crash, and one nobody could diagnose. Anything that is
+    /// not ours passes through untouched, exactly as it did before this existed.
+    /// </para>
+    /// <para>
+    /// This is a net under a mistake. The contract is still that a handler does not throw; see
+    /// <c>SignInWindow.Guarded</c>, which is where the fault is supposed to be caught.
+    /// </para>
+    /// </remarks>
+    private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        // Frames, not just the throw site: a plugin usually mis-drives a framework type rather than
+        // throwing one of its own, so the innermost frame is typically System.something.
+        string?[] declaringTypes = new StackTrace(e.Exception, fNeedFileInfo: false)
+            .GetFrames()
+            .Select(frame => frame.GetMethod()?.DeclaringType?.FullName)
+            .ToArray();
+
+        if (!AddinFaults.IsOurs(declaringTypes))
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        // Said out loud rather than swallowed. A curator who sees this once has a bug to report; one
+        // who sees nothing has a plugin that quietly does not work.
+        new TaskDialog("Mantle Place")
+        {
+            MainInstruction = "Something in Mantle Place went wrong.",
+            MainContent = $"{e.Exception.Message}\n\nRevit is still running and your model is "
+                + "untouched. If this keeps happening, please report it.",
+        }.Show();
+    }
+
     public Result OnStartup(UIControlledApplication application)
     {
         ArgumentNullException.ThrowIfNull(application);
+
+        // OnStartup runs on Revit's UI thread, which is the only moment this add-in is guaranteed to
+        // see the dispatcher it needs to guard.
+        _uiDispatcher = Dispatcher.CurrentDispatcher;
+        _uiDispatcher.UnhandledException += OnDispatcherUnhandledException;
 
         MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load();
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
@@ -164,6 +225,12 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
     public Result OnShutdown(UIControlledApplication application)
     {
+        if (_uiDispatcher is not null)
+        {
+            _uiDispatcher.UnhandledException -= OnDispatcherUnhandledException;
+            _uiDispatcher = null;
+        }
+
         _importEvent?.Dispose();
         _importEvent = null;
         _importHandler = null;
