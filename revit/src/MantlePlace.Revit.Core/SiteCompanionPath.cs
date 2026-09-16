@@ -41,6 +41,13 @@ public static class SiteCompanionPath
 {
     private const string CompanionExtension = ".rvt";
 
+    /// <summary>
+    /// Hex characters of the digest that re-suffixes a dotted version token. Matches the width
+    /// ⛔<c>HPS-30</c> uses, because it is the same job — telling apart two strings one mapping made
+    /// alike — and a second width here would read as a second rule.
+    /// </summary>
+    private const int DigestHexLength = 8;
+
     /// <summary>The companion the Revit identified by <paramref name="revitVersionNumber"/> converts into.</summary>
     /// <param name="ifcPath">The extracted site IFC, as the archive wrote it.</param>
     /// <param name="revitVersionNumber">
@@ -110,26 +117,41 @@ public static class SiteCompanionPath
     /// <summary>One Revit version string, as the single dot-free file-name component it becomes.</summary>
     /// <remarks>
     /// <para>
-    /// Two properties are needed and ⛔<see cref="CacheKeySanitiser"/> (<c>HPS-30</c>) already
-    /// guarantees both: the result is filesystem-safe, and two different inputs never map to one
-    /// output. The rule's own wording is about an order id becoming a directory, and this is a
-    /// version becoming a file-name component — the same mapping over a different string, reused
-    /// rather than reinvented, because a second sanitiser in this host is a second thing to get
-    /// wrong.
+    /// Two properties are needed. ⛔<see cref="CacheKeySanitiser"/> (<c>HPS-30</c>) supplies the
+    /// first — filesystem-safe, and collision-free because a lossy mapping earns a digest of the RAW
+    /// string — and it is reused rather than reinvented, since a second sanitiser in this host is a
+    /// second thing to get wrong. Its own wording is about an order id becoming a directory; this is
+    /// a version becoming a file-name component, the same mapping over a different string.
     /// </para>
     /// <para>
-    /// The dots are mapped to <c>/</c> <b>before</b> sanitising rather than removed after. A token
-    /// with a dot in it would be more than one component, which is exactly what
-    /// <see cref="IsCompanionOf"/> refuses — so <c>ForVersion</c> would write a companion that
-    /// <c>IsCompanionOf</c> then failed to recognise, and the re-import would call
-    /// <c>CreateFromIFC</c> against an already-linked path and throw. Pre-mapping to a character the
-    /// sanitiser already neutralises means the collision suffix fires by the ordinary rule and
-    /// <c>"2025.1"</c> and <c>"2025-1"</c> stay distinct, which stripping the dot afterwards would
-    /// not.
+    /// The second property is <b>no dot</b>, which <c>HPS-30</c> does not give: it keeps <c>.</c>
+    /// verbatim. A token with a dot in it is more than one component, which is exactly what
+    /// <see cref="IsCompanionOf"/> refuses — so <c>"2025.1"</c> would write a companion that this
+    /// same file then failed to recognise, and the re-import would call <c>CreateFromIFC</c> against
+    /// an already-linked path and throw. That is the failure the recognition exists to prevent, so
+    /// it must not be reachable from a version string this code itself wrote.
+    /// </para>
+    /// <para>
+    /// The dots therefore come out <b>after</b> sanitising, against a digest of the version as it
+    /// arrived. Mapping them to a character the sanitiser neutralises would have been shorter, but
+    /// <c>HPS-30</c> hashes what it is handed, so <c>"a.b"</c> and <c>"a/b"</c> would have arrived
+    /// as one string and earned one digest — two versions, one companion, which is the whole bug
+    /// this file exists to stop. Re-suffixing here keeps the digest over the argument.
     /// </para>
     /// </remarks>
     private static string TokenFor(string revitVersionNumber)
-        => CacheKeySanitiser.Sanitise(revitVersionNumber.Replace('.', '/')).DirectoryName;
+    {
+        string sanitised = CacheKeySanitiser.Sanitise(revitVersionNumber).DirectoryName;
+
+        // The ordinary case, and the only one Revit produces: "2025" survives HPS-30 untouched and
+        // carries no dot, so there is nothing left to do.
+        if (!sanitised.Contains('.', StringComparison.Ordinal))
+        {
+            return sanitised;
+        }
+
+        return sanitised.Replace('.', '_') + "_" + Sha256Digest.OfUtf8(revitVersionNumber)[..DigestHexLength];
+    }
 
     /// <summary>
     /// <paramref name="ifcPath"/> with its extension replaced by <paramref name="suffix"/>, in the

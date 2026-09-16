@@ -104,16 +104,21 @@ internal static class SiteCompanionPathTests
                 "the collision suffix carries the difference the mapping loses");
         });
 
-        run.Case("a dotted version and the token it could be confused with stay distinct", () =>
+        run.Case("no two version strings share a companion", () =>
         {
-            // The dots are mapped BEFORE sanitisation precisely so this holds. Stripping them
-            // afterwards would land "2025.1" and "2025-1" on one companion.
-            run.True(
-                !string.Equals(
-                    SiteCompanionPath.ForVersion(IfcPath, "2025.1"),
-                    SiteCompanionPath.ForVersion(IfcPath, "2025-1"),
-                    StringComparison.OrdinalIgnoreCase),
-                "a dotted version is not the dashed one");
+            // The dot removal is what makes this need saying. "2025.1" cannot stay dotted, and every
+            // cheap way of un-dotting it lands on a string some other version already maps to:
+            // "2025-1" and "2025_1" by stripping, "2025/1" by pre-mapping the dot to a character
+            // HPS-30 neutralises — that one collides because HPS-30 digests what it is HANDED, so
+            // both versions would arrive as one string and earn one suffix.
+            string[] versions = ["2025", "2025.1", "2025-1", "2025_1", "2025/1", "a.b", "a/b", "a:b", "..", "1.2.3"];
+
+            run.Equal(
+                versions.Select(version => SiteCompanionPath.ForVersion(IfcPath, version))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count(),
+                versions.Length,
+                "every version string gets its own companion");
         });
 
         run.Case("every companion this build writes is one this build recognises", () =>
