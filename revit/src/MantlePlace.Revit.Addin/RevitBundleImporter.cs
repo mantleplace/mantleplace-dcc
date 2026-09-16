@@ -1977,18 +1977,29 @@ internal sealed class RevitBundleImporter(
 
     /// <summary>
     /// Links the IFC site model as a coordinated reference — two steps, not one: convert the IFC to
-    /// a companion <c>.rvt</c>, then link that.
+    /// a companion <c>.rvt</c> named for this Revit version, then link that.
     /// </summary>
     private void LinkSiteIfc(ImportStep step)
     {
         // Both the IFC and the companion .rvt are referenced by the link for the life of the
         // project, so the kind's lifetime carries the .rvt written next to it too.
         string ifcPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
-        string companionRvt = Path.ChangeExtension(ifcPath, ".rvt");
+
+        // ⛔ Named for THIS Revit. The cache is one per order for the machine, not one per Revit, so
+        // a single shared companion meant the second version to import an order upgraded the first
+        // one's file in place — one way, unrepairable by re-importing, and visible only as a broken
+        // link in the older project's Manage Links. See SiteCompanionPath.
+        string companionRvt = SiteCompanionPath.ForVersion(ifcPath, _application.VersionNumber);
 
         // CreateFromIFC does NOT convert; it links an ALREADY-CONVERTED Revit file and throws
         // FileArgumentNotFoundException when that file is missing. OpenIFCDocument is the
         // conversion step, and it must run outside any transaction on the host document.
+        //
+        // This runs BEFORE the already-linked check below, and the order is load-bearing rather
+        // than incidental. Converting first costs nothing on the ordinary re-import — the companion
+        // is there and File.Exists skips the work — and it is what rebuilds a companion that Remove
+        // download took while the project kept its link. Checking first would return early and
+        // leave that link permanently unresolvable, which is the failure this whole step is about.
         if (!File.Exists(companionRvt))
         {
             Document? converted = null;
@@ -2014,9 +2025,9 @@ internal sealed class RevitBundleImporter(
         // in any view, it lives in Manage Links. Every other repeatable step in this import already
         // recognises its own earlier work (the boundary stamps, the drape's type-by-name); this one
         // simply had not been run twice yet. Reusing the existing link is also the honest answer:
-        // the file on disk is retained for the life of the project, so the link that is already
-        // pointing at it is the same link this step would create.
-        if (ExistingSiteLink(ifcPath, companionRvt) is { } alreadyLinked)
+        // the conversion above has just made sure the file the link points at is on disk, so the
+        // link that is already there is the link this step would create.
+        if (ExistingSiteLink(ifcPath) is { } alreadyLinked)
         {
             Say($"The IFC site model ({step.EntryName}) is already linked into this project, so it "
                 + "was left as it is. Remove it under Manage ▸ Manage Links if you want it rebuilt.");
@@ -2051,14 +2062,24 @@ internal sealed class RevitBundleImporter(
     }
 
     /// <summary>
-    /// The <see cref="RevitLinkType"/> already pointing at one of these paths, or <c>null</c>.
+    /// The <see cref="RevitLinkType"/> already pointing at this site model, or <c>null</c>.
     /// </summary>
     /// <remarks>
-    /// Both paths are checked because <c>CreateFromIFC</c> takes two and Revit records the one it
-    /// prefers: the IFC that was converted, or the <c>.rvt</c> it was converted into. Which of the
-    /// two lands in the external file reference is not worth depending on.
+    /// <para>
+    /// The IFC and its companion are both accepted because <c>CreateFromIFC</c> takes two paths and
+    /// Revit records the one it prefers: the IFC that was converted, or the <c>.rvt</c> it was
+    /// converted into. Which of the two lands in the external file reference is not worth depending
+    /// on.
+    /// </para>
+    /// <para>
+    /// "Its companion" means ⛔<see cref="SiteCompanionPath.IsCompanionOf"/>, not this Revit's
+    /// companion. The link may have been created by a different Revit version, or by a build from
+    /// before companions were version-qualified at all, and either way it is a link this project
+    /// already has. Failing to recognise it would call <c>CreateFromIFC</c> against an
+    /// already-linked path, which throws — the very failure the reuse below exists to prevent.
+    /// </para>
     /// </remarks>
-    private ElementId? ExistingSiteLink(string ifcPath, string companionRvt)
+    private ElementId? ExistingSiteLink(string ifcPath)
     {
         foreach (RevitLinkType link in new FilteredElementCollector(_document)
             .OfClass(typeof(RevitLinkType))
@@ -2083,7 +2104,7 @@ internal sealed class RevitBundleImporter(
             }
 
             if (string.Equals(linked, ifcPath, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(linked, companionRvt, StringComparison.OrdinalIgnoreCase))
+                || SiteCompanionPath.IsCompanionOf(ifcPath, linked))
             {
                 return link.Id;
             }
