@@ -5,8 +5,9 @@ maximally unlike Unreal (.NET, document-transactional, BIM semantics), which is 
 second: it debugs the standard.
 
 **Status:** all four layers landed — manifest reader, import core, browser sign-in, vault client and
-bundle cache. The only unchecked box is a real Revit user completing sign-in → pick bundle → import
-end to end. The local-zip path stays as the permanent fallback.
+bundle cache — and the last unchecked box is ticked: sign-in → pick bundle → import completed end to
+end on a licensed install in **2025.4, 2026.5 and 2027.2** on 2026-09-15, which is the release floor
+below. The local-zip path stays as the permanent fallback.
 
 **Supported hosts:** Revit **2025, 2026 and 2027**, from one `net8.0-windows` build. See
 [Build and test](#build-and-test) for why the compile target is the oldest of the three.
