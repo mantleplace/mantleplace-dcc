@@ -13,6 +13,7 @@ exitCode |= SiteVectorTests.Run();
 exitCode |= ProjectionConformanceTests.Run();
 exitCode |= CacheKeySanitiserTests.Run();
 exitCode |= ImportStepLifetimeTests.Run();
+exitCode |= SiteCompanionPathTests.Run();
 exitCode |= PngHeaderTests.Run();
 exitCode |= SiteBoundaryIdentityTests.Run();
 exitCode |= TerrainIdentityTests.Run();
