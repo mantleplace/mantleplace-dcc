@@ -76,6 +76,9 @@ Four workflows run on every pull request, on free hosted runners:
   them on **.NET 8 and .NET 10**.
 - **`ci-public-hygiene`** — refuses references that resolve only in a private repository, in
   tracked files and in the pull request's title, body, branch name and commit messages (see above).
+  The same job refuses a reference that resolves *nowhere*: a relative Markdown link with no file
+  behind it, an agent-facing document missing its `name` or `description` frontmatter, and an ADR
+  index in root `CLAUDE.md` that no longer matches `docs/adr/`.
 - **`ci-unreal-naming`** — refuses a generated asset name or package path built anywhere but the
   Unreal naming module. Text-only, no engine, seconds on a hosted runner — and the only automated
   check standing in front of a naming regression, because nothing in public CI compiles the Unreal

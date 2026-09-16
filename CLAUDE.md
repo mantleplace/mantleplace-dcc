@@ -26,7 +26,7 @@ unreal/MantlePlace/            the UE 5.8 plugin, folder + .uplugin — PascalCa
 revit/                         the Revit plugin: pure Core, Client, Addin shim, headless tests
 spec/                          the public MPB format spec — prose only; the schema stays remote
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
-tools/public-hygiene/          the private-reference gate + its cases
+tools/public-hygiene/          the private-reference and docs-integrity gates + their cases
 tools/unreal-naming/           the generated-name drift gate + its cases
 docs/adr/                      architecture decision records, numbered and cross-host
 docs/agents/                   how the engineering skills read this repo — tracker, labels, domain
