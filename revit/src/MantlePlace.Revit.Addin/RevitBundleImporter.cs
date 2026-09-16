@@ -1985,26 +1985,6 @@ internal sealed class RevitBundleImporter(
         // project, so the kind's lifetime carries the .rvt written next to it too.
         string ifcPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
 
-        // ⛔ A re-import used to die below, and take the whole rest of the import with it:
-        // CreateFromIFC throws when the document already carries a link at that path, and the
-        // curator cannot fix it by selecting the site and pressing Delete — a RevitLinkType is not
-        // in any view, it lives in Manage Links. Every other repeatable step in this import already
-        // recognises its own earlier work (the boundary stamps, the drape's type-by-name); this one
-        // simply had not been run twice yet. Reusing the existing link is also the honest answer:
-        // the file on disk is retained for the life of the project, so the link that is already
-        // pointing at it is the same link this step would create.
-        //
-        // Asked BEFORE the conversion, not after: a project already carrying the link needs no
-        // companion, and converting one first would spend the 9-25 s this step costs to produce a
-        // file the early return then never uses.
-        if (ExistingSiteLink(ifcPath) is { } alreadyLinked)
-        {
-            Say($"The IFC site model ({step.EntryName}) is already linked into this project, so it "
-                + "was left as it is. Remove it under Manage ▸ Manage Links if you want it rebuilt.");
-            EnsureLinkInstance(alreadyLinked);
-            return;
-        }
-
         // ⛔ Named for THIS Revit. The cache is one per order for the machine, not one per Revit, so
         // a single shared companion meant the second version to import an order upgraded the first
         // one's file in place — one way, unrepairable by re-importing, and visible only as a broken
@@ -2014,6 +1994,12 @@ internal sealed class RevitBundleImporter(
         // CreateFromIFC does NOT convert; it links an ALREADY-CONVERTED Revit file and throws
         // FileArgumentNotFoundException when that file is missing. OpenIFCDocument is the
         // conversion step, and it must run outside any transaction on the host document.
+        //
+        // This runs BEFORE the already-linked check below, and the order is load-bearing rather
+        // than incidental. Converting first costs nothing on the ordinary re-import — the companion
+        // is there and File.Exists skips the work — and it is what rebuilds a companion that Remove
+        // download took while the project kept its link. Checking first would return early and
+        // leave that link permanently unresolvable, which is the failure this whole step is about.
         if (!File.Exists(companionRvt))
         {
             Document? converted = null;
@@ -2031,6 +2017,22 @@ internal sealed class RevitBundleImporter(
             {
                 converted?.Close(false);
             }
+        }
+
+        // ⛔ A re-import used to die here, and take the whole rest of the import with it:
+        // CreateFromIFC throws when the document already carries a link at that path, and the
+        // curator cannot fix it by selecting the site and pressing Delete — a RevitLinkType is not
+        // in any view, it lives in Manage Links. Every other repeatable step in this import already
+        // recognises its own earlier work (the boundary stamps, the drape's type-by-name); this one
+        // simply had not been run twice yet. Reusing the existing link is also the honest answer:
+        // the conversion above has just made sure the file the link points at is on disk, so the
+        // link that is already there is the link this step would create.
+        if (ExistingSiteLink(ifcPath) is { } alreadyLinked)
+        {
+            Say($"The IFC site model ({step.EntryName}) is already linked into this project, so it "
+                + "was left as it is. Remove it under Manage ▸ Manage Links if you want it rebuilt.");
+            EnsureLinkInstance(alreadyLinked);
+            return;
         }
 
         ImportFailureSwallower swallower = new("Linking the IFC site");

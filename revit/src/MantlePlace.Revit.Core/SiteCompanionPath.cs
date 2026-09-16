@@ -28,9 +28,9 @@ namespace MantlePlace.Revit.Core;
 /// </para>
 /// <para>
 /// A companion already sitting at the version-neutral path was produced by an unknown Revit
-/// version, so nothing here rewrites or deletes it — <see cref="VersionNeutral"/> exists only so the
-/// shim can still recognise a link an earlier build created and leave that project alone. The stale
-/// file is dead weight the curator's Remove download clears.
+/// version, so nothing here rewrites or deletes it; <see cref="IsCompanionOf"/> still answers for
+/// it, so a project an earlier build linked is recognised and left alone. The stale file is dead
+/// weight the curator's Remove download clears.
 /// </para>
 /// <para>
 /// This is path resolution, which is pure, so it lives here rather than in the shim: the shim reads
@@ -48,36 +48,15 @@ public static class SiteCompanionPath
     /// string.
     /// </param>
     /// <remarks>
-    /// The version goes through ⛔<see cref="CacheKeySanitiser"/> (<c>HPS-30</c>) rather than into
-    /// the name raw. Revit returns <c>"2025"</c>, which the mapping passes through untouched; the
-    /// sanitiser is there for the case where it does not, because this value becomes a file name and
-    /// the alternatives — a traversal, or a throw that would abandon the step and every step after
-    /// it — are both worse than a neutralised, still-collision-free token.
+    /// Revit returns <c>"2025"</c>, which <see cref="TokenFor"/> passes through untouched. The
+    /// sanitisation behind it is for the case where it does not.
     /// </remarks>
     public static string ForVersion(string ifcPath, string revitVersionNumber)
     {
         ArgumentException.ThrowIfNullOrEmpty(ifcPath);
         ArgumentException.ThrowIfNullOrEmpty(revitVersionNumber);
 
-        string token = CacheKeySanitiser.Sanitise(revitVersionNumber).DirectoryName;
-
-        return Beside(ifcPath, "." + token + CompanionExtension);
-    }
-
-    /// <summary>
-    /// The unqualified companion path that builds before per-version companions wrote, and that
-    /// projects imported by one of those builds still link to.
-    /// </summary>
-    /// <remarks>
-    /// Nothing writes this any more. It is still derived because the shim checks the project's
-    /// existing links against it: a re-import that failed to recognise a link an older build created
-    /// would call <c>CreateFromIFC</c> against an already-linked path, which throws.
-    /// </remarks>
-    public static string VersionNeutral(string ifcPath)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(ifcPath);
-
-        return Beside(ifcPath, CompanionExtension);
+        return Beside(ifcPath, "." + TokenFor(revitVersionNumber) + CompanionExtension);
     }
 
     /// <summary>
@@ -127,6 +106,30 @@ public static class SiteCompanionPath
         return candidateStem.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
             && !candidateStem[prefix.Length..].Contains('.', StringComparison.Ordinal);
     }
+
+    /// <summary>One Revit version string, as the single dot-free file-name component it becomes.</summary>
+    /// <remarks>
+    /// <para>
+    /// Two properties are needed and ⛔<see cref="CacheKeySanitiser"/> (<c>HPS-30</c>) already
+    /// guarantees both: the result is filesystem-safe, and two different inputs never map to one
+    /// output. The rule's own wording is about an order id becoming a directory, and this is a
+    /// version becoming a file-name component — the same mapping over a different string, reused
+    /// rather than reinvented, because a second sanitiser in this host is a second thing to get
+    /// wrong.
+    /// </para>
+    /// <para>
+    /// The dots are mapped to <c>/</c> <b>before</b> sanitising rather than removed after. A token
+    /// with a dot in it would be more than one component, which is exactly what
+    /// <see cref="IsCompanionOf"/> refuses — so <c>ForVersion</c> would write a companion that
+    /// <c>IsCompanionOf</c> then failed to recognise, and the re-import would call
+    /// <c>CreateFromIFC</c> against an already-linked path and throw. Pre-mapping to a character the
+    /// sanitiser already neutralises means the collision suffix fires by the ordinary rule and
+    /// <c>"2025.1"</c> and <c>"2025-1"</c> stay distinct, which stripping the dot afterwards would
+    /// not.
+    /// </para>
+    /// </remarks>
+    private static string TokenFor(string revitVersionNumber)
+        => CacheKeySanitiser.Sanitise(revitVersionNumber.Replace('.', '/')).DirectoryName;
 
     /// <summary>
     /// <paramref name="ifcPath"/> with its extension replaced by <paramref name="suffix"/>, in the
