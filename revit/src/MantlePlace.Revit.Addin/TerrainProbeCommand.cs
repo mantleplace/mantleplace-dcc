@@ -202,6 +202,8 @@ public sealed class TerrainProbeCommand : IExternalCommand
 
         ProbeSmoothedSurface(document, report);
 
+        ProbeSubDivisionAgreement(document, report);
+
         using LocalBundleArchive archive = LocalBundleArchive.Open(zipPath);
         if (archive.Manifest is not { } manifest)
         {
@@ -838,15 +840,24 @@ public sealed class TerrainProbeCommand : IExternalCommand
     /// settled that in one build, at no cost.
     /// </para>
     /// <para>
-    /// ⛔ <b>Answered 2 — it is incompatible with the drape.</b> Measured on a 1,419 × 1,413 m site
-    /// by rendering the same view twice: smoothing off gives a correct, continuous photograph on
-    /// faceted ground; smoothing on gives smooth ground under a photograph broken into four
-    /// quadrants meeting at a hard cross, each showing different terrain. Same material, same four
-    /// real-world texture properties, same element — only the setting differs. Autodesk documents
-    /// that smoothing suppresses toposolid surface patterns and ignores paint and graphic overrides;
-    /// breaking a real-world-scaled bitmap is an undocumented fourth cost. The importer therefore
-    /// smooths only ground with no photograph on it, and this arm is what would catch that changing
-    /// in a future Revit.
+    /// <b>Answered 2 — it moves where a real-world texture is measured from, and the drape is
+    /// written for that.</b> Measured on a 1,419 × 1,413 m site by rendering the same view twice:
+    /// under flat shading Revit measures the offset from the project origin, per face, in each
+    /// face's own plane; under smooth shading from the element's bounding-box minimum corner,
+    /// continuously. Autodesk documents that smoothing suppresses toposolid surface patterns and
+    /// ignores paint and graphic overrides; moving a real-world-scaled bitmap's origin is an
+    /// undocumented fourth effect. The importer therefore turns smoothing <b>on</b> — always, given
+    /// terrain — and anchors every drape material to its own element's corner
+    /// (<c>DrapeAnchor</c>, <c>TerrainSmoothing</c>). This arm is what would catch that changing in
+    /// a future Revit.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>An earlier version of this remark said the two were incompatible and that the importer
+    /// smoothed only undraped ground. That was true before the drape was anchored per element, and
+    /// it survived here for two weeks after it stopped being true</b> — long enough to send a
+    /// session hunting a call the importer had already been making. The runtime lines below were
+    /// current the whole time; only this prose was not. Which is the argument for reading the log a
+    /// probe writes before reading the remark above it.
     /// </para>
     /// <para>
     /// The inventory is the new half. A project that has been imported into more than once can hold
@@ -875,7 +886,7 @@ public sealed class TerrainProbeCommand : IExternalCommand
             bool enabled = Toposolid.IsSmoothedSurfaceEnabled(document);
             string reading = enabled
                 ? "ON  <- a drape anchored to the element's corner renders correctly; one anchored to the origin shows four quarters at a cross"
-                : "OFF <- ground reads as a mosaic; a drape anchored to the origin is positioned correctly at the large scale";
+                : "OFF <- flat shading maps per face, so a drape anchored to the element's corner (what this plugin writes) shatters into unrelated ground; one anchored to the origin is positioned correctly at the large scale and still reads as a mosaic";
             report.AppendLine(CultureInfo.InvariantCulture,
                 $"  IsSmoothedSurfaceEnabled = {reading}");
         }
@@ -957,6 +968,228 @@ public sealed class TerrainProbeCommand : IExternalCommand
                 + $"{footprint}  type \"{document.GetElement(toposolid.GetTypeId())?.Name ?? "(none)"}\""
                 + $"{identity}");
         }
+    }
+
+
+    /// <summary>
+    /// Whether every site-boundary subdivision's surface actually lies on the ground it was cut
+    /// from, measured vertically at its own tessellation vertices.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The question came from a screenshot: 23 subdivisions on one terrain, each drawing its own
+    /// contour lines, and the lines do not line up with the continuous ground beneath them. Two
+    /// explanations fit, and they call for opposite responses — either the surfaces agree and Revit
+    /// simply generates contours per element, which is a limitation to document, or the surfaces
+    /// genuinely differ, which is a defect. Nothing short of a number separates them.
+    /// </para>
+    /// <para>
+    /// ⛔ Read-only and no transaction, like the arm above it. The arithmetic is
+    /// <see cref="SurfaceAgreementCheck"/> in the pure core, where a headless test drives it; this
+    /// method only gets Revit's tessellation out and converts feet to metres.
+    /// </para>
+    /// <para>
+    /// Sampling is capped at <see cref="AgreementSampleCap"/> vertices per subdivision, strided
+    /// evenly rather than taken from the front. The comparison is a linear scan over the ground's
+    /// triangles — on the order of 10^5 of them — so an uncapped run over 23 subdivisions would cost
+    /// minutes, and a probe nobody waits for answers nothing. Taking the first N instead of striding
+    /// would sample one corner of each subdivision, which is exactly where a boundary artifact would
+    /// hide a disagreement in the middle.
+    /// </para>
+    /// </remarks>
+    private static void ProbeSubDivisionAgreement(Document document, StringBuilder report)
+    {
+        report.AppendLine("SUBDIVISION SURFACE AGREEMENT — read only, nothing is written");
+        report.AppendLine("  (does each subdivision lie ON the ground toposolid, or is it a different surface?");
+        report.AppendLine("   measured vertically at the subdivision's own tessellation vertices.)");
+
+        List<Toposolid> all = [.. new FilteredElementCollector(document)
+            .OfClass(typeof(Toposolid))
+            .Cast<Toposolid>()];
+
+        HashSet<ElementId> subdivisionIds = [];
+        foreach (Toposolid toposolid in all)
+        {
+            foreach (ElementId id in toposolid.GetSubDivisionIds())
+            {
+                subdivisionIds.Add(id);
+            }
+        }
+
+        Toposolid? ground = all.FirstOrDefault(toposolid => !subdivisionIds.Contains(toposolid.Id));
+        if (ground is null)
+        {
+            report.AppendLine("  No ground toposolid in this project, so there is nothing to measure against.");
+            report.AppendLine();
+            return;
+        }
+
+        if (!TryTopSurface(ground, out List<SurfacePoint> groundVertices,
+                out List<SurfaceTriangle> groundTriangles, out string? groundReason))
+        {
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"  The ground toposolid {ground.Id.Value} gave no top surface to measure against — {groundReason}");
+            report.AppendLine();
+            return;
+        }
+
+        report.AppendLine(CultureInfo.InvariantCulture,
+            $"  reference: ground {ground.Id.Value} — {groundVertices.Count:N0} vertices, "
+            + $"{groundTriangles.Count:N0} triangles.");
+
+        List<ElementId> children = [.. ground.GetSubDivisionIds()];
+        if (children.Count == 0)
+        {
+            report.AppendLine("  That ground has no subdivisions, so there is nothing to compare to it.");
+            report.AppendLine();
+            return;
+        }
+
+        foreach (ElementId id in children)
+        {
+            if (document.GetElement(id) is not Toposolid subdivision)
+            {
+                report.AppendLine(CultureInfo.InvariantCulture,
+                    $"      {id.Value}: not a toposolid any more — skipped.");
+                continue;
+            }
+
+            if (!TryTopSurface(subdivision, out List<SurfacePoint> vertices, out _, out string? reason))
+            {
+                report.AppendLine(CultureInfo.InvariantCulture,
+                    $"      {id.Value}: no top surface — {reason}");
+                continue;
+            }
+
+            List<SurfacePoint> samples = Stride(vertices, AgreementSampleCap);
+            SurfaceAgreement agreement =
+                SurfaceAgreementCheck.Compare(groundVertices, groundTriangles, samples);
+
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"      {SurfaceAgreementCheck.Describe(id.Value.ToString(CultureInfo.InvariantCulture), agreement)} "
+                + $"[{samples.Count:N0} of {vertices.Count:N0} vertices sampled]");
+        }
+
+        report.AppendLine();
+    }
+
+    /// <summary>
+    /// How many of a subdivision's vertices the agreement arm measures. See
+    /// <see cref="ProbeSubDivisionAgreement"/> for why it is capped and why the sample is strided.
+    /// </summary>
+    private const int AgreementSampleCap = 128;
+
+    /// <summary>
+    /// Every vertex and triangle of one toposolid's upward face, in metres.
+    /// </summary>
+    /// <remarks>
+    /// The face is chosen by the largest upward normal, the way <see cref="PaintTopFace"/> chooses
+    /// it and for the same reason: face order is not a documented property of anything.
+    /// <c>Face.Triangulate()</c> is Revit's own tessellation, which is the right thing to measure —
+    /// the question is whether the surfaces Revit built agree, not whether the points they were
+    /// built from did.
+    /// </remarks>
+    private static bool TryTopSurface(
+        Element element,
+        out List<SurfacePoint> vertices,
+        out List<SurfaceTriangle> triangles,
+        out string? reason)
+    {
+        vertices = [];
+        triangles = [];
+        reason = null;
+
+        try
+        {
+            Options options = new() { DetailLevel = ViewDetailLevel.Fine };
+            GeometryElement? geometry = element.get_Geometry(options);
+            if (geometry is null)
+            {
+                reason = "it has no geometry.";
+                return false;
+            }
+
+            Face? top = null;
+            double bestArea = 0.0;
+            foreach (GeometryObject item in geometry)
+            {
+                if (item is not Solid { Faces.Size: > 0 } solid)
+                {
+                    continue;
+                }
+
+                foreach (Face face in solid.Faces)
+                {
+                    BoundingBoxUV bounds = face.GetBoundingBox();
+                    XYZ normal = face.ComputeNormal((bounds.Min + bounds.Max) * 0.5);
+                    if (normal.Z > 0.5 && face.Area > bestArea)
+                    {
+                        bestArea = face.Area;
+                        top = face;
+                    }
+                }
+            }
+
+            if (top is null)
+            {
+                reason = "none of its faces point upward.";
+                return false;
+            }
+
+            Mesh mesh = top.Triangulate();
+            for (int i = 0; i < mesh.Vertices.Count; i++)
+            {
+                XYZ point = mesh.Vertices[i];
+                vertices.Add(new SurfacePoint(
+                    UnitUtils.ConvertFromInternalUnits(point.X, UnitTypeId.Meters),
+                    UnitUtils.ConvertFromInternalUnits(point.Y, UnitTypeId.Meters),
+                    UnitUtils.ConvertFromInternalUnits(point.Z, UnitTypeId.Meters)));
+            }
+
+            for (int i = 0; i < mesh.NumTriangles; i++)
+            {
+                MeshTriangle triangle = mesh.get_Triangle(i);
+                triangles.Add(new SurfaceTriangle(
+                    (int)triangle.get_Index(0),
+                    (int)triangle.get_Index(1),
+                    (int)triangle.get_Index(2)));
+            }
+
+            if (vertices.Count == 0)
+            {
+                reason = "its top face tessellated to nothing.";
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
+                                       or ArgumentException
+                                       or InvalidOperationException)
+        {
+            // One element's geometry failing must not cost the reader the other twenty-two lines.
+            reason = $"Revit threw {ex.GetType().Name}: {ex.Message}";
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// At most <paramref name="cap"/> items, spread evenly across <paramref name="source"/>.
+    /// </summary>
+    private static List<SurfacePoint> Stride(List<SurfacePoint> source, int cap)
+    {
+        if (source.Count <= cap)
+        {
+            return source;
+        }
+
+        List<SurfacePoint> taken = new(cap);
+        for (int i = 0; i < cap; i++)
+        {
+            taken.Add(source[(int)((long)i * source.Count / cap)]);
+        }
+
+        return taken;
     }
 
     /// <summary>
