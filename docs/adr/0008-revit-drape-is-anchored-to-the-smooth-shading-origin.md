@@ -18,10 +18,19 @@ One material carries one offset. There is no third value that is correct under b
 
 So the import turns smoothing on, reads the setting back, and writes every drape offset for the
 smoothed renderer — the terrain from its own corner, and each site-boundary subdivision from its own,
-each with its own material because one material carries one offset. Measured on a 1,419 × 1,413 m
-site by exporting one view under both settings and matching every region against the published
-photograph: anchored to the corner, the photograph sits within 1.6 m of the truth everywhere, on
-smooth ground; correlation 0.955 against 0.31 for the faceted original.
+each with its own material because one material carries one offset.
+
+Two measurements are cited below, on two different sites, and they answer different questions.
+
+- **2026-09-03, a 1,419 × 1,413 m site.** One view exported under both settings and every region
+  matched by free translation against the published photograph. This is what established the two
+  origins and produced the anchoring rule: anchored to the corner, the photograph sits within 1.6 m
+  of the truth everywhere, on smooth ground — correlation 0.955 against 0.31 for the faceted
+  original.
+- **2026-09-16, a 1,086 × 1,080 m site with 23 site-boundary subdivisions.** The same view
+  photographed with the ribbon switch as the only variable, against a terrain probe log whose
+  per-element offsets ran from −39 in to −38,505 in (−978 m). This is what established what the
+  *off* case looks like, and it is the one the warning sentence describes.
 
 ## The decision, and what it costs
 
@@ -36,7 +45,7 @@ That was accepted, over three alternatives:
 | alternative | why not |
 | --- | --- |
 | **Anchor to the project origin and leave smoothing off.** | Flat shading maps the bitmap per face, in each face's own plane, so every triangle carries its own slice and the ground reads as a mosaic no view style, sun setting or self-illumination touches. Correct placement, unusable picture. |
-| **Find one offset correct under both.** | There is one offset and two origins that differ by the element's own position — up to 978 m on a 1,086 m site. No single value satisfies both. |
+| **Find one offset correct under both.** | There is one offset and two origins that differ by the element's own position — up to 978 m on the 2026-09-16 site. No single value satisfies both. |
 | **Lock the setting, or turn it back on when the curator turns it off.** | It is project-wide and theirs. Silently reversing someone's display setting is the same trespass as silently setting it, and the plugin has no standing to hold a document-wide switch against its owner. |
 
 The remedy that was taken instead is disclosure: the import log says which origin each material was

@@ -767,42 +767,13 @@ public sealed class TerrainProbeCommand : IExternalCommand
     {
         try
         {
-            Options options = new() { ComputeReferences = true, DetailLevel = ViewDetailLevel.Fine };
-            GeometryElement? geometry = subdivision.get_Geometry(options);
-            if (geometry is null)
-            {
-                report.AppendLine("          no geometry — Paint has nothing to act on.");
-                return;
-            }
-
-            Face? top = null;
-            double bestArea = 0.0;
-            int faceCount = 0;
-
-            foreach (GeometryObject item in geometry)
-            {
-                if (item is not Solid { Faces.Size: > 0 } solid)
-                {
-                    continue;
-                }
-
-                foreach (Face face in solid.Faces)
-                {
-                    faceCount++;
-                    BoundingBoxUV bounds = face.GetBoundingBox();
-                    XYZ normal = face.ComputeNormal((bounds.Min + bounds.Max) * 0.5);
-                    if (normal.Z > 0.5 && face.Area > bestArea)
-                    {
-                        bestArea = face.Area;
-                        top = face;
-                    }
-                }
-            }
+            Face? top = FindTopFace(
+                subdivision, computeReferences: true, out int faceCount, out double bestArea, out string? reason);
 
             if (top is null)
             {
                 report.AppendLine(CultureInfo.InvariantCulture,
-                    $"          {faceCount:N0} face(s), none of them upward-facing — no top face to paint.");
+                    $"          {faceCount:N0} face(s) — no top face to paint: {reason}");
                 return;
             }
 
@@ -970,7 +941,6 @@ public sealed class TerrainProbeCommand : IExternalCommand
         }
     }
 
-
     /// <summary>
     /// Whether every site-boundary subdivision's surface actually lies on the ground it was cut
     /// from, measured vertically at its own tessellation vertices.
@@ -1016,32 +986,47 @@ public sealed class TerrainProbeCommand : IExternalCommand
             }
         }
 
-        Toposolid? ground = all.FirstOrDefault(toposolid => !subdivisionIds.Contains(toposolid.Id));
-        if (ground is null)
+        // ⛔ Every ground, not the first one found. A project imported into more than once can hold
+        // several, the arm above this one warns about exactly that, and measuring one of them while
+        // silently skipping the rest would report a clean bill for a project where the problem sits
+        // under the terrain nobody looked at.
+        List<Toposolid> grounds = [.. all.Where(toposolid => !subdivisionIds.Contains(toposolid.Id))];
+        if (grounds.Count == 0)
         {
             report.AppendLine("  No ground toposolid in this project, so there is nothing to measure against.");
             report.AppendLine();
             return;
         }
 
+        foreach (Toposolid ground in grounds)
+        {
+            MeasureAgainstGround(document, ground, report);
+        }
+
+        report.AppendLine();
+    }
+
+    /// <summary>
+    /// One ground toposolid's subdivisions, each measured against it.
+    /// </summary>
+    private static void MeasureAgainstGround(Document document, Toposolid ground, StringBuilder report)
+    {
         if (!TryTopSurface(ground, out List<SurfacePoint> groundVertices,
                 out List<SurfaceTriangle> groundTriangles, out string? groundReason))
         {
             report.AppendLine(CultureInfo.InvariantCulture,
-                $"  The ground toposolid {ground.Id.Value} gave no top surface to measure against — {groundReason}");
-            report.AppendLine();
+                $"  ground {ground.Id.Value} gave no top surface to measure against — {groundReason}");
             return;
         }
 
+        List<ElementId> children = [.. ground.GetSubDivisionIds()];
         report.AppendLine(CultureInfo.InvariantCulture,
             $"  reference: ground {ground.Id.Value} — {groundVertices.Count:N0} vertices, "
-            + $"{groundTriangles.Count:N0} triangles.");
+            + $"{groundTriangles.Count:N0} triangles, {children.Count:N0} subdivision(s).");
 
-        List<ElementId> children = [.. ground.GetSubDivisionIds()];
         if (children.Count == 0)
         {
-            report.AppendLine("  That ground has no subdivisions, so there is nothing to compare to it.");
-            report.AppendLine();
+            report.AppendLine("      no subdivisions on this ground, so there is nothing to compare to it.");
             return;
         }
 
@@ -1061,7 +1046,7 @@ public sealed class TerrainProbeCommand : IExternalCommand
                 continue;
             }
 
-            List<SurfacePoint> samples = Stride(vertices, AgreementSampleCap);
+            IReadOnlyList<SurfacePoint> samples = SurfaceAgreementCheck.Sample(vertices, AgreementSampleCap);
             SurfaceAgreement agreement =
                 SurfaceAgreementCheck.Compare(groundVertices, groundTriangles, samples);
 
@@ -1069,8 +1054,6 @@ public sealed class TerrainProbeCommand : IExternalCommand
                 $"      {SurfaceAgreementCheck.Describe(id.Value.ToString(CultureInfo.InvariantCulture), agreement)} "
                 + $"[{samples.Count:N0} of {vertices.Count:N0} vertices sampled]");
         }
-
-        report.AppendLine();
     }
 
     /// <summary>
@@ -1078,6 +1061,68 @@ public sealed class TerrainProbeCommand : IExternalCommand
     /// <see cref="ProbeSubDivisionAgreement"/> for why it is capped and why the sample is strided.
     /// </summary>
     private const int AgreementSampleCap = 128;
+
+    /// <summary>
+    /// The largest upward-facing face of one element, or <c>null</c> with a reason.
+    /// </summary>
+    /// <remarks>
+    /// Chosen by the largest upward normal rather than by index, because face order is not a
+    /// documented property of anything. One copy rather than one per caller: this is an unverified
+    /// Revit API shape (`revit/CLAUDE.md` ▸ "Revit API risk is real and not caught by the
+    /// compiler"), and a second copy is a second thing to fix when it turns out to be wrong.
+    /// </remarks>
+    private static Face? FindTopFace(
+        Element element,
+        bool computeReferences,
+        out int faceCount,
+        out double topArea,
+        out string? reason)
+    {
+        faceCount = 0;
+        topArea = 0.0;
+        reason = null;
+
+        Options options = new()
+        {
+            ComputeReferences = computeReferences,
+            DetailLevel = ViewDetailLevel.Fine,
+        };
+
+        GeometryElement? geometry = element.get_Geometry(options);
+        if (geometry is null)
+        {
+            reason = "it has no geometry.";
+            return null;
+        }
+
+        Face? top = null;
+        foreach (GeometryObject item in geometry)
+        {
+            if (item is not Solid { Faces.Size: > 0 } solid)
+            {
+                continue;
+            }
+
+            foreach (Face face in solid.Faces)
+            {
+                faceCount++;
+                BoundingBoxUV bounds = face.GetBoundingBox();
+                XYZ normal = face.ComputeNormal((bounds.Min + bounds.Max) * 0.5);
+                if (normal.Z > 0.5 && face.Area > topArea)
+                {
+                    topArea = face.Area;
+                    top = face;
+                }
+            }
+        }
+
+        if (top is null)
+        {
+            reason = "none of its faces point upward.";
+        }
+
+        return top;
+    }
 
     /// <summary>
     /// Every vertex and triangle of one toposolid's upward face, in metres.
@@ -1101,42 +1146,19 @@ public sealed class TerrainProbeCommand : IExternalCommand
 
         try
         {
-            Options options = new() { DetailLevel = ViewDetailLevel.Fine };
-            GeometryElement? geometry = element.get_Geometry(options);
-            if (geometry is null)
-            {
-                reason = "it has no geometry.";
-                return false;
-            }
-
-            Face? top = null;
-            double bestArea = 0.0;
-            foreach (GeometryObject item in geometry)
-            {
-                if (item is not Solid { Faces.Size: > 0 } solid)
-                {
-                    continue;
-                }
-
-                foreach (Face face in solid.Faces)
-                {
-                    BoundingBoxUV bounds = face.GetBoundingBox();
-                    XYZ normal = face.ComputeNormal((bounds.Min + bounds.Max) * 0.5);
-                    if (normal.Z > 0.5 && face.Area > bestArea)
-                    {
-                        bestArea = face.Area;
-                        top = face;
-                    }
-                }
-            }
-
+            Face? top = FindTopFace(element, computeReferences: false, out _, out _, out reason);
             if (top is null)
             {
-                reason = "none of its faces point upward.";
                 return false;
             }
 
-            Mesh mesh = top.Triangulate();
+            // ⛔ 1.0, not the parameterless overload. Each element is tessellated on its own, so a
+            // sample vertex from one surface is interpolated across the other's chords — and two
+            // different triangulations of the same sloped shape disagree by the chord height between
+            // them, with no geometry differing at all. Asking for the finest available tessellation
+            // is what keeps that error below the millimetre SurfaceAgreementCheck calls agreement,
+            // and the alternative is a probe that manufactures the verdict it exists to rule out.
+            Mesh mesh = top.Triangulate(1.0);
             for (int i = 0; i < mesh.Vertices.Count; i++)
             {
                 XYZ point = mesh.Vertices[i];
@@ -1171,25 +1193,6 @@ public sealed class TerrainProbeCommand : IExternalCommand
             reason = $"Revit threw {ex.GetType().Name}: {ex.Message}";
             return false;
         }
-    }
-
-    /// <summary>
-    /// At most <paramref name="cap"/> items, spread evenly across <paramref name="source"/>.
-    /// </summary>
-    private static List<SurfacePoint> Stride(List<SurfacePoint> source, int cap)
-    {
-        if (source.Count <= cap)
-        {
-            return source;
-        }
-
-        List<SurfacePoint> taken = new(cap);
-        for (int i = 0; i < cap; i++)
-        {
-            taken.Add(source[(int)((long)i * source.Count / cap)]);
-        }
-
-        return taken;
     }
 
     /// <summary>

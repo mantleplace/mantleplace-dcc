@@ -142,6 +142,33 @@ internal static class SurfaceAgreementTests
             run.Equal(agreement.Sampled, 0, "nothing measurable was left");
         });
 
+        run.Case("a short list is sampled whole", () =>
+        {
+            IReadOnlyList<SurfacePoint> source = [new(0.0, 0.0, 0.0), new(1.0, 0.0, 0.0)];
+
+            run.Equal(SurfaceAgreementCheck.Sample(source, 10).Count, 2, "nothing was dropped");
+        });
+
+        run.Case("a long list is strided, and keeps both of its ends", () =>
+        {
+            // ⛔ The ends are the finding. A subdivision that reaches past the ground it was cut
+            // from does so at its extremes, so a sample that stops short of the last vertex is a
+            // sample that cannot see the thing most worth seeing. Taking a prefix instead would
+            // sample one part of a tessellation-ordered list, which is not a random part.
+            List<SurfacePoint> source = [];
+            for (int i = 0; i < 1000; i++)
+            {
+                source.Add(new SurfacePoint(i, 0.0, 0.0));
+            }
+
+            IReadOnlyList<SurfacePoint> taken = SurfaceAgreementCheck.Sample(source, 10);
+
+            run.Equal(taken.Count, 10, "capped");
+            run.Within(taken[0].X, 0.0, 1e-9, "the first vertex is in the sample");
+            run.Within(taken[^1].X, 999.0, 1e-9, "and so is the last");
+            run.True(taken[1].X > taken[0].X, "the sample advances rather than repeating");
+        });
+
         run.Case("no samples is a stated fact, not a silent zero", () =>
         {
             SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(FlatVertices, FlatTriangles, []);

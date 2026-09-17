@@ -57,10 +57,21 @@ public static class SurfaceAgreementCheck
     /// The deviation below which two surfaces are called the same surface, in metres.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// One millimetre. The surfaces under test are built by Revit from one point set, so agreement
-    /// should be exact and the tolerance is here only to absorb tessellation round-off — it is not a
-    /// judgement about how much disagreement is acceptable, and it is deliberately far below the
-    /// contour interval anybody would draw.
+    /// should be exact — this is not a judgement about how much disagreement is acceptable, and it
+    /// is deliberately far below the contour interval anybody would draw.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>It does not absorb chord error, and a caller that tessellates the two surfaces
+    /// independently can exceed it without the surfaces differing.</b> Each surface is sampled as
+    /// flat triangles; a sample vertex from one is interpolated across the other's chords, and on
+    /// sloped ground two different triangulations of the same shape disagree by the chord height
+    /// between them. That is a property of the tessellation, not of the geometry, and it is exactly
+    /// the false "they differ" verdict this type exists to avoid producing. A caller must tessellate
+    /// both surfaces at the finest level of detail available to it, and a reading between a
+    /// millimetre and the chord height of its own mesh is inconclusive rather than a defect.
+    /// </para>
     /// </remarks>
     public const double AgreementToleranceM = 0.001;
 
@@ -131,6 +142,43 @@ public static class SurfaceAgreementCheck
     }
 
     /// <summary>
+    /// At most <paramref name="cap"/> of <paramref name="source"/>, spread evenly across it and
+    /// always including its first and last item.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Compare"/> is a linear scan over the reference triangles, so the cost of a run is
+    /// samples × triangles and an uncapped comparison against a terrain mesh is minutes. A probe
+    /// nobody waits for answers nothing.
+    /// </para>
+    /// <para>
+    /// ⛔ Strided, not the first <paramref name="cap"/>. A surface's vertices arrive in tessellation
+    /// order, which is not random: taking a prefix samples one part of it, and on a subdivision that
+    /// is the part nearest its boundary — exactly where a boundary artifact would mask a
+    /// disagreement in the middle. The endpoints are included for the same reason, because a surface
+    /// that reaches past the one it is measured against does so at its extremes.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<SurfacePoint> Sample(IReadOnlyList<SurfacePoint> source, int cap)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentOutOfRangeException.ThrowIfLessThan(cap, 2);
+
+        if (source.Count <= cap)
+        {
+            return source;
+        }
+
+        List<SurfacePoint> taken = new(cap);
+        for (int i = 0; i < cap; i++)
+        {
+            taken.Add(source[(int)((long)i * (source.Count - 1) / (cap - 1))]);
+        }
+
+        return taken;
+    }
+
+    /// <summary>
     /// The reading a person needs from <see cref="Compare"/>, as one sentence.
     /// </summary>
     /// <remarks>
@@ -149,9 +197,9 @@ public static class SurfaceAgreementCheck
         }
 
         string verdict = agreement.MaxAbsDeltaM <= AgreementToleranceM
-            ? $"lies on the reference surface (worst deviation "
+            ? $"lies on the reference surface at every point measured (worst deviation "
                 + $"{agreement.MaxAbsDeltaM.ToString("0.###", CultureInfo.InvariantCulture)} m over "
-                + $"{agreement.Sampled:N0} point(s)), so any contour mismatch is drawing, not geometry"
+                + $"{agreement.Sampled:N0} point(s)), so a contour mismatch here is drawing, not geometry"
             : $"does not lie on the reference surface — worst deviation "
                 + $"{agreement.MaxAbsDeltaM.ToString("0.###", CultureInfo.InvariantCulture)} m, mean "
                 + $"{agreement.MeanAbsDeltaM.ToString("0.###", CultureInfo.InvariantCulture)} m over "
