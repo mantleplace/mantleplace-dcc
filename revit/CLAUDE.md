@@ -152,6 +152,17 @@ takes the host's own noun, *toposolid* and never *toposurface*. Every button als
   to read correctly either way. A journal cannot settle it — `Jrn.RibbonEvent` executes a command
   and never reports what a button looked like — so this one is proven by opening Revit and looking,
   the same way the release gate is.
+- **The ribbon's imagery joined that set.** `UIThemeManager.CurrentTheme`,
+  `UIControlledApplication.ThemeChanged` with `ThemeChangedEventArgs.ThemeChangedType`, and
+  `RibbonButton.Image`/`LargeImage` assigned on retained items compile and have not been executed
+  inside Revit. The compiler earned its keep here too: it is what settled that `SplitButton` derives
+  from `PulldownButton` and therefore has no `Image` of its own, so the face's picture is the first
+  dropdown item's. What no compiler can answer is whether a `SplitButton` face actually draws that
+  item's image, and whether a live theme change repaints a ribbon rather than needing a restart.
+  Both are eyes-on-a-running-Revit, in both themes. What IS settled without Revit: the pure core
+  picks the file name, the headless suite reads `Resources/` in both directions, and the built
+  assembly's WPF resource table plus every pack URI in it can be checked from a script — see the
+  pull request that added `RibbonImagery`.
 
 ## Where knowledge lives
 

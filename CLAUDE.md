@@ -135,7 +135,7 @@ gate: for Revit the gate is the ribbon loading and one real import completing in
 ## Binaries
 
 **There are no Git LFS patterns in this repository, on purpose** — a stranger's first clone must not
-be a multi-hundred-megabyte pull; the binaries that are here — one `.uasset`, three fonts, seven PNG
+be a multi-hundred-megabyte pull; the binaries that are here — one `.uasset`, three fonts, twenty-three PNG
 icons — total well under 1.2 MB and are plain git blobs. **Ask before you `git add` any binary, a
 new file of a type already here included:** the axis is bytes, not novelty, and the budget being
 protected is a stranger's first clone rather than a list of blessed extensions. Git decides

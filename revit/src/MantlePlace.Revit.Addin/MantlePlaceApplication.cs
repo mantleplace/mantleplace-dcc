@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Windows.Threading;
 using Autodesk.Revit.UI;
+using Autodesk.Revit.UI.Events;
 using MantlePlace.Revit.Client;
 using MantlePlace.Revit.Core;
 
@@ -204,6 +205,11 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "opens About Mantle Place.",
         });
 
+        // The face is the one place on this ribbon the brand is spent, and it is spent on the mark
+        // rather than on anything drawn for the occasion. RibbonImagery keeps the reference and
+        // repaints it when Revit changes theme; the mark itself has no theme, and says why.
+        RibbonImagery.GiveMark(_accountFace);
+
         // The address, shown only while there is one. Disabled for its whole life: it is a line of
         // text that happens to live in a control that can only hold buttons.
         _accountIdentity = _accountButton.AddPushButton(new PushButtonData(
@@ -216,6 +222,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         });
         _accountIdentity.Enabled = false;
         _accountIdentity.Visible = false;
+        RibbonImagery.GiveMark(_accountIdentity);
 
         _signOutButton = _accountButton.AddPushButton(new PushButtonData(
             "MantlePlaceSignOut",
@@ -229,8 +236,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "you out of every Mantle Place plugin on this machine. The vault asks you to sign in "
                 + "again afterwards; a bundle import still does not.",
         });
+        RibbonImagery.GiveMark(_signOutButton);
 
-        _accountButton.AddPushButton(new PushButtonData(
+        PushButton openSite = _accountButton.AddPushButton(new PushButtonData(
             "MantlePlaceOpenSite",
             "Open mantle.place",
             assemblyPath,
@@ -238,8 +246,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
         {
             ToolTip = "Open the Mantle Place website in your browser.",
         });
+        RibbonImagery.GiveMark(openSite);
 
-        _accountButton.AddPushButton(new PushButtonData(
+        PushButton about = _accountButton.AddPushButton(new PushButtonData(
             "MantlePlaceAbout",
             "About Mantle Place",
             assemblyPath,
@@ -247,6 +256,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         {
             ToolTip = "Which build this is, and which Revit it is running in.",
         });
+        RibbonImagery.GiveMark(about);
 
         _accountButton.IsSynchronizedWithCurrentItem = false;
     }
@@ -345,6 +355,32 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _ = dispatcher.BeginInvoke(new Action(ApplyAccountState));
     }
 
+    /// <summary>
+    /// Repaints every ribbon image when the curator changes Revit's UI theme.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠ <b><c>ThemeChanged</c> is raised for the canvas theme too</b>, and the two are set
+    /// independently in Options: a curator on a dark canvas with a light UI is an ordinary
+    /// configuration. <c>ThemeChangedType</c> is the only thing that separates them, and repainting
+    /// on a canvas change would swap the ribbon to a set nothing on it is drawn for.
+    /// </para>
+    /// <para>
+    /// No dispatcher hop, unlike <see cref="OnAuthStateChanged"/>. A Revit API event is raised on
+    /// Revit's own thread by contract; an <c>AuthSession</c> transition is raised on whichever thread
+    /// finished the work, which is why that one needs the hop and this one does not.
+    /// </para>
+    /// </remarks>
+    private static void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
+    {
+        if (e is null || e.ThemeChangedType != ThemeType.UITheme)
+        {
+            return;
+        }
+
+        RibbonImagery.Retheme();
+    }
+
     public Result OnStartup(UIControlledApplication application)
     {
         ArgumentNullException.ThrowIfNull(application);
@@ -381,7 +417,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         BuildAccountPanel(application, assemblyPath);
 
         RibbonPanel panel = application.CreateRibbonPanel(TabName, "Bundles");
-        panel.AddItem(new PushButtonData(
+        PushButton vault = (PushButton)panel.AddItem(new PushButtonData(
             "MantlePlaceOpenVault",
             "Vault",
             assemblyPath,
@@ -394,8 +430,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "not cancel the job, and reopening rejoins it. This is the one surface that needs you "
                 + "signed in.",
         });
+        RibbonImagery.Give(vault, RibbonGlyph.Vault);
 
-        panel.AddItem(new PushButtonData(
+        PushButton importLocal = (PushButton)panel.AddItem(new PushButtonData(
             "MantlePlaceImportLocalBundle",
             "Import\nBundle",
             assemblyPath,
@@ -408,6 +445,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "A bundle import needs no account and no sign-in, so this path stays as the permanent "
                 + "fallback beside the vault.",
         });
+        RibbonImagery.Give(importLocal, RibbonGlyph.ImportBundle);
 
         // Everything after this call lands in the slide-out rather than on the panel face, and the
         // panel grows the small unfold arrow at its foot that opens it. The two buttons above are
@@ -416,7 +454,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         // this affordance for exactly this distinction, so it costs no explaining.
         panel.AddSlideOut();
 
-        panel.AddItem(new PushButtonData(
+        PushButton probe = (PushButton)panel.AddItem(new PushButtonData(
             "MantlePlaceProbeTerrain",
             "Probe\nTerrain",
             assemblyPath,
@@ -429,8 +467,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "Every attempt is rolled back, so nothing in your project changes. Use it when a bundle "
                 + "import is refused and the log does not say enough.",
         });
+        RibbonImagery.Give(probe, RibbonGlyph.ProbeTerrain);
 
-        panel.AddItem(new PushButtonData(
+        PushButton logs = (PushButton)panel.AddItem(new PushButtonData(
             "MantlePlaceOpenLogs",
             "Logs",
             assemblyPath,
@@ -443,6 +482,13 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "and a zip you opened from somewhere else logs beside that zip. This opens the newest "
                 + "of them. The About dialog on the Account button goes to the same place.",
         });
+        RibbonImagery.Give(logs, RibbonGlyph.OpenLogs);
+
+        // ⛔ Subscribed for the life of the add-in, and unsubscribed in OnShutdown. Revit has run a
+        // light and a dark UI theme since 2024, a curator switches between them from Options while
+        // Revit is open, and a set drawn for one is unreadable on the other — so an icon set chosen
+        // once at startup is a ribbon that goes blank halfway through an afternoon.
+        application.ThemeChanged += OnThemeChanged;
 
         // Subscribed after the panel exists, and followed by one unconditional read of the session.
         // The startup restore below runs on a thread pool thread and can finish at any point,
@@ -457,6 +503,17 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
     public Result OnShutdown(UIControlledApplication application)
     {
+        // Before the buttons are dropped: a theme change raised after this point would repaint a
+        // ribbon Revit has already taken apart. Guarded rather than ThrowIfNull'd, unlike OnStartup:
+        // a throw here is a fault dialog on the way out of Revit, over a teardown that had already
+        // stopped mattering.
+        if (application is not null)
+        {
+            application.ThemeChanged -= OnThemeChanged;
+        }
+
+        RibbonImagery.Forget();
+
         if (_uiDispatcher is not null)
         {
             _uiDispatcher.UnhandledException -= OnDispatcherUnhandledException;
