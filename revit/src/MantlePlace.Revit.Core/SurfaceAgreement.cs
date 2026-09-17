@@ -20,6 +20,45 @@ public readonly record struct SurfaceAgreement(
     double MeanAbsDeltaM);
 
 /// <summary>
+/// How far a mesh's own chords fall from the surface it approximates — the deviation a reading has
+/// to beat before it says anything about geometry.
+/// </summary>
+/// <remarks>
+/// Two surfaces tessellated independently disagree by the chord height between their triangulations
+/// even when the surfaces are identical, and until that is a number the caveat saying so is
+/// unusable: a reader holding 0.04 m cannot tell which side of it they are on. It is measured, not
+/// assumed — see <see cref="SurfaceAgreementCheck.MeasureNoiseFloor"/> for how.
+/// </remarks>
+/// <param name="Sampled">How many control samples were measured against the reference mesh.</param>
+/// <param name="OffFootprint">
+/// How many did not, because nothing on the reference mesh covered them in plan. A floor taken from
+/// a control that mostly missed is a floor over the part of the surface that was hit, and a reader
+/// deciding what a deviation means needs to know that before it is quoted at them.
+/// </param>
+/// <param name="Coincident">
+/// How many of those landed on a vertex of that mesh, where interpolation is exact by construction
+/// and no chord error can show. Counted because a control made entirely of them reads 0.000 m while
+/// having measured nothing — identical to a floor that is genuinely zero, and it must not be
+/// mistaken for one.
+/// </param>
+/// <param name="FloorM">The worst chord deviation seen, in metres.</param>
+public readonly record struct TessellationNoiseFloor(
+    int Sampled,
+    int OffFootprint,
+    int Coincident,
+    double FloorM)
+{
+    /// <summary>No control was taken. Every non-zero reading measured against this is unclassified.</summary>
+    public static TessellationNoiseFloor Unmeasured => default;
+
+    /// <summary>
+    /// Whether this floor can classify a deviation: at least one control sample that was measured
+    /// and was not itself a vertex of the mesh it was measured against.
+    /// </summary>
+    public bool CanClassify => Sampled > Coincident;
+}
+
+/// <summary>
 /// Whether one surface lies on another — the arithmetic behind "do these two disagree, or do they
 /// only <em>draw</em> differently".
 /// </summary>
@@ -87,6 +126,16 @@ public static class SurfaceAgreementCheck
     /// </remarks>
     private const double InsideToleranceBarycentric = 1e-9;
 
+    /// <summary>
+    /// How close two plan positions have to be to count as the same position, in metres.
+    /// </summary>
+    /// <remarks>
+    /// A micron. The control's coarse vertices come off the same face as the fine mesh's, so the
+    /// shared ones are shared exactly, and this only absorbs the round-off of converting out of
+    /// Revit's internal units twice.
+    /// </remarks>
+    private const double CoincidentPlanToleranceM = 1e-6;
+
     /// <summary>Twice the plan area below which a triangle is treated as having no interior, in m².</summary>
     /// <remarks>
     /// Far below any triangle a terrain mesh contains, and well above the round-off that makes an
@@ -124,26 +173,20 @@ public static class SurfaceAgreementCheck
         ArgumentNullException.ThrowIfNull(samples);
 
         int sampled = 0;
-        int offFootprint = 0;
         double max = 0.0;
         double total = 0.0;
 
-        PlanIndex index = PlanIndex.Over(referenceVertices, referenceTriangles);
-
-        foreach (SurfacePoint sample in samples)
-        {
-            if (index.TryHeightAt(referenceVertices, referenceTriangles, sample.X, sample.Y, out double ground))
+        int offFootprint = MeasureEach(
+            referenceVertices,
+            referenceTriangles,
+            samples,
+            (sample, ground) =>
             {
                 double delta = Math.Abs(sample.Z - ground);
                 sampled++;
                 total += delta;
                 max = Math.Max(max, delta);
-            }
-            else
-            {
-                offFootprint++;
-            }
-        }
+            });
 
         return new SurfaceAgreement(
             sampled,
@@ -153,14 +196,51 @@ public static class SurfaceAgreementCheck
     }
 
     /// <summary>
+    /// Runs <paramref name="onMeasured"/> for every sample the reference surface covers, and returns
+    /// how many it did not cover.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ One traversal for both readings. <see cref="Compare"/> and <see cref="MeasureNoiseFloor"/>
+    /// have to agree exactly on which samples count as measured — the floor is the yardstick the
+    /// agreement is judged against, and a footprint test that drifted between them would compare a
+    /// deviation over one set of points to a floor over another. Sharing the walk makes that
+    /// impossible rather than merely unlikely.
+    /// </remarks>
+    private static int MeasureEach(
+        IReadOnlyList<SurfacePoint> referenceVertices,
+        IReadOnlyList<SurfaceTriangle> referenceTriangles,
+        IReadOnlyList<SurfacePoint> samples,
+        Action<SurfacePoint, double> onMeasured)
+    {
+        PlanIndex index = PlanIndex.Over(referenceVertices, referenceTriangles);
+        int offFootprint = 0;
+
+        foreach (SurfacePoint sample in samples)
+        {
+            if (index.TryHeightAt(referenceVertices, referenceTriangles, sample.X, sample.Y, out double height))
+            {
+                onMeasured(sample, height);
+            }
+            else
+            {
+                offFootprint++;
+            }
+        }
+
+        return offFootprint;
+    }
+
+    /// <summary>
     /// At most <paramref name="cap"/> of <paramref name="source"/>, spread evenly across it and
     /// always including its first and last item.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <see cref="Compare"/> is a linear scan over the reference triangles, so the cost of a run is
-    /// samples × triangles and an uncapped comparison against a terrain mesh is minutes. A probe
-    /// nobody waits for answers nothing.
+    /// ⛔ The cap bounds what a verdict <em>claims to have checked</em>, not what a run costs:
+    /// <see cref="Compare"/> indexes the reference triangles in plan, so a run does not track their
+    /// count. A verdict from some of a surface's vertices is a verdict about those vertices and no
+    /// others, which is why the caller prints the two counts side by side rather than the verdict
+    /// alone. The caller also chooses the number, and says there why it chose it.
     /// </para>
     /// <para>
     /// ⛔ Strided, not the first <paramref name="cap"/>. A surface's vertices arrive in tessellation
@@ -190,14 +270,106 @@ public static class SurfaceAgreementCheck
     }
 
     /// <summary>
+    /// The chord error of the surface described by <paramref name="referenceVertices"/> and
+    /// <paramref name="referenceTriangles"/>, measured at <paramref name="controlSamples"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The control is one mesh against a coarser tessellation of <em>itself</em>. Both sets of points
+    /// lie on one true face, so the true deviation between them is zero and whatever comes out is
+    /// that mesh's own chords falling away from the surface — the noise floor, measured on the
+    /// document being probed rather than guessed at from triangle counts.
+    /// </para>
+    /// <para>
+    /// ⛔ The coarse level only decides <em>where</em> the floor is sampled, never how large it
+    /// reads. What it must not do is sample only the fine mesh's own vertices, which interpolate
+    /// exactly and would report a floor of zero from a control that measured no chord at all;
+    /// <see cref="TessellationNoiseFloor.Coincident"/> is how a reader tells those apart.
+    /// </para>
+    /// </remarks>
+    public static TessellationNoiseFloor MeasureNoiseFloor(
+        IReadOnlyList<SurfacePoint> referenceVertices,
+        IReadOnlyList<SurfaceTriangle> referenceTriangles,
+        IReadOnlyList<SurfacePoint> controlSamples)
+    {
+        ArgumentNullException.ThrowIfNull(referenceVertices);
+        ArgumentNullException.ThrowIfNull(referenceTriangles);
+        ArgumentNullException.ThrowIfNull(controlSamples);
+
+        HashSet<(long X, long Y)> vertexCells = PlanCells(referenceVertices);
+
+        int sampled = 0;
+        int coincident = 0;
+        double floor = 0.0;
+
+        // ⛔ Coincidence is counted over the samples that were MEASURED, never over the samples that
+        // were offered. The plan match is a micron wide and the footprint test is not, so a control
+        // vertex a hair outside the mesh can be coincident with one of its vertices and still not be
+        // measured; counting those would let Coincident reach Sampled, take CanClassify false, and
+        // throw away a floor that was there — which prints every subdivision as unclassified and
+        // leaves the question this probe exists to settle unanswered.
+        int offFootprint = MeasureEach(
+            referenceVertices,
+            referenceTriangles,
+            controlSamples,
+            (sample, height) =>
+            {
+                sampled++;
+                floor = Math.Max(floor, Math.Abs(sample.Z - height));
+                if (Occupies(vertexCells, Cell(sample)))
+                {
+                    coincident++;
+                }
+            });
+
+        return new TessellationNoiseFloor(sampled, offFootprint, coincident, floor);
+    }
+
+    /// <summary>The floor, as the one line that belongs above a set of verdicts.</summary>
+    public static string DescribeNoiseFloor(TessellationNoiseFloor floor)
+    {
+        if (floor.Sampled == 0)
+        {
+            return "tessellation noise floor: not measured — no control sample reached the reference "
+                + "surface, so every reading below is unclassified.";
+        }
+
+        if (!floor.CanClassify)
+        {
+            return $"tessellation noise floor: not measured — all {floor.Sampled:N0} control sample(s) "
+                + "landed on a vertex of the reference mesh, where interpolation is exact by "
+                + "construction and no chord error can show. Every reading below is unclassified.";
+        }
+
+        string missed = floor.OffFootprint == 0
+            ? string.Empty
+            : $" {floor.OffFootprint:N0} further control sample(s) fell outside its footprint, so this "
+                + "is the floor over the part of the surface that was hit.";
+
+        return $"tessellation noise floor: {Metres(floor.FloorM)} m, from {floor.Sampled:N0} control "
+            + $"sample(s), {floor.Coincident:N0} of them on a vertex of the reference mesh. A "
+            + $"deviation at or below this is the two tessellations disagreeing, not the surfaces.{missed}";
+    }
+
+    /// <summary>
     /// The reading a person needs from <see cref="Compare"/>, as one sentence.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The verdict is stated, not left to be inferred from the numbers. A reader looking at a
     /// screenshot of mismatched contours is deciding whether to file a bug, and "0.000 m" only
     /// answers that if somebody says what it means.
+    /// </para>
+    /// <para>
+    /// ⛔ Three readings, not two, and the precedence matters. <see cref="AgreementToleranceM"/>
+    /// is tested first and wins outright: a surface agreeing to a millimetre has agreed however
+    /// coarsely its neighbour's chords are drawn, so a large <paramref name="floor"/> never takes an
+    /// agreement away. The floor bounds only what a <em>disagreement</em> must clear. A run with no
+    /// floor produces neither verdict — it says the reading is unclassified, because "differs by more
+    /// than a number nobody measured" is the sentence this type exists to stop being written.
+    /// </para>
     /// </remarks>
-    public static string Describe(string subject, SurfaceAgreement agreement)
+    public static string Describe(string subject, SurfaceAgreement agreement, TessellationNoiseFloor floor)
     {
         if (agreement.Sampled == 0)
         {
@@ -207,16 +379,40 @@ public static class SurfaceAgreementCheck
                     + "outside the reference surface's footprint.";
         }
 
-        string verdict = agreement.MaxAbsDeltaM <= AgreementToleranceM
-            ? $"lies on the reference surface at every point measured (worst deviation "
-                + $"{agreement.MaxAbsDeltaM.ToString("0.###", CultureInfo.InvariantCulture)} m over "
-                + $"{agreement.Sampled:N0} point(s)), so a contour mismatch here is drawing, not geometry"
-            : $"does not lie on the reference surface — worst deviation "
-                + $"{agreement.MaxAbsDeltaM.ToString("0.###", CultureInfo.InvariantCulture)} m, mean "
-                + $"{agreement.MeanAbsDeltaM.ToString("0.###", CultureInfo.InvariantCulture)} m over "
-                + $"{agreement.Sampled:N0} point(s). ⚠ Inconclusive below the chord height of the two "
-                + "meshes compared: each was tessellated on its own, so a deviation smaller than that "
-                + "is the tessellation disagreeing and not the geometry";
+        string verdict;
+        if (agreement.MaxAbsDeltaM <= AgreementToleranceM)
+        {
+            verdict = "lies on the reference surface at every point measured (worst deviation "
+                + $"{Metres(agreement.MaxAbsDeltaM)} m over {agreement.Sampled:N0} point(s)), so a "
+                + "contour mismatch here is drawing, not geometry";
+        }
+        else if (!floor.CanClassify)
+        {
+            // ⛔ The reading, then the refusal to read it — and no clause before either that names
+            // one of the two verdicts. "Deviates from the reference surface" is the disagreement
+            // said in other words, and a reader who stops at the first comma has been told the thing
+            // this branch exists to withhold.
+            verdict = "⚠ Unclassified — worst deviation "
+                + $"{Metres(agreement.MaxAbsDeltaM)} m, mean {Metres(agreement.MeanAbsDeltaM)} m over "
+                + $"{agreement.Sampled:N0} point(s), and no tessellation noise floor was measured for "
+                + "this reference surface. Whether that is geometry or chord error is not something "
+                + "this run can say";
+        }
+        else if (agreement.MaxAbsDeltaM <= floor.FloorM)
+        {
+            verdict = "deviates by no more than this mesh's own chords — worst deviation "
+                + $"{Metres(agreement.MaxAbsDeltaM)} m against a tessellation noise floor of "
+                + $"{Metres(floor.FloorM)} m, over {agreement.Sampled:N0} point(s). ⚠ "
+                + "Inconclusive: a deviation this small is the two tessellations disagreeing, not "
+                + "the surfaces";
+        }
+        else
+        {
+            verdict = "does not lie on the reference surface — worst deviation "
+                + $"{Metres(agreement.MaxAbsDeltaM)} m, mean {Metres(agreement.MeanAbsDeltaM)} m over "
+                + $"{agreement.Sampled:N0} point(s), against a tessellation noise floor of "
+                + $"{Metres(floor.FloorM)} m";
+        }
 
         string outside = agreement.OffFootprint == 0
             ? string.Empty
@@ -224,6 +420,51 @@ public static class SurfaceAgreementCheck
 
         return $"{subject}: {verdict}.{outside}";
     }
+
+    private static string Metres(double value) =>
+        value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>Every vertex's plan position, bucketed at <see cref="CoincidentPlanToleranceM"/>.</summary>
+    private static HashSet<(long X, long Y)> PlanCells(IReadOnlyList<SurfacePoint> vertices)
+    {
+        HashSet<(long X, long Y)> occupied = [];
+        foreach (SurfacePoint vertex in vertices)
+        {
+            occupied.Add(Cell(vertex));
+        }
+
+        return occupied;
+    }
+
+    /// <summary>
+    /// Whether one plan position sits on an occupied one.
+    /// </summary>
+    /// <remarks>
+    /// The nine cells around it, not the one it landed in: a pair either side of a bucket boundary
+    /// is a micron apart and the same point.
+    /// </remarks>
+    private static bool Occupies(HashSet<(long X, long Y)> occupied, (long X, long Y) cell)
+        => Occupies(occupied, cell.X, cell.Y);
+
+    private static bool Occupies(HashSet<(long X, long Y)> occupied, long x, long y)
+    {
+        for (long dx = -1; dx <= 1; dx++)
+        {
+            for (long dy = -1; dy <= 1; dy++)
+            {
+                if (occupied.Contains((x + dx, y + dy)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static (long X, long Y) Cell(SurfacePoint point) => (
+        (long)Math.Round(point.X / CoincidentPlanToleranceM),
+        (long)Math.Round(point.Y / CoincidentPlanToleranceM));
 
     /// <summary>
     /// The reference triangles bucketed by their plan footprint, so a sample only tests the few that

@@ -242,7 +242,8 @@ internal static class SurfaceAgreementTests
         run.Case("no samples is a stated fact, not a silent zero", () =>
         {
             SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(FlatVertices, FlatTriangles, []);
-            string described = SurfaceAgreementCheck.Describe("subdivision 1", agreement);
+            string described = SurfaceAgreementCheck.Describe(
+                "subdivision 1", agreement, TessellationNoiseFloor.Unmeasured);
 
             run.Equal(agreement.Sampled, 0, "nothing was measured");
             run.Contains(described, "nothing to measure", "said rather than implied");
@@ -253,7 +254,8 @@ internal static class SurfaceAgreementTests
             SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
                 FlatVertices, FlatTriangles, [new SurfacePoint(5.0, 5.0, 0.0)]);
 
-            string described = SurfaceAgreementCheck.Describe("subdivision 1", agreement);
+            string described = SurfaceAgreementCheck.Describe(
+                "subdivision 1", agreement, TessellationNoiseFloor.Unmeasured);
 
             run.Contains(described, "subdivision 1", "which surface this is about");
             run.Contains(described, "lies on", "the reading, not just the number");
@@ -264,7 +266,7 @@ internal static class SurfaceAgreementTests
             SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
                 FlatVertices, FlatTriangles, [new SurfacePoint(5.0, 5.0, 0.4)]);
 
-            string described = SurfaceAgreementCheck.Describe("subdivision 1", agreement);
+            string described = SurfaceAgreementCheck.Describe("subdivision 1", agreement, FloorOf(0.01));
 
             run.Contains(described, "does not lie on", "the opposite reading is said as plainly");
             run.Contains(described, "0.4", "with the number that settles it");
@@ -277,10 +279,140 @@ internal static class SurfaceAgreementTests
                 FlatTriangles,
                 [new SurfacePoint(5.0, 5.0, 0.0), new SurfacePoint(50.0, 50.0, 0.0)]);
 
-            run.Contains(SurfaceAgreementCheck.Describe("subdivision 1", agreement), "outside",
+            run.Contains(
+                SurfaceAgreementCheck.Describe("subdivision 1", agreement, FloorOf(0.01)), "outside",
                 "a subdivision reaching past its ground is worth a clause of its own");
+        });
+
+        run.Case("the noise floor is the reference mesh's own chord error, measured", () =>
+        {
+            // ⛔ The claim this whole arm rests on: a control taken off the surface a mesh
+            // approximates reads that mesh's chords falling away from it, and nothing else. Testing
+            // it needs a surface with chords to fall — a flat mesh has none, and would let a reading
+            // of zero pass for a measurement.
+            //
+            // An arch across x, z = sin(pi x / 10), tessellated coarsely at x = 0, 5, 10: between
+            // x = 0 and x = 5 the mesh runs straight from z = 0 to z = 1, so at x = 2.5 its chord
+            // sits at 0.5 while the surface is at sin(pi/4) = 0.7071. The sag between them is the
+            // floor, and it is arithmetic rather than an eyeball.
+            SurfacePoint[] arch =
+            [
+                new(0.0, 0.0, 0.0), new(5.0, 0.0, 1.0), new(10.0, 0.0, 0.0),
+                new(0.0, 10.0, 0.0), new(5.0, 10.0, 1.0), new(10.0, 10.0, 0.0),
+            ];
+
+            SurfaceTriangle[] chords = [new(0, 1, 4), new(0, 4, 3), new(1, 2, 5), new(1, 5, 4)];
+
+            double crest = Math.Sin(Math.PI * 0.25);
+            TessellationNoiseFloor floor = SurfaceAgreementCheck.MeasureNoiseFloor(
+                arch, chords, [new SurfacePoint(2.5, 2.0, crest), new SurfacePoint(7.5, 2.0, crest)]);
+
+            run.Equal(floor.Sampled, 2, "both control samples sat over the mesh");
+            run.Equal(floor.Coincident, 0, "neither was one of its vertices");
+            run.True(floor.CanClassify, "so this floor can judge a deviation");
+            run.Within(floor.FloorM, crest - 0.5, 1e-9, "and it is the chord sag, to the arithmetic");
+        });
+
+        run.Case("a control sample the reference surface does not cover is reported, not dropped", () =>
+        {
+            // ⛔ A floor measured over a corner of a surface is a floor about that corner. Silently
+            // averaging one and calling it the mesh's is how a deviation gets judged against a
+            // yardstick taken somewhere else.
+            TessellationNoiseFloor floor = SurfaceAgreementCheck.MeasureNoiseFloor(
+                FlatVertices, FlatTriangles,
+                [new SurfacePoint(5.0, 5.0, 0.02), new SurfacePoint(500.0, 500.0, 0.0)]);
+
+            run.Equal(floor.Sampled, 1, "one control sample landed on the surface");
+            run.Equal(floor.OffFootprint, 1, "and one missed it entirely");
+            run.Contains(
+                SurfaceAgreementCheck.DescribeNoiseFloor(floor), "outside its footprint",
+                "which the floor's own line says out loud");
+        });
+
+        run.Case("a control that only landed on the mesh's own vertices establishes nothing", () =>
+        {
+            // ⛔ Interpolation at a vertex is exact by construction, so this control reads 0.000 m
+            // while having measured no chord at all. A floor of zero and a floor that was never
+            // taken produce the same number and must not produce the same verdict.
+            TessellationNoiseFloor floor = SurfaceAgreementCheck.MeasureNoiseFloor(
+                FlatVertices, FlatTriangles, FlatVertices);
+
+            run.Equal(floor.Sampled, FlatVertices.Length, "every control sample was measured");
+            run.Equal(floor.Coincident, FlatVertices.Length, "and every one of them was a vertex");
+            run.Within(floor.FloorM, 0.0, 1e-9, "which reads as no deviation");
+            run.False(floor.CanClassify, "so there is no floor to judge anything against");
+            run.Contains(
+                SurfaceAgreementCheck.DescribeNoiseFloor(floor), "not measured",
+                "and the report says so rather than printing 0.000 m");
+        });
+
+        run.Case("a deviation inside the noise floor is inconclusive, not a disagreement", () =>
+        {
+            SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
+                FlatVertices, FlatTriangles, [new SurfacePoint(5.0, 5.0, 0.01)]);
+
+            string described = SurfaceAgreementCheck.Describe("subdivision 1", agreement, FloorOf(0.02));
+
+            run.Contains(described, "Inconclusive", "the verdict is stated, not left to arithmetic");
+            run.False(described.Contains("does not lie on", StringComparison.Ordinal),
+                "and it is not reported as a surface that differs");
+        });
+
+        run.Case("a deviation equal to the noise floor is inconclusive", () =>
+        {
+            SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
+                FlatVertices, FlatTriangles, [new SurfacePoint(5.0, 5.0, 0.02)]);
+
+            run.Contains(
+                SurfaceAgreementCheck.Describe("subdivision 1", agreement, FloorOf(0.02)), "Inconclusive",
+                "the boundary belongs to the side that claims less");
+        });
+
+        run.Case("agreement within tolerance survives a floor far larger than it", () =>
+        {
+            // ⛔ Tolerance wins over the floor. A surface agreeing to a millimetre has agreed
+            // however coarsely its neighbour's chords are drawn: the floor bounds what a
+            // disagreement has to clear, never what an agreement is allowed to be.
+            SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
+                FlatVertices, FlatTriangles, [new SurfacePoint(5.0, 5.0, 0.0004)]);
+
+            string described = SurfaceAgreementCheck.Describe("subdivision 1", agreement, FloorOf(0.05));
+
+            run.Contains(described, "lies on", "the agreement is reported as an agreement");
+            run.False(described.Contains("Inconclusive", StringComparison.Ordinal),
+                "and a large floor does not take it away");
+        });
+
+        run.Case("a deviation above the floor is a disagreement, and names the floor it beat", () =>
+        {
+            SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
+                FlatVertices, FlatTriangles, [new SurfacePoint(5.0, 5.0, 0.4)]);
+
+            string described = SurfaceAgreementCheck.Describe("subdivision 1", agreement, FloorOf(0.02));
+
+            run.Contains(described, "does not lie on", "the reading is said plainly");
+            run.Contains(described, "0.02", "against the floor it had to clear");
+        });
+
+        run.Case("without a floor a deviation is unclassified rather than a disagreement", () =>
+        {
+            SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
+                FlatVertices, FlatTriangles, [new SurfacePoint(5.0, 5.0, 0.4)]);
+
+            string described = SurfaceAgreementCheck.Describe(
+                "subdivision 1", agreement, TessellationNoiseFloor.Unmeasured);
+
+            run.Contains(described, "Unclassified", "a missing control is a fact about the run");
+            run.False(described.Contains("does not lie on", StringComparison.Ordinal),
+                "and it does not license the verdict the control was there to support");
+            run.False(described.Contains("deviates from the reference surface", StringComparison.Ordinal),
+                "nor that verdict in other words — a reader who stops at the first comma has "
+                + "been told the thing this branch withholds");
         });
 
         return run.Report("surface agreement");
     }
+
+    /// <summary>A floor of <paramref name="metres"/>, taken from samples that were not vertices.</summary>
+    private static TessellationNoiseFloor FloorOf(double metres) => new(8, 0, 0, metres);
 }

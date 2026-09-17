@@ -966,9 +966,11 @@ public sealed class TerrainProbeCommand : IExternalCommand
     /// evenly rather than taken from the front: taking the first N would sample one corner of each
     /// subdivision, which is exactly where a boundary artifact would hide a disagreement in the
     /// middle. The cap is a bound on how much of each subdivision is claimed to have been checked,
-    /// which is why the report prints how many of its vertices were sampled — a verdict from 128 of
-    /// 4,000 vertices is a verdict about 128 vertices.
+    /// which is why the report prints how many of its vertices were sampled — a verdict from part of
+    /// a subdivision is a verdict about that part. See <see cref="AgreementSampleCap"/> for the
+    /// number and why it is the number.
     /// </para>
+
     /// <para>
     /// The cap is <em>not</em> what keeps the run cheap, and an earlier version of this remark said
     /// it was — while the code beneath it asked for the finest tessellation Revit offers, which
@@ -976,6 +978,11 @@ public sealed class TerrainProbeCommand : IExternalCommand
     /// <see cref="SurfaceAgreementCheck.Compare"/> indexes the reference triangles in plan, so the
     /// cost does not track that count. Cheapness is the core's problem; honesty about coverage is
     /// this method's.
+    /// </para>
+    /// <para>
+    /// Every ground is measured against a noise floor of its own before its subdivisions are judged,
+    /// because a deviation only means something once there is a number it had to beat. See
+    /// <see cref="MeasureGroundNoiseFloor"/>.
     /// </para>
     /// </remarks>
     private static void ProbeSubDivisionAgreement(Document document, StringBuilder report)
@@ -1022,7 +1029,7 @@ public sealed class TerrainProbeCommand : IExternalCommand
     /// </summary>
     private static void MeasureAgainstGround(Document document, Toposolid ground, StringBuilder report)
     {
-        if (!TryTopSurface(ground, out List<SurfacePoint> groundVertices,
+        if (!TryTopSurface(ground, FinestDetail, out List<SurfacePoint> groundVertices,
                 out List<SurfaceTriangle> groundTriangles, out string? groundReason))
         {
             report.AppendLine(CultureInfo.InvariantCulture,
@@ -1041,6 +1048,14 @@ public sealed class TerrainProbeCommand : IExternalCommand
             return;
         }
 
+        // The floor before the verdicts it qualifies, and only once there is a verdict to qualify:
+        // the control is a second tessellation of the whole ground, which is not worth asking Revit
+        // for on a ground nothing is being measured against.
+        TessellationNoiseFloor floor =
+            MeasureGroundNoiseFloor(ground, groundVertices, groundTriangles, report);
+        report.AppendLine(CultureInfo.InvariantCulture,
+            $"      {SurfaceAgreementCheck.DescribeNoiseFloor(floor)}");
+
         foreach (ElementId id in children)
         {
             if (document.GetElement(id) is not Toposolid subdivision)
@@ -1050,7 +1065,8 @@ public sealed class TerrainProbeCommand : IExternalCommand
                 continue;
             }
 
-            if (!TryTopSurface(subdivision, out List<SurfacePoint> vertices, out _, out string? reason))
+            if (!TryTopSurface(subdivision, FinestDetail, out List<SurfacePoint> vertices, out _,
+                    out string? reason))
             {
                 report.AppendLine(CultureInfo.InvariantCulture,
                     $"      {id.Value}: no top surface — {reason}");
@@ -1062,16 +1078,79 @@ public sealed class TerrainProbeCommand : IExternalCommand
                 SurfaceAgreementCheck.Compare(groundVertices, groundTriangles, samples);
 
             report.AppendLine(CultureInfo.InvariantCulture,
-                $"      {SurfaceAgreementCheck.Describe(id.Value.ToString(CultureInfo.InvariantCulture), agreement)} "
+                $"      {SurfaceAgreementCheck.Describe(id.Value.ToString(CultureInfo.InvariantCulture), agreement, floor)} "
                 + $"[{samples.Count:N0} of {vertices.Count:N0} vertices sampled]");
         }
+    }
+
+    /// <summary>
+    /// How far one ground's own chords fall from its own surface — the floor every verdict about it
+    /// is stated against.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same element, tessellated a second time at <see cref="ControlDetail"/> and measured
+    /// against its own finest triangles. Both point sets come off one face, so the true deviation is
+    /// zero by construction and what comes out is chord error and nothing else. Without it the
+    /// report can only say a subdivision deviates by more than a number nobody computed, which is
+    /// the sentence <see cref="SurfaceAgreementCheck"/> exists to stop being written.
+    /// </para>
+    /// <para>
+    /// ⛔ Read-only, like everything in this arm: a second <c>Triangulate</c> on a face Revit has
+    /// already given up once, opening no transaction and touching no element.
+    /// </para>
+    /// </remarks>
+    private static TessellationNoiseFloor MeasureGroundNoiseFloor(
+        Toposolid ground,
+        IReadOnlyList<SurfacePoint> groundVertices,
+        IReadOnlyList<SurfaceTriangle> groundTriangles,
+        StringBuilder report)
+    {
+        if (!TryTopSurface(ground, ControlDetail, out List<SurfacePoint> control, out _, out string? reason))
+        {
+            report.AppendLine(CultureInfo.InvariantCulture,
+                $"      the control tessellation of ground {ground.Id.Value} gave no surface — {reason}");
+            return TessellationNoiseFloor.Unmeasured;
+        }
+
+        return SurfaceAgreementCheck.MeasureNoiseFloor(
+            groundVertices, groundTriangles, SurfaceAgreementCheck.Sample(control, AgreementSampleCap));
     }
 
     /// <summary>
     /// How many of a subdivision's vertices the agreement arm measures. See
     /// <see cref="ProbeSubDivisionAgreement"/> for why it is capped and why the sample is strided.
     /// </summary>
-    private const int AgreementSampleCap = 128;
+    /// <remarks>
+    /// ⛔ Large enough that every subdivision on the site this arm was written for is measured whole,
+    /// because the cap's job is coverage rather than cost — <c>SurfaceAgreementCheck.Compare</c>
+    /// indexes the reference triangles in plan, so a run does not track their count. A cap sized to
+    /// keep a run cheap would buy nothing and cost the one thing a one-shot measurement cannot
+    /// afford, which is a "they agree" verdict from a strided sample that walked past the
+    /// disagreement.
+    /// </remarks>
+    private const int AgreementSampleCap = 10_000;
+
+    /// <summary>
+    /// Revit's finest tessellation — "0 is the lowest level of detail and 1 is the highest"
+    /// (Revit 2025 API).
+    /// </summary>
+    private const double FinestDetail = 1.0;
+
+    /// <summary>
+    /// The level of detail the noise-floor control is tessellated at.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ Coarse, but not the coarsest. The level decides only <em>where</em> the floor is sampled,
+    /// never how large it reads — both point sets lie on the same true face — so the single property
+    /// it has to have is that its vertices are not simply the fine mesh's own, which interpolate
+    /// exactly and would report a floor of zero from a control that measured no chord at all. 0.0
+    /// risks collapsing the face to a handful of triangles whose corners are exactly that; 0.3
+    /// spreads the samples off them while staying plainly coarser than the mesh under test.
+    /// <see cref="TessellationNoiseFloor.Coincident"/> reports how many landed on a vertex anyway,
+    /// so this is a choice the report does not ask a reader to trust.
+    /// </remarks>
+    private const double ControlDetail = 0.3;
 
     /// <summary>
     /// The largest upward-facing face of one element, or <c>null</c> with a reason.
@@ -1146,13 +1225,14 @@ public sealed class TerrainProbeCommand : IExternalCommand
     /// </summary>
     /// <remarks>
     /// The face comes from <see cref="FindTopFace"/>, shared with <see cref="PaintTopFace"/>.
-    /// <c>Face.Triangulate(1.0)</c> is Revit's own tessellation at its highest level of detail
-    /// ("0 is the lowest level of detail and 1 is the highest" — Revit 2025 API), and Revit's
-    /// tessellation is the right thing to measure: the question is whether the surfaces Revit built
-    /// agree, not whether the points they were built from did.
+    /// <paramref name="detail"/> is handed to <c>Face.Triangulate</c> ("0 is the lowest level of
+    /// detail and 1 is the highest" — Revit 2025 API), and Revit's tessellation is the right thing
+    /// to measure: the question is whether the surfaces Revit built agree, not whether the points
+    /// they were built from did.
     /// </remarks>
     private static bool TryTopSurface(
         Element element,
+        double detail,
         out List<SurfacePoint> vertices,
         out List<SurfaceTriangle> triangles,
         out string? reason)
@@ -1169,16 +1249,15 @@ public sealed class TerrainProbeCommand : IExternalCommand
                 return false;
             }
 
-            // ⛔ 1.0, not the parameterless overload — the highest level of detail Revit offers.
-            // Each element is tessellated on its own, so a sample vertex from one surface is
-            // interpolated across the other's chords, and two different triangulations of the same
-            // sloped shape disagree by the chord height between them with no geometry differing at
-            // all. The finest tessellation available makes that error as small as this probe can
-            // make it; it does not make it zero, and SurfaceAgreementCheck.AgreementToleranceM is
-            // explicit that a reading between a millimetre and the mesh's own chord height is
-            // inconclusive rather than a defect. Do not read this comment as a guarantee the core
-            // declines to give.
-            Mesh mesh = top.Triangulate(1.0);
+            // ⛔ An explicit level, never the parameterless overload. Callers measuring one surface
+            // against another pass FinestDetail, because each element is tessellated on its own: a
+            // sample vertex from one is interpolated across the other's chords, and two different
+            // triangulations of the same sloped shape disagree by the chord height between them with
+            // no geometry differing at all. The finest tessellation makes that error as small as
+            // this probe can make it and does not make it zero, which is why the arm also measures
+            // how large it is — see MeasureGroundNoiseFloor, whose control deliberately asks for a coarser
+            // level. Do not read this comment as a guarantee the core declines to give.
+            Mesh mesh = top.Triangulate(detail);
             for (int i = 0; i < mesh.Vertices.Count; i++)
             {
                 XYZ point = mesh.Vertices[i];
