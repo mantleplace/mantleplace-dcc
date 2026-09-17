@@ -13,6 +13,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
     private const string TabName = "Mantle Place";
 
     private static AuthSession? _session;
+    private static MantlePlaceEndpoints? _endpoints;
     private static VaultClient? _vault;
     private static BundleCache? _cache;
     private static ExternalEvent? _importEvent;
@@ -20,6 +21,22 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
     /// <summary>Revit's UI dispatcher, held only so the handler below can be detached again.</summary>
     private static Dispatcher? _uiDispatcher;
+
+    /// <summary>
+    /// The Account split button and the three items whose appearance depends on the session.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Retained on purpose.</b> The two push buttons these replace were added and their
+    /// references dropped on the floor, which is why nothing could ever change their text or their
+    /// enabled state — the ribbon was structurally incapable of reflecting the session, and the
+    /// truth was left to a dialog at click time. A ribbon item is only ever as honest as the
+    /// reference somebody kept.
+    /// </remarks>
+    private static SplitButton? _accountButton;
+
+    private static PushButton? _accountFace;
+    private static PushButton? _accountIdentity;
+    private static PushButton? _signOutButton;
 
     /// <summary>
     /// The one session for this Revit process.
@@ -31,6 +48,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
     /// signing out in one would leave the other authenticated and the ribbon lying about it.
     /// </remarks>
     public static AuthSession Session => _session ?? throw NotStarted();
+
+    /// <summary>The routes this process signs in against and sends curators to.</summary>
+    internal static MantlePlaceEndpoints Endpoints => _endpoints ?? throw NotStarted();
 
     internal static VaultClient Vault => _vault ?? throw NotStarted();
 
@@ -127,6 +147,204 @@ public sealed class MantlePlaceApplication : IExternalApplication
         }.Show();
     }
 
+    /// <summary>
+    /// The Account panel: one split button whose face is the auth session.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠ <b><c>IsSynchronizedWithCurrentItem = false</c> is what makes the face a face.</b> A Revit
+    /// <c>SplitButton</c> defaults to true, which means it adopts whichever dropdown item was used
+    /// last — click "Open mantle.place" once and the button that reports your session is replaced by
+    /// a link to a website. With it false the face is pinned to the first item added, which is why
+    /// <c>MantlePlaceAccountFace</c> goes on first and why the order of the rest is not decorative.
+    /// </para>
+    /// <para>
+    /// ⚠ The face's tooltip is set on the <b>push button</b>, not on the split button:
+    /// <c>RibbonItem.ToolTip</c> on a <c>SplitButton</c> is documented as never being shown.
+    /// </para>
+    /// <para>
+    /// The panel name stays <c>Account</c> and the tab stays <c>Mantle Place</c> — a recorded journal
+    /// keys on both, and on the <c>Bundles</c> panel's command ids, which is why those are untouched
+    /// here (<c>revit/README.md</c> ▸ the ribbon events a playback journal needs).
+    /// <c>MantlePlaceSignOut</c> keeps its id for the same reason, one dropdown row lower.
+    /// </para>
+    /// </remarks>
+    private static void BuildAccountPanel(UIControlledApplication application, string assemblyPath)
+    {
+        RibbonPanel account = application.CreateRibbonPanel(TabName, "Account");
+
+        // Taken from the same place the live updates are, rather than written out again here. The
+        // state a ribbon is built in is the state the session starts in, and two copies of one
+        // string is how a face ends up saying something the core stopped saying a year ago.
+        AccountRibbonState initial = AccountRibbon.For(AuthStateMachine.Initial, null, false);
+
+        _accountButton = (SplitButton)account.AddItem(
+            new SplitButtonData("MantlePlaceAccount", initial.FaceText));
+
+        // First, and therefore the face. Its text, tooltip and enabled state are rewritten on every
+        // auth transition by ApplyAccountState; what is set here is only what the ribbon shows in
+        // the moment between the panel existing and the session being read.
+        // ⚠ The id is MantlePlaceSignIn, not MantlePlaceAccountFace, and the difference is a rule
+        // rather than a preference: command ids are fixed here because a recorded journal keys on
+        // them. This button does more than its id now says — signed in, it opens About — and the id
+        // stays anyway. An id is an address, not a description, and renaming it to read better
+        // would break the one thing it is for.
+        _accountFace = _accountButton.AddPushButton(new PushButtonData(
+            "MantlePlaceSignIn",
+            initial.FaceText,
+            assemblyPath,
+            typeof(AccountCommand).FullName)
+        {
+            ToolTip = initial.FaceToolTip,
+            LongDescription =
+                "Sign in to Mantle Place in your browser. Revit never sees your password: the browser "
+                + "returns an authorization code to a local address only this Revit is listening on. "
+                + "Signing in here signs you in for every Mantle Place plugin on this machine. Only the "
+                + "vault needs you signed in; a bundle import does not. Once signed in, this button "
+                + "opens About Mantle Place.",
+        });
+
+        // The address, shown only while there is one. Disabled for its whole life: it is a line of
+        // text that happens to live in a control that can only hold buttons.
+        _accountIdentity = _accountButton.AddPushButton(new PushButtonData(
+            "MantlePlaceAccountIdentity",
+            AccountRibbon.SignedInFace,
+            assemblyPath,
+            typeof(AccountIdentityCommand).FullName)
+        {
+            ToolTip = "The account this Revit is signed in to.",
+        });
+        _accountIdentity.Enabled = false;
+        _accountIdentity.Visible = false;
+
+        _signOutButton = _accountButton.AddPushButton(new PushButtonData(
+            "MantlePlaceSignOut",
+            "Sign Out",
+            assemblyPath,
+            typeof(SignOutCommand).FullName)
+        {
+            ToolTip = "Sign out and forget the stored credential.",
+            LongDescription =
+                "Sign out of Mantle Place and forget the credential stored for this OS user, which signs "
+                + "you out of every Mantle Place plugin on this machine. The vault asks you to sign in "
+                + "again afterwards; a bundle import still does not.",
+        });
+
+        _accountButton.AddPushButton(new PushButtonData(
+            "MantlePlaceOpenSite",
+            "Open mantle.place",
+            assemblyPath,
+            typeof(OpenMantlePlaceCommand).FullName)
+        {
+            ToolTip = "Open the Mantle Place website in your browser.",
+        });
+
+        _accountButton.AddPushButton(new PushButtonData(
+            "MantlePlaceAbout",
+            "About Mantle Place",
+            assemblyPath,
+            typeof(AboutMantlePlaceCommand).FullName)
+        {
+            ToolTip = "Which build this is, and which Revit it is running in.",
+        });
+
+        _accountButton.IsSynchronizedWithCurrentItem = false;
+    }
+
+    /// <summary>
+    /// Copies the session onto the Account button. Revit's UI thread only.
+    /// </summary>
+    /// <remarks>
+    /// Reads the session rather than the transition it was told about, so the ribbon can never be one
+    /// event behind — and so the single call after the ribbon is built catches whatever the startup
+    /// restore did while the panel did not exist yet.
+    /// </remarks>
+    private static void ApplyAccountState()
+    {
+        AuthSession? session = _session;
+        if (session is null || _accountFace is null)
+        {
+            return;
+        }
+
+        AccountRibbonState face = session.AccountFace();
+
+        try
+        {
+            _accountFace.ItemText = face.FaceText;
+            _accountFace.ToolTip = face.FaceToolTip;
+            _accountFace.Enabled = face.FaceEnabled;
+
+            // Belt and braces: with IsSynchronizedWithCurrentItem false the split button draws its
+            // first item, but it carries its own text for the case where the dropdown is empty, and
+            // leaving that at whatever it was created with is a second thing able to lie.
+            if (_accountButton is not null)
+            {
+                _accountButton.ItemText = face.FaceText;
+            }
+
+            if (_accountIdentity is not null)
+            {
+                if (face.IdentityVisible)
+                {
+                    _accountIdentity.ItemText = face.IdentityText;
+                }
+
+                _accountIdentity.Visible = face.IdentityVisible;
+            }
+
+            if (_signOutButton is not null)
+            {
+                _signOutButton.Enabled = face.SignOutEnabled;
+            }
+        }
+        catch (Autodesk.Revit.Exceptions.ApplicationException)
+        {
+            // Swallowed, and only here. This runs on every auth transition, so a ribbon that refuses
+            // an assignment would otherwise raise the fault dialog repeatedly — for a button, while
+            // the curator is signing in. The strings are pre-checked in AccountRibbon precisely so
+            // this catch stays unreachable; what is left is Revit refusing a ribbon it is tearing
+            // down, and a stale face on the way out costs nothing.
+        }
+    }
+
+    /// <summary>
+    /// Marshals an auth transition onto Revit's UI thread, then repaints the Account button.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <c>AuthSession.StateChanged</c> is raised on whichever thread finished the work, which is a
+    /// thread-pool thread for every transition a sign-in or a refresh produces. Touching a
+    /// <c>PushButton</c> from there is a main-thread violation, and Revit answers those by
+    /// terminating the process — so this hop is not a nicety.
+    /// </remarks>
+    /// <remarks>
+    /// ⚠ <b>What this does and does not see when the other host changes the shared credential.</b>
+    /// Both hosts keep one stored session per Windows user, so Unreal can sign in or out underneath
+    /// this process. A renewal is the moment that becomes visible: <c>AuthSession.RefreshAsync</c>
+    /// re-reads the freshest stored token before spending a round trip, so a credential the other
+    /// host rotated arrives here as an ordinary Refreshing → Authenticated transition and the face is
+    /// rebuilt from the session, never from anything cached at startup. <b>Nothing watches the store
+    /// itself.</b> Unreal signing out does not move this process's session, and this ribbon goes on
+    /// saying Signed In until the next renewal finds the credential gone — at which point Sign Out
+    /// here is still correct, because it clears memory as well as the store.
+    /// </remarks>
+    private static void OnAuthStateChanged(object? sender, AuthState state)
+    {
+        Dispatcher? dispatcher = _uiDispatcher;
+        if (dispatcher is null)
+        {
+            return;
+        }
+
+        if (dispatcher.CheckAccess())
+        {
+            ApplyAccountState();
+            return;
+        }
+
+        _ = dispatcher.BeginInvoke(new Action(ApplyAccountState));
+    }
+
     public Result OnStartup(UIControlledApplication application)
     {
         ArgumentNullException.ThrowIfNull(application);
@@ -137,11 +355,10 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _uiDispatcher.UnhandledException += OnDispatcherUnhandledException;
 
         MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load();
+        _endpoints = endpoints;
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
         _vault = new VaultClient(endpoints, _session);
         _cache = new BundleCache();
-
-        BeginSessionRestore(_session);
 
         // Created during OnStartup because ExternalEvent.Create must run on Revit's own thread, and
         // a modeless window has no other moment when that is guaranteed.
@@ -161,33 +378,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         string assemblyPath = Assembly.GetExecutingAssembly().Location;
 
-        RibbonPanel account = application.CreateRibbonPanel(TabName, "Account");
-        account.AddItem(new PushButtonData(
-            "MantlePlaceSignIn",
-            "Sign in",
-            assemblyPath,
-            typeof(SignInCommand).FullName)
-        {
-            ToolTip = "Sign in to Mantle Place in your browser.",
-            LongDescription =
-                "Sign in to Mantle Place in your browser. Revit never sees your password: the browser "
-                + "returns an authorization code to a local address only this Revit is listening on. "
-                + "Signing in here signs you in for every Mantle Place plugin on this machine. Only the "
-                + "vault needs you signed in; a bundle import does not.",
-        });
-
-        account.AddItem(new PushButtonData(
-            "MantlePlaceSignOut",
-            "Sign Out",
-            assemblyPath,
-            typeof(SignOutCommand).FullName)
-        {
-            ToolTip = "Sign out and forget the stored credential.",
-            LongDescription =
-                "Sign out of Mantle Place and forget the credential stored for this OS user, which signs "
-                + "you out of every Mantle Place plugin on this machine. The vault asks you to sign in "
-                + "again afterwards; a bundle import still does not.",
-        });
+        BuildAccountPanel(application, assemblyPath);
 
         RibbonPanel panel = application.CreateRibbonPanel(TabName, "Bundles");
         panel.AddItem(new PushButtonData(
@@ -232,6 +423,14 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "import is refused and the log does not say enough.",
         });
 
+        // Subscribed after the panel exists, and followed by one unconditional read of the session.
+        // The startup restore below runs on a thread pool thread and can finish at any point,
+        // including before this line; reading the session here rather than trusting the event means
+        // a transition that landed while the ribbon was still being built is not missed.
+        _session.StateChanged += OnAuthStateChanged;
+        BeginSessionRestore(_session);
+        ApplyAccountState();
+
         return Result.Succeeded;
     }
 
@@ -243,11 +442,24 @@ public sealed class MantlePlaceApplication : IExternalApplication
             _uiDispatcher = null;
         }
 
+        // Before the session is disposed: a transition raised after the ribbon is gone would post to
+        // a dispatcher that is shutting down.
+        if (_session is not null)
+        {
+            _session.StateChanged -= OnAuthStateChanged;
+        }
+
+        _accountButton = null;
+        _accountFace = null;
+        _accountIdentity = null;
+        _signOutButton = null;
+
         _importEvent?.Dispose();
         _importEvent = null;
         _importHandler = null;
         _vault = null;
         _cache = null;
+        _endpoints = null;
         _session?.Dispose();
         _session = null;
         return Result.Succeeded;

@@ -142,6 +142,16 @@ takes the host's own noun, *toposolid* and never *toposurface*. Every button als
   itself is Revit 2024+, so the 2025 floor is also the floor for the topo path. There is a way to
   drive them without a human: set `MANTLEPLACE_BUNDLE_ZIP` and the import command skips its file
   picker, so a journal or a test script can run it unattended (`LocalBundleSource`).
+- **The ribbon is in that set too, and it has no unattended path at all.** The Account split button
+  — `SplitButtonData`, `SplitButton.IsSynchronizedWithCurrentItem`, `RibbonItem.Visible` on a
+  dropdown child, and `TaskDialog.AddCommandLink` — compiles, and the compiler is again worth more
+  than nothing: it is what pins `SplitButton.AddPushButton` and the `RibbonItem` setters to their
+  real shapes. What it cannot answer is whether the face repeats as the dropdown's first row, since
+  `IsSynchronizedWithCurrentItem = false` is documented as "the first listed PushButton is shown"
+  without saying whether that item is also listed. The row order in `BuildAccountPanel` is written
+  to read correctly either way. A journal cannot settle it — `Jrn.RibbonEvent` executes a command
+  and never reports what a button looked like — so this one is proven by opening Revit and looking,
+  the same way the release gate is.
 
 ## Where knowledge lives
 

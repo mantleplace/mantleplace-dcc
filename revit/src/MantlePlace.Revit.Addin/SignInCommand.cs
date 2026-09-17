@@ -37,6 +37,19 @@ public sealed class SignInCommand : IExternalCommand
     private static SignInWindow? _window;
 
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+        => StartSignIn(commandData);
+
+    /// <summary>
+    /// The sign-in, callable from the Account face as well as from this command.
+    /// </summary>
+    /// <remarks>
+    /// The Account split button's face is one <c>PushButton</c> bound to one class, and what it does
+    /// depends on the session (<see cref="AccountCommand"/>), so the sign-in needs a name something
+    /// other than <see cref="IExternalCommand.Execute"/> can call. The window below is still
+    /// per-process rather than per-caller: two entry points must not become two browser round-trips
+    /// racing for one loopback callback.
+    /// </remarks>
+    internal static Result StartSignIn(ExternalCommandData commandData)
     {
         ArgumentNullException.ThrowIfNull(commandData);
 
@@ -48,6 +61,10 @@ public sealed class SignInCommand : IExternalCommand
             return Result.Succeeded;
         }
 
+        // A backstop rather than the ribbon's answer to "am I signed in?". That question is answered
+        // on the face now (AccountRibbon), which reports Signed In and opens About instead of
+        // offering a sign-in. This is what is left: a click landing in the gap between the session
+        // moving and the ribbon being told about it.
         if (session.State == AuthState.Authenticated)
         {
             new TaskDialog("Mantle Place")

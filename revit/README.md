@@ -14,12 +14,21 @@ below. The local-zip path stays as the permanent fallback.
 
 ## What it does today
 
-`Mantle Place ▸ Account ▸ Sign in` opens your system browser (`HPS-05` — never an embedded webview,
+`Mantle Place ▸ Account ▸ Sign In` opens your system browser (`HPS-05` — never an embedded webview,
 never a password field in Revit), captures the redirect on a `127.0.0.1` loopback listener bound
 before the browser opens, and exchanges the authorization code with PKCE `S256`. The refresh token
 is stored per-OS-user with DPAPI; the access token is memory-only and never written (`HPS-15`). A
 machine with no secure store degrades to memory-only auth and the dialog says so, rather than
 writing the token somewhere less safe (`HPS-16`).
+
+**The Account button is the session, not a command.** It is one split button whose face reads
+`Sign In` when you are signed out, `Signing In…` — disabled — while a browser round-trip or a stored
+grant is being renewed, and `Signed In` once you are, with your address on the tooltip. Signed in,
+clicking the face opens About Mantle Place; the dropdown carries your address, `Sign Out`,
+`Open mantle.place`, and that About dialog, which names the build you are running, the Revit it is
+running in, and where each import wrote its log. `Sign Out` is offered only when there is a session
+to drop — including a stored one you are not currently signed in to, because both hosts share one
+credential per Windows user.
 
 `Mantle Place ▸ Bundles ▸ Vault` lists the bundles you own, prepares their Revit deliverables,
 downloads them and imports. It is **modeless**: a build can take ten minutes and Revit stays usable

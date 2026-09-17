@@ -33,6 +33,7 @@ exitCode |= VectorDocumentSelfTests.Run();
 exitCode |= AddinFaultTests.Run();
 exitCode |= AuthConformanceTests.Run();
 exitCode |= AuthClientTests.Run();
+exitCode |= AccountRibbonTests.Run();
 exitCode |= VaultConformanceTests.Run();
 exitCode |= MaterializeJobTests.Run();
 exitCode |= CacheConformanceTests.Run();

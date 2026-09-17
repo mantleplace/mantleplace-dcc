@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -571,16 +570,13 @@ public sealed class AuthSession : IDisposable
 
     private static bool TryOpenBrowser(string url, out string error)
     {
-        error = string.Empty;
-        try
+        if (ShellLauncher.TryOpen(url, out string refused))
         {
-            using Process? started = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            error = string.Empty;
             return true;
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            error = "Could not open your browser to sign in. Open this address manually: " + url;
-            return false;
-        }
+
+        error = "Could not open your browser to sign in. Open this address manually: " + refused;
+        return false;
     }
 }

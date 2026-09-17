@@ -86,6 +86,18 @@ public sealed class BundleCacheLayout
         return new BundleCacheLayout(Path.Combine(cacheRoot, key.DirectoryName), key);
     }
 
+    /// <summary>
+    /// The directory every order's folder hangs off — and so where a vault import's log is found.
+    /// </summary>
+    /// <remarks>
+    /// Public because "where did my import write its log?" is a question the ribbon has to be able to
+    /// answer, and the answer is derived here. An import logs beside the zip it was handed
+    /// (<see cref="Core.LocalBundleSource.LogPathFor"/>), so for a vault download that is inside this
+    /// root; for a zip the curator downloaded by hand it is beside their own file, which they already
+    /// know how to find.
+    /// </remarks>
+    public static string DefaultRoot => CacheRoot();
+
     private static string CacheRoot() => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "MantlePlace",
