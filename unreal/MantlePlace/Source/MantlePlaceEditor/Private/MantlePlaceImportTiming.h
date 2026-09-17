@@ -59,9 +59,14 @@ inline const TCHAR* const IntegrityPrecheck = TEXT("integrity pre-check");
  *
  * ⚠ These are the only phases in this vocabulary that are a SUM of many spans rather than one
  * span, which is why they are recorded through `FAccumulatedPhase` — there is no single scope to
- * put a guard on. The split is the whole point: reading a payload out of the zip and hashing the
- * bytes that came back have different remedies (one is I/O and caching, the other is parallelism),
- * and a row that charged both to "integrity" could not tell anyone which to reach for.
+ * put a guard on. The split is the whole point: getting a payload's bytes and hashing them have
+ * different remedies, and a row that charged both to "integrity" could not tell anyone which to
+ * reach for.
+ *
+ * ⛔ **`IntegrityEntryRead` is not "the I/O half", and reading it that way would send someone to
+ * tune the wrong thing.** It wraps `FZipArchiveReader::TryReadFile`, which is a disk read AND a
+ * zlib inflate, so a large number there could be either and this split cannot say which. What it
+ * does say, which is what it was added for, is how it compares to the hashing beside it.
  */
 inline const TCHAR* const IntegrityEntryRead = TEXT("integrity entry read");
 inline const TCHAR* const IntegrityDigest = TEXT("integrity sha256 digest");
@@ -332,15 +337,23 @@ private:
  * ran at. Opening one here would stamp anything recorded between the first span and the last a
  * level too deep.
  *
- * ⚠ A span holds a bare pointer to its accumulator, so an accumulator must outlive every span
- * taken against it. Both are locals of the same block at every call site, which is the shape that
- * makes that structural rather than a rule to remember.
+ * ⚠ A span holds a bare pointer to its accumulator, so an accumulator must outlive every span taken
+ * against it. It does not have to be a local of the same block — the integrity pre-check's
+ * accumulators are locals of the import while their spans are locals of the function its loop
+ * calls — and the rule that actually holds is the weaker one: a span is always a local of a scope
+ * the accumulator encloses, because an accumulator is only ever reached by being passed DOWN.
+ * Storing one, or handing one to anything that outlives the caller, is what would break this.
+ *
+ * ⛔ **No detail.** Every other guard here takes one; this does not, because a detail that varied
+ * with the bundle would give a summed row a different identity on every import, and nothing has
+ * ever wanted a detail that does not. The parameter is absent rather than unused so that stays a
+ * decision instead of an omission.
  */
 class FAccumulatedPhase
 {
 public:
-	FAccumulatedPhase(FTimeline& InTimeline, const TCHAR* InPhase, FString InDetail = FString())
-	    : Timeline(&InTimeline), Phase(InPhase), Detail(MoveTemp(InDetail))
+	FAccumulatedPhase(FTimeline& InTimeline, const TCHAR* InPhase)
+	    : Timeline(&InTimeline), Phase(InPhase)
 	{
 	}
 
@@ -375,7 +388,7 @@ public:
 		~FSpan()
 		{
 			Owner->TotalSeconds += FPlatformTime::Seconds() - StartSeconds;
-			++Owner->SpanCount;
+			Owner->bAnySpan = true;
 		}
 
 		FSpan(const FSpan&) = delete;
@@ -393,9 +406,10 @@ private:
 	/** Null once recorded. That is what makes `Record()` idempotent. */
 	FTimeline* Timeline;
 	const TCHAR* Phase;
-	FString Detail;
 	double TotalSeconds = 0.0;
-	int32 SpanCount = 0;
+
+	/** Whether any span ran at all — a total of zero seconds and no spans are different facts. */
+	bool bAnySpan = false;
 };
 
 /**

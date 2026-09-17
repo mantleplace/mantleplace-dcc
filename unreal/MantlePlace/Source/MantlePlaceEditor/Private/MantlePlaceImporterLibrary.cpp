@@ -85,22 +85,59 @@ namespace
 	}
 
 	/**
+	 * The integrity pre-check's cost, split into the two halves that have different remedies: getting
+	 * a payload's bytes out of the zip, and hashing them. Both are totals over the declared chain, so
+	 * neither has a scope to put an ordinary guard on.
+	 *
+	 * One type rather than two accumulators passed side by side, because they are never apart: they
+	 * are created together, handed down together, and — the part that made this worth a type —
+	 * RECORDED together, in the order they ran, on every path out of the loop. That last one was two
+	 * pairs of lines at two call sites before it was a method, which is one copy away from a failed
+	 * import printing its rows in a different order from a successful one.
+	 *
+	 * ⛔ Read `Read` as read-and-inflate. `TryReadFile` is a disk read AND a zlib inflate, so it is
+	 * not "the I/O half" and a large number there could be either.
+	 */
+	struct FIntegrityTiming
+	{
+		explicit FIntegrityTiming(MantlePlaceImportTiming::FTimeline& Timeline)
+			: Read(Timeline, MantlePlaceImportTiming::Phase::IntegrityEntryRead)
+			, Digest(Timeline, MantlePlaceImportTiming::Phase::IntegrityDigest)
+		{
+		}
+
+		/**
+		 * Both rows, in the order they ran.
+		 *
+		 * Called rather than left to the destructors, which fire in reverse declaration order and
+		 * would print the hashing row above the reading row that fed it. Idempotent underneath, so
+		 * the destructors add nothing after this.
+		 */
+		void Record()
+		{
+			Read.Record();
+			Digest.Record();
+		}
+
+		MantlePlaceImportTiming::FAccumulatedPhase Read;
+		MantlePlaceImportTiming::FAccumulatedPhase Digest;
+	};
+
+	/**
 	 * Fail-closed integrity check: hash one zip entry's bytes and compare to the manifest's declared
 	 * sha256. Returns true (skip) when ExpectedHex is empty (legacy bundle that predates the hash); on a
 	 * read failure or a mismatch it fills OutError and returns false so the caller can abort the import.
 	 *
-	 * The two accumulators split what this costs into reading the entry out of the zip and hashing
-	 * the bytes that came back. They are taken as parameters rather than reached for through the
-	 * running import because this is the only phase whose two halves are measured inside a function
-	 * the caller's own loop drives — the caller owns the totals, one row each, and passing them is
-	 * what makes it impossible for this to record a row of its own per payload.
+	 * `Timing` is taken as a parameter rather than reached for through the running import because the
+	 * caller's loop is what makes these totals: this function measures one payload's two spans and
+	 * adds them, and owning no row of its own is what stops the row count becoming a property of the
+	 * bundle.
 	 */
 	bool VerifyEntrySha256(
 		const FZipArchiveReader& Reader,
 		const FString& InZipPath,
 		const FString& ExpectedHex,
-		MantlePlaceImportTiming::FAccumulatedPhase& ReadPhase,
-		MantlePlaceImportTiming::FAccumulatedPhase& DigestPhase,
+		FIntegrityTiming& Timing,
 		FString& OutError)
 	{
 		if (ExpectedHex.IsEmpty())
@@ -109,7 +146,7 @@ namespace
 		}
 		TArray<uint8> Bytes;
 		{
-			const MantlePlaceImportTiming::FAccumulatedPhase::FSpan ReadSpan(ReadPhase);
+			const MantlePlaceImportTiming::FAccumulatedPhase::FSpan ReadSpan(Timing.Read);
 			if (!Reader.TryReadFile(InZipPath, Bytes))
 			{
 				OutError = FString::Printf(TEXT("Integrity check could not read entry: %s"), *InZipPath);
@@ -118,7 +155,7 @@ namespace
 		}
 		FString Actual;
 		{
-			const MantlePlaceImportTiming::FAccumulatedPhase::FSpan DigestSpan(DigestPhase);
+			const MantlePlaceImportTiming::FAccumulatedPhase::FSpan DigestSpan(Timing.Digest);
 			Actual = MantlePlaceSha256::HexDigest(Bytes);
 		}
 		if (!Actual.Equals(ExpectedHex, ESearchCase::IgnoreCase))
@@ -492,12 +529,9 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 
 		// The pre-check's two halves, summed across every payload rather than recorded per payload:
 		// the row count would otherwise depend on the bundle, and nothing could ask "how long was
-		// spent hashing" without knowing to add them up. They are declared here, inside the phase
-		// that encloses them, so the rows land nested under it rather than beside it.
-		MantlePlaceImportTiming::FAccumulatedPhase ReadPhase(
-			Timeline, MantlePlaceImportTiming::Phase::IntegrityEntryRead);
-		MantlePlaceImportTiming::FAccumulatedPhase DigestPhase(
-			Timeline, MantlePlaceImportTiming::Phase::IntegrityDigest);
+		// spent hashing" without knowing to add them up. Declared here, inside the phase that
+		// encloses them, so the rows land nested under it rather than beside it.
+		FIntegrityTiming IntegrityTiming(Timeline);
 
 		const TArray<FMantlePlaceDeclaredArtifact> Declared =
 			FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(Manifest);
@@ -506,8 +540,12 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		for (const FMantlePlaceDeclaredArtifact& Artifact : Declared)
 		{
 			FString IntegrityError;
-			if (!VerifyEntrySha256(Reader, Artifact.Path, Artifact.Sha256, ReadPhase, DigestPhase, IntegrityError))
+			if (!VerifyEntrySha256(Reader, Artifact.Path, Artifact.Sha256, IntegrityTiming, IntegrityError))
 			{
+				// Recorded on this path too, so a failed pre-check's two rows come out in the same
+				// order as a successful one's. A timeline you cannot line up against another
+				// timeline is the one thing this file exists to prevent.
+				IntegrityTiming.Record();
 				Result.Message = FString::Printf(TEXT("Integrity check failed: %s"), *IntegrityError);
 				return Result;
 			}
@@ -524,11 +562,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			}
 		}
 
-		// Recorded here, in the order they ran, rather than left to the destructors — which fire in
-		// reverse declaration order and would print the hashing row above the reading row that fed
-		// it.
-		ReadPhase.Record();
-		DigestPhase.Record();
+		IntegrityTiming.Record();
 
 		// The verification gate is a product claim ("verified before anything is written"), so its
 		// PASSING is narrated, not only its failure — log followers should see the gate clear before
