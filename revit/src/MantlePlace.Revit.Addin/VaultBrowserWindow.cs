@@ -386,7 +386,10 @@ internal sealed class VaultBrowserWindow : Window
 
         if (_session.State != AuthState.Authenticated)
         {
-            Report("Sign in first: Mantle Place ▸ Account ▸ Sign in.");
+            // The path is the ribbon's own words. It was "Account ▸ Sign in" against a button that
+            // no longer exists under that name, and a status line that names a control the curator
+            // cannot find is worse than one that says nothing.
+            Report($"Sign in first: Mantle Place ▸ Account ▸ {AccountRibbon.SignInFace}.");
             return false;
         }
 
