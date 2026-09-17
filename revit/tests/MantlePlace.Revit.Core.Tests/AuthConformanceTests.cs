@@ -222,6 +222,9 @@ internal static class AuthConformanceTests
 
         string doneUrl = handOff.Str("urlTemplate")!.Replace("{hostId}", HostId, StringComparison.Ordinal);
         run.Equal(BrowserPages.DoneUrl, doneUrl, "the hand-off target the corpus states");
+        // And that the page actually carries it. Asserting the constant alone would stay green if
+        // someone edited the URL inside the script markup without touching the constant.
+        run.Contains(success, doneUrl, "and the success page carries it");
 
         foreach (VectorNode required in handOff.Items("successPageContains"))
         {
@@ -237,24 +240,42 @@ internal static class AuthConformanceTests
             run.False(success.Contains(token, StringComparison.Ordinal), $"the hand-off is not '{token}'");
         }
 
-        // successOnly is why the failure page is the one with nothing executable on it: its body
-        // carries an error_description the authorization server wrote.
-        run.True(handOff.Bool("successOnly") ?? false, "the corpus says only success hands off");
+        // successOnly drives behaviour rather than restating itself: when the corpus says only
+        // success hands off, the failure page must not carry the hand-off target. The reason it
+        // must not is that the failure body interpolates an error_description the authorization
+        // server wrote, and a page that executes nothing is a page where the escape pass is the
+        // only thing that has to be right about that string.
+        bool successOnly = handOff.Bool("successOnly") ?? false;
+        run.True(successOnly, "the corpus says only success hands off");
+        if (successOnly)
+        {
+            run.False(
+                failure.Contains(doneUrl, StringComparison.Ordinal),
+                "so the failure page does not carry the hand-off target");
+        }
+
         foreach (VectorNode forbidden in handOff.Items("failurePageLacks"))
         {
             string token = forbidden.AsString()!;
             run.False(failure.Contains(token, StringComparison.Ordinal), $"failure carries no '{token}'");
         }
 
-        // Each character the corpus lists must actually be escaped — that is what makes the ORDER
-        // meaningful rather than three names in a file.
+        // Stated as "the raw character does not survive", not "the escape changed something": the
+        // page is what the user sees, and that is where the character must not appear bare.
+        string bodyPrefix = copy.Str("failureBodyPrefix")!;
         foreach (VectorNode character in escaping.Items("order"))
         {
             string raw = character.AsString()!;
-            run.True(BrowserPages.HtmlEscape(raw) != raw, $"'{raw}' is escaped at all");
+            run.False(
+                BrowserPages.Error(raw).Contains(bodyPrefix + raw + "<", StringComparison.Ordinal),
+                $"'{raw}' never reaches the page raw");
         }
 
-        foreach (VectorNode vector in escaping.Items("vectors"))
+        // The vectors are what pin the ORDER. Run '<' before '&' over the first of them and the '<'
+        // just written comes back as &amp;lt; — a different string, so it fails.
+        IReadOnlyList<VectorNode> vectors = escaping.Items("vectors");
+        run.True(vectors.Count > 0, "states escaping vectors");
+        foreach (VectorNode vector in vectors)
         {
             string raw = vector.Str("raw")!;
             run.Equal(BrowserPages.HtmlEscape(raw), vector.Str("escaped")!, $"escaping '{raw}'");

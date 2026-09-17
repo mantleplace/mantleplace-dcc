@@ -1,5 +1,5 @@
 {
-  "note": [
+  "$comment": [
     "The two pages the browser is shown when the loopback redirect lands (HPS-08), pinned as the",
     "copy and the structure rather than as whole documents.",
     "",
@@ -18,7 +18,7 @@
   ],
 
   "copy": {
-    "note": [
+    "$comment": [
       "Exact. A host builds its pages' visible text from these and nothing else.",
       "`closing` carries the one legitimate per-host difference, and it is a substitution rather",
       "than a fork: `hostNames` is keyed by the bundle manifest's hosts.<hostId> ids, the same",
@@ -40,7 +40,7 @@
   },
 
   "palette": {
-    "note": [
+    "$comment": [
       "As MantlePlacePalette states it for the Unreal editor UI, so one palette covers the plugin",
       "chrome and these pages. Dark is the fix rather than a preference: the platform's own hand-off",
       "page is dark, and arriving from it onto default white read as something having gone wrong.",
@@ -57,7 +57,7 @@
   },
 
   "structure": {
-    "note": [
+    "$comment": [
       "Present on BOTH pages, absent from BOTH pages. The `lacks` list is HPS-08 stated as the",
       "absence of every way to reach off-page for something the renderer NEEDS: the browser may have",
       "no network by the time the redirect lands, and a page that reaches for a stylesheet renders as",
@@ -82,7 +82,7 @@
   },
 
   "handOff": {
-    "note": [
+    "$comment": [
       "The success page probes the platform's branded completion page and navigates only if",
       "something answered.",
       "",
@@ -114,15 +114,17 @@
   },
 
   "escaping": {
-    "note": [
+    "$comment": [
       "HPS-08's ordering, restated here as vectors because this is the file the page copy lives in",
       "and the two are edited together. Escaping '<' first would produce &lt; and the later '&' pass",
       "would double-escape it to &amp;lt;, which renders as literal '&lt;' on the page. The message",
       "can carry an error_description the authorization server wrote, so it is not the host's to",
       "trust.",
       "",
-      "The third vector is the one that catches a reversed order: input that is already an entity",
-      "must come out escaped once more, not left alone."
+      "The FIRST vector is the one that catches a reversed order. Run '<', then '&', then '>' over",
+      "it and the '<' it just wrote comes back as '&amp;lt;' -- a different string, so the vector",
+      "fails. The third vector is a different trap: input that is already an entity must come out",
+      "escaped once more, not left alone."
     ],
     "order": ["&", "<", ">"],
     "vectors": [

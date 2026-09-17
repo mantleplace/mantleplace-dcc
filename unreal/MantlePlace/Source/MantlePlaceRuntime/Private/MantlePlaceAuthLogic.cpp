@@ -634,7 +634,18 @@ namespace
 		".close{margin:1rem 0 0;font-size:.875rem;line-height:1.5;color:rgba(255,255,255,.4)}");
 
 	/**
-	 * Probes the platform's branded completion page and navigates to it only if something answered.
+	 * The platform's branded completion page. It carries the real typeface and lockup and names the
+	 * signed-in email -- which the listener cannot know, because it never sees a session.
+	 *
+	 * `host` is the bundle manifest's hosts.<hostId> id, the same vocabulary
+	 * UMantlePlaceAuthSystemBase::WebLoginUrl uses. Named here rather than inlined into the script
+	 * below so this host has one definition of it, the way the Revit listener has
+	 * BrowserPages.DoneUrl.
+	 */
+	const TCHAR* const BrowserDoneUrl = TEXT("https://mantle.place/auth/native/done?host=unreal");
+
+	/**
+	 * Markup that probes BrowserDoneUrl and navigates to it only if something answered.
 	 *
 	 * A <meta http-equiv="refresh"> would navigate unconditionally, and with no network the browser
 	 * would land on its own "can't reach this site" page -- so the branded page would have been
@@ -648,20 +659,9 @@ namespace
 	 * interpolates a string the authorization server wrote, and keeping that string off any page
 	 * that executes anything leaves the escape pass as the only thing that has to be right about it.
 	 *
-	 * `host` is the bundle manifest's hosts.<hostId> id, the same vocabulary
-	 * UMantlePlaceAuthSystemBase::WebLoginUrl uses.
+	 * Built at call time rather than written as a literal so the URL above stays the single
+	 * definition; a literal here would be a second copy to drift.
 	 */
-	/**
-	 * The platform's branded completion page. It carries the real typeface and lockup and names the
-	 * signed-in email -- which the listener cannot know, because it never sees a session.
-	 *
-	 * `host` is the bundle manifest's hosts.<hostId> id, the same vocabulary
-	 * UMantlePlaceAuthSystemBase::WebLoginUrl uses. Named here rather than inlined below so this
-	 * host has one definition of it, the way the Revit listener has BrowserPages.DoneUrl.
-	 */
-	const TCHAR* const BrowserDoneUrl = TEXT("https://mantle.place/auth/native/done?host=unreal");
-
-	/** @return BrowserHandOffScript's markup, built around the one definition of the URL above. */
 	FString BrowserHandOffScript()
 	{
 		return FString::Printf(
