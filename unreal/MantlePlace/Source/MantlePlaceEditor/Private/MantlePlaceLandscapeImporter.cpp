@@ -167,10 +167,19 @@ namespace MantlePlaceLandscapeImporter
 		const int32 SizeX = Manifest.Resolution;
 		const int32 SizeY = Manifest.Resolution;
 
+		// Every phase below is FScopedCurrentPhase rather than FScopedPhase, for the reason that form
+		// exists: this is a different translation unit from the one that owns the import's timeline,
+		// and threading a timing parameter through a signature that has nothing else to do with
+		// timing is what the current-import lookup replaces. Each is null-safe — this importer is
+		// also driven by tests, where no import is running and every one of them records nothing.
 		TArray<uint16> Samples;
-		if (!DecodeHeightmapPng(HeightmapFile, SizeX, Samples, OutError))
 		{
-			return nullptr;
+			const MantlePlaceImportTiming::FScopedCurrentPhase DecodePhase(
+				MantlePlaceImportTiming::Phase::LandscapeHeightmapDecode);
+			if (!DecodeHeightmapPng(HeightmapFile, SizeX, Samples, OutError))
+			{
+				return nullptr;
+			}
 		}
 
 		// Orient so North maps to +X and East to +Y — Unreal's LEFT-handed world frame. This is a
@@ -186,43 +195,56 @@ namespace MantlePlaceLandscapeImporter
 		const int32 SrcWidth = SizeY;  // PNG columns  -> landscape Y (east)
 		const int32 SrcHeight = SizeX; // PNG rows     -> landscape X (north)
 		TArray<uint16> HeightData;
-		HeightData.SetNumUninitialized(SizeX * SizeY);
-		for (int32 Y = 0; Y < SizeY; ++Y)
 		{
-			for (int32 X = 0; X < SizeX; ++X)
+			const MantlePlaceImportTiming::FScopedCurrentPhase OrientPhase(
+				MantlePlaceImportTiming::Phase::LandscapeHeightmapOrient);
+			HeightData.SetNumUninitialized(SizeX * SizeY);
+			for (int32 Y = 0; Y < SizeY; ++Y)
 			{
-				// Landscape X=0 is the south edge; PNG row 0 is the north edge when the bundle says so.
-				const int32 SrcRow = Manifest.bRow0IsNorth ? (SrcHeight - 1 - X) : X;
-				HeightData[X + static_cast<int64>(Y) * SizeX] =
-					Samples[static_cast<int64>(SrcRow) * SrcWidth + Y];
+				for (int32 X = 0; X < SizeX; ++X)
+				{
+					// Landscape X=0 is the south edge; PNG row 0 is the north edge when the bundle says so.
+					const int32 SrcRow = Manifest.bRow0IsNorth ? (SrcHeight - 1 - X) : X;
+					HeightData[X + static_cast<int64>(Y) * SizeX] =
+						Samples[static_cast<int64>(SrcRow) * SrcWidth + Y];
+				}
 			}
 		}
 
 		const FVector Scale = Manifest.GetLandscapeScale();
 		const FVector SpawnLocation = Manifest.GetLandscapeSpawnLocation();
 
-		ALandscape* Landscape = World->SpawnActor<ALandscape>(SpawnLocation, FRotator::ZeroRotator);
-		if (Landscape == nullptr)
+		ALandscape* Landscape = nullptr;
 		{
-			OutError = TEXT("Failed to spawn the Landscape actor.");
-			return nullptr;
+			// The spawn and the three property assignments that have to precede Import(), together:
+			// they are one step as far as ordering goes, and splitting them would produce three rows
+			// nobody can act on separately.
+			const MantlePlaceImportTiming::FScopedCurrentPhase SpawnPhase(
+				MantlePlaceImportTiming::Phase::LandscapeActorSpawn);
+
+			Landscape = World->SpawnActor<ALandscape>(SpawnLocation, FRotator::ZeroRotator);
+			if (Landscape == nullptr)
+			{
+				OutError = TEXT("Failed to spawn the Landscape actor.");
+				return nullptr;
+			}
+
+			// Match the engine's New-Landscape path: set scale before Import, leave edit-layer
+			// capability at its default (the FGuid() height-data key is the correct no-edit-layer import).
+			Landscape->SetActorRelativeScale3D(Scale);
+
+			// Assign the drape material BEFORE Import() so the per-component material instances are built
+			// with it from the start. A landscape assigned a material *after* creation keeps rendering the
+			// default material (the components aren't rebuilt) until the assignment is re-applied to a
+			// finalized landscape — so the material has to be in hand here, before the components exist.
+			if (DrapeMaterial != nullptr)
+			{
+				Landscape->LandscapeMaterial = DrapeMaterial;
+			}
+
+			Landscape->StaticLightingLOD =
+				FMath::DivideAndRoundUp(FMath::CeilLogTwo((SizeX * SizeY) / (2048 * 2048) + 1), static_cast<uint32>(2));
 		}
-
-		// Match the engine's New-Landscape path: set scale before Import, leave edit-layer
-		// capability at its default (the FGuid() height-data key is the correct no-edit-layer import).
-		Landscape->SetActorRelativeScale3D(Scale);
-
-		// Assign the drape material BEFORE Import() so the per-component material instances are built
-		// with it from the start. A landscape assigned a material *after* creation keeps rendering the
-		// default material (the components aren't rebuilt) until the assignment is re-applied to a
-		// finalized landscape — so the material has to be in hand here, before the components exist.
-		if (DrapeMaterial != nullptr)
-		{
-			Landscape->LandscapeMaterial = DrapeMaterial;
-		}
-
-		Landscape->StaticLightingLOD =
-			FMath::DivideAndRoundUp(FMath::CeilLogTwo((SizeX * SizeY) / (2048 * 2048) + 1), static_cast<uint32>(2));
 
 		TMap<FGuid, TArray<uint16>> HeightDataPerLayers;
 		HeightDataPerLayers.Add(FGuid(), MoveTemp(HeightData));
@@ -232,40 +254,61 @@ namespace MantlePlaceLandscapeImporter
 		// unresolved and they would silently paint nothing.
 		TArray<FLandscapeImportLayerInfo> ImportLayers;
 		ImportLayers.Reserve(WeightPlanes.Num());
-		for (const FMantlePlaceWeightPlane& Plane : WeightPlanes)
 		{
-			if (Plane.Data.Num() != SizeX * SizeY)
+			// Package creation and asset registration per paint layer, plus the copy of each plane's
+			// samples into the engine's own structure. Both are per-layer costs that scale with the
+			// bundle's legend, which is what makes them worth a row of their own.
+			const MantlePlaceImportTiming::FScopedCurrentPhase LayerInfoPhase(
+				MantlePlaceImportTiming::Phase::LandscapeLayerInfoAssets);
+			for (const FMantlePlaceWeightPlane& Plane : WeightPlanes)
 			{
-				OutError = FString::Printf(
-					TEXT("Weight layer \"%s\" is %d samples but the landscape is %dx%d."),
-					*Plane.Material, Plane.Data.Num(), SizeX, SizeY);
-				return nullptr;
+				if (Plane.Data.Num() != SizeX * SizeY)
+				{
+					OutError = FString::Printf(
+						TEXT("Weight layer \"%s\" is %d samples but the landscape is %dx%d."),
+						*Plane.Material, Plane.Data.Num(), SizeX, SizeY);
+					return nullptr;
+				}
+				ULandscapeLayerInfoObject* LayerInfo = GetOrCreateLayerInfo(Plane.Material, DestPackagePath);
+				if (LayerInfo == nullptr)
+				{
+					continue;
+				}
+				FLandscapeImportLayerInfo Entry(FName(*Plane.Material));
+				Entry.LayerInfo = LayerInfo;
+				Entry.LayerData = Plane.Data;
+				ImportLayers.Add(MoveTemp(Entry));
 			}
-			ULandscapeLayerInfoObject* LayerInfo = GetOrCreateLayerInfo(Plane.Material, DestPackagePath);
-			if (LayerInfo == nullptr)
-			{
-				continue;
-			}
-			FLandscapeImportLayerInfo Entry(FName(*Plane.Material));
-			Entry.LayerInfo = LayerInfo;
-			Entry.LayerData = Plane.Data;
-			ImportLayers.Add(MoveTemp(Entry));
 		}
 
 		TMap<FGuid, TArray<FLandscapeImportLayerInfo>> MaterialLayerDataPerLayers;
 		MaterialLayerDataPerLayers.Add(FGuid(), MoveTemp(ImportLayers));
 
-		Landscape->Import(
-			FGuid::NewGuid(),
-			0, 0, SizeX - 1, SizeY - 1,
-			Manifest.SectionsPerComponent, Manifest.SectionSizeQuads,
-			HeightDataPerLayers, *HeightmapFile,
-			MaterialLayerDataPerLayers, ELandscapeImportAlphamapType::Additive,
-			TArrayView<const FLandscapeLayer>());
-
-		if (ULandscapeInfo* Info = Landscape->GetLandscapeInfo())
 		{
-			Info->UpdateLayerInfoMap(Landscape);
+			// ⚠ The floor of this breakdown. Heightmap upload, component construction, weightmap
+			// application and collision all happen inside this one engine call, and none of them can
+			// be given a row from here — `ALandscape::Import` is engine code. A row that says "the
+			// engine's own import cost N seconds" is the most this plugin can honestly report, and
+			// splitting it further needs Unreal Insights or an engine build rather than another
+			// phase name.
+			const MantlePlaceImportTiming::FScopedCurrentPhase EngineImportPhase(
+				MantlePlaceImportTiming::Phase::LandscapeEngineImport);
+			Landscape->Import(
+				FGuid::NewGuid(),
+				0, 0, SizeX - 1, SizeY - 1,
+				Manifest.SectionsPerComponent, Manifest.SectionSizeQuads,
+				HeightDataPerLayers, *HeightmapFile,
+				MaterialLayerDataPerLayers, ELandscapeImportAlphamapType::Additive,
+				TArrayView<const FLandscapeLayer>());
+		}
+
+		{
+			const MantlePlaceImportTiming::FScopedCurrentPhase LayerInfoMapPhase(
+				MantlePlaceImportTiming::Phase::LandscapeLayerInfoMap);
+			if (ULandscapeInfo* Info = Landscape->GetLandscapeInfo())
+			{
+				Info->UpdateLayerInfoMap(Landscape);
+			}
 		}
 
 		// Make the drape render on the import frame — no manual "re-apply material" / level refresh.
@@ -289,11 +332,11 @@ namespace MantlePlaceLandscapeImporter
 		// demonstrated does not work. So the second option in the report is taken instead: it is
 		// never a silent freeze.
 		//
-		// The progress is not decoration. There is no measured share of import time to tune against
-		// — that needs a real bundle in a real editor — and the instruction was not to tune blind.
-		// These log lines ARE the measurement: the next import on a machine that has a bundle prints
-		// how long each of the three steps took, and whoever has those numbers can decide whether
-		// anything further is worth doing. Until then the editor says what it is waiting for.
+		// The progress is not decoration, and all three steps now report into the running import's
+		// timeline as well as onto the log line below. That is a change from how this read when it
+		// was written: only the stall was reported, on the grounds that it was the one with a
+		// hypothesis attached — which left two thirds of a cost that had been measured all along
+		// outside the summary block, visible to a person reading a log and to nothing else.
 		if (DrapeMaterial != nullptr)
 		{
 			FScopedSlowTask ShaderTask(3.0f, NSLOCTEXT("MantlePlaceImporter", "CompilingLandscapeShaders",
@@ -316,10 +359,12 @@ namespace MantlePlaceLandscapeImporter
 
 			// The same number the line below already prints, reported into the running import's
 			// timeline so it appears in the summary block beside every other phase. It is measured
-			// here rather than wrapped in a FScopedPhase because the measurement already existed —
-			// the stall has been timed since the day it was found, and duplicating the clock would
-			// let the two numbers drift. Null-safe by construction: this importer is also driven by
-			// tests, where there is no import and RecordOnCurrent does nothing.
+			// here rather than wrapped in a guard because the measurement already existed — all
+			// three steps have been timed since the day this sequence was written, and a second
+			// clock over the same span would let the log line and the timeline drift. The rebuild
+			// and the flush below report the same way, for the same reason. Null-safe by
+			// construction: this importer is also driven by tests, where there is no import and
+			// RecordOnCurrent does nothing.
 			MantlePlaceImportTiming::RecordOnCurrent(
 				MantlePlaceImportTiming::Phase::ShaderStall, CompileSeconds);
 
@@ -330,6 +375,8 @@ namespace MantlePlaceLandscapeImporter
 			const double RebuildStart = FPlatformTime::Seconds();
 			Landscape->UpdateAllComponentMaterialInstances(/*bInInvalidateCombinationMaterials*/ true);
 			const double RebuildSeconds = FPlatformTime::Seconds() - RebuildStart;
+			MantlePlaceImportTiming::RecordOnCurrent(
+				MantlePlaceImportTiming::Phase::LandscapeMaterialRebuild, RebuildSeconds);
 
 			// 3) Let the render thread apply the recreated proxies before we hand control back.
 			ShaderTask.EnterProgressFrame(1.0f, NSLOCTEXT("MantlePlaceImporter", "FlushingRenderCommands",
@@ -337,6 +384,8 @@ namespace MantlePlaceLandscapeImporter
 			const double FlushStart = FPlatformTime::Seconds();
 			FlushRenderingCommands();
 			const double FlushSeconds = FPlatformTime::Seconds() - FlushStart;
+			MantlePlaceImportTiming::RecordOnCurrent(
+				MantlePlaceImportTiming::Phase::LandscapeRenderFlush, FlushSeconds);
 
 			// One line, all three numbers, so the share of import time this accounts for is a fact
 			// somebody can read off a log rather than a thing to guess at.

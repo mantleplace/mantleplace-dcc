@@ -136,9 +136,16 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 	// --- The total is wall time, not the sum of the phases ---------------------------------------
 	// The phases do not tile the import, so printing their sum as the total would quietly claim
 	// everything is accounted for. The unmeasured remainder is printed instead, and said out loud.
+	//
+	// ⚠ The sleep is load-bearing and was added after this block failed once in three runs. The
+	// remainder row is printed only when the wall time is above zero — a share needs a denominator —
+	// and `Start()` followed immediately by `BuildSummary()` can read the same QPC tick twice, which
+	// makes `ElapsedSeconds()` exactly 0.0 and suppresses the row this asserts. One millisecond is
+	// enough to guarantee a tick boundary; the assertion is about the row existing, not its value.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
+		FPlatformProcess::Sleep(0.001f);
 		Timeline.Record(Phase::ZipAndManifest, 1000.0); // far more than the wall time of this test
 
 		const TArray<FString> Summary = Timeline.BuildSummary();
@@ -402,6 +409,170 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		{
 			TestEqual(TEXT("it carries its detail"), Timeline.GetEntries()[0].Detail, FString(TEXT("assets")));
 			TestTrue(TEXT("it carries a non-negative duration"), Timeline.GetEntries()[0].Seconds >= 0.0);
+		}
+	}
+
+	// --- An accumulator sums many spans into one row ---------------------------------------------
+	// The shape the integrity pre-check's two halves need: reading and hashing happen once per
+	// declared payload, so "how long was spent hashing" is a total of N disjoint spans and no scope
+	// encloses them. One row per payload was the other option, and it makes the row count a property
+	// of the bundle.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		{
+			FAccumulatedPhase Accumulated(Timeline, Phase::IntegrityDigest);
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				const FAccumulatedPhase::FSpan Span(Accumulated);
+				FPlatformProcess::Sleep(0.01f);
+			}
+			TestEqual(TEXT("nothing is recorded until the accumulator ends"), Timeline.GetEntries().Num(), 0);
+		}
+
+		TestEqual(TEXT("three spans, one row"), Timeline.GetEntries().Num(), 1);
+		if (Timeline.GetEntries().Num() == 1)
+		{
+			// One-sided: three 10ms sleeps cannot take less than one, and a loaded machine only ever
+			// makes them longer. Asserting a window here would be asserting the scheduler.
+			TestTrue(TEXT("the seconds are a sum, not one span"), Timeline.GetEntries()[0].Seconds >= 0.01);
+		}
+	}
+
+	// --- An accumulator with no spans records nothing ---------------------------------------------
+	// The vocabulary's own rule, applied to a row that is a sum: an absent row means "not reached",
+	// where a 0.00s row would read as "instant" and quietly claim a loop ran.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		{
+			FAccumulatedPhase Accumulated(Timeline, Phase::IntegrityEntryRead);
+		}
+		TestEqual(TEXT("no spans, no row"), Timeline.GetEntries().Num(), 0);
+	}
+
+	// --- Record() is idempotent, so the destructor cannot write the row twice ---------------------
+	// Recording explicitly is how a call site controls ROW ORDER — two accumulators in one block
+	// destruct in reverse declaration order, which would print the hashing row above the reading row
+	// that fed it. That control is only safe if the destructor then does nothing.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		{
+			FAccumulatedPhase ReadPhase(Timeline, Phase::IntegrityEntryRead);
+			FAccumulatedPhase DigestPhase(Timeline, Phase::IntegrityDigest);
+			{
+				const FAccumulatedPhase::FSpan ReadSpan(ReadPhase);
+			}
+			{
+				const FAccumulatedPhase::FSpan DigestSpan(DigestPhase);
+			}
+
+			ReadPhase.Record();
+			DigestPhase.Record();
+			TestEqual(TEXT("both rows are in before the scope ends"), Timeline.GetEntries().Num(), 2);
+		}
+
+		TestEqual(TEXT("the destructors added nothing"), Timeline.GetEntries().Num(), 2);
+		if (Timeline.GetEntries().Num() == 2)
+		{
+			TestEqual(TEXT("the reading row is first, as it ran"), FString(Timeline.GetEntries()[0].Phase),
+			          FString(Phase::IntegrityEntryRead));
+			TestEqual(TEXT("the hashing row is second"), FString(Timeline.GetEntries()[1].Phase),
+			          FString(Phase::IntegrityDigest));
+		}
+	}
+
+	// --- An accumulator opens no nesting level ----------------------------------------------------
+	// It is a row, not a scope. Opening a level would stamp anything recorded between its first span
+	// and its last one level too deep — and the integrity pre-check records its two accumulators
+	// side by side, so each would have nested inside the other.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		{
+			FScopedCurrent Publish(Timeline);
+			const FScopedPhase Enclosing(Timeline, Phase::IntegrityPrecheck);
+
+			FAccumulatedPhase ReadPhase(Timeline, Phase::IntegrityEntryRead);
+			{
+				const FAccumulatedPhase::FSpan ReadSpan(ReadPhase);
+				// Recorded while a span is open: still one level inside the enclosing phase, not two.
+				RecordOnCurrent(Phase::ShaderStall, 1.0);
+			}
+			ReadPhase.Record();
+		}
+
+		TestEqual(TEXT("three rows"), Timeline.GetEntries().Num(), 3);
+		if (Timeline.GetEntries().Num() == 3)
+		{
+			TestEqual(TEXT("a row recorded inside a span is not deepened by it"), Timeline.GetEntries()[0].Depth, 1);
+			TestEqual(TEXT("the accumulated row sits inside the enclosing phase"), Timeline.GetEntries()[1].Depth, 1);
+			TestEqual(TEXT("the enclosing phase is top level"), Timeline.GetEntries()[2].Depth, 0);
+
+			// And therefore it is not double counted: only the enclosing row is summed.
+			TestEqual(TEXT("only the enclosing row is accounted"), Timeline.AccountedSeconds(),
+			          Timeline.GetEntries()[2].Seconds);
+		}
+	}
+
+	// --- The landscape's sub-phases nest under the artifact row, not beside it --------------------
+	// The whole point of instrumenting inside the landscape: its steps have to be readable as parts
+	// of the 36% row rather than as new top-level rows that would push the accounted total past the
+	// wall clock. This is the arrangement the importer builds — the artifact phase in one translation
+	// unit, its steps reached through the running import from another.
+	{
+		FTimeline Timeline;
+		Timeline.Start();
+		{
+			FScopedCurrent Publish(Timeline);
+			const FScopedPhase TransactionPhase(Timeline, Phase::InsideTransaction);
+			const FScopedPhase LandscapePhase(Timeline, Phase::Artifact, TEXT("landscape 2017x2017"));
+			{
+				const FScopedCurrentPhase DecodePhase(Phase::LandscapeHeightmapDecode);
+			}
+			{
+				const FScopedCurrentPhase EngineImportPhase(Phase::LandscapeEngineImport);
+			}
+			RecordOnCurrent(Phase::ShaderStall, 1.0);
+		}
+
+		TestEqual(TEXT("five rows"), Timeline.GetEntries().Num(), 5);
+		if (Timeline.GetEntries().Num() == 5)
+		{
+			TestEqual(TEXT("the decode is inside the landscape"), Timeline.GetEntries()[0].Depth, 2);
+			TestEqual(TEXT("so is the engine import"), Timeline.GetEntries()[1].Depth, 2);
+			TestEqual(TEXT("and the stall is at the same level as both"), Timeline.GetEntries()[2].Depth, 2);
+			TestEqual(TEXT("the landscape artifact is inside the transaction"), Timeline.GetEntries()[3].Depth, 1);
+			TestEqual(TEXT("the transaction is top level"), Timeline.GetEntries()[4].Depth, 0);
+
+			// Three sub-phases plus the artifact that holds them: the transaction encloses four.
+			TestEqual(TEXT("the landscape encloses its three steps"), Timeline.EnclosedRowCount(3), 3);
+			TestEqual(TEXT("the transaction encloses all four"), Timeline.EnclosedRowCount(4), 4);
+		}
+	}
+
+	// --- Every phase name is distinct --------------------------------------------------------------
+	// The vocabulary's one job is that two runs line up, and two constants sharing a string collapse
+	// into one row that neither call site knows it is sharing. It is a copy-paste away from true and
+	// invisible in a diff, which is exactly the kind of thing to assert rather than to review.
+	{
+		const TCHAR* const Everything[] = {
+			Phase::ZipAndManifest, Phase::IntegrityPrecheck, Phase::IntegrityEntryRead,
+			Phase::IntegrityDigest, Phase::Wipe, Phase::Artifact,
+			Phase::LandscapeHeightmapExtract, Phase::LandscapeHeightmapDecode,
+			Phase::LandscapeHeightmapOrient, Phase::LandscapeActorSpawn,
+			Phase::LandscapeLayerInfoAssets, Phase::LandscapeEngineImport,
+			Phase::LandscapeLayerInfoMap, Phase::ShaderStall, Phase::LandscapeMaterialRebuild,
+			Phase::LandscapeRenderFlush, Phase::CesiumAvailability, Phase::WeightResample,
+			Phase::InsideTransaction,
+		};
+
+		TSet<FString> Seen;
+		for (const TCHAR* const Name : Everything)
+		{
+			TestFalse(*FString::Printf(TEXT("phase name '%s' is used once"), Name), Seen.Contains(FString(Name)));
+			Seen.Add(FString(Name));
 		}
 	}
 

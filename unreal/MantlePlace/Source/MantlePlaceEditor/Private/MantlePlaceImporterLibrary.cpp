@@ -88,11 +88,19 @@ namespace
 	 * Fail-closed integrity check: hash one zip entry's bytes and compare to the manifest's declared
 	 * sha256. Returns true (skip) when ExpectedHex is empty (legacy bundle that predates the hash); on a
 	 * read failure or a mismatch it fills OutError and returns false so the caller can abort the import.
+	 *
+	 * The two accumulators split what this costs into reading the entry out of the zip and hashing
+	 * the bytes that came back. They are taken as parameters rather than reached for through the
+	 * running import because this is the only phase whose two halves are measured inside a function
+	 * the caller's own loop drives — the caller owns the totals, one row each, and passing them is
+	 * what makes it impossible for this to record a row of its own per payload.
 	 */
 	bool VerifyEntrySha256(
 		const FZipArchiveReader& Reader,
 		const FString& InZipPath,
 		const FString& ExpectedHex,
+		MantlePlaceImportTiming::FAccumulatedPhase& ReadPhase,
+		MantlePlaceImportTiming::FAccumulatedPhase& DigestPhase,
 		FString& OutError)
 	{
 		if (ExpectedHex.IsEmpty())
@@ -100,12 +108,19 @@ namespace
 			return true; // nothing declared to verify against
 		}
 		TArray<uint8> Bytes;
-		if (!Reader.TryReadFile(InZipPath, Bytes))
 		{
-			OutError = FString::Printf(TEXT("Integrity check could not read entry: %s"), *InZipPath);
-			return false;
+			const MantlePlaceImportTiming::FAccumulatedPhase::FSpan ReadSpan(ReadPhase);
+			if (!Reader.TryReadFile(InZipPath, Bytes))
+			{
+				OutError = FString::Printf(TEXT("Integrity check could not read entry: %s"), *InZipPath);
+				return false;
+			}
 		}
-		const FString Actual = MantlePlaceSha256::HexDigest(Bytes);
+		FString Actual;
+		{
+			const MantlePlaceImportTiming::FAccumulatedPhase::FSpan DigestSpan(DigestPhase);
+			Actual = MantlePlaceSha256::HexDigest(Bytes);
+		}
 		if (!Actual.Equals(ExpectedHex, ESearchCase::IgnoreCase))
 		{
 			OutError = FString::Printf(
@@ -474,6 +489,16 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	{
 		const MantlePlaceImportTiming::FScopedPhase IntegrityPhase(
 			Timeline, MantlePlaceImportTiming::Phase::IntegrityPrecheck);
+
+		// The pre-check's two halves, summed across every payload rather than recorded per payload:
+		// the row count would otherwise depend on the bundle, and nothing could ask "how long was
+		// spent hashing" without knowing to add them up. They are declared here, inside the phase
+		// that encloses them, so the rows land nested under it rather than beside it.
+		MantlePlaceImportTiming::FAccumulatedPhase ReadPhase(
+			Timeline, MantlePlaceImportTiming::Phase::IntegrityEntryRead);
+		MantlePlaceImportTiming::FAccumulatedPhase DigestPhase(
+			Timeline, MantlePlaceImportTiming::Phase::IntegrityDigest);
+
 		const TArray<FMantlePlaceDeclaredArtifact> Declared =
 			FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(Manifest);
 		int32 VerifiedCount = 0;
@@ -481,7 +506,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		for (const FMantlePlaceDeclaredArtifact& Artifact : Declared)
 		{
 			FString IntegrityError;
-			if (!VerifyEntrySha256(Reader, Artifact.Path, Artifact.Sha256, IntegrityError))
+			if (!VerifyEntrySha256(Reader, Artifact.Path, Artifact.Sha256, ReadPhase, DigestPhase, IntegrityError))
 			{
 				Result.Message = FString::Printf(TEXT("Integrity check failed: %s"), *IntegrityError);
 				return Result;
@@ -498,6 +523,12 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				++UnverifiableCount;
 			}
 		}
+
+		// Recorded here, in the order they ran, rather than left to the destructors — which fire in
+		// reverse declaration order and would print the hashing row above the reading row that fed
+		// it.
+		ReadPhase.Record();
+		DigestPhase.Record();
 
 		// The verification gate is a product claim ("verified before anything is written"), so its
 		// PASSING is narrated, not only its failure — log followers should see the gate clear before
@@ -803,7 +834,18 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				Timeline, MantlePlaceImportTiming::Phase::Artifact,
 				FString::Printf(TEXT("landscape %dx%d"), Manifest.Resolution, Manifest.Resolution));
 			FString Err, HeightmapDisk;
-			if (ExtractEntry(Reader, Manifest.HeightmapPath, TempDir, HeightmapDisk, Err))
+
+			// Inside the landscape phase and measured on its own: laying the heightmap on disk is
+			// an inflate plus a write of the same bytes the decode below then reads back, and it is
+			// the one step of the landscape artifact that happens before control leaves this file.
+			bool bHeightmapOnDisk = false;
+			{
+				const MantlePlaceImportTiming::FScopedPhase HeightmapExtractPhase(
+					Timeline, MantlePlaceImportTiming::Phase::LandscapeHeightmapExtract);
+				bHeightmapOnDisk = ExtractEntry(Reader, Manifest.HeightmapPath, TempDir, HeightmapDisk, Err);
+			}
+
+			if (bHeightmapOnDisk)
 			{
 				if (ALandscape* Landscape = MantlePlaceLandscapeImporter::Import(
 						World, Manifest, HeightmapDisk, DrapeMic, WeightPlanes, DestPackagePath, Err))
