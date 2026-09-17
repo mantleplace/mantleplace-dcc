@@ -52,6 +52,9 @@ internal static class AuthConformanceTests
                     case "auth.stateMachine":
                         DriveStateMachine(run, vectors.Root);
                         break;
+                    case "auth.browserPageVectors":
+                        DriveBrowserPages(run, vectors.Root);
+                        break;
                     default:
                         run.Fail($"no driver for corpus case '{corpusCase.Id}' — a case added upstream that "
                             + "nothing here asserts (HPS-41)");
@@ -143,6 +146,118 @@ internal static class AuthConformanceTests
             int at = authorizeUrl.IndexOf(fragment, cursor, StringComparison.Ordinal);
             run.True(at >= 0, $"authorize URL carries '{fragment}' after the previous parameter");
             cursor = at < 0 ? cursor : at + fragment.Length;
+        }
+    }
+
+    /// <summary>
+    /// The two pages the browser is shown (<c>HPS-08</c>), against the copy and structure the
+    /// corpus pins.
+    /// </summary>
+    /// <remarks>
+    /// The point of driving this from the corpus rather than from literals here: the two hosts
+    /// render the same moment in the same flow, and they had already drifted into two headings and
+    /// two sentences with nothing failing. Asserting a literal in each host's own suite reproduces
+    /// exactly that — both suites stay green while disagreeing. Against one fixture they cannot.
+    /// </remarks>
+    private static void DriveBrowserPages(TestRun run, VectorNode root)
+    {
+        const string HostId = "revit";
+
+        VectorNode copy = root.Obj("copy")!;
+        VectorNode palette = root.Obj("palette")!;
+        VectorNode structure = root.Obj("structure")!;
+        VectorNode handOff = root.Obj("handOff")!;
+        VectorNode escaping = root.Obj("escaping")!;
+
+        // The whole host-name map is read, not just this host's row, so a third host added upstream
+        // turns red here rather than being silently absent.
+        VectorNode hostNames = copy.Obj("hostNames")!;
+        string thisHost = string.Empty;
+        foreach (string id in hostNames.Keys())
+        {
+            string name = hostNames.Str(id)!;
+            run.True(name.Length > 0, $"the corpus names host '{id}'");
+            if (id == HostId)
+            {
+                thisHost = name;
+            }
+        }
+
+        run.True(thisHost.Length > 0, $"and names this one ({HostId})");
+        string closing = copy.Str("closing")!.Replace("{hostName}", thisHost, StringComparison.Ordinal);
+
+        string success = BrowserPages.Success();
+        string failure = BrowserPages.Error("the server said no");
+
+        foreach ((string what, string page) in new[] { ("success", success), ("failure", failure) })
+        {
+            foreach (VectorNode required in structure.Items("bothPagesContain"))
+            {
+                run.Contains(page, required.AsString()!, $"{what}: the document declares it");
+            }
+
+            // HPS-08 as the absence of every way to reach off-page for something the renderer NEEDS.
+            // The hand-off below is not one of these: it is a navigation the page survives failing.
+            foreach (VectorNode forbidden in structure.Items("bothPagesLack"))
+            {
+                string token = forbidden.AsString()!;
+                run.False(page.Contains(token, StringComparison.Ordinal), $"{what}: no '{token}'");
+            }
+
+            // Whole declarations, not bare colours: a page that ships the value in a comment and
+            // renders default white would pass the looser check.
+            run.Contains(page, palette.Str("groundDeclaration")!, $"{what}: the brand ground");
+            run.Contains(page, palette.Str("accentDeclaration")!, $"{what}: the brand accent");
+            run.Contains(page, palette.Str("fontStackHead")!, $"{what}: a system face, never a webfont");
+
+            run.Contains(page, copy.Str("wordmark")!, $"{what}: the wordmark");
+            run.Contains(page, copy.Str("titleSuffix")!, $"{what}: the tab title carries the brand");
+            run.Contains(page, closing, $"{what}: tells the user to close the tab");
+        }
+
+        run.Contains(success, copy.Str("successTitle")!, "the success heading");
+        run.Contains(success, copy.Str("successBody")!, "and its sentence");
+        run.Contains(failure, copy.Str("failureTitle")!, "the failure heading");
+        run.Contains(failure, copy.Str("failureBodyPrefix")!, "and its sentence");
+
+        string doneUrl = handOff.Str("urlTemplate")!.Replace("{hostId}", HostId, StringComparison.Ordinal);
+        run.Equal(BrowserPages.DoneUrl, doneUrl, "the hand-off target the corpus states");
+
+        foreach (VectorNode required in handOff.Items("successPageContains"))
+        {
+            run.Contains(success, required.AsString()!, "the hand-off probes before it navigates");
+        }
+
+        // A meta refresh would navigate whether or not the done page answered, so an offline curator
+        // would land on the browser's own error page and the branded page would have been for
+        // nothing — in exactly the case it exists for.
+        foreach (VectorNode forbidden in handOff.Items("successPageLacks"))
+        {
+            string token = forbidden.AsString()!;
+            run.False(success.Contains(token, StringComparison.Ordinal), $"the hand-off is not '{token}'");
+        }
+
+        // successOnly is why the failure page is the one with nothing executable on it: its body
+        // carries an error_description the authorization server wrote.
+        run.True(handOff.Bool("successOnly") ?? false, "the corpus says only success hands off");
+        foreach (VectorNode forbidden in handOff.Items("failurePageLacks"))
+        {
+            string token = forbidden.AsString()!;
+            run.False(failure.Contains(token, StringComparison.Ordinal), $"failure carries no '{token}'");
+        }
+
+        // Each character the corpus lists must actually be escaped — that is what makes the ORDER
+        // meaningful rather than three names in a file.
+        foreach (VectorNode character in escaping.Items("order"))
+        {
+            string raw = character.AsString()!;
+            run.True(BrowserPages.HtmlEscape(raw) != raw, $"'{raw}' is escaped at all");
+        }
+
+        foreach (VectorNode vector in escaping.Items("vectors"))
+        {
+            string raw = vector.Str("raw")!;
+            run.Equal(BrowserPages.HtmlEscape(raw), vector.Str("escaped")!, $"escaping '{raw}'");
         }
     }
 

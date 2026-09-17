@@ -46,6 +46,13 @@
   "manifestVersion": "1.0.0",
   "cases": [
     {
+      "id": "auth.browserPageVectors",
+      "group": "auth",
+      "file": "auth/browser-page-vectors.json",
+      "expect": "vector",
+      "reason": "The last thing browser sign-in shows a curator, and the one surface where two hosts drifted silently: two headings, two sentences and two languages for the same moment, with nothing failing when they diverged. HPS-43's share model for two hosts in two languages is specifications plus this corpus, so the copy lives here and each host asserts against it rather than against a literal a reviewer has to happen to compare."
+    },
+    {
       "id": "auth.callbackQueryVectors",
       "group": "auth",
       "file": "auth/callback-query-vectors.json",

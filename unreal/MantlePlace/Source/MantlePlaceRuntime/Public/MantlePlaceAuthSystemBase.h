@@ -56,9 +56,22 @@ public:
 	 * The mantle.place hosted native-login URL the system browser is sent to — the OAuth
 	 * authorization endpoint. PKCE + redirect params are appended at runtime.
 	 * Public route, compiled in; override via config to point at a non-production stack.
+	 *
+	 * `host` is how the sign-in page knows which editor is asking, so its heading, credential prompt
+	 * and tab title can name Unreal instead of saying "the application". The value is the bundle
+	 * manifest's hosts.<hostId> id — one vocabulary across the manifest and the sign-in surface.
+	 *
+	 * It is NOT a credential. On the platform side it is display-only: read off an untrusted query,
+	 * allowlisted so an unrecognised value renders nothing, never validated against a client registry
+	 * and never able to fail or alter a request. Do not start signing it or treating it as a client
+	 * id.
+	 *
+	 * It rides the configured base rather than the appended query, which is why the pinned authorize
+	 * parameter order is unaffected — BuildAuthorizeUrl already picks '&' over '?' when the base
+	 * carries a query, so the five OAuth parameters follow in the same order they always did.
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Mantle Place|Auth")
-	FString WebLoginUrl = TEXT("https://mantle.place/auth/native");
+	FString WebLoginUrl = TEXT("https://mantle.place/auth/native?host=unreal");
 
 	/**
 	 * Endpoint for the PKCE code→token exchange. Public route, compiled in.

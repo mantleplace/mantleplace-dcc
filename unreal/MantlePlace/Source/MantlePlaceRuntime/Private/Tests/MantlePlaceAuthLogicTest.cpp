@@ -557,6 +557,170 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
+	// --- The two browser pages: the copy, the structure, and the hand-off (HPS-08) -------------
+	//
+	// Driven from the corpus rather than from literals here, because literals here are exactly how
+	// the two hosts drifted: the pages are the same moment in the same flow and had grown two
+	// headings and two sentences, with both suites green the whole time. Against one fixture they
+	// cannot disagree silently. HPS-43's share model for two hosts in two languages is
+	// specifications plus this corpus, and this is that.
+	if (const FCase* Case = Take(TEXT("auth.browserPageVectors")))
+	{
+		const TSharedPtr<FJsonObject> Root = Case->PayloadObject;
+		if (!Root.IsValid())
+		{
+			AddError(Case->What(TEXT("vector file is not a JSON object")));
+		}
+		else
+		{
+			const TSharedPtr<FJsonObject>* Copy = nullptr;
+			const TSharedPtr<FJsonObject>* Palette = nullptr;
+			const TSharedPtr<FJsonObject>* Structure = nullptr;
+			const TSharedPtr<FJsonObject>* HandOff = nullptr;
+			const TSharedPtr<FJsonObject>* Escaping = nullptr;
+			const bool bShaped =
+				Root->TryGetObjectField(TEXT("copy"), Copy)
+				&& Root->TryGetObjectField(TEXT("palette"), Palette)
+				&& Root->TryGetObjectField(TEXT("structure"), Structure)
+				&& Root->TryGetObjectField(TEXT("handOff"), HandOff)
+				&& Root->TryGetObjectField(TEXT("escaping"), Escaping);
+
+			TestTrue(Case->What(TEXT("states copy, palette, structure, handOff and escaping")), bShaped);
+			if (bShaped)
+			{
+				// The whole host-name map is read, not just this host's row, so a third host added
+				// upstream turns red here rather than being silently absent.
+				FString ThisHostName;
+				const TSharedPtr<FJsonObject>* HostNames = nullptr;
+				if ((*Copy)->TryGetObjectField(TEXT("hostNames"), HostNames))
+				{
+					for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*HostNames)->Values)
+					{
+						const FString Name = Entry.Value.IsValid() ? Entry.Value->AsString() : FString();
+						TestTrue(Case->What(*FString::Printf(TEXT("names host '%s'"), *Entry.Key)),
+							!Name.IsEmpty());
+						if (Entry.Key == HostKey())
+						{
+							ThisHostName = Name;
+						}
+					}
+				}
+
+				TestTrue(Case->What(TEXT("and names this one")), !ThisHostName.IsEmpty());
+				const FString Closing =
+					RowString(*Copy, TEXT("closing")).Replace(TEXT("{hostName}"), *ThisHostName);
+
+				const FString Success = FLogic::BuildBrowserSuccessHtml();
+				const FString Failure = FLogic::BuildBrowserErrorHtml(TEXT("the server said no"));
+
+				const FString Pages[] = { Success, Failure };
+				const TCHAR* const Names[] = { TEXT("success"), TEXT("failure") };
+				for (int32 Index = 0; Index < 2; ++Index)
+				{
+					const TCHAR* const What = Names[Index];
+					const FString& Html = Pages[Index];
+
+					for (const FString& Required : RowStrings(*Structure, TEXT("bothPagesContain")))
+					{
+						TestTrue(Case->What(*FString::Printf(TEXT("%s declares %s"), What, *Required)),
+							Html.Contains(Required, ESearchCase::CaseSensitive));
+					}
+
+					// HPS-08 as the absence of every way to reach off-page for something the
+					// renderer NEEDS. The hand-off below is not one of these: it is a navigation the
+					// page survives failing.
+					for (const FString& Forbidden : RowStrings(*Structure, TEXT("bothPagesLack")))
+					{
+						TestFalse(Case->What(*FString::Printf(TEXT("%s has no %s"), What, *Forbidden)),
+							Html.Contains(Forbidden, ESearchCase::CaseSensitive));
+					}
+
+					// Whole declarations, not bare colours: a page shipping the value in a comment
+					// and rendering default white would pass the looser check.
+					TestTrue(Case->What(*FString::Printf(TEXT("%s: the brand ground"), What)),
+						Html.Contains(RowString(*Palette, TEXT("groundDeclaration")), ESearchCase::CaseSensitive));
+					TestTrue(Case->What(*FString::Printf(TEXT("%s: the brand accent"), What)),
+						Html.Contains(RowString(*Palette, TEXT("accentDeclaration")), ESearchCase::CaseSensitive));
+					TestTrue(Case->What(*FString::Printf(TEXT("%s: a system face, never a webfont"), What)),
+						Html.Contains(RowString(*Palette, TEXT("fontStackHead"))));
+
+					TestTrue(Case->What(*FString::Printf(TEXT("%s: the wordmark"), What)),
+						Html.Contains(RowString(*Copy, TEXT("wordmark"))));
+					TestTrue(Case->What(*FString::Printf(TEXT("%s: the tab title carries the brand"), What)),
+						Html.Contains(RowString(*Copy, TEXT("titleSuffix"))));
+					TestTrue(Case->What(*FString::Printf(TEXT("%s: tells the user to close the tab"), What)),
+						Html.Contains(Closing, ESearchCase::CaseSensitive));
+				}
+
+				TestTrue(Case->What(TEXT("the success heading")),
+					Success.Contains(RowString(*Copy, TEXT("successTitle")), ESearchCase::CaseSensitive));
+				TestTrue(Case->What(TEXT("and its sentence")),
+					Success.Contains(RowString(*Copy, TEXT("successBody")), ESearchCase::CaseSensitive));
+				TestTrue(Case->What(TEXT("the failure heading")),
+					Failure.Contains(RowString(*Copy, TEXT("failureTitle")), ESearchCase::CaseSensitive));
+				TestTrue(Case->What(TEXT("and its sentence")),
+					Failure.Contains(RowString(*Copy, TEXT("failureBodyPrefix")), ESearchCase::CaseSensitive));
+
+				const FString DoneUrl =
+					RowString(*HandOff, TEXT("urlTemplate")).Replace(TEXT("{hostId}"), HostKey());
+				TestTrue(Case->What(TEXT("the hand-off target the corpus states")),
+					Success.Contains(DoneUrl, ESearchCase::CaseSensitive));
+
+				for (const FString& Required : RowStrings(*HandOff, TEXT("successPageContains")))
+				{
+					TestTrue(Case->What(*FString::Printf(TEXT("the hand-off uses %s"), *Required)),
+						Success.Contains(Required, ESearchCase::CaseSensitive));
+				}
+
+				// A meta refresh would navigate whether or not the done page answered, so an offline
+				// curator would land on the browser's own error page and the branded page would have
+				// been for nothing -- in exactly the case it exists for.
+				for (const FString& Forbidden : RowStrings(*HandOff, TEXT("successPageLacks")))
+				{
+					TestFalse(Case->What(*FString::Printf(TEXT("the hand-off is not %s"), *Forbidden)),
+						Success.Contains(Forbidden, ESearchCase::CaseSensitive));
+				}
+
+				// successOnly is why the failure page is the one with nothing executable on it: its
+				// body carries an error_description the authorization server wrote.
+				TestTrue(Case->What(TEXT("the corpus says only success hands off")),
+					RowBool(*HandOff, TEXT("successOnly")));
+				for (const FString& Forbidden : RowStrings(*HandOff, TEXT("failurePageLacks")))
+				{
+					TestFalse(Case->What(*FString::Printf(TEXT("failure carries no %s"), *Forbidden)),
+						Failure.Contains(Forbidden, ESearchCase::CaseSensitive));
+				}
+
+				// Every character the corpus lists must come out as an entity -- that is what makes
+				// the ORDER meaningful rather than three names sitting in a file.
+				const FString BodyPrefix = RowString(*Copy, TEXT("failureBodyPrefix"));
+				for (const FString& Character : RowStrings(*Escaping, TEXT("order")))
+				{
+					TestTrue(Case->What(*FString::Printf(TEXT("'%s' leaves as an entity"), *Character)),
+						FLogic::BuildBrowserErrorHtml(Character)
+							.Contains(BodyPrefix + TEXT("&"), ESearchCase::CaseSensitive));
+				}
+
+				const TArray<TSharedPtr<FJsonValue>>* EscapeVectors = nullptr;
+				if ((*Escaping)->TryGetArrayField(TEXT("vectors"), EscapeVectors) && EscapeVectors != nullptr)
+				{
+					for (const TSharedPtr<FJsonValue>& Value : *EscapeVectors)
+					{
+						const TSharedPtr<FJsonObject>* Row = nullptr;
+						if (!Value.IsValid() || !Value->TryGetObject(Row) || Row == nullptr)
+						{
+							continue;
+						}
+						const FString Raw = RowString(*Row, TEXT("raw"));
+						TestTrue(Case->What(*FString::Printf(TEXT("escaping '%s'"), *Raw)),
+							FLogic::BuildBrowserErrorHtml(Raw).Contains(
+								BodyPrefix + RowString(*Row, TEXT("escaped")), ESearchCase::CaseSensitive));
+					}
+				}
+			}
+		}
+	}
+
 	// --- HPS-41 coverage guard ----------------------------------------------------------------
 	for (const FString& Missing : UndrivenCases(Cases, Driven))
 	{

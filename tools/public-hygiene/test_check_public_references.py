@@ -109,6 +109,22 @@ class AllowsWhatIsLegitimate(unittest.TestCase):
         found = scan('html.Append("padding:0 1rem;color:#111}h1{font-size:1.25rem}");\n', "a.cs")
         self.assertEqual(found, [])
 
+    def test_a_hex_colour_carrying_letters_is_not_an_issue_number(self):
+        # The exemption used to be handed the MATCHED token rather than the colour, and `#\d+`
+        # stops at the first non-digit -- so `#0B0C10` arrived as `#0`, failed the three-or-six
+        # digit shape test, and was refused as a private tracker citation. Every colour that
+        # happened to be all digits passed, which is why it survived: the brand ground is the
+        # first colour in this repository whose second character is a letter.
+        found = scan('html.Append("padding:2rem;background:#0B0C10;color:#fff;");\n', "a.cs")
+        self.assertEqual(found, [])
+        self.assertEqual(scan("body{background:#0b0c10}\n", "a.css"), [])
+
+    def test_the_colour_exemption_still_needs_a_colour_shape(self):
+        # The exemption is anchored on a preceding ':' AND the hex shape. Neither alone is enough,
+        # or "fixes:#42" would launder a real citation.
+        self.assertNotEqual(scan("fixes:#42 in the private tracker\n", "a.cs"), [])
+        self.assertNotEqual(scan("fixes:#0B0C10FF is not a colour\n", "a.cs"), [])
+
     def test_public_rule_ids_are_prose_and_stay(self):
         # The distinction CLAUDE.md already draws: rule ids are stable public identifiers.
         found = scan("Registered in verified-against.json per HPS-38, and DOC-06 places it.\n")

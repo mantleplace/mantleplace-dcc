@@ -8,6 +8,10 @@
     "Maintainer-owned: propose changes by pull request."
   ],
   "cases": {
+    "auth.browserPageVectors": [
+      "revit",
+      "unreal"
+    ],
     "auth.callbackQueryVectors": [
       "revit",
       "unreal"
