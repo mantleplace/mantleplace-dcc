@@ -409,6 +409,13 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "fallback beside the vault.",
         });
 
+        // Everything after this call lands in the slide-out rather than on the panel face, and the
+        // panel grows the small unfold arrow at its foot that opens it. The two buttons above are
+        // how a curator gets content in; the two below are what they reach for when that went wrong,
+        // and a diagnostic sitting third on the face reads as a third way in. Revit's own panels use
+        // this affordance for exactly this distinction, so it costs no explaining.
+        panel.AddSlideOut();
+
         panel.AddItem(new PushButtonData(
             "MantlePlaceProbeTerrain",
             "Probe\nTerrain",
@@ -421,6 +428,20 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "types and the bundle's own elevations — and try each way of placing the terrain. "
                 + "Every attempt is rolled back, so nothing in your project changes. Use it when a bundle "
                 + "import is refused and the log does not say enough.",
+        });
+
+        panel.AddItem(new PushButtonData(
+            "MantlePlaceOpenLogs",
+            "Logs",
+            assemblyPath,
+            typeof(OpenLogsCommand).FullName)
+        {
+            ToolTip = "Show the most recent import or probe log in File Explorer.",
+            LongDescription =
+                "Every import and every probe writes its record beside the bundle zip it was given, so "
+                + "a bundle downloaded from your vault logs inside its own folder in the bundle cache, "
+                + "and a zip you opened from somewhere else logs beside that zip. This opens the newest "
+                + "of them. The About dialog on the Account button goes to the same place.",
         });
 
         // Subscribed after the panel exists, and followed by one unconditional read of the session.
