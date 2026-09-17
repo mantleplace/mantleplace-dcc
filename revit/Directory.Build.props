@@ -53,4 +53,39 @@
     <RevitApiDir Condition="'$(RevitApiDir)' == ''">C:\Program Files\Autodesk\Revit 2025</RevitApiDir>
   </PropertyGroup>
 
+  <!--
+    The dirty marker. The SDK already appends the source commit to the informational version as
+    semver build metadata (0.1.0+<sha>), which is what lets a log or the About dialog name the exact
+    source a build came from. It cannot say whether that source had uncommitted changes, and a
+    maintainer iterating locally is dirty most of the time, so two builds naming the same commit
+    are not the same code, and nothing on screen says so. This appends "-dirty" after the sha when
+    anything under revit/ is modified, staged or untracked. Scoped to revit/ because that is what
+    the assemblies are built from: a stray edit under unreal/ is not this build's business.
+
+    Runs after the SDK's own source-control step has set SourceRevisionId and before the assembly
+    attributes are generated, so it edits the value at the one moment it exists and is not yet
+    used. Skipped when there is no sha to append to (no git on PATH, no repository), because a
+    marker with nothing to mark is noise. A hosted runner is always clean, so CI never sees it.
+
+    BuildIdentity in MantlePlace.Revit.Core is the one reader of this shape; keep the two together.
+  -->
+  <Target Name="MarkDirtySourceRevision"
+          AfterTargets="InitializeSourceControlInformation"
+          BeforeTargets="GetAssemblyVersion"
+          Condition="'$(SourceRevisionId)' != '' and !$(SourceRevisionId.EndsWith('-dirty'))">
+    <Exec Command="git status --porcelain --untracked-files=all -- &quot;$(MSBuildThisFileDirectory).&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low"
+          ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_MantlePlaceRevitStatus" />
+      <Output TaskParameter="ExitCode" PropertyName="_MantlePlaceRevitStatusExit" />
+    </Exec>
+    <PropertyGroup Condition="'$(_MantlePlaceRevitStatusExit)' == '0' and '$(_MantlePlaceRevitStatus)' != ''">
+      <SourceRevisionId>$(SourceRevisionId)-dirty</SourceRevisionId>
+    </PropertyGroup>
+  </Target>
+
 </Project>

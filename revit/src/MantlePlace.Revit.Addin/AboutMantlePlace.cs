@@ -1,7 +1,9 @@
+using System.IO;
 using Autodesk.Revit.UI;
 
 // Not unused: AccountFace() is an extension method on AuthSession, declared in Client.
 using MantlePlace.Revit.Client;
+using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
@@ -21,11 +23,19 @@ namespace MantlePlace.Revit.Addin;
 /// <c>net8.0-windows</c> build loads in three of them and "which Revit" is the other half of the
 /// same question.
 /// </para>
+/// <para>
+/// The third half, for a maintainer: which branch and which worktree. The assembly cannot know
+/// that; the deploy script did, and wrote it beside the manifest as <c>MantlePlace.install.json</c>
+/// (<see cref="InstallStamp"/>). Reading it here is the one file read in this dialog, and it is
+/// allowed to fail: a missing or unreadable stamp is a sentence, not an exception.
+/// </para>
 /// </remarks>
 internal static class AboutMantlePlace
 {
     /// <summary>The release gate: a real import completing in each of these, on a licensed install.</summary>
     private const string SupportedRevitVersions = "2025, 2026 and 2027";
+
+    private const string StampFileName = "MantlePlace.install.json";
 
     internal static Result Show(UIApplication application)
     {
@@ -35,7 +45,7 @@ internal static class AboutMantlePlace
         {
             MainInstruction = "Mantle Place for Revit",
             MainContent =
-                $"Add-in version {PluginVersion.Current}.\n"
+                InstalledBuild.Describe(BuildIdentity.Parse(PluginVersion.Current), ReadStamp()) + "\n"
                 + $"Running in {application.Application.VersionName} "
                 + $"(build {application.Application.VersionBuild}).\n"
                 + $"This build supports Revit {SupportedRevitVersions}; every release is proven by a "
@@ -64,4 +74,8 @@ internal static class AboutMantlePlace
 
         return Result.Succeeded;
     }
+
+    /// <summary>The deploy stamp beside the loaded assembly, or <c>null</c> when there is none to read.</summary>
+    private static InstallStamp? ReadStamp() =>
+        InstallStampFile.Read(Path.GetDirectoryName(typeof(AboutMantlePlace).Assembly.Location));
 }

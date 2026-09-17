@@ -270,9 +270,46 @@ deployed timestamp before anything else.**
 
 The version now travels with the build — `<Version>` in [`Directory.Build.props`](./Directory.Build.props)
 is its one home, the deploy script prints it, and it opens both the import log and the terrain probe
-report. That answers a different question from the timestamp and does not replace it: within one
-release the version is constant, so a maintainer iterating locally still has only the timestamp,
-while a stranger's log now says which build they are running without anyone having to ask.
+report. The SDK appends the source commit to it, and the build appends `-dirty` when anything under
+`revit/` had uncommitted changes, so the string reads `0.1.0+<sha>` or `0.1.0+<sha>-dirty`: a
+stranger's log says which build they are running without anyone having to ask, and two dev builds a
+day apart no longer claim to be the same code.
+
+### The install is a single slot, and it says what it holds
+
+Revit loads one Mantle Place per process — the manifest carries one `ClientId`, and Revit refuses a
+duplicate — so with several worktrees there is still one install, and it has to say where it came
+from. The deploy script writes **`MantlePlace.install.json`** beside the manifest: the commit, the
+branch, the worktree, whether that tree was dirty, and when. **About**, under the Account button,
+reads it back and shows version, commit, branch and tree on one screen, so a screenshot proves the
+build. The stamp records; it never refuses. A deploy from a feature branch is a preview, printed as
+one, and the install returns to `main` when a session deploys after a merge — the rule is in root
+[`CLAUDE.md`](../CLAUDE.md#local-installs), and the model in
+[`tools/local-install/`](../tools/local-install/README.md).
+
+```powershell
+# Is the add-in in Revit the tree? One line per install, exit 0 for current or preview.
+./tools/Check-RevitInstall.ps1
+```
+
+It compares the stamped commit against `origin/main`, counting only commits that touch `revit/`,
+and says `current`, `preview`, `stale` (with the count and the command), or `unverified` (no stamp,
+a dirty tree, or a commit this clone has never seen). It fetches first; `-NoFetch` skips that.
+
+### Hot Reload, and what it cannot reach
+
+```powershell
+# Build, install, and start Revit 2027 ready for Hot Reload.
+./tools/Deploy-MantlePlaceRevit.ps1 -Launch
+```
+
+`-Launch` starts Revit (`-LaunchVersion`, 2027 by default: the one host where a .NET 8 assembly runs
+under a .NET 10 runtime, so the leg that shows a difference first) with
+`DOTNET_MODIFIABLE_ASSEMBLIES=debug`. Attach Visual Studio or Rider to that `Revit.exe`, edit a
+method body in `Core` or `Client`, and Hot Reload applies it to the running add-in — no deploy, no
+restart. That covers the behaviour behind the buttons. It does not cover the buttons: `OnStartup`
+ran once, and a ribbon change is a deploy and a restart, the same as a new type or a changed
+signature. A Revit started from the Start menu has no such variable and simply cannot be hot-reloaded.
 
 `MantlePlace.addin` names the assembly without a path, so Revit resolves it beside the manifest.
 

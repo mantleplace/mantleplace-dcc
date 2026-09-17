@@ -85,6 +85,13 @@ a framework and fails outright.
 
 **Quote paths with spaces** — `C:\Program Files\Autodesk\...`.
 
+**The Revit on this machine is a copy of the tree, not the tree** (`HPS-50`). Before trusting
+what it shows, `tools/Check-RevitInstall.ps1` says whether the installed add-in is `main`, a
+preview, or stale; `tools/Deploy-MantlePlaceRevit.ps1` makes it `main` again, and with `-Launch`
+starts Revit 2027 ready for Hot Reload of method bodies. The loop, including the one thing no
+script can do (the first launch's *Always Load* click), is in
+[`README.md` ▸ Loading it into Revit](./README.md#loading-it-into-revit).
+
 The cross-host contract gate has no home in the README, so it is here (Python, offline for the corpus
 half):
 
