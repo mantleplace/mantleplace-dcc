@@ -431,6 +431,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "signed in.",
         });
         RibbonImagery.Give(vault, RibbonGlyph.Vault);
+        RibbonImagery.GiveVignette(vault, Vignette.Vault);
 
         PushButton importLocal = (PushButton)panel.AddItem(new PushButtonData(
             "MantlePlaceImportLocalBundle",
@@ -446,6 +447,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "fallback beside the vault.",
         });
         RibbonImagery.Give(importLocal, RibbonGlyph.ImportBundle);
+        RibbonImagery.GiveVignette(importLocal, Vignette.ImportBundle);
 
         // Everything after this call lands in the slide-out rather than on the panel face, and the
         // panel grows the small unfold arrow at its foot that opens it. The two buttons above are

@@ -163,6 +163,16 @@ takes the host's own noun, *toposolid* and never *toposurface*. Every button als
   picks the file name, the headless suite reads `Resources/` in both directions, and the built
   assembly's WPF resource table plus every pack URI in it can be checked from a script — see the
   pull request that added `RibbonImagery`.
+- **`RibbonItem.ToolTipImage` is the newest member of that set.** It compiles — which is what pins
+  down that it exists on `RibbonItem` and not only on `RibbonItemData`, so a vignette can be
+  repainted after the ribbon is built and a theme change reaches it. What the compiler cannot say is
+  whether Revit lays the picture out, whether it clips against a fifty-word `LongDescription`, or
+  where the **355 px cap** actually bites: the API documents it in 2025, 2026 and 2027 alike and
+  enforces it **silently**, so an over-large image is simply not there. That is why
+  `Vignettes.MaxPixels` is asserted against the committed files' own PNG headers — no other detector
+  is possible. Hovering the two Bundles buttons in a running Revit is the check, and it is the one
+  manual step [ADR 0010](../docs/adr/0010-tooltip-vignettes-are-drawn-not-photographed.md) leaves
+  open.
 
 ## Where knowledge lives
 

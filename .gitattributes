@@ -2,7 +2,7 @@
 #
 # THERE ARE NO GIT LFS PATTERNS HERE, AND THAT IS DELIBERATE. A stranger's first clone of an
 # open-source plugin must not be a multi-hundred-megabyte pull. The binaries in this tree — one
-# .uasset file, three fonts, twenty-three PNG icons — total about 1.1 MB and are plain git blobs.
+# .uasset file, three fonts, twenty-seven PNG icons — total about 1.1 MB and are plain git blobs.
 #
 # If a real need for LFS ever arises (a binary submission that genuinely belongs here), that is a
 # decision to take deliberately and once. Adding a binary type by accident is not reversible without
