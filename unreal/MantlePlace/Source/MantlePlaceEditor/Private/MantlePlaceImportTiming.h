@@ -54,14 +54,61 @@ inline const TCHAR* const ZipAndManifest = TEXT("zip open + manifest parse");
 /** The fail-closed sha256 pre-check over the declared payload chain. */
 inline const TCHAR* const IntegrityPrecheck = TEXT("integrity pre-check");
 
+/**
+ * The two halves of the pre-check above, summed across every declared payload.
+ *
+ * ⚠ These are the only phases in this vocabulary that are a SUM of many spans rather than one
+ * span, which is why they are recorded through `FAccumulatedPhase` — there is no single scope to
+ * put a guard on. The split is the whole point: reading a payload out of the zip and hashing the
+ * bytes that came back have different remedies (one is I/O and caching, the other is parallelism),
+ * and a row that charged both to "integrity" could not tell anyone which to reach for.
+ */
+inline const TCHAR* const IntegrityEntryRead = TEXT("integrity entry read");
+inline const TCHAR* const IntegrityDigest = TEXT("integrity sha256 digest");
+
 /** The idempotent wipe of a prior import's assets and actors. */
 inline const TCHAR* const Wipe = TEXT("wipe (prior import)");
 
 /** One per imported artifact. The artifact's own name is the detail, not the phase. */
 inline const TCHAR* const Artifact = TEXT("artifact");
 
+/**
+ * The landscape artifact's own steps, in the order they run.
+ *
+ * **Why they exist.** `artifact [landscape]` is the largest single row a full-size bundle produces
+ * — larger than every named hotspot put together — and until these were added nothing inside it
+ * was measured, so "the landscape is the cost" was as far as anyone could get. Each row below is a
+ * step this plugin can actually reach; between them they say which of the steps a reader would
+ * guess at is worth looking into and which are already free.
+ *
+ * ⛔ **They carry no detail, deliberately.** A row is matched by phase AND detail, so a detail that
+ * varies with the bundle — a resolution, a layer count — creates a brand-new row on every bundle,
+ * and a consumer keeping a record per row would never see the same one twice. The landscape's own
+ * size is already on the `Artifact` row that encloses these.
+ *
+ * ⚠ `LandscapeEngineImport` is a call into `ALandscape::Import`, and that is the floor: component
+ * construction, heightmap upload, weightmap application and collision all happen inside it, in
+ * engine code this plugin cannot put a guard in. A breakdown finer than this row needs Unreal
+ * Insights or an engine build, not another phase name.
+ */
+inline const TCHAR* const LandscapeHeightmapExtract = TEXT("landscape heightmap extract");
+inline const TCHAR* const LandscapeHeightmapDecode = TEXT("landscape heightmap decode");
+inline const TCHAR* const LandscapeHeightmapOrient = TEXT("landscape heightmap orient");
+inline const TCHAR* const LandscapeActorSpawn = TEXT("landscape actor spawn");
+inline const TCHAR* const LandscapeLayerInfoAssets = TEXT("landscape layer info assets");
+inline const TCHAR* const LandscapeEngineImport = TEXT("landscape engine import");
+inline const TCHAR* const LandscapeLayerInfoMap = TEXT("landscape layer info map");
+
 /** ⛔ Hotspot 1: the in-transaction shader-compile stall the editor blocks on. */
 inline const TCHAR* const ShaderStall = TEXT("shader FinishAllCompilation stall");
+
+/**
+ * The other two thirds of the drape-ready sequence the stall above opens. All three were timed
+ * from the day the sequence was written and printed on one log line; only the stall was ever
+ * reported into the timeline, which left two thirds of a known cost outside the summary block.
+ */
+inline const TCHAR* const LandscapeMaterialRebuild = TEXT("landscape material instance rebuild");
+inline const TCHAR* const LandscapeRenderFlush = TEXT("landscape render flush");
 
 /** ⛔ Hotspot 2: `RewriteCesiumTerrainAvailability`'s recursive scan and JSON rewrite. */
 inline const TCHAR* const CesiumAvailability = TEXT("cesium availability rewrite");
@@ -269,6 +316,86 @@ private:
 	const TCHAR* Phase;
 	FString Detail;
 	double StartSeconds;
+};
+
+/**
+ * One row that is a SUM of many spans rather than one span.
+ *
+ * **Why a guard is not enough.** `FScopedPhase` measures a scope, and some costs do not have one:
+ * the integrity pre-check reads and hashes every declared payload in a loop, so "how long was
+ * spent hashing" is the total of N disjoint spans and no single block encloses them. Recording one
+ * row per payload instead was the other option and it is worse twice over — the row count then
+ * depends on the bundle, and the consumer wanting the hashing total has to know to add them up.
+ *
+ * ⛔ **It opens no nesting level.** The spans are what nest inside the enclosing guard, not inside
+ * this; the row lands at whatever depth is open when it is recorded, which is the depth the loop
+ * ran at. Opening one here would stamp anything recorded between the first span and the last a
+ * level too deep.
+ *
+ * ⚠ A span holds a bare pointer to its accumulator, so an accumulator must outlive every span
+ * taken against it. Both are locals of the same block at every call site, which is the shape that
+ * makes that structural rather than a rule to remember.
+ */
+class FAccumulatedPhase
+{
+public:
+	FAccumulatedPhase(FTimeline& InTimeline, const TCHAR* InPhase, FString InDetail = FString())
+	    : Timeline(&InTimeline), Phase(InPhase), Detail(MoveTemp(InDetail))
+	{
+	}
+
+	~FAccumulatedPhase()
+	{
+		Record();
+	}
+
+	/**
+	 * Record the total and disarm, so the destructor cannot record it a second time.
+	 *
+	 * Public and idempotent because row ORDER is readable output: two accumulators in one block
+	 * destruct in reverse declaration order, which would print the summary's rows backwards
+	 * against the order they ran. A call site that cares says when instead of arranging its
+	 * declarations to come out right, which is the kind of cleverness that survives exactly one
+	 * edit.
+	 *
+	 * An accumulator no span ever contributed to records NOTHING, on the vocabulary's own rule
+	 * that an absent row means "not reached" while a zero reads as "instant".
+	 */
+	void Record();
+
+	/** One contributing span. Measured on the way out and added to the total. */
+	class FSpan
+	{
+	public:
+		explicit FSpan(FAccumulatedPhase& InOwner)
+		    : Owner(&InOwner), StartSeconds(FPlatformTime::Seconds())
+		{
+		}
+
+		~FSpan()
+		{
+			Owner->TotalSeconds += FPlatformTime::Seconds() - StartSeconds;
+			++Owner->SpanCount;
+		}
+
+		FSpan(const FSpan&) = delete;
+		FSpan& operator=(const FSpan&) = delete;
+
+	private:
+		FAccumulatedPhase* Owner;
+		double StartSeconds;
+	};
+
+	FAccumulatedPhase(const FAccumulatedPhase&) = delete;
+	FAccumulatedPhase& operator=(const FAccumulatedPhase&) = delete;
+
+private:
+	/** Null once recorded. That is what makes `Record()` idempotent. */
+	FTimeline* Timeline;
+	const TCHAR* Phase;
+	FString Detail;
+	double TotalSeconds = 0.0;
+	int32 SpanCount = 0;
 };
 
 /**

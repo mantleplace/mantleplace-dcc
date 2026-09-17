@@ -76,6 +76,23 @@ void ClosePhaseAndRecord(FTimeline* Timeline, const TCHAR* InPhase, double InSec
 	Timeline->Record(InPhase, InSeconds, MoveTemp(InDetail));
 }
 
+void FAccumulatedPhase::Record()
+{
+	if (Timeline == nullptr || SpanCount == 0)
+	{
+		// Nothing to say. A timeline that is already null has recorded; a span count of zero means
+		// the loop this was declared for never ran a single iteration, and the vocabulary's rule is
+		// that an absent row means "not reached" rather than "instant".
+		Timeline = nullptr;
+		return;
+	}
+
+	// No ClosePhase, and that is the difference from every other guard in this file: this opened no
+	// level, so the row lands at the depth the spans ran at rather than one inside itself.
+	Timeline->Record(Phase, TotalSeconds, MoveTemp(Detail));
+	Timeline = nullptr;
+}
+
 FScopedCurrentPhase::FScopedCurrentPhase(const TCHAR* InPhase, FString InDetail)
     : Timeline(GCurrent), Phase(InPhase), Detail(MoveTemp(InDetail)), StartSeconds(FPlatformTime::Seconds())
 {
