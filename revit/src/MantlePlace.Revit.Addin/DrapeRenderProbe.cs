@@ -20,12 +20,23 @@ namespace MantlePlace.Revit.Addin;
 /// exported, so nothing survives in the project; the PNGs beside the report are the whole output.
 /// </para>
 /// <para>
-/// The question it exists for: Revit 2025's toposolid smooth shading removes the flat-triangle
-/// faceting and breaks the real-world-scaled bitmap into four quadrants. Two of the arrangements
-/// below attack the faceting from the other side — taking the directional light out of the view
-/// (<c>SunlightIntensity</c>), or making the photograph self-illuminating — so that per-face
-/// shading has nothing to show while the mapping is left exactly as it is. The rest establish the
-/// baseline and try the cheap variations under smoothing.
+/// The question it existed for, and the answer these experiments produced: Revit 2025's toposolid
+/// smooth shading removes the flat-triangle faceting, and it moves where a real-world-scaled
+/// bitmap's offset is measured from — the project origin under flat shading, the element's
+/// bounding-box corner under smooth. Two of the arrangements below attack the faceting from the
+/// other side — taking the directional light out of the view (<c>SunlightIntensity</c>), or making
+/// the photograph self-illuminating — so that per-face shading has nothing to show while the mapping
+/// is left exactly as it is. Those two are what established that the faceting is mapping rather than
+/// lighting. The rest establish the baseline and try the cheap variations under smoothing.
+/// </para>
+/// <para>
+/// ⛔ <b>An earlier version of this remark said smoothing "breaks the real-world-scaled bitmap into
+/// four quadrants" full stop.</b> It breaks a bitmap anchored to the <em>project origin</em> that
+/// way, which is what the plugin wrote at the time. Since the drape was re-anchored per element it
+/// is the other setting that breaks it, and into a different shape — see
+/// <c>docs/adr/0008-revit-drape-is-anchored-to-the-smooth-shading-origin.md</c>. The sentence
+/// survived here two weeks past the code it described, which is the argument for citing the ADR
+/// rather than restating its conclusion.
 /// </para>
 /// </remarks>
 internal static class DrapeRenderProbe
