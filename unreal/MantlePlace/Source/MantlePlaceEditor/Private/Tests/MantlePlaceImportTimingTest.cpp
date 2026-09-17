@@ -557,16 +557,25 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 	// into one row that neither call site knows it is sharing. It is a copy-paste away from true and
 	// invisible in a diff, which is exactly the kind of thing to assert rather than to review.
 	{
-		const TCHAR* const Everything[] = {
-			Phase::ZipAndManifest, Phase::IntegrityPrecheck, Phase::IntegrityEntryRead,
-			Phase::IntegrityDigest, Phase::Wipe, Phase::Artifact,
-			Phase::LandscapeHeightmapExtract, Phase::LandscapeHeightmapDecode,
-			Phase::LandscapeHeightmapOrient, Phase::LandscapeActorSpawn,
-			Phase::LandscapeLayerInfoAssets, Phase::LandscapeEngineImport,
-			Phase::LandscapeLayerInfoMap, Phase::ShaderStall, Phase::LandscapeMaterialRebuild,
-			Phase::LandscapeRenderFlush, Phase::CesiumAvailability, Phase::WeightResample,
-			Phase::InsideTransaction,
-		};
+		const TCHAR* const Everything[] = {Phase::ZipAndManifest,
+		                                   Phase::IntegrityPrecheck,
+		                                   Phase::IntegrityEntryRead,
+		                                   Phase::IntegrityDigest,
+		                                   Phase::Wipe,
+		                                   Phase::Artifact,
+		                                   Phase::LandscapeHeightmapExtract,
+		                                   Phase::LandscapeHeightmapDecode,
+		                                   Phase::LandscapeHeightmapOrient,
+		                                   Phase::LandscapeActorSpawn,
+		                                   Phase::LandscapeLayerInfoAssets,
+		                                   Phase::LandscapeEngineImport,
+		                                   Phase::LandscapeLayerInfoMap,
+		                                   Phase::ShaderStall,
+		                                   Phase::LandscapeMaterialRebuild,
+		                                   Phase::LandscapeRenderFlush,
+		                                   Phase::CesiumAvailability,
+		                                   Phase::WeightResample,
+		                                   Phase::InsideTransaction};
 
 		TSet<FString> Seen;
 		for (const TCHAR* const Name : Everything)
