@@ -219,7 +219,9 @@ Most facts already have exactly one home. Find it before writing a fact down any
   `elevation.dem.bounds_target_crs` while Revit consumes it, and why the asymmetry is the contract
   rather than a disagreement · **0007** every `HPS-NN` cited in a public file must resolve in a
   public document, so the **publicly-cited half of the standard is published here** and a private
-  rule becomes uncitable in public. Write one only for a decision hard to reverse,
+  rule becomes uncitable in public · **0008** the Revit imagery drape is anchored to the
+  **smooth-shading origin**, so a project-wide display checkbox the curator owns is load-bearing for
+  the photograph. Write one only for a decision hard to reverse,
   surprising without the context, and the result of a real trade-off; an ADR is not a design
   document.
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the

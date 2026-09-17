@@ -129,11 +129,22 @@ internal static class TerrainSmoothingTests
             string notice = TerrainSmoothing.DrapeNotice(isEnabled: true);
 
             run.Contains(notice, "placed for Revit's toposolid smooth shading", "which renderer");
-            run.Contains(notice, "four quarters", "the symptom of turning it off");
+            run.Contains(notice, "every triangle", "the symptom of turning it off, as it is seen");
             run.Contains(notice, TerrainSmoothing.RibbonPath, "where the switch is");
             run.Contains(notice, "Turn it back on", "the remedy");
             run.True(notice.Contains("cannot", StringComparison.Ordinal) == false,
                 "no longer claims the two cannot be had together");
+
+            // ⛔ Measured, and it is the opposite mismatch. Four quarters meeting at a cross is what
+            // an offset written for the *project origin* looks like once smoothing is on — the case
+            // this plugin never ships. An offset written for the element's corner and then read from
+            // the origin is the mosaic instead, because flat shading maps per face: 2026-09-16, a
+            // 1,086 × 1,080 m site whose subdivision offsets ran to 978 m, photographed both ways.
+            // Predicting the wrong symptom is worse than predicting none — a curator who sees a
+            // shattered mosaic and was promised quarters concludes the sentence is about something
+            // else and goes looking.
+            run.False(notice.Contains("four quarters", StringComparison.Ordinal),
+                "does not predict the symptom of the opposite mismatch");
         });
 
         run.Case("a draped terrain with smoothing OFF is the loud case, and says to import again", () =>

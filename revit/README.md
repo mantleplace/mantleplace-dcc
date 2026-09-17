@@ -44,8 +44,8 @@ Remove (`HPS-44`).
   ⚠ **This is not what made the imported ground read as faceted, and an earlier version of this
   list said it was.** The mosaic outlived the move to the TIN. `Toposolid.Create` takes points and
   re-triangulates, so a toposolid is a triangulated mesh whatever the vertex source is — the faceting
-  is Revit shading per face, and the only thing that changes it is the smooth-shading setting below,
-  which cannot be used on ground wearing a photograph;
+  is Revit mapping the drape per face, and the only thing that changes it is the smooth-shading
+  setting below, which the import turns on and anchors the photograph for;
 - falls back to the points file when the DXF is missing, or when the bundle publishes no origin to
   reduce its absolute coordinates against — the points file is already local, so it needs none — and
   falls back again to linking the DXF as CAD when neither surface can be built. Whichever tier is

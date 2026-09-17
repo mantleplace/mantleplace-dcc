@@ -19,10 +19,19 @@ namespace MantlePlace.Revit.Core;
 /// makes Revit ignore paint and graphic overrides. It does one more thing they do not document:
 /// under flat shading a real-world-scaled bitmap's offset is measured from the project origin, per
 /// face, in each face's own plane — which is the mosaic the faceting complaint was about — and under
-/// smooth shading from the element's bounding-box corner, continuously. Written for the wrong origin
-/// the photograph rolls by half its size and shows as four quarters meeting at a cross. Written for
-/// the right one it sits within 1.6 m of the published photograph on smooth ground
-/// (<see cref="DrapeAnchor"/>). So the import turns smoothing on and places the photograph for it.
+/// smooth shading from the element's bounding-box corner, continuously. Written for the right one it
+/// sits within 1.6 m of the published photograph on smooth ground (<see cref="DrapeAnchor"/>). So the
+/// import turns smoothing on and places the photograph for it.
+/// </para>
+/// <para>
+/// ⛔ <b>The two mismatches do not look alike, and the sentences must not swap their symptoms.</b>
+/// An offset written for the <em>project origin</em> and then rendered smooth rolls the photograph by
+/// half its size and shows as four quarters meeting at a cross — the shape <see cref="DrapeAnchor"/>
+/// records, and the case this plugin never ships. The mismatch a curator can actually reach is the
+/// other one: an offset written for the element's corner, read from the origin after they turn the
+/// switch off, which flat shading maps per face into a shattered mosaic of unrelated ground.
+/// Measured 2026-09-16 on a 1,086 × 1,080 m site whose subdivision offsets ran to 978 m, photographed
+/// with the switch both ways.
 /// </para>
 /// <para>
 /// Hence two sentences rather than one: the one for turning the setting on, and the one that tells
@@ -41,7 +50,7 @@ public static class TerrainSmoothing
     /// <remarks>
     /// Spelled out in every sentence this type produces. A project-wide display setting the plugin
     /// turned on is only acceptable if the curator is told how to undo it — and a curator whose
-    /// photograph has arrived in quarters needs the same path to put it right.
+    /// photograph has shattered needs the same path to put it right.
     /// </remarks>
     public const string RibbonPath = "Massing & Site ▸ Model Site ▸ Toposolid Smooth Shading";
 
@@ -121,8 +130,9 @@ public static class TerrainSmoothing
                 + $"⚠ Leave it on while you need the imagery ({RibbonPath}): under flat shading Revit "
                 + "measures a real-world texture from the project origin, under smooth shading from "
                 + "each toposolid's own corner, and the photograph is placed for the second — turned "
-                + "off, it appears as four quarters meeting at a cross, each showing the wrong ground. "
-                + "Turn it back on and it reads correctly again."
+                + "off, every triangle carries its own slice of it, each slice showing unrelated "
+                + "ground, and the site reads as a shattered mosaic. Turn it back on and it reads "
+                + "correctly again."
             : "⚠ Revit's toposolid smooth shading is off and this import could not turn it on, so the "
                 + "aerial photograph was placed for flat shading: positioned correctly, but every "
                 + "triangle carries its own slice of it and the ground reads as a mosaic. If you turn "
