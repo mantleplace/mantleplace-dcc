@@ -960,11 +960,19 @@ public sealed class TerrainProbeCommand : IExternalCommand
     /// </para>
     /// <para>
     /// Sampling is capped at <see cref="AgreementSampleCap"/> vertices per subdivision, strided
-    /// evenly rather than taken from the front. The comparison is a linear scan over the ground's
-    /// triangles — on the order of 10^5 of them — so an uncapped run over 23 subdivisions would cost
-    /// minutes, and a probe nobody waits for answers nothing. Taking the first N instead of striding
-    /// would sample one corner of each subdivision, which is exactly where a boundary artifact would
-    /// hide a disagreement in the middle.
+    /// evenly rather than taken from the front: taking the first N would sample one corner of each
+    /// subdivision, which is exactly where a boundary artifact would hide a disagreement in the
+    /// middle. The cap is a bound on how much of each subdivision is claimed to have been checked,
+    /// which is why the report prints how many of its vertices were sampled — a verdict from 128 of
+    /// 4,000 vertices is a verdict about 128 vertices.
+    /// </para>
+    /// <para>
+    /// The cap is <em>not</em> what keeps the run cheap, and an earlier version of this remark said
+    /// it was — while the code beneath it asked for the finest tessellation Revit offers, which
+    /// raises the ground's triangle count by an unmeasured factor, and then looped over every ground.
+    /// <see cref="SurfaceAgreementCheck.Compare"/> indexes the reference triangles in plan, so the
+    /// cost does not track that count. Cheapness is the core's problem; honesty about coverage is
+    /// this method's.
     /// </para>
     /// </remarks>
     private static void ProbeSubDivisionAgreement(Document document, StringBuilder report)
@@ -1118,7 +1126,13 @@ public sealed class TerrainProbeCommand : IExternalCommand
 
         if (top is null)
         {
-            reason = "none of its faces point upward.";
+            // Two different absences, and the distinction is the first thing a reader needs: no
+            // solids at all is a geometry option or a view-detail problem, while solids whose faces
+            // all point elsewhere is a real shape. "0 face(s), none of them upward-facing" reads as
+            // a contradiction and sends the reader looking for the wrong thing.
+            reason = faceCount == 0
+                ? "its geometry contains no solid faces."
+                : "none of its faces point upward.";
         }
 
         return top;
@@ -1128,11 +1142,11 @@ public sealed class TerrainProbeCommand : IExternalCommand
     /// Every vertex and triangle of one toposolid's upward face, in metres.
     /// </summary>
     /// <remarks>
-    /// The face is chosen by the largest upward normal, the way <see cref="PaintTopFace"/> chooses
-    /// it and for the same reason: face order is not a documented property of anything.
-    /// <c>Face.Triangulate()</c> is Revit's own tessellation, which is the right thing to measure —
-    /// the question is whether the surfaces Revit built agree, not whether the points they were
-    /// built from did.
+    /// The face comes from <see cref="FindTopFace"/>, shared with <see cref="PaintTopFace"/>.
+    /// <c>Face.Triangulate(1.0)</c> is Revit's own tessellation at its highest level of detail
+    /// ("0 is the lowest level of detail and 1 is the highest" — Revit 2025 API), and Revit's
+    /// tessellation is the right thing to measure: the question is whether the surfaces Revit built
+    /// agree, not whether the points they were built from did.
     /// </remarks>
     private static bool TryTopSurface(
         Element element,
@@ -1152,12 +1166,15 @@ public sealed class TerrainProbeCommand : IExternalCommand
                 return false;
             }
 
-            // ⛔ 1.0, not the parameterless overload. Each element is tessellated on its own, so a
-            // sample vertex from one surface is interpolated across the other's chords — and two
-            // different triangulations of the same sloped shape disagree by the chord height between
-            // them, with no geometry differing at all. Asking for the finest available tessellation
-            // is what keeps that error below the millimetre SurfaceAgreementCheck calls agreement,
-            // and the alternative is a probe that manufactures the verdict it exists to rule out.
+            // ⛔ 1.0, not the parameterless overload — the highest level of detail Revit offers.
+            // Each element is tessellated on its own, so a sample vertex from one surface is
+            // interpolated across the other's chords, and two different triangulations of the same
+            // sloped shape disagree by the chord height between them with no geometry differing at
+            // all. The finest tessellation available makes that error as small as this probe can
+            // make it; it does not make it zero, and SurfaceAgreementCheck.AgreementToleranceM is
+            // explicit that a reading between a millimetre and the mesh's own chord height is
+            // inconclusive rather than a defect. Do not read this comment as a guarantee the core
+            // declines to give.
             Mesh mesh = top.Triangulate(1.0);
             for (int i = 0; i < mesh.Vertices.Count; i++)
             {

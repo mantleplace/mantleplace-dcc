@@ -101,9 +101,18 @@ public static class SurfaceAgreementCheck
     /// <paramref name="referenceVertices"/> and <paramref name="referenceTriangles"/>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Triangles that name a vertex outside the list, and triangles with no area in plan, are
     /// skipped rather than thrown on: the shim feeds this from Revit's own tessellation, and a probe
     /// that throws hands its reader nothing at all.
+    /// </para>
+    /// <para>
+    /// ⛔ The reference triangles are indexed in plan before anything is measured. A linear scan
+    /// would be samples × triangles, and the caller tessellates at the finest level of detail it can
+    /// get precisely so that the triangle count is <em>large</em> — the two pull in opposite
+    /// directions, and the version of this that scanned was sized against a triangle count nobody
+    /// had measured. An index removes the guess rather than documenting it.
+    /// </para>
     /// </remarks>
     public static SurfaceAgreement Compare(
         IReadOnlyList<SurfacePoint> referenceVertices,
@@ -119,9 +128,11 @@ public static class SurfaceAgreementCheck
         double max = 0.0;
         double total = 0.0;
 
+        PlanIndex index = PlanIndex.Over(referenceVertices, referenceTriangles);
+
         foreach (SurfacePoint sample in samples)
         {
-            if (TryHeightAt(referenceVertices, referenceTriangles, sample.X, sample.Y, out double ground))
+            if (index.TryHeightAt(referenceVertices, referenceTriangles, sample.X, sample.Y, out double ground))
             {
                 double delta = Math.Abs(sample.Z - ground);
                 sampled++;
@@ -203,7 +214,9 @@ public static class SurfaceAgreementCheck
             : $"does not lie on the reference surface — worst deviation "
                 + $"{agreement.MaxAbsDeltaM.ToString("0.###", CultureInfo.InvariantCulture)} m, mean "
                 + $"{agreement.MeanAbsDeltaM.ToString("0.###", CultureInfo.InvariantCulture)} m over "
-                + $"{agreement.Sampled:N0} point(s)";
+                + $"{agreement.Sampled:N0} point(s). ⚠ Inconclusive below the chord height of the two "
+                + "meshes compared: each was tessellated on its own, so a deviation smaller than that "
+                + "is the tessellation disagreeing and not the geometry";
 
         string outside = agreement.OffFootprint == 0
             ? string.Empty
@@ -213,25 +226,167 @@ public static class SurfaceAgreementCheck
     }
 
     /// <summary>
+    /// The reference triangles bucketed by their plan footprint, so a sample only tests the few that
+    /// could possibly cover it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A uniform grid, sized so the average cell holds a handful of triangles. A triangle goes in
+    /// every cell its plan bounding box touches, which over-counts slightly and never under-counts —
+    /// the failure this must not have is a sample reported as off the footprint because the triangle
+    /// covering it was filed somewhere else.
+    /// </para>
+    /// <para>
+    /// ⛔ It changes cost, never answers. <see cref="TryHeightAt"/> still tests candidates with the
+    /// same arithmetic and the same tolerances a scan used; the grid only decides which candidates
+    /// are worth testing. The tests assert agreement results, not the index, and a mesh larger than
+    /// one cell is among them for that reason.
+    /// </para>
+    /// </remarks>
+    private sealed class PlanIndex
+    {
+        private const int MaxCellsPerAxis = 256;
+        private const double TargetTrianglesPerCell = 4.0;
+
+        private readonly List<int>[] _cells;
+        private readonly int _columns;
+        private readonly int _rows;
+        private readonly double _minX;
+        private readonly double _minY;
+        private readonly double _cellWidth;
+        private readonly double _cellHeight;
+
+        private PlanIndex(
+            List<int>[] cells, int columns, int rows,
+            double minX, double minY, double cellWidth, double cellHeight)
+        {
+            _cells = cells;
+            _columns = columns;
+            _rows = rows;
+            _minX = minX;
+            _minY = minY;
+            _cellWidth = cellWidth;
+            _cellHeight = cellHeight;
+        }
+
+        internal static PlanIndex Over(
+            IReadOnlyList<SurfacePoint> vertices, IReadOnlyList<SurfaceTriangle> triangles)
+        {
+            double minX = double.MaxValue;
+            double minY = double.MaxValue;
+            double maxX = double.MinValue;
+            double maxY = double.MinValue;
+            int usable = 0;
+
+            foreach (SurfaceTriangle triangle in triangles)
+            {
+                if (!TryCorners(vertices, triangle, out SurfacePoint a, out SurfacePoint b, out SurfacePoint c))
+                {
+                    continue;
+                }
+
+                usable++;
+                minX = Math.Min(minX, Math.Min(a.X, Math.Min(b.X, c.X)));
+                minY = Math.Min(minY, Math.Min(a.Y, Math.Min(b.Y, c.Y)));
+                maxX = Math.Max(maxX, Math.Max(a.X, Math.Max(b.X, c.X)));
+                maxY = Math.Max(maxY, Math.Max(a.Y, Math.Max(b.Y, c.Y)));
+            }
+
+            if (usable == 0 || maxX <= minX || maxY <= minY)
+            {
+                // Nothing to index, or a reference surface with no extent in plan. One cell holding
+                // everything degrades to the scan this replaced, which is correct and merely slow —
+                // and on a degenerate surface there is nothing to be slow about.
+                return OneCell(triangles);
+            }
+
+            int perAxis = (int)Math.Ceiling(Math.Sqrt(usable / TargetTrianglesPerCell));
+            perAxis = Math.Clamp(perAxis, 1, MaxCellsPerAxis);
+
+            List<int>[] cells = new List<int>[perAxis * perAxis];
+            double cellWidth = (maxX - minX) / perAxis;
+            double cellHeight = (maxY - minY) / perAxis;
+
+            PlanIndex index = new(cells, perAxis, perAxis, minX, minY, cellWidth, cellHeight);
+
+            for (int i = 0; i < triangles.Count; i++)
+            {
+                if (!TryCorners(vertices, triangles[i], out SurfacePoint a, out SurfacePoint b, out SurfacePoint c))
+                {
+                    continue;
+                }
+
+                int left = index.Column(Math.Min(a.X, Math.Min(b.X, c.X)));
+                int right = index.Column(Math.Max(a.X, Math.Max(b.X, c.X)));
+                int bottom = index.Row(Math.Min(a.Y, Math.Min(b.Y, c.Y)));
+                int top = index.Row(Math.Max(a.Y, Math.Max(b.Y, c.Y)));
+
+                for (int column = left; column <= right; column++)
+                {
+                    for (int row = bottom; row <= top; row++)
+                    {
+                        (cells[(row * perAxis) + column] ??= []).Add(i);
+                    }
+                }
+            }
+
+            return index;
+        }
+
+        private static PlanIndex OneCell(IReadOnlyList<SurfaceTriangle> triangles)
+        {
+            List<int> everything = new(triangles.Count);
+            for (int i = 0; i < triangles.Count; i++)
+            {
+                everything.Add(i);
+            }
+
+            return new PlanIndex([everything], 1, 1, 0.0, 0.0, 1.0, 1.0);
+        }
+
+        private int Column(double x) => _columns == 1
+            ? 0
+            : Math.Clamp((int)((x - _minX) / _cellWidth), 0, _columns - 1);
+
+        private int Row(double y) => _rows == 1
+            ? 0
+            : Math.Clamp((int)((y - _minY) / _cellHeight), 0, _rows - 1);
+
+        internal bool TryHeightAt(
+            IReadOnlyList<SurfacePoint> vertices,
+            IReadOnlyList<SurfaceTriangle> triangles,
+            double x,
+            double y,
+            out double height)
+            => SurfaceAgreementCheck.TryHeightAt(
+                vertices, triangles, _cells[(Row(y) * _columns) + Column(x)], x, y, out height);
+    }
+
+    /// <summary>
     /// The reference surface's height under one plan position, or <c>false</c> when nothing covers it.
     /// </summary>
     /// <remarks>
-    /// A linear scan. The caller is a probe run by hand on one document, and an index would be the
-    /// third thing in this file that has to be right for the number to mean anything. If a site ever
-    /// makes this too slow, the fix is to sample fewer points, not to make the arithmetic harder to
-    /// check.
+    /// <paramref name="candidates"/> is the index's shortlist of triangle indices. The arithmetic is
+    /// the same one a full scan used; only the set it runs over is smaller.
     /// </remarks>
     private static bool TryHeightAt(
         IReadOnlyList<SurfacePoint> vertices,
         IReadOnlyList<SurfaceTriangle> triangles,
+        List<int>? candidates,
         double x,
         double y,
         out double height)
     {
         height = 0.0;
 
-        foreach (SurfaceTriangle triangle in triangles)
+        if (candidates is null)
         {
+            return false;
+        }
+
+        foreach (int candidate in candidates)
+        {
+            SurfaceTriangle triangle = triangles[candidate];
             if (!TryCorners(vertices, triangle, out SurfacePoint a, out SurfacePoint b, out SurfacePoint c))
             {
                 continue;

@@ -169,6 +169,76 @@ internal static class SurfaceAgreementTests
             run.True(taken[1].X > taken[0].X, "the sample advances rather than repeating");
         });
 
+        run.Case("a mesh far larger than one index cell measures every one of its own vertices", () =>
+        {
+            // ⛔ The failure this guards is silent and reads as the defect being hunted: a triangle
+            // filed in the wrong index cell makes a sample that sits exactly on the surface report
+            // as off the footprint, or — worse — as a deviation. So the surface is big enough to
+            // span many cells, it slopes in both axes so a wrong triangle gives a wrong height
+            // rather than the same one, and every vertex of it is offered back as a sample. All of
+            // them must land, and all must agree to the millimetre.
+            const int side = 60;
+            List<SurfacePoint> vertices = [];
+            for (int row = 0; row <= side; row++)
+            {
+                for (int column = 0; column <= side; column++)
+                {
+                    vertices.Add(new SurfacePoint(column * 3.0, row * 3.0, (column * 0.7) + (row * 0.3)));
+                }
+            }
+
+            List<SurfaceTriangle> triangles = [];
+            for (int row = 0; row < side; row++)
+            {
+                for (int column = 0; column < side; column++)
+                {
+                    int corner = (row * (side + 1)) + column;
+                    triangles.Add(new SurfaceTriangle(corner, corner + 1, corner + side + 2));
+                    triangles.Add(new SurfaceTriangle(corner, corner + side + 2, corner + side + 1));
+                }
+            }
+
+            SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(vertices, triangles, vertices);
+
+            run.Equal(agreement.Sampled, vertices.Count, "every vertex found the surface it belongs to");
+            run.Equal(agreement.OffFootprint, 0, "none was filed into a cell that does not cover it");
+            run.Within(agreement.MaxAbsDeltaM, 0.0, 1e-9, "and each one interpolated to its own height");
+        });
+
+        run.Case("a sample beyond a many-celled mesh is still outside it", () =>
+        {
+            // The complement of the case above. An index that clamps a query into the nearest cell
+            // would make anything outside the surface match its edge triangles and report a
+            // deviation instead of an absence — quietly turning "this subdivision overruns its
+            // ground" into "this subdivision is the wrong height".
+            const int side = 40;
+            List<SurfacePoint> vertices = [];
+            for (int row = 0; row <= side; row++)
+            {
+                for (int column = 0; column <= side; column++)
+                {
+                    vertices.Add(new SurfacePoint(column * 2.0, row * 2.0, 0.0));
+                }
+            }
+
+            List<SurfaceTriangle> triangles = [];
+            for (int row = 0; row < side; row++)
+            {
+                for (int column = 0; column < side; column++)
+                {
+                    int corner = (row * (side + 1)) + column;
+                    triangles.Add(new SurfaceTriangle(corner, corner + 1, corner + side + 2));
+                    triangles.Add(new SurfaceTriangle(corner, corner + side + 2, corner + side + 1));
+                }
+            }
+
+            SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
+                vertices, triangles, [new SurfacePoint(500.0, 500.0, 0.0), new SurfacePoint(-500.0, 10.0, 0.0)]);
+
+            run.Equal(agreement.OffFootprint, 2, "both fell outside, neither was clamped onto an edge");
+            run.Equal(agreement.Sampled, 0, "and neither was measured");
+        });
+
         run.Case("no samples is a stated fact, not a silent zero", () =>
         {
             SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(FlatVertices, FlatTriangles, []);
