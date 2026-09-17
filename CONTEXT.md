@@ -22,6 +22,37 @@ The Mantle Place plugin for one DCC host. Each is written natively for its host 
 same behaviour; they share no code, only a contract and a conformance corpus.
 _Avoid_: client, connector, adapter
 
+### Brand and marks
+
+**Mark**:
+The square, full-bleed orange tile carrying the white `mp` monogram. This is *the* Mantle Place
+mark, in every host and at every size. Unqualified "the logo" has meant this and the roundel to
+different people, which is how two hosts came to ship two different marks.
+_Avoid_: logo, icon, brand mark, tile
+
+**Monogram**:
+The white lowercase `mp` letterform inside the mark. Nameable on its own, because a host may render
+it without the tile and extrude around it.
+_Avoid_: letterform, initials, glyph
+
+**Roundel**:
+The superseded round treatment of the monogram. Not a synonym for the mark; saying one when you mean
+the other is the confusion this entry exists to end.
+_Avoid_: circular logo, round mark, the old logo
+
+**Lockup**:
+The mark set beside the wordmark. A composition of the two, never either one alone.
+_Avoid_: logo, header logo, brand block
+
+**Wordmark**:
+The words "mantle place" set as brand typography, with no mark beside them.
+_Avoid_: logotype, text logo
+
+**Glyph**:
+A flat monochrome command icon on a host's toolbar or ribbon, drawn in that host's own style. A
+glyph says what a command does, where the mark says whose it is.
+_Avoid_: icon, symbol, button image
+
 ### Sessions and identity
 
 **Editor session**:

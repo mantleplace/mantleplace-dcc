@@ -67,7 +67,7 @@ repository's own issue space); it stays forbidden in files.
 **The objective bar is: the conformance suite passes, and behaviour it pins is not changed without
 changing a case.**
 
-Four workflows run on every pull request, on free hosted runners:
+Five workflows run on every pull request, on free hosted runners:
 
 - **`ci-manifest-conformance`** — fetches the published bundle-manifest schema, checks every
   registered host is verified against the newest version, and checks the shared corpus under
@@ -83,8 +83,12 @@ Four workflows run on every pull request, on free hosted runners:
   Unreal naming module. Text-only, no engine, seconds on a hosted runner — and the only automated
   check standing in front of a naming regression, because nothing in public CI compiles the Unreal
   plugin (see below).
+- **`ci-brand-assets`** — tests the rules that decide what a rendered Mantle Place mark looks like.
+  Deliberately half a gate: the renderer's input is a private file, so no runner can regenerate the
+  committed PNGs and none tries. It asserts the geometry, which is where a silent change to a
+  shipped logo would start.
 
-All four must be green before a maintainer merges — but that is this project's bar, not the one
+All five must be green before a maintainer merges — but that is this project's bar, not the one
 GitHub enforces. Branch protection on `main` matches *jobs*, not workflows, and `ci-unreal-naming`
 is not among them: it reports on every pull request and cannot block a merge, so the only automated
 guard in front of a naming regression is advisory. The enforced list lives in the repository rather
