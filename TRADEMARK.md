@@ -4,9 +4,10 @@
 
 The [Apache 2.0 licence](LICENSE) that covers this repository grants you broad rights over the
 *code*. It grants no rights over the **Mantle Place** name, the `mantle.place` domain, or the Mantle
-Place logo and marks — including the "mp" roundel that ships in
-[`unreal/MantlePlace/Resources/`](unreal/MantlePlace/Resources/). Trademark law and copyright law are
-separate, and Apache 2.0 §6 says so explicitly.
+Place logo and marks — including the square "mp" mark that ships in
+[`unreal/MantlePlace/Resources/`](unreal/MantlePlace/Resources/) and
+[`revit/src/MantlePlace.Revit.Addin/Resources/`](revit/src/MantlePlace.Revit.Addin/Resources/).
+Trademark law and copyright law are separate, and Apache 2.0 §6 says so explicitly.
 
 This document says what we will and will not object to, so you do not have to guess.
 
@@ -16,8 +17,12 @@ For the avoidance of doubt, the marks this policy covers are:
 
 - the **"Mantle Place"** word mark;
 - the **`mantle.place`** domain;
-- the **"mp" roundel** and the Mantle Place logo lockups shipped in
-  [`unreal/MantlePlace/Resources/`](unreal/MantlePlace/Resources/);
+- the square **"mp" mark** and the Mantle Place logo lockups shipped in
+  [`unreal/MantlePlace/Resources/`](unreal/MantlePlace/Resources/) and
+  [`revit/src/MantlePlace.Revit.Addin/Resources/`](revit/src/MantlePlace.Revit.Addin/Resources/);
+- the **"mp" roundel**, the round treatment the Unreal plugin shipped through `unreal-0.4.0`. It
+  is no longer rendered anywhere in this repository, and it remains covered: it is installed on
+  machines we do not control, so a fork still has to replace it;
 - the tagline **"place it on mantle"**.
 
 All are trademarks (™) of Mantle Place LLC.
@@ -43,7 +48,8 @@ Concretely, a fork changes:
 
 - the plugin display name and description in `unreal/MantlePlace/MantlePlace.uplugin`;
 - the Revit ribbon text and `.addin` manifest name under `revit/src/MantlePlace.Revit.Addin/`;
-- the icons and logo in `unreal/MantlePlace/Resources/`.
+- the icons and logo in `unreal/MantlePlace/Resources/`;
+- the ribbon icons in `revit/src/MantlePlace.Revit.Addin/Resources/`.
 
 You may still say your fork *derives from* Mantle Place. Say it in prose, not in the product name.
 

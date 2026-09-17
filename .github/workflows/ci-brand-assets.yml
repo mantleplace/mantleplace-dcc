@@ -1,0 +1,47 @@
+# Brand assets — test the rules that decide what a rendered mark looks like.
+#
+# This job is DELIBERATELY only half of a gate, and the missing half cannot be built. The renderer
+# in tools/brand-assets/ reads the canonical Mantle Place mark, which is a private file: it is not
+# in this repository and it never will be, so no hosted runner can regenerate the committed PNGs
+# and no workflow can compare what is committed against what the script would produce today.
+#
+# What CAN be tested is every decision the renderer makes — where the monogram ends and the tile
+# begins, the optical box, the margin, which sizes get a hardened edge. Those live in
+# mark_geometry.py on plain numbers and plain buffers, with no image library anywhere near them,
+# precisely so that this job exists at all. ADR 0009 records why the rules are what they are.
+#
+# Standard library only, like the other three tools here, so there is no dependency install to rot.
+# Pillow is confined to render_mark.py, which this job never imports.
+#
+# This is not a required check. It guards a script that a human runs by hand with a private input;
+# what it protects against is a silent change to the arithmetic that produces a shipped logo.
+#
+# NO paths: FILTER ON pull_request, deliberately, for the reason spelled out in ci-revit-tests.yml
+# and ci-public-hygiene.yml: a required check that is path-filtered never reports on a pull request
+# outside its paths, so the check sits pending forever and nothing can merge. This job is not
+# required today, and a filter added now is a trap for whoever makes it required later.
+name: ci-brand-assets
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-brand-assets-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mark-geometry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Unit-test the mark geometry
+        working-directory: tools/brand-assets
+        run: python -m unittest discover -p "test_*.py" -v

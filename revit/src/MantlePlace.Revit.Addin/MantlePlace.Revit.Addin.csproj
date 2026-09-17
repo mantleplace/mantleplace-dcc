@@ -60,6 +60,20 @@
   </ItemGroup>
 
   <!--
+    Ribbon imagery. The build action is Resource, not EmbeddedResource: a pack URI
+    ("pack://application:,,,/MantlePlace.Revit.Addin;component/Resources/MantlePlaceMark_32.png")
+    resolves against the WPF resource table, which EmbeddedResource does not populate. UseWPF is
+    already on above, so this costs nothing extra. Baking them in rather than copying loose files
+    beside the DLL keeps Package-MantlePlaceRevit.ps1 free of a copy step.
+
+    The glob is deliberately Resources\*.png and not Resources\**\*: Resources\src\ holds the
+    written record of where these files come from, and that is documentation, not payload.
+  -->
+  <ItemGroup>
+    <Resource Include="Resources\*.png" />
+  </ItemGroup>
+
+  <!--
     A missing Revit install is the single most likely reason this project fails to build, and the
     default failure is forty lines of CS0246 for every Revit type. Say it once, in one sentence.
   -->

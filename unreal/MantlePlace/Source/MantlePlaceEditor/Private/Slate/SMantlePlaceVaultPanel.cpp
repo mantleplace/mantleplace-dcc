@@ -140,14 +140,17 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 {
 	return SNew(SHorizontalBox)
 
-		// Brand lockup: circular logo + stacked "mantle / place" wordmark.
+		// Brand lockup: the square "mp" mark + stacked "mantle / place" wordmark.
+		// The mark carries its own trailing gutter rather than leaning on the wordmark's leading
+		// one. A circle used to give the gap back optically as its edge curved away; a full-bleed
+		// tile has a hard edge at every height, so S3 alone reads as a collision.
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
 		.VAlign(VAlign_Center)
-		.Padding(FMantlePlaceEditorStyle::S2, 12.f, 0.f, 12.f)
+		.Padding(FMantlePlaceEditorStyle::S2, 12.f, FMantlePlaceEditorStyle::S3, 12.f)
 		[
 			SNew(SImage)
-			.Image(FMantlePlaceEditorStyle::Get().GetBrush("MantlePlace.Logo"))
+			.Image(FMantlePlaceEditorStyle::Get().GetBrush("MantlePlace.Mark"))
 			.DesiredSizeOverride(FVector2D(32.f, 32.f))
 		]
 

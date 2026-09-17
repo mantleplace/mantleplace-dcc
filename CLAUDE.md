@@ -28,11 +28,12 @@ spec/                          the public MPB format spec — prose only; the sc
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
 tools/public-hygiene/          the private-reference and docs-integrity gates + their cases
 tools/unreal-naming/           the generated-name drift gate + its cases
+tools/brand-assets/            renders the mark for both hosts; its input is private
 docs/adr/                      architecture decision records, numbered and cross-host
 docs/agents/                   how the engineering skills read this repo — tracker, labels, domain
 docs/platform-auth-contract.md sign-in and tokens — the one contract both hosts implement
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
-.github/workflows/             the four public CI gates, plus the stale and tracker-hygiene jobs
+.github/workflows/             the five public CI gates, plus the stale and tracker-hygiene jobs
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
 CONTEXT.md  CLAUDE.md
 ```
@@ -134,7 +135,7 @@ gate: for Revit the gate is the ribbon loading and one real import completing in
 ## Binaries
 
 **There are no Git LFS patterns in this repository, on purpose** — a stranger's first clone must not
-be a multi-hundred-megabyte pull; the binaries that are here — one `.uasset`, three fonts, three PNG
+be a multi-hundred-megabyte pull; the binaries that are here — one `.uasset`, three fonts, seven PNG
 icons — total well under 1.2 MB and are plain git blobs. **Ask before you `git add` any binary, a
 new file of a type already here included:** the axis is bytes, not novelty, and the budget being
 protected is a stranger's first clone rather than a list of blessed extensions. Git decides
@@ -175,10 +176,14 @@ in writing (commit body, ledger, or manifest), never saved up for the closing me
 
 ## CI
 
-Four workflows run on every pull request, all on free hosted runners: `ci-manifest-conformance`,
-`ci-revit-tests`, `ci-public-hygiene` and `ci-unreal-naming`. (`stale.yml` and
+Five workflows run on every pull request, all on free hosted runners: `ci-manifest-conformance`,
+`ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming` and `ci-brand-assets`. (`stale.yml` and
 `ci-tracker-hygiene.yml` are tracker hygiene, not gates — the second runs on issue and comment
 events, a pull request's own comments included, and it detects rather than blocks.)
+
+`ci-brand-assets` is **half a gate by construction**: the mark renderer's input is a private file,
+so no runner can regenerate the committed PNGs, and the job tests the rules that decide what a
+render looks like rather than the renders themselves ([ADR 0009](docs/adr/0009-host-assets-render-the-monogram.md)).
 
 **A workflow name is not a check name.** Branch protection matches *jobs*, and the mapping is not
 one-to-one — `ci-revit-tests` contributes two. The four required checks on `main` are
@@ -221,7 +226,8 @@ Most facts already have exactly one home. Find it before writing a fact down any
   public document, so the **publicly-cited half of the standard is published here** and a private
   rule becomes uncitable in public · **0008** the Revit imagery drape is anchored to the
   **smooth-shading origin**, so a project-wide display checkbox the curator owns is load-bearing for
-  the photograph. Write one only for a decision hard to reverse,
+  the photograph · **0009** host assets render the **monogram**, not the mark as drawn — the extrude
+  is below a pixel at ribbon sizes, and the roundel is retired. Write one only for a decision hard to reverse,
   surprising without the context, and the result of a real trade-off; an ADR is not a design
   document.
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the

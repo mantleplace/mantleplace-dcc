@@ -76,11 +76,15 @@ TSharedRef<FSlateStyleSet> FMantlePlaceEditorStyle::Create()
 	}
 
 	// ---- Icons / logo ----
+	// Both brushes draw the same 64px file: the square "mp" mark, monogram only, rendered by
+	// tools/brand-assets/render_mark.py. One source at 64px covers the 16px tab and the 32px
+	// header with headroom for a high-DPI editor, and downsamples cleanly from a power of two.
+	// The mark drops its extrude at these sizes and the roundel this once shipped is retired --
+	// docs/adr/0009-host-assets-render-the-monogram.md says why, before anyone restores either.
 	const FVector2D Icon16x16(16.0f, 16.0f);
-	const FVector2D Logo32x32(32.0f, 32.0f);
+	const FVector2D Mark32x32(32.0f, 32.0f);
 	Style->Set("MantlePlace.TabIcon", new IMAGE_BRUSH(TEXT("MantlePlaceTabIcon"), Icon16x16));
-	// Circular "mp" brand mark for the panel header (icon-512.png rendered at 32px).
-	Style->Set("MantlePlace.Logo", new IMAGE_BRUSH(TEXT("MantlePlaceLogo"), Logo32x32));
+	Style->Set("MantlePlace.Mark", new IMAGE_BRUSH(TEXT("MantlePlaceTabIcon"), Mark32x32));
 
 	// ---- Embedded brand fonts (Montserrat + Geist Mono, OFL) ----
 	// Slate font sizes are in points (~1.333 px at 100% app scale), so these track the web px scale.
