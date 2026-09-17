@@ -43,7 +43,7 @@ public static class LocalBundleSource
     /// journal playback blocks on it forever. A file beside the input is what the caller that set
     /// <see cref="PathVariable"/> already knows how to find.
     /// </remarks>
-    public static string LogPathFor(string zipPath) => zipPath + ".mantleplace-import.log";
+    public static string LogPathFor(string zipPath) => zipPath + ImportLogSuffix;
 
     /// <summary>
     /// Where the terrain probe writes what it measured — beside the zip, next to the import log.
@@ -53,5 +53,23 @@ public static class LocalBundleSource
     /// the import does. Two files make it obvious which run produced which numbers, and a probe log
     /// left lying around can never be mistaken for evidence that a model was built.
     /// </remarks>
-    public static string ProbeLogPathFor(string zipPath) => zipPath + ".mantleplace-terrain-probe.log";
+    public static string ProbeLogPathFor(string zipPath) => zipPath + ProbeLogSuffix;
+
+    /// <summary>What <see cref="LogPathFor"/> appends.</summary>
+    public const string ImportLogSuffix = ".mantleplace-import.log";
+
+    /// <summary>What <see cref="ProbeLogPathFor"/> appends.</summary>
+    public const string ProbeLogSuffix = ".mantleplace-terrain-probe.log";
+
+    /// <summary>
+    /// Whether a file name is one of the two logs written above.
+    /// </summary>
+    /// <remarks>
+    /// The suffixes are constants rather than literals repeated at each site precisely so this
+    /// predicate and the two writers cannot drift: a reader that stopped recognising what a writer
+    /// produces would report "no log yet" over a folder full of them.
+    /// </remarks>
+    public static bool IsLogFileName(string fileName)
+        => fileName.EndsWith(ImportLogSuffix, StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(ProbeLogSuffix, StringComparison.OrdinalIgnoreCase);
 }

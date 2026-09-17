@@ -105,6 +105,21 @@ Remove (`HPS-44`).
 - tells you what it did **not** import and why, using the manifest's own
   `hosts.revit.readiness.<path>.reason` where there is one (`HPS-36`).
 
+The Bundles panel carries a **slide-out** — the small unfold arrow at its foot — holding the two
+commands that are not ways to get content in. `Probe Terrain` measures what this project and a
+bundle would give the terrain importer, trying every way of placing it and rolling every attempt
+back, so nothing in the project changes; use it when a bundle import is refused and the log does not
+say enough. `Logs` shows the most recent import or probe log in File Explorer. `Probe Terrain`
+used to sit on the panel face beside `Vault` and `Import Bundle`, where a first-time user read a
+diagnostic as a third way to import.
+
+**Neither log has a fixed home**, which is the whole reason `Logs` exists: both writers put
+their file beside the zip they were handed, so a bundle downloaded from your vault logs inside its
+own order folder under `%LOCALAPPDATA%\MantlePlace\bundles\`, and a zip you opened from somewhere
+else logs beside that zip. `Logs` selects the newest log under the cache, and where there is
+none it opens the cache and says that a zip from elsewhere logged elsewhere. The About dialog on the
+Account button reaches the same place through the same function, so the two can never disagree.
+
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
 runs unattended from a Revit journal or a tester script. An unattended run raises no dialog — it
 writes `<zip>.mantleplace-import.log` beside the bundle instead, because a `TaskDialog` during
@@ -121,13 +136,55 @@ again, because the trust is per assembly and the assembly changed. Getting past 
 there is no way to do it from a journal — which is the same reason the release gate below is a
 person launching all three Revits rather than a script.
 
+⛔ **And the click only counts if that Revit then exits normally.** The answer is written on
+shutdown, so a session you kill — which is the obvious thing to do to a playback that has stopped
+dead behind the dialog — loses it, and the next launch prompts again for the same assembly. That
+reads exactly like the answer not having been remembered. So the sequence is: launch Revit, answer
+**Always Load**, quit it, and only then start the playback. Measured 2026-09-16 on Revit 2026,
+same assembly either way: killed after answering, the next launch prompted; closed after answering,
+it did not.
+
 The ribbon events a playback journal needs, for reference — the tab, panel and button names come
 from `MantlePlaceApplication`:
 
 ```
 Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Mantle Place%Bundles%MantlePlaceImportLocalBundle:MantlePlace.Revit.Addin.ImportLocalBundleCommand"
 Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Mantle Place%Bundles%MantlePlaceProbeTerrain:MantlePlace.Revit.Addin.TerrainProbeCommand"
+Jrn.RibbonEvent "Execute external command:CustomCtrl_%CustomCtrl_%Mantle Place%Bundles%MantlePlaceOpenLogs:MantlePlace.Revit.Addin.OpenLogsCommand"
 ```
+
+**A slide-out item addresses the same as a panel-face one**, so moving `Probe Terrain` off the face
+changed nothing above. `RibbonPanel.AddSlideOut()` does not create a named container: every item on
+the panel stays a child of the panel. You do not have to guess, and you should not — Revit reports
+each button's parent as it registers it, into the journal every session writes:
+
+```
+Added pushbutton Id: 6424, name: MantlePlaceProbeTerrain, ... parentId: CustomCtrl_%Mantle Place%Bundles
+Added pushbutton Id: 6425, name: MantlePlaceOpenLogs,     ... parentId: CustomCtrl_%Mantle Place%Bundles
+```
+
+**A split button's dropdown is the opposite, and the same journal says so** — those items *are*
+nested, which is what makes the slide-out's flatness worth stating rather than assuming:
+
+```
+Added pushbutton Id: 6421, name: MantlePlaceAbout, ... parentId: CustomCtrl_%CustomCtrl_%Mantle Place%Account%MantlePlaceAccount
+```
+
+Measured 2026-09-16 in Revit 2026, on the build that first carried the slide-out. Worth writing down
+because the control path is the only handle a journal has on a button — and because the read that a
+slide-out adds a level to it is a reasonable one that happens to be wrong, as the Account line just
+above shows it would have been for a dropdown.
+
+⚠ **Read off the add-in's load, not off a click.** The intent was to settle this by replaying the
+recorded probe journal and watching the button fire, and that leg did not complete: every attempt
+stopped at startup on `processShellCommand` and `TaskDialog "Failed to open file."`, with Revit
+taking the journal as a document to open rather than a script to play, and no `Jrn.` line in it ever
+executing. A hand-written journal starting at `Dim Jrn` is the suspect — a recorded journal carries a
+`Jrn.Directive` preamble ahead of that line — but this is not established, so do not trust a
+hand-written playback file until somebody does establish it. **The registration lines above are the
+better evidence anyway**: they are Revit reporting the parent it actually assigned, they appear
+before any click, and a `Jrn.RibbonEvent` that fires only tells you a command ran, never what the
+button looked like or where it hung.
 
 ## Layout
 

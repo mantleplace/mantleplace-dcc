@@ -29,12 +29,24 @@ public static class ShellLauncher
     /// <param name="error">Empty on success; on failure, a sentence naming the target.</param>
     /// <returns>Whether Windows took it.</returns>
     public static bool TryOpen(string target, out string error)
+        => TryStart(new ProcessStartInfo(target) { UseShellExecute = true }, target, out error);
+
+    /// <summary>
+    /// The one <c>Process.Start</c> in this assembly, and the one <c>catch</c> around it.
+    /// </summary>
+    /// <remarks>
+    /// Every launch goes through here rather than writing its own <c>try</c>, because the two things
+    /// worth getting right are both easy to leave out of a copy: the flag above — <c>false</c> is
+    /// .NET's default and means "execute this string", not "open it with whatever handles it" — and
+    /// the narrow <c>catch</c>, which must not swallow anything but a shell that would not start.
+    /// </remarks>
+    private static bool TryStart(ProcessStartInfo start, string target, out string error)
     {
         error = string.Empty;
 
         try
         {
-            using Process? started = Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+            using Process? started = Process.Start(start);
             return true;
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -67,5 +79,35 @@ public static class ShellLauncher
         }
 
         return TryOpen(folder, out error);
+    }
+
+    /// <summary>
+    /// Opens a file's folder with that file selected in it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>A path that is no longer there falls back to its folder rather than being handed to
+    /// Explorer.</b> <c>/select</c> does not fail on a missing file — it opens Documents, reports
+    /// success, and leaves the curator somewhere they did not ask to be with nothing saying why.
+    /// The gap is real rather than theoretical: whatever named this file listed the directory at one
+    /// moment and clicks at another, and a log can be deleted in between.
+    /// </para>
+    /// <para>
+    /// ⚠ <c>/select</c> is also the one case <see cref="TryOpen"/> cannot serve, and the one place
+    /// the arguments are built as a string rather than a list: Explorer wants the switch and the
+    /// path as a single comma-joined, quoted token, and the quotes carry any space in it — a cache
+    /// directory is named for a sanitised order id, and a curator's own folder is their business.
+    /// </para>
+    /// </remarks>
+    public static bool TryReveal(string filePath, out string error)
+    {
+        if (!File.Exists(filePath))
+        {
+            string folder = Path.GetDirectoryName(filePath) ?? filePath;
+            return TryOpenFolder(folder, out error);
+        }
+
+        return TryStart(
+            new ProcessStartInfo("explorer.exe", $"/select,\"{filePath}\""), filePath, out error);
     }
 }

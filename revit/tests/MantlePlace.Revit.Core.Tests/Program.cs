@@ -29,6 +29,7 @@ exitCode |= ImportFailurePolicyTests.Run();
 exitCode |= SlowStepNoticeTests.Run();
 exitCode |= ReadinessReasonTests.Run();
 exitCode |= LocalBundleArchiveTests.Run();
+exitCode |= OpenLogsTests.Run();
 exitCode |= VectorDocumentSelfTests.Run();
 exitCode |= AddinFaultTests.Run();
 exitCode |= AuthConformanceTests.Run();

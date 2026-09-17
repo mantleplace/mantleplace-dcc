@@ -1,4 +1,6 @@
 using Autodesk.Revit.UI;
+
+// Not unused: AccountFace() is an extension method on AuthSession, declared in Client.
 using MantlePlace.Revit.Client;
 
 namespace MantlePlace.Revit.Addin;
@@ -49,29 +51,16 @@ internal static class AboutMantlePlace
         dialog.AddCommandLink(
             TaskDialogCommandLinkId.CommandLink1,
             "Open the import logs",
-            "Each import writes its log beside the bundle zip it read. Vault downloads live in this "
-                + "folder; a zip you downloaded yourself has its log beside your own copy.");
+            "Each import and each probe writes its log beside the bundle zip it read. This shows the "
+                + "newest one there is; a zip you downloaded yourself has its log beside your own copy.");
 
         if (dialog.Show() == TaskDialogResult.CommandLink1)
         {
-            OpenImportLogFolder();
+            // The same function the Bundles slide-out's Logs button calls, so the dialog and the
+            // button can never send a curator to two different folders.
+            OpenLogsCommand.Show();
         }
 
         return Result.Succeeded;
-    }
-
-    /// <summary>Opens the folder vault downloads — and so their import logs — live in.</summary>
-    private static void OpenImportLogFolder()
-    {
-        string folder = BundleCacheLayout.DefaultRoot;
-
-        if (!ShellLauncher.TryOpenFolder(folder, out string refused))
-        {
-            new TaskDialog("Mantle Place")
-            {
-                MainInstruction = "Could not open the folder.",
-                MainContent = $"Open it yourself: {refused}",
-            }.Show();
-        }
     }
 }
