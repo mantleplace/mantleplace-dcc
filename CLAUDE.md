@@ -29,6 +29,7 @@ tools/manifest-conformance/    the contract gate + the shared conformance corpus
 tools/public-hygiene/          the private-reference and docs-integrity gates + their cases
 tools/unreal-naming/           the generated-name drift gate + its cases
 tools/brand-assets/            renders the mark for both hosts; its input is private
+tools/local-install/           the session-start check that a host's local install is the tree
 docs/adr/                      architecture decision records, numbered and cross-host
 docs/agents/                   how the engineering skills read this repo — tracker, labels, domain
 docs/platform-auth-contract.md sign-in and tokens — the one contract both hosts implement
@@ -42,7 +43,8 @@ CONTEXT.md  CLAUDE.md
 concern, nothing else.* Names are spelled out in full — `mantleplace`, never `mp`. `max/`,
 `blender/`, `rhino/` are created when they have real content, never as empty placeholders — and
 "real content" means the triad every layer here is built as (an impure host shim, a pure logic core,
-and a headless test of that core — [CONTRIBUTING.md](CONTRIBUTING.md#style-and-shape)) plus the new
+and a headless test of that core — [CONTRIBUTING.md](CONTRIBUTING.md#style-and-shape)), the
+host's local-install tool and check script (`HPS-50` — see "Local installs" below), and the new
 folder's own `<host>/CLAUDE.md`. **That
 rule governs this repository and its code** — paths, folders, modules, symbols — **not the strings a
 plugin writes into a user's project.** A host may abbreviate where a user reads the name in a cramped
@@ -162,6 +164,32 @@ the project you open to do the work is never the tracker for it — is
 [`docs/agents/work-routing.md`](docs/agents/work-routing.md). The two are independent: work can be
 perfectly thin and still belong somewhere else.
 
+## Local installs
+
+**The plugin a host application loads on this machine is a copy of the tree, and the copy is a
+single slot that tracks `main`** (`HPS-50`, [`tools/local-install/`](tools/local-install/README.md)).
+Revit loads one Mantle Place per process and the consuming Unreal project has one submodule
+checkout, so there is no install per worktree; the slot says what it holds instead, and the rules
+keep it on `main`:
+
+- **At session start, run the check** and read its lines before deciding what a host will show you:
+
+  ```powershell
+  ./tools/local-install/Check-LocalInstall.ps1
+  ```
+
+  `current` and `preview` need nothing. `stale` or `unverified` means the host is not the tree, and
+  a bug seen there is not yet evidence about the code. Unreal reports `not configured` unless
+  `MANTLEPLACE_CONSUMING_PROJECT_ROOT` names the consuming project, and that is fine on any machine that has none.
+- **A session that merges a pull request touching `revit/` or `unreal/` deploys from `main` before
+  it finishes**: pull `main`, run `revit/tools/Deploy-MantlePlaceRevit.ps1` there and
+  `unreal/tools/Refresh-UnrealInstall.ps1`, and report the stamp each printed. Revit refuses while
+  Revit is open; that refusal is an item under test (2) below, reported as such, never skipped
+  silently. The first launch of a new Revit build is a human's — see `revit/README.md`.
+- **A preview from a branch happens only when the founder asks for it in that session.** It is
+  stamped as a preview, the deploy script says so, and the slot returns to `main` at the next
+  post-merge deploy. Nothing deploys from a branch by default.
+
 ## Finishing a session
 
 A session finishes what it starts. An item may outlive the session only if it (1) needs a decision
@@ -169,7 +197,9 @@ only the founder can make, (2) needs access the agent does not have, (3) touches
 law forbids editing, or (4) sits outside the session's working tree, where fixing it would put
 unrelated changes in the diff. Nothing else qualifies — not size, not risk, not "the founder might
 not want it." Where checks exist, closed out means the checks pass; if they cannot be made to pass,
-that is (2), and it is raised when it is hit, not at the end. There is no standing "next steps" or
+that is (2), and it is raised when it is hit, not at the end. A merge that touched a host's folder
+is not closed out until that host's local install is `main` again ("Local installs" above), or the
+refusal is reported under (2). There is no standing "next steps" or
 "outstanding" section: one appears only when an item passes one of the four tests or the founder
 asks, and each item names the test it claims. Work resolved on the agent's own judgment is disclosed
 in writing (commit body, ledger, or manifest), never saved up for the closing message.

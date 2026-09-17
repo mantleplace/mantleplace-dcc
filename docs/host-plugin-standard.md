@@ -54,6 +54,7 @@ host met the contract for real:
 | **v1.3** | `HPS-06` requires an OS-assigned callback port, `HPS-06a` adds the declared-list override — the declared range it previously mandated was unbindable on any machine whose reserved blocks happened to cover it |
 | **v1.4** | `HPS-24` rewritten over the platform's full four-outcome start response, `HPS-25a` added for delivery-derived polling. The old wording described a two-outcome start and a job-status poll, and **both hosts were built to it** — so a materialize that named no job read as a failure, and a poll carrying no status word read as five errors in a row |
 | **v1.5** | ⛔`HPS-49` — the presign request states its payload explicitly. The same flow, once past the start and the poll, died on a schema rejection: one host had been sending an empty body and the other a deprecated whole-bundle alias. Both had been green throughout, because the corpus pinned presign RESPONSES and never the request |
+| **v1.6** | ⛔`HPS-50` — a host's local install is a single slot that tracks `main`, and says what it holds. The installed Revit add-in on the maintainer machine predated a full day of ribbon commits and the consuming project's Unreal checkout sat twenty commits behind; nothing detected either, because nothing said what was installed |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -925,6 +926,42 @@ _Enforcer:_ `doc-only` (the trigger is a decision-log entry at Rhino kickoff).
 
 ---
 
+## 9. Local install (`HPS-50`)
+
+⛔ **`HPS-50` — A host's local install is a single slot that tracks `main`, and the slot says what
+it holds.** Every host ships three things beside its shim: an **install tool** that puts a build
+into the host application's own plugin location and writes a **stamp** naming the commit, the
+branch, the source tree, whether that tree had uncommitted changes, and when; a
+**`<host>/tools/Check-<Host>Install.ps1`** that reads the stamp back, compares the commit against
+`origin/main` counting only commits under that host's folder, and prints one line under the shared
+contract (current, preview, stale, unverified, not installed, not configured — exit 0 for the
+first two and the last, 1 otherwise); and a **written inner loop** naming what the host application
+reloads live and what needs a restart. What the *source* tree looks like is never a reason for the
+install tool to refuse: a deploy from a dirty tree or from a branch is recorded as such, and the
+check script is where "unverified" is said. (Refusing over the *destination* — a slot with
+uncommitted edits in it — is a different question, and a host may.) A deploy from a branch is a
+preview, is stamped as one, and is made only when asked for.
+
+The failure this guards is the plugin that *appears* to be the tree: a maintainer with several
+worktrees and one plugin folder runs a build a day older than the source, reproduces a bug against
+code that already contains its fix, and has nothing on screen saying so. Revit's add-in manifest
+carries one `ClientId` and Revit refuses a duplicate; a consuming Unreal project has one submodule
+checkout; so a slot per worktree is not available, and the slot has to be legible instead. The
+check is scoped to the host's folder so a docs-only merge never asks for a redeploy, and it fetches
+first because the tree it runs in is moved by other sessions.
+
+The shared half — the verdict sentences and the git facts behind them — is
+[`tools/local-install/`](https://github.com/mantleplace/mantleplace-dcc/blob/main/tools/local-install/README.md),
+whose runner enumerates every host's script and is the session-start check root `CLAUDE.md` asks
+for. What a host's install tool *is* stays host-local: Revit copies assemblies into per-version
+add-ins folders and Unreal moves a submodule checkout, and the two have nothing in common but the
+line they print.
+
+_Enforcer:_ `agent-review` — no hosted runner has a host application or a consuming project, so the
+scripts are proven by being run, and the rule by the check script's line at the start of a session.
+
+---
+
 ## Reference-implementation deviations
 
 The shipped code is the version-of-record. This standard is a transcription of it, and
@@ -951,6 +988,7 @@ records that eviction is deliberately explicit-only.
 | Four-layer completeness, corpus coverage (`HPS-01`, `HPS-41`)                                                                                                                                                             | `pr-review`                                            |
 | Corpus-reader coverage — asserted keys, vector leaves, nested leaves (`HPS-46`, `HPS-46a`, `HPS-46b`)                                                                                                                   | `automation-test` per host + `corpus/self-test/`       |
 | The .NET SDK trigger (`HPS-43`)                                                                                                                                                                                           | `doc-only`                                             |
+| The local install slot and its check script (`HPS-50`)                                                                                                                                                                    | `agent-review`, proven by running the scripts          |
 
 Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS-33`) appear in both rows —
 the corpus proves the behaviour, review catches the shape a vector cannot see.

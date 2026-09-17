@@ -184,6 +184,15 @@ top of the first.
   request here can still break the engine build — an accepted, published lag. Corollary: build it
   locally before you claim it works, and be suspicious of a type widening, which compiles at some
   call sites and silently rots others.
+- **The editor does not compile this tree. It compiles the consuming project's submodule checkout
+  of it** (`HPS-50`), a single slot that is `main` by default and moves only by
+  `tools/Refresh-UnrealInstall.ps1` — `origin/main` after a merge, `origin/<branch>` for a preview
+  you were asked for. `tools/Check-UnrealInstall.ps1` says which it currently holds; both need
+  `MANTLEPLACE_CONSUMING_PROJECT_ROOT` or `-ConsumingProjectRoot` to find the consuming project, and say `not configured`
+  otherwise. Editing inside that checkout is the orphan-commit hazard root `CLAUDE.md` rule 3
+  describes: edit in a worktree here, push, and preview from origin. Live Coding picks up `.cpp`
+  bodies; a header or an asset that changed under the checkout needs a restart. The consuming
+  project documents its own side of the loop, including the pin bump that follows a merge.
 - **Nothing the importer generates is ever saved.** There is no `SavePackage` call in the plugin;
   every import task sets `bSave = false` and generated packages are only marked dirty. A user who
   closes without saving loses the import.

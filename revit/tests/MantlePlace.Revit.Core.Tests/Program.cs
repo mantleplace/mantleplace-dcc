@@ -32,6 +32,7 @@ exitCode |= LocalBundleArchiveTests.Run();
 exitCode |= OpenLogsTests.Run();
 exitCode |= VectorDocumentSelfTests.Run();
 exitCode |= AddinFaultTests.Run();
+exitCode |= InstalledBuildTests.Run();
 exitCode |= AuthConformanceTests.Run();
 exitCode |= AuthClientTests.Run();
 exitCode |= AccountRibbonTests.Run();
