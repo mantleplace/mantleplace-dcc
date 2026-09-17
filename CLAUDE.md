@@ -135,8 +135,8 @@ gate: for Revit the gate is the ribbon loading and one real import completing in
 ## Binaries
 
 **There are no Git LFS patterns in this repository, on purpose** — a stranger's first clone must not
-be a multi-hundred-megabyte pull; the binaries that are here — one `.uasset`, three fonts, twenty-three PNG
-icons — total well under 1.2 MB and are plain git blobs. **Ask before you `git add` any binary, a
+be a multi-hundred-megabyte pull; the binaries that are here — one `.uasset`, three fonts, twenty-seven PNG
+icons — total about 1.1 MB and are plain git blobs. **Ask before you `git add` any binary, a
 new file of a type already here included:** the axis is bytes, not novelty, and the budget being
 protected is a stranger's first clone rather than a list of blessed extensions. Git decides
 text-vs-binary at `git add` time, and a binary committed here is in the history forever with no later
@@ -227,7 +227,9 @@ Most facts already have exactly one home. Find it before writing a fact down any
   rule becomes uncitable in public · **0008** the Revit imagery drape is anchored to the
   **smooth-shading origin**, so a project-wide display checkbox the curator owns is load-bearing for
   the photograph · **0009** host assets render the **monogram**, not the mark as drawn — the extrude
-  is below a pixel at ribbon sizes, and the roundel is retired. Write one only for a decision hard to reverse,
+  is below a pixel at ribbon sizes, and the roundel is retired · **0010** Revit's tooltip
+  **vignettes are drawn, not photographed**, and sized to the 355 px cap the ribbon enforces in
+  silence. Write one only for a decision hard to reverse,
   surprising without the context, and the result of a real trade-off; an ADR is not a design
   document.
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the

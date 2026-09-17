@@ -13,9 +13,15 @@ namespace MantlePlace.Revit.Addin;
 /// buttons that have to be repainted. The pack URI and the WPF decode behind it are
 /// <see cref="ResourceImages"/>, shared with the windows' <c>BrandChrome</c>. Every decision it acts
 /// on —
-/// <em>which</em> file, for which theme, at which size — is <see cref="RibbonGlyphs"/> and
-/// <see cref="MarkRenders"/> in the pure core, where it is asserted without Revit
-/// (<c>HPS-02</c>, <c>HPS-42</c>). Nothing here chooses anything.
+/// <em>which</em> file, for which theme, at which size — is <see cref="RibbonGlyphs"/>,
+/// <see cref="MarkRenders"/> and <see cref="Vignettes"/> in the pure core, where it is asserted
+/// without Revit (<c>HPS-02</c>, <c>HPS-42</c>). Nothing here chooses anything.
+/// </para>
+/// <para>
+/// Three kinds of picture, on two properties. A <b>glyph</b> and the <b>mark</b> go on
+/// <c>Image</c>/<c>LargeImage</c> and are picked from a size ladder; a <b>vignette</b> goes on
+/// <c>ToolTipImage</c> and has no ladder at all, because Revit caps that one at 355 px
+/// (<see cref="Vignettes.MaxPixels"/>) and there is no headroom for a second size to choose between.
 /// </para>
 /// </remarks>
 internal static class RibbonImagery
@@ -39,6 +45,20 @@ internal static class RibbonImagery
     /// </remarks>
     private static readonly List<(RibbonButton Button, RibbonGlyph? Glyph)> Given = [];
 
+    /// <summary>
+    /// Every button that has been given a tooltip vignette, and which one.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>A second list rather than a third case in the one above.</b> That tuple already carries
+    /// two meanings in a nullable — a glyph, or the mark — and a vignette is a third thing entirely:
+    /// a different property on the item, one file instead of a ladder, and two of the five buttons
+    /// rather than all of them. A button with a vignette also has a glyph, so folding them together
+    /// would mean either listing that button twice or widening the tuple until most entries carry a
+    /// field that is null. What the two lists genuinely share is the repaint trigger, and that is
+    /// <see cref="Retheme"/>, not a shape.
+    /// </remarks>
+    private static readonly List<(RibbonButton Button, Vignette Vignette)> GivenVignettes = [];
+
     private static double? _displayScale;
 
     /// <summary>Gives <paramref name="button"/> a command's glyph, in the current theme.</summary>
@@ -54,11 +74,36 @@ internal static class RibbonImagery
     internal static void GiveMark(RibbonButton button) => Remember(button, null);
 
     /// <summary>
+    /// Gives <paramref name="button"/> the picture Revit shows under its long description.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not every button gets one, and the two that do are <see cref="Vignettes.All"/>. The Account
+    /// face could not have one even if it were wanted: Revit's API says <em>"SplitButton and
+    /// RadioButtonGroup cannot display the tooltip set by this method"</em>, and that face is a push
+    /// button inside a split button.
+    /// </para>
+    /// <para>
+    /// Set through <c>RibbonItem.ToolTipImage</c> rather than on the <c>PushButtonData</c>, so that a
+    /// theme change reaches it. Both properties exist; only this one is reachable after the ribbon is
+    /// built.
+    /// </para>
+    /// </remarks>
+    internal static void GiveVignette(RibbonButton button, Vignette vignette)
+    {
+        ArgumentNullException.ThrowIfNull(button);
+
+        GivenVignettes.Add((button, vignette));
+        ApplyVignette(button, vignette, CurrentTheme());
+    }
+
+    /// <summary>
     /// Repaints every button given so far, for whatever theme Revit is in now.
     /// </summary>
     /// <remarks>
     /// Cheap enough to do unconditionally: the decoded images are cached and frozen, so a theme flip
-    /// is nine property assignments and two dictionary hits.
+    /// is twenty property assignments over nine buttons and no new decode — eighteen of them images
+    /// on the two ribbon slots, two of them vignettes on <c>ToolTipImage</c>.
     /// </remarks>
     internal static void Retheme()
     {
@@ -69,12 +114,18 @@ internal static class RibbonImagery
         {
             Apply(button, glyph, theme, scale);
         }
+
+        foreach ((RibbonButton button, Vignette vignette) in GivenVignettes)
+        {
+            ApplyVignette(button, vignette, theme);
+        }
     }
 
     /// <summary>Drops every retained reference. Called from <c>OnShutdown</c> and nowhere else.</summary>
     internal static void Forget()
     {
         Given.Clear();
+        GivenVignettes.Clear();
         ResourceImages.Forget();
         _displayScale = null;
     }
@@ -111,6 +162,28 @@ internal static class RibbonImagery
             // Swallowed for the same reason ApplyAccountState swallows its assignments: this runs on
             // a theme change, which can arrive while Revit is tearing the ribbon down, and a fault
             // dialog raised over a button image would be worse than the stale image it replaces.
+        }
+    }
+
+    /// <summary>
+    /// Puts the vignette for <paramref name="theme"/> on <paramref name="button"/>.
+    /// </summary>
+    /// <remarks>
+    /// No display scale, because there is nothing to pick: Revit caps a tooltip image at 355 px on
+    /// its longest side (<see cref="Vignettes.MaxPixels"/>), which leaves no room for a second,
+    /// larger render to choose between. One file per theme, and Revit softens it on a scaled display.
+    /// </remarks>
+    private static void ApplyVignette(RibbonButton button, Vignette vignette, RibbonTheme theme)
+    {
+        try
+        {
+            button.ToolTipImage = ResourceImages.Decode(Vignettes.FileNameOf(vignette, theme));
+        }
+        catch (Autodesk.Revit.Exceptions.ApplicationException)
+        {
+            // Swallowed for the reason Apply swallows its assignments: a theme change can arrive
+            // while Revit is tearing the ribbon down, and a fault dialog raised over a tooltip
+            // picture would be worse than the stale picture it replaces.
         }
     }
 

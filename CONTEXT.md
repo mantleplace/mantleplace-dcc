@@ -53,6 +53,13 @@ A flat monochrome command icon on a host's toolbar or ribbon, drawn in that host
 glyph says what a command does, where the mark says whose it is.
 _Avoid_: icon, symbol, button image
 
+**Vignette**:
+The explanatory picture a host shows beside or beneath a command's long description, saying what the
+command *produces*. Third of three and named apart from the other two on purpose: a glyph says what
+a command does and lives on the button, a mark says whose it is, and a vignette answers the question
+neither can — what will be in my project afterwards.
+_Avoid_: tooltip image, screenshot, illustration, preview
+
 ### Sessions and identity
 
 **Editor session**:

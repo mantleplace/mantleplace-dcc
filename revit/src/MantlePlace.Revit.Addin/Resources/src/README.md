@@ -37,18 +37,56 @@ source in the set with a separable action element — a box, plus an arrow going
 is drawn in the brand orange and the box is not. Everything else on this ribbon is the theme's own
 grey, which is the point: the tab has to sit beside Autodesk's own without reading as an advert.
 
+## The vignettes, and the sources that are only theirs
+
+A **vignette** is the picture Revit shows under a button's long description on hover — the thing
+that makes an Autodesk button feel explained. Two buttons have one, `Vault` and `Import Bundle`, and
+neither picture is a screenshot: [ADR 0010](../../../../../docs/adr/0010-tooltip-vignettes-are-drawn-not-photographed.md)
+records why, and why that is the opposite of what the issue asked for.
+
+They are drawn two ways, with one pen. `Vault` is **composed** from unedited Tabler icons.
+`Import Bundle` is **computed** — an analytic height field sampled on a grid and projected
+isometrically, which is a toposolid arrived at by arithmetic rather than by drawing one. Both use
+Tabler's 2-on-24 stroke ratio at a 96 px element box, so a picture made of icons and a picture made
+of geometry read as one family.
+
+A separate table because a source's job here is not the job it has above. `building-bank.svg`
+appears in both and is not listed twice by accident: on the ribbon it is drawn *on* the Vault button,
+and here it is one element *inside* that button's picture. Only `package.svg` is new to the tree.
+
+| source | used by | what it says |
+| --- | --- | --- |
+| [`building-bank.svg`](./building-bank.svg) | `Vault` | the vault itself — the same source its glyph uses, so the button and its picture are visibly one thing |
+| [`package.svg`](./package.svg) | `Vault`, `Import Bundle` | a bundle. Three of them under the vault, one of them raised and orange; and one above the toposolid it becomes |
+
+`package.svg` is Tabler **3.46.0**, the same version pinned above, taken unedited. The one orange in
+each picture is one element — the raised bundle in `Vault`, the descending arrow in `Import Bundle`
+— which is the accent rule the glyphs already follow.
+
 ## Rendering them
 
 ```powershell
-./revit/tools/Render-RibbonIcons.ps1   # from the repository root
+./revit/tools/Render-RibbonIcons.ps1        # from the repository root
+./revit/tools/Render-TooltipVignettes.ps1   # and this one, for the two vignettes
 ```
 
 [`Render-RibbonIcons.ps1`](../../../../tools/Render-RibbonIcons.ps1) writes every
 `<Command><Theme>_<size>.png` in the folder above from the SVGs in this one — four commands, two
-themes, two sizes, sixteen files. **It is how they are regenerated, not a build step**: nothing in
-the build, the packaging script or CI runs it, and every output is committed.
+themes, two sizes, sixteen files.
+[`Render-TooltipVignettes.ps1`](../../../../tools/Render-TooltipVignettes.ps1) writes every
+`<Command>Vignette<Theme>.png` — two commands, two themes, one size, four files. **Both are how
+those files are regenerated, not build steps**: nothing in the build, the packaging script or CI
+runs either, and every output is committed.
 
-That is what earns those sixteen binaries their place. The
+**Two scripts, and not because one of them reads something private.** That is why
+[`tools/brand-assets/`](../../../../../tools/brand-assets/) is separate; both halves of the vignettes
+are here. They are separate because the glyph script's contract is exact — every
+`<Command><Theme>_<size>.png` from one Tabler icon scaled — and a vignette breaks all of it: a
+different name shape, no size in the name, a 355×266 canvas rather than a square, and one of the two
+pictures with no SVG source at all. Folding them together would turn that contract into a list of
+exceptions.
+
+That is what earns those twenty binaries their place. The
 [binaries rule](../../../../../CLAUDE.md) protects a stranger's first clone, and the answer to "may
 this be added" is much easier when every byte of it is reproducible from a text file committed
 beside it.
@@ -107,3 +145,11 @@ The window headers are the third caller: `BrandChrome` fills a 32 logical px slo
 window's heading from the same `MarkRenders`. It differs from the ribbon in one way — a window can
 be dragged to a monitor at another scale, so it re-picks on `DpiChanged`, where the ribbon reads the
 system scale once at startup and never again.
+
+**The vignettes are not a fourth caller, and their absence from this table is the point.** Revit caps
+a tooltip image at 355 px on its longest side, so there is no headroom for a second, larger render to
+pick between — a 2× render of a 355 px picture is 710 px, twice what the ribbon accepts. One file per
+theme, at 96 DPI, softened by Revit on a scaled display. `RenderSizes` has nothing to decide, and
+[`Vignettes`](../../../MantlePlace.Revit.Core/Vignettes.cs) carries the cap instead, asserted by the
+headless suite against these files' own PNG headers — because an over-large tooltip image is clipped
+or dropped **silently**, on a surface that only appears after a hover delay.
