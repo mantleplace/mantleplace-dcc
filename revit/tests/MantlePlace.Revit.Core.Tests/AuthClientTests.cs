@@ -73,7 +73,7 @@ internal static class AuthClientTests
         run.Case("the compiled defaults point at production and need no config file", () =>
         {
             MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load(Path.Combine(sandbox, "absent.json"));
-            run.Equal(endpoints.WebLoginUrl, "https://mantle.place/auth/native", "web login");
+            run.Equal(endpoints.WebLoginUrl, "https://mantle.place/auth/native?host=revit", "web login");
             run.Equal(endpoints.TokenEndpointUrl, "https://mantle.place/api/v1/auth/native/token", "token exchange");
             // No declared ports at all: the OS picks one (HPS-06). Every fixed list this shipped
             // with was eventually swallowed by a Windows reserved block that moved under it.
@@ -120,8 +120,30 @@ internal static class AuthClientTests
             File.WriteAllText(broken, "{ not json");
             run.Equal(
                 MantlePlaceEndpoints.Load(broken).WebLoginUrl,
-                "https://mantle.place/auth/native",
+                "https://mantle.place/auth/native?host=revit",
                 "a malformed config falls back to the defaults");
+        });
+
+        run.Case("the default login url tells the sign-in page which editor is asking", () =>
+        {
+            MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load(Path.Combine(sandbox, "absent.json"));
+            run.Contains(endpoints.WebLoginUrl, "host=revit", "the manifest's hostId, one vocabulary");
+
+            // It is display-only on the platform side: read off an untrusted query, allowlisted,
+            // never validated against a client registry and never able to fail a request. It is not
+            // a client id, and nothing here should start treating it as one.
+            string url = AuthUrls.BuildAuthorizeUrl(
+                endpoints.WebLoginUrl, "http://127.0.0.1:51000/callback", "chal", "st");
+            run.Contains(url, "?host=revit&response_type=code", "host rides the base, ahead of the OAuth params");
+
+            // The pinned order is what makes a captured URL from one host a usable reproduction for
+            // the other, so it has to survive the base growing a query.
+            run.True(
+                url.IndexOf("response_type=code", StringComparison.Ordinal)
+                    < url.IndexOf("code_challenge=", StringComparison.Ordinal)
+                    && url.IndexOf("redirect_uri=", StringComparison.Ordinal)
+                        < url.IndexOf("state=", StringComparison.Ordinal),
+                "and the appended query keeps its order");
         });
 
         run.Case("the loopback listener binds before anything opens a browser (HPS-06)", () =>

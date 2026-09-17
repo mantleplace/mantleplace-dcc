@@ -39,7 +39,8 @@ a file nobody rereads:
   `#42`           a fenced or inline code span. This is how the rule documents ITSELF, and a gate
                   that fails its own rulebook is a gate that gets deleted.
   host #2         an ordinal in prose. "Host #2" is a count of DCC hosts, not a tracker.
-  :#111           a CSS colour. Three or six hex digits after a colon is a hex triplet.
+  :#111           a CSS colour. Three or six hex characters after a colon is a hex triplet --
+                  characters, not digits, because `#0B0C10` is a colour and `#0` is not a citation.
   &#39;           an HTML numeric character reference. This tree serves a sign-in page, so
                   they appear in the string literals that build its markup.
 
@@ -239,7 +240,7 @@ def link_spans(line: str) -> list[tuple[int, int]]:
     return spans
 
 
-def exempt(line: str, start: int, end: int, spans: list[tuple[int, int]]) -> bool:
+def exempt(line: str, start: int, spans: list[tuple[int, int]]) -> bool:
     if any(low <= start < high for low, high in spans):
         return True
 
@@ -247,7 +248,11 @@ def exempt(line: str, start: int, end: int, spans: list[tuple[int, int]]) -> boo
     if HOST_ORDINAL.search(before) or HTML_ENTITY.search(before):
         return True
 
-    return bool(CSS_COLOUR.search(before) and CSS_DIGITS.match(line[start:end]))
+    # Read forward from the '#' in the LINE, not within the matched token. The token is whatever
+    # `#\d+` captured, and that stops at the first non-digit — so `#0B0C10` arrives here as `#0`,
+    # fails the hex shape and gets refused. Every colour that happens to be all digits passed,
+    # which is how this survived until the first brand colour with a letter in it.
+    return bool(CSS_COLOUR.search(before) and CSS_DIGITS.match(line[start:]))
 
 
 def inside_url(line: str, start: int) -> bool:
@@ -278,7 +283,7 @@ def violations_in_text(
 
         if surface == "file":
             for match in ISSUE_REFERENCE.finditer(line):
-                if not exempt(line, match.start(), match.end(), spans):
+                if not exempt(line, match.start(), spans):
                     found.append(
                         f"{label}:{number}: {shown(match.group(), 'issue', redact)} cites an issue "
                         f"in a private tracker; "
@@ -296,7 +301,7 @@ def violations_in_text(
                     continue
                 if inside_url(line, match.start()):
                     continue
-                if not exempt(line, match.start(), match.end(), spans):
+                if not exempt(line, match.start(), spans):
                     found.append(
                         f"{label}:{number}: {shown(match.group(), 'qualified', redact)} cites an issue "
                         f"in another repository "
@@ -304,7 +309,7 @@ def violations_in_text(
                     )
 
             for match in PRIVATE_SIBLING.finditer(line):
-                if not exempt(line, match.start(), match.end(), spans):
+                if not exempt(line, match.start(), spans):
                     found.append(
                         f"{label}:{number}: {shown(match.group(), 'sibling', redact)} names a private "
                         f"sibling repository; "
@@ -312,7 +317,7 @@ def violations_in_text(
                     )
 
             for match in SHORTNAME_REFERENCE.finditer(line):
-                if not exempt(line, match.start(), match.end(), spans):
+                if not exempt(line, match.start(), spans):
                     found.append(
                         f"{label}:{number}: {shown(match.group() + ' #NN', 'shorthand', redact)} is "
                         f"shorthand for a private "

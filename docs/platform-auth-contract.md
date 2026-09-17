@@ -45,7 +45,18 @@ Revit's overrides are read from `%LOCALAPPDATA%\MantlePlace\config.json`, a file
 packaging time and whose absence, unreadability or malformation falls back to the compiled defaults
 rather than throwing. Neither host's override is a secret; it is a way to point somewhere else.
 
-**Native login** — `WebLoginUrl`, default `https://mantle.place/auth/native`.
+**Native login** — `WebLoginUrl`, default `https://mantle.place/auth/native?host=<hostId>`: Unreal
+sends `?host=unreal`, Revit `?host=revit`.
+
+`host` is optional and **display-only**. The sign-in page reads it to name the editor in its
+heading, its credential prompt and its tab title instead of saying "the application"; the value is
+the bundle manifest's `hosts.<hostId>` id, so one vocabulary covers the manifest and the sign-in
+surface. It is **not a credential and must never become one**: it arrives on an untrusted query, is
+allowlisted so an unrecognised value renders nothing rather than being echoed, is never validated
+against a client registry, and can never fail or alter a request. It rides the configured base
+rather than the appended query, so the pinned parameter order below is unaffected — both hosts'
+builders already join with `&` when the base carries a query, and two hosts still produce comparable
+authorize URLs.
 
 Accepts `response_type=code`, `code_challenge`, `code_challenge_method=S256`, `state` and
 `redirect_uri` as query parameters, completes authentication however it chooses, and 302-redirects
@@ -53,6 +64,22 @@ to the supplied loopback `redirect_uri` carrying `?code=…&state=…`. The `red
 `http://127.0.0.1:<port>/callback` with an OS-assigned port, so whatever validates redirect URIs has
 to accept a loopback address on an arbitrary port — this is RFC 8252 §7.3, and pinning the port
 instead is what breaks on machines whose reserved port ranges move across reboots.
+
+**Completion page** — `https://mantle.place/auth/native/done?host=<hostId>`.
+
+The last thing browser sign-in shows a curator — and the one route on this page that `mantle.place`
+may take down without breaking sign-in.
+
+**It is an upgrade, never a dependency.** By the time a browser could reach it the token exchange
+has already happened, and what a host must render when the redirect lands is `HPS-08`'s business,
+not this document's. What matters to whoever operates this route is the consequence: if it is
+unreachable, moved or renamed, sign-in still succeeds, the curator is left on a complete page the
+host served itself, and nothing retries. No host parses this page or reads a status from it.
+
+What it is for is the part the listener cannot do: the real typeface and lockup, and the signed-in
+email — which the listener never sees, because it never sees a session. It carries no outbound
+links, so it is terminal by design and cannot bounce a curator somewhere they did not ask to go.
+`host` means what it means above, and is display-only there too.
 
 **Token exchange** — `TokenEndpointUrl`, default `https://mantle.place/api/v1/auth/native/token`.
 

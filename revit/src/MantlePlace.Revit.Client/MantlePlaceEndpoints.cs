@@ -14,7 +14,27 @@ namespace MantlePlace.Revit.Client;
 public sealed class MantlePlaceEndpoints
 {
     /// <summary>The hosted native-login page the system browser is sent to.</summary>
-    public string WebLoginUrl { get; init; } = "https://mantle.place/auth/native";
+    /// <remarks>
+    /// <para>
+    /// <c>host</c> is how the sign-in page knows which editor is asking, so its heading, credential
+    /// prompt and tab title can name Revit instead of saying "the application". The value is the
+    /// bundle manifest's <c>hosts.&lt;hostId&gt;</c> id — one vocabulary across the manifest and the
+    /// sign-in surface.
+    /// </para>
+    /// <para>
+    /// <b>It is not a credential.</b> On the platform side it is display-only: read off an untrusted
+    /// query, allowlisted so an unrecognised value renders nothing, never validated against a client
+    /// registry and never able to fail or alter a request. Do not start signing it or treating it as
+    /// a client id.
+    /// </para>
+    /// <para>
+    /// It rides the configured base rather than the appended query, which is why the pinned
+    /// authorize-parameter order is unaffected — <c>AuthUrls.BuildAuthorizeUrl</c> already picks
+    /// <c>&amp;</c> over <c>?</c> when the base carries a query, so the five OAuth parameters follow
+    /// in the same order they always did.
+    /// </para>
+    /// </remarks>
+    public string WebLoginUrl { get; init; } = "https://mantle.place/auth/native?host=revit";
 
     /// <summary>The PKCE code→token exchange.</summary>
     public string TokenEndpointUrl { get; init; } = "https://mantle.place/api/v1/auth/native/token";

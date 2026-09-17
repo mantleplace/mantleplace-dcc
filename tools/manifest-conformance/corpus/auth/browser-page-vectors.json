@@ -1,0 +1,145 @@
+{
+  "$comment": [
+    "The two pages the browser is shown when the loopback redirect lands (HPS-08), pinned as the",
+    "copy and the structure rather than as whole documents.",
+    "",
+    "Why it is here and not in each host: the two pages are the same moment in the same flow, and",
+    "before this file they did not say the same thing -- one host headed the page 'Signed in' and",
+    "the other 'Signed in to Mantle Place', one said 'return to Revit' and the other 'return to the",
+    "application'. Nothing failed when they diverged. Fixing one by hand and copying the result into",
+    "the other starts them matched and lets them drift again on the next edit, which is how they got",
+    "there. HPS-43's share model for two hosts in two languages is specifications plus this corpus,",
+    "and this is the specification half.",
+    "",
+    "Whole documents are deliberately NOT pinned. The markup is each host's to write in its own",
+    "language, and a byte-for-byte document fixture would fail on an indent. What must not drift is",
+    "what the user reads and what the page is allowed to reach for -- so the copy is exact, and the",
+    "structure is stated as substrings that must be present and substrings that must be absent."
+  ],
+
+  "copy": {
+    "$comment": [
+      "Exact. A host builds its pages' visible text from these and nothing else.",
+      "`closing` carries the one legitimate per-host difference, and it is a substitution rather",
+      "than a fork: `hostNames` is keyed by the bundle manifest's hosts.<hostId> ids, the same",
+      "vocabulary the `?host=` sign-in parameter uses. A host reads the whole map, not just its own",
+      "row, so adding a third host here is a red test in the two that already exist rather than a",
+      "silent omission."
+    ],
+    "successTitle": "Signed in",
+    "successBody": "You're signed in to Mantle Place.",
+    "failureTitle": "Sign-in failed",
+    "failureBodyPrefix": "Sign-in did not complete: ",
+    "closing": "You can close this tab and return to {hostName}.",
+    "hostNames": {
+      "revit": "Revit",
+      "unreal": "the Unreal Editor"
+    },
+    "wordmark": "Mantle Place",
+    "titleSuffix": " &middot; Mantle Place"
+  },
+
+  "palette": {
+    "$comment": [
+      "As MantlePlacePalette states it for the Unreal editor UI, so one palette covers the plugin",
+      "chrome and these pages. Dark is the fix rather than a preference: the platform's own hand-off",
+      "page is dark, and arriving from it onto default white read as something having gone wrong.",
+      "",
+      "Stated as whole CSS declarations rather than as bare colours, for two reasons. It is what a",
+      "host must actually emit -- a page shipping the value in a comment and rendering default white",
+      "passes a bare-colour check and fails this one. And ci-public-hygiene exempts a hex triplet",
+      "only where a colon precedes it, which a CSS declaration provides and a bare quoted value does",
+      "not; writing the declaration satisfies that exemption honestly rather than widening it."
+    ],
+    "groundDeclaration": "background:#0B0C10",
+    "accentDeclaration": "background:#FF7110",
+    "fontStackHead": "system-ui"
+  },
+
+  "structure": {
+    "$comment": [
+      "Present on BOTH pages, absent from BOTH pages. The `lacks` list is HPS-08 stated as the",
+      "absence of every way to reach off-page for something the renderer NEEDS: the browser may have",
+      "no network by the time the redirect lands, and a page that reaches for a stylesheet renders as",
+      "unstyled text. The hand-off below is not one of these -- it is a navigation the page survives",
+      "failing.",
+      "",
+      "The closing line is on the failure page too: HPS-08 asks each of them to tell the user to",
+      "close the tab, and the failure page is where a curator left staring at a dead tab goes looking",
+      "for a button that is not there."
+    ],
+    "bothPagesContain": [
+      "<!doctype html",
+      "lang=\"en\"",
+      "charset=\"utf-8\"",
+      "width=device-width"
+    ],
+    "bothPagesLack": [
+      "<link",
+      "src=",
+      "@import"
+    ]
+  },
+
+  "handOff": {
+    "$comment": [
+      "The success page probes the platform's branded completion page and navigates only if",
+      "something answered.",
+      "",
+      "A <meta http-equiv=\"refresh\"> would navigate unconditionally, so with no network the browser",
+      "would land on its own 'can't reach this site' page and the branded page would have been",
+      "rendered and thrown away in exactly the case it exists for. Probe-then-navigate inverts that:",
+      "no response, no navigation, and the curator keeps looking at a complete page on brand. The",
+      "hand-off is an upgrade, never a dependency, which is what keeps it inside HPS-08's 'small",
+      "self-contained HTML page' rather than beside it.",
+      "",
+      "`successOnly` is load-bearing. The failure page interpolates an error_description the",
+      "authorization server wrote; keeping that string off any page that executes anything leaves",
+      "the escape pass as the only thing that has to be right about it. `failurePageLacks` is how",
+      "that is checked rather than trusted."
+    ],
+    "urlTemplate": "https://mantle.place/auth/native/done?host={hostId}",
+    "successOnly": true,
+    "successPageContains": [
+      "fetch(",
+      "location.replace"
+    ],
+    "successPageLacks": [
+      "http-equiv=\"refresh\""
+    ],
+    "failurePageLacks": [
+      "<script",
+      "mantle.place"
+    ]
+  },
+
+  "escaping": {
+    "$comment": [
+      "HPS-08's ordering, restated here as vectors because this is the file the page copy lives in",
+      "and the two are edited together. Escaping '<' first would produce &lt; and the later '&' pass",
+      "would double-escape it to &amp;lt;, which renders as literal '&lt;' on the page. The message",
+      "can carry an error_description the authorization server wrote, so it is not the host's to",
+      "trust.",
+      "",
+      "The FIRST vector is the one that catches a reversed order. Run '<', then '&', then '>' over",
+      "it and the '<' it just wrote comes back as '&amp;lt;' -- a different string, so the vector",
+      "fails. The third vector is a different trap: input that is already an entity must come out",
+      "escaped once more, not left alone."
+    ],
+    "order": ["&", "<", ">"],
+    "vectors": [
+      {
+        "raw": "<a & b>",
+        "escaped": "&lt;a &amp; b&gt;"
+      },
+      {
+        "raw": "<script>alert(1)</script> & <b>",
+        "escaped": "&lt;script&gt;alert(1)&lt;/script&gt; &amp; &lt;b&gt;"
+      },
+      {
+        "raw": "already &amp; escaped",
+        "escaped": "already &amp;amp; escaped"
+      }
+    ]
+  }
+}
