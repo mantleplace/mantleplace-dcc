@@ -913,13 +913,16 @@ public sealed class TerrainProbeCommand : IExternalCommand
 
         foreach (Toposolid toposolid in all)
         {
+            // Worded by FootprintExtent, which is also what the import's coextension report compares
+            // against — the probe and the log must not print one site at two precisions.
             BoundingBoxXYZ? box = toposolid.get_BoundingBox(null);
             string footprint = box is null
                 ? "no bounding box"
-                : string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"{UnitUtils.ConvertFromInternalUnits(box.Max.X - box.Min.X, UnitTypeId.Meters):0.#} x "
-                    + $"{UnitUtils.ConvertFromInternalUnits(box.Max.Y - box.Min.Y, UnitTypeId.Meters):0.#} m");
+                : new FootprintExtent(
+                    UnitUtils.ConvertFromInternalUnits(box.Min.X, UnitTypeId.Meters),
+                    UnitUtils.ConvertFromInternalUnits(box.Min.Y, UnitTypeId.Meters),
+                    UnitUtils.ConvertFromInternalUnits(box.Max.X, UnitTypeId.Meters),
+                    UnitUtils.ConvertFromInternalUnits(box.Max.Y, UnitTypeId.Meters)).Describe();
 
             bool isSubdivision = subdivisionIds.Contains(toposolid.Id);
             string? comments = toposolid

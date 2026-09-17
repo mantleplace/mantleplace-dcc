@@ -1,4 +1,4 @@
-// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
+﻿// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -854,6 +854,26 @@ internal sealed class RevitBundleImporter(
         int declined = 0;
         int unstamped = 0;
 
+        // Which features end up with a subdivision on the terrain: everything already present, plus
+        // whatever this run manages to cut. A ring Revit declines, or one with too few edges to
+        // close, leaves nothing behind — and a report naming a subdivision that does not exist is
+        // the same lie as a summary counting one.
+        bool[] onTerrain = new bool[features.Count];
+        Array.Fill(onTerrain, true);
+        foreach (NewSiteBoundary boundary in newBoundaries)
+        {
+            onTerrain[boundary.Ordinal - 1] = false;
+        }
+
+        // ⛔ Before the transaction, and before this run cuts anything: whether a parent toposolid's
+        // bounding box absorbs its subdivisions is unexecuted Revit behaviour, so the ground is
+        // measured while the only subdivisions on it are ones an earlier import left. A re-import
+        // still measures it with those present — if Revit does absorb them, and one reaches past the
+        // ground it was cut from, this footprint is that much too large and the comparison below
+        // under-reports. It never over-reports, which is the direction that matters for a line
+        // asserting a subdivision is redundant.
+        FootprintExtent? ground = GroundFootprint(terrain);
+
         // ⛔ Before the transaction, because the whole cost is inside its commit and nothing can be
         // written while that runs. This line is the only warning there will ever be.
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, newBoundaries.Count) is { } notice)
@@ -892,6 +912,7 @@ internal sealed class RevitBundleImporter(
             {
                 Toposolid subdivision = terrain.CreateSubDivision(_document, [CurveLoop.Create(edges)]);
                 created++;
+                onTerrain[boundary.Ordinal - 1] = true;
 
                 // Remembered for the drape, which prefers the stamp below but cannot use it for a
                 // subdivision that fails to take one.
@@ -938,6 +959,85 @@ internal sealed class RevitBundleImporter(
         }
 
         Say(summary + ".");
+        ReportCoextensiveBoundaries(ground, features, onTerrain);
+    }
+
+    /// <summary>
+    /// The ground toposolid's footprint in the bundle's own east/north metres, or <c>null</c> when
+    /// Revit will not give a bounding box.
+    /// </summary>
+    /// <remarks>
+    /// The same box <c>TerrainProbeCommand</c>'s inventory prints. It is comparable with a ring's
+    /// vertices because those are placed at <see cref="MetresToInternal"/> of frame metres with no
+    /// further translation — <em>for a terrain this plugin built</em>. A terrain found by
+    /// <see cref="TerrainToposolidId"/> may be a curator's own or another bundle's, in which case
+    /// the two are in the same model axes but not necessarily about the same origin, and a
+    /// comparison between them is meaningless rather than wrong.
+    /// </remarks>
+    private FootprintExtent? GroundFootprint(Toposolid terrain)
+    {
+        if (terrain.get_BoundingBox(null) is not { } box)
+        {
+            Trace("  site boundaries: the terrain has no bounding box, so no footprint could be compared.");
+            return null;
+        }
+
+        return new FootprintExtent(
+            InternalToMetres(box.Min.X),
+            InternalToMetres(box.Min.Y),
+            InternalToMetres(box.Max.X),
+            InternalToMetres(box.Max.Y));
+    }
+
+    /// <summary>
+    /// Says which published boundaries reproduce the ground's own outline, and nothing else about
+    /// them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every feature that ENDED UP on the terrain is measured, not just the ones this run created:
+    /// a re-import creates nothing and the reading is just as true the second time. A feature with
+    /// no subdivision behind it — declined by Revit, or too few edges to close — is passed over,
+    /// because a line naming a subdivision that is not in the model is the same lie as a count of
+    /// one that was never cut. The verdict is <see cref="SiteBoundaryCoextension"/>'s
+    /// (<c>HPS-02</c>); this reads the two footprints and says whatever comes back.
+    /// </para>
+    /// <para>
+    /// The subdivision's footprint is the box around the ring this import drew, in the bundle's own
+    /// east/north metres; the ground's comes from <see cref="GroundFootprint"/>, which says how the
+    /// two are made comparable.
+    /// </para>
+    /// <para>
+    /// ⛔ Nothing is skipped, refused or arbitrated on the strength of this. The published polygons
+    /// are what the bundle publishes and this host applies what it is given.
+    /// </para>
+    /// </remarks>
+    private void ReportCoextensiveBoundaries(
+        FootprintExtent? ground,
+        IReadOnlyList<SiteFeature> features,
+        bool[] onTerrain)
+    {
+        if (ground is not { } groundFootprint)
+        {
+            return;
+        }
+
+        for (int index = 0; index < features.Count; index++)
+        {
+            if (!onTerrain[index] || FootprintExtent.Around(features[index].Vertices) is not { } footprint)
+            {
+                continue;
+            }
+
+            // The position is stated by the core alongside whatever name there is, because names are
+            // not unique and an unnamed feature's stamp is its position (SiteBoundaryIdentity).
+            string name = FeatureName(features[index], "(unnamed)");
+
+            if (SiteBoundaryCoextension.Describe(name, index + 1, footprint, groundFootprint) is { } line)
+            {
+                Say(line);
+            }
+        }
     }
 
     /// <summary>
