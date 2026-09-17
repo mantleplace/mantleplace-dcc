@@ -60,7 +60,7 @@ public sealed class OpenLogsCommand : IExternalCommand
         }
 
         bool opened = target.RevealFilePath is { } log
-            ? ShellLauncher.TryReveal(log, out string refused)
+            ? ShellLauncher.TryReveal(log, target.FolderPath, out string refused)
             : ShellLauncher.TryOpenFolder(target.FolderPath, out refused);
 
         if (!opened)

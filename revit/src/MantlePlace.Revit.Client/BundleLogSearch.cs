@@ -39,46 +39,45 @@ public static class BundleLogSearch
     /// The newest log under <paramref name="cacheRoot"/>, or <c>null</c> if there is none.
     /// </summary>
     /// <remarks>
-    /// Unreadable is treated as absent, throughout. A folder the curator cannot enumerate, a file
-    /// deleted between the listing and the stat, a path the cache wrote that is now too long — none
-    /// of those should turn a diagnostic button into an error dialog, which is the one thing a
-    /// curator reaching for the logs least needs.
+    /// <para>
+    /// ⛔ <b>Two shallow passes, never <c>SearchOption.AllDirectories</c>.</b> A log is always beside
+    /// the zip it describes, which is one level down — <c>&lt;order&gt;/bundle.zip…log</c> — while
+    /// the sibling <see cref="BundleCacheLayout.ExtractedDirectoryName"/> holds every tile, raster
+    /// and mesh of every bundle ever imported, and <c>HPS-44</c> means nothing there is ever evicted.
+    /// A recursive walk would therefore stat tens of thousands of files that cannot be logs, on
+    /// Revit's UI thread, before the button that exists for "something went wrong" shows anything at
+    /// all. Depth is the whole optimisation: this visits exactly the directories a log can be in.
+    /// </para>
+    /// <para>
+    /// Unreadable is treated as absent, throughout — and per directory, so one folder the curator
+    /// cannot enumerate costs its own logs rather than everybody's. A file deleted between the
+    /// listing and the stat, a path the cache wrote that is now too long: none of those should turn
+    /// a diagnostic button into an error dialog, which is the one thing a curator reaching for the
+    /// logs least needs.
+    /// </para>
     /// </remarks>
     private static string? NewestLog(string cacheRoot)
     {
         string? newest = null;
         DateTime newestWrite = DateTime.MinValue;
 
-        IEnumerable<string> candidates;
-        try
+        // The root itself first: a zip that names no order still gets a folder of its own, and a
+        // future layout that wrote a log beside the roots would otherwise go unseen.
+        Consider(cacheRoot, ref newest, ref newestWrite);
+
+        foreach (string orderDirectory in TopLevel(cacheRoot, Directory.EnumerateDirectories))
         {
-            candidates = Directory.EnumerateFiles(cacheRoot, "*", SearchOption.AllDirectories);
+            Consider(orderDirectory, ref newest, ref newestWrite);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+
+        return newest;
+    }
+
+    /// <summary>Takes the newest log directly inside <paramref name="directory"/> into account.</summary>
+    private static void Consider(string directory, ref string? newest, ref DateTime newestWrite)
+    {
+        foreach (string path in TopLevel(directory, Directory.EnumerateFiles))
         {
-            return null;
-        }
-
-        using IEnumerator<string> walk = candidates.GetEnumerator();
-        while (true)
-        {
-            // The enumerator itself throws when it reaches a folder it cannot open, and the throw
-            // comes from MoveNext rather than from the call above, so the try has to sit here.
-            string path;
-            try
-            {
-                if (!walk.MoveNext())
-                {
-                    break;
-                }
-
-                path = walk.Current;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                break;
-            }
-
             if (!LocalBundleSource.IsLogFileName(Path.GetFileName(path)))
             {
                 continue;
@@ -100,7 +99,25 @@ public static class BundleLogSearch
                 newestWrite = written;
             }
         }
+    }
 
-        return newest;
+    /// <summary>
+    /// One directory's immediate children, as a list, or an empty one where it cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// Materialised rather than streamed because the throw an enumerator raises arrives from
+    /// <c>MoveNext</c> rather than from the call that built it, so a lazy sequence puts the
+    /// <c>try</c> on every caller's loop and gets forgotten on the next one written.
+    /// </remarks>
+    private static List<string> TopLevel(string directory, Func<string, string, SearchOption, IEnumerable<string>> list)
+    {
+        try
+        {
+            return [.. list(directory, "*", SearchOption.TopDirectoryOnly)];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 }

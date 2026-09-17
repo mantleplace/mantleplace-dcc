@@ -81,7 +81,7 @@ internal static class OpenLogsTests
                 "naming where a hand-picked zip logs instead");
         });
 
-        run.Case("the index finds the newest log anywhere under the cache root", () =>
+        run.Case("the search finds the newest log in any order's folder", () =>
         {
             string root = Path.Combine(sandbox, "index");
             string older = Path.Combine(root, "order-a", "bundle.zip" + LocalBundleSource.ImportLogSuffix);
@@ -94,13 +94,22 @@ internal static class OpenLogsTests
             File.SetLastWriteTimeUtc(older, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
             File.SetLastWriteTimeUtc(newer, new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 
+            // ⛔ The one place a log must NOT be looked for. `extracted/` holds every tile, raster and
+            // mesh of every bundle ever imported and is never evicted (HPS-44), so a recursive walk
+            // would stat tens of thousands of files that cannot be logs — on Revit's UI thread,
+            // before the button that exists for "something went wrong" shows anything. A file named
+            // like a log down there is the cheapest way to assert the search never descends.
+            Write(
+                Path.Combine(root, "order-b", "extracted", "Surface", "decoy.zip" + LocalBundleSource.ImportLogSuffix),
+                "not a log the search may see");
+
             OpenLogsTarget target = BundleLogSearch.ResolveTarget(root);
 
             run.Equal(target.RevealFilePath, newer, "the probe log written last wins");
             run.Equal(target.FolderPath, Path.Combine(root, "order-b"), "and its folder is what opens");
         });
 
-        run.Case("an index over a root that does not exist explains rather than throws", () =>
+        run.Case("a search over a root that does not exist explains rather than throws", () =>
         {
             string absent = Path.Combine(sandbox, "absent");
 
@@ -116,7 +125,7 @@ internal static class OpenLogsTests
         // which a hosted runner should never be asked to do for a passing test. It is a guard around
         // a shell call, and a shell call is the one thing this headless suite cannot stand in for.
 
-        run.Case("an index over an existing but logless root opens it", () =>
+        run.Case("a search over an existing but logless root opens it", () =>
         {
             string root = Path.Combine(sandbox, "logless");
             Directory.CreateDirectory(root);

@@ -52,7 +52,8 @@ internal static class AboutMantlePlace
             TaskDialogCommandLinkId.CommandLink1,
             "Open the import logs",
             "Each import and each probe writes its log beside the bundle zip it read. This shows the "
-                + "newest one there is; a zip you downloaded yourself has its log beside your own copy.");
+                + "newest one in the bundle cache; a zip you downloaded yourself has its log beside your "
+                + "own copy, not there.");
 
         if (dialog.Show() == TaskDialogResult.CommandLink1)
         {
