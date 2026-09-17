@@ -57,7 +57,7 @@ internal static class SiteCompanionPathTests
                 "2025, 2026 and 2027 each get their own companion");
         });
 
-        run.Case("the companion sits beside the IFC, so Remove download still takes it", () =>
+        run.Case("the companion sits beside the IFC, so Remove Download still takes it", () =>
         {
             // The sweep deletes the whole per-order root recursively. Keeping the companion inside
             // `extracted/` is what makes that continue to be true without a second place to sweep.

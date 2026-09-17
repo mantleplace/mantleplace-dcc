@@ -19,10 +19,11 @@ this folder, beside the licence text.
 ## Which mark file for which display scale
 
 Revit's ribbon takes exactly two images per button — `Image` at 16 px and `LargeImage` at 32 px —
-and scales whatever it is handed to the display. Handing it a render that already matches the
+and scales whatever it is handed to the display. The plugin's two windows head themselves with a
+third slot, 32 logical px beside the heading. Handing any of them a render that already matches the
 display scale is the difference between crisp and blurry on a high-DPI laptop:
 
-| Windows display scale | `Image` | `LargeImage` |
+| Windows display scale | 16 px slot | 32 px slot |
 | --- | --- | --- |
 | 100% | `MantlePlaceMark_16.png` | `MantlePlaceMark_32.png` |
 | 150% | `MantlePlaceMark_24.png` | `MantlePlaceMark_48.png` |
@@ -33,3 +34,7 @@ that costs least.
 
 **Without this table the 24, 48 and 64 px renders look like dead weight and someone deletes them.**
 That is what it is for.
+
+The table is implemented once, in `MantlePlace.Revit.Core.MarkRenders`, and asserted by the headless
+suite. The window headers call it today; the ribbon does not set an image at all yet, and when it
+does it calls the same function rather than a second copy of this table.
