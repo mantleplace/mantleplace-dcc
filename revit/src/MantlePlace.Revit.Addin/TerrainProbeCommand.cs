@@ -13,7 +13,7 @@ using Microsoft.Win32;
 namespace MantlePlace.Revit.Addin;
 
 /// <summary>
-/// "Probe terrain": measures what a project and a bundle would actually give
+/// "Probe Terrain": measures what a project and a bundle would actually give
 /// <c>Toposolid.Create</c>, tries every base-plane strategy — and every way of giving a site
 /// subdivision the drape material — against it, and changes nothing.
 /// </summary>

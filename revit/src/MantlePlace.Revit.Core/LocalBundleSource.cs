@@ -1,7 +1,7 @@
 namespace MantlePlace.Revit.Core;
 
 /// <summary>
-/// Where the "Import bundle zip" command gets its path, and where it reports when nobody is looking.
+/// Where the "Import Bundle" command gets its path, and where it reports when nobody is looking.
 /// </summary>
 /// <remarks>
 /// <para>

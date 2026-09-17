@@ -99,6 +99,14 @@ python ../tools/manifest-conformance/check_manifest_conformance.py
 private fields `_camelCase`. The Unreal prefix tables (`U`, `A`, `F`, `b`) are Unreal's semantics and
 do **not** cross over.
 
+**Ribbon face text is Title Case** — `Vault`, `Import Bundle`, `Probe Terrain` — because that is what
+every Autodesk tab beside ours uses (`Toposolid`, `Site Component`, `Property Line`), and a
+sentence-case verb phrase is what makes the tab read as somebody's add-in. Name the thing rather than
+the act wherever the button has one: `Vault`, not `Open vault`. A shared action takes the cross-host
+word from [`CONTEXT.md`](../CONTEXT.md) — *vault*, *bundle*, *terrain* — and only a host construct
+takes the host's own noun, *toposolid* and never *toposurface*. Every button also sets a one-line
+`ToolTip`: without one Revit shows the `LongDescription` on hover, and that is a paragraph.
+
 ## Things that will bite you
 
 - **`UseWPF` changes the implicit-usings set.** The WindowsDesktop set omits `System.IO`, so the

@@ -168,55 +168,67 @@ public sealed class MantlePlaceApplication : IExternalApplication
             assemblyPath,
             typeof(SignInCommand).FullName)
         {
+            ToolTip = "Sign in to Mantle Place in your browser.",
             LongDescription =
                 "Sign in to Mantle Place in your browser. Revit never sees your password: the browser "
-                + "returns an authorization code to a local address only this session is listening on.",
+                + "returns an authorization code to a local address only this Revit is listening on. "
+                + "Signing in here signs you in for every Mantle Place plugin on this machine. Only the "
+                + "vault needs you signed in; a bundle import does not.",
         });
 
         account.AddItem(new PushButtonData(
             "MantlePlaceSignOut",
-            "Sign out",
+            "Sign Out",
             assemblyPath,
             typeof(SignOutCommand).FullName)
         {
-            LongDescription = "Sign out and forget the stored session on this machine.",
+            ToolTip = "Sign out and forget the stored credential.",
+            LongDescription =
+                "Sign out of Mantle Place and forget the credential stored for this OS user, which signs "
+                + "you out of every Mantle Place plugin on this machine. The vault asks you to sign in "
+                + "again afterwards; a bundle import still does not.",
         });
 
         RibbonPanel panel = application.CreateRibbonPanel(TabName, "Bundles");
         panel.AddItem(new PushButtonData(
             "MantlePlaceOpenVault",
-            "Open\nvault",
+            "Vault",
             assemblyPath,
             typeof(VaultBrowserCommand).FullName)
         {
+            ToolTip = "Browse the bundles in your vault and import one.",
             LongDescription =
-                "Browse the bundles you own, prepare their Revit deliverables, download them and import. "
-                + "The window stays open while a bundle builds — closing it does not cancel the job, and "
-                + "reopening rejoins it.",
+                "Open the vault browser: it lists the bundles you own, prepares their Revit deliverables, "
+                + "downloads them and imports them. It stays open while a bundle builds — closing it does "
+                + "not cancel the job, and reopening rejoins it. This is the one surface that needs you "
+                + "signed in.",
         });
 
         panel.AddItem(new PushButtonData(
             "MantlePlaceImportLocalBundle",
-            "Import\nbundle zip",
+            "Import\nBundle",
             assemblyPath,
             typeof(ImportLocalBundleCommand).FullName)
         {
+            ToolTip = "Import a bundle zip you already have on disk.",
             LongDescription =
-                "Import a Mantle Place bundle zip you have already downloaded: builds the toposurface from "
-                + "the points file and links the IFC site model. Importing straight from your vault arrives "
-                + "next; this local path stays as the permanent fallback.",
+                "Import a Mantle Place bundle zip you have already downloaded: builds the terrain as one "
+                + "toposolid from the bundle's surface artifact, and links the IFC site model beside it. "
+                + "A bundle import needs no account and no sign-in, so this path stays as the permanent "
+                + "fallback beside the vault.",
         });
 
         panel.AddItem(new PushButtonData(
             "MantlePlaceProbeTerrain",
-            "Probe\nterrain",
+            "Probe\nTerrain",
             assemblyPath,
             typeof(TerrainProbeCommand).FullName)
         {
+            ToolTip = "Measure what a terrain import would find here, changing nothing.",
             LongDescription =
                 "Measure what this project would give the terrain importer — its levels, its toposolid "
                 + "types and the bundle's own elevations — and try each way of placing the terrain. "
-                + "Every attempt is rolled back, so nothing in your project changes. Use it when an "
+                + "Every attempt is rolled back, so nothing in your project changes. Use it when a bundle "
                 + "import is refused and the log does not say enough.",
         });
 

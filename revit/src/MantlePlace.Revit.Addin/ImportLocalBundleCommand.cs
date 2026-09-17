@@ -11,7 +11,7 @@ using Microsoft.Win32;
 namespace MantlePlace.Revit.Addin;
 
 /// <summary>
-/// "Import bundle zip": pick a downloaded bundle, read its manifest, and run the resulting plan.
+/// "Import Bundle": pick a downloaded bundle, read its manifest, and run the resulting plan.
 /// </summary>
 /// <remarks>
 /// <para>

@@ -105,7 +105,7 @@ produced by the same pipeline as a paid order.
    - **Unreal:** **Window ▸ Mantle Place**, then *Browse...* to pick the zip and *Import*. The
      importer saves nothing — use **File ▸ Save All** (Ctrl+Shift+S) before closing the editor or
      the import is lost. The rest is in [`unreal/README.md`](unreal/README.md).
-   - **Revit:** `Mantle Place ▸ Bundles ▸ Import bundle zip`, or set `MANTLEPLACE_BUNDLE_ZIP` and the
+   - **Revit:** `Mantle Place ▸ Bundles ▸ Import Bundle`, or set `MANTLEPLACE_BUNDLE_ZIP` and the
      picker is skipped entirely, so the import runs unattended from a script.
 
 ![The imported result in UE 5.8: a single Landscape with the imagery drape, buildings and road splines, the Mantle Place vault panel docked on the left and the outliner on the right](https://mantle.place/media/importer/unreal-landscape-import.jpg)

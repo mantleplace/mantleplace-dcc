@@ -21,7 +21,7 @@ is stored per-OS-user with DPAPI; the access token is memory-only and never writ
 machine with no secure store degrades to memory-only auth and the dialog says so, rather than
 writing the token somewhere less safe (`HPS-16`).
 
-`Mantle Place ▸ Bundles ▸ Open vault` lists the bundles you own, prepares their Revit deliverables,
+`Mantle Place ▸ Bundles ▸ Vault` lists the bundles you own, prepares their Revit deliverables,
 downloads them and imports. It is **modeless**: a build can take ten minutes and Revit stays usable
 throughout. Closing the window is not cancelling — only the Cancel button cancels; the ETL job keeps
 running and reopening the browser rejoins it rather than queueing a second (`HPS-24`).
@@ -30,7 +30,7 @@ Downloads are written to `bundle.zip.part`, hashed, and renamed over `bundle.zip
 verify (⛔`HPS-26`). Nothing is ever evicted automatically: a purchased bundle stays until you press
 Remove (`HPS-44`).
 
-`Mantle Place ▸ Bundles ▸ Import bundle zip` takes a bundle you already downloaded and:
+`Mantle Place ▸ Bundles ▸ Import Bundle` takes a bundle you already downloaded and:
 
 - refuses anything below manifest **MPB 1.0.0**, and anything whose MAJOR is above the line it
   reads, naming re-download and plugin-update respectively rather than dual-parsing (`HPS-31`).

@@ -4,7 +4,7 @@ using Autodesk.Revit.UI;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>"Open vault": shows the modeless bundle browser.</summary>
+/// <summary>"Vault": shows the modeless vault browser.</summary>
 /// <remarks>
 /// One window per Revit session. A second click focuses the one that is open rather than starting a
 /// second browser with its own cancellation token and its own idea of what is downloading.
