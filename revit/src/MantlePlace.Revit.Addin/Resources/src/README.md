@@ -80,10 +80,11 @@ have to restart it to get a readable ribbon.
 ## Which mark file for which display scale
 
 Revit's ribbon takes exactly two images per button — `Image` at 16 px and `LargeImage` at 32 px —
-and scales whatever it is handed to the display. Handing it a render that already matches the
+and scales whatever it is handed to the display. The plugin's two windows head themselves with a
+third slot, 32 logical px beside the heading. Handing any of them a render that already matches the
 display scale is the difference between crisp and blurry on a high-DPI laptop:
 
-| Windows display scale | `Image` | `LargeImage` |
+| Windows display scale | 16 px slot | 32 px slot |
 | --- | --- | --- |
 | 100% | `MantlePlaceMark_16.png` | `MantlePlaceMark_32.png` |
 | 150% | `MantlePlaceMark_24.png` | `MantlePlaceMark_48.png` |
@@ -101,3 +102,8 @@ is one function — [`RenderSizes`](../../../MantlePlace.Revit.Core/RenderSizes.
 [`MarkRenders`](../../../MantlePlace.Revit.Core/MarkRenders.cs) and
 [`RibbonGlyphs`](../../../MantlePlace.Revit.Core/RibbonGlyphs.cs) are that table expressed over it,
 in the pure core where a machine with no Revit licence can assert them.
+
+The window headers are the third caller: `BrandChrome` fills a 32 logical px slot beside each
+window's heading from the same `MarkRenders`. It differs from the ribbon in one way — a window can
+be dragged to a monitor at another scale, so it re-picks on `DpiChanged`, where the ribbon reads the
+system scale once at startup and never again.

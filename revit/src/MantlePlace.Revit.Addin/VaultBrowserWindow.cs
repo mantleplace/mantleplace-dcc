@@ -23,8 +23,8 @@ namespace MantlePlace.Revit.Addin;
 /// "I am done looking", not "throw away the thing I paid for".
 /// </para>
 /// <para>
-/// Built in code rather than XAML: it is one list and five buttons, and a code-only window has no
-/// build-action, resource-lookup or designer surface to go wrong inside a Revit add-in.
+/// Built in code rather than XAML: it is a header, one list and five buttons, and a code-only window
+/// has no build-action, resource-lookup or designer surface to go wrong inside a Revit add-in.
 /// </para>
 /// </remarks>
 internal sealed class VaultBrowserWindow : Window
@@ -37,11 +37,11 @@ internal sealed class VaultBrowserWindow : Window
 
     private readonly ListBox _list = new() { Margin = new Thickness(0, 0, 0, 8), MinHeight = 220 };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, MinHeight = 40 };
-    private readonly Button _refresh = new() { Content = "Refresh", Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
-    private readonly Button _prepare = new() { Content = "Prepare for Revit", Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
-    private readonly Button _import = new() { Content = "Import", Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
-    private readonly Button _remove = new() { Content = "Remove download", Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
-    private readonly Button _cancel = new() { Content = "Cancel", Padding = new Thickness(12, 4, 12, 4), IsEnabled = false };
+    private readonly Button _refresh = new() { Content = WindowLabels.Refresh, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
+    private readonly Button _prepare = new() { Content = WindowLabels.PrepareForRevit, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
+    private readonly Button _import = new() { Content = WindowLabels.Import, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
+    private readonly Button _remove = new() { Content = WindowLabels.RemoveDownload, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
+    private readonly Button _cancel = new() { Content = WindowLabels.Cancel, Padding = new Thickness(12, 4, 12, 4), IsEnabled = false };
 
     private List<VaultBundle> _bundles = [];
     private CancellationTokenSource? _work;
@@ -75,9 +75,11 @@ internal sealed class VaultBrowserWindow : Window
         _importEvent = importEvent;
         _importHandler = importHandler;
 
-        Title = "Mantle Place — your vault";
+        Title = WindowLabels.VaultWindowTitle;
         Width = 720;
-        Height = 460;
+
+        // Exactly the header taller than it was, so the list still shows every row it did.
+        Height = 460 + BrandChrome.HeaderHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         // Owned by Revit's main window so it stays in front of it and minimises with it, rather
@@ -100,6 +102,10 @@ internal sealed class VaultBrowserWindow : Window
 
     private UIElement BuildLayout()
     {
+        // The one primary action in the plugin. Prepare is the step before it and Remove undoes it;
+        // neither is what the curator came here to do.
+        BrandChrome.MakePrimary(_import);
+
         StackPanel buttons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         buttons.Children.Add(_refresh);
         buttons.Children.Add(_prepare);
@@ -108,6 +114,7 @@ internal sealed class VaultBrowserWindow : Window
         buttons.Children.Add(_cancel);
 
         DockPanel root = new() { Margin = new Thickness(12) };
+        BrandChrome.AddHeader(root, WindowLabels.VaultHeading);
         DockPanel.SetDock(buttons, Dock.Top);
         DockPanel.SetDock(_status, Dock.Bottom);
         root.Children.Add(buttons);
@@ -345,7 +352,7 @@ internal sealed class VaultBrowserWindow : Window
 
         if (entry.State != CacheState.CachedValid)
         {
-            Report(entry.Describe() + " Use “Prepare for Revit” first.");
+            Report(entry.Describe() + $" Use “{WindowLabels.PrepareForRevit}” first.");
             return;
         }
 

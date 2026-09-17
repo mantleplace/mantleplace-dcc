@@ -37,7 +37,15 @@ running and reopening the browser rejoins it rather than queueing a second (`HPS
 
 Downloads are written to `bundle.zip.part`, hashed, and renamed over `bundle.zip` only once they
 verify (⛔`HPS-26`). Nothing is ever evicted automatically: a purchased bundle stays until you press
-Remove (`HPS-44`).
+`Remove Download` (`HPS-44`).
+
+**Both windows this plugin opens are headed by the mark and their purpose** — `Vault`, `Sign In` —
+and their button faces are Title Case, the same rule the ribbon follows and for the same reason. The
+brand orange appears on exactly one control in the whole plugin, the vault browser's `Import`;
+everything else keeps Revit's own chrome, because an add-in that paints its own windows stops looking
+like part of the host. The words, the colour and which render of the mark a header slot gets are
+`WindowLabels`, `BrandPalette` and `MarkRenders` in the pure core, so the suite checks them without a
+Revit licence.
 
 `Mantle Place ▸ Bundles ▸ Import Bundle` takes a bundle you already downloaded and:
 

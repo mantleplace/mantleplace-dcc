@@ -28,6 +28,17 @@ public static class MarkRenders
     /// </remarks>
     public static IReadOnlyList<int> Sizes { get; } = [16, 24, 32, 48, 64];
 
+    /// <summary>
+    /// The slot a window header gives the mark, in logical pixels.
+    /// </summary>
+    /// <remarks>
+    /// The ribbon's two slots are Revit's and are named where they are used; this one is ours, so it
+    /// is named here beside the renders that fill it rather than as a literal in the shim
+    /// (<c>BrandChrome</c>). It matches the ribbon's large slot today, which is a coincidence of two
+    /// designs agreeing and not a constraint either owes the other.
+    /// </remarks>
+    public const int HeaderSlotPixels = 32;
+
     /// <summary>The render size for a slot of <paramref name="slotPixels"/> logical pixels.</summary>
     /// <param name="slotPixels">The slot's size in logical pixels — 16 or 32 for a ribbon button.</param>
     /// <param name="displayScale">The display's scale factor; see <see cref="RenderSizes.Pick"/>.</param>

@@ -1,6 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using Autodesk.Revit.UI;
 using MantlePlace.Revit.Core;
 
@@ -11,18 +9,13 @@ namespace MantlePlace.Revit.Addin;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The impure half of the ribbon's imagery: pack URIs, WPF decoding, a Win32 call for the display
-/// scale, and a list of the buttons that have to be repainted. Every decision it acts on —
+/// The impure half of the ribbon's imagery: a Win32 call for the display scale, and a list of the
+/// buttons that have to be repainted. The pack URI and the WPF decode behind it are
+/// <see cref="ResourceImages"/>, shared with the windows' <c>BrandChrome</c>. Every decision it acts
+/// on —
 /// <em>which</em> file, for which theme, at which size — is <see cref="RibbonGlyphs"/> and
 /// <see cref="MarkRenders"/> in the pure core, where it is asserted without Revit
 /// (<c>HPS-02</c>, <c>HPS-42</c>). Nothing here chooses anything.
-/// </para>
-/// <para>
-/// ⚠ <b>The images are embedded resources, not files beside the DLL.</b> The build action in
-/// <c>MantlePlace.Revit.Addin.csproj</c> is <c>Resource</c> and not <c>EmbeddedResource</c>, because
-/// a pack URI resolves against the WPF resource table and <c>EmbeddedResource</c> does not populate
-/// it. Baking them in is what keeps <c>Package-MantlePlaceRevit.ps1</c> free of a copy step, and
-/// what stops a release whose ribbon is blank because one folder did not get zipped.
 /// </para>
 /// </remarks>
 internal static class RibbonImagery
@@ -31,9 +24,6 @@ internal static class RibbonImagery
     private const int SmallSlot = 16;
 
     private const int LargeSlot = 32;
-
-    /// <summary>The assembly's own resource table, as a pack URI stem.</summary>
-    private const string PackStem = "pack://application:,,,/MantlePlace.Revit.Addin;component/Resources/";
 
     /// <summary>What Windows reports at 100%.</summary>
     private const double BaselineDpi = 96.0;
@@ -48,8 +38,6 @@ internal static class RibbonImagery
     /// glyph is the mark, which is the Account panel's imagery and has no theme of its own.
     /// </remarks>
     private static readonly List<(RibbonButton Button, RibbonGlyph? Glyph)> Given = [];
-
-    private static readonly Dictionary<string, ImageSource?> Decoded = new(StringComparer.Ordinal);
 
     private static double? _displayScale;
 
@@ -87,7 +75,7 @@ internal static class RibbonImagery
     internal static void Forget()
     {
         Given.Clear();
-        Decoded.Clear();
+        ResourceImages.Forget();
         _displayScale = null;
     }
 
@@ -115,8 +103,8 @@ internal static class RibbonImagery
 
         try
         {
-            button.Image = Load(NameFor(SmallSlot));
-            button.LargeImage = Load(NameFor(LargeSlot));
+            button.Image = ResourceImages.Decode(NameFor(SmallSlot));
+            button.LargeImage = ResourceImages.Decode(NameFor(LargeSlot));
         }
         catch (Autodesk.Revit.Exceptions.ApplicationException)
         {
@@ -124,61 +112,6 @@ internal static class RibbonImagery
             // a theme change, which can arrive while Revit is tearing the ribbon down, and a fault
             // dialog raised over a button image would be worse than the stale image it replaces.
         }
-    }
-
-    /// <summary>
-    /// Decodes one render out of this assembly's resource table.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <c>OnLoad</c> and then <c>Freeze</c>: the stream is closed before this returns and the result
-    /// is usable from any thread, which matters because a frozen <see cref="ImageSource"/> is the
-    /// only kind a ribbon item will hold without complaint.
-    /// </para>
-    /// <para>
-    /// A miss is cached as a miss. A render this assembly asks for and does not find is a defect the
-    /// headless suite already fails on, so the remedy is a fixed build rather than a retry on every
-    /// theme change.
-    /// </para>
-    /// </remarks>
-    private static ImageSource? Load(string fileName)
-    {
-        if (Decoded.TryGetValue(fileName, out ImageSource? cached))
-        {
-            return cached;
-        }
-
-        ImageSource? image = null;
-        try
-        {
-            // ⚠ Registers the "pack" URI scheme if nothing has yet, and this is the line that does
-            // it: touching System.IO.Packaging.PackUriHelper is NOT enough — WPF's own registration
-            // runs in Application's static constructor, and without it every pack URI here fails
-            // with "The URI prefix is not recognized". Revit hosts WPF, so in practice the scheme is
-            // already registered by the time OnStartup runs; this costs a null property read and
-            // removes the dependency on that being true.
-            _ = System.Windows.Application.ResourceAssembly;
-
-            BitmapImage bitmap = new();
-            bitmap.BeginInit();
-            bitmap.UriSource = new Uri(PackStem + fileName, UriKind.Absolute);
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            image = bitmap;
-        }
-        catch (System.IO.IOException)
-        {
-            // Fully qualified: RevitAPI.dll puts an inaccessible IOException in the global namespace,
-            // and an unqualified one here resolves to that rather than to the framework's.
-            // The resource is not in the table, or is not a decodable PNG. Either is a build defect.
-        }
-        catch (UriFormatException)
-        {
-        }
-
-        Decoded[fileName] = image;
-        return image;
     }
 
     /// <summary>

@@ -23,14 +23,14 @@ namespace MantlePlace.Revit.Core;
 /// </para>
 /// <para>
 /// The companion stays <b>beside the IFC</b>, inside <c>extracted/</c>, rather than in a sibling
-/// tree. Remove download deletes the per-order root recursively, so staying under it is what keeps
+/// tree. Remove Download deletes the per-order root recursively, so staying under it is what keeps
 /// the sweep complete without a second place to remember.
 /// </para>
 /// <para>
 /// A companion already sitting at the version-neutral path was produced by an unknown Revit
 /// version, so nothing here rewrites or deletes it; <see cref="IsCompanionOf"/> still answers for
 /// it, so a project an earlier build linked is recognised and left alone. The stale file is dead
-/// weight the curator's Remove download clears.
+/// weight the curator's Remove Download clears.
 /// </para>
 /// <para>
 /// This is path resolution, which is pure, so it lives here rather than in the shim: the shim reads

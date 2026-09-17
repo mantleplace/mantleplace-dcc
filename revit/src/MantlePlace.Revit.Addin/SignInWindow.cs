@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using MantlePlace.Revit.Client;
+using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
@@ -47,14 +48,14 @@ internal sealed class SignInWindow : Window
 
     private readonly Button _cancel = new()
     {
-        Content = "Cancel",
+        Content = WindowLabels.Cancel,
         Padding = new Thickness(12, 4, 12, 4),
         IsDefault = true,
     };
 
     private readonly Button _close = new()
     {
-        Content = "Close",
+        Content = WindowLabels.Close,
         Padding = new Thickness(12, 4, 12, 4),
         Visibility = Visibility.Collapsed,
     };
@@ -63,9 +64,12 @@ internal sealed class SignInWindow : Window
     {
         _session = session;
 
-        Title = "Mantle Place — signing in";
+        Title = WindowLabels.SignInWindowTitle;
         Width = 420;
-        Height = 190;
+
+        // Exactly the header taller than it was. Fixed, because ResizeMode below means nothing but
+        // this number decides whether the longest status line has room to wrap.
+        Height = 190 + BrandChrome.HeaderHeight;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -129,7 +133,11 @@ internal sealed class SignInWindow : Window
         buttons.Children.Add(_cancel);
         buttons.Children.Add(_close);
 
+        // No primary action here, so nothing on this window is orange. Cancel stops something and
+        // Close dismisses a window whose work is over; neither is the thing the curator came to do,
+        // and the brand orange says "do this".
         DockPanel root = new() { Margin = new Thickness(16) };
+        BrandChrome.AddHeader(root, WindowLabels.SignInHeading);
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
         root.Children.Add(_status);
