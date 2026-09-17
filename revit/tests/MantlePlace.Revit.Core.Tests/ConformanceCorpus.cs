@@ -97,22 +97,12 @@ internal static class ConformanceCorpus
     }
 
     /// <summary>Locates the corpus directory, or <c>null</c>.</summary>
+    /// <remarks>
+    /// <c>index.json</c> rather than the directory alone: an empty <c>corpus/</c> left behind by a
+    /// half-finished checkout would otherwise answer this question wrongly and loudly.
+    /// </remarks>
     internal static string? FindCorpusDirectory()
-    {
-        DirectoryInfo? dir = new(AppContext.BaseDirectory);
-        for (int i = 0; i < MaxWalkUp && dir is not null; i++)
-        {
-            string candidate = Path.Combine(dir.FullName, CorpusRelativePath.Replace('/', Path.DirectorySeparatorChar));
-            if (File.Exists(Path.Combine(candidate, "index.json")))
-            {
-                return candidate;
-            }
-
-            dir = dir.Parent;
-        }
-
-        return null;
-    }
+        => RepoTree.Find(CorpusRelativePath, dir => File.Exists(Path.Combine(dir, "index.json")));
 
     /// <summary>
     /// The manifest version the corpus itself is pinned at. Cross-checked against this host's floor

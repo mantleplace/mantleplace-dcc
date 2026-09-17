@@ -1,80 +1,54 @@
 namespace MantlePlace.Revit.Core;
 
 /// <summary>
-/// Which committed render of the Mantle Place mark belongs in a slot of a given logical size.
+/// The committed renders of the Mantle Place mark, and which one a slot should be handed.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The renders are <c>MantlePlace.Revit.Addin/Resources/MantlePlaceMark_*.png</c>, produced from the
-/// private canonical mark by <c>tools/brand-assets</c> (<c>ADR 0009</c>). This type does not read
-/// them; it names one.
+/// The mark's renders are not produced from anything in this repository: their input is a private
+/// vector source and <c>tools/brand-assets</c> is what reads it
+/// (<c>docs/adr/0009-host-assets-render-the-monogram.md</c>). What IS in this repository is the list
+/// of sizes that came out, and the table in
+/// <c>revit/src/MantlePlace.Revit.Addin/Resources/src/README.md</c> that says which display scale
+/// takes which. This type is that table, in the one language that can be asserted without Revit.
 /// </para>
 /// <para>
-/// ⛔ <b>The choice is the display scale's, not the slot's.</b> WPF and the Revit ribbon both measure
-/// in logical pixels and scale whatever image they are handed to the device. Hand a 32 px render to a
-/// 32 px slot on a 200% laptop and it is drawn at 64 device pixels from 32 — a blurred square where
-/// the mark should be. The table this implements is
-/// <c>Resources/src/README.md ▸ Which mark file for which display scale</c>, and that README exists
-/// because without it the 24, 48 and 64 px renders look like dead weight and someone deletes them.
+/// <b>Without this, the 24, 48 and 64 px renders look like dead weight and somebody deletes them.</b>
 /// </para>
 /// </remarks>
 public static class MarkRenders
 {
     /// <summary>
-    /// The renders that exist, smallest first.
+    /// The renders that exist in <c>Resources</c>, smallest first.
     /// </summary>
     /// <remarks>
-    /// Kept in step with the folder by hand, and asserted as a literal in the suite: a size listed
-    /// here that is not on disk is a name this type will hand out for a file nobody can open.
+    /// A render added to <c>Resources</c> and not added here would never be chosen; one removed from
+    /// <c>Resources</c> and left here would be asked for by name and not be there. Both are what the
+    /// headless suite checks, against the files themselves.
     /// </remarks>
     public static IReadOnlyList<int> Sizes { get; } = [16, 24, 32, 48, 64];
 
-    /// <summary>The slot a window header gives the mark, in logical pixels.</summary>
-    public const int HeaderSlotPixels = 32;
-
     /// <summary>
-    /// The render for a <paramref name="logicalPixels"/> slot at <paramref name="displayScale"/>.
+    /// The slot a window header gives the mark, in logical pixels.
     /// </summary>
     /// <remarks>
-    /// The smallest render that covers the device size, so nothing is ever scaled up; a scale between
-    /// two steps takes the next render up and lets the host scale down, which is the direction that
-    /// costs least. Past the largest render the largest render is the answer — asking for more cannot
-    /// conjure one, and the alternative is a blank header.
+    /// The ribbon's two slots are Revit's and are named where they are used; this one is ours, so it
+    /// is named here beside the renders that fill it rather than as a literal in the shim
+    /// (<c>BrandChrome</c>). It matches the ribbon's large slot today, which is a coincidence of two
+    /// designs agreeing and not a constraint either owes the other.
     /// </remarks>
-    /// <param name="logicalPixels">The slot's size in logical pixels. Must be positive.</param>
-    /// <param name="displayScale">
-    /// Windows' scale factor — <c>1.0</c> at 100%. <b>Anything below 1.0 is read as 1.0</b>, NaN
-    /// included: Windows offers no sub-100% scale, so a value there is a <c>DpiScaleX</c> read off a
-    /// visual that is not in a tree yet rather than a display anyone has. Guessing 100% is the failure
-    /// that is merely blurry, not the one that throws on a dispatcher.
-    /// </param>
-    public static int SizeFor(int logicalPixels, double displayScale)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(logicalPixels);
+    public const int HeaderSlotPixels = 32;
 
-        double scale = double.IsNaN(displayScale) || displayScale < 1.0 ? 1.0 : displayScale;
+    /// <summary>The render size for a slot of <paramref name="slotPixels"/> logical pixels.</summary>
+    /// <param name="slotPixels">The slot's size in logical pixels — 16 or 32 for a ribbon button.</param>
+    /// <param name="displayScale">The display's scale factor; see <see cref="RenderSizes.Pick"/>.</param>
+    public static int SizeFor(int slotPixels, double displayScale)
+        => RenderSizes.Pick(Sizes, slotPixels, displayScale);
 
-        // The epsilon absorbs a scale that arrives a hair above an exact step. Every scale Windows
-        // offers is a power-of-two fraction of 96 dpi and multiplies out exactly — 32 × 1.5 really is
-        // 48.0 — but DpiScaleX is a computed double off a monitor's reported dpi, and a 1.5 that
-        // arrives as 1.4999999999999998 or 1.5000000000000002 would otherwise decide between the
-        // 48 px render and the 64 px one on the last bit of a float.
-        int devicePixels = (int)Math.Ceiling((logicalPixels * scale) - 0.001);
+    /// <summary>The file name of that render, as it is spelled in <c>Resources</c>.</summary>
+    public static string FileNameFor(int slotPixels, double displayScale)
+        => FileNameOf(SizeFor(slotPixels, displayScale));
 
-        foreach (int size in Sizes)
-        {
-            if (size >= devicePixels)
-            {
-                return size;
-            }
-        }
-
-        return Sizes[^1];
-    }
-
-    /// <summary>The file name of the render <see cref="SizeFor"/> picks, as it sits in <c>Resources</c>.</summary>
-    /// <param name="logicalPixels">The slot's size in logical pixels. Must be positive.</param>
-    /// <param name="displayScale">Windows' scale factor — <c>1.0</c> at 100%.</param>
-    public static string FileNameFor(int logicalPixels, double displayScale)
-        => $"MantlePlaceMark_{SizeFor(logicalPixels, displayScale)}.png";
+    /// <summary>The file name of one render size, without choosing it.</summary>
+    public static string FileNameOf(int size) => $"MantlePlaceMark_{size}.png";
 }

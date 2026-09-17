@@ -2,7 +2,8 @@ namespace MantlePlace.Revit.Core.Tests;
 
 /// <summary>
 /// What the two Mantle Place windows say, and the one colour the brand is allowed to spend on
-/// them. Which render of the mark sits in their header is <see cref="MarkRenderTests"/>.
+/// them, including the slot their header gives the mark. Which render fills a slot of that size is
+/// <see cref="RibbonImageryTests"/>, whose rule the header shares with the ribbon.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -102,6 +103,17 @@ internal static class WindowLabelsTests
                 new HashSet<string>(EveryButtonFace, StringComparer.OrdinalIgnoreCase).Count,
                 EveryButtonFace.Length,
                 "every face is distinct");
+        });
+
+        run.Case("the header's slot is a real slot, and takes a real render at every scale", () =>
+        {
+            run.Equal(MarkRenders.HeaderSlotPixels, 32, "the slot beside a window heading");
+
+            // The window half of the rule RibbonImageryTests pins for the ribbon: a header on a 200%
+            // laptop must reach the 64 px render, or the mark beside the heading is a blurred square.
+            run.Equal(MarkRenders.FileNameFor(MarkRenders.HeaderSlotPixels, 1.0), "MantlePlaceMark_32.png", "100%");
+            run.Equal(MarkRenders.FileNameFor(MarkRenders.HeaderSlotPixels, 1.5), "MantlePlaceMark_48.png", "150%");
+            run.Equal(MarkRenders.FileNameFor(MarkRenders.HeaderSlotPixels, 2.0), "MantlePlaceMark_64.png", "200%");
         });
 
         run.Case("the brand orange is the mark's own orange", () =>

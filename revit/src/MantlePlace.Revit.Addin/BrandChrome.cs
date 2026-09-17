@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -24,24 +23,13 @@ namespace MantlePlace.Revit.Addin;
 /// Shared rather than copied into each window because there are two of them and the second copy is
 /// the one that drifts. What is decided here is WPF assembly and nothing else: the words are
 /// <see cref="WindowLabels"/>, the colour is <see cref="BrandPalette"/>, and which render of the mark
-/// goes in the 32 px slot is <see cref="MarkRenders"/> — all three in the pure core, where CI can see
-/// them (<c>HPS-02</c>, <c>HPS-42</c>).
+/// goes in the <see cref="MarkRenders.HeaderSlotPixels"/> slot is <see cref="MarkRenders"/> — all
+/// three in the pure core, where CI can see them (<c>HPS-02</c>, <c>HPS-42</c>). The decode itself is
+/// <see cref="ResourceImages.Decode"/>, shared with the ribbon so the pack URI has one home.
 /// </para>
 /// </remarks>
 internal static class BrandChrome
 {
-    /// <summary>
-    /// Where the committed renders live at run time.
-    /// </summary>
-    /// <remarks>
-    /// A pack URI against the WPF resource table, which is why the csproj gives them the
-    /// <c>Resource</c> build action rather than <c>EmbeddedResource</c>. Naming the assembly rather
-    /// than relying on <c>Application.ResourceAssembly</c> matters inside an add-in: the application
-    /// is Revit's, not ours.
-    /// </remarks>
-    private const string MarkUriFormat =
-        "pack://application:,,,/MantlePlace.Revit.Addin;component/Resources/{0}";
-
     /// <summary>Names the one element in the primary button's template that the triggers repaint.</summary>
     private const string FillName = "MantlePlaceFill";
 
@@ -218,44 +206,13 @@ internal static class BrandChrome
                 return;
             }
 
-            if (Load(fileName) is not { } source)
+            if (ResourceImages.Decode(fileName) is not { } source)
             {
                 return;
             }
 
             _mark.Source = source;
             _showing = fileName;
-        }
-
-        /// <summary>
-        /// Decodes one committed render, or gives back nothing.
-        /// </summary>
-        /// <remarks>
-        /// ⛔ Every caller is a window constructor or a dispatcher callback, where an escaping
-        /// exception is how an add-in ends Revit rather than how it reports a problem — the same
-        /// reason <c>SignInWindow.Guarded</c> exists. A resource that will not decode is a header
-        /// without a mark, which nobody loses work over. The catch is broad because the ways a pack
-        /// URI can fail are: the scheme is not registered yet, the assembly has no such resource, and
-        /// the bytes are not an image, and they arrive as three unrelated exception types.
-        /// </remarks>
-        private static ImageSource? Load(string fileName)
-        {
-            try
-            {
-                BitmapImage image = new();
-                image.BeginInit();
-                image.UriSource = new Uri(
-                    string.Format(CultureInfo.InvariantCulture, MarkUriFormat, fileName),
-                    UriKind.Absolute);
-                image.CacheOption = BitmapCacheOption.OnLoad;
-                image.EndInit();
-                image.Freeze();
-                return image;
-            }
-            catch (Exception)
-            {
-                return null;
-            }
         }
     }
 }

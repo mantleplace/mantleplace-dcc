@@ -279,7 +279,36 @@ while a stranger's log now says which build they are running without anyone havi
 **One build, three hosts, and that is a claim to be tested rather than assumed.** Before a release,
 drop the same output into each folder above, launch that Revit, and confirm the ribbon appears and an
 import completes. The 2027 leg is the one that matters most: it is the only one where a .NET 8
-assembly is loaded by a .NET 10 runtime.
+assembly is loaded by a .NET 10 runtime. Check the ribbon in **both UI themes** while you are there —
+Revit has had two since 2024, the icons are picked per theme, and the failure mode is a panel of
+invisible buttons rather than an error.
+
+## Ribbon imagery
+
+Every button on the tab carries an image, and the images are **embedded resources** reached by pack
+URI rather than loose files beside the DLL — the build action in the shim's `.csproj` is `Resource`
+and not `EmbeddedResource`, because a pack URI resolves against the WPF resource table and
+`EmbeddedResource` does not populate it. Nothing has to be copied at packaging time, and there is no
+way to ship a release whose ribbon is blank because a folder did not get zipped.
+
+The Account face draws the Mantle Place mark, which comes from a private vector source through
+[`tools/brand-assets/`](../tools/brand-assets/) ([ADR 0009](../docs/adr/0009-host-assets-render-the-monogram.md)).
+The four command buttons draw glyphs rendered from MIT-licensed SVGs committed in the tree, by
+
+```powershell
+./tools/Render-RibbonIcons.ps1   # from revit/, like the two scripts beside it
+```
+
+which is run by hand when a glyph changes and by nothing else. Both the sources and the reasoning —
+which icon, which colours, which orange and why only one — are
+[`src/MantlePlace.Revit.Addin/Resources/src/README.md`](./src/MantlePlace.Revit.Addin/Resources/src/README.md).
+
+**Which file each button is handed is a pure decision and lives in the core**, so the whole of it is
+asserted on a machine with no Revit licence: `RenderSizes` picks a render for a display scale,
+`MarkRenders` and `RibbonGlyphs` name the file, and the headless suite reads `Resources/` in both
+directions — every name the plugin can ask for is a file that is there, and every file that is there
+is one something asks for. That last check is the only thing standing between a hand-run render
+script and a button that is silently blank.
 
 ## Packaging a release
 
