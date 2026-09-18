@@ -200,6 +200,24 @@ public sealed class GroundExtent
     public double HeightUnits => Top - Bottom;
 }
 
+/// <summary>One <c>attribution.sources[]</c> entry, verbatim.</summary>
+/// <remarks>
+/// Pass-through, and nothing more. This host writes these words into the project as the manifest
+/// gave them and makes no licensing decision of its own: which terms a source carries, and what they
+/// oblige, is the platform's statement. Every member but <see cref="ProviderId"/> is <c>null</c> when
+/// the manifest gave none — <c>license_url</c> is published as <c>null</c> for some sources today,
+/// though the schema types it as a string.
+/// </remarks>
+/// <param name="ProviderId"><c>provider_id</c>, the one field the schema requires; empty when absent.</param>
+/// <param name="AttributionText"><c>attribution_text</c>.</param>
+/// <param name="License"><c>license</c> — the licence text, not an identifier.</param>
+/// <param name="LicenseUrl"><c>license_url</c>.</param>
+public sealed record AttributionSource(
+    string ProviderId,
+    string? AttributionText,
+    string? License,
+    string? LicenseUrl);
+
 /// <summary>The top-level <c>delivery</c> block — units and grid, host-neutral.</summary>
 public sealed class DeliveryFacts
 {
@@ -308,6 +326,12 @@ public sealed class BundleManifest
 
     /// <summary><c>Landcover/TreePoints.csv</c> — Forma's "Vegetation" row.</summary>
     public BundleArtifact? TreePoints { get; internal set; }
+
+    /// <summary>
+    /// <c>attribution.sources[]</c>, in the manifest's order — empty when the block is absent, which
+    /// the schema says it is when no source contributed.
+    /// </summary>
+    public IReadOnlyList<AttributionSource> AttributionSources { get; internal set; } = [];
 
     public DeliveryFacts Delivery { get; internal set; } = new();
 

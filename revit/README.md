@@ -109,6 +109,13 @@ Revit licence.
   stop drawing, paint and graphic overrides are ignored), and the plugin never turns it off. Where
   Revit refuses the setting, the photograph is anchored to the origin instead and the log says to
   import again after turning smoothing on by hand;
+- writes the manifest's `attribution.sources[]` into a drafting view named **Mantle Place
+  Attribution** — one line per source, its attribution text, licence text and licence URL exactly
+  as the manifest gives them — ready to place on a sheet. The plugin makes no licensing decision of
+  its own; it copies what the manifest says. Beside it, Project Information carries a record of the
+  order, the build, the manifest version and the sources, which is how a re-import finds the note
+  this one wrote: a later build rewrites that note, an unchanged one leaves it alone, and a note
+  edited by hand is treated as yours and left as it is, with a fresh one added beside it;
 - refuses to import anything at all when an artifact's bytes do not match the `sha256` its own
   manifest publishes, before a single element is created (⛔`HPS-26`);
 - tells you what it did **not** import and why, using the manifest's own
