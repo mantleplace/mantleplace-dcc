@@ -19,14 +19,20 @@ internal static class SiteContextTests
         {
             // The filter is only as good as this: a stamp kind that does not begin with the prefix
             // is an element the import made that the filter cannot find.
-            foreach (string stamp in (string[])
-                [
-                    TerrainIdentity.Stamp(Stem, Build),
-                    TerrainIdentity.Stamp(Stem, null),
-                    SiteBoundaryIdentity.Stamp(Stem, "Parcel 12", 3),
-                    SiteBoundaryIdentity.Stamp(Stem, null, 1),
-                    TreeIdentity.Stamp(Stem, Build, 17),
-                ])
+            List<string> stamps =
+            [
+                TerrainIdentity.Stamp(Stem, Build),
+                TerrainIdentity.Stamp(Stem, null),
+                TreeIdentity.Stamp(Stem, Build, 17),
+                RoadIdentity.Stamp(Stem, 4),
+            ];
+            foreach (GroundLayer layer in Enum.GetValues<GroundLayer>())
+            {
+                stamps.Add(SiteBoundaryIdentity.Stamp(layer, Stem, "Parcel 12", 3));
+                stamps.Add(SiteBoundaryIdentity.Stamp(layer, Stem, null, 1));
+            }
+
+            foreach (string stamp in stamps)
             {
                 run.True(
                     stamp.StartsWith(SiteContext.StampPrefix, StringComparison.Ordinal),

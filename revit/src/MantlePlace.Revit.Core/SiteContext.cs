@@ -56,9 +56,10 @@ public sealed class SiteContextDecision
 /// <para>
 /// The filter is the durable part. It matches every element whose Comments begin with
 /// <see cref="StampPrefix"/>, which is every element any import stamped — the terrain, the
-/// subdivisions, the trees, and each element kind a later change stamps, provided its stamp begins
-/// the same way. The headless suite holds every stamp this host writes to that prefix. From the
-/// filter a curator builds a plan, a sun study or a render view of the context alone in a minute.
+/// subdivisions, the roads, the trees, and each element kind a later change stamps, provided its
+/// stamp begins the same way. The headless suite holds every stamp this host writes to that prefix.
+/// From the filter a curator builds a plan, a sun study or a render view of the context alone in a
+/// minute.
 /// </para>
 /// <para>
 /// Found by name on a re-import, never made twice and never edited: a curator who has changed the
