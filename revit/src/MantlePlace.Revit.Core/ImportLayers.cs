@@ -11,8 +11,10 @@ namespace MantlePlace.Revit.Core;
 /// </para>
 /// <para>
 /// Not a step kind. Three kinds build the one terrain, and a curator choosing it is choosing
-/// whichever tier the planner picks; <see cref="ImportStepKind.SetSharedCoordinates"/> builds
-/// nothing, so it is no layer at all and runs whatever is chosen.
+/// whichever tier the planner picks. <see cref="ImportStepKind.SetSharedCoordinates"/> builds
+/// nothing, so it is no layer at all and runs whatever is chosen; nor is
+/// <see cref="ImportStepKind.AttributionAndProvenance"/>, because crediting the data that came in is
+/// the licence's condition on importing any of it, not a thing to leave out.
 /// </para>
 /// </remarks>
 public enum ImportLayer
@@ -29,7 +31,7 @@ public enum ImportLayer
 /// <summary>Properties of an <see cref="ImportLayer"/> that the window must not decide for itself.</summary>
 public static class ImportLayers
 {
-    /// <summary>The layer a step builds, or <c>null</c> for the one step that builds nothing.</summary>
+    /// <summary>The layer a step builds, or <c>null</c> for a step that runs whatever is chosen.</summary>
     public static ImportLayer? Of(ImportStepKind kind) => kind switch
     {
         ImportStepKind.ToposurfaceFromPointsFile => ImportLayer.Terrain,

@@ -117,6 +117,7 @@ public static class WindowLabels
     public static string StepName(ImportStepKind kind) => kind switch
     {
         ImportStepKind.SetSharedCoordinates => "Shared Coordinates",
+        ImportStepKind.AttributionAndProvenance => "Attribution",
         _ when ImportLayers.Of(kind) is { } layer => LayerName(layer),
 
         // A kind added to the planner and never named here still gets a row rather than a throw on

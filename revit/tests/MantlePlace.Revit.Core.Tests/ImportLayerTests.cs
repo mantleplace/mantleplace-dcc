@@ -38,6 +38,9 @@ internal static class ImportLayerTests
 
             // Placing the project builds nothing, so there is nothing to leave out.
             run.True(ImportLayers.Of(ImportStepKind.SetSharedCoordinates) is null, "shared coordinates is not a layer");
+
+            // Crediting the data is the licence's condition on importing any of it.
+            run.True(ImportLayers.Of(ImportStepKind.AttributionAndProvenance) is null, "attribution is not a layer");
         });
 
         run.Case("every layer has a step kind, so none is a box that controls nothing", () =>
@@ -205,7 +208,7 @@ internal static class ImportLayerTests
             run.True(plan.CanImport, "can import");
             run.Equal(
                 string.Join(", ", plan.Steps.Select(step => step.Kind)),
-                "ToposurfaceFromPointsFile, LinkSiteIfc, SetSharedCoordinates, RoadCentrelines, SiteBoundaries, LandCover, Vegetation, ImageryDrape",
+                "ToposurfaceFromPointsFile, LinkSiteIfc, SetSharedCoordinates, RoadCentrelines, SiteBoundaries, LandCover, Vegetation, AttributionAndProvenance, ImageryDrape",
                 "every step");
         });
 
@@ -256,6 +259,7 @@ internal static class ImportLayerTests
                 1,
                 "the tiers the terrain passed over are not news once it was left out");
             run.True(plan.Steps.Any(step => step.Kind == ImportStepKind.SetSharedCoordinates), "the project is still placed");
+            run.True(plan.Steps.Any(step => step.Kind == ImportStepKind.AttributionAndProvenance), "and the data still credited");
             run.True(plan.CanImport, "the site model and the trees are an import");
         });
 
