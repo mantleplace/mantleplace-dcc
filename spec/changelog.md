@@ -19,6 +19,41 @@ history, not contract.
 
 ## Semver era
 
+### 1.1.0 — the location block and its time zone (additive minor; publish date stamped at merge)
+
+A new **required** top-level block, `location`, holds facts about the place that are the same for
+every host. Unlike `hosts.<hostId>`, which a host reads only its own of, every host may read it
+([format](format.md) §4.1). Its first member is `location.time_zone`:
+
+| Field                   | Meaning                                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| `iana`                  | IANA zone name, e.g. `America/Denver`. The authority for a host with tzdata.              |
+| `utc_offset_standard_h` | Standard-time offset in hours; the smallest offset in the build year. Fractional, unclamped. |
+| `observes_dst`          | Whether the clocks show more than one offset in the build year.                           |
+| `tzdata_version`        | The IANA tzdata release the offsets came from. Provenance only.                           |
+
+**Why it is not under `hosts.revit`.** The Revit plugin asked for it there so that `SiteLocation`
+could be completed without deriving a zone from longitude. But Unreal's SunSky takes a time zone
+too, and neither host takes a zone name: both take a standard offset and a separate daylight-saving
+switch. So the numbers are pre-computed once, beside the name, and published where every host can
+read them.
+
+**Where it is resolved.** At the AOI-bbox centroid, the point `delivery` already resolves from, for
+the year of `updated_at`. The boundaries cover the whole globe, open ocean included (`Etc/GMT±N`), so
+the block is always present on a 1.1.0 manifest.
+
+**Attribution.** The zone is looked up in timezone-boundary-builder's boundaries, which are ODbL.
+Every bundle credits them in `attribution.sources`.
+
+**Required, and still a minor.** Each published schema pins `version.const` to exactly one version,
+so "required" binds only a producer writing a 1.1.0 manifest; no 1.0.x document is ever validated
+against it. To a consumer the block is additive, which is what [compatibility](compatibility.md) §2
+asks of a minor. "Narrowed" there means narrowing an existing field, and nothing existing changed.
+
+**What a host must do.** Nothing, to keep importing: a 1.0.x reader ignores the unknown block, per
+[compatibility](compatibility.md) §3. A host that wants the sun right reads `location.time_zone`.
+Each host re-pins `verified-against.json` to 1.1.0 once its reader has been exercised against it.
+
 ### Within 1.0.1 — the vector layer vocabulary, stated (2026-09-18)
 
 No schema version was published, and nothing a reader parses changed. The seven names a
