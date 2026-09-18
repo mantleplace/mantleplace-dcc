@@ -147,24 +147,36 @@ else logs beside that zip. `Logs` selects the newest log under the cache, and wh
 none it opens the cache and says that a zip from elsewhere logged elsewhere. The About dialog on the
 Account button reaches the same place through the same function, so the two can never disagree.
 
-**An import is staged, and shows itself.** Both ways in — `Import Bundle` and the vault window's
-`Import` — open the modeless `Bundle Import` window, which lists the plan's steps, marks each one
-`Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts the trees in as they
-go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent` raise, so Revit repaints
-between them and **Cancel** is honoured at the next boundary. Whatever committed before the cancel
-stays, and importing the same bundle again reuses the terrain, the site model link, the
-subdivisions, the road centrelines and the trees it finds and creates only what is missing. Road
-centrelines drawn by a build that predates their stamp carry none, so the first import after upgrading
-draws them once more; delete the older set by hand. The log's last line names the steps that
-completed and those that never ran. What no window can show is the inside of one commit: the terrain and the
+**An import brings in what you tick.** Both ways in — `Import Bundle` and the vault window's
+`Import` — open the modeless `Bundle Import` window on a checklist headed `Include`: one box for each
+layer the bundle carries (`Terrain`, `Site Model`, `Road Centrelines`, `Land Use Subdivisions`,
+`Land Cover Subdivisions`, `Trees`, `Imagery Drape`), all ticked. Nothing runs until `Import` is
+pressed. Both kinds of subdivision and the drape need the terrain, so unticking `Terrain` disables
+them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
+out creates nothing, and the log says it was left out by choice. The shared coordinates and the
+attribution are not layers and are written whatever is ticked. Leaving out the drape also builds the
+terrain on the project's own ground type rather than the imagery one. Closing the window before
+`Import` imports nothing and leaves the last run's log as it was.
+
+**An import is staged, and shows itself.** Once `Import` is pressed the window lists the chosen
+steps, marks each one `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts
+the trees in as they go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent`
+raise, so Revit repaints between them and **Cancel** is honoured at the next boundary. Whatever
+committed before the cancel stays, and importing the same bundle again reuses the terrain, the site
+model link, the subdivisions, the road centrelines and the trees it finds and creates only what is
+missing. Road centrelines drawn by a build that predates their stamp carry none, so the first import
+after upgrading draws them once more; delete the older set by hand. The log's last line names the
+steps that completed and those that never ran. What no window can show is the inside of one
+commit: the terrain and the
 subdivisions are one commit each — and so is the drape's retype, which only a ground built before the
 terrain took the imagery type still needs — Revit reports "not responding" while one runs, and a
 Cancel pressed then takes effect when it finishes. Closing the window while it runs is a cancel.
 
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
 runs unattended from a Revit journal or a tester script. An unattended run raises no dialog and opens
-no window — it runs synchronously and writes `<zip>.mantleplace-import.log` beside the bundle
-instead, because a `TaskDialog` or a modeless window during journal playback is never dismissed.
+no window — it imports every layer, runs synchronously and writes `<zip>.mantleplace-import.log`
+beside the bundle instead, because a `TaskDialog` or a modeless window during journal playback is
+never dismissed.
 
 ⛔ **Load the add-in by hand once after every deploy, before the first unattended run.** The
 assemblies are unsigned, so the first time Revit loads a *newly built* shim it raises

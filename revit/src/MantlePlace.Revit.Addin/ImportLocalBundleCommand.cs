@@ -46,7 +46,7 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
         if (unattended is null && MantlePlaceApplication.ImportHandler.IsImporting)
         {
             MantlePlaceApplication.ImportHandler.ShowRunning();
-            Report(unattended, "An import is already running.", "Wait for it to finish, or cancel it in its window.");
+            Report(unattended, "Another import is open.", MantlePlaceApplication.ImportHandler.BusyReason);
             return Result.Cancelled;
         }
 
@@ -75,7 +75,7 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
         // ⛔ The record is written on the ATTENDED path too, and that is the point of it. Two steps of
         // this import freeze Revit for minutes inside one commit with a "this will take a while" line
         // that has to be readable WHILE they run (SlowStepNotice). A curator can open a text file
-        // beside a frozen Revit. ActiveImport.Open begins it, before anything can fail.
+        // beside a frozen Revit. ActiveImport.Open makes it, and its first line begins it.
         if (ActiveImport.Open(commandData.Application.Application, document, zipPath, out ImportRefusal? refusal)
             is not { } import)
         {
@@ -86,17 +86,20 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
 
         if (unattended is null)
         {
-            // Staged: one step or one chunk per ExternalEvent raise, with the import window showing
-            // it, so Revit repaints between them and Cancel is honoured. This command returns now;
-            // the handler owns the import from here and closes it when the run is over.
-            MantlePlaceApplication.ImportHandler.Start(import, commandData.Application.MainWindowHandle);
+            // The import window opens on its checklist; once the curator presses Import the run is
+            // staged, one step or one chunk per ExternalEvent raise, so Revit repaints between them
+            // and Cancel is honoured. This command returns now; the handler owns the import from
+            // here and closes it when the run is over.
+            MantlePlaceApplication.ImportHandler.TakeOver(import, commandData.Application.MainWindowHandle);
             return Result.Succeeded;
         }
 
         // ⛔ Unattended: synchronous and log-only. A modeless window in a journal playback never
-        // closes, and nothing is there to click Cancel, so the same import runs to the end in place.
+        // closes, and nothing is there to tick a box or click Cancel, so the same import brings in
+        // every layer and runs to the end in place.
         using (import)
         {
+            import.Begin(ImportLayerChoice.All);
             import.RunToEnd();
             if (import.Failed)
             {

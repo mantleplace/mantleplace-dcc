@@ -36,14 +36,21 @@ public static class BundleImportPlanner
     /// not mention it. A defaulted probe would let a future call site plan a drape whose
     /// extent nothing corroborated, and it would plan it silently.
     /// </remarks>
+    /// <param name="choice">
+    /// The layers the curator ticked in the import window, or <c>null</c> for all of them — which is
+    /// the plan the checklist is built from, and the unattended path's plan. A layer left out gets no
+    /// step and one skip saying it was a choice.
+    /// </param>
     public static BundleImportPlan Plan(
         BundleManifest manifest,
         IEnumerable<string> entryNames,
-        Func<string, ImageSize?> probeImageSize)
+        Func<string, ImageSize?> probeImageSize,
+        ImportLayerChoice? choice = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(entryNames);
         ArgumentNullException.ThrowIfNull(probeImageSize);
+        choice ??= ImportLayerChoice.All;
 
         if (!manifest.IsValid)
         {
@@ -62,13 +69,14 @@ public static class BundleImportPlanner
         List<ImportStep> drapeSteps = [];
         List<SkippedImport> drapeSkipped = [];
         PlanImageryDrape(manifest, entries, drapeSteps, drapeSkipped, probeImageSize);
+        bool drapeRuns = drapeSteps.Count > 0 && choice.Includes(ImportLayer.ImageryDrape);
 
         PlanToposurface(
             manifest,
             entries,
             steps,
             skipped,
-            drapeSteps.Count > 0 ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
+            drapeRuns ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
         PlanSiteIfc(manifest, entries, steps, skipped);
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteContext(manifest, entries, steps, skipped);
@@ -92,6 +100,7 @@ public static class BundleImportPlanner
         steps.AddRange(drapeSteps);
         skipped.AddRange(drapeSkipped);
 
+        LeaveOut(choice, steps, skipped);
         NoteAvailableButNotImported(manifest, entries, notImported);
 
         // Every kind but SetSharedCoordinates and AttributionAndProvenance changes the document's model, so any
@@ -112,9 +121,47 @@ public static class BundleImportPlanner
             AvailableButNotImported = notImported,
             BlockedReason = canImport
                 ? string.Empty
-                : "This bundle carries nothing this plugin can import into Revit. "
-                  + DescribeAbsence(manifest),
+                : skipped.Exists(skip => skip.ReasonCode == SkipReasonCode.LeftOutByChoice)
+                    ? "Everything this bundle carries was left out of the import, so there is nothing to import."
+                    : "This bundle carries nothing this plugin can import into Revit. "
+                      + DescribeAbsence(manifest),
         };
+    }
+
+    /// <summary>
+    /// Takes the layers the curator did not choose out of the plan, leaving one skip for each that
+    /// says so.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Planned in full first and removed after, so every decision above — which terrain tier wins,
+    /// whether the drape's extent holds — is taken exactly as it is for an import of everything. Only
+    /// the terrain's type depends on the choice, and that is decided before the terrain step exists.
+    /// </para>
+    /// <para>
+    /// A layer left out loses its skips as well as its steps: the tiers a terrain passed over are not
+    /// news once no terrain was wanted. A layer the bundle does not carry keeps the skip it has,
+    /// because "missing from the zip" is truer than "not chosen" and the window never offered it.
+    /// </para>
+    /// </remarks>
+    private static void LeaveOut(ImportLayerChoice choice, List<ImportStep> steps, List<SkippedImport> skipped)
+    {
+        foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
+        {
+            if (choice.Includes(layer) || steps.Find(step => ImportLayers.Of(step.Kind) == layer) is not { } planned)
+            {
+                continue;
+            }
+
+            steps.RemoveAll(step => ImportLayers.Of(step.Kind) == layer);
+            skipped.RemoveAll(skip => ImportLayers.Of(skip.Kind) == layer);
+            skipped.Add(new SkippedImport
+            {
+                Kind = planned.Kind,
+                ReasonCode = SkipReasonCode.LeftOutByChoice,
+                Reason = $"Left out of this import by choice: {WindowLabels.LayerName(layer)}.",
+            });
+        }
     }
 
     /// <summary>

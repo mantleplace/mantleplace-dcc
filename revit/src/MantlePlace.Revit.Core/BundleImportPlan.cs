@@ -138,6 +138,13 @@ public enum SkipReasonCode
     /// failure a curator has no way to notice.
     /// </remarks>
     ExtentNotCorroborated,
+
+    /// <summary>The bundle carries this layer and the curator left it out of the import window's checklist.</summary>
+    /// <remarks>
+    /// The one skip that is not about the bundle. A support triage rule reading a log has to tell "the
+    /// trees did not come in" apart from "the trees were not wanted", and only this code does.
+    /// </remarks>
+    LeftOutByChoice,
 }
 
 /// <summary>
