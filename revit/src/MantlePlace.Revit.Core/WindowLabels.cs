@@ -111,8 +111,8 @@ public static class WindowLabels
     /// The glossary's words, not the planner's: a curator waits on "Terrain", not on
     /// <c>ToposurfaceFromSurfaceTin</c>, and three kinds that each build the one terrain are one row
     /// to them. The land-use and land-cover polygons are both <c>Subdivisions</c>, which is what they
-    /// become (<c>CONTEXT.md</c>), told apart by the layer they were cut from; the IFC is the
-    /// <c>Site Model</c>.
+    /// become (<c>CONTEXT.md</c>), told apart by the layer they were cut from; the IFC's link is the
+    /// <c>Site Model</c>, and the buildings copied out of it are <c>Context Buildings</c>.
     /// </remarks>
     public static string StepName(ImportStepKind kind) => kind switch
     {
@@ -134,6 +134,7 @@ public static class WindowLabels
     public static string LayerName(ImportLayer layer) => layer switch
     {
         ImportLayer.Terrain => "Terrain",
+        ImportLayer.ContextBuildings => "Context Buildings",
         ImportLayer.SiteModel => "Site Model",
         ImportLayer.RoadCentrelines => "Road Centrelines",
         ImportLayer.LandUseSubdivisions => "Land Use Subdivisions",

@@ -22,7 +22,23 @@ public enum ImportStepKind
     ToposurfaceFromSurfaceDxf,
 
     /// <summary>Insert ▸ Link IFC — kept as a coordinated reference, not opened as a model.</summary>
+    /// <remarks>
+    /// Its checklist row starts unchecked (<see cref="ImportLayers.OnByDefault"/>):
+    /// <see cref="ContextBuildings"/> puts the same buildings in the project as elements, and both at
+    /// once shows each building twice.
+    /// </remarks>
     LinkSiteIfc,
+
+    /// <summary>
+    /// Every building in the site model copied into the project as its own Generic Model element,
+    /// the context terrain left out.
+    /// </summary>
+    /// <remarks>
+    /// The site model's own extrusions, reused rather than rebuilt: it carries one per building, where
+    /// the building mesh is one merged node and the footprints would have to be extruded here — see
+    /// <c>docs/adr/0012-context-buildings-come-from-the-site-model.md</c>.
+    /// </remarks>
+    ContextBuildings,
 
     /// <summary>Publish the pre-derived survey point / shared coordinates.</summary>
     SetSharedCoordinates,

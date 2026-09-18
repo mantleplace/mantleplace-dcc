@@ -261,7 +261,9 @@ Most facts already have exactly one home. Find it before writing a fact down any
   **vignettes are drawn, not photographed**, and sized to the 355 px cap the ribbon enforces in
   silence · **0011** the Revit provenance record's **schema GUID is permanent**, and the attribution
   note is **known by the text that record says was written**, for its own order only — so a re-import
-  rewrites it in place, the one Revit element that is. Write one only for a decision hard to reverse,
+  rewrites it in place, the one Revit element that is · **0012** Revit's context buildings are
+  **the site model's own extrusions, copied** into Generic Model elements — not footprints extruded
+  here, not the glb, and no longer a link. Write one only for a decision hard to reverse,
   surprising without the context, and the result of a real trade-off; an ADR is not a design
   document.
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the

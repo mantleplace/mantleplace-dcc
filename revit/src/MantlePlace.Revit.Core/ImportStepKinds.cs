@@ -54,6 +54,10 @@ public static class ImportStepKinds
         ImportStepKind.LandCover => ExtractionLifetime.Transient,
         ImportStepKind.Vegetation => ExtractionLifetime.Transient,
 
+        // The same file as LinkSiteIfc, and the opposite answer: the buildings are copied out of the
+        // site model into elements of the project's own, and nothing links to the IFC afterwards.
+        ImportStepKind.ContextBuildings => ExtractionLifetime.Transient,
+
         // Stated rather than left to the default arm below, because this is the first kind whose
         // answer is not obvious from what it builds. The drape becomes a material — geometry-free,
         // and every other geometry-free step so far was Transient — but a Revit appearance asset

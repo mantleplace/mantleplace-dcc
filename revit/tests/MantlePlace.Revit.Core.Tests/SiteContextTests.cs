@@ -24,6 +24,7 @@ internal static class SiteContextTests
                 TerrainIdentity.Stamp(Stem, Build),
                 TerrainIdentity.Stamp(Stem, null),
                 TreeIdentity.Stamp(Stem, Build, 17),
+                BuildingIdentity.Stamp(Stem, Build, "1Kx0mPq8T3uBv9Wc2Yd4Ze"),
                 RoadIdentity.Stamp(Stem, 4),
             ];
             foreach (GroundLayer layer in Enum.GetValues<GroundLayer>())

@@ -76,7 +76,16 @@ Revit licence.
   plugin does not remove ground it did not create in that run. A toposolid it does not recognise —
   yours, another order's, or one from an import that predates the stamp — is left alone and reported.
   See [ADR 0004](../docs/adr/0004-revit-terrain-identity.md);
-- links `Site/Site.ifc` as a coordinated reference;
+- copies every building in the site model (`Site/Site.ifc`) into the project as its own Generic
+  Model element — the platform's own extrusion, not one rebuilt here — so each can be selected,
+  hidden or coloured, and a renderer's live link sees it as model geometry. The site model's context
+  terrain is left out: the terrain is the toposolid. Each building carries
+  `Mantle Place Building {stem}/{build}/{GlobalId}` in Comments and follows the terrain's
+  reuse / refuse / create table, so a second import of the same build creates nothing, and buildings
+  from an earlier build are refused with the prefix to delete. Linking the site model is still a row
+  in the import window's checklist, and it starts unticked; the version-qualified companion `.rvt` is
+  written only when it is linked. See
+  [ADR 0012](../docs/adr/0012-context-buildings-come-from-the-site-model.md);
 - sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
   this host's own block — falling back to `delivery.local_origin` on a bundle whose own block
   publishes no usable origin (`HPS-33`);
@@ -159,9 +168,10 @@ Account button reaches the same place through the same function, so the two can 
 
 **An import brings in what you tick.** Both ways in — `Import Bundle` and the vault window's
 `Import` — open the modeless `Bundle Import` window on a checklist headed `Include`: one box for each
-layer the bundle carries (`Terrain`, `Site Model`, `Road Centrelines`, `Land Use Subdivisions`,
-`Land Cover Subdivisions`, `Trees`, `Imagery Drape`), all ticked. Nothing runs until `Import` is
-pressed. Both kinds of subdivision and the drape need the terrain, so unticking `Terrain` disables
+layer the bundle carries (`Terrain`, `Context Buildings`, `Site Model`, `Road Centrelines`,
+`Land Use Subdivisions`, `Land Cover Subdivisions`, `Trees`, `Imagery Drape`), all ticked but
+`Site Model`: that row links the site model, whose buildings `Context Buildings` has already copied
+in, and ticking both shows every building twice. Nothing runs until `Import` is pressed. Both kinds of subdivision and the drape need the terrain, so unticking `Terrain` disables
 them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
 out creates nothing, and the log says it was left out by choice. The shared coordinates, the site
 location and the attribution are not layers and are written whatever is ticked. Leaving out the drape also builds the
@@ -170,11 +180,13 @@ terrain on the project's own ground type rather than the imagery one. Closing th
 
 **An import is staged, and shows itself.** Once `Import` is pressed the window lists the chosen
 steps, marks each one `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts
-the trees in as they go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent`
-raise, so Revit repaints between them and **Cancel** is honoured at the next boundary. Whatever
-committed before the cancel stays, and importing the same bundle again reuses the terrain, the site
-model link, the subdivisions, the road centrelines, the trees and the site context view and filter it
-finds and creates only what is missing. Road centrelines drawn by a build that predates their stamp carry none, so the first import
+the context buildings and the trees in as they go. The import runs one step, or one chunk of 200
+buildings or trees, per `ExternalEvent` raise, so Revit repaints between them and **Cancel** is
+honoured at the next boundary. Whatever committed before the cancel stays, and importing the same
+bundle again reuses the terrain, the context buildings, the site model link, the subdivisions, the
+road centrelines, the trees and the site context view and filter it finds and creates only what is
+missing. Opening the site model to copy from is one call and is not counted: the window shows the
+building count once it is open. Road centrelines drawn by a build that predates their stamp carry none, so the first import
 after upgrading draws them once more; delete the older set by hand. The log's last line names the
 steps that completed and those that never ran. What no window can show is the inside of one
 commit: the terrain and the

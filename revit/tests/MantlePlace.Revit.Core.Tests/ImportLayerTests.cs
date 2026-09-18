@@ -29,7 +29,8 @@ internal static class ImportLayerTests
             run.True(ImportLayers.Of(ImportStepKind.ToposurfaceFromSurfaceTin) == ImportLayer.Terrain, "the TIN path");
             run.True(ImportLayers.Of(ImportStepKind.ToposurfaceFromPointsFile) == ImportLayer.Terrain, "the points path");
             run.True(ImportLayers.Of(ImportStepKind.ToposurfaceFromSurfaceDxf) == ImportLayer.Terrain, "the linked DXF");
-            run.True(ImportLayers.Of(ImportStepKind.LinkSiteIfc) == ImportLayer.SiteModel, "the IFC");
+            run.True(ImportLayers.Of(ImportStepKind.ContextBuildings) == ImportLayer.ContextBuildings, "the buildings copied from the IFC");
+            run.True(ImportLayers.Of(ImportStepKind.LinkSiteIfc) == ImportLayer.SiteModel, "the IFC, linked");
             run.True(ImportLayers.Of(ImportStepKind.RoadCentrelines) == ImportLayer.RoadCentrelines, "the roads");
             run.True(ImportLayers.Of(ImportStepKind.SiteBoundaries) == ImportLayer.LandUseSubdivisions, "the land-use polygons");
             run.True(ImportLayers.Of(ImportStepKind.LandCover) == ImportLayer.LandCoverSubdivisions, "the land-cover polygons");
@@ -62,15 +63,18 @@ internal static class ImportLayerTests
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.ImageryDrape) == ImportLayer.Terrain, "the drape is worn by the ground");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.Terrain) is null, "the terrain");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.SiteModel) is null, "the site model is linked on its own");
+            run.True(ImportLayers.PrerequisiteOf(ImportLayer.ContextBuildings) is null, "context buildings carry their own Z");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.RoadCentrelines) is null, "roads carry their own Z");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.Trees) is null, "trees carry their own Z");
         });
 
-        run.Case("every layer is on by default", () =>
+        run.Case("every layer but the site model's link is on by default", () =>
         {
+            // The reason HPS-51 asks for before a row starts unchecked: the site model's buildings are
+            // already copied in, and a link as well shows each one twice.
             foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
             {
-                run.True(ImportLayers.OnByDefault(layer), $"{layer} starts checked");
+                run.Equal(ImportLayers.OnByDefault(layer), layer != ImportLayer.SiteModel, $"{layer}'s box");
             }
         });
 
@@ -86,6 +90,7 @@ internal static class ImportLayerTests
 
             run.Equal(WindowLabels.LayerName(ImportLayer.Terrain), "Terrain", "the glossary's word, not the host's");
             run.Equal(WindowLabels.LayerName(ImportLayer.SiteModel), "Site Model", "the site model");
+            run.Equal(WindowLabels.LayerName(ImportLayer.ContextBuildings), "Context Buildings", "the glossary's context buildings");
             run.Equal(WindowLabels.LayerName(ImportLayer.LandUseSubdivisions), "Land Use Subdivisions", "the glossary's subdivision, told apart by its layer");
             run.Equal(WindowLabels.LayerName(ImportLayer.LandCoverSubdivisions), "Land Cover Subdivisions", "the other layer's subdivisions");
             run.Equal(WindowLabels.LayerName(ImportLayer.ImageryDrape), "Imagery Drape", "the drape");
@@ -107,7 +112,7 @@ internal static class ImportLayerTests
 
             run.Equal(
                 string.Join(", ", checklist.Layers),
-                "Terrain, SiteModel, RoadCentrelines, LandUseSubdivisions, LandCoverSubdivisions, Trees, ImageryDrape",
+                "Terrain, ContextBuildings, SiteModel, RoadCentrelines, LandUseSubdivisions, LandCoverSubdivisions, Trees, ImageryDrape",
                 "every layer the plan has a step for, and no other");
         });
 
@@ -119,13 +124,13 @@ internal static class ImportLayerTests
             run.False(checklist.IsChecked(ImportLayer.SiteModel), "a layer that is not offered is never chosen");
         });
 
-        run.Case("everything starts checked and enabled, and can be imported", () =>
+        run.Case("everything but the link starts checked, all of it enabled, and can be imported", () =>
         {
             ImportChecklist checklist = new(Enum.GetValues<ImportLayer>());
 
             foreach (ImportLayer layer in checklist.Layers)
             {
-                run.True(checklist.IsChecked(layer), $"{layer} is checked");
+                run.Equal(checklist.IsChecked(layer), layer != ImportLayer.SiteModel, $"{layer}'s box");
                 run.True(checklist.IsEnabled(layer), $"{layer} is enabled");
                 run.True(checklist.MissingPrerequisite(layer) is null, $"{layer} needs nothing it lacks");
             }
@@ -208,7 +213,7 @@ internal static class ImportLayerTests
             run.True(plan.CanImport, "can import");
             run.Equal(
                 string.Join(", ", plan.Steps.Select(step => step.Kind)),
-                "ToposurfaceFromPointsFile, LinkSiteIfc, SetSharedCoordinates, SetSiteLocation, RoadCentrelines, SiteBoundaries, LandCover, Vegetation, AttributionAndProvenance, SiteContextView, ImageryDrape",
+                "ToposurfaceFromPointsFile, ContextBuildings, LinkSiteIfc, SetSharedCoordinates, SetSiteLocation, RoadCentrelines, SiteBoundaries, LandCover, Vegetation, AttributionAndProvenance, SiteContextView, ImageryDrape",
                 "every step");
         });
 

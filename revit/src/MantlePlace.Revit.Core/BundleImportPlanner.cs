@@ -383,28 +383,49 @@ public static class BundleImportPlanner
         return true;
     }
 
+    /// <summary>
+    /// The site model, two ways: its buildings copied into the project, and the site model linked.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both are planned, as every layer is, and the checklist decides which run. The copy's row starts
+    /// checked and the link's does not (<see cref="ImportLayers.OnByDefault"/>): a link as well as the
+    /// copies shows every building twice, once selectable and once not.
+    /// </para>
+    /// <para>
+    /// An absent site model is one skip, under the kind that runs by default. Two lines for one
+    /// missing file would read as two problems.
+    /// </para>
+    /// </remarks>
     private static void PlanSiteIfc(
         BundleManifest manifest,
         BundleEntryIndex entries,
         List<ImportStep> steps,
         List<SkippedImport> skipped)
     {
-        if (TryPlanArtifact(
+        if (!TryPlanArtifact(
                 manifest.SiteIfc,
                 manifest,
                 entries,
-                ImportStepKind.LinkSiteIfc,
+                ImportStepKind.ContextBuildings,
                 manifest.Readiness.IfcSite,
                 "IFC site model",
-                out ImportStep? step,
+                out ImportStep? copy,
                 out SkippedImport? skip,
                 out _))
         {
-            steps.Add(step!);
+            skipped.Add(skip!);
             return;
         }
 
-        skipped.Add(skip!);
+        steps.Add(copy!);
+        steps.Add(new ImportStep
+        {
+            Kind = ImportStepKind.LinkSiteIfc,
+            EntryName = copy!.EntryName,
+            Units = copy.Units,
+            ExpectedSha256 = copy.ExpectedSha256,
+        });
     }
 
     /// <summary>

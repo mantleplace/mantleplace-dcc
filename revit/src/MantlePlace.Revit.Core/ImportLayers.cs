@@ -20,6 +20,9 @@ namespace MantlePlace.Revit.Core;
 public enum ImportLayer
 {
     Terrain,
+    ContextBuildings,
+
+    /// <summary>The site model as a link — the same buildings as <see cref="ContextBuildings"/>, unselectable.</summary>
     SiteModel,
     RoadCentrelines,
     LandUseSubdivisions,
@@ -37,6 +40,7 @@ public static class ImportLayers
         ImportStepKind.ToposurfaceFromPointsFile => ImportLayer.Terrain,
         ImportStepKind.ToposurfaceFromSurfaceTin => ImportLayer.Terrain,
         ImportStepKind.ToposurfaceFromSurfaceDxf => ImportLayer.Terrain,
+        ImportStepKind.ContextBuildings => ImportLayer.ContextBuildings,
         ImportStepKind.LinkSiteIfc => ImportLayer.SiteModel,
         ImportStepKind.RoadCentrelines => ImportLayer.RoadCentrelines,
         ImportStepKind.SiteBoundaries => ImportLayer.LandUseSubdivisions,
@@ -51,8 +55,8 @@ public static class ImportLayers
     /// </summary>
     /// <remarks>
     /// Both kinds of subdivision are cut into the ground and the drape is a material the ground
-    /// wears, so all three need the terrain. Roads and trees carry their own Z and do not; the site
-    /// model is a link.
+    /// wears, so all three need the terrain. Roads, trees and context buildings carry their own Z and
+    /// do not; the site model is a link.
     /// </remarks>
     public static ImportLayer? PrerequisiteOf(ImportLayer layer) => layer switch
     {
@@ -64,11 +68,19 @@ public static class ImportLayers
 
     /// <summary>Whether a layer's box starts checked.</summary>
     /// <remarks>
-    /// Every layer today. The site model leaves the default once context buildings are copied out of
-    /// it, and this is the one place that changes. The unattended path does not read it: it imports
-    /// everything (<see cref="ImportLayerChoice.All"/>).
+    /// <para>
+    /// Every layer but the site model's link. Its buildings are copied into the project as
+    /// <see cref="ImportLayer.ContextBuildings"/>, and a link as well shows each one twice, once
+    /// selectable and once not — the stated reason <c>HPS-51</c> asks for before a row starts
+    /// unchecked (<c>docs/adr/0012-context-buildings-come-from-the-site-model.md</c>).
+    /// </para>
+    /// <para>
+    /// The unattended path does not read it: it imports everything
+    /// (<see cref="ImportLayerChoice.All"/>), the link included, because the standard says an import
+    /// nobody is there to choose for brings in everything.
+    /// </para>
     /// </remarks>
-    public static bool OnByDefault(ImportLayer layer) => true;
+    public static bool OnByDefault(ImportLayer layer) => layer != ImportLayer.SiteModel;
 }
 
 /// <summary>Which layers an import brings in. Immutable.</summary>
