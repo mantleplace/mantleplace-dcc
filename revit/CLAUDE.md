@@ -116,8 +116,9 @@ takes the host's own noun, *toposolid* and never *toposurface*. Every button als
 `ToolTip`: without one Revit shows the `LongDescription` on hover, and that is a paragraph.
 
 **Which words a shared action takes is not this file's to decide** (`HPS-51`): signing in and out,
-the signed-in state and the wait either side of it, the vault, importing a bundle from disk and the
-about surface are said the same way in every host, and the standard's table is where they are said.
+the signed-in state and the wait either side of it, the vault, importing a bundle from disk, the
+import window with its checklist and step states, and the about surface are said the same way in
+every host, and the standard's table is where they are said.
 Title Case is the part that is Revit's, and a host construct keeps its own noun — *toposolid*.
 Changing one of those labels makes the other host wrong, so the standard moves first and both hosts
 follow.

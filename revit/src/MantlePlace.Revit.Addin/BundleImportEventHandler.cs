@@ -53,8 +53,16 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// </summary>
     internal event EventHandler<string>? Completed;
 
-    /// <summary>Whether an import is running. One at a time: two would interleave in one document.</summary>
+    /// <summary>
+    /// Whether an import is open — running, or waiting on its checklist. One at a time: two would
+    /// interleave in one document.
+    /// </summary>
     internal bool IsImporting => _import is not null;
+
+    /// <summary>Why a second import cannot open now, in the words that fit which state the first is in.</summary>
+    internal string BusyReason => _import?.Staged is null
+        ? "An import is waiting in its window — press Import there, or close it."
+        : "An import is already running — wait for it, or cancel it in its window.";
 
     /// <summary>The event this handler re-raises between slices. Set once, at startup.</summary>
     internal void Attach(ExternalEvent externalEvent) => _event = externalEvent;
@@ -140,7 +148,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         if (_import is not null)
         {
             _window?.Activate();
-            Completed?.Invoke(this, "An import is already running — wait for it, or cancel it in its window.");
+            Completed?.Invoke(this, BusyReason);
             return;
         }
 

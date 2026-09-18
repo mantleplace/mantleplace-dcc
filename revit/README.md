@@ -136,12 +136,13 @@ layer the bundle carries (`Terrain`, `Site Model`, `Road Centrelines`, `Subdivis
 need the terrain, so unticking `Terrain` disables both and says `Needs Terrain` beside them; ticking it
 again gives back what they were. A layer left out creates nothing, and the log says it was left out by
 choice. The shared coordinates are not a layer and are set whatever is ticked. Leaving out the drape
-also builds the terrain on the project's own ground type rather than the imagery one.
+also builds the terrain on the project's own ground type rather than the imagery one. Closing the
+window before `Import` imports nothing and leaves the last run's log as it was.
 
 **An import is staged, and shows itself.** Once `Import` is pressed the window lists the chosen
 steps, marks each one `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts
-the trees in as they go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent` raise, so Revit repaints
-between them and **Cancel** is honoured at the next boundary. Whatever committed before the cancel
+the trees in as they go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent`
+raise, so Revit repaints between them and **Cancel** is honoured at the next boundary. Whatever committed before the cancel
 stays, and importing the same bundle again reuses the terrain, the site model link, the subdivisions
 and the trees it finds and creates only what is missing — except the road centrelines, which carry no
 stamp yet and are created a second time. The log's last line names the steps that completed and those
@@ -152,8 +153,9 @@ Cancel pressed then takes effect when it finishes. Closing the window while it r
 
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
 runs unattended from a Revit journal or a tester script. An unattended run raises no dialog and opens
-no window — it imports every layer, runs synchronously and writes `<zip>.mantleplace-import.log` beside the bundle
-instead, because a `TaskDialog` or a modeless window during journal playback is never dismissed.
+no window — it imports every layer, runs synchronously and writes `<zip>.mantleplace-import.log`
+beside the bundle instead, because a `TaskDialog` or a modeless window during journal playback is
+never dismissed.
 
 ⛔ **Load the add-in by hand once after every deploy, before the first unattended run.** The
 assemblies are unsigned, so the first time Revit loads a *newly built* shim it raises

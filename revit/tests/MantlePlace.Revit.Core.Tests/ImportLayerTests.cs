@@ -81,7 +81,7 @@ internal static class ImportLayerTests
 
             run.Equal(WindowLabels.LayerName(ImportLayer.Terrain), "Terrain", "the glossary's word, not the host's");
             run.Equal(WindowLabels.LayerName(ImportLayer.SiteModel), "Site Model", "the site model");
-            run.Equal(WindowLabels.LayerName(ImportLayer.Subdivisions), "Subdivisions", "Revit's construct, Revit's noun");
+            run.Equal(WindowLabels.LayerName(ImportLayer.Subdivisions), "Subdivisions", "the glossary's word for what the land-use polygons become");
             run.Equal(WindowLabels.LayerName(ImportLayer.ImageryDrape), "Imagery Drape", "the drape");
         });
 

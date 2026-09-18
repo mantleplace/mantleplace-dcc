@@ -57,7 +57,7 @@ host met the contract for real:
 | **v1.6** | ⛔`HPS-50` — a host's local install is a single slot that tracks `main`, and says what it holds. The installed Revit add-in on the maintainer machine predated a full day of ribbon commits and the consuming project's Unreal checkout sat twenty commits behind; nothing detected either, because nothing said what was installed |
 | **v1.7** | `HPS-51` — the shared user-facing actions carry one set of words in every host, and a host construct carries the host's own noun. Unreal's panel said `Sign In` and `Sign Out`, Revit's ribbon said `Sign in` and `Sign out`, and Revit's vault window said `Remove download`; nothing said which of those words were shared, so each host went on naming the same actions by itself |
 | **v1.8** | `HPS-51` gains an eighth action, the window that shows a bundle import running and stops it. The Revit import ran as one call on the host's thread, so Revit reported "not responding" for minutes with nothing to show and nothing to cancel; the staged import that fixed it has a window whose surface the reference host will need too, so its words were fixed here before the second host named them differently |
-| **v1.9** | `HPS-51` gains a ninth action, choosing what a bundle import brings in before its steps run. Revit's import window grew a checklist while the reference host's picker was still on the roadmap, so the words were fixed here first — and `Layers`, the word both hosts' developers use for the rows, was kept off the screen, because it already names three other things in the glossary and two more in the reference host's editor |
+| **v1.9** | `HPS-51` gains a ninth action, choosing what a bundle import brings in before its steps run. A Revit import brought in every step the planner found, and a curator who wanted the terrain alone had no way to leave the rest out but to hold a bundle that lacked it; the checklist that fixed it is a surface the reference host's roadmapped picker will share, so its words were fixed here before either host named them — and `Layers`, the word both hosts' developers use for the rows, was kept off the screen, because it already names three other things in the glossary and two more in the reference host's editor |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -985,9 +985,9 @@ twice. Nine actions are shared, and each carries one set of words:
 | Choose what a bundle import brings in, before its steps run    | `Include` over the list, `Import` to start; a row that cannot be chosen until another is reads `Needs` and that row's name | the import window, before its steps | nothing yet; these are the words when it grows one |
 
 **A row in that list is named for what it builds, and a step is named the same.** The glossary's
-word where it has one — `Terrain`, `Site Model` — and the host's noun where the thing is a host
-construct, as Revit's `Subdivisions` are. The list and the steps that follow it are one surface, so a
-curator who ticked `Trees` watches `Trees` import. **Every row starts checked** unless a host has a
+word where it has one — `Terrain`, `Site Model`, `Subdivisions`, and `Imagery Drape` for its
+*drape* — and the host's own noun only for a host construct the glossary does not name. The list and
+the steps that follow it are one surface, so a curator who ticked `Trees` watches `Trees` import. **Every row starts checked** unless a host has a
 stated reason to start one unchecked, and an import nobody is there to choose for brings in
 everything. A row that needs another is disabled while that one is unchecked, and says which — a
 disabled box with no reason beside it reads as a bug.

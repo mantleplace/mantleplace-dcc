@@ -356,7 +356,9 @@ internal sealed class VaultBrowserWindow : Window
             return;
         }
 
-        Report("Importing into the active project…");
+        // Not "Importing…": the import window opens on its checklist, and nothing is imported until
+        // the curator presses Import there.
+        Report($"Opening the {WindowLabels.ImportHeading} window — choose what to include, then press {WindowLabels.Import}.");
 
         // Hands off to Revit's thread. The window stays responsive and hears back through Completed.
         _importHandler.QueueImport(entry.Layout.BundleZipPath);

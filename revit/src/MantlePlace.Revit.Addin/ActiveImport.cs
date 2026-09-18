@@ -104,9 +104,9 @@ internal sealed class ActiveImport : IDisposable
     /// created — or says why not.
     /// </summary>
     /// <remarks>
-    /// The log is begun here, on both paths, before anything can fail: see <see cref="ImportLog"/>
-    /// for why the record is streamed rather than written at the end. A refusal is appended to it as
-    /// well as returned.
+    /// The log is made here, on both paths, and begins with the first line anything writes: see
+    /// <see cref="ImportLog"/> for why the record is streamed rather than written at the end, and why
+    /// opening it no longer truncates it. A refusal is appended to it as well as returned.
     /// </remarks>
     internal static ActiveImport? Open(
         Autodesk.Revit.ApplicationServices.Application application,
@@ -115,7 +115,6 @@ internal sealed class ActiveImport : IDisposable
         out ImportRefusal? refusal)
     {
         ImportLog log = new(zipPath);
-        log.Begin();
 
         // A picker guarantees this; an environment variable and a cache path do not, and an unhandled
         // FileNotFoundException during journal playback is Revit's internal-error dialog with nothing
@@ -211,7 +210,11 @@ internal sealed class ActiveImport : IDisposable
     }
 
     /// <summary>Ends an import the curator dismissed before choosing to run it.</summary>
-    internal void CancelBeforeStart() => Close("Nothing was imported: the window was closed before the import began.");
+    /// <remarks>
+    /// Writes nothing to the log. Nothing ran, and the file beside the zip still holds the last run
+    /// that did — which is the record worth keeping.
+    /// </remarks>
+    internal void CancelBeforeStart() => _summary ??= "Nothing was imported: the import was cancelled before it began.";
 
     /// <summary>
     /// Does one slice of the import on Revit's thread, and closes the record when it was the last.
