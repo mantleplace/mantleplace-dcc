@@ -216,6 +216,50 @@ importable", so that a caller can still identify the bundle it is holding.
 Two identifiers appear in the manifest and are **not interchangeable**: the per-rebuild job identity
 and the order identity. Only the order identity joins a bundle to its vault entry.
 
+### 6.3 Vector layers, by name
+
+The `vector` block describes the vector set: one entry in `vector.layers` per layer, each carrying a
+`name` and one row per delivered format. A consumer finds a layer by its `name` and then a file by
+its format row. It MUST NOT guess a layer from a file name (§3). It also MUST NOT fall back to a
+format it cannot read when the one it wants is missing. The corpus pins both:
+`manifest.roadSplinesGeojsonWins` puts a decoy layer beside the one being selected, and
+`manifest.roadSplinesGpkgOnly` offers only a format the reader does not take.
+
+The schema types `name` as a plain string on purpose. **This table states the vocabulary**, and
+the corpus case `manifest.vectorLayerVocabulary` carries every name in it:
+
+| `name` | What it holds | Geometry | Where it comes from |
+| --- | --- | --- | --- |
+| `building` | Building footprints, with subtype and a height where the source has one | Polygons | Overture buildings |
+| `road` | Road centrelines (road segments only, not rail or paths), with class, subclass and name | Lines | Overture transportation |
+| `water` | Water as the source maps it: streams as centrelines, water bodies as polygons | Lines, polygons and points | Overture base |
+| `land_use` | Land-use areas, with class and subtype | Mostly polygons; lines and points occur | Overture base |
+| `land_cover` | Physical ground cover, with a subtype such as forest | Polygons | Overture base |
+| `road_splines` | The `road` centrelines draped onto the delivered elevation, carrying an estimated width, class and name | Lines with Z | Derived from `road`, and marked with `derived_from` |
+| `road_polygons` | Road surfaces: the `road` centrelines widened by the same estimated width, merged per class, and cut so no two overlap (the wider class keeps the ground where classes meet), carrying class and width | Polygons | Derived from `road`, and marked with `derived_from` |
+
+A layer's geometry can mix the families its row names, so a reader keys on each feature's own
+geometry type rather than on the layer. Every layer's coordinates are geographic, so §6's one
+projection exception applies to all of them.
+
+What presence and absence mean:
+
+- **A base layer is present exactly when the AOI holds at least one of its features after the clip
+  to the AOI.** An absent base layer means *zero features*, never a failure. The producer does not
+  ship a vector set with a layer it failed to read or write: when any base layer fails, the whole
+  set is withheld. The `vector` block then says `present: false` and lists no layers, and `packaging`
+  says why (§6.1).
+- **A layer is never emitted empty.** The producer writes no entry with a feature count of zero,
+  and no placeholder entry for a layer the AOI does not have.
+- **The derived layers are best-effort.** `road_splines` and `road_polygons` can each be absent
+  while `road` is present, and their absence says nothing about whether the AOI has roads. A
+  consumer that wants roads and finds no derived layer SHOULD say so rather than report an AOI
+  without roads.
+- ⛔ **A consumer MUST ignore a layer name it does not recognise.** The vocabulary grows additively.
+  A new name is a change to this table and to the corpus, not to the schema. A consumer that
+  refuses a bundle for carrying an unfamiliar layer turns every new layer into a breaking release.
+  The corpus case `manifest.vectorLayerUnknownName` pins this.
+
 ## 7. The sidecar manifest
 
 The vault publishes a versioned copy of the manifest beside the zip, so that a listing can show a

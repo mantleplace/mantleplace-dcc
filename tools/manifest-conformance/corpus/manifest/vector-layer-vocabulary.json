@@ -1,0 +1,100 @@
+{
+  "version": "1.0.0",
+  "vector": {
+    "present": true,
+    "layers": [
+      {
+        "name": "building",
+        "feature_count": 412,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/Building.geojson",
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ]
+      },
+      {
+        "name": "road",
+        "feature_count": 96,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/Road.geojson",
+            "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        ]
+      },
+      {
+        "name": "water",
+        "feature_count": 7,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/Water.geojson",
+            "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        ]
+      },
+      {
+        "name": "land_use",
+        "feature_count": 23,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/LandUse.geojson",
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ]
+      },
+      {
+        "name": "land_cover",
+        "feature_count": 58,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/LandCover.geojson",
+            "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        ]
+      },
+      {
+        "name": "road_splines",
+        "derived_from": "road",
+        "feature_count": 96,
+        "formats": [
+          {
+            "format": "gpkg",
+            "path": "Vector/RoadSplines.gpkg",
+            "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+          },
+          {
+            "format": "geojson",
+            "path": "Vector/RoadSplines.geojson",
+            "sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+          }
+        ]
+      },
+      {
+        "name": "road_polygons",
+        "derived_from": "road",
+        "feature_count": 5,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/RoadPolygons.geojson",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    ]
+  },
+  "job_id": "vl",
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
+    }
+  }
+}
