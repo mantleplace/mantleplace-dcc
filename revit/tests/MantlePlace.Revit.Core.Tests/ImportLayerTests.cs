@@ -31,7 +31,8 @@ internal static class ImportLayerTests
             run.True(ImportLayers.Of(ImportStepKind.ToposurfaceFromSurfaceDxf) == ImportLayer.Terrain, "the linked DXF");
             run.True(ImportLayers.Of(ImportStepKind.LinkSiteIfc) == ImportLayer.SiteModel, "the IFC");
             run.True(ImportLayers.Of(ImportStepKind.RoadCentrelines) == ImportLayer.RoadCentrelines, "the roads");
-            run.True(ImportLayers.Of(ImportStepKind.SiteBoundaries) == ImportLayer.Subdivisions, "the land-use polygons");
+            run.True(ImportLayers.Of(ImportStepKind.SiteBoundaries) == ImportLayer.LandUseSubdivisions, "the land-use polygons");
+            run.True(ImportLayers.Of(ImportStepKind.LandCover) == ImportLayer.LandCoverSubdivisions, "the land-cover polygons");
             run.True(ImportLayers.Of(ImportStepKind.Vegetation) == ImportLayer.Trees, "the tree points");
             run.True(ImportLayers.Of(ImportStepKind.ImageryDrape) == ImportLayer.ImageryDrape, "the drape");
 
@@ -53,7 +54,8 @@ internal static class ImportLayerTests
 
         run.Case("the subdivisions and the drape need the terrain, and nothing else needs anything", () =>
         {
-            run.True(ImportLayers.PrerequisiteOf(ImportLayer.Subdivisions) == ImportLayer.Terrain, "subdivisions are cut into the ground");
+            run.True(ImportLayers.PrerequisiteOf(ImportLayer.LandUseSubdivisions) == ImportLayer.Terrain, "land-use subdivisions are cut into the ground");
+            run.True(ImportLayers.PrerequisiteOf(ImportLayer.LandCoverSubdivisions) == ImportLayer.Terrain, "and so are land-cover ones");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.ImageryDrape) == ImportLayer.Terrain, "the drape is worn by the ground");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.Terrain) is null, "the terrain");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.SiteModel) is null, "the site model is linked on its own");
@@ -81,7 +83,8 @@ internal static class ImportLayerTests
 
             run.Equal(WindowLabels.LayerName(ImportLayer.Terrain), "Terrain", "the glossary's word, not the host's");
             run.Equal(WindowLabels.LayerName(ImportLayer.SiteModel), "Site Model", "the site model");
-            run.Equal(WindowLabels.LayerName(ImportLayer.Subdivisions), "Subdivisions", "the glossary's word for what the land-use polygons become");
+            run.Equal(WindowLabels.LayerName(ImportLayer.LandUseSubdivisions), "Land Use Subdivisions", "the glossary's subdivision, told apart by its layer");
+            run.Equal(WindowLabels.LayerName(ImportLayer.LandCoverSubdivisions), "Land Cover Subdivisions", "the other layer's subdivisions");
             run.Equal(WindowLabels.LayerName(ImportLayer.ImageryDrape), "Imagery Drape", "the drape");
         });
 
@@ -101,7 +104,7 @@ internal static class ImportLayerTests
 
             run.Equal(
                 string.Join(", ", checklist.Layers),
-                "Terrain, SiteModel, RoadCentrelines, Subdivisions, Trees, ImageryDrape",
+                "Terrain, SiteModel, RoadCentrelines, LandUseSubdivisions, LandCoverSubdivisions, Trees, ImageryDrape",
                 "every layer the plan has a step for, and no other");
         });
 
@@ -132,7 +135,7 @@ internal static class ImportLayerTests
             ImportChecklist checklist = new(Enum.GetValues<ImportLayer>());
             checklist.Set(ImportLayer.Terrain, false);
 
-            foreach (ImportLayer dependent in new[] { ImportLayer.Subdivisions, ImportLayer.ImageryDrape })
+            foreach (ImportLayer dependent in new[] { ImportLayer.LandUseSubdivisions, ImportLayer.LandCoverSubdivisions, ImportLayer.ImageryDrape })
             {
                 run.False(checklist.IsEnabled(dependent), $"{dependent} cannot be toggled");
                 run.False(checklist.IsChecked(dependent), $"{dependent} reads unchecked");
@@ -151,7 +154,7 @@ internal static class ImportLayerTests
             checklist.Set(ImportLayer.Terrain, false);
             checklist.Set(ImportLayer.Terrain, true);
 
-            run.True(checklist.IsChecked(ImportLayer.Subdivisions), "subdivisions were on, and are again");
+            run.True(checklist.IsChecked(ImportLayer.LandUseSubdivisions), "subdivisions were on, and are again");
             run.False(checklist.IsChecked(ImportLayer.ImageryDrape), "the drape was off before, and stays off");
         });
 
@@ -159,9 +162,9 @@ internal static class ImportLayerTests
         {
             ImportChecklist checklist = new(Enum.GetValues<ImportLayer>());
             checklist.Set(ImportLayer.Terrain, false);
-            checklist.Set(ImportLayer.Subdivisions, true);
+            checklist.Set(ImportLayer.LandUseSubdivisions, true);
 
-            run.False(checklist.Choice.Includes(ImportLayer.Subdivisions), "subdivisions without the terrain are not chosen");
+            run.False(checklist.Choice.Includes(ImportLayer.LandUseSubdivisions), "subdivisions without the terrain are not chosen");
         });
 
         run.Case("a prerequisite the bundle does not carry disables nothing", () =>
@@ -186,7 +189,7 @@ internal static class ImportLayerTests
 
         run.Case("only the dependents checked, under an unchecked terrain, is nothing to import", () =>
         {
-            ImportChecklist checklist = new([ImportLayer.Terrain, ImportLayer.Subdivisions]);
+            ImportChecklist checklist = new([ImportLayer.Terrain, ImportLayer.LandUseSubdivisions]);
             checklist.Set(ImportLayer.Terrain, false);
 
             run.False(checklist.CanImport, "a checked box that is disabled imports nothing");
@@ -202,7 +205,7 @@ internal static class ImportLayerTests
             run.True(plan.CanImport, "can import");
             run.Equal(
                 string.Join(", ", plan.Steps.Select(step => step.Kind)),
-                "ToposurfaceFromPointsFile, LinkSiteIfc, SetSharedCoordinates, RoadCentrelines, SiteBoundaries, Vegetation, ImageryDrape",
+                "ToposurfaceFromPointsFile, LinkSiteIfc, SetSharedCoordinates, RoadCentrelines, SiteBoundaries, LandCover, Vegetation, ImageryDrape",
                 "every step");
         });
 
@@ -287,6 +290,7 @@ internal static class ImportLayerTests
         "Imagery/Drape.png",
         "Vector/RoadSplines.geojson",
         "Vector/LandUse.geojson",
+        "Vector/LandCover.geojson",
         "Landcover/TreePoints.csv",
     ];
 
@@ -322,7 +326,8 @@ internal static class ImportLayerTests
           "vector": {
             "layers": [
               { "name": "road_splines", "formats": [{ "format": "geojson", "path": "Vector/RoadSplines.geojson", "sha256": "aa" }] },
-              { "name": "land_use", "formats": [{ "format": "geojson", "path": "Vector/LandUse.geojson", "sha256": "bb" }] }
+              { "name": "land_use", "formats": [{ "format": "geojson", "path": "Vector/LandUse.geojson", "sha256": "bb" }] },
+              { "name": "land_cover", "formats": [{ "format": "geojson", "path": "Vector/LandCover.geojson", "sha256": "cc" }] }
             ]
           }
         }

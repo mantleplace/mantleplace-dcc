@@ -38,6 +38,13 @@ public enum ImportStepKind
     SiteBoundaries,
 
     /// <summary>
+    /// Ground cover from the <c>land_cover</c> vector layer, cut as subdivisions the way the
+    /// <see cref="SiteBoundaries"/> are. A different Overture layer from <c>land_use</c>, not a
+    /// second name for it: this one carries the physical subtype — forest and its like.
+    /// </summary>
+    LandCover,
+
+    /// <summary>
     /// Trees from the tree-points file, with real height and crown — Forma's "Vegetation" row.
     /// </summary>
     Vegetation,

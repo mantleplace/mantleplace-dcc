@@ -104,12 +104,16 @@ internal sealed partial class RevitBundleImporter
 
         // One material carries one offset, and under smooth shading every subdivision's offset is
         // its own — so each gets its own material, anchored to its own corner. Under flat shading
-        // the origin is shared and so is the material.
+        // the origin is shared and so is the material, save that a renderer keyword needs a name of
+        // its own: one extra material per keyword, anchored as the ground is.
+        Dictionary<string, ElementId> sharedByKeyword = new(StringComparer.Ordinal);
         if (!TryWearMaterial(
             terrain,
             materialId,
             name,
-            subdivision => smoothed ? SubDivisionMaterialId(subdivision, name, imagePath, placement) : materialId,
+            subdivision => smoothed
+                ? SubDivisionMaterialId(subdivision, name, imagePath, placement)
+                : SharedMaterialId(subdivision, name, imagePath, placement, groundAnchor, materialId, sharedByKeyword),
             out int drapedSubDivisions,
             out int refusedSubDivisions,
             out string? refusalReason,
@@ -196,18 +200,23 @@ internal sealed partial class RevitBundleImporter
 
     /// <summary>
     /// A subdivision's own drape material: the ground's image and scale, anchored to the
-    /// subdivision's corner, named by the subdivision's stamp so a re-import reuses it.
+    /// subdivision's corner, named by the subdivision's stamp and its renderer keyword so a
+    /// re-import reuses it (<see cref="GroundMaterialNames.PerSubDivision"/>).
     /// </summary>
     private ElementId SubDivisionMaterialId(Element subdivision, string name, string imagePath, DrapePlacement placement)
     {
-        string token = SiteBoundaryIdentity.Token(
+        // A subdivision this run cut and could not stamp is named by its id, under the land-use
+        // spelling this plugin has always used for it.
+        GroundStamp stamp = SiteBoundaryIdentity.Parse(
             subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString(),
             _archive.Layout.Key.Stem)
-            ?? subdivision.Id.Value.ToString(CultureInfo.InvariantCulture);
+            ?? new GroundStamp(GroundLayer.LandUse, subdivision.Id.Value.ToString(CultureInfo.InvariantCulture));
 
-        // Revit refuses these in an element name; anything else in a feature name is kept.
-        string safe = string.Concat(token.Select(c => @"\:{}[]|;<>?`~".Contains(c) ? '-' : c));
-        string materialName = $"{name} boundary {safe}";
+        string materialName = GroundMaterialNames.PerSubDivision(
+            name,
+            stamp.Layer,
+            stamp.Token,
+            _subDivisionKeywords.GetValueOrDefault(subdivision.Id));
 
         DrapeOffset anchor = AnchorFor(subdivision, $"subdivision {subdivision.Id.Value}", placement, smoothed: true);
         ElementId id = DrapeMaterialId(materialName, imagePath, placement, anchor, out string? misplaced);
@@ -217,6 +226,45 @@ internal sealed partial class RevitBundleImporter
         }
 
         return id;
+    }
+
+    /// <summary>
+    /// Under flat shading, the material a subdivision shares: the ground's own when its subtype names
+    /// no renderer keyword, and otherwise one per keyword, made once per step
+    /// (<see cref="GroundMaterialNames.Shared"/>).
+    /// </summary>
+    /// <remarks>
+    /// Anchored to the project origin like the ground, which is what flat shading measures every
+    /// offset from, so the photograph lines up across the subdivision's edge. A keyword material this
+    /// Revit will not make falls back to the ground's: the photograph matters more than the grass.
+    /// </remarks>
+    private ElementId SharedMaterialId(
+        Element subdivision,
+        string name,
+        string imagePath,
+        DrapePlacement placement,
+        DrapeOffset groundAnchor,
+        ElementId groundMaterialId,
+        Dictionary<string, ElementId> sharedByKeyword)
+    {
+        if (_subDivisionKeywords.GetValueOrDefault(subdivision.Id) is not { } keyword)
+        {
+            return groundMaterialId;
+        }
+
+        if (!sharedByKeyword.TryGetValue(keyword, out ElementId? id))
+        {
+            id = DrapeMaterialId(
+                GroundMaterialNames.Shared(name, keyword), imagePath, placement, groundAnchor, out string? misplaced);
+            if (misplaced is not null)
+            {
+                Trace($"  drape: ⚠ the \"{keyword}\" material's photograph is not pinned where it should be: {misplaced}");
+            }
+
+            sharedByKeyword[keyword] = id;
+        }
+
+        return id == ElementId.InvalidElementId ? groundMaterialId : id;
     }
 
     /// <summary>

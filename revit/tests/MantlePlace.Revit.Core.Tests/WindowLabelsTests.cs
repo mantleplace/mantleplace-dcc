@@ -188,7 +188,8 @@ internal static class WindowLabelsTests
             run.Equal(WindowLabels.StepName(ImportStepKind.ToposurfaceFromSurfaceTin), "Terrain", "the TIN path");
             run.Equal(WindowLabels.StepName(ImportStepKind.ToposurfaceFromPointsFile), "Terrain", "the points path");
             run.Equal(WindowLabels.StepName(ImportStepKind.LinkSiteIfc), "Site Model", "the IFC");
-            run.Equal(WindowLabels.StepName(ImportStepKind.SiteBoundaries), "Subdivisions", "the land-use polygons, by what they become");
+            run.Equal(WindowLabels.StepName(ImportStepKind.SiteBoundaries), "Land Use Subdivisions", "the land-use polygons, by what they become");
+            run.Equal(WindowLabels.StepName(ImportStepKind.LandCover), "Land Cover Subdivisions", "the land-cover polygons, told apart from the land use");
             run.Equal(WindowLabels.StepName(ImportStepKind.Vegetation), "Trees", "the tree points");
             run.Equal(WindowLabels.ProgressText(new StepProgress(1_250, 4_532)), "1,250 of 4,532", "chunk progress");
         });

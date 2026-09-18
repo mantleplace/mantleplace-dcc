@@ -985,8 +985,9 @@ twice. Nine actions are shared, and each carries one set of words:
 | Choose what a bundle import brings in, before its steps run    | `Include` over the list, `Import` to start; a row that cannot be chosen until another is reads `Needs` and that row's name | the import window, before its steps | nothing yet; these are the words when it grows one |
 
 **A row in that list is named for what it builds, and a step is named the same.** The glossary's
-word where it has one — `Terrain`, `Site Model`, `Subdivisions`, and `Imagery Drape` for its
-*drape* — and the host's own noun only for a host construct the glossary does not name. The list and
+word where it has one — `Terrain`, `Site Model`, and names built on it, as `Land Use Subdivisions`
+and `Imagery Drape` are on *subdivision* and *drape* — and the host's own noun only for a host
+construct the glossary does not name. The list and
 the steps that follow it are one surface, so a curator who ticked `Trees` watches `Trees` import. **Every row starts checked** unless a host has a
 stated reason to start one unchecked, and an import nobody is there to choose for brings in
 everything. A row that needs another is disabled while that one is unchecked, and says which — a

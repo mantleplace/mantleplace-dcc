@@ -88,6 +88,18 @@ internal sealed partial class RevitBundleImporter(
     private readonly List<ElementId> _createdSubDivisionIds = [];
 
     /// <summary>
+    /// The renderer keyword each subdivision's material is to carry, by element, for the subdivisions
+    /// this import cut or found stamped on the terrain.
+    /// </summary>
+    /// <remarks>
+    /// Filled by the subdivision steps, which are the only ones that read the published subtype, and
+    /// read by the drape, which names the materials. By element rather than by stamp so a subdivision
+    /// this run cut and could not stamp still gets its keyword. A subdivision absent from it — its
+    /// layer did not run this import, or its subtype names no keyword — wears a name with none.
+    /// </remarks>
+    private readonly Dictionary<ElementId, string> _subDivisionKeywords = [];
+
+    /// <summary>
     /// Whether the smooth-shading decision has been made, and said, for this import.
     /// </summary>
     /// <remarks>
@@ -186,7 +198,9 @@ internal sealed partial class RevitBundleImporter(
             case ImportStepKind.RoadCentrelines:
                 return Once(() => ImportRoadCentrelines(step));
             case ImportStepKind.SiteBoundaries:
-                return Once(() => ImportSiteBoundaries(step));
+                return Once(() => ImportSiteBoundaries(step, GroundLayer.LandUse));
+            case ImportStepKind.LandCover:
+                return Once(() => ImportSiteBoundaries(step, GroundLayer.LandCover));
             case ImportStepKind.Vegetation:
                 return ImportVegetation(step);
             case ImportStepKind.ImageryDrape:

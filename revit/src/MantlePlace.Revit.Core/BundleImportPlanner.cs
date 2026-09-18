@@ -431,7 +431,8 @@ public static class BundleImportPlanner
     }
 
     /// <summary>
-    /// The three Forma-parity layers: road centrelines, site boundaries and vegetation.
+    /// The three Forma-parity layers — road centrelines, site boundaries and vegetation — and the
+    /// land cover, which is cut as subdivisions beside the site boundaries.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -470,6 +471,15 @@ public static class BundleImportPlanner
             entries,
             ImportStepKind.SiteBoundaries,
             "site boundaries",
+            steps,
+            skipped);
+
+        PlanPlacedArtifact(
+            manifest.LandCover,
+            frame,
+            entries,
+            ImportStepKind.LandCover,
+            "land cover",
             steps,
             skipped);
 

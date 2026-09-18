@@ -44,6 +44,22 @@ public sealed class SiteFeature
 
     /// <summary><c>properties.width_m_estimated</c>, or <c>null</c>. Roads only.</summary>
     public double? WidthM { get; init; }
+
+    /// <summary>
+    /// GeoJSON <c>properties.subtype</c> verbatim — Overture's physical or use subtype, such as
+    /// <c>forest</c> — or empty. What <see cref="RendererKeywords"/> reads a keyword from.
+    /// </summary>
+    public string Subtype { get; init; } = string.Empty;
+
+    /// <summary>
+    /// True for an inner ring of a polygon: the ground where the polygon's subtype is <em>not</em>.
+    /// </summary>
+    /// <remarks>
+    /// Every ring is still its own feature, as it always has been, so the stamps and their positions
+    /// do not move. What this changes is what a hole may claim: a clearing cut out of a forest is
+    /// not forest, and it must not be named as though it were.
+    /// </remarks>
+    public bool IsHole { get; init; }
 }
 
 /// <summary>
@@ -132,9 +148,11 @@ public static class SiteVectorReader
         List<SiteFeature> parsed)
     {
         JsonElement? properties = feature.Object("properties");
-        string name = properties?.Str("name") ?? string.Empty;
-        string classification = properties?.Str("class") ?? string.Empty;
-        double? width = properties?.OptionalDouble("width_m_estimated");
+        FeatureProperties carried = new(
+            properties?.Str("name") ?? string.Empty,
+            properties?.Str("class") ?? string.Empty,
+            properties?.OptionalDouble("width_m_estimated"),
+            properties?.Str("subtype") ?? string.Empty);
 
         if (feature.Object("geometry") is not { } geometry)
         {
@@ -157,38 +175,35 @@ public static class SiteVectorReader
         // Every accepted type normalises to "an array of position lists": a LineString is one, a
         // MultiLineString and a Polygon are both a list of them, and a MultiPolygon is a list of
         // those. Rings become their own features, outer and inner alike — Revit needs each loop
-        // separately, and which is which is the caller's geometry question, not this reader's.
+        // separately. Which is which is marked (IsHole) and nothing more: what a hole means for the
+        // element it becomes is the caller's question, not this reader's.
         switch (type)
         {
             case "LineString":
-                AppendPath(coordinates, frame, closed: false, name, classification, width, parsed);
+                AppendPath(coordinates, frame, closed: false, isHole: false, carried, parsed);
                 break;
 
-            case "MultiLineString" or "Polygon":
+            case "MultiLineString":
                 foreach (JsonElement path in coordinates.EnumerateArray())
                 {
                     if (path.ValueKind == JsonValueKind.Array)
                     {
-                        AppendPath(path, frame, closed, name, classification, width, parsed);
+                        AppendPath(path, frame, closed: false, isHole: false, carried, parsed);
                     }
                 }
 
                 break;
 
+            case "Polygon":
+                AppendRings(coordinates, frame, carried, parsed);
+                break;
+
             case "MultiPolygon":
                 foreach (JsonElement polygon in coordinates.EnumerateArray())
                 {
-                    if (polygon.ValueKind != JsonValueKind.Array)
+                    if (polygon.ValueKind == JsonValueKind.Array)
                     {
-                        continue;
-                    }
-
-                    foreach (JsonElement ring in polygon.EnumerateArray())
-                    {
-                        if (ring.ValueKind == JsonValueKind.Array)
-                        {
-                            AppendPath(ring, frame, closed: true, name, classification, width, parsed);
-                        }
+                        AppendRings(polygon, frame, carried, parsed);
                     }
                 }
 
@@ -200,13 +215,34 @@ public static class SiteVectorReader
         }
     }
 
+    /// <summary>
+    /// One polygon's rings, each its own feature. RFC 7946 puts the exterior ring first, so every
+    /// ring after it is a hole.
+    /// </summary>
+    private static void AppendRings(
+        JsonElement polygon,
+        SiteFrame frame,
+        FeatureProperties carried,
+        List<SiteFeature> parsed)
+    {
+        int ring = 0;
+        foreach (JsonElement path in polygon.EnumerateArray())
+        {
+            if (path.ValueKind == JsonValueKind.Array)
+            {
+                AppendPath(path, frame, closed: true, isHole: ring > 0, carried, parsed);
+            }
+
+            ring++;
+        }
+    }
+
     private static void AppendPath(
         JsonElement path,
         SiteFrame frame,
         bool closed,
-        string name,
-        string classification,
-        double? width,
+        bool isHole,
+        FeatureProperties carried,
         List<SiteFeature> parsed)
     {
         List<SiteVertex> vertices = [];
@@ -242,11 +278,20 @@ public static class SiteVectorReader
         {
             Vertices = vertices,
             IsClosed = closed,
-            Name = name,
-            Classification = classification,
-            WidthM = width,
+            Name = carried.Name,
+            Classification = carried.Classification,
+            WidthM = carried.WidthM,
+            Subtype = carried.Subtype,
+            IsHole = isHole,
         });
     }
+
+    /// <summary>The properties one GeoJSON feature hands to every line or ring it yields.</summary>
+    private readonly record struct FeatureProperties(
+        string Name,
+        string Classification,
+        double? WidthM,
+        string Subtype);
 
     private static bool TryReadPosition(JsonElement position, SiteFrame frame, out SiteVertex vertex)
     {

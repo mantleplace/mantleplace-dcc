@@ -20,7 +20,8 @@ public enum ImportLayer
     Terrain,
     SiteModel,
     RoadCentrelines,
-    Subdivisions,
+    LandUseSubdivisions,
+    LandCoverSubdivisions,
     Trees,
     ImageryDrape,
 }
@@ -36,7 +37,8 @@ public static class ImportLayers
         ImportStepKind.ToposurfaceFromSurfaceDxf => ImportLayer.Terrain,
         ImportStepKind.LinkSiteIfc => ImportLayer.SiteModel,
         ImportStepKind.RoadCentrelines => ImportLayer.RoadCentrelines,
-        ImportStepKind.SiteBoundaries => ImportLayer.Subdivisions,
+        ImportStepKind.SiteBoundaries => ImportLayer.LandUseSubdivisions,
+        ImportStepKind.LandCover => ImportLayer.LandCoverSubdivisions,
         ImportStepKind.Vegetation => ImportLayer.Trees,
         ImportStepKind.ImageryDrape => ImportLayer.ImageryDrape,
         _ => null,
@@ -46,12 +48,14 @@ public static class ImportLayers
     /// The layer this one cannot be imported without, or <c>null</c> for one that stands alone.
     /// </summary>
     /// <remarks>
-    /// Subdivisions are cut into the ground and the drape is a material the ground wears, so both
-    /// need the terrain. Roads and trees carry their own Z and do not; the site model is a link.
+    /// Both kinds of subdivision are cut into the ground and the drape is a material the ground
+    /// wears, so all three need the terrain. Roads and trees carry their own Z and do not; the site
+    /// model is a link.
     /// </remarks>
     public static ImportLayer? PrerequisiteOf(ImportLayer layer) => layer switch
     {
-        ImportLayer.Subdivisions => ImportLayer.Terrain,
+        ImportLayer.LandUseSubdivisions => ImportLayer.Terrain,
+        ImportLayer.LandCoverSubdivisions => ImportLayer.Terrain,
         ImportLayer.ImageryDrape => ImportLayer.Terrain,
         _ => null,
     };
@@ -96,7 +100,7 @@ public sealed class ImportLayerChoice
 /// </para>
 /// <para>
 /// A box remembers what the curator set it to while its prerequisite is off. Unchecking the terrain
-/// unchecks and disables the subdivisions and the drape; checking it again gives back whatever they
+/// unchecks and disables both kinds of subdivision and the drape; checking it again gives back whatever they
 /// were, rather than making the curator redo them.
 /// </para>
 /// </remarks>
