@@ -86,17 +86,20 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
 
         if (unattended is null)
         {
-            // Staged: one step or one chunk per ExternalEvent raise, with the import window showing
-            // it, so Revit repaints between them and Cancel is honoured. This command returns now;
-            // the handler owns the import from here and closes it when the run is over.
-            MantlePlaceApplication.ImportHandler.Start(import, commandData.Application.MainWindowHandle);
+            // The import window opens on its checklist; once the curator presses Import the run is
+            // staged, one step or one chunk per ExternalEvent raise, so Revit repaints between them
+            // and Cancel is honoured. This command returns now; the handler owns the import from
+            // here and closes it when the run is over.
+            MantlePlaceApplication.ImportHandler.TakeOver(import, commandData.Application.MainWindowHandle);
             return Result.Succeeded;
         }
 
         // ⛔ Unattended: synchronous and log-only. A modeless window in a journal playback never
-        // closes, and nothing is there to click Cancel, so the same import runs to the end in place.
+        // closes, and nothing is there to tick a box or click Cancel, so the same import brings in
+        // every layer and runs to the end in place.
         using (import)
         {
+            import.Begin(ImportLayerChoice.All);
             import.RunToEnd();
             if (import.Failed)
             {

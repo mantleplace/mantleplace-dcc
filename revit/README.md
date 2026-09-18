@@ -129,10 +129,18 @@ else logs beside that zip. `Logs` selects the newest log under the cache, and wh
 none it opens the cache and says that a zip from elsewhere logged elsewhere. The About dialog on the
 Account button reaches the same place through the same function, so the two can never disagree.
 
-**An import is staged, and shows itself.** Both ways in — `Import Bundle` and the vault window's
-`Import` — open the modeless `Bundle Import` window, which lists the plan's steps, marks each one
-`Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts the trees in as they
-go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent` raise, so Revit repaints
+**An import brings in what you tick.** Both ways in — `Import Bundle` and the vault window's
+`Import` — open the modeless `Bundle Import` window on a checklist headed `Include`: one box for each
+layer the bundle carries (`Terrain`, `Site Model`, `Road Centrelines`, `Subdivisions`, `Trees`,
+`Imagery Drape`), all ticked. Nothing runs until `Import` is pressed. The subdivisions and the drape
+need the terrain, so unticking `Terrain` disables both and says `Needs Terrain` beside them; ticking it
+again gives back what they were. A layer left out creates nothing, and the log says it was left out by
+choice. The shared coordinates are not a layer and are set whatever is ticked. Leaving out the drape
+also builds the terrain on the project's own ground type rather than the imagery one.
+
+**An import is staged, and shows itself.** Once `Import` is pressed the window lists the chosen
+steps, marks each one `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts
+the trees in as they go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent` raise, so Revit repaints
 between them and **Cancel** is honoured at the next boundary. Whatever committed before the cancel
 stays, and importing the same bundle again reuses the terrain, the site model link, the subdivisions
 and the trees it finds and creates only what is missing — except the road centrelines, which carry no
@@ -144,7 +152,7 @@ Cancel pressed then takes effect when it finishes. Closing the window while it r
 
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
 runs unattended from a Revit journal or a tester script. An unattended run raises no dialog and opens
-no window — it runs synchronously and writes `<zip>.mantleplace-import.log` beside the bundle
+no window — it imports every layer, runs synchronously and writes `<zip>.mantleplace-import.log` beside the bundle
 instead, because a `TaskDialog` or a modeless window during journal playback is never dismissed.
 
 ⛔ **Load the add-in by hand once after every deploy, before the first unattended run.** The
