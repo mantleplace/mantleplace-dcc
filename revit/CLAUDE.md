@@ -46,6 +46,7 @@ The ones this tree already turns on:
 | `HPS-18` … `25`, `48` | list → materialize → poll → **re-list** → presign → download; explicit token list, never a scope keyword; one error-body precedence for auth and vault alike. |
 | `HPS-26` … `30`, `44` | write to `.part`, verify, rename; null sha is unknown not absent; eviction only on request.                                                                   |
 | `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers behind roads and site boundaries. Nothing else here projects.                        |
+| `HPS-51`              | signing in and out, the vault, the local import and the about surface take the standard's words. The casing is this host's; the words are not.                 |
 
 ## Layout and the split that matters
 
@@ -113,6 +114,13 @@ the act wherever the button has one: `Vault`, not `Open vault`. A shared action 
 word from [`CONTEXT.md`](../CONTEXT.md) — *vault*, *bundle*, *terrain* — and only a host construct
 takes the host's own noun, *toposolid* and never *toposurface*. Every button also sets a one-line
 `ToolTip`: without one Revit shows the `LongDescription` on hover, and that is a paragraph.
+
+**Which words a shared action takes is not this file's to decide** (`HPS-51`): signing in and out,
+the signed-in state and the wait either side of it, the vault, importing a bundle from disk and the
+about surface are said the same way in every host, and the standard's table is where they are said.
+Title Case is the part that is Revit's, and a host construct keeps its own noun — *toposolid*.
+Changing one of those labels makes the other host wrong, so the standard moves first and both hosts
+follow.
 
 ## Things that will bite you
 

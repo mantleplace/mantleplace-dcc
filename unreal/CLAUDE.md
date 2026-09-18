@@ -34,6 +34,7 @@ turns on most visibly, and which a patch here is most likely to break:
 | `HPS-32` | the paint-layer band legend is **data**. Which weight channel is which material is read from the manifest, never inferred from a filename. |
 | `HPS-33` | manifest values are applied verbatim. A paint layer's name is the platform's material name exactly — never prettified, never prefixed.    |
 | `HPS-46` | the conformance corpus's expectation keys are asserted. A case edited to expect something different turns the suite red.                   |
+| `HPS-51` | the vault panel's auth button and heading take the standard's words — the editor's own casing, not its own wording. The local-import label is the one that does not yet, and the standard records it. |
 
 Root `CLAUDE.md`'s boundary section is the one to internalise: **this plugin applies pre-derived
 values and never derives them.** A patch that computes a placement value locally is refused even when
@@ -92,6 +93,14 @@ there. The reason is in [ADR 0003](../docs/adr/0003-naming-authority-and-mp-pref
 label is read in a cramped outliner column and reappears unqualified in the Details panel, in logs
 and in Blueprint references, and it is the only Mantle Place marker that survives a project whose
 content root has been reconfigured.
+
+**A third kind of string, which neither of those two is about: the words on the panel's own
+controls** — the auth button, the heading over the list, the local-import section. Those name actions
+a curator also meets in Revit, so their words are fixed cross-host by `HPS-51` and the standard's
+table is where they are spelled; the editor's casing and the panel's layout stay ours. A host
+construct keeps its host noun: it is a `Landscape` here and a `Toposolid` there, and that is outside
+the rule. They live inline in `SMantlePlaceVaultPanel.cpp`, which CI never compiles — so a label is
+changed under review alone, and the standard's table is what review reads.
 
 ### Generated assets
 

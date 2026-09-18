@@ -14,7 +14,9 @@ namespace MantlePlace.Revit.Core.Tests;
 /// </para>
 /// <para>
 /// The casing cases are not decoration. Revit's windows sat at <c>Prepare for Revit</c> beside
-/// <c>Remove download</c>, one Title Case and one sentence case, in the same button row.
+/// <c>Remove download</c>, one Title Case and one sentence case, in the same button row. The
+/// shared-word cases are not decoration either: <c>Vault</c> and <c>Sign In</c> are fixed across
+/// hosts by <c>HPS-51</c>, and this is the half of that rule a test can hold.
 /// </para>
 /// </remarks>
 internal static class WindowLabelsTests

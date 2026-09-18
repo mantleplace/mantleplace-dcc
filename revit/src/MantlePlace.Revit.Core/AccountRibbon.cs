@@ -43,12 +43,13 @@ public readonly record struct AccountRibbonState(
 /// visible nowhere but inside that dialog and the sign-in window.
 /// </para>
 /// <para>
-/// The words are the reference host's, deliberately: <c>Sign In</c>, the same one label for both
-/// waits, and disabled while either runs (<c>SMantlePlaceVaultPanel::GetAuthButtonText</c>). Only the
-/// casing is Revit's — Title Case, because every Autodesk tab beside ours uses it. The face's third
-/// state differs because the control does: Unreal's single button toggles to <c>Sign Out</c>, while
-/// here signing out moved into the dropdown, so the face reports <c>Signed In</c> instead of offering
-/// the opposite action.
+/// The words are the reference host's, deliberately (<c>HPS-51</c>): <c>Sign In</c>, the same one
+/// label for both waits, and disabled while either runs
+/// (<c>SMantlePlaceVaultPanel::GetAuthButtonText</c>). Only the casing is Revit's — Title Case,
+/// because every Autodesk tab beside ours uses it. The face's third state differs because the control
+/// does: Unreal's single button toggles to <c>Sign Out</c>, while here signing out moved into the
+/// dropdown, so the face reports <c>Signed In</c> instead of offering the opposite action. Either
+/// shape says all four words; this one says them on a face rather than on a toggle.
 /// </para>
 /// <para>
 /// In the pure core rather than the shim because it is a pure decision and the shim is never built in
