@@ -102,7 +102,18 @@ Revit licence.
 - draws the road centrelines from the `road_splines` vector layer as DirectShape linework, drapes
   the `land_use` boundaries onto the terrain as toposolid subdivisions, and places the trees from
   `Landcover/TreePoints.csv` at their published height and crown radius — the three rows that closed
-  the Forma Site Design Add-In parity gap. All three are positioned from the same
+  the Forma Site Design Add-In parity gap. Each tree is an instance of one Planting family,
+  **`Mantle Place Tree`**, with the published numbers in its `Tree Height` and `Crown Radius`
+  instance parameters (not `Height`: every Planting family already has a built-in *type* parameter
+  of that name) and its row's stamp in Comments. The family ships inside the add-in; when it cannot
+  be loaded, the step builds the same trees as DirectShapes on the Planting category and the log
+  says why. A family already in the project is used as it stands and never reloaded over, so a
+  curator's edits to it survive a re-import — and a newer build's family reaches that project only
+  when the curator reloads it. One family only — a shrub or any other foliage type waits for the
+  platform to publish one, and the add-in never guesses a type from a height. **No render
+  substitution is set yet:** Twinmotion's lives on the project's family type rather than in the
+  `.rfa`, so for now a curator picks one asset on the one type by hand, and writing it at import is
+  issue 174. All three are positioned from the same
   published origin as the survey point, and a bundle whose origin is in a CRS they cannot be brought
   into is **skipped with that reason** rather than placed ~2000 km out;
 - cuts the `land_cover` polygons into the terrain as subdivisions too, the same way and stamped
@@ -260,6 +271,31 @@ hand-written playback file until somebody does establish it. **The registration 
 better evidence anyway**: they are Revit reporting the parent it actually assigned, they appear
 before any click, and a `Jrn.RibbonEvent` that fires only tells you a command ran, never what the
 button looked like or where it hung.
+
+### Authoring the tree family
+
+`src/MantlePlace.Revit.Addin/Families/MantlePlaceTree.rfa` is authored by code, not by hand:
+`TreeFamilyAuthoring.cs` builds it from Revit's own `Metric Planting.rft` through the Family API —
+the two instance parameters, three formula parameters for the trunk and the crown's tip in the
+proportions `TreeFamily` owns, a trunk extrusion and a crown blend whose ends and radii are labelled
+to them — then flexes it three times, places one instance in a scratch project through the tree step's own
+placement code, and measures all three against the numbers that drove them. It is the one binary
+the tree step adds, and it is re-run, never edited, when the proportions change:
+
+It has no button. It runs at Revit's startup when an environment variable names a folder:
+
+1. Build the add-in, deploy it, and set `MANTLEPLACE_AUTHOR_TREE_FAMILY` to a **neutral folder** such
+   as `C:\MantlePlace` in the environment Revit is started from.
+2. Start **Revit 2025** — a family saved by a Revit loads only in that Revit and later ones. Once
+   Revit has initialised, the folder holds `Mantle Place Tree.rfa` and
+   `Mantle Place Tree.authoring.log`; nothing else is touched, and there is no button.
+3. Commit the file as `Families/MantlePlaceTree.rfa` only if the log's last line says every
+   measurement agreed.
+
+⛔ **Revit writes the folder a file was saved in, and the saving Revit's user name, into the file.**
+Neither shows in the Family Editor and both are public once pushed. The run refuses to call a
+family ready when the folder is under a user profile, or when it was saved by any Revit but 2025; the user name — for a Revit signed in to an
+Autodesk account, that account's name — it reports, for whoever commits the file to judge.
 
 ## Layout
 

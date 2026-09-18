@@ -74,6 +74,16 @@
   </ItemGroup>
 
   <!--
+    The Mantle Place Tree Planting family, authored by TreeFamilyAuthoring.cs in Revit 2025 and embedded
+    rather than copied beside the DLL: the deploy and package scripts carry .dll/.pdb/.json only, and
+    a family that travels inside the assembly cannot be left behind by either. The tree step writes it
+    out under its family name before loading it, because Revit names a loaded family after its file.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Families\MantlePlaceTree.rfa" LogicalName="MantlePlace.Revit.Addin.Families.MantlePlaceTree.rfa" />
+  </ItemGroup>
+
+  <!--
     A missing Revit install is the single most likely reason this project fails to build, and the
     default failure is forty lines of CS0246 for every Revit type. Say it once, in one sentence.
   -->
