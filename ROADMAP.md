@@ -32,6 +32,12 @@ planned it.
   public CI — both need a licensed install this repository must not put on a runner.
 - **Unreal quickstart tutorial** — the missing walk-through from empty project to imported site,
   plus the README's screenshot and GIF slots filled with real captures.
+- **Revit site-context completeness** — the first users work in Revit, so the Revit plugin takes
+  headline features now: a staged import that stays responsive and can be cancelled, context
+  buildings as native elements copied from the bundle's site model, trees as Planting families,
+  renderer-ready material names on the ground, site location and a context view, attribution
+  written into the model, and a per-layer picker. The plan and its build order are tracked as
+  issues on this repository.
 
 ## Q1 2027
 
@@ -61,8 +67,7 @@ planned it.
 ## What is deliberately not on this roadmap
 
 - **Other hosts** (Rhino, Blender, 3ds Max) — top-level folders appear when they have real content,
-  never as placeholders, and none is scheduled. The Revit plugin continues at conformance parity —
-  it tracks the manifest contract but takes no headline features in this window.
+  never as placeholders, and none is scheduled.
 - **Anything that thickens the client.** Coordinate machinery, source selection, mosaic assembly and
   their relatives stay on the platform side by rule, so no quarter will ever contain them — see
   [What these plugins do](README.md#what-these-plugins-do).
