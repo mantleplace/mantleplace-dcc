@@ -55,6 +55,7 @@ host met the contract for real:
 | **v1.4** | `HPS-24` rewritten over the platform's full four-outcome start response, `HPS-25a` added for delivery-derived polling. The old wording described a two-outcome start and a job-status poll, and **both hosts were built to it** — so a materialize that named no job read as a failure, and a poll carrying no status word read as five errors in a row |
 | **v1.5** | ⛔`HPS-49` — the presign request states its payload explicitly. The same flow, once past the start and the poll, died on a schema rejection: one host had been sending an empty body and the other a deprecated whole-bundle alias. Both had been green throughout, because the corpus pinned presign RESPONSES and never the request |
 | **v1.6** | ⛔`HPS-50` — a host's local install is a single slot that tracks `main`, and says what it holds. The installed Revit add-in on the maintainer machine predated a full day of ribbon commits and the consuming project's Unreal checkout sat twenty commits behind; nothing detected either, because nothing said what was installed |
+| **v1.7** | `HPS-51` — the shared user-facing actions carry one set of words in every host, and a host construct carries the host's own noun. Unreal's panel said `Sign In` and `Sign Out`, Revit's ribbon said `Sign in` and `Sign out`, and Revit's vault window said `Remove download`; nothing said which of those words were shared, so each host went on naming the same actions by itself |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -962,6 +963,68 @@ scripts are proven by being run, and the rule by the check script's line at the 
 
 ---
 
+## 10. User-facing vocabulary (`HPS-51`)
+
+**`HPS-51` — The shared actions carry the same words in every host; anything naming a host construct
+carries the host's own noun.** A curator who signs in to Revit in the morning and to Unreal in the
+afternoon is doing one thing twice, and the plugin that calls it two things has made them learn it
+twice. Seven actions are shared, and each carries one set of words:
+
+| The action                                                     | The words            | Revit says it on                                                 | Unreal says it on                                    |
+| -------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
+| Start the browser sign-in                                      | `Sign In`            | the Account face, and the sign-in window's heading                | the vault panel's auth button                        |
+| Drop the session and forget the stored credential              | `Sign Out`           | the Account dropdown                                              | that same button, once authenticated                 |
+| Either wait — authenticating in the browser, or refreshing      | `Signing In`         | the Account face, disabled for the wait                           | the auth button, disabled for the wait               |
+| Authenticated                                                  | `Signed In`          | the Account face                                                  | the panel's header line                              |
+| The surface that lists the vault                               | `Vault`              | the Bundles panel's button, and the vault window's heading        | the panel's heading                                  |
+| Import a bundle the user already holds on disk                 | `Import Bundle`      | the Bundles panel's button                                        | the local-import section — see the deviations table |
+| Which build this is, and what it is running in                 | `About Mantle Place` | the Account dropdown, and the dialog it opens                     | nothing yet; these are the words when it grows one |
+
+**Casing is the host's own convention, and this rule does not touch it.** Title Case on a Revit
+ribbon, because every Autodesk tab beside ours uses it; the editor's own style in Unreal. So is the
+punctuation of a wait: `Signing In…` and `Signing in...` are one word in two hosts' typography and
+both conform, while `Authenticating…` is a different word and does not. So is a ribbon face that wraps
+`Import Bundle` over two lines, and a status line that ends `Signed in.` in a sentence — same words,
+host's own presentation. The rule fixes **which words**, and nothing else.
+
+**A host says what its control shape allows, and the shape is not shared.** Unreal's single button
+toggles between `Sign In` and `Sign Out` and reports the session on a header line beside it; Revit's
+split button pins `Signed In` to the face and moves `Sign Out` into the dropdown. Both say all four
+words; neither borrows the other's control. Saying them is the whole of it — but a state with no word
+anywhere on screen is a state the host has not said, which is how the Revit ribbon came to answer "am
+I signed in?" with a dialog raised by clicking `Sign in` and reading the refusal.
+
+**A host construct takes the host's own noun and is outside this rule.** The terrain above all:
+Unreal builds a `Landscape` and Revit builds a `Toposolid`, and a shared word there would name a
+thing neither host has. `HPS-03` already puts the import layer's semantics out of scope for this
+standard, and this is the user-facing half of the same boundary. A control that names both — a host
+construct built by a shared action — takes the shared word for the action and the host's noun for the
+construct, in that host's own grammar.
+
+**Everywhere else, the words are [`CONTEXT.md`](../CONTEXT.md)'s** — *vault*, *bundle*, *bundle
+import*, *terrain*, with the avoid-lists that come with them. Tooltips, long descriptions, status
+lines and refusals are prose rather than labels, so they are not enumerated above; what binds them is
+the glossary, which is cross-host already.
+
+The failure attached to this rule is only visible across hosts, and casing is not it. Revit's
+ribbon said `Sign in` and `Sign out` where Unreal said `Sign In` and `Sign Out`, and its vault window
+said `Remove download` beside `Prepare for Revit` — all of which the host's own Title Case convention
+settled, which is exactly why casing is exempt here. What that pass then found underneath was
+word-level and a convention could not have reached it: the Revit ribbon had **no word at all** for
+being signed in, because a face that never reported a session had never needed one, and the two hosts
+name the local import differently to this day (below). Both hosts were naming the same actions from
+scratch, twice, because nothing said which of them were the same action — and host #3 would have
+named them a third time.
+
+_Enforcer:_ `agent-review`, plus whatever half of a host's words sits in a pure core. Revit's auth
+faces and its window labels are constants with a headless test — `AccountRibbon`, `WindowLabels` —
+because the shim is never built in CI (`HPS-02`, `HPS-42`). The ribbon's own faces are not: `Sign
+Out`, `Vault`, `Import Bundle` and `About Mantle Place` are literals in `MantlePlaceApplication`,
+where nothing but review reads them, and Unreal's are inline in the Slate panel on the same terms.
+Review is the enforcer of record; a test covers what a host has already moved out of its shim.
+
+---
+
 ## Reference-implementation deviations
 
 The shipped code is the version-of-record. This standard is a transcription of it, and
@@ -971,6 +1034,7 @@ here rather than left for a future reader to discover as a contradiction.
 | Rule     | Deviation                                                                                                                                                                                                                                                                                                                                                                                   |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HPS-30` | The reference's **secret store** derives its blob name with its own per-code-unit walk and its own keep-set (`MantlePlaceSecretStore.cpp`, `ResolveSecretPath`), not with `SanitizeKeySegment`. It is inert today — `refresh_token` is the only key either host stores, and every derivation agrees on it — but the rule's secret-store sentence is ahead of this call site, not behind it. |
+| `HPS-51` | Unreal's local-import control is labelled `Import`, under a section headed `Import a local bundle (.zip)`: the word *bundle* is in the heading rather than on the control, where Revit's command is `Import Bundle`. It is one string in the Slate panel, which CI never compiles, so it moves with the next change to that panel rather than on its own. |
 
 Two places where the _silo prose_ was wrong and the code was right went the other way and are
 transcribed as shipped: `HPS-23` permits `"all"` as an explicit user-facing scope, and `HPS-44`
@@ -989,6 +1053,7 @@ records that eviction is deliberately explicit-only.
 | Corpus-reader coverage — asserted keys, vector leaves, nested leaves (`HPS-46`, `HPS-46a`, `HPS-46b`)                                                                                                                   | `automation-test` per host + `corpus/self-test/`       |
 | The .NET SDK trigger (`HPS-43`)                                                                                                                                                                                           | `doc-only`                                             |
 | The local install slot and its check script (`HPS-50`)                                                                                                                                                                    | `agent-review`, proven by running the scripts          |
+| The shared user-facing vocabulary (`HPS-51`)                                                                                                                                                              | `agent-review`; a pure-core test where a host has one  |
 
 Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS-33`) appear in both rows —
 the corpus proves the behaviour, review catches the shape a vector cannot see.

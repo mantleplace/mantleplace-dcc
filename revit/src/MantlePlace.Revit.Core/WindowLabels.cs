@@ -18,10 +18,11 @@ namespace MantlePlace.Revit.Core;
 /// <c>Remove download</c> in the same row — so the rule now covers them too.
 /// </para>
 /// <para>
-/// The words themselves are shared with the reference host wherever the action is shared;
-/// only the casing is Revit's. <c>Refresh</c> and <c>Import</c> are the vault panel's own labels in
-/// Unreal, and <see cref="SignInHeading"/> is <see cref="AccountRibbon.SignInFace"/> rather than a
-/// second spelling of it.
+/// The words themselves are shared with the reference host wherever the action is shared
+/// (<c>HPS-51</c>); only the casing is Revit's. <c>Refresh</c> and <c>Import</c> are the vault
+/// panel's own labels in Unreal, and <see cref="SignInHeading"/> is
+/// <see cref="AccountRibbon.SignInFace"/> rather than a second spelling of it. <c>Vault</c> is one
+/// of the words that table fixes; <c>Prepare for Revit</c> is this host's own, and is not.
 /// </para>
 /// <para>
 /// Not named <c>WindowChrome</c>, which is what it is: WPF already has a
