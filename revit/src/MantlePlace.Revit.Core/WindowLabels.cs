@@ -118,6 +118,8 @@ public static class WindowLabels
         ImportStepKind.ToposurfaceFromSurfaceDxf => "Terrain",
         ImportStepKind.LinkSiteIfc => "Site Model",
         ImportStepKind.SetSharedCoordinates => "Shared Coordinates",
+        ImportStepKind.SetSiteLocation => "Site Location",
+        ImportStepKind.SiteContextView => "Site Context View",
         ImportStepKind.RoadCentrelines => "Road Centrelines",
         ImportStepKind.SiteBoundaries => "Land Use Subdivisions",
         ImportStepKind.LandCover => "Land Cover Subdivisions",

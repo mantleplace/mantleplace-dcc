@@ -199,6 +199,15 @@ follow.
   Never `yield` inside an open transaction — a chunked step commits, then yields — and never leave
   the session-wide `FailuresProcessing` hook attached across a slice boundary: between slices the
   curator is editing their own model (`RevitBundleImporter.InSlice`).
+- **The site location and the context view joined that set.** `SiteLocation.Latitude`/`Longitude`,
+  `View3D.CreateIsometric`, `ParameterFilterElement.Create` over every model category that
+  `ParameterFilterUtilities.GetFilterableParametersInCommon` says has Comments, the 2023+
+  `CreateBeginsWithRule` overload (case-insensitive — the case-sensitive one is deprecated) and
+  `View.AddFilter` compile and are unexecuted. The sign of a longitude is settled without Revit:
+  Revit's own `en-US/SiteAndWeatherStationName.txt` lists Boston at `-71.0335`, so a published
+  west-negative longitude goes in as it is. Not settled: that Revit lets a 3D view and a view
+  filter share the name `SiteContext` gives both, and that the time zone Revit picks for itself
+  when the coordinates change is the site's.
 
 ## Where knowledge lives
 

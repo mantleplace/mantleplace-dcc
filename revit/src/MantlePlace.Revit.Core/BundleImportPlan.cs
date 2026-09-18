@@ -28,6 +28,17 @@ public enum ImportStepKind
     SetSharedCoordinates,
 
     /// <summary>
+    /// Manage ▸ Location: the project's latitude and longitude, which is what places the sun.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="SetSharedCoordinates"/> because the two read different fields and
+    /// fail for different reasons: the survey point is a projected pair that may fall back to
+    /// <c>delivery.local_origin</c>, and the site location is the own block's lat/lon and nothing
+    /// else.
+    /// </remarks>
+    SetSiteLocation,
+
+    /// <summary>
     /// Road centrelines from the <c>road_splines</c> vector layer — Forma's "Roads" row.
     /// </summary>
     RoadCentrelines,
@@ -48,6 +59,12 @@ public enum ImportStepKind
     /// Trees from the tree-points file, with real height and crown — Forma's "Vegetation" row.
     /// </summary>
     Vegetation,
+
+    /// <summary>
+    /// The "Mantle Place Site Context" 3D view, and the view filter that finds every element an
+    /// import stamped (<see cref="SiteContext"/>).
+    /// </summary>
+    SiteContextView,
 
     /// <summary>
     /// The satellite imagery draped on the terrain as a material texture — Forma's last row.
@@ -129,6 +146,21 @@ public enum SkipReasonCode
     /// failure a curator has no way to notice.
     /// </remarks>
     ExtentNotCorroborated,
+
+    /// <summary>
+    /// The host's own <c>georeference.origin</c> publishes no latitude and longitude pair.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="NoSurveyPoint"/>: that one is the projected pair, and a bundle can
+    /// carry either without the other.
+    /// </remarks>
+    NoGeographicOrigin,
+
+    /// <summary>
+    /// The published latitude or longitude is off the globe, so it was not handed to Revit to throw
+    /// on or to wrap.
+    /// </summary>
+    GeographicOriginOutOfRange,
 }
 
 /// <summary>
@@ -240,6 +272,35 @@ public sealed class SurveyPointPlacement
     public double ElevationM => 0.0;
 }
 
+/// <summary>
+/// The project's latitude and longitude, from <c>hosts.revit.georeference.origin</c> and nothing
+/// else (<c>HPS-33</c>).
+/// </summary>
+/// <remarks>
+/// <para>
+/// Degrees as published, radians as Revit's <c>SiteLocation</c> takes them. The conversion is a unit
+/// conversion and lives here with the check that the pair is on the globe, so the shim does no
+/// arithmetic of its own. The sign goes through as published: Revit's own site database lists Boston
+/// at -71.0335, west negative, which is the convention the manifest's lon/lat pair is in.
+/// </para>
+/// <para>
+/// No time zone. The manifest publishes none, and deriving one from longitude is derivation. Revit
+/// adjusts the project's time zone itself when a latitude or longitude is set — that is Revit's
+/// behaviour, documented on both setters, not this host's; the shim reports the zone Revit chose so
+/// the curator can check it.
+/// </para>
+/// </remarks>
+public sealed class SiteLocationPlacement
+{
+    public required double LatitudeDeg { get; init; }
+
+    public required double LongitudeDeg { get; init; }
+
+    public double LatitudeRadians => LatitudeDeg * Math.PI / 180.0;
+
+    public double LongitudeRadians => LongitudeDeg * Math.PI / 180.0;
+}
+
 /// <summary>One resolved action, with its bundle entry already checked to exist.</summary>
 public sealed class ImportStep
 {
@@ -263,6 +324,9 @@ public sealed class ImportStep
 
     /// <summary>Populated only for <see cref="ImportStepKind.SetSharedCoordinates"/>.</summary>
     public SurveyPointPlacement? SurveyPoint { get; init; }
+
+    /// <summary>Populated only for <see cref="ImportStepKind.SetSiteLocation"/>.</summary>
+    public SiteLocationPlacement? SiteLocation { get; init; }
 
     /// <summary>
     /// The frame this step's geometry is placed in, for the kinds whose artifact does not arrive

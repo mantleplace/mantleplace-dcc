@@ -80,6 +80,15 @@ Revit licence.
 - sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
   this host's own block — falling back to `delivery.local_origin` on a bundle whose own block
   publishes no usable origin (`HPS-33`);
+- sets the project's **site location** — Manage ▸ Location, which is what places the sun in every
+  view and renderer — from the latitude and longitude in `hosts.revit.georeference.origin`, verbatim,
+  and from nowhere else. The bundle publishes no time zone and the plugin sets none; Revit adjusts
+  the project's zone by itself when the coordinates change, and the log says which zone it chose;
+- makes one 3D view, **Mantle Place Site Context**, and one view filter of the same name that
+  matches every element whose Comments begin with `Mantle Place` — everything an import stamped —
+  across every model category that has Comments. The filter goes on the new view with no override,
+  ready to hide, halftone or recolour the site context in any view it is added to. A second import
+  finds both by name and leaves them as they are;
 - draws the road centrelines from the `road_splines` vector layer as DirectShape linework, drapes
   the `land_use` boundaries onto the terrain as toposolid subdivisions, and places the trees from
   `Landcover/TreePoints.csv` at their published height and crown radius — the three rows that closed
@@ -144,10 +153,11 @@ Account button reaches the same place through the same function, so the two can 
 go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent` raise, so Revit repaints
 between them and **Cancel** is honoured at the next boundary. Whatever committed before the cancel
 stays, and importing the same bundle again reuses the terrain, the site model link, the
-subdivisions, the road centrelines and the trees it finds and creates only what is missing. Road
-centrelines drawn by a build that predates their stamp carry none, so the first import after upgrading
-draws them once more; delete the older set by hand. The log's last line names the steps that
-completed and those that never ran. What no window can show is the inside of one commit: the terrain and the
+subdivisions, the road centrelines, the trees and the site context view and filter it finds and
+creates only what is missing. Road centrelines drawn by a build that predates their stamp carry none,
+so the first import after upgrading draws them once more; delete the older set by hand. The log's last
+line names the steps that completed and those that never ran. What no window can show is the inside
+of one commit: the terrain and the
 subdivisions are one commit each — and so is the drape's retype, which only a ground built before the
 terrain took the imagery type still needs — Revit reports "not responding" while one runs, and a
 Cancel pressed then takes effect when it finishes. Closing the window while it runs is a cancel.

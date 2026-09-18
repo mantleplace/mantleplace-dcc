@@ -195,6 +195,8 @@ internal sealed partial class RevitBundleImporter(
                 return Once(() => LinkSiteIfc(step));
             case ImportStepKind.SetSharedCoordinates:
                 return Once(() => SetSharedCoordinates(step));
+            case ImportStepKind.SetSiteLocation:
+                return Once(() => SetSiteLocation(step));
             case ImportStepKind.RoadCentrelines:
                 return Once(() => ImportRoadCentrelines(step));
             case ImportStepKind.SiteBoundaries:
@@ -203,6 +205,8 @@ internal sealed partial class RevitBundleImporter(
                 return Once(() => ImportSiteBoundaries(step, GroundLayer.LandCover));
             case ImportStepKind.Vegetation:
                 return ImportVegetation(step);
+            case ImportStepKind.SiteContextView:
+                return Once(EnsureSiteContextView);
             case ImportStepKind.ImageryDrape:
                 return Once(() => ApplyImageryDrape(step));
             default:

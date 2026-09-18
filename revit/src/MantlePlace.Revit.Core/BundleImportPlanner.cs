@@ -71,7 +71,26 @@ public static class BundleImportPlanner
             drapeSteps.Count > 0 ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
         PlanSiteIfc(manifest, entries, steps, skipped);
         PlanSharedCoordinates(manifest, steps, skipped);
+        PlanSiteLocation(manifest, steps, skipped);
         PlanSiteContext(manifest, entries, steps, skipped);
+
+        // Every kind but the settings kinds changes the document, so any one of them is an import.
+        // Those are excluded because they place the project and build nothing — a bundle whose only
+        // planned steps were the survey point and the site location would report "imported" over an
+        // empty model. The parity layers are on the creating side of that line: a bundle carrying
+        // roads and no terrain still has something to put in the document. So is the drape, which
+        // builds no geometry but does write a material, and retypes ground not already on the
+        // imagery type.
+        bool canImport = steps.Exists(step => ImportStepKinds.ImportsContent(step.Kind))
+            || drapeSteps.Count > 0;
+
+        // After every step that stamps an element, so the view filter is made over a document that
+        // already holds what it exists to find — and only when there is something to find. Before
+        // the drape, which stamps nothing and keeps its place at the end for the reasons below.
+        if (canImport)
+        {
+            steps.Add(new ImportStep { Kind = ImportStepKind.SiteContextView });
+        }
 
         // Last, and last for three reasons. The drape needs the terrain step to have run before it —
         // it writes the photograph into the material that step built the toposolid wearing; it also
@@ -84,14 +103,6 @@ public static class BundleImportPlanner
         skipped.AddRange(drapeSkipped);
 
         NoteAvailableButNotImported(manifest, entries, notImported);
-
-        // Every kind but SetSharedCoordinates changes the document, so any one of them is an import.
-        // That step is excluded because it changes project settings and builds nothing — a bundle
-        // whose only planned step was the survey point would report "imported" over an empty model.
-        // The parity layers are on the creating side of that line: a bundle carrying roads and no
-        // terrain still has something to put in the document. So is the drape, which builds no
-        // geometry but does write a material, and retypes ground not already on the imagery type.
-        bool canImport = steps.Exists(step => step.Kind != ImportStepKind.SetSharedCoordinates);
 
         return new BundleImportPlan
         {
@@ -380,6 +391,64 @@ public static class BundleImportPlanner
             Reason = "This bundle carries no pre-derived survey point for Revit, so the model is placed in "
                 + "the project's own frame and shared coordinates are left untouched. Set them by hand if you "
                 + "need real-world positioning.",
+        });
+    }
+
+    /// <summary>
+    /// The project's latitude and longitude, read from <c>hosts.revit.georeference.origin</c> and
+    /// applied verbatim (<c>HPS-33</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The own block only. <c>delivery.local_origin</c> also carries a lon/lat, and the survey point
+    /// falls back to it; the site location does not, because nothing asked this host to read one
+    /// there, and a sun placed from an unaudited field is wrong in every renderer with no way to tell.
+    /// </para>
+    /// <para>
+    /// A pair off the globe is refused here rather than handed on: Revit throws on a latitude past a
+    /// pole, which would cost only this step, but it silently wraps a longitude past the
+    /// antimeridian, which would put the sun over somewhere else.
+    /// </para>
+    /// </remarks>
+    private static void PlanSiteLocation(
+        BundleManifest manifest,
+        List<ImportStep> steps,
+        List<SkippedImport> skipped)
+    {
+        if (manifest.Georeference.Origin is not { Lat: { } lat, Lon: { } lon })
+        {
+            skipped.Add(new SkippedImport
+            {
+                Kind = ImportStepKind.SetSiteLocation,
+                ReasonCode = SkipReasonCode.NoGeographicOrigin,
+                Reason = "This bundle publishes no latitude and longitude for Revit, so the project's site "
+                    + "location was left as it was and the sun in every view and render is placed for "
+                    + "that location, not this site. Set it under Manage ▸ Location if you need the sun.",
+            });
+            return;
+        }
+
+        if (!double.IsFinite(lat) || !double.IsFinite(lon)
+            || lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0)
+        {
+            skipped.Add(new SkippedImport
+            {
+                Kind = ImportStepKind.SetSiteLocation,
+                ReasonCode = SkipReasonCode.GeographicOriginOutOfRange,
+                Reason = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "This bundle publishes a latitude of {0} and a longitude of {1}, which is not a place "
+                    + "on Earth, so the project's site location was left as it was.",
+                    lat,
+                    lon),
+            });
+            return;
+        }
+
+        steps.Add(new ImportStep
+        {
+            Kind = ImportStepKind.SetSiteLocation,
+            SiteLocation = new SiteLocationPlacement { LatitudeDeg = lat, LongitudeDeg = lon },
         });
     }
 
