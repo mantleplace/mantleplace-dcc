@@ -94,7 +94,7 @@ public static class BundleImportPlanner
 
         NoteAvailableButNotImported(manifest, entries, notImported);
 
-        // Every kind but SetSharedCoordinates and Attribution changes the document's model, so any
+        // Every kind but SetSharedCoordinates and AttributionAndProvenance changes the document's model, so any
         // one of them is an import. Those two are excluded because they build nothing — a bundle
         // whose only planned steps were the survey point and a drafting view of credits would report
         // "imported" over an empty model.

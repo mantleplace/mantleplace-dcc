@@ -231,11 +231,7 @@ public static class BundleManifestReader
                 continue;
             }
 
-            AttributionSource source = new(
-                entry.Str("provider_id"),
-                entry.OptionalStr("attribution_text"),
-                entry.OptionalStr("license"),
-                entry.OptionalStr("license_url"));
+            AttributionSource source = AttributionSourceJson.Read(entry);
 
             if (source.ProviderId.Length > 0
                 || source.AttributionText is not null

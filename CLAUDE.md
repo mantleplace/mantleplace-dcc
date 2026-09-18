@@ -259,7 +259,9 @@ Most facts already have exactly one home. Find it before writing a fact down any
   the photograph · **0009** host assets render the **monogram**, not the mark as drawn — the extrude
   is below a pixel at ribbon sizes, and the roundel is retired · **0010** Revit's tooltip
   **vignettes are drawn, not photographed**, and sized to the 355 px cap the ribbon enforces in
-  silence. Write one only for a decision hard to reverse,
+  silence · **0011** the Revit provenance record's **schema GUID is permanent**, and the attribution
+  note is **known by the text that record says was written**, for its own order only — so a re-import
+  rewrites it in place, the one Revit element that is. Write one only for a decision hard to reverse,
   surprising without the context, and the result of a real trade-off; an ADR is not a design
   document.
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the

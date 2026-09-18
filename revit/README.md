@@ -113,9 +113,11 @@ Revit licence.
   Attribution** — one line per source, its attribution text, licence text and licence URL exactly
   as the manifest gives them — ready to place on a sheet. The plugin makes no licensing decision of
   its own; it copies what the manifest says. Beside it, Project Information carries a record of the
-  order, the build, the manifest version and the sources, which is how a re-import finds the note
-  this one wrote: a later build rewrites that note, an unchanged one leaves it alone, and a note
-  edited by hand is treated as yours and left as it is, with a fresh one added beside it;
+  order, the build, the manifest version, the sources and the note's text, which is how a re-import
+  finds the note this one wrote: a later build of the same order rewrites that note, an unchanged one
+  leaves it alone, and any other note — one edited by hand, or another order's — is left as it is,
+  with a fresh one added beneath it. See
+  [ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md);
 - refuses to import anything at all when an artifact's bytes do not match the `sha256` its own
   manifest publishes, before a single element is created (⛔`HPS-26`);
 - tells you what it did **not** import and why, using the manifest's own

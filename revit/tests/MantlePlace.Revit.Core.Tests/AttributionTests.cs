@@ -45,6 +45,17 @@ internal static class AttributionTests
         }
         """;
 
+    private const string OrderA = "order-a";
+
+    /// <summary><see cref="AttributionView.Decide"/> for order A unless a case says otherwise.</summary>
+    private static AttributionNotePlan Decide(
+        AttributionViewFound view,
+        IReadOnlyList<string> notes,
+        RecordedAttribution? recorded,
+        string wanted,
+        string orderId = OrderA)
+        => AttributionView.Decide(view, notes, recorded, orderId, wanted);
+
     internal static int Run()
     {
         TestRun run = new();
@@ -140,59 +151,124 @@ internal static class AttributionTests
             run.Equal(line, "First part second part — Licence line two", "breaks become spaces");
         });
 
-        run.Case("no sources is nothing to write", () =>
+        run.Case("no sources is nothing to write, and no view is made to hold nothing", () =>
         {
             run.Equal(AttributionView.NoteText([]), string.Empty, "empty text");
-            run.True(
-                AttributionView.Decide([], null, string.Empty).Action == AttributionNoteAction.NothingToWrite,
-                "a view is not made to hold nothing");
+
+            AttributionNotePlan plan = Decide(AttributionViewFound.None, [], null, string.Empty);
+            run.True(plan.Action == AttributionNoteAction.NothingToWrite, "nothing to write");
+            run.False(plan.CreateView, "no empty view");
         });
 
-        run.Case("a view with no note of ours gets one", () =>
+        run.Case("a first import makes the view and records the text it wrote", () =>
         {
-            AttributionNotePlan plan = AttributionView.Decide([], null, "A — B");
+            AttributionNotePlan plan = Decide(AttributionViewFound.None, [], null, "A — B");
 
             run.True(plan.Action == AttributionNoteAction.Add, "added");
+            run.True(plan.CreateView, "into a new view");
+            run.Equal(plan.TextToRecord, "A — B", "the record says what the note says");
+        });
+
+        run.Case("a view of that name that is not a drafting view is not written into", () =>
+        {
+            // A template, or a plan a curator named this way. Renaming a new view onto the name
+            // would throw inside Revit, and writing into theirs would put credits where they did not ask.
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.NotADraftingView,
+                [],
+                new RecordedAttribution(OrderA, "Old — licence"),
+                "New — licence");
+
+            run.True(plan.Action == AttributionNoteAction.ViewNameTaken, "refused");
+            run.False(plan.CreateView, "and no second view is attempted under a taken name");
+            run.Equal(plan.TextToRecord, "Old — licence", "the record keeps pointing at the note that still exists");
         });
 
         run.Case("a note that already says it is left alone, whatever Revit did to its line breaks", () =>
         {
             // Revit hands a text note back with \r between paragraphs and a trailing \r of its own.
-            AttributionNotePlan plan = AttributionView.Decide(
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.DraftingView,
                 ["a curator's own note", "A — B\rC — D\r"],
-                "an older build's text",
+                new RecordedAttribution(OrderA, "an older build's text"),
                 "A — B\rC — D");
 
             run.True(plan.Action == AttributionNoteAction.Keep, "kept");
             run.Equal(plan.NoteIndex, 1, "the matching note");
+            run.Equal(plan.TextToRecord, "A — B\rC — D", "and recorded as this build's");
         });
 
-        run.Case("the note an earlier build wrote is rewritten when the build changes", () =>
+        run.Case("the note this order's earlier build wrote is rewritten when the build changes", () =>
         {
-            AttributionNotePlan plan = AttributionView.Decide(
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.DraftingView,
                 ["a curator's own note", "Old — licence\r"],
-                "Old — licence",
+                new RecordedAttribution(OrderA, "Old — licence"),
                 "New — licence");
 
             run.True(plan.Action == AttributionNoteAction.Rewrite, "rewritten");
-            run.Equal(plan.NoteIndex, 1, "the note the previous record's text identifies");
+            run.Equal(plan.NoteIndex, 1, "the note the record's text identifies");
+            run.False(plan.CreateView, "in the view it is already in");
+            run.Equal(plan.TextToRecord, "New — licence", "and the record moves on with it");
+        });
+
+        run.Case("the recorded text is what identifies the note, not today's line format", () =>
+        {
+            // A later plugin that lays a line out differently still finds the note an older one
+            // wrote, because the record holds the words written rather than the sources to rebuild them.
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.DraftingView,
+                ["NAIP / public domain"],
+                new RecordedAttribution(OrderA, "NAIP / public domain"),
+                "NAIP — public domain");
+
+            run.True(plan.Action == AttributionNoteAction.Rewrite, "found by what it says");
+        });
+
+        run.Case("another order's note is never rewritten — this order's credits go beside it", () =>
+        {
+            // Two orders in one project: the record is order A's, and order B is being imported. A's
+            // terrain is still in the project, so its credits must be too.
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.DraftingView,
+                ["Old — licence"],
+                new RecordedAttribution(OrderA, "Old — licence"),
+                "New — licence",
+                orderId: "order-b");
+
+            run.True(plan.Action == AttributionNoteAction.Add, "added beside, not written over");
+            run.Equal(plan.TextToRecord, "New — licence", "the record is now B's");
         });
 
         run.Case("a note a curator edited is not ours any more, so a fresh one is added beside it", () =>
         {
-            AttributionNotePlan plan = AttributionView.Decide(
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.DraftingView,
                 ["Old — licence, and a curator's addition"],
-                "Old — licence",
+                new RecordedAttribution(OrderA, "Old — licence"),
                 "New — licence");
 
             run.True(plan.Action == AttributionNoteAction.Add, "added, and the edited note is left as it is");
+            run.False(plan.CreateView, "into the existing view");
         });
 
         run.Case("with no record of what was written before, only an exact match is ours", () =>
         {
-            AttributionNotePlan plan = AttributionView.Decide(["Old — licence"], null, "New — licence");
+            AttributionNotePlan plan = Decide(AttributionViewFound.DraftingView, ["Old — licence"], null, "New — licence");
 
             run.True(plan.Action == AttributionNoteAction.Add, "nothing is claimed on a guess");
+        });
+
+        run.Case("no sources this build leaves this order's earlier note where the record can find it", () =>
+        {
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.DraftingView,
+                ["Old — licence"],
+                new RecordedAttribution(OrderA, "Old — licence"),
+                string.Empty);
+
+            run.True(plan.Action == AttributionNoteAction.NothingToWrite, "nothing written");
+            run.Equal(plan.TextToRecord, "Old — licence", "a later build with sources still rewrites it");
         });
 
         run.Case("the view name is the identity a re-import finds it by", () =>
@@ -244,7 +320,8 @@ internal static class AttributionTests
                 ProvenanceStorage.OrderIdField,
                 ProvenanceStorage.JobIdField,
                 ProvenanceStorage.ManifestVersionField,
-                ProvenanceStorage.SourcesField])
+                ProvenanceStorage.SourcesField,
+                ProvenanceStorage.NoteTextField])
             {
                 run.True(
                     name.Length > 0 && char.IsAsciiLetter(name[0]) && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'),

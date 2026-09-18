@@ -208,7 +208,8 @@ follow.
   settled is whether the record reads back after a save and reopen in each of 2025, 2026 and 2027 —
   the import log says `This project already records an import of order …` when it does. ⛔ **The
   schema GUID is permanent:** changing a field under `ProvenanceStorage.SchemaGuid` breaks every
-  project that already holds the old definition, so a field change is a new GUID.
+  project that already holds the old definition, so a field change is a new GUID
+  ([ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md)).
 
 ## Where knowledge lives
 

@@ -79,6 +79,17 @@ public static class ProvenanceStorage
     /// <summary>The sources, as <see cref="EncodeSources"/> writes them.</summary>
     public const string SourcesField = "Sources";
 
+    /// <summary>
+    /// The attribution note's text exactly as the plugin left it —
+    /// <see cref="AttributionNotePlan.TextToRecord"/>.
+    /// </summary>
+    /// <remarks>
+    /// Stored rather than rebuilt from <see cref="SourcesField"/>, because rebuilding ties the
+    /// note's identity to today's line format: a later plugin that lays a line out differently would
+    /// no longer find the note an earlier one wrote, and would add a second beside it.
+    /// </remarks>
+    public const string NoteTextField = "NoteText";
+
     /// <summary>Keeps <c>©</c> and <c>§</c> readable in the stored string rather than escaped.</summary>
     private static readonly JsonWriterOptions WriterOptions = new()
     {
@@ -99,12 +110,7 @@ public static class ProvenanceStorage
             writer.WriteStartArray();
             foreach (AttributionSource source in sources)
             {
-                writer.WriteStartObject();
-                writer.WriteString("provider_id", source.ProviderId);
-                WriteOptional(writer, "attribution_text", source.AttributionText);
-                WriteOptional(writer, "license", source.License);
-                WriteOptional(writer, "license_url", source.LicenseUrl);
-                writer.WriteEndObject();
+                AttributionSourceJson.Write(writer, source);
             }
 
             writer.WriteEndArray();
@@ -137,11 +143,7 @@ public static class ProvenanceStorage
             {
                 if (entry.ValueKind == JsonValueKind.Object)
                 {
-                    sources.Add(new AttributionSource(
-                        entry.Str("provider_id"),
-                        entry.OptionalStr("attribution_text"),
-                        entry.OptionalStr("license"),
-                        entry.OptionalStr("license_url")));
+                    sources.Add(AttributionSourceJson.Read(entry));
                 }
             }
 
@@ -151,6 +153,36 @@ public static class ProvenanceStorage
         {
             return [];
         }
+    }
+
+}
+
+/// <summary>
+/// One <see cref="AttributionSource"/> as JSON, keyed as the manifest keys it — the one place those
+/// keys are spelled, for the manifest reader and the stored record alike.
+/// </summary>
+internal static class AttributionSourceJson
+{
+    private const string ProviderId = "provider_id";
+    private const string AttributionText = "attribution_text";
+    private const string License = "license";
+    private const string LicenseUrl = "license_url";
+
+    /// <summary>Reads one entry. A field that is absent, null or blank is <c>null</c>.</summary>
+    internal static AttributionSource Read(JsonElement entry) => new(
+        entry.Str(ProviderId),
+        entry.OptionalStr(AttributionText),
+        entry.OptionalStr(License),
+        entry.OptionalStr(LicenseUrl));
+
+    internal static void Write(Utf8JsonWriter writer, AttributionSource source)
+    {
+        writer.WriteStartObject();
+        writer.WriteString(ProviderId, source.ProviderId);
+        WriteOptional(writer, AttributionText, source.AttributionText);
+        WriteOptional(writer, License, source.License);
+        WriteOptional(writer, LicenseUrl, source.LicenseUrl);
+        writer.WriteEndObject();
     }
 
     private static void WriteOptional(Utf8JsonWriter writer, string name, string? value)
