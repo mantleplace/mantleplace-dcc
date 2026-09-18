@@ -236,6 +236,7 @@ the corpus case `manifest.vectorLayerVocabulary` carries every name in it:
 | `land_use` | Land-use areas, with class and subtype | Mostly polygons; lines and points occur | Overture base |
 | `land_cover` | Physical ground cover, with a subtype such as forest | Polygons | Overture base |
 | `road_splines` | The `road` centrelines draped onto the delivered elevation, carrying an estimated width, class and name | Lines with Z | Derived from `road`, and marked with `derived_from` |
+| `road_polygons` | Road surfaces: the `road` centrelines widened by the same estimated width, merged per class, and cut so no two overlap (the wider class keeps the ground where classes meet), carrying class and width | Polygons | Derived from `road`, and marked with `derived_from` |
 
 A layer's geometry can mix the families its row names, so a reader keys on each feature's own
 geometry type rather than on the layer. Every layer's coordinates are geographic, so §6's one
@@ -250,9 +251,10 @@ What presence and absence mean:
   says why (§6.1).
 - **A layer is never emitted empty.** The producer writes no entry with a feature count of zero,
   and no placeholder entry for a layer the AOI does not have.
-- **`road_splines` is best-effort.** It can be absent while `road` is present, and its absence says
-  nothing about whether the AOI has roads. A consumer that wants roads and finds no splines SHOULD
-  say so rather than report an AOI without roads.
+- **The derived layers are best-effort.** `road_splines` and `road_polygons` can each be absent
+  while `road` is present, and their absence says nothing about whether the AOI has roads. A
+  consumer that wants roads and finds no derived layer SHOULD say so rather than report an AOI
+  without roads.
 - ⛔ **A consumer MUST ignore a layer name it does not recognise.** The vocabulary grows additively.
   A new name is a change to this table and to the corpus, not to the schema. A consumer that
   refuses a bundle for carrying an unfamiliar layer turns every new layer into a breaking release.

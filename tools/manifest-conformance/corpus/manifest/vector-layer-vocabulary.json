@@ -74,6 +74,18 @@
             "sha256": "7777777777777777777777777777777777777777777777777777777777777777"
           }
         ]
+      },
+      {
+        "name": "road_polygons",
+        "derived_from": "road",
+        "feature_count": 5,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/RoadPolygons.geojson",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
       }
     ]
   },

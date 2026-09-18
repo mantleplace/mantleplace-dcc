@@ -21,7 +21,7 @@ history, not contract.
 
 ### Within 1.0.1 — the vector layer vocabulary, stated (2026-09-18)
 
-No schema version was published, and nothing a reader parses changed. The six names a
+No schema version was published, and nothing a reader parses changed. The seven names a
 `vector.layers` entry can carry, and what a layer's presence or absence means, are now written down
 in [format §6.3](format.md#63-vector-layers-by-name). The corpus gained
 `manifest.vectorLayerVocabulary`, which names every layer, and `manifest.vectorLayerUnknownName`,
