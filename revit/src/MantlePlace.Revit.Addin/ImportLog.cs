@@ -26,10 +26,26 @@ internal sealed class ImportLog(string zipPath)
 {
     private readonly string _path = LocalBundleSource.LogPathFor(zipPath);
     private readonly string _zipPath = zipPath;
+    private bool _begun;
 
-    /// <summary>Truncates the file, so one run's record can never be read as another's.</summary>
-    internal void Begin()
+    /// <summary>
+    /// Truncates the file, so one run's record can never be read as another's. Done by the first
+    /// line written, not when the import is opened.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ An import window can now be opened on its checklist and closed without anything being
+    /// imported. Truncating at open erased the last real run's record for a run that never happened
+    /// — the one file a curator reads to find out what the previous import did. Every run that does
+    /// anything, a refusal included, writes a line, so none is left without a record.
+    /// </remarks>
+    private void Begin()
     {
+        if (_begun)
+        {
+            return;
+        }
+
+        _begun = true;
         try
         {
             File.WriteAllText(
@@ -54,6 +70,7 @@ internal sealed class ImportLog(string zipPath)
     /// </remarks>
     internal void Append(string line)
     {
+        Begin();
         try
         {
             File.AppendAllText(_path, $"{DateTime.Now:HH:mm:ss}  {line}{Environment.NewLine}");
@@ -71,6 +88,7 @@ internal sealed class ImportLog(string zipPath)
     /// </remarks>
     internal void AppendBlock(string block)
     {
+        Begin();
         try
         {
             File.AppendAllText(_path, Environment.NewLine + block + Environment.NewLine);

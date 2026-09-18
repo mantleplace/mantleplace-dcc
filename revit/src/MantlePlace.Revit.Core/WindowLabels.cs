@@ -68,7 +68,10 @@ public static class WindowLabels
     /// <summary>Materialize this host's deliverables, then download them (<c>HPS-18</c>).</summary>
     public const string PrepareForRevit = "Prepare for Revit";
 
-    /// <summary>Import the downloaded bundle into the active project. The one primary action here.</summary>
+    /// <summary>
+    /// Import the downloaded bundle into the active project — the vault window's primary action, and
+    /// the import window's once the checklist is set: the same act, so the same word.
+    /// </summary>
     public const string Import = "Import";
 
     /// <summary>Evict this order from the bundle cache (<c>HPS-44</c>). Was <c>Remove download</c>.</summary>
@@ -113,24 +116,48 @@ public static class WindowLabels
     /// </remarks>
     public static string StepName(ImportStepKind kind) => kind switch
     {
-        ImportStepKind.ToposurfaceFromPointsFile => "Terrain",
-        ImportStepKind.ToposurfaceFromSurfaceTin => "Terrain",
-        ImportStepKind.ToposurfaceFromSurfaceDxf => "Terrain",
-        ImportStepKind.LinkSiteIfc => "Site Model",
         ImportStepKind.SetSharedCoordinates => "Shared Coordinates",
         ImportStepKind.SetSiteLocation => "Site Location",
         ImportStepKind.SiteContextView => "Site Context View",
-        ImportStepKind.RoadCentrelines => "Road Centrelines",
-        ImportStepKind.SiteBoundaries => "Land Use Subdivisions",
-        ImportStepKind.LandCover => "Land Cover Subdivisions",
-        ImportStepKind.Vegetation => "Trees",
-        ImportStepKind.ImageryDrape => "Imagery Drape",
         ImportStepKind.AttributionAndProvenance => "Attribution",
+        _ when ImportLayers.Of(kind) is { } layer => LayerName(layer),
 
         // A kind added to the planner and never named here still gets a row rather than a throw on
         // Revit's thread; the test that walks the enum is what makes it get a real name.
         _ => kind.ToString(),
     };
+
+    /// <summary>
+    /// A layer's row in the checklist, and the name of the step that builds it — one word for one
+    /// thing, before the import and during it.
+    /// </summary>
+    public static string LayerName(ImportLayer layer) => layer switch
+    {
+        ImportLayer.Terrain => "Terrain",
+        ImportLayer.SiteModel => "Site Model",
+        ImportLayer.RoadCentrelines => "Road Centrelines",
+        ImportLayer.LandUseSubdivisions => "Land Use Subdivisions",
+        ImportLayer.LandCoverSubdivisions => "Land Cover Subdivisions",
+        ImportLayer.Trees => "Trees",
+        ImportLayer.ImageryDrape => "Imagery Drape",
+        _ => layer.ToString(),
+    };
+
+    /// <summary>
+    /// The heading over the checklist, before the steps run (<c>HPS-51</c>).
+    /// </summary>
+    /// <remarks>
+    /// Not <c>Layers</c>, though that is what the rows are to the people who built this. The glossary
+    /// keeps <em>layer</em> off the user's page — a landscape layer block, a paint layer and a vector
+    /// layer are three different things already — and the reference host, whose picker is still to
+    /// come, has landscape layers and data layers of its own on the same screen.
+    /// </remarks>
+    public const string IncludeHeading = "Include";
+
+    /// <summary>
+    /// What a disabled box says beside it: the layer it cannot be imported without (<c>HPS-51</c>).
+    /// </summary>
+    public static string Needs(ImportLayer prerequisite) => $"Needs {LayerName(prerequisite)}";
 
     /// <summary>How far a chunked step has got, in the elements it creates: <c>250 of 600</c>.</summary>
     public static string ProgressText(StepProgress progress)
