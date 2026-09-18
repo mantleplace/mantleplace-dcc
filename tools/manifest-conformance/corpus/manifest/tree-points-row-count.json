@@ -88,7 +88,7 @@
       "csv": "x,y,ground_z,crown_radius_m\n441959.50,4014372.50,2640.96,4.34\n",
       "declaredPointCount": 1,
       "outcome": "headerUnrecognised",
-      "errorContains": "height_m"
+      "errorContains": "\"height_m\""
     },
     {
       "name": "a row with fewer fields than the header is skipped, and the count says so",

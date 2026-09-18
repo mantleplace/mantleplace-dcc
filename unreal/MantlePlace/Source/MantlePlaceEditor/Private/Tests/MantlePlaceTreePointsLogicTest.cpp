@@ -97,7 +97,7 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 			for (int32 Index = 0; Index < FMath::Min(Rows.Num(), Expected.Num()); ++Index)
 			{
 				TestEqual(FString::Printf(TEXT("%s: row %d position"), Variant.Key, Index),
-				    Rows[Index].Position, Expected[Index].Position, 1e-6);
+				    Rows[Index].Position, Expected[Index].Position, 1e-6f);
 				TestEqual(FString::Printf(TEXT("%s: row %d height"), Variant.Key, Index),
 				    Rows[Index].HeightM, Expected[Index].HeightM, 1e-6f);
 				TestEqual(FString::Printf(TEXT("%s: row %d crown"), Variant.Key, Index),
@@ -126,7 +126,7 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 		        TEXT("x,y,ground_z,crown_radius_m,foliage_type\n441959.50,4014372.50,2640.96,4.34,tree\n"),
 		        OriginEastingM, OriginNorthingM, /*DeclaredPointCount*/ 0, Rows, Error)
 		        == EMantlePlaceTreePointsOutcome::HeaderUnrecognised);
-		TestTrue(TEXT("and it names the missing column"), Error.Contains(TEXT("height_m")));
+		TestTrue(TEXT("and it names the missing column"), Error.Contains(TEXT("\"height_m\"")));
 		TestTrue(TEXT("empty text is HeaderUnrecognised too"),
 		    FMantlePlaceTreePointsLogic::ParseCsv(
 		        FString(), OriginEastingM, OriginNorthingM, /*DeclaredPointCount*/ 0, Rows, Error)

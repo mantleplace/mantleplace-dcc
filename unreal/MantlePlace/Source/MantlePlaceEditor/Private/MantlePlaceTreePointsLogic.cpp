@@ -16,10 +16,42 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 
 	TArray<FString> Lines;
 	CsvText.ParseIntoArrayLines(Lines, /*bCullEmpty*/ true);
-	if (Lines.Num() == 0 || !Lines[0].TrimStartAndEnd().Equals(TEXT("x,y,ground_z,height_m,crown_radius_m")))
+	if (Lines.Num() == 0)
 	{
-		OutError = TEXT("TreePoints.csv header is missing or not the expected "
-		                "\"x,y,ground_z,height_m,crown_radius_m\" (ETL column contract changed?).");
+		OutError = TEXT("TreePoints.csv is empty: it has no header row naming the columns x, y, ground_z, "
+		                "height_m and crown_radius_m.");
+		return EMantlePlaceTreePointsOutcome::HeaderUnrecognised;
+	}
+
+	// Columns are found by header NAME, never by position. The manifest publishes the column names
+	// (`landcover.tree_points.columns`), so the names are the contract and the order is not: a
+	// column this reader does not know is ignored, and only a missing required one is a drift.
+	static const TCHAR* const RequiredColumns[] = {
+	    TEXT("x"), TEXT("y"), TEXT("ground_z"), TEXT("height_m"), TEXT("crown_radius_m")};
+	enum : int32 { ColumnX, ColumnY, ColumnGroundZ, ColumnHeight, ColumnCrown, RequiredColumnCount };
+
+	TArray<FString> HeaderFields;
+	Lines[0].ParseIntoArray(HeaderFields, TEXT(","), /*bCullEmpty*/ false);
+	int32 ColumnIndex[RequiredColumnCount];
+	TArray<FString> Missing;
+	int32 WidestIndex = 0;
+	for (int32 Required = 0; Required < RequiredColumnCount; ++Required)
+	{
+		ColumnIndex[Required] = HeaderFields.IndexOfByPredicate([&](const FString& Field) {
+			return Field.TrimStartAndEnd().Equals(RequiredColumns[Required], ESearchCase::IgnoreCase);
+		});
+		if (ColumnIndex[Required] == INDEX_NONE)
+		{
+			Missing.Add(FString::Printf(TEXT("\"%s\""), RequiredColumns[Required]));
+		}
+		WidestIndex = FMath::Max(WidestIndex, ColumnIndex[Required]);
+	}
+	if (Missing.Num() > 0)
+	{
+		OutError = FString::Printf(
+		    TEXT("TreePoints.csv has no %s column (it needs x, y, ground_z, height_m and crown_radius_m, "
+		         "in any order). The ETL column contract changed; the tree-points layer is skipped."),
+		    *FString::Join(Missing, TEXT(", ")));
 		return EMantlePlaceTreePointsOutcome::HeaderUnrecognised;
 	}
 
@@ -28,22 +60,24 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	{
 		TArray<FString> Fields;
 		Lines[LineIndex].ParseIntoArray(Fields, TEXT(","), /*bCullEmpty*/ false);
-		if (Fields.Num() != 5 || !Fields[0].IsNumeric() || !Fields[1].IsNumeric())
+		if (Fields.Num() <= WidestIndex || !Fields[ColumnIndex[ColumnX]].IsNumeric()
+		    || !Fields[ColumnIndex[ColumnY]].IsNumeric())
 		{
 			continue; // one malformed row must not drop the whole layer
 		}
 
-		const double UtmX = FCString::Atod(*Fields[0]);
-		const double UtmY = FCString::Atod(*Fields[1]);
+		const double UtmX = FCString::Atod(*Fields[ColumnIndex[ColumnX]]);
+		const double UtmY = FCString::Atod(*Fields[ColumnIndex[ColumnY]]);
 		// ground_z is deliberately empty when the DEM had no data under the point.
-		const double GroundZM = Fields[2].IsEmpty() ? 0.0 : FCString::Atod(*Fields[2]);
+		const FString& GroundField = Fields[ColumnIndex[ColumnGroundZ]];
+		const double GroundZM = GroundField.IsEmpty() ? 0.0 : FCString::Atod(*GroundField);
 
 		FMantlePlaceTreePointRow Row;
 		// Same frame math as the drape/mesh placement, through the one helper that owns it.
 		Row.Position = FMantlePlaceVaultManifest::ProjectedToUeCm(
 		    UtmX - OriginEastingM, UtmY - OriginNorthingM, GroundZM);
-		Row.HeightM = FCString::Atof(*Fields[3]);
-		Row.CrownRadiusM = FCString::Atof(*Fields[4]);
+		Row.HeightM = FCString::Atof(*Fields[ColumnIndex[ColumnHeight]]);
+		Row.CrownRadiusM = FCString::Atof(*Fields[ColumnIndex[ColumnCrown]]);
 		Row.GroundZM = static_cast<float>(GroundZM);
 		OutRows.Add(Row);
 	}
