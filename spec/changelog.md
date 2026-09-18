@@ -19,6 +19,27 @@ history, not contract.
 
 ## Semver era
 
+### 1.2.0 — the foliage type
+
+The tree-points CSV gains a sixth column, `foliage_type`, and `landcover.tree_points` gains an
+optional `foliage_type_vocabulary` naming the closed vocabulary its values are drawn from — `"1"`,
+which is `tree` and `shrub`, read from the ESA WorldCover class under each point. The rules a reader
+follows are [format](format.md) §4.4. `hosts.unreal.foliage_points.columns` now states the columns
+the CSV actually carries rather than a fixed list of five.
+
+Nothing is removed or re-meant, so this is a MINOR under [compatibility](compatibility.md) §2 and
+every host floor at 1.0.0 reads it. Both hosts re-pin to 1.2.0 with the column exercised: Unreal's
+tree-points reader resolves columns by header name, and Revit's reader already did. The pins move
+from 1.0.0 in one step; the only thing 1.1.0 added is the `location` block, which a reader that
+does not use it ignores.
+
+⚠️ **Additive in the schema is not additive in every reader.** Unreal's tree-points reader as
+released through `unreal-0.4.0` matched the header as one exact string and counted five fields, so
+the new column would have dropped the whole tree layer on import, with the import still reporting
+success. The reader was fixed and released before the platform emitted the column, which is the
+order 1.0.0 was shipped in for the same reason. [Format](format.md) §4.4 now states the rule that
+reader broke.
+
 ### Within 1.0.1 — the vector layer vocabulary, stated (2026-09-18)
 
 No schema version was published, and nothing a reader parses changed. The seven names a
