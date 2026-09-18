@@ -48,6 +48,24 @@ public enum ImportStepKind
     ImageryDrape,
 }
 
+/// <summary>Which toposolid type the terrain step builds the ground on.</summary>
+/// <remarks>
+/// A role, not an element: the planner cannot see the document, so it decides WHICH type and the
+/// shim resolves that to one. The name the imagery type goes by is
+/// <see cref="DrapeLayering.ImageryName"/>, shared by both steps that touch it.
+/// </remarks>
+public enum TerrainToposolidType
+{
+    /// <summary>The project's own ground type, as <see cref="ToposolidTypeChoice"/> picks it.</summary>
+    Project,
+
+    /// <summary>
+    /// A duplicate of that type whose top layer is the imagery drape's material — the type the drape
+    /// step would otherwise retype the terrain onto after the fact.
+    /// </summary>
+    Imagery,
+}
+
 /// <summary>Why a step the bundle might have carried is not in the plan, as a closed vocabulary.</summary>
 /// <remarks>
 /// The machine-readable half of a skip. <see cref="SkippedImport.Reason"/> is prose written for a
@@ -269,6 +287,21 @@ public sealed class ImportStep
     /// all is <see cref="SurfacePointsSanitiser"/>.
     /// </remarks>
     public SurfaceCropWindow? Crop { get; init; }
+
+    /// <summary>
+    /// The type the terrain is built on. Read only for
+    /// <see cref="ImportStepKind.ToposurfaceFromPointsFile"/> and
+    /// <see cref="ImportStepKind.ToposurfaceFromSurfaceTin"/>, the two kinds that build a toposolid.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <see cref="TerrainToposolidType.Imagery"/> exactly when the plan also carries an
+    /// <see cref="ImportStepKind.ImageryDrape"/> step. Retyping a toposolid makes Revit rebuild the
+    /// whole terrain's element relations, and that cost tracks the point count: 409 s on an
+    /// 80,372-point terrain, the largest single cost in the import, spent on a type the terrain step
+    /// could have used at creation. Only a drape that will run earns the imagery type — one with no
+    /// photograph to carry would lay a blank layer over the ground.
+    /// </remarks>
+    public TerrainToposolidType ToposolidType { get; init; } = TerrainToposolidType.Project;
 }
 
 /// <summary>

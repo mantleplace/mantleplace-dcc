@@ -693,6 +693,77 @@ internal static class ImportPlannerTests
                 true,
                 "the shim textures a toposolid that exists, and risks nothing queued behind it");
         });
+
+        // A terrain-plus-drape bundle whose drape can be switched off by what the manifest says about
+        // the imagery, so the two cases below differ in the drape and nothing else.
+        static string TerrainAndDrape(string imagery) => $$"""
+            {
+              "version": "1.0.0",
+              "layout": { "points_csv": "Surface/SurfacePoints.csv", "imagery_drape": "Imagery/Drape.png" },
+              {{MetricGeoreference}},
+              {{imagery}},
+              {{DemBounds}}
+            }
+            """;
+
+        string[] terrainAndDrapeBundle = ["Metadata/manifest.json", "Surface/SurfacePoints.csv", "Imagery/Drape.png"];
+
+        run.Case("a planned drape builds the terrain on the imagery type, so the drape never retypes it", () =>
+        {
+            BundleImportPlan plan = PlanFor(TerrainAndDrape(ImageryWithGsd), terrainAndDrapeBundle);
+
+            run.True(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is planned");
+            run.True(
+                FindStep(plan, ImportStepKind.ToposurfaceFromPointsFile)?.ToposolidType == TerrainToposolidType.Imagery,
+                "retyping an 80,372-point toposolid after the fact cost 409 s");
+        });
+
+        run.Case("with no drape planned the terrain is built on the project's own type", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                TerrainAndDrape("\"imagery\": { \"present\": false }"),
+                ["Metadata/manifest.json", "Surface/SurfacePoints.csv"]);
+
+            run.False(HasStep(plan, ImportStepKind.ImageryDrape), "no drape is planned");
+            run.True(
+                FindStep(plan, ImportStepKind.ToposurfaceFromPointsFile)?.ToposolidType == TerrainToposolidType.Project,
+                "an imagery type with no photograph to carry would be a blank layer on the ground");
+        });
+
+        run.Case("the TIN path takes the imagery type too, not only the points file", () =>
+        {
+            // The preferred topo path, with a drape placed around the same origin the TIN is reduced
+            // against: 1,430 × 1,420 m either side of it, which is what the probe's pixel grid covers.
+            string layout = RevitLayout.Replace(
+                "\"contours\": \"Surface/Contours.dxf\"",
+                "\"contours\": \"Surface/Contours.dxf\", \"imagery_drape\": \"Imagery/Drape.png\"",
+                StringComparison.Ordinal);
+            const string tinDemBounds = """
+                "elevation": { "dem": { "crs": "EPSG:32610",
+                  "bounds_target_crs": [545173.5, 4186511.5, 546603.5, 4187931.5] } }
+                """;
+
+            BundleImportPlan plan = PlanFor(
+                $$"""{"version": "1.0.0", {{layout}}, {{TinHostBlock}}, {{ImageryWithGsd}}, {{tinDemBounds}}}""",
+                [.. FullBundle, "Imagery/Drape.png"]);
+
+            run.True(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is planned");
+            run.True(
+                FindStep(plan, ImportStepKind.ToposurfaceFromSurfaceTin)?.ToposolidType == TerrainToposolidType.Imagery,
+                "whichever tier builds the terrain, it is built on the type the drape will want");
+        });
+
+        run.Case("a drape the planner refused leaves the terrain on the project's own type", () =>
+        {
+            // The pointer is there and the image is not readable: the drape is skipped, not planned,
+            // and the decision follows the plan rather than the manifest's intent.
+            BundleImportPlan plan = PlanFor(TerrainAndDrape(ImageryWithGsd), terrainAndDrapeBundle, _ => null);
+
+            run.False(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is skipped");
+            run.True(
+                FindStep(plan, ImportStepKind.ToposurfaceFromPointsFile)?.ToposolidType == TerrainToposolidType.Project,
+                "only a drape that will run earns the imagery type");
+        });
     }
 
     /// <summary>

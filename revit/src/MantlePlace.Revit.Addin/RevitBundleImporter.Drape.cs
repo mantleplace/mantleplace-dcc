@@ -20,16 +20,26 @@ internal sealed partial class RevitBundleImporter
     /// material pointing at it, and a toposolid type wearing that material.
     /// </para>
     /// <para>
-    /// <b>The type is duplicated, never edited.</b> The terrain was created against whichever
-    /// <c>ToposolidType</c> the project had first, and that type belongs to the project — texturing
-    /// it in place would repaint every other toposolid in the model with this site's aerial
-    /// photograph. The duplicate is named from the bundle's cache key, so importing the same order
-    /// twice reuses one type rather than growing a new one each time.
+    /// <b>The type is duplicated, never edited.</b> The project's own toposolid type belongs to the
+    /// project — texturing it in place would repaint every other toposolid in the model with this
+    /// site's aerial photograph. The duplicate is named from the bundle's cache key
+    /// (<see cref="DrapeLayering.ImageryName"/>), so importing the same order twice reuses one type
+    /// rather than growing a new one each time.
     /// </para>
     /// <para>
-    /// ⚠️ <b>None of this is reachable by CI</b> (no Revit on a hosted runner), and none of it has
-    /// executed anywhere before this change. <c>AppearanceAssetEditScope</c>, the <c>UnifiedBitmap</c>
-    /// schema and <c>ToposolidType.Duplicate</c> all compile, which says nothing about what they do.
+    /// ⛔ <b>On a terrain this run built, the type is already on it.</b> The planner decides the
+    /// terrain's type before the terrain exists (<see cref="ImportStep.ToposolidType"/>), and the
+    /// terrain step creates the ground on the imagery type with a bare drape material, so what is
+    /// left here is writing the photograph into that material. The retype below is kept for ground
+    /// not on that type: an earlier import's terrain kept by ADR 0004's reuse arm, which may predate
+    /// the change, or this run's terrain when the terrain step could not prepare the type. It is the
+    /// expensive half: 409 s on an 80,372-point toposolid.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>None of this is reachable by CI</b> (no Revit on a hosted runner).
+    /// <c>AppearanceAssetEditScope</c>, the <c>UnifiedBitmap</c> schema and
+    /// <c>ToposolidType.Duplicate</c> — which the terrain step now calls too — all compile, which
+    /// says nothing about what they do; only a real import does.
     /// The one behaviour worth naming: whether a duplicated type's compound structure accepts the
     /// two-layer split for a toposolid as it does for a floor — <see cref="TryWearMaterial"/>
     /// refuses rather than half-applies if it does not.
@@ -54,7 +64,12 @@ internal sealed partial class RevitBundleImporter
         // Retained, not scratch: the appearance asset stores this PATH and re-reads it every time the
         // project is opened (ImportStepKinds.LifetimeOf).
         string imagePath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
-        string name = $"Mantle Place Site Imagery {_archive.Layout.Key.Stem}";
+        string name = DrapeLayering.ImageryName(_archive.Layout.Key.Stem);
+
+        // Whether the terrain step already built this ground on the imagery type — which decides
+        // whether this step retypes at all, and therefore whether it is slow.
+        bool wearsImageryType = _document.GetElement(terrain.GetTypeId()) is ToposolidType worn
+            && string.Equals(worn.Name, name, StringComparison.Ordinal);
 
         // ⛔ BEFORE the material is written, because the offsets depend on the answer. Under smooth
         // shading Revit measures a real-world texture offset from the element's bounding-box corner;
@@ -63,9 +78,11 @@ internal sealed partial class RevitBundleImporter
         bool smoothed = EnsureSmoothedSurface();
         DrapeOffset groundAnchor = AnchorFor(terrain, "the terrain", placement, smoothed);
 
-        // The host retype is always paid and is the dominant cost, so the work count is 1 rather
-        // than the subdivision count — the drape is slow on a terrain with no subdivisions at all.
-        if (SlowStepNotice.For(step.Kind, _terrainVertexCount, 1) is { } notice)
+        // The host retype is the dominant cost, so the work count is 1 rather than the subdivision
+        // count — the drape is slow on a terrain with no subdivisions at all. A terrain already on the
+        // imagery type has no retype coming, and announcing a seven-minute freeze there would teach a
+        // curator to ignore the line.
+        if (SlowStepNotice.For(step.Kind, _terrainVertexCount, wearsImageryType ? 0 : 1) is { } notice)
         {
             Say(notice);
         }
@@ -79,7 +96,9 @@ internal sealed partial class RevitBundleImporter
             transaction.RollBack();
             Say(
                 $"Skipped the satellite imagery ({step.EntryName}): this Revit build would not create an "
-                + "appearance asset for it, so the terrain was left with the material it had.");
+                + (wearsImageryType
+                    ? "appearance asset for it, so the terrain's imagery layer carries no photograph."
+                    : "appearance asset for it, so the terrain was left with the material it had."));
             return;
         }
 
@@ -98,8 +117,10 @@ internal sealed partial class RevitBundleImporter
         {
             transaction.RollBack();
             Say(
-                $"Skipped the satellite imagery ({step.EntryName}): {layering}, so the terrain was left "
-                + "untouched rather than half-changed.");
+                $"Skipped the satellite imagery ({step.EntryName}): {layering}, so "
+                + (wearsImageryType
+                    ? "the terrain's imagery layer carries no photograph."
+                    : "the terrain was left untouched rather than half-changed."));
             return;
         }
 
@@ -306,10 +327,11 @@ internal sealed partial class RevitBundleImporter
         if (decision.Verdict == DrapeLayerVerdict.AlreadyLayered)
         {
             // Write nothing. This is the anti-stacking guarantee, now derived from the structure in
-            // front of us rather than from which import happens to be running.
-            layering = $"the photograph was already the top layer of \"{draped.Name}\" from an "
-                + $"earlier import, so its structure was left alone ({DescribeLayers(structure, materialId)})";
-            Trace($"  drape: {layering}.");
+            // front of us rather than from which import happens to be running — the terrain step
+            // earlier in this run, or an earlier import.
+            Trace($"  drape: the photograph is already the top layer of \"{draped.Name}\", so its "
+                + $"structure was left alone ({DescribeLayers(structure, materialId)}).");
+            layering = SidesClause(structure);
             return true;
         }
 
@@ -357,11 +379,22 @@ internal sealed partial class RevitBundleImporter
                 + "a vertical face. Please report this log.");
         }
 
-        layering = $"the photograph is a {Mm(written.GetLayerWidth(0))} layer on top of the terrain's "
-            + $"own {Mm(written.GetWidth() - written.GetLayerWidth(0))}, so its sides keep the "
-            + "material they had";
+        layering = SidesClause(written);
         return true;
     }
+
+    /// <summary>
+    /// What a layered imagery type does for the terrain's vertical faces, as a curator reads it.
+    /// </summary>
+    /// <remarks>
+    /// One sentence whether this run split the layer or found it split: the terrain step now does
+    /// the split on a first import, so the drape step's summary would otherwise describe the
+    /// mechanism only on the path that has become rare.
+    /// </remarks>
+    private static string SidesClause(CompoundStructure structure)
+        => $"the photograph is a {Mm(structure.GetLayerWidth(0))} layer on top of the terrain's "
+            + $"own {Mm(structure.GetWidth() - structure.GetLayerWidth(0))}, so its sides keep the "
+            + "material they had";
 
     /// <summary>A compound structure's layers as one log line, with the imagery layer called out.</summary>
     private string DescribeLayers(CompoundStructure structure, ElementId materialId)

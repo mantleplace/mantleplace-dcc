@@ -55,18 +55,33 @@ public static class BundleImportPlanner
         List<SkippedImport> skipped = [];
         List<string> notImported = [];
 
-        PlanToposurface(manifest, entries, steps, skipped);
+        // Decided FIRST, appended LAST. Whether a drape will run decides which type the terrain is
+        // built on (ImportStep.ToposolidType), so the answer has to exist before the terrain step
+        // does — while the drape's place at the end of the list, and its skips' place at the end of
+        // theirs, stay exactly where they were.
+        List<ImportStep> drapeSteps = [];
+        List<SkippedImport> drapeSkipped = [];
+        PlanImageryDrape(manifest, entries, drapeSteps, drapeSkipped, probeImageSize);
+
+        PlanToposurface(
+            manifest,
+            entries,
+            steps,
+            skipped,
+            drapeSteps.Count > 0 ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
         PlanSiteIfc(manifest, entries, steps, skipped);
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteContext(manifest, entries, steps, skipped);
 
         // Last, and last for three reasons. The drape needs the terrain step to have run before it —
-        // it textures the toposolid that step built; it also retypes the site-boundary subdivisions
-        // this import created, which must exist before they can be draped; and it is the one
-        // kind whose Revit API surface has never executed anywhere, so if any step is going to fail
-        // it should be the one with nothing queued behind it. Execute runs a transaction per step and
-        // does not catch, so the order of this list is also the order of what survives.
-        PlanImageryDrape(manifest, entries, steps, skipped, probeImageSize);
+        // it writes the photograph into the material that step built the toposolid wearing; it also
+        // drapes the site-boundary subdivisions this import created, which must exist before they
+        // can be draped; and it is the one kind whose Revit API surface has never executed
+        // anywhere, so if any step is going to fail it should be the one with nothing queued behind
+        // it. Execute runs a transaction per step and does not catch, so the order of this list is
+        // also the order of what survives.
+        steps.AddRange(drapeSteps);
+        skipped.AddRange(drapeSkipped);
 
         NoteAvailableButNotImported(manifest, entries, notImported);
 
@@ -75,7 +90,7 @@ public static class BundleImportPlanner
         // whose only planned step was the survey point would report "imported" over an empty model.
         // The parity layers are on the creating side of that line: a bundle carrying roads and no
         // terrain still has something to put in the document. So is the drape, which builds no
-        // geometry but does build a material and retype the terrain it is applied to.
+        // geometry but does write a material, and retypes ground not already on the imagery type.
         bool canImport = steps.Exists(step => step.Kind != ImportStepKind.SetSharedCoordinates);
 
         return new BundleImportPlan
@@ -127,7 +142,8 @@ public static class BundleImportPlanner
         BundleManifest manifest,
         BundleEntryIndex entries,
         List<ImportStep> steps,
-        List<SkippedImport> skipped)
+        List<SkippedImport> skipped,
+        TerrainToposolidType toposolidType)
     {
         // The crop rides on the step, so the shim never has to work out what the area of interest was
         // — and so the case that matters, a bundle whose frame cannot project one, is a null a
@@ -135,7 +151,7 @@ public static class BundleImportPlanner
         SiteFrame? frame = SiteFrame.For(manifest);
         SurfaceCropWindow? crop = SurfaceCrop.For(manifest, frame);
 
-        if (TryPlanTin(manifest, entries, crop, frame, out ImportStep? tinStep, out SkippedImport? tinSkip))
+        if (TryPlanTin(manifest, entries, crop, frame, toposolidType, out ImportStep? tinStep, out SkippedImport? tinSkip))
         {
             steps.Add(tinStep!);
             return;
@@ -151,7 +167,8 @@ public static class BundleImportPlanner
                 out ImportStep? pointsStep,
                 out SkippedImport? pointsSkip,
                 out bool pointsUnitUnreadable,
-                crop))
+                crop,
+                toposolidType: toposolidType))
         {
             skipped.Add(tinSkip!);
             steps.Add(pointsStep!);
@@ -226,6 +243,7 @@ public static class BundleImportPlanner
         BundleEntryIndex entries,
         SurfaceCropWindow? crop,
         SiteFrame? frame,
+        TerrainToposolidType toposolidType,
         out ImportStep? step,
         out SkippedImport? skipped)
     {
@@ -245,7 +263,8 @@ public static class BundleImportPlanner
                 out skipped,
                 out _,
                 crop,
-                frame))
+                frame,
+                toposolidType))
         {
             return false;
         }
@@ -730,7 +749,8 @@ public static class BundleImportPlanner
         out SkippedImport? skipped,
         out bool unitUnreadable,
         SurfaceCropWindow? crop = null,
-        SiteFrame? frame = null)
+        SiteFrame? frame = null,
+        TerrainToposolidType toposolidType = TerrainToposolidType.Project)
     {
         step = null;
         skipped = null;
@@ -781,6 +801,7 @@ public static class BundleImportPlanner
             ExpectedSha256 = artifact.Sha256,
             Crop = crop,
             Frame = frame,
+            ToposolidType = toposolidType,
         };
         return true;
     }

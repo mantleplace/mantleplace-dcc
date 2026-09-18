@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Autodesk.Revit.DB;
+using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
@@ -296,7 +297,7 @@ public sealed partial class TerrainProbeCommand
             .OfClass(typeof(Material))
             .Cast<Material>()
             .FirstOrDefault(material =>
-                material.Name.StartsWith("Mantle Place Site Imagery", StringComparison.Ordinal));
+                material.Name.StartsWith(DrapeLayering.ImageryNamePrefix, StringComparison.Ordinal));
 
         if (existing is not null)
         {

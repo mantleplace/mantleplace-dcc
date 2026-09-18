@@ -14,6 +14,12 @@ namespace MantlePlace.Revit.Core;
 /// 247.1 s and 249.6 s on a re-import, with Revit reporting "not responding" for the whole of each.
 /// </para>
 /// <para>
+/// The drape's half is now paid only on ground that is not already on the imagery type — an
+/// earlier import's, or this run's when the terrain step could not prepare that type. A terrain
+/// built for a planned drape is otherwise created on it (<see cref="ImportStep.ToposolidType"/>),
+/// so its drape has no retype to announce and the shim hands over zero work.
+/// </para>
+/// <para>
 /// ⛔ <b>Nothing here makes the import faster, and that is the decision, not an omission.</b> The
 /// alternatives were weighed and refused: <c>Toposolid.Simplify</c> is decimation and the terrain is
 /// already too coarse to read as terrain, so it makes the worse defect worse to soften the lesser
