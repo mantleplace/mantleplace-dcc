@@ -200,6 +200,17 @@ follow.
   the session-wide `FailuresProcessing` hook attached across a slice boundary: between slices the
   curator is editing their own model (`RevitBundleImporter.InSlice`).
 
+- **The tree family's calls left that set in Revit 2025 before they merged**, through a harness that
+  compiles this tree's sources into one differently named assembly and loads it into a Revit of its
+  own, beside whatever the install slot holds. The Family API calls in `TreeFamilyAuthoring` (`NewExtrusion`, `NewBlend`, `NewRadialDimension` with a
+  `FamilyLabel`, formulas, `AssociateElementParameterToFamilyParameter`) and the tree step's
+  `LoadFamily`, `EditFamily` and level-hosted `NewFamilyInstance` executed in Revit 2025, measured
+  against the numbers that drove them. 2026 and 2027 load the same 2025-saved family by upgrading it
+  on load, which only the release gate proves. Two things it settled that reading would not have:
+  a Planting family already owns a built-in *type* parameter named `Height`, so the per-instance one
+  is `Tree Height`; and a saved `.rfa` records its save folder and the Revit user name — see
+  [`README.md` ▸ Authoring the tree family](./README.md#authoring-the-tree-family).
+
 ## Where knowledge lives
 
 - The bundle-manifest contract → the published JSON Schema series at
