@@ -70,6 +70,15 @@ public enum ImportStepKind
     /// The satellite imagery draped on the terrain as a material texture — Forma's last row.
     /// </summary>
     ImageryDrape,
+
+    /// <summary>
+    /// The "Mantle Place Attribution" drafting view, and the provenance record on Project
+    /// Information — which bundle this project came from, and whose data is in it.
+    /// </summary>
+    /// <remarks>
+    /// Declared last so every kind before it keeps its number; its place in a plan is the planner's.
+    /// </remarks>
+    AttributionAndProvenance,
 }
 
 /// <summary>Which toposolid type the terrain step builds the ground on.</summary>
@@ -372,6 +381,12 @@ public sealed class ImportStep
     /// photograph to carry would lay a blank layer over the ground.
     /// </remarks>
     public TerrainToposolidType ToposolidType { get; init; } = TerrainToposolidType.Project;
+
+    /// <summary>
+    /// Populated only for <see cref="ImportStepKind.AttributionAndProvenance"/>: what the attribution view says
+    /// and what the provenance record stores, both copied from the manifest.
+    /// </summary>
+    public ProjectProvenance? Provenance { get; init; }
 }
 
 /// <summary>

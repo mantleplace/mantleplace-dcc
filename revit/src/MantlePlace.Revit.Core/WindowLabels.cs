@@ -125,6 +125,7 @@ public static class WindowLabels
         ImportStepKind.LandCover => "Land Cover Subdivisions",
         ImportStepKind.Vegetation => "Trees",
         ImportStepKind.ImageryDrape => "Imagery Drape",
+        ImportStepKind.AttributionAndProvenance => "Attribution",
 
         // A kind added to the planner and never named here still gets a row rather than a throw on
         // Revit's thread; the test that walks the enum is what makes it get a real name.

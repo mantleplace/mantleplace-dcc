@@ -208,6 +208,17 @@ follow.
   west-negative longitude goes in as it is. Not settled: that Revit lets a 3D view and a view
   filter share the name `SiteContext` gives both, and that writing `SiteLocation.TimeZone` back
   after the coordinates undoes the zone Revit recalculates from them.
+- **The attribution step joined that set.** `ViewDrafting.Create`, `TextNote.Create` and a
+  `TextNote.Text` write, and ExtensibleStorage — `SchemaBuilder` with `AccessLevel.Vendor` write
+  access, `Entity`, `ProjectInformation.SetEntity`/`GetEntity` — compile and have not been executed
+  inside Revit. Two of their failure modes are settled headlessly: `ProvenanceStorage.VendorId` is
+  asserted equal to the `.addin` file's `VendorId` (a vendor-write schema refuses any other add-in),
+  and every schema and field name is checked against the identifier rule Revit enforces. What is not
+  settled is whether the record reads back after a save and reopen in each of 2025, 2026 and 2027 —
+  the import log says `This project already records an import of order …` when it does. ⛔ **The
+  schema GUID is permanent:** changing a field under `ProvenanceStorage.SchemaGuid` breaks every
+  project that already holds the old definition, so a field change is a new GUID
+  ([ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md)).
 
 ## Where knowledge lives
 

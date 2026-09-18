@@ -385,9 +385,77 @@ internal static class ImportPlannerTests
         RunTinTierCases(run);
         RunParityCases(run);
         RunDrapeCases(run);
+        RunAttributionCases(run);
         RunSiteLocationCases(run);
 
         return run.Report("import planner");
+    }
+
+    /// <summary>
+    /// The attribution view and the provenance record: written on every import, and never the thing
+    /// that makes a bundle count as importable.
+    /// </summary>
+    private static void RunAttributionCases(TestRun run)
+    {
+        run.Case("every import writes attribution and provenance, carried on the step", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                $$"""
+                {
+                  "version": "1.0.0",
+                  "job_id": "job-7",
+                  "order_id": "order-3",
+                  {{RevitLayout}},
+                  "attribution": { "sources": [ { "provider_id": "naip", "attribution_text": "NAIP" } ] }
+                }
+                """,
+                FullBundle);
+            ImportStep? step = FindStep(plan, ImportStepKind.AttributionAndProvenance);
+
+            run.True(step?.Provenance is not null, "the record rides on the step, not on the shim (HPS-02)");
+            run.Equal(step?.Provenance?.OrderId, "order-3", "the order");
+            run.Equal(step?.Provenance?.JobId, "job-7", "the build");
+            run.Equal(step?.Provenance?.Sources.Count ?? 0, 1, "the sources");
+        });
+
+        run.Case("a bundle with no attribution block still records where the project came from", () =>
+        {
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
+
+            run.True(HasStep(plan, ImportStepKind.AttributionAndProvenance), "the order and build are worth recording alone");
+        });
+
+        run.Case("attribution alone is not an import", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                """{"version": "1.0.0", "attribution": { "sources": [ { "provider_id": "naip" } ] }}""",
+                ["Metadata/manifest.json"]);
+
+            run.False(plan.CanImport, "a drafting view over an empty model is not 'imported'");
+        });
+
+        run.Case("attribution is written before the drape, which stays last", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                $$"""
+                {
+                  "version": "1.0.0",
+                  "layout": { "points_csv": "Surface/SurfacePoints.csv", "imagery_drape": "Imagery/Drape.png" },
+                  {{MetricGeoreference}},
+                  {{ImageryWithGsd}},
+                  {{DemBounds}}
+                }
+                """,
+                ["Metadata/manifest.json", "Surface/SurfacePoints.csv", "Imagery/Drape.png"]);
+
+            List<ImportStepKind> kinds = [.. plan.Steps.Select(step => step.Kind)];
+            int attribution = kinds.IndexOf(ImportStepKind.AttributionAndProvenance);
+
+            // Not "second to last": the site context view sits between it and the drape.
+            run.True(attribution > kinds.IndexOf(ImportStepKind.ToposurfaceFromPointsFile), "after the layer it credits");
+            run.True(attribution >= 0 && attribution < kinds.Count - 1, "before the drape");
+            run.Equal(plan.Steps[^1].Kind.ToString(), "ImageryDrape", "the drape still last");
+        });
     }
 
 
@@ -1083,12 +1151,13 @@ internal static class ImportPlannerTests
             run.False(HasStep(plan, ImportStepKind.SiteContextView), "and no view for nothing");
         });
 
-        run.Case("only the settings kinds are not content", () =>
+        run.Case("only the settings and credits kinds are not content", () =>
         {
             foreach (ImportStepKind kind in Enum.GetValues<ImportStepKind>())
             {
                 bool settings = kind is ImportStepKind.SetSharedCoordinates
                     or ImportStepKind.SetSiteLocation
+                    or ImportStepKind.AttributionAndProvenance
                     or ImportStepKind.SiteContextView;
                 run.Equal(ImportStepKinds.ImportsContent(kind), !settings, $"{kind}");
             }

@@ -193,6 +193,7 @@ internal static class WindowLabelsTests
             run.Equal(WindowLabels.StepName(ImportStepKind.Vegetation), "Trees", "the tree points");
             run.Equal(WindowLabels.StepName(ImportStepKind.SetSiteLocation), "Site Location", "Revit's own dialog's word");
             run.Equal(WindowLabels.StepName(ImportStepKind.SiteContextView), "Site Context View", "the view and its filter");
+            run.Equal(WindowLabels.StepName(ImportStepKind.AttributionAndProvenance), "Attribution", "the drafting view and the record");
             run.Equal(WindowLabels.ProgressText(new StepProgress(1_250, 4_532)), "1,250 of 4,532", "chunk progress");
         });
 

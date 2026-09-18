@@ -66,15 +66,17 @@ public static class ImportStepKinds
 
     /// <summary>
     /// Whether a step of this kind puts something from the bundle into the document, as opposed to
-    /// placing the project or organising what other steps put there.
+    /// placing the project, crediting its sources, or organising what other steps put there.
     /// </summary>
     /// <remarks>
     /// A plan whose steps are all on the <c>false</c> side is not an import: it would place the
-    /// project and name a view over a model with nothing in it, and report "imported". The drape is
-    /// content — it builds no geometry, but it writes the bundle's photograph into a material.
+    /// project, write a drafting view of credits and name a view over a model with nothing in it, and
+    /// report "imported". The drape is content — it builds no geometry, but it writes the bundle's
+    /// photograph into a material.
     /// </remarks>
     public static bool ImportsContent(ImportStepKind kind) => kind is not (
         ImportStepKind.SetSharedCoordinates
         or ImportStepKind.SetSiteLocation
+        or ImportStepKind.AttributionAndProvenance
         or ImportStepKind.SiteContextView);
 }
