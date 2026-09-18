@@ -54,6 +54,21 @@ public static class DrapeLayering
     /// <summary>Revit's internal length unit is the decimal INTERNATIONAL foot, exactly 0.3048 m.</summary>
     private const double MillimetresPerInternalFoot = 304.8;
 
+    /// <summary>What every element this plugin names for the imagery drape begins with.</summary>
+    public const string ImageryNamePrefix = "Mantle Place Site Imagery";
+
+    /// <summary>
+    /// The name of the drape's material and of the toposolid type that wears it, for one bundle.
+    /// </summary>
+    /// <remarks>
+    /// Named from the bundle's cache key so a re-import of the same order resolves the same type
+    /// rather than growing a new one. ⛔ One owner, because two steps resolve it: the terrain step
+    /// builds the ground on this type and the drape step finds it by this name. Two spellings would
+    /// have the drape duplicate a second type and retype the terrain onto it — the very commit this
+    /// name being shared exists to avoid.
+    /// </remarks>
+    public static string ImageryName(string bundleStem) => $"{ImageryNamePrefix} {bundleStem}";
+
     /// <summary>
     /// A layer thickness in the unit a human judges it in. One owner for the constant, so the log
     /// line and the curator's sentence can never quote two different numbers for one layer.

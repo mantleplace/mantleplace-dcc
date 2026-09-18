@@ -36,7 +36,7 @@ internal sealed partial class RevitBundleImporter
             Say(cleaned.Explanation);
         }
 
-        BuildTerrain(points, LinearUnits.MetresPerUnit(step.Units), step.EntryName, "points", stamp);
+        BuildTerrain(points, LinearUnits.MetresPerUnit(step.Units), step.EntryName, "points", stamp, step.ToposolidType);
     }
 
     /// <summary>
@@ -97,7 +97,7 @@ internal sealed partial class RevitBundleImporter
 
         // 1.0, not step.Units: SurfaceTinFrame consumed the artifact's unit when it subtracted the
         // origin, exactly as TreePointsReader does, so these coordinates are already metres.
-        BuildTerrain(vertices, 1.0, step.EntryName, "TIN vertices", stamp);
+        BuildTerrain(vertices, 1.0, step.EntryName, "TIN vertices", stamp, step.ToposolidType);
     }
 
     /// <summary>
@@ -159,12 +159,18 @@ internal sealed partial class RevitBundleImporter
     /// Everything the two toposolid paths share: choose a type, convert into Revit's internal feet,
     /// decide a base plane, and build — including the escalation retry.
     /// </summary>
+    /// <param name="toposolidType">
+    /// The planner's answer to which type the ground is built on — see
+    /// <see cref="ImportStep.ToposolidType"/>. The project type is still chosen either way: it is
+    /// what the imagery type is duplicated from, and its thickness is what the base plane clears.
+    /// </param>
     private void BuildTerrain(
         IReadOnlyList<SurfacePoint> points,
         double metresPerUnit,
         string entryName,
         string noun,
-        string stamp)
+        string stamp,
+        TerrainToposolidType toposolidType)
     {
         if (ChooseToposolidType() is not { } chosenType)
         {
@@ -202,7 +208,7 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        if (!TryBuildTerrain(plan, chosenType, revitPoints, relief, stamp))
+        if (!TryBuildTerrain(plan, chosenType, toposolidType, revitPoints, relief, stamp))
         {
             // ⛔ The retry is not defensive coding. Toposolid.Create takes no offset argument, so the
             // height offset can only be written after the element exists — and whether Revit
@@ -213,7 +219,7 @@ internal sealed partial class RevitBundleImporter
             TerrainBasePlan escalated = TerrainBasePlanner.Escalate(plan, relief);
             Say(escalated.Explanation);
 
-            if (!TryBuildTerrain(escalated, chosenType, revitPoints, relief, stamp))
+            if (!TryBuildTerrain(escalated, chosenType, toposolidType, revitPoints, relief, stamp))
             {
                 Say("The terrain could not be built on either base plane, so this project has no "
                     + "ground. The rest of the bundle was still imported.");
@@ -228,9 +234,15 @@ internal sealed partial class RevitBundleImporter
     /// One attempt at the toposolid, on the base plane <paramref name="plan"/> describes.
     /// </summary>
     /// <returns><c>false</c> when Revit refused it and rolled the transaction back.</returns>
+    /// <remarks>
+    /// The imagery type is prepared inside this attempt's transaction, not before it, so a refused
+    /// attempt rolls the duplicate back with the terrain and the retry finds the document as the
+    /// first attempt did.
+    /// </remarks>
     private bool TryBuildTerrain(
         TerrainBasePlan plan,
         CandidateToposolidType type,
+        TerrainToposolidType toposolidType,
         IList<XYZ> revitPoints,
         TerrainRelief relief,
         string stamp)
@@ -242,7 +254,19 @@ internal sealed partial class RevitBundleImporter
             ? FindOrCreateTerrainLevel(plan.LevelElevation)
             : new ElementId(plan.LevelId);
 
-        Toposolid terrain = Toposolid.Create(_document, revitPoints, new ElementId(type.Id), levelId);
+        ElementId typeId = new(type.Id);
+        string typeName = type.Name;
+        string? declined = null;
+        if (toposolidType == TerrainToposolidType.Imagery)
+        {
+            if (ImageryToposolidType(typeId, out declined) is { } imagery)
+            {
+                typeId = imagery.Id;
+                typeName = imagery.Name;
+            }
+        }
+
+        Toposolid terrain = Toposolid.Create(_document, revitPoints, typeId, levelId);
 
         if (plan.HeightOffset != 0.0)
         {
@@ -280,8 +304,17 @@ internal sealed partial class RevitBundleImporter
         // a collector would happily return one the user had already modelled.
         _terrainId = built;
         _terrainVertexCount = relief.PointCount;
+
+        if (declined is not null)
+        {
+            // Not a failure of the terrain, and not yet of the drape: the drape step still tries its
+            // own path, which retypes this ground after the fact — correct, and slow on a large one.
+            Say($"The terrain was built on the project's own type \"{type.Name}\" rather than the "
+                + $"imagery type: {declined}. The satellite imagery step will retype it instead.");
+        }
+
         Say(plan.Explanation
-            + $" Type \"{type.Name}\"; terrain spans {UnitUtils.ConvertFromInternalUnits(relief.MinZ, UnitTypeId.Meters):0.##}"
+            + $" Type \"{typeName}\"; terrain spans {UnitUtils.ConvertFromInternalUnits(relief.MinZ, UnitTypeId.Meters):0.##}"
             + $" m to {UnitUtils.ConvertFromInternalUnits(relief.MaxZ, UnitTypeId.Meters):0.##} m.");
 
         return true;

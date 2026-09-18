@@ -164,6 +164,21 @@ internal static class DrapeLayeringTests
             run.Contains(described, " / ", "one line, not one per layer");
         });
 
+        run.Case("the imagery type keeps the name projects already hold it by", () =>
+        {
+            // Pinned, not derived: projects imported before this name had one owner hold types and
+            // materials spelled exactly this way, and the drape resolves them by name. A respelling
+            // would orphan every one of them — and a re-import would duplicate a fresh type and pay
+            // the retype this name exists to avoid.
+            run.Equal(
+                DrapeLayering.ImageryName("f93bc782"),
+                "Mantle Place Site Imagery f93bc782",
+                "the terrain step and the drape step resolve one type by this name");
+            run.True(
+                DrapeLayering.ImageryName("f93bc782").StartsWith(DrapeLayering.ImageryNamePrefix, StringComparison.Ordinal),
+                "and the terrain probe finds the material by its prefix");
+        });
+
         run.Case("a layer with no material reads as by-category rather than as an empty name", () =>
         {
             run.Contains(

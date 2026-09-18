@@ -40,32 +40,12 @@ internal sealed partial class RevitBundleImporter
     {
         misplaced = null;
 
-        Material? existing = new FilteredElementCollector(_document)
-            .OfClass(typeof(Material))
-            .Cast<Material>()
-            .FirstOrDefault(material => string.Equals(material.Name, name, StringComparison.Ordinal));
-
-        ElementId materialId = existing?.Id ?? Material.Create(_document, name);
-        if (_document.GetElement(materialId) is not Material drapeMaterial)
+        if (DrapeMaterial(name) is not { } drapeMaterial)
         {
             return ElementId.InvalidElementId;
         }
 
-        if (drapeMaterial.AppearanceAssetId == ElementId.InvalidElementId)
-        {
-            AppearanceAssetElement? template = AppearanceAssetElement.GetAppearanceAssetElementByName(_document, "Generic")
-                ?? new FilteredElementCollector(_document)
-                    .OfClass(typeof(AppearanceAssetElement))
-                    .Cast<AppearanceAssetElement>()
-                    .FirstOrDefault();
-
-            if (template is null)
-            {
-                return ElementId.InvalidElementId;
-            }
-
-            drapeMaterial.AppearanceAssetId = template.Duplicate(name).Id;
-        }
+        ElementId materialId = drapeMaterial.Id;
 
         using (AppearanceAssetEditScope scope = new(_document))
         {
@@ -142,8 +122,116 @@ internal sealed partial class RevitBundleImporter
     }
 
     /// <summary>
+    /// The material named <paramref name="name"/>, created or reused, with an appearance asset of its
+    /// own — but no photograph yet. <c>null</c> when this Revit has no asset to start one from.
+    /// </summary>
+    /// <remarks>
+    /// Split from <see cref="DrapeMaterialId"/> because the terrain step needs the material before the
+    /// drape step can write it: the imagery type's top layer has to wear SOMETHING when the ground is
+    /// created on it, and the photograph's offsets cannot be known until that ground exists to be
+    /// measured (<see cref="DrapeAnchor"/>).
+    /// </remarks>
+    private Material? DrapeMaterial(string name)
+    {
+        Material? existing = new FilteredElementCollector(_document)
+            .OfClass(typeof(Material))
+            .Cast<Material>()
+            .FirstOrDefault(material => string.Equals(material.Name, name, StringComparison.Ordinal));
+
+        ElementId materialId = existing?.Id ?? Material.Create(_document, name);
+        if (_document.GetElement(materialId) is not Material drapeMaterial)
+        {
+            return null;
+        }
+
+        if (drapeMaterial.AppearanceAssetId == ElementId.InvalidElementId)
+        {
+            AppearanceAssetElement? template = AppearanceAssetElement.GetAppearanceAssetElementByName(_document, "Generic")
+                ?? new FilteredElementCollector(_document)
+                    .OfClass(typeof(AppearanceAssetElement))
+                    .Cast<AppearanceAssetElement>()
+                    .FirstOrDefault();
+
+            if (template is null)
+            {
+                return null;
+            }
+
+            drapeMaterial.AppearanceAssetId = template.Duplicate(name).Id;
+        }
+
+        return drapeMaterial;
+    }
+
+    /// <summary>
+    /// The toposolid type the terrain step builds a drape-bound ground on: a duplicate of
+    /// <paramref name="projectTypeId"/> whose top layer wears this bundle's drape material.
+    /// </summary>
+    /// <returns><c>null</c>, with the reason in <paramref name="declined"/>, when it cannot be built.</returns>
+    /// <remarks>
+    /// ⛔ This is what keeps the drape step from retyping the terrain. A retype makes Revit rebuild the
+    /// whole terrain's element relations on commit — 409 s on an 80,372-point toposolid, the largest
+    /// single cost in the import — and it bought nothing a type chosen at creation could not. The
+    /// photograph itself is still the drape step's to write; the material is created here bare so the
+    /// layer has something to wear, and the drape step finds it by the same name.
+    /// </remarks>
+    private ToposolidType? ImageryToposolidType(ElementId projectTypeId, out string? declined)
+    {
+        declined = null;
+        string name = DrapeLayering.ImageryName(_archive.Layout.Key.Stem);
+
+        if (_document.GetElement(projectTypeId) is not ToposolidType projectType)
+        {
+            declined = "the project's type could not be read";
+            return null;
+        }
+
+        if (DrapeMaterial(name) is not { } material)
+        {
+            declined = "this Revit build would not create an appearance asset for the photograph";
+            return null;
+        }
+
+        ToposolidType? imagery = ImageryTypeFrom(projectType, name, material.Id, out string layering);
+        if (imagery is null)
+        {
+            declined = layering;
+        }
+
+        return imagery;
+    }
+
+    /// <summary>
+    /// The imagery type named <paramref name="name"/> — reused, or duplicated from
+    /// <paramref name="source"/> — with <paramref name="materialId"/> as its top layer.
+    /// </summary>
+    /// <returns><c>null</c> when the type cannot be had or cannot be layered.</returns>
+    /// <remarks>
+    /// <b>Duplicated, never edited.</b> The source type belongs to the project, and texturing it in
+    /// place would repaint every other toposolid in the model with this site's photograph.
+    /// </remarks>
+    private ToposolidType? ImageryTypeFrom(ToposolidType source, string name, ElementId materialId, out string layering)
+    {
+        ToposolidType? draped = new FilteredElementCollector(_document)
+            .OfClass(typeof(ToposolidType))
+            .Cast<ToposolidType>()
+            .FirstOrDefault(type => string.Equals(type.Name, name, StringComparison.Ordinal));
+
+        draped ??= source.Duplicate(name) as ToposolidType;
+
+        if (draped is null)
+        {
+            layering = $"Revit would not duplicate the terrain's type \"{source.Name}\"";
+            return null;
+        }
+
+        return TryLayerImagery(draped, materialId, out layering) ? draped : null;
+    }
+
+    /// <summary>
     /// Puts <paramref name="materialId"/> on a thin top layer of a DUPLICATE of the terrain's type,
-    /// then retypes the terrain — and the subdivisions this import created — onto it.
+    /// retypes the terrain onto it unless it already wears it, and drapes the subdivisions this
+    /// import created.
     /// </summary>
     /// <returns>
     /// <c>false</c> when the type carries no layer to split, or when splitting it would leave a
@@ -178,27 +266,23 @@ internal sealed partial class RevitBundleImporter
             return false;
         }
 
-        ToposolidType? draped = new FilteredElementCollector(_document)
-            .OfClass(typeof(ToposolidType))
-            .Cast<ToposolidType>()
-            .FirstOrDefault(type => string.Equals(type.Name, typeName, StringComparison.Ordinal));
-
-        draped ??= current.Duplicate(typeName) as ToposolidType;
-
-        if (draped is null)
-        {
-            layering = $"Revit would not duplicate the terrain's type \"{current.Name}\"";
-            return false;
-        }
-
-        if (!TryLayerImagery(draped, materialId, out layering))
+        if (ImageryTypeFrom(current, typeName, materialId, out layering) is not { } draped)
         {
             return false;
         }
 
         try
         {
-            terrain.ChangeTypeId(draped.Id);
+            // ⛔ Only when the terrain does not already wear it. The terrain step builds a drape-bound
+            // ground on this type from the start (ImportStep.ToposolidType), so this is now the rare
+            // path: ground an earlier build of this plugin laid and ADR 0004's reuse arm kept, or a
+            // terrain step that could not prepare the type. Asking first is not a politeness — a
+            // retype rebuilds every element relation the terrain has, 409 s on an 80,372-point
+            // toposolid, and whether Revit short-circuits a same-type ChangeTypeId was never measured.
+            if (terrain.GetTypeId() != draped.Id)
+            {
+                terrain.ChangeTypeId(draped.Id);
+            }
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
         {

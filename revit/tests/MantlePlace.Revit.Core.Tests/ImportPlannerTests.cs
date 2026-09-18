@@ -693,6 +693,54 @@ internal static class ImportPlannerTests
                 true,
                 "the shim textures a toposolid that exists, and risks nothing queued behind it");
         });
+
+        // A terrain-plus-drape bundle whose drape can be switched off by what the manifest says about
+        // the imagery, so the two cases below differ in the drape and nothing else.
+        static string TerrainAndDrape(string imagery) => $$"""
+            {
+              "version": "1.0.0",
+              "layout": { "points_csv": "Surface/SurfacePoints.csv", "imagery_drape": "Imagery/Drape.png" },
+              {{MetricGeoreference}},
+              {{imagery}},
+              {{DemBounds}}
+            }
+            """;
+
+        string[] terrainAndDrapeBundle = ["Metadata/manifest.json", "Surface/SurfacePoints.csv", "Imagery/Drape.png"];
+
+        run.Case("a planned drape builds the terrain on the imagery type, so the drape never retypes it", () =>
+        {
+            BundleImportPlan plan = PlanFor(TerrainAndDrape(ImageryWithGsd), terrainAndDrapeBundle);
+
+            run.True(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is planned");
+            run.True(
+                FindStep(plan, ImportStepKind.ToposurfaceFromPointsFile)?.ToposolidType == TerrainToposolidType.Imagery,
+                "retyping an 80,372-point toposolid after the fact cost 409 s");
+        });
+
+        run.Case("with no drape planned the terrain is built on the project's own type", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                TerrainAndDrape("\"imagery\": { \"present\": false }"),
+                ["Metadata/manifest.json", "Surface/SurfacePoints.csv"]);
+
+            run.False(HasStep(plan, ImportStepKind.ImageryDrape), "no drape is planned");
+            run.True(
+                FindStep(plan, ImportStepKind.ToposurfaceFromPointsFile)?.ToposolidType == TerrainToposolidType.Project,
+                "an imagery type with no photograph to carry would be a blank layer on the ground");
+        });
+
+        run.Case("a drape the planner refused leaves the terrain on the project's own type", () =>
+        {
+            // The pointer is there and the image is not readable: the drape is skipped, not planned,
+            // and the decision follows the plan rather than the manifest's intent.
+            BundleImportPlan plan = PlanFor(TerrainAndDrape(ImageryWithGsd), terrainAndDrapeBundle, _ => null);
+
+            run.False(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is skipped");
+            run.True(
+                FindStep(plan, ImportStepKind.ToposurfaceFromPointsFile)?.ToposolidType == TerrainToposolidType.Project,
+                "only a drape that will run earns the imagery type");
+        });
     }
 
     /// <summary>
