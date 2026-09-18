@@ -385,8 +385,71 @@ internal static class ImportPlannerTests
         RunTinTierCases(run);
         RunParityCases(run);
         RunDrapeCases(run);
+        RunAttributionCases(run);
 
         return run.Report("import planner");
+    }
+
+    /// <summary>
+    /// The attribution view and the provenance record: written on every import, and never the thing
+    /// that makes a bundle count as importable.
+    /// </summary>
+    private static void RunAttributionCases(TestRun run)
+    {
+        run.Case("every import writes attribution and provenance, carried on the step", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                $$"""
+                {
+                  "version": "1.0.0",
+                  "job_id": "job-7",
+                  "order_id": "order-3",
+                  {{RevitLayout}},
+                  "attribution": { "sources": [ { "provider_id": "naip", "attribution_text": "NAIP" } ] }
+                }
+                """,
+                FullBundle);
+            ImportStep? step = FindStep(plan, ImportStepKind.AttributionAndProvenance);
+
+            run.True(step?.Provenance is not null, "the record rides on the step, not on the shim (HPS-02)");
+            run.Equal(step?.Provenance?.OrderId, "order-3", "the order");
+            run.Equal(step?.Provenance?.JobId, "job-7", "the build");
+            run.Equal(step?.Provenance?.Sources.Count ?? 0, 1, "the sources");
+        });
+
+        run.Case("a bundle with no attribution block still records where the project came from", () =>
+        {
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
+
+            run.True(HasStep(plan, ImportStepKind.AttributionAndProvenance), "the order and build are worth recording alone");
+        });
+
+        run.Case("attribution alone is not an import", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                """{"version": "1.0.0", "attribution": { "sources": [ { "provider_id": "naip" } ] }}""",
+                ["Metadata/manifest.json"]);
+
+            run.False(plan.CanImport, "a drafting view over an empty model is not 'imported'");
+        });
+
+        run.Case("attribution is written before the drape, which stays last", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                $$"""
+                {
+                  "version": "1.0.0",
+                  "layout": { "points_csv": "Surface/SurfacePoints.csv", "imagery_drape": "Imagery/Drape.png" },
+                  {{MetricGeoreference}},
+                  {{ImageryWithGsd}},
+                  {{DemBounds}}
+                }
+                """,
+                ["Metadata/manifest.json", "Surface/SurfacePoints.csv", "Imagery/Drape.png"]);
+
+            run.Equal(plan.Steps.Count >= 3 ? plan.Steps[^2].Kind.ToString() : null, "AttributionAndProvenance", "second to last");
+            run.Equal(plan.Steps[^1].Kind.ToString(), "ImageryDrape", "the drape still last");
+        });
     }
 
 

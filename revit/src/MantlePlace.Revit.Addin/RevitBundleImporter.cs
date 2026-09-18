@@ -205,6 +205,8 @@ internal sealed partial class RevitBundleImporter(
                 return ImportVegetation(step);
             case ImportStepKind.ImageryDrape:
                 return Once(() => ApplyImageryDrape(step));
+            case ImportStepKind.AttributionAndProvenance:
+                return Once(() => WriteAttributionAndProvenance(step));
             default:
                 // Fail, do not log-and-continue. A step kind added to the pure core and never
                 // dispatched here would otherwise import silently-incomplete: the plan says the bundle

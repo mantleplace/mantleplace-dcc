@@ -73,6 +73,15 @@ public static class BundleImportPlanner
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteContext(manifest, entries, steps, skipped);
 
+        // Every import, whatever else it carries: the order and the build are worth recording even
+        // when the manifest names no sources, and a record is how the next import finds the note
+        // this one wrote. After the layers it credits, and before the drape, which stays last.
+        steps.Add(new ImportStep
+        {
+            Kind = ImportStepKind.AttributionAndProvenance,
+            Provenance = ProjectProvenance.From(manifest),
+        });
+
         // Last, and last for three reasons. The drape needs the terrain step to have run before it —
         // it writes the photograph into the material that step built the toposolid wearing; it also
         // drapes the site-boundary subdivisions this import created, which must exist before they
@@ -85,13 +94,15 @@ public static class BundleImportPlanner
 
         NoteAvailableButNotImported(manifest, entries, notImported);
 
-        // Every kind but SetSharedCoordinates changes the document, so any one of them is an import.
-        // That step is excluded because it changes project settings and builds nothing — a bundle
-        // whose only planned step was the survey point would report "imported" over an empty model.
+        // Every kind but SetSharedCoordinates and AttributionAndProvenance changes the document's model, so any
+        // one of them is an import. Those two are excluded because they build nothing — a bundle
+        // whose only planned steps were the survey point and a drafting view of credits would report
+        // "imported" over an empty model.
         // The parity layers are on the creating side of that line: a bundle carrying roads and no
         // terrain still has something to put in the document. So is the drape, which builds no
         // geometry but does write a material, and retypes ground not already on the imagery type.
-        bool canImport = steps.Exists(step => step.Kind != ImportStepKind.SetSharedCoordinates);
+        bool canImport = steps.Exists(
+            step => step.Kind is not (ImportStepKind.SetSharedCoordinates or ImportStepKind.AttributionAndProvenance));
 
         return new BundleImportPlan
         {
