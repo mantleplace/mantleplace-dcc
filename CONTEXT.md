@@ -228,6 +228,6 @@ _Avoid_: building, massing, generic model, context geometry
 
 **Stamp**:
 The identity a host writes onto something it created so its next import recognises it. It names the
-order and, for the terrain, the build — never the element id, which identifies a run rather than a
-document.
+order and, for the terrain and the trees, the build — never the element id, which identifies a run
+rather than a document.
 _Avoid_: tag, marker, label, key

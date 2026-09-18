@@ -1,10 +1,8 @@
 // UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.IO;
-using System.Text;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using MantlePlace.Revit.Client;
 using MantlePlace.Revit.Core;
 using Microsoft.Win32;
 
@@ -15,7 +13,8 @@ namespace MantlePlace.Revit.Addin;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The whole command is orchestration — file picker, plan, execute, report. Every rule it appears
+/// The whole command is orchestration — file picker, then an <see cref="ActiveImport"/> handed to
+/// <see cref="BundleImportEventHandler"/> to run staged, with the import window. Every rule it appears
 /// to enforce (the version gate, which topo path wins, whether shared coordinates may be set) is
 /// enforced in <c>MantlePlace.Revit.Core</c> and asserted headlessly there.
 /// </para>
@@ -43,6 +42,14 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
         string? unattended = LocalBundleSource.Unattended(
             Environment.GetEnvironmentVariable(LocalBundleSource.PathVariable));
 
+        // One import at a time: two staged runs would interleave their slices in one document.
+        if (unattended is null && MantlePlaceApplication.ImportHandler.IsImporting)
+        {
+            MantlePlaceApplication.ImportHandler.ShowRunning();
+            Report(unattended, "An import is already running.", "Wait for it to finish, or cancel it in its window.");
+            return Result.Cancelled;
+        }
+
         string zipPath;
         if (unattended is not null)
         {
@@ -65,115 +72,53 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
             zipPath = picker.FileName;
         }
 
-        // Truncated once, here; everything after this point appends. See ImportLog for why the
-        // record is streamed rather than written at the end.
-        //
-        // ⛔ Written on the ATTENDED path too, and that is the point of it. The dialog below arrives
-        // when the import is over, and two of these steps freeze Revit for minutes with a "this will
-        // take a while" line that has to be readable WHILE they run (SlowStepNotice). A curator can
-        // open a text file beside a frozen Revit; they cannot open a TaskDialog that does not exist
-        // yet. The file was previously written only for unattended runs, so the one person actually
-        // sitting through the freeze was the one person who could not see anything.
-        ImportLog log = new(zipPath);
-        log.Begin();
-
-        // The picker guarantees this; an environment variable does not, and an unhandled
-        // FileNotFoundException during journal playback is Revit's internal-error dialog with
-        // nothing there to dismiss it.
-        if (!File.Exists(zipPath))
+        // ⛔ The record is written on the ATTENDED path too, and that is the point of it. Two steps of
+        // this import freeze Revit for minutes inside one commit with a "this will take a while" line
+        // that has to be readable WHILE they run (SlowStepNotice). A curator can open a text file
+        // beside a frozen Revit. ActiveImport.Open begins it, before anything can fail.
+        if (ActiveImport.Open(commandData.Application.Application, document, zipPath, out ImportRefusal? refusal)
+            is not { } import)
         {
-            message = $"No bundle zip at \"{zipPath}\".";
-            Report(log, unattended, "Bundle not found.", message);
-            return Result.Failed;
+            message = refusal!.Message;
+            Report(unattended, refusal.Instruction, refusal.Message);
+            return refusal.IsFailure ? Result.Failed : Result.Cancelled;
         }
 
-        using LocalBundleArchive archive = LocalBundleArchive.Open(zipPath);
-
-        if (archive.Manifest is not { } manifest)
+        if (unattended is null)
         {
-            message = "That zip has no Metadata/manifest.json, so it is not a Mantle Place bundle.";
-            Report(log, unattended, "Not a Mantle Place bundle.", message);
-            return Result.Failed;
+            // Staged: one step or one chunk per ExternalEvent raise, with the import window showing
+            // it, so Revit repaints between them and Cancel is honoured. This command returns now;
+            // the handler owns the import from here and closes it when the run is over.
+            MantlePlaceApplication.ImportHandler.Start(import, commandData.Application.MainWindowHandle);
+            return Result.Succeeded;
         }
 
-        BundleImportPlan plan = BundleImportPlanner.Plan(
-            manifest,
-            archive.EntryNames,
-            archive.ProbeImageSize);
-
-        if (!plan.CanImport)
+        // ⛔ Unattended: synchronous and log-only. A modeless window in a journal playback never
+        // closes, and nothing is there to click Cancel, so the same import runs to the end in place.
+        using (import)
         {
-            // Not an error: an unimportable bundle is a state the manifest explains, and the
-            // skipped list carries the manifest's own reasons (HPS-36).
-            Report(
-                log,
-                unattended,
-                "Nothing to import from this bundle.",
-                plan.BlockedReason + Environment.NewLine + Summarise(plan, []));
-            return Result.Cancelled;
+            import.RunToEnd();
+            if (import.Failed)
+            {
+                message = import.Summary ?? import.Heading;
+                return Result.Failed;
+            }
         }
-
-        // Fail-closed, and BEFORE any element exists: a bundle whose bytes do not match the hashes
-        // its own manifest publishes creates nothing at all (⛔HPS-26).
-        if (archive.VerifyPlan(plan) is { } integrityFailure)
-        {
-            message = integrityFailure;
-            Report(log, unattended, "This bundle failed its integrity check.", integrityFailure);
-            return Result.Failed;
-        }
-
-        RevitBundleImporter importer = new(
-            commandData.Application.Application,
-            document,
-            archive,
-            log.Append);
-
-        // The Revit API throws for a long tail of document states this command cannot anticipate —
-        // a template with no toposolid type, an IFC that will not convert, a degenerate TIN. An
-        // unhandled one surfaces as Revit's internal-error dialog, which tells the user nothing and
-        // implicates the whole session. Catching it here keeps the failure attributable.
-        try
-        {
-            importer.Execute(plan);
-        }
-        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
-                                       or InvalidOperationException
-                                       or IOException)
-        {
-            message = $"The import failed partway through: {ex.Message}";
-            Report(log, unattended, "The import failed partway through.", message);
-            return Result.Failed;
-        }
-
-        Report(
-            log,
-            unattended,
-            "Bundle imported.",
-            Summarise(plan, importer.Log)
-                + Environment.NewLine
-                + $"Linked files live in {archive.RetainedDirectory} — moving or deleting that folder "
-                + "will break the links.");
 
         return Result.Succeeded;
     }
 
     /// <summary>
-    /// Tells the curator what happened — always into the log beside the zip, and additionally as a
-    /// dialog when there is someone driving to read it.
+    /// Tells the curator why the import did not start, as a dialog when there is someone driving to
+    /// read it. The log beside the zip already has it (<see cref="ActiveImport.Open"/>).
     /// </summary>
     /// <remarks>
     /// A <c>TaskDialog</c> raised during journal playback never gets dismissed, so the run that
     /// exists to prove the import works would hang instead — which is why the dialog, not the file,
-    /// is the conditional half. Writing the log is best-effort: an unwritable path must not turn a
-    /// successful import into a failure.
+    /// is the conditional half.
     /// </remarks>
-    private static void Report(ImportLog log, string? unattendedZipPath, string instruction, string body)
+    private static void Report(string? unattendedZipPath, string instruction, string body)
     {
-        // Appends, because the streamed lines are already in the file and they carry the timings and
-        // the appearance-asset writes that the summary does not. Overwriting here would throw away
-        // the half of the record that only exists because the run was watched as it happened.
-        log.AppendBlock(instruction + Environment.NewLine + body);
-
         if (unattendedZipPath is not null)
         {
             return;
@@ -185,39 +130,5 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
             MainContent = body,
         };
         dialog.Show();
-    }
-
-    /// <summary>
-    /// Reports what happened AND what did not. A skipped artifact with its manifest-stated reason
-    /// is the difference between "the plugin is broken" and "this bundle does not carry that yet"
-    /// (HPS-36).
-    /// </summary>
-    private static string Summarise(BundleImportPlan plan, IReadOnlyList<string> log)
-    {
-        StringBuilder text = new();
-        foreach (string line in log)
-        {
-            text.AppendLine(line);
-        }
-
-        if (plan.Skipped.Count > 0)
-        {
-            text.AppendLine().AppendLine("Not imported:");
-            foreach (SkippedImport skipped in plan.Skipped)
-            {
-                text.Append("  • ").AppendLine(skipped.Reason);
-            }
-        }
-
-        if (plan.AvailableButNotImported.Count > 0)
-        {
-            text.AppendLine().AppendLine("Also in this bundle:");
-            foreach (string available in plan.AvailableButNotImported)
-            {
-                text.Append("  • ").AppendLine(available);
-            }
-        }
-
-        return text.ToString();
     }
 }

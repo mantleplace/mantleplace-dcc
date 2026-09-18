@@ -56,6 +56,7 @@ host met the contract for real:
 | **v1.5** | ⛔`HPS-49` — the presign request states its payload explicitly. The same flow, once past the start and the poll, died on a schema rejection: one host had been sending an empty body and the other a deprecated whole-bundle alias. Both had been green throughout, because the corpus pinned presign RESPONSES and never the request |
 | **v1.6** | ⛔`HPS-50` — a host's local install is a single slot that tracks `main`, and says what it holds. The installed Revit add-in on the maintainer machine predated a full day of ribbon commits and the consuming project's Unreal checkout sat twenty commits behind; nothing detected either, because nothing said what was installed |
 | **v1.7** | `HPS-51` — the shared user-facing actions carry one set of words in every host, and a host construct carries the host's own noun. Unreal's panel said `Sign In` and `Sign Out`, Revit's ribbon said `Sign in` and `Sign out`, and Revit's vault window said `Remove download`; nothing said which of those words were shared, so each host went on naming the same actions by itself |
+| **v1.8** | `HPS-51` gains an eighth action, the window that shows a bundle import running and stops it. The Revit import ran as one call on the host's thread, so Revit reported "not responding" for minutes with nothing to show and nothing to cancel; the staged import that fixed it has a window whose surface the reference host will need too, so its words were fixed here before the second host named them differently |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -968,7 +969,7 @@ scripts are proven by being run, and the rule by the check script's line at the 
 **`HPS-51` — The shared actions carry the same words in every host; anything naming a host construct
 carries the host's own noun.** A curator who signs in to Revit in the morning and to Unreal in the
 afternoon is doing one thing twice, and the plugin that calls it two things has made them learn it
-twice. Seven actions are shared, and each carries one set of words:
+twice. Eight actions are shared, and each carries one set of words:
 
 | The action                                                     | The words            | Revit says it on                                                 | Unreal says it on                                    |
 | -------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
@@ -979,6 +980,12 @@ twice. Seven actions are shared, and each carries one set of words:
 | The surface that lists the vault                               | `Vault`              | the Bundles panel's button, and the vault window's heading        | the panel's heading                                  |
 | Import a bundle the user already holds on disk                 | `Import Bundle`      | the Bundles panel's button                                        | the local-import section's button                    |
 | Which build this is, and what it is running in                 | `About Mantle Place` | the Account dropdown, and the dialog it opens                     | nothing yet; these are the words when it grows one |
+| Show a bundle import running, step by step, and stop it        | `Bundle Import`, `Cancel`; a step reads `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run` | the import window's heading, its stop button and each step's row | nothing yet; these are the words when it grows one |
+
+**A step a cancel stopped partway reads `Cancelled`; a step it never reached reads `Not Run`.** They
+are different facts for a curator deciding whether to import again — the first left stamped work in
+the project that a re-import reuses, the second left nothing — so they are different words, and a
+host that shows one word for both has hidden which steps a re-import will pick up.
 
 **Casing is the host's own convention, and this rule does not touch it.** Title Case on a Revit
 ribbon, because every Autodesk tab beside ours uses it; the editor's own style in Unreal. So is the

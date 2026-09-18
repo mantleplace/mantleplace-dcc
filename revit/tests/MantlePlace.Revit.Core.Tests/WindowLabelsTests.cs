@@ -1,7 +1,7 @@
 namespace MantlePlace.Revit.Core.Tests;
 
 /// <summary>
-/// What the two Mantle Place windows say, and the one colour the brand is allowed to spend on
+/// What the Mantle Place windows say, and the one colour the brand is allowed to spend on
 /// them, including the slot their header gives the mark. Which render fills a slot of that size is
 /// <see cref="RibbonImageryTests"/>, whose rule the header shares with the ribbon.
 /// </summary>
@@ -21,7 +21,7 @@ namespace MantlePlace.Revit.Core.Tests;
 /// </remarks>
 internal static class WindowLabelsTests
 {
-    /// <summary>Every button face the two windows show, so a new one cannot skip the casing rule.</summary>
+    /// <summary>Every button face the windows show, so a new one cannot skip the casing rule.</summary>
     private static readonly string[] EveryButtonFace =
     [
         WindowLabels.Refresh,
@@ -40,8 +40,9 @@ internal static class WindowLabelsTests
         {
             run.Equal(WindowLabels.VaultWindowTitle, "Mantle Place Vault", "the vault window's title bar");
             run.Equal(WindowLabels.SignInWindowTitle, "Mantle Place Sign In", "the sign-in window's title bar");
+            run.Equal(WindowLabels.ImportWindowTitle, "Mantle Place Bundle Import", "the import window's title bar");
 
-            foreach (string title in new[] { WindowLabels.VaultWindowTitle, WindowLabels.SignInWindowTitle })
+            foreach (string title in new[] { WindowLabels.VaultWindowTitle, WindowLabels.SignInWindowTitle, WindowLabels.ImportWindowTitle })
             {
                 run.False(title.Contains('—', StringComparison.Ordinal), $"\"{title}\" carries no em dash");
                 run.True(title.StartsWith("Mantle Place ", StringComparison.Ordinal), $"\"{title}\" leads with the product");
@@ -54,8 +55,9 @@ internal static class WindowLabelsTests
             // would be the third time in one window.
             run.Equal(WindowLabels.VaultHeading, "Vault", "the vault window's heading");
             run.Equal(WindowLabels.SignInHeading, "Sign In", "the sign-in window's heading");
+            run.Equal(WindowLabels.ImportHeading, "Bundle Import", "the import window's heading");
 
-            foreach (string heading in new[] { WindowLabels.VaultHeading, WindowLabels.SignInHeading })
+            foreach (string heading in new[] { WindowLabels.VaultHeading, WindowLabels.SignInHeading, WindowLabels.ImportHeading })
             {
                 run.False(
                     heading.Contains("Mantle Place", StringComparison.Ordinal),
@@ -150,6 +152,45 @@ internal static class WindowLabelsTests
             run.Equal(BrandPalette.MixToWhite(BrandPalette.Mantle, -5).Hex, "#FF7110", "below zero clamps");
             run.Equal(BrandPalette.MixToWhite(BrandPalette.Mantle, 5).Hex, "#FFFFFF", "above one clamps");
             run.Equal(BrandPalette.MixToWhite(BrandPalette.Mantle, double.NaN).Hex, "#FF7110", "NaN is no mix");
+        });
+
+        run.Case("the import window says HPS-51's words for a step's state", () =>
+        {
+            // The standard's row for the import window fixes these, because the reference host will
+            // show the same surface. Revit's half is only the casing.
+            run.Equal(WindowLabels.StateWord(ImportStepState.Waiting), "Waiting", "not reached");
+            run.Equal(WindowLabels.StateWord(ImportStepState.Importing), "Importing", "in flight");
+            run.Equal(WindowLabels.StateWord(ImportStepState.Done), "Done", "finished");
+            run.Equal(WindowLabels.StateWord(ImportStepState.Failed), "Failed", "failed");
+            run.Equal(WindowLabels.StateWord(ImportStepState.Cancelled), "Cancelled", "stopped partway");
+            run.Equal(WindowLabels.StateWord(ImportStepState.NotRun), "Not Run", "never started");
+        });
+
+        run.Case("every step kind and every state has its own word", () =>
+        {
+            foreach (ImportStepKind kind in Enum.GetValues<ImportStepKind>())
+            {
+                run.False(
+                    string.Equals(WindowLabels.StepName(kind), kind.ToString(), StringComparison.Ordinal),
+                    $"{kind} has a curator's name rather than the planner's");
+            }
+
+            ImportStepState[] states = Enum.GetValues<ImportStepState>();
+            run.Equal(
+                new HashSet<string>(states.Select(WindowLabels.StateWord), StringComparer.Ordinal).Count,
+                states.Length,
+                "no two states read the same");
+        });
+
+        run.Case("the step names are the glossary's", () =>
+        {
+            // Three planner kinds build the one terrain, so they are one word to the curator.
+            run.Equal(WindowLabels.StepName(ImportStepKind.ToposurfaceFromSurfaceTin), "Terrain", "the TIN path");
+            run.Equal(WindowLabels.StepName(ImportStepKind.ToposurfaceFromPointsFile), "Terrain", "the points path");
+            run.Equal(WindowLabels.StepName(ImportStepKind.LinkSiteIfc), "Site Model", "the IFC");
+            run.Equal(WindowLabels.StepName(ImportStepKind.SiteBoundaries), "Subdivisions", "the land-use polygons, by what they become");
+            run.Equal(WindowLabels.StepName(ImportStepKind.Vegetation), "Trees", "the tree points");
+            run.Equal(WindowLabels.ProgressText(new StepProgress(1_250, 4_532)), "1,250 of 4,532", "chunk progress");
         });
 
         return run.Report("window labels");

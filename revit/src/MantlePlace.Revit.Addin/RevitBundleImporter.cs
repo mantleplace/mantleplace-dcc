@@ -8,7 +8,8 @@ using MantlePlace.Revit.Core;
 namespace MantlePlace.Revit.Addin;
 
 /// <summary>
-/// Executes a <see cref="BundleImportPlan"/> against a Revit document.
+/// Executes a <see cref="BundleImportPlan"/>'s steps against a Revit document, one at a time, for
+/// <see cref="StagedImport"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -28,8 +29,10 @@ namespace MantlePlace.Revit.Addin;
 /// <para>
 /// The class is split one file per step — <c>RevitBundleImporter.&lt;Step&gt;.cs</c> — so that two
 /// changes to two steps do not touch one file. Three things stay here and nowhere else: the
-/// state steps hand to each other (the fields below), the step order (<see cref="ExecuteSteps"/>),
-/// and the session-wide failure hook (<see cref="Execute"/>). What every step shares — the log,
+/// state steps hand to each other (the fields below), the dispatch from a step kind to its work
+/// (<see cref="Run"/>), and the session-wide failure hook (<see cref="InSlice"/>). The step ORDER,
+/// when a step runs and when a cancel is honoured are <see cref="StagedImport"/>'s, in the pure core.
+/// What every step shares — the log,
 /// the transaction, finding the ground — is <c>RevitBundleImporter.Plumbing.cs</c>, and what
 /// more than one vector step shares is <c>RevitBundleImporter.SiteVectors.cs</c>.
 /// </para>
@@ -38,7 +41,7 @@ internal sealed partial class RevitBundleImporter(
     Autodesk.Revit.ApplicationServices.Application application,
     Document document,
     LocalBundleArchive archive,
-    Action<string>? trace = null)
+    Action<string>? trace = null) : IImportStepRunner
 {
     private readonly Autodesk.Revit.ApplicationServices.Application _application = application;
     private readonly Document _document = document;
@@ -49,8 +52,8 @@ internal sealed partial class RevitBundleImporter(
     /// Where a line goes the MOMENT it is produced, when the caller offered somewhere to put it.
     /// </summary>
     /// <remarks>
-    /// ⛔ The summary is returned to the caller and written once, after <see cref="Execute"/> has
-    /// returned. A step that never returns therefore leaves no evidence at all — and the
+    /// ⛔ The summary is returned to the caller and written once, after the last step has
+    /// ended. A step that never returns therefore leaves no evidence at all — and the
     /// site-boundary step's commit has been observed spending over four minutes inside
     /// <c>updateElementRelations</c> on a large toposolid, which is exactly the shape of run this
     /// import needs a record of. Anything written here is diagnostic and does not appear in the
@@ -95,27 +98,54 @@ internal sealed partial class RevitBundleImporter(
     /// </remarks>
     private bool _smoothingSettled;
 
+    /// <summary>
+    /// Whether the step in flight had a commit Revit rolled back. Reset as each step starts, set by
+    /// <see cref="CommitAndReport"/>, read by <see cref="Committed"/> — so a step whose work is gone
+    /// reads as failed in the window and in a cancelled run's closing line, not as done.
+    /// </summary>
+    private bool _stepRolledBack;
+
+    /// <summary>Times the step in flight, from its start slice to the slice that ends it.</summary>
+    /// <remarks>
+    /// Wall time, so on a staged run it includes Revit's own work between slices. The per-commit
+    /// trace lines (<see cref="CommitAndReport"/>) are what to read when tuning a chunk size.
+    /// </remarks>
+    private readonly Stopwatch _stepClock = new();
+
     internal IReadOnlyList<string> Log => _log;
 
-    /// <summary>Runs every step in the plan. One transaction per step, so a late failure keeps the earlier work.</summary>
-    internal void Execute(BundleImportPlan plan)
+    /// <summary>
+    /// Runs <paramref name="slice"/> — one <see cref="StagedImport.Advance"/> — with the import's
+    /// failure hook attached for exactly as long as it runs.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ Revit's own IFC importer opens a transaction named "Import" inside
+    /// RevitLinkType.CreateFromIFC, and a per-transaction preprocessor cannot reach it — which is
+    /// how "Can't keep elements joined" and the IFC4 warning surfaced as a modal in the middle of an
+    /// otherwise silent import. This is the only hook that sees a transaction we did not open.
+    /// </para>
+    /// <para>
+    /// It is session-wide, so it is attached per slice and not for the length of the import. The
+    /// import is staged: between two slices Revit is live, and the curator may be editing their own
+    /// model while the trees go in. A hook left on across that gap would put this policy between
+    /// them and their own edits.
+    /// </para>
+    /// <para>
+    /// The same gap lets a curator undo an earlier step's transaction, leaving an id in the fields
+    /// above pointing at nothing. The Revit call that meets it throws an ApplicationException, which
+    /// <see cref="IsStepFailure"/> turns into that one step failing and saying why.
+    /// </para>
+    /// </remarks>
+    internal bool InSlice(Func<bool> slice)
     {
-        // ⛔ Revit's own IFC importer opens a transaction named "Import" inside
-        // RevitLinkType.CreateFromIFC, and a per-transaction preprocessor cannot reach it — which is
-        // how "Can't keep elements joined" and the IFC4 warning surfaced as a modal in the middle of
-        // an otherwise silent import. This is the only hook that sees a transaction we did not open.
-        // It is session-wide, so it is attached for the length of the import and detached in the
-        // finally: leaving it on would put this policy between the curator and their own edits.
+        ArgumentNullException.ThrowIfNull(slice);
+
         ImportFailureSwallower session = new("The import");
         _application.FailuresProcessing += session.OnFailuresProcessing;
-
         try
         {
-            ExecuteSteps(plan);
-
-            // After every step as well as inside the drape step: a bundle with no photograph still
-            // gets smooth ground, and for the bundle that had one this is a no-op read.
-            EnsureSmoothedSurface();
+            return slice();
         }
         finally
         {
@@ -124,76 +154,107 @@ internal sealed partial class RevitBundleImporter(
         }
     }
 
-    private void ExecuteSteps(BundleImportPlan plan)
+    /// <summary>What every import does once its steps are over, however they ended.</summary>
+    /// <remarks>
+    /// After every step as well as inside the drape step: a bundle with no photograph still gets
+    /// smooth ground, and for the bundle that had one this is a no-op read. It runs on a cancelled
+    /// import too, because the terrain that import kept is the same ground a finished one would have
+    /// left, and should look the same.
+    /// </remarks>
+    internal void Finish() => EnsureSmoothedSurface();
+
+    /// <summary>Adds a line to the summary from outside the steps — the run's closing line.</summary>
+    internal void Report(string line) => Say(line);
+
+    /// <inheritdoc/>
+    public IEnumerable<StepProgress> Run(ImportStep step)
     {
-        foreach (ImportStep step in plan.Steps)
+        ArgumentNullException.ThrowIfNull(step);
+
+        switch (step.Kind)
         {
-            // A start marker and a duration, because a step is the unit a curator waits on and the
-            // unit a slow one has to be attributed to. The marker is traced rather than said: it is
-            // only useful in the streamed file, where it is the last line standing if a step hangs.
-            Trace($"[{step.Kind}] started.");
-            Stopwatch clock = Stopwatch.StartNew();
-
-            // ⛔ One step's exception used to abandon every step after it. The only catch was at the
-            // top of the command, so a re-import that tripped over the IFC link — step two of eight
-            // — reported a single sentence and silently never attempted the terrain, the
-            // boundaries, the vegetation or the drape. The steps already take a transaction each
-            // precisely so a late failure keeps the earlier work; that promise is only half kept if
-            // the LATER work is what disappears instead.
-            //
-            // InvalidOperationException is deliberately NOT caught here: the default arm throws it
-            // for a step kind this build cannot dispatch, and that one must still stop the import
-            // rather than quietly produce a model missing whatever the new kind was for.
-            try
-            {
-                switch (step.Kind)
-                {
-                    case ImportStepKind.ToposurfaceFromPointsFile:
-                        ImportToposurfaceFromPoints(step);
-                        break;
-                    case ImportStepKind.ToposurfaceFromSurfaceTin:
-                        ImportToposurfaceFromTin(step);
-                        break;
-                    case ImportStepKind.ToposurfaceFromSurfaceDxf:
-                        LinkCadSurface(step);
-                        break;
-                    case ImportStepKind.LinkSiteIfc:
-                        LinkSiteIfc(step);
-                        break;
-                    case ImportStepKind.SetSharedCoordinates:
-                        SetSharedCoordinates(step);
-                        break;
-                    case ImportStepKind.RoadCentrelines:
-                        ImportRoadCentrelines(step);
-                        break;
-                    case ImportStepKind.SiteBoundaries:
-                        ImportSiteBoundaries(step);
-                        break;
-                    case ImportStepKind.Vegetation:
-                        ImportVegetation(step);
-                        break;
-                    case ImportStepKind.ImageryDrape:
-                        ApplyImageryDrape(step);
-                        break;
-                    default:
-                        // Fail, do not log-and-continue. A step kind added to the pure core and
-                        // never dispatched here would otherwise import silently-incomplete: the plan
-                        // says the bundle is fully handled, the model is missing whatever the new
-                        // kind was for, and the summary reads like a success.
-                        throw new InvalidOperationException(
-                            $"This build of the plugin does not know how to execute the import step "
-                            + $"'{step.Kind}', so the import was stopped rather than left half-done. "
-                            + "Update the Mantle Place add-in.");
-                }
-            }
-            catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or IOException)
-            {
-                Say($"The \"{step.Kind}\" step failed and was skipped — {ex.Message} Everything after "
-                    + "it was still attempted.");
-            }
-
-            clock.Stop();
-            Say($"({step.Kind} took {clock.Elapsed.TotalSeconds:N1} s.)");
+            case ImportStepKind.ToposurfaceFromPointsFile:
+                return Once(() => ImportToposurfaceFromPoints(step));
+            case ImportStepKind.ToposurfaceFromSurfaceTin:
+                return Once(() => ImportToposurfaceFromTin(step));
+            case ImportStepKind.ToposurfaceFromSurfaceDxf:
+                return Once(() => LinkCadSurface(step));
+            case ImportStepKind.LinkSiteIfc:
+                return Once(() => LinkSiteIfc(step));
+            case ImportStepKind.SetSharedCoordinates:
+                return Once(() => SetSharedCoordinates(step));
+            case ImportStepKind.RoadCentrelines:
+                return Once(() => ImportRoadCentrelines(step));
+            case ImportStepKind.SiteBoundaries:
+                return Once(() => ImportSiteBoundaries(step));
+            case ImportStepKind.Vegetation:
+                return ImportVegetation(step);
+            case ImportStepKind.ImageryDrape:
+                return Once(() => ApplyImageryDrape(step));
+            default:
+                // Fail, do not log-and-continue. A step kind added to the pure core and never
+                // dispatched here would otherwise import silently-incomplete: the plan says the bundle
+                // is fully handled, the model is missing whatever the new kind was for, and the
+                // summary reads like a success. StagedImport lets this one through to the host,
+                // because it is not a step's own failure.
+                throw new InvalidOperationException(
+                    $"This build of the plugin does not know how to execute the import step "
+                    + $"'{step.Kind}', so the import was stopped rather than left half-done. "
+                    + "Update the Mantle Place add-in.");
         }
+    }
+
+    /// <inheritdoc/>
+    public bool Committed(ImportStep step) => !_stepRolledBack;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// InvalidOperationException is deliberately NOT one: <see cref="Run"/> throws it for a step kind
+    /// this build cannot dispatch, and that one must still stop the import.
+    /// </remarks>
+    public bool IsStepFailure(Exception exception)
+        => exception is Autodesk.Revit.Exceptions.ApplicationException or IOException;
+
+    /// <inheritdoc/>
+    public void StepStarting(ImportStep step)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+
+        // A start marker and a duration, because a step is the unit a curator waits on and the unit
+        // a slow one has to be attributed to. The marker is traced rather than said: it is only
+        // useful in the streamed file, where it is the last line standing if a step hangs.
+        Trace($"[{step.Kind}] started.");
+        _stepRolledBack = false;
+        _stepClock.Restart();
+    }
+
+    /// <inheritdoc/>
+    public void StepEnded(ImportStep step, ImportStepState state, Exception? failure)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+
+        _stepClock.Stop();
+        if (failure is not null)
+        {
+            Say($"The \"{step.Kind}\" step failed and was skipped — {failure.Message} Everything after "
+                + "it was still attempted.");
+        }
+
+        if (state == ImportStepState.NotRun)
+        {
+            // Pairs the "[Kind] started." marker, which was written before the cancel landed, so the
+            // streamed file does not read as though the step began and then vanished.
+            Trace($"[{step.Kind}] not run: the import was cancelled before it began.");
+            return;
+        }
+
+        Say($"({step.Kind} took {_stepClock.Elapsed.TotalSeconds:N1} s.)");
+    }
+
+    /// <summary>A step that is one commit, as a step with no chunk boundaries in it.</summary>
+    private static IEnumerable<StepProgress> Once(Action step)
+    {
+        step();
+        yield break;
     }
 }

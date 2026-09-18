@@ -1,37 +1,61 @@
-// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.IO;
-using System.Text;
+using System.Windows.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using MantlePlace.Revit.Client;
 using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
 /// <summary>
-/// Runs an import against the active document, on Revit's thread.
+/// Drives an import on Revit's thread, one slice per <see cref="ExternalEvent"/> raise.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Revit's document API is main-thread-only and there is no supported way to marshal onto it except
-/// <see cref="ExternalEvent"/>. The vault browser is modeless and does its downloading on a
-/// background task, so the moment it has a zip on disk it raises this and gets out of the way.
+/// <see cref="ExternalEvent"/>. This used to run the whole import inside one <see cref="Execute"/>,
+/// so Revit reported "not responding" for as long as the import took and nothing could be cancelled.
+/// Now each <see cref="Execute"/> does one slice of an <see cref="ActiveImport"/> — start a step,
+/// run a step, commit one chunk — refreshes the import window, and raises the event again. Revit
+/// repaints and processes input between the two.
 /// </para>
 /// <para>
-/// Everything it does was decided elsewhere: <see cref="BundleImportPlanner"/> chose the steps and
-/// <see cref="RevitBundleImporter"/> knows how to execute them. This is the thread hop and the
-/// report, and nothing else.
+/// ⛔ <b>The next raise is posted at <see cref="DispatcherPriority.Background"/>, not made inline.</b>
+/// Background sits below input and render, so the window draws the slice that just finished and a
+/// click on Cancel is handled before the next slice can start. Raising inline would leave both to
+/// whichever Revit happened to service first.
+/// </para>
+/// <para>
+/// Two ways in, one driver. The vault window is on its own and queues a zip path (<see cref="QueueImport"/>),
+/// opened here on Revit's thread. The ribbon command is already on Revit's thread, opens its own
+/// import and hands it over (<see cref="Start"/>). The unattended path never comes here: a modeless
+/// window in a journal playback never closes, so it runs its import to the end in place.
 /// </para>
 /// </remarks>
 internal sealed class BundleImportEventHandler : IExternalEventHandler
 {
     private readonly object _gate = new();
     private string? _zipPath;
+    private ExternalEvent? _event;
+    private ActiveImport? _import;
+    private ImportWindow? _window;
 
-    /// <summary>Raised on Revit's thread when an import finishes, so the browser can update.</summary>
+    /// <summary>Whether the running import came from the vault window, which is who hears about it.</summary>
+    private bool _fromVault;
+
+    /// <summary>
+    /// Raised on Revit's thread with one line for the vault window's status: why an import it asked
+    /// for did not start, or that it finished and where its report is. An import started from the
+    /// ribbon is not the vault window's to report.
+    /// </summary>
     internal event EventHandler<string>? Completed;
 
-    /// <summary>Queues a zip. The last one queued before the event fires is the one that runs.</summary>
+    /// <summary>Whether an import is running. One at a time: two would interleave in one document.</summary>
+    internal bool IsImporting => _import is not null;
+
+    /// <summary>The event this handler re-raises between slices. Set once, at startup.</summary>
+    internal void Attach(ExternalEvent externalEvent) => _event = externalEvent;
+
+    /// <summary>Queues a zip from the vault window. The last one queued before the event fires is the one that runs.</summary>
     internal void QueueImport(string zipPath)
     {
         lock (_gate)
@@ -39,6 +63,22 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             _zipPath = zipPath;
         }
     }
+
+    /// <summary>Takes over an import the ribbon command opened, shows its window and starts it.</summary>
+    internal void Start(ActiveImport import, IntPtr revitWindow)
+    {
+        ArgumentNullException.ThrowIfNull(import);
+        if (_import is not null)
+        {
+            throw new InvalidOperationException("An import is already running.");
+        }
+
+        Begin(import, revitWindow, fromVault: false);
+        RaiseNextSlice();
+    }
+
+    /// <summary>Brings the running import's window forward, for a second click on Import.</summary>
+    internal void ShowRunning() => _window?.Activate();
 
     public void Execute(UIApplication application)
     {
@@ -51,113 +91,111 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             _zipPath = null;
         }
 
-        if (zipPath is null)
+        if (zipPath is not null)
+        {
+            OpenQueued(application, zipPath);
+        }
+
+        if (_import is not { } import)
         {
             return;
         }
 
-        Completed?.Invoke(this, Import(application, zipPath));
+        bool more;
+        try
+        {
+            more = import.Advance();
+        }
+        catch (Exception ex)
+        {
+            // The one catch-all in the import, and the contract rather than a shortcut: an exception
+            // out of here would leave the run unable to advance or close (ActiveImport.Abandon).
+            import.Abandon(ex);
+            more = false;
+        }
+
+        _window?.Refresh();
+
+        if (more)
+        {
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(RaiseNextSlice));
+            return;
+        }
+
+        End(import);
     }
 
     public string GetName() => "Mantle Place bundle import";
 
-    private static string Import(UIApplication application, string zipPath)
+    private void OpenQueued(UIApplication application, string zipPath)
     {
-        Document? document = application.ActiveUIDocument?.Document;
-        if (document is null)
+        if (_import is not null)
         {
-            return "Open a project first — there is no active document to import into.";
+            _window?.Activate();
+            Completed?.Invoke(this, "An import is already running — wait for it, or cancel it in its window.");
+            return;
         }
 
-        // ⛔ This path had no file record at all: the summary went to the vault window and nowhere
-        // else, so an import that hung, crashed or was clicked away left nothing behind. That is the
-        // path a curator actually uses, and it is the one that most needs a record — the
-        // site-boundary step has been measured spending ten minutes inside a single commit. Same
-        // file beside the zip that the ribbon command writes, same streaming, same best-effort
-        // contract: an unwritable path never turns an import into a failure.
-        ImportLog log = new(zipPath);
-        log.Begin();
-
-        try
+        if (application.ActiveUIDocument?.Document is not Document document)
         {
-            using LocalBundleArchive archive = LocalBundleArchive.Open(zipPath);
-
-            if (archive.Manifest is not { } manifest)
-            {
-                return log.AndSay(
-                    "That download has no Metadata/manifest.json, so it is not a Mantle Place bundle.");
-            }
-
-            BundleImportPlan plan = BundleImportPlanner.Plan(
-                manifest,
-                archive.EntryNames,
-                archive.ProbeImageSize);
-            if (!plan.CanImport)
-            {
-                return log.AndSay(plan.BlockedReason + Environment.NewLine + Summarise(plan, []));
-            }
-
-            // Fail-closed, and BEFORE any element exists. The download path already verifies on the
-            // way in (⛔HPS-26, BundleCache); this covers the zip that arrived some other way, and
-            // costs one pass over three files.
-            if (archive.VerifyPlan(plan) is { } integrityFailure)
-            {
-                return log.AndSay(integrityFailure);
-            }
-
-            RevitBundleImporter importer = new(application.Application, document, archive, log.Append);
-            importer.Execute(plan);
-
-            string summary = Summarise(plan, importer.Log)
-                + Environment.NewLine
-                + $"Linked files live in {archive.RetainedDirectory} — moving or deleting that folder will "
-                + "break the links.";
-            log.AppendBlock(summary);
-            return summary;
+            Completed?.Invoke(this, "Open a project first — there is no active document to import into.");
+            return;
         }
-        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
-                                       or InvalidOperationException
-                                       or IOException)
+
+        if (ActiveImport.Open(application.Application, document, zipPath, out ImportRefusal? refusal) is not { } import)
         {
-            // The Revit API throws for a long tail of document states this cannot anticipate. An
-            // unhandled one surfaces as Revit's internal-error dialog, which tells the curator
-            // nothing and implicates the whole session.
-            string failure = $"The import failed partway through: {ex.Message}";
-            log.AppendBlock(failure);
-            return failure;
+            Completed?.Invoke(this, refusal!.Instruction + Environment.NewLine + refusal.Message);
+            return;
         }
+
+        Begin(import, application.MainWindowHandle, fromVault: true);
+    }
+
+    private void Begin(ActiveImport import, IntPtr revitWindow, bool fromVault)
+    {
+        _import = import;
+        _fromVault = fromVault;
+        _window = new ImportWindow(Path.GetFileName(import.ZipPath), import.Staged, revitWindow);
+        _window.Show();
     }
 
     /// <summary>
-    /// Reports what happened AND what did not — the difference between "the plugin is broken" and
-    /// "this bundle does not carry that yet" (<c>HPS-36</c>).
+    /// Raises the event for the next slice, and ends the import if Revit will not take the request.
     /// </summary>
-    private static string Summarise(BundleImportPlan plan, IReadOnlyList<string> log)
+    /// <remarks>
+    /// ⛔ A refused raise is otherwise silent: no slice ever runs again, the window sits on its last
+    /// state with Cancel lit, and the handler believes an import is running until Revit restarts.
+    /// </remarks>
+    private void RaiseNextSlice()
     {
-        StringBuilder text = new();
-        foreach (string line in log)
+        if (_import is not { } import || _event is null)
         {
-            text.AppendLine(line);
+            return;
         }
 
-        if (plan.Skipped.Count > 0)
+        ExternalEventRequest request = _event.Raise();
+        if (request == ExternalEventRequest.Accepted)
         {
-            text.AppendLine().AppendLine("Not imported:");
-            foreach (SkippedImport skipped in plan.Skipped)
-            {
-                text.Append("  • ").AppendLine(skipped.Reason);
-            }
+            return;
         }
 
-        if (plan.AvailableButNotImported.Count > 0)
-        {
-            text.AppendLine().AppendLine("Also in this bundle:");
-            foreach (string available in plan.AvailableButNotImported)
-            {
-                text.Append("  • ").AppendLine(available);
-            }
-        }
+        import.Abandon(new InvalidOperationException(
+            $"Revit did not accept the request to run the next step ({request}), so the import stopped where it stood."));
+        End(import);
+    }
 
-        return text.ToString();
+    private void End(ActiveImport import)
+    {
+        _window?.ShowFinished(import.Summary ?? string.Empty);
+        import.Dispose();
+
+        bool fromVault = _fromVault;
+        _import = null;
+        _window = null;
+
+        if (fromVault)
+        {
+            Completed?.Invoke(this, $"{import.Heading} The report is in the {WindowLabels.ImportHeading} window, and in the log beside the bundle.");
+        }
     }
 }

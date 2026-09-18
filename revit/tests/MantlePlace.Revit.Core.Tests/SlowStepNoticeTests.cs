@@ -111,6 +111,23 @@ internal static class SlowStepNoticeTests
             run.Equal(SlowStepNotice.MeasuredPointCount, 80_372, "the measured reference count");
         });
 
+        run.Case("it says what cannot be shown and why, not that nothing can", () =>
+        {
+            // The staged import shows every step and every chunk. What it still cannot show is the
+            // inside of one commit, and a notice that still said "there is no progress to show"
+            // would contradict the window it is read beside.
+            foreach (ImportStepKind kind in SlowKinds)
+            {
+                string? notice = SlowStepNotice.For(kind, 80_372, 1);
+                run.Contains(notice, "one commit", $"{kind} names where the wait is");
+                run.Contains(notice, "cannot report part of itself", $"{kind} says why that part is dark");
+                run.Contains(notice, "Cancel takes effect when it finishes", $"{kind} says what Cancel can and cannot do");
+                run.False(
+                    notice is not null && notice.Contains("no progress to show", StringComparison.Ordinal),
+                    $"{kind} no longer claims there is no progress at all");
+            }
+        });
+
         run.Case("every other step stays quiet", () =>
         {
             foreach (ImportStepKind kind in FastKinds)
