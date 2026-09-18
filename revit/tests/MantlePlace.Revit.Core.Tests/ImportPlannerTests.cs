@@ -379,10 +379,7 @@ internal static class ImportPlannerTests
         {
             BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
 
-            run.Equal(
-                plan.AvailableButNotImported.Count,
-                3,
-                "LandXML and contours are both listed, and so is the site model's off-by-default link");
+            run.Equal(plan.AvailableButNotImported.Count, 2, "LandXML and contours are both listed");
         });
 
         RunTinTierCases(run);
@@ -390,30 +387,34 @@ internal static class ImportPlannerTests
         RunDrapeCases(run);
         RunAttributionCases(run);
         RunSiteModelCases(run);
+        RunSiteLocationCases(run);
 
         return run.Report("import planner");
     }
 
     /// <summary>
-    /// The site model is copied, not linked: its buildings become native elements by default, and
-    /// the link is still planned — resolved and bound to its digest — for the per-layer picker to
-    /// offer.
+    /// The site model is copied, not linked: its buildings are a checklist row that starts checked,
+    /// and the link is a row that starts unchecked, both planned and checked like every other step.
     /// </summary>
     private static void RunSiteModelCases(TestRun run)
     {
-        run.Case("the site model's buildings are copied by default, and the link is not", () =>
+        ImportLayerChoice byDefault = ImportLayerChoice.Only(Enum.GetValues<ImportLayer>().Where(ImportLayers.OnByDefault));
+
+        run.Case("by default the site model's buildings are copied, and the site model is not linked", () =>
         {
-            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle, byDefault);
 
             ImportStep? copy = FindStep(plan, ImportStepKind.ContextBuildings);
             run.Equal(copy?.EntryName, "Site/Site.ifc", "the buildings come from the site model");
             run.False(
                 HasStep(plan, ImportStepKind.LinkSiteIfc),
                 "a link as well would show every building twice, one copy selectable and one not");
-            run.True(FindSkip(plan, ImportStepKind.LinkSiteIfc) is null, "the link is not a skip: nothing is wrong with it");
+            run.True(
+                FindSkip(plan, ImportStepKind.LinkSiteIfc)?.ReasonCode == SkipReasonCode.LeftOutByChoice,
+                "the log says the link was left out, and why");
         });
 
-        run.Case("the link stays in the plan, off by default, for the picker", () =>
+        run.Case("the link is offered, unchecked, and bound to the site model's digest", () =>
         {
             BundleImportPlan plan = PlanFor(
                 $$"""
@@ -432,20 +433,19 @@ internal static class ImportPlannerTests
                 """,
                 FullBundle);
 
-            ImportStep? link = plan.OffByDefault.FirstOrDefault(step => step.Kind == ImportStepKind.LinkSiteIfc);
-            run.Equal(link?.EntryName, "Site/Site.ifc", "the same site model, resolved");
+            ImportChecklist checklist = ImportChecklist.For(plan);
+            run.True(checklist.IsChecked(ImportLayer.ContextBuildings), "the copies start checked");
+            run.True(checklist.Layers.Contains(ImportLayer.SiteModel), "the link is a row");
+            run.False(checklist.IsChecked(ImportLayer.SiteModel), "and it starts unchecked");
             run.Equal(
-                link?.ExpectedSha256,
+                FindStep(plan, ImportStepKind.LinkSiteIfc)?.ExpectedSha256,
                 "e1cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                "and bound to the same digest, so opting in cannot skip the integrity check");
-            run.True(
-                plan.AvailableButNotImported.Any(line => line.Contains("link", StringComparison.OrdinalIgnoreCase)),
-                "the summary says the link is there and was not made");
+                "opting in cannot skip the integrity check: the whole plan is verified");
         });
 
         run.Case("a bundle whose only artifact is the site model can still import", () =>
         {
-            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", ["Site/Site.ifc"]);
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", ["Site/Site.ifc"], byDefault);
 
             run.True(plan.CanImport, "the buildings are something to put in the document");
             run.True(HasStep(plan, ImportStepKind.ContextBuildings), "and they are planned");
@@ -470,7 +470,6 @@ internal static class ImportPlannerTests
             run.True(skip?.ReasonCode == SkipReasonCode.ArtifactNotInManifest, "classified");
             run.Contains(skip?.Reason, "did not produce it for this order", "the manifest's reason, translated");
             run.True(FindSkip(plan, ImportStepKind.LinkSiteIfc) is null, "one artifact missing is one line, not two");
-            run.Equal(plan.OffByDefault.Count, 0, "and there is no link to offer");
         });
     }
 
@@ -531,7 +530,12 @@ internal static class ImportPlannerTests
                 """,
                 ["Metadata/manifest.json", "Surface/SurfacePoints.csv", "Imagery/Drape.png"]);
 
-            run.Equal(plan.Steps.Count >= 3 ? plan.Steps[^2].Kind.ToString() : null, "AttributionAndProvenance", "second to last");
+            List<ImportStepKind> kinds = [.. plan.Steps.Select(step => step.Kind)];
+            int attribution = kinds.IndexOf(ImportStepKind.AttributionAndProvenance);
+
+            // Not "second to last": the site context view sits between it and the drape.
+            run.True(attribution > kinds.IndexOf(ImportStepKind.ToposurfaceFromPointsFile), "after the layer it credits");
+            run.True(attribution >= 0 && attribution < kinds.Count - 1, "before the drape");
             run.Equal(plan.Steps[^1].Kind.ToString(), "ImageryDrape", "the drape still last");
         });
     }
@@ -1082,6 +1086,166 @@ internal static class ImportPlannerTests
         });
     }
 
+    /// <summary>
+    /// The project's place on Earth beyond the survey point, and the view and filter that let a
+    /// curator find what an import made.
+    /// </summary>
+    private static void RunSiteLocationCases(TestRun run)
+    {
+        run.Case("the site location is the own block's lat and lon, verbatim (HPS-33)", () =>
+        {
+            BundleImportPlan plan = PlanFor(ParityManifest(MetricGeoreference), ParityBundle);
+
+            SiteLocationPlacement? location = FindStep(plan, ImportStepKind.SetSiteLocation)?.SiteLocation;
+            run.True(location is not null, "the site location is planned");
+            run.Within(location?.LatitudeDeg ?? 0.0, 38.46130517000308, 1e-12, "latitude verbatim");
+            run.Within(location?.LongitudeDeg ?? 0.0, -105.32557885004304, 1e-12, "longitude verbatim, west negative");
+            run.Within(
+                location?.LatitudeRadians ?? 0.0,
+                38.46130517000308 * Math.PI / 180.0,
+                1e-15,
+                "in radians, which is what SiteLocation takes");
+            run.Within(
+                location?.LongitudeRadians ?? 0.0,
+                -105.32557885004304 * Math.PI / 180.0,
+                1e-15,
+                "in radians, sign kept");
+        });
+
+        run.Case("it follows the survey point, so the two place-on-Earth steps sit together", () =>
+        {
+            BundleImportPlan plan = PlanFor(ParityManifest(MetricGeoreference), ParityBundle);
+            List<ImportStepKind> kinds = [.. plan.Steps.Select(step => step.Kind)];
+
+            run.Equal(
+                kinds.IndexOf(ImportStepKind.SetSiteLocation),
+                kinds.IndexOf(ImportStepKind.SetSharedCoordinates) + 1,
+                "directly after the shared coordinates");
+        });
+
+        run.Case("no lat/lon in the own block is a named skip, and delivery's pair is not borrowed", () =>
+        {
+            // delivery.local_origin carries a lon/lat too, and the survey point falls back to it. The
+            // site location does not: the issue that asked for it names the own block, and a sun
+            // placed from a value this host was not told to read is a sun nobody can audit.
+            BundleImportPlan plan = PlanFor(
+                $$"""
+                {
+                  "version": "1.0.0",
+                  {{RevitLayout}},
+                  "delivery": {
+                    "tier": "local_ft", "linear_unit": "ft",
+                    "local_origin": {
+                      "lon": -105.6462, "lat": 36.2725, "utm_epsg": 32613,
+                      "easting_m": 441959.5, "northing_m": 4014372.5
+                    }
+                  }
+                }
+                """,
+                FullBundle);
+
+            run.False(HasStep(plan, ImportStepKind.SetSiteLocation), "no site location invented");
+            run.True(
+                FindSkip(plan, ImportStepKind.SetSiteLocation)?.ReasonCode == SkipReasonCode.NoGeographicOrigin,
+                "skipped for want of a published lat/lon");
+            run.Contains(
+                FindSkip(plan, ImportStepKind.SetSiteLocation)?.Reason,
+                "sun",
+                "the curator is told what is left wrong");
+        });
+
+        run.Case("half a lat/lon pair is no pair", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                ParityManifest(MetricGeoreference.Replace(
+                    "\"lon\": -105.32557885004304,",
+                    string.Empty,
+                    StringComparison.Ordinal)),
+                ParityBundle);
+
+            run.True(
+                FindSkip(plan, ImportStepKind.SetSiteLocation)?.ReasonCode == SkipReasonCode.NoGeographicOrigin,
+                "a latitude alone places no sun");
+        });
+
+        run.Case("a lat or lon off the globe is refused, not wrapped", () =>
+        {
+            // Revit throws on a latitude past a pole and silently wraps a longitude past the
+            // antimeridian. Wrapping would put the sun over some other site with no word said.
+            foreach ((string field, string bad) in (ReadOnlySpan<(string, string)>)
+                [("\"lat\": 38.46130517000308", "\"lat\": 91.0"), ("\"lon\": -105.32557885004304", "\"lon\": 254.67")])
+            {
+                BundleImportPlan plan = PlanFor(
+                    ParityManifest(MetricGeoreference.Replace(field, bad, StringComparison.Ordinal)),
+                    ParityBundle);
+
+                run.False(HasStep(plan, ImportStepKind.SetSiteLocation), $"{bad} is not applied");
+                run.True(
+                    FindSkip(plan, ImportStepKind.SetSiteLocation)?.ReasonCode
+                        == SkipReasonCode.GeographicOriginOutOfRange,
+                    $"{bad} is named as out of range");
+            }
+        });
+
+        run.Case("the context view comes after every step that stamps an element, and before the drape", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                $$"""
+                {
+                  "version": "1.0.0",
+                  "layout": { "points_csv": "Surface/SurfacePoints.csv", "imagery_drape": "Imagery/Drape.png",
+                              "tree_points": "Landcover/TreePoints.csv" },
+                  {{MetricGeoreference}},
+                  "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv", "crs": "EPSG:32613" } },
+                  {{ImageryWithGsd}},
+                  {{DemBounds}}
+                }
+                """,
+                ["Metadata/manifest.json", "Surface/SurfacePoints.csv", "Imagery/Drape.png", "Landcover/TreePoints.csv"]);
+            List<ImportStepKind> kinds = [.. plan.Steps.Select(step => step.Kind)];
+            int view = kinds.IndexOf(ImportStepKind.SiteContextView);
+
+            run.True(view >= 0, "the context view is planned");
+            run.True(view > kinds.IndexOf(ImportStepKind.ToposurfaceFromPointsFile), "after the terrain");
+            run.True(view > kinds.IndexOf(ImportStepKind.Vegetation), "after the trees");
+            run.Equal(view, kinds.Count - 2, "second to last");
+            run.True(kinds[^1] == ImportStepKind.ImageryDrape, "the drape stays last");
+            run.Equal(kinds.Count(kind => kind == ImportStepKind.SiteContextView), 1, "once");
+        });
+
+        run.Case("with no drape, the context view is the last step", () =>
+        {
+            BundleImportPlan plan = PlanFor(ParityManifest(MetricGeoreference), ParityBundle);
+
+            run.True(plan.Steps[^1].Kind == ImportStepKind.SiteContextView, "last");
+        });
+
+        run.Case("placing the project and naming a view is not an import", () =>
+        {
+            // The survey point, the site location and the context view change project settings and
+            // add an empty view. A bundle whose plan held only those would report "imported" over a
+            // model with nothing in it — and a view and filter for nothing to be found.
+            BundleImportPlan plan = PlanFor(
+                $$"""{"version": "1.0.0", {{MetricGeoreference}}}""",
+                ["Metadata/manifest.json"]);
+
+            run.False(plan.CanImport, "nothing to import");
+            run.False(HasStep(plan, ImportStepKind.SiteContextView), "and no view for nothing");
+        });
+
+        run.Case("only the settings and credits kinds are not content", () =>
+        {
+            foreach (ImportStepKind kind in Enum.GetValues<ImportStepKind>())
+            {
+                bool settings = kind is ImportStepKind.SetSharedCoordinates
+                    or ImportStepKind.SetSiteLocation
+                    or ImportStepKind.AttributionAndProvenance
+                    or ImportStepKind.SiteContextView;
+                run.Equal(ImportStepKinds.ImportsContent(kind), !settings, $"{kind}");
+            }
+        });
+    }
+
     private static readonly ImportStepKind[] ParityKinds =
     [
         ImportStepKind.RoadCentrelines,
@@ -1200,6 +1364,9 @@ internal static class ImportPlannerTests
         IReadOnlyList<string> entries,
         Func<string, ImageSize?> probeImageSize)
         => BundleImportPlanner.Plan(BundleManifestReader.Parse(manifestJson), entries, probeImageSize);
+
+    private static BundleImportPlan PlanFor(string manifestJson, IReadOnlyList<string> entries, ImportLayerChoice choice)
+        => BundleImportPlanner.Plan(BundleManifestReader.Parse(manifestJson), entries, _ => DrapePixels, choice);
 
     private static bool HasStep(BundleImportPlan plan, ImportStepKind kind) => FindStep(plan, kind) is not null;
 

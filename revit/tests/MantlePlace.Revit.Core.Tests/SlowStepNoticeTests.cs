@@ -17,8 +17,10 @@ internal static class SlowStepNoticeTests
         ImportStepKind.LinkSiteIfc,
         ImportStepKind.ContextBuildings,
         ImportStepKind.SetSharedCoordinates,
+        ImportStepKind.SetSiteLocation,
         ImportStepKind.RoadCentrelines,
         ImportStepKind.Vegetation,
+        ImportStepKind.SiteContextView,
         ImportStepKind.AttributionAndProvenance,
     ];
 

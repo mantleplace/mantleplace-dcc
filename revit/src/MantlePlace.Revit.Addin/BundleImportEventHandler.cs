@@ -27,8 +27,12 @@ namespace MantlePlace.Revit.Addin;
 /// <para>
 /// Two ways in, one driver. The vault window is on its own and queues a zip path (<see cref="QueueImport"/>),
 /// opened here on Revit's thread. The ribbon command is already on Revit's thread, opens its own
-/// import and hands it over (<see cref="Start"/>). The unattended path never comes here: a modeless
+/// import and hands it over (<see cref="TakeOver"/>). The unattended path never comes here: a modeless
 /// window in a journal playback never closes, so it runs its import to the end in place.
+/// </para>
+/// <para>
+/// Either way the window opens on its checklist and nothing is raised until the curator presses
+/// Import. Choosing is not a slice: it plans, and touches no document.
 /// </para>
 /// </remarks>
 internal sealed class BundleImportEventHandler : IExternalEventHandler
@@ -49,8 +53,16 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// </summary>
     internal event EventHandler<string>? Completed;
 
-    /// <summary>Whether an import is running. One at a time: two would interleave in one document.</summary>
+    /// <summary>
+    /// Whether an import is open — running, or waiting on its checklist. One at a time: two would
+    /// interleave in one document.
+    /// </summary>
     internal bool IsImporting => _import is not null;
+
+    /// <summary>Why a second import cannot open now, in the words that fit which state the first is in.</summary>
+    internal string BusyReason => _import?.Staged is null
+        ? "An import is waiting in its window — press Import there, or close it."
+        : "An import is already running — wait for it, or cancel it in its window.";
 
     /// <summary>The event this handler re-raises between slices. Set once, at startup.</summary>
     internal void Attach(ExternalEvent externalEvent) => _event = externalEvent;
@@ -64,8 +76,11 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         }
     }
 
-    /// <summary>Takes over an import the ribbon command opened, shows its window and starts it.</summary>
-    internal void Start(ActiveImport import, IntPtr revitWindow)
+    /// <summary>
+    /// Takes over an import the ribbon command opened and shows its window, on its checklist. The
+    /// first slice is raised when the curator presses Import.
+    /// </summary>
+    internal void TakeOver(ActiveImport import, IntPtr revitWindow)
     {
         ArgumentNullException.ThrowIfNull(import);
         if (_import is not null)
@@ -73,8 +88,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             throw new InvalidOperationException("An import is already running.");
         }
 
-        Begin(import, revitWindow, fromVault: false);
-        RaiseNextSlice();
+        Show(import, revitWindow, fromVault: false);
     }
 
     /// <summary>Brings the running import's window forward, for a second click on Import.</summary>
@@ -96,7 +110,9 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             OpenQueued(application, zipPath);
         }
 
-        if (_import is not { } import)
+        // An import still on its checklist has nothing to advance: it was either opened by this very
+        // raise, or it is waiting on the curator's Import.
+        if (_import is not { Staged: not null } import)
         {
             return;
         }
@@ -132,7 +148,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         if (_import is not null)
         {
             _window?.Activate();
-            Completed?.Invoke(this, "An import is already running — wait for it, or cancel it in its window.");
+            Completed?.Invoke(this, BusyReason);
             return;
         }
 
@@ -148,15 +164,61 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             return;
         }
 
-        Begin(import, application.MainWindowHandle, fromVault: true);
+        Show(import, application.MainWindowHandle, fromVault: true);
     }
 
-    private void Begin(ActiveImport import, IntPtr revitWindow, bool fromVault)
+    private void Show(ActiveImport import, IntPtr revitWindow, bool fromVault)
     {
         _import = import;
         _fromVault = fromVault;
-        _window = new ImportWindow(Path.GetFileName(import.ZipPath), import.Staged, revitWindow);
+        _window = new ImportWindow(
+            Path.GetFileName(import.ZipPath),
+            import.Checklist,
+            revitWindow,
+            BeginChosen,
+            DismissBeforeStart);
         _window.Show();
+    }
+
+    /// <summary>The curator pressed Import: plan what they ticked, show its steps, run the first slice.</summary>
+    /// <remarks>
+    /// On the window's click, which is Revit's thread but outside any API context — so this plans and
+    /// touches no document. The document work starts at the raise.
+    /// </remarks>
+    private void BeginChosen(ImportLayerChoice choice)
+    {
+        if (_import is not { } import)
+        {
+            return;
+        }
+
+        try
+        {
+            import.Begin(choice);
+        }
+        catch (Exception ex)
+        {
+            // Out of a WPF click, an exception is Revit's internal-error dialog; ActiveImport.Abandon
+            // is the contract that keeps a run from being left unable to close.
+            import.Abandon(ex);
+            End(import);
+            return;
+        }
+
+        _window?.ShowRun(import.Staged!);
+        RaiseNextSlice();
+    }
+
+    /// <summary>The window went before Import was pressed: nothing ran, and the import is dropped.</summary>
+    private void DismissBeforeStart()
+    {
+        if (_import is not { } import)
+        {
+            return;
+        }
+
+        import.CancelBeforeStart();
+        End(import);
     }
 
     /// <summary>
@@ -193,9 +255,16 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         _import = null;
         _window = null;
 
-        if (fromVault)
+        if (!fromVault)
         {
-            Completed?.Invoke(this, $"{import.Heading} The report is in the {WindowLabels.ImportHeading} window, and in the log beside the bundle.");
+            return;
         }
+
+        // A window dismissed on its checklist is gone, and nothing ran for a report to describe.
+        Completed?.Invoke(
+            this,
+            import.Staged is null && !import.Failed
+                ? import.Heading
+                : $"{import.Heading} The report is in the {WindowLabels.ImportHeading} window, and in the log beside the bundle.");
     }
 }

@@ -45,9 +45,10 @@ step and name the prefix to delete. The build half is the twelve-character token
 model's sha256; it is not redundant with the GlobalId, because an emitter is entitled to keep a
 building's GlobalId stable across builds.
 
-The link is **off by default** rather than removed. It is still planned, resolved and checked
-against its digest, for the per-layer checklist to offer; its version-qualified companion `.rvt` is
-written only when it is linked.
+The link is **off by default** rather than removed. It stays a row in the import window's
+checklist, planned, resolved and checked against its digest like every other step, and the row
+starts unticked — the stated reason the standard's `HPS-51` asks for before a row may. Its
+version-qualified companion `.rvt` is written only when it is linked.
 
 ## Considered options
 
@@ -85,6 +86,9 @@ written only when it is linked.
   found, and its solids are what is copied. Neither is something the compiler can check. If a Revit
   version stops recording the GlobalId, the step says so in one line and copies nothing, rather than
   guessing by category.
+- **The unattended path links as well as copies.** An import nobody is there to choose for brings in
+  every layer, as `HPS-51` says, and the link is a layer. It is the developer's journal path, where
+  exercising every step is the point.
 - **A project imported before this change keeps its link**, and a re-import adds the context
   buildings beside it. Nothing here removes a link the curator may have set up views against; the
   link is theirs to remove under Manage Links.

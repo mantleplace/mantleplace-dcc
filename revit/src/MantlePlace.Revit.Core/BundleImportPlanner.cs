@@ -36,14 +36,21 @@ public static class BundleImportPlanner
     /// not mention it. A defaulted probe would let a future call site plan a drape whose
     /// extent nothing corroborated, and it would plan it silently.
     /// </remarks>
+    /// <param name="choice">
+    /// The layers the curator ticked in the import window, or <c>null</c> for all of them — which is
+    /// the plan the checklist is built from, and the unattended path's plan. A layer left out gets no
+    /// step and one skip saying it was a choice.
+    /// </param>
     public static BundleImportPlan Plan(
         BundleManifest manifest,
         IEnumerable<string> entryNames,
-        Func<string, ImageSize?> probeImageSize)
+        Func<string, ImageSize?> probeImageSize,
+        ImportLayerChoice? choice = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(entryNames);
         ArgumentNullException.ThrowIfNull(probeImageSize);
+        choice ??= ImportLayerChoice.All;
 
         if (!manifest.IsValid)
         {
@@ -52,7 +59,6 @@ public static class BundleImportPlanner
 
         BundleEntryIndex entries = new(entryNames);
         List<ImportStep> steps = [];
-        List<ImportStep> offByDefault = [];
         List<SkippedImport> skipped = [];
         List<string> notImported = [];
 
@@ -63,15 +69,17 @@ public static class BundleImportPlanner
         List<ImportStep> drapeSteps = [];
         List<SkippedImport> drapeSkipped = [];
         PlanImageryDrape(manifest, entries, drapeSteps, drapeSkipped, probeImageSize);
+        bool drapeRuns = drapeSteps.Count > 0 && choice.Includes(ImportLayer.ImageryDrape);
 
         PlanToposurface(
             manifest,
             entries,
             steps,
             skipped,
-            drapeSteps.Count > 0 ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
-        PlanSiteIfc(manifest, entries, steps, offByDefault, skipped, notImported);
+            drapeRuns ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
+        PlanSiteIfc(manifest, entries, steps, skipped);
         PlanSharedCoordinates(manifest, steps, skipped);
+        PlanSiteLocation(manifest, steps, skipped);
         PlanSiteContext(manifest, entries, steps, skipped);
 
         // Every import, whatever else it carries: the order and the build are worth recording even
@@ -93,30 +101,76 @@ public static class BundleImportPlanner
         steps.AddRange(drapeSteps);
         skipped.AddRange(drapeSkipped);
 
+        LeaveOut(choice, steps, skipped);
         NoteAvailableButNotImported(manifest, entries, notImported);
 
-        // Every kind but SetSharedCoordinates and AttributionAndProvenance changes the document's model, so any
-        // one of them is an import. Those two are excluded because they build nothing — a bundle
-        // whose only planned steps were the survey point and a drafting view of credits would report
-        // "imported" over an empty model.
-        // The parity layers are on the creating side of that line: a bundle carrying roads and no
-        // terrain still has something to put in the document. So is the drape, which builds no
-        // geometry but does write a material, and retypes ground not already on the imagery type.
-        bool canImport = steps.Exists(
-            step => step.Kind is not (ImportStepKind.SetSharedCoordinates or ImportStepKind.AttributionAndProvenance));
+        // Every kind but the settings kinds changes the document's model, so any one of them is an
+        // import. Those are excluded because they build nothing — a bundle whose only planned steps
+        // were the survey point, the site location and a drafting view of credits would report
+        // "imported" over an empty model. The parity layers are on the creating side of that line: a
+        // bundle carrying roads and no terrain still has something to put in the document. So is the
+        // drape, which builds no geometry but does write a material, and retypes ground not already
+        // on the imagery type. Decided after the checklist has taken out what the curator left out.
+        bool canImport = steps.Exists(step => ImportStepKinds.ImportsContent(step.Kind));
+
+        // After every step that stamps an element, so the view filter is made over a document that
+        // already holds what it exists to find — and only when there is something to find. Before
+        // the drape, which stamps nothing and keeps its place at the end.
+        if (canImport)
+        {
+            int drape = steps.FindIndex(step => step.Kind == ImportStepKind.ImageryDrape);
+            steps.Insert(drape < 0 ? steps.Count : drape, new ImportStep { Kind = ImportStepKind.SiteContextView });
+        }
 
         return new BundleImportPlan
         {
             CanImport = canImport,
             Steps = steps,
-            OffByDefault = offByDefault,
             Skipped = skipped,
             AvailableButNotImported = notImported,
             BlockedReason = canImport
                 ? string.Empty
-                : "This bundle carries nothing this plugin can import into Revit. "
-                  + DescribeAbsence(manifest),
+                : skipped.Exists(skip => skip.ReasonCode == SkipReasonCode.LeftOutByChoice)
+                    ? "Everything this bundle carries was left out of the import, so there is nothing to import."
+                    : "This bundle carries nothing this plugin can import into Revit. "
+                      + DescribeAbsence(manifest),
         };
+    }
+
+    /// <summary>
+    /// Takes the layers the curator did not choose out of the plan, leaving one skip for each that
+    /// says so.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Planned in full first and removed after, so every decision above — which terrain tier wins,
+    /// whether the drape's extent holds — is taken exactly as it is for an import of everything. Only
+    /// the terrain's type depends on the choice, and that is decided before the terrain step exists.
+    /// </para>
+    /// <para>
+    /// A layer left out loses its skips as well as its steps: the tiers a terrain passed over are not
+    /// news once no terrain was wanted. A layer the bundle does not carry keeps the skip it has,
+    /// because "missing from the zip" is truer than "not chosen" and the window never offered it.
+    /// </para>
+    /// </remarks>
+    private static void LeaveOut(ImportLayerChoice choice, List<ImportStep> steps, List<SkippedImport> skipped)
+    {
+        foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
+        {
+            if (choice.Includes(layer) || steps.Find(step => ImportLayers.Of(step.Kind) == layer) is not { } planned)
+            {
+                continue;
+            }
+
+            steps.RemoveAll(step => ImportLayers.Of(step.Kind) == layer);
+            skipped.RemoveAll(skip => ImportLayers.Of(skip.Kind) == layer);
+            skipped.Add(new SkippedImport
+            {
+                Kind = planned.Kind,
+                ReasonCode = SkipReasonCode.LeftOutByChoice,
+                Reason = $"Left out of this import by choice: {WindowLabels.LayerName(layer)}.",
+            });
+        }
     }
 
     /// <summary>
@@ -330,17 +384,16 @@ public static class BundleImportPlanner
     }
 
     /// <summary>
-    /// The site model is copied into the project by default, and its link is planned off by default.
+    /// The site model, two ways: its buildings copied into the project, and the site model linked.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// One artifact, two ways to take it, and only one of them runs unless a curator asks: a link as
-    /// well as the copies would show every building twice, once selectable and once not. The link is
-    /// still resolved and bound to its digest here, so the per-layer checklist that offers it hands
-    /// the shim a step checked exactly like every other.
+    /// Both are planned, as every layer is, and the checklist decides which run. The copy's row starts
+    /// checked and the link's does not (<see cref="ImportLayers.OnByDefault"/>): a link as well as the
+    /// copies shows every building twice, once selectable and once not.
     /// </para>
     /// <para>
-    /// An absent site model is one skip, under the kind that would have run. Two lines for one
+    /// An absent site model is one skip, under the kind that runs by default. Two lines for one
     /// missing file would read as two problems.
     /// </para>
     /// </remarks>
@@ -348,9 +401,7 @@ public static class BundleImportPlanner
         BundleManifest manifest,
         BundleEntryIndex entries,
         List<ImportStep> steps,
-        List<ImportStep> offByDefault,
-        List<SkippedImport> skipped,
-        List<string> notImported)
+        List<SkippedImport> skipped)
     {
         if (!TryPlanArtifact(
                 manifest.SiteIfc,
@@ -368,16 +419,13 @@ public static class BundleImportPlanner
         }
 
         steps.Add(copy!);
-        offByDefault.Add(new ImportStep
+        steps.Add(new ImportStep
         {
             Kind = ImportStepKind.LinkSiteIfc,
             EntryName = copy!.EntryName,
             Units = copy.Units,
             ExpectedSha256 = copy.ExpectedSha256,
         });
-        notImported.Add(
-            $"{copy.EntryName} as a linked IFC — its buildings are copied into the project as elements "
-            + "instead, and linking it as well would show each one twice.");
     }
 
     /// <summary>
@@ -420,6 +468,64 @@ public static class BundleImportPlanner
             Reason = "This bundle carries no pre-derived survey point for Revit, so the model is placed in "
                 + "the project's own frame and shared coordinates are left untouched. Set them by hand if you "
                 + "need real-world positioning.",
+        });
+    }
+
+    /// <summary>
+    /// The project's latitude and longitude, read from <c>hosts.revit.georeference.origin</c> and
+    /// applied verbatim (<c>HPS-33</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The own block only. <c>delivery.local_origin</c> also carries a lon/lat, and the survey point
+    /// falls back to it; the site location does not, because nothing asked this host to read one
+    /// there, and a sun placed from an unaudited field is wrong in every renderer with no way to tell.
+    /// </para>
+    /// <para>
+    /// A pair off the globe is refused here rather than handed on: Revit throws on a latitude past a
+    /// pole, which would cost only this step, but it silently wraps a longitude past the
+    /// antimeridian, which would put the sun over somewhere else.
+    /// </para>
+    /// </remarks>
+    private static void PlanSiteLocation(
+        BundleManifest manifest,
+        List<ImportStep> steps,
+        List<SkippedImport> skipped)
+    {
+        if (manifest.Georeference.Origin is not { Lat: { } lat, Lon: { } lon })
+        {
+            skipped.Add(new SkippedImport
+            {
+                Kind = ImportStepKind.SetSiteLocation,
+                ReasonCode = SkipReasonCode.NoGeographicOrigin,
+                Reason = "This bundle publishes no latitude and longitude for Revit, so the project's site "
+                    + "location was left as it was and the sun in every view and render is placed for "
+                    + "that location, not this site. Set it under Manage ▸ Location if you need the sun.",
+            });
+            return;
+        }
+
+        if (!double.IsFinite(lat) || !double.IsFinite(lon)
+            || lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0)
+        {
+            skipped.Add(new SkippedImport
+            {
+                Kind = ImportStepKind.SetSiteLocation,
+                ReasonCode = SkipReasonCode.GeographicOriginOutOfRange,
+                Reason = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "This bundle publishes a latitude of {0} and a longitude of {1}, which is not a place "
+                    + "on Earth, so the project's site location was left as it was.",
+                    lat,
+                    lon),
+            });
+            return;
+        }
+
+        steps.Add(new ImportStep
+        {
+            Kind = ImportStepKind.SetSiteLocation,
+            SiteLocation = new SiteLocationPlacement { LatitudeDeg = lat, LongitudeDeg = lon },
         });
     }
 
