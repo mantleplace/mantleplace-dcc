@@ -45,7 +45,7 @@ The ones this tree already turns on:
 | `HPS-14` … `17`       | refresh token via DPAPI, per-OS-user; access token memory-only; no store means memory-only auth, never a less-safe file.                                      |
 | `HPS-18` … `25`, `48` | list → materialize → poll → **re-list** → presign → download; explicit token list, never a scope keyword; one error-body precedence for auth and vault alike. |
 | `HPS-26` … `30`, `44` | write to `.part`, verify, rename; null sha is unknown not absent; eviction only on request.                                                                   |
-| `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers behind roads and site boundaries. Nothing else here projects.                        |
+| `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers behind roads, site boundaries and land cover. Nothing else here projects.            |
 | `HPS-51`              | signing in and out, the vault, the local import, the import window and the about surface take the standard's words. The casing is this host's; the words are not. |
 
 ## Layout and the split that matters

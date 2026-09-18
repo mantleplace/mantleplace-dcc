@@ -213,6 +213,56 @@ internal static class SiteVectorTests
             run.Equal(lines.Count, 0, "a polygon is not a centreline");
         });
 
+        run.Case("the published subtype rides along on every ring, and a hole says it is one", () =>
+        {
+            // land_cover's shape: a MultiPolygon carrying `subtype` and no name. The first polygon has
+            // a clearing in it; the hole is where the forest is NOT, so it must be told apart.
+            string? error = SiteVectorReader.TryParse(
+                """
+                {
+                  "features": [
+                    {
+                      "properties": { "overture_id": "x", "subtype": "forest" },
+                      "geometry": {
+                        "type": "MultiPolygon",
+                        "coordinates": [
+                          [
+                            [[-105.3270, 38.4570], [-105.3250, 38.4570], [-105.3250, 38.4590], [-105.3270, 38.4570]],
+                            [[-105.3262, 38.4575], [-105.3258, 38.4575], [-105.3258, 38.4579], [-105.3262, 38.4575]]
+                          ],
+                          [
+                            [[-105.3240, 38.4570], [-105.3230, 38.4570], [-105.3230, 38.4580], [-105.3240, 38.4570]]
+                          ]
+                        ]
+                      }
+                    },
+                    {
+                      "properties": { "class": "park" },
+                      "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [
+                          [[-105.3220, 38.4570], [-105.3210, 38.4570], [-105.3210, 38.4580], [-105.3220, 38.4570]]
+                        ]
+                      }
+                    }
+                  ]
+                }
+                """,
+                MetricFrame,
+                SiteGeometryKinds.Areas,
+                "land cover",
+                out IReadOnlyList<SiteFeature> rings);
+
+            run.True(error is null, $"parsed: {error}");
+            run.Equal(rings.Count, 4, "three rings from the MultiPolygon, one from the Polygon");
+            run.Equal(rings[0].Subtype, "forest", "the outer ring carries the subtype");
+            run.False(rings[0].IsHole, "an outer ring is not a hole");
+            run.Equal(rings[1].Subtype, "forest", "so does the hole, verbatim");
+            run.True(rings[1].IsHole, "the clearing is a hole");
+            run.False(rings[2].IsHole, "the second polygon's outer ring is not a hole");
+            run.Equal(rings[3].Subtype, string.Empty, "no subtype property reads as empty, not as the class");
+        });
+
         run.Case("one malformed feature does not drop the layer, but malformed JSON does", () =>
         {
             string? error = SiteVectorReader.TryParse(

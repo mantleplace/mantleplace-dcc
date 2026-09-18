@@ -89,6 +89,15 @@ public static class SlowStepNotice
                 MeasuredSiteBoundariesMinutes,
                 terrainPointCount),
 
+            // The same commit as the boundaries': a subdivision costs the terrain's relation rebuild
+            // whichever layer published its polygon, so it is announced against the same measurement.
+            ImportStepKind.LandCover => Describe(
+                "Next: the land cover — "
+                    + plannedWorkItems.ToString("N0", CultureInfo.InvariantCulture)
+                    + " subdivision(s) to cut into the terrain, as slow as the site boundaries were.",
+                MeasuredSiteBoundariesMinutes,
+                terrainPointCount),
+
             ImportStepKind.ImageryDrape => Describe(
                 "Next: the imagery drape. Retyping the terrain so it can wear the photograph costs "
                     + "almost as much as cutting the boundaries did, and for the same reason.",

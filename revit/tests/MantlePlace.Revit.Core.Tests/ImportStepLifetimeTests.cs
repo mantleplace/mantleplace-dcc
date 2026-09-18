@@ -33,7 +33,7 @@ internal static class ImportStepLifetimeTests
         run.Case("the parity layers are transient — Revit builds elements, it stores no path", () =>
         {
             foreach (ImportStepKind kind in (ImportStepKind[])
-                [ImportStepKind.RoadCentrelines, ImportStepKind.SiteBoundaries, ImportStepKind.Vegetation])
+                [ImportStepKind.RoadCentrelines, ImportStepKind.SiteBoundaries, ImportStepKind.LandCover, ImportStepKind.Vegetation])
             {
                 run.Equal(
                     ImportStepKinds.LifetimeOf(kind) == ExtractionLifetime.Transient,

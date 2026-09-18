@@ -86,6 +86,15 @@ Revit licence.
   the Forma Site Design Add-In parity gap. All three are positioned from the same
   published origin as the survey point, and a bundle whose origin is in a CRS they cannot be brought
   into is **skipped with that reason** rather than placed ~2000 km out;
+- cuts the `land_cover` polygons into the terrain as subdivisions too, the same way and stamped
+  under their own kind. `land_cover` is a different layer from `land_use`, not a second name for it,
+  and it is the one carrying the physical subtype — forest and its like;
+- names each subdivision's drape material with the **renderer keyword** for its published `subtype`
+  — `Mantle Place Site Imagery {stem} grass`, and so on — so Enscape grows 3D grass on it without
+  anything being renamed by hand. The photograph stays; the keyword rides on the name, last, in the
+  renderer's own word order (`tall grass`, never `grass tall`). The table from subtype to keyword is
+  `RendererKeywords` in the pure core; a subtype it does not name, and a hole cut out of a polygon,
+  get no keyword;
 - drapes `Imagery/Drape.png` over the terrain as a real-world-scaled material texture — the last
   parity row — on a **duplicated** toposolid type, so the project's own type is
   never repainted. The rectangle the image is pinned to is not taken on trust: the only extent this
@@ -101,7 +110,7 @@ Revit licence.
   exporting one view under both settings and matching every region against the published
   photograph: anchored to the corner, the photograph sits within 1.6 m of the truth everywhere, on
   smooth ground. So the import turns the setting on **first**, reads it back, and writes the offsets
-  for the renderer that will draw them — the terrain from its corner, and every site-boundary
+  for the renderer that will draw them — the terrain from its corner, and every
   subdivision from its own, each with its own material, since one material carries one offset. The
   log says which origin each was written for and names the ribbon switch
   (Massing & Site ▸ Model Site ▸ Toposolid Smooth Shading) with what turning it off will do to the
@@ -134,10 +143,11 @@ Account button reaches the same place through the same function, so the two can 
 `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts the trees in as they
 go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent` raise, so Revit repaints
 between them and **Cancel** is honoured at the next boundary. Whatever committed before the cancel
-stays, and importing the same bundle again reuses the terrain, the site model link, the subdivisions
-and the trees it finds and creates only what is missing — except the road centrelines, which carry no
-stamp yet and are created a second time. The log's last line names the steps that completed and those
-that never ran. What no window can show is the inside of one commit: the terrain and the
+stays, and importing the same bundle again reuses the terrain, the site model link, the
+subdivisions, the road centrelines and the trees it finds and creates only what is missing. Road
+centrelines drawn by a build that predates their stamp carry none, so the first import after upgrading
+draws them once more; delete the older set by hand. The log's last line names the steps that
+completed and those that never ran. What no window can show is the inside of one commit: the terrain and the
 subdivisions are one commit each — and so is the drape's retype, which only a ground built before the
 terrain took the imagery type still needs — Revit reports "not responding" while one runs, and a
 Cancel pressed then takes effect when it finishes. Closing the window while it runs is a cancel.
