@@ -81,7 +81,7 @@ internal static class ImportPlannerTests
             run.False(
                 HasStep(plan, ImportStepKind.ToposurfaceFromSurfaceDxf),
                 "the surface DXF is not also imported — that would build the same terrain twice");
-            run.True(HasStep(plan, ImportStepKind.LinkSiteIfc), "IFC site linked");
+            run.True(HasStep(plan, ImportStepKind.ContextBuildings), "context buildings copied from the site model");
         });
 
         run.Case("a pointer naming an entry the bundle lacks falls back to the surface DXF", () =>
@@ -325,7 +325,7 @@ internal static class ImportPlannerTests
                 "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "points file");
             run.Equal(
-                FindStep(plan, ImportStepKind.LinkSiteIfc)?.ExpectedSha256,
+                FindStep(plan, ImportStepKind.ContextBuildings)?.ExpectedSha256,
                 "e1cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
                 "IFC site");
         });
@@ -379,14 +379,98 @@ internal static class ImportPlannerTests
         {
             BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
 
-            run.Equal(plan.AvailableButNotImported.Count, 2, "LandXML and contours are both listed");
+            run.Equal(
+                plan.AvailableButNotImported.Count,
+                3,
+                "LandXML and contours are both listed, and so is the site model's off-by-default link");
         });
 
         RunTinTierCases(run);
         RunParityCases(run);
         RunDrapeCases(run);
+        RunSiteModelCases(run);
 
         return run.Report("import planner");
+    }
+
+    /// <summary>
+    /// The site model is copied, not linked: its buildings become native elements by default, and
+    /// the link is still planned — resolved and bound to its digest — for the per-layer picker to
+    /// offer.
+    /// </summary>
+    private static void RunSiteModelCases(TestRun run)
+    {
+        run.Case("the site model's buildings are copied by default, and the link is not", () =>
+        {
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
+
+            ImportStep? copy = FindStep(plan, ImportStepKind.ContextBuildings);
+            run.Equal(copy?.EntryName, "Site/Site.ifc", "the buildings come from the site model");
+            run.False(
+                HasStep(plan, ImportStepKind.LinkSiteIfc),
+                "a link as well would show every building twice, one copy selectable and one not");
+            run.True(FindSkip(plan, ImportStepKind.LinkSiteIfc) is null, "the link is not a skip: nothing is wrong with it");
+        });
+
+        run.Case("the link stays in the plan, off by default, for the picker", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                $$"""
+                {
+                  "version": "1.0.0",
+                  {{RevitLayout}},
+                  "hosts": {
+                    "revit": {
+                      "ifc_site": {
+                        "path": "Site/Site.ifc", "units": "m",
+                        "sha256": "e1cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                      }
+                    }
+                  }
+                }
+                """,
+                FullBundle);
+
+            ImportStep? link = plan.OffByDefault.FirstOrDefault(step => step.Kind == ImportStepKind.LinkSiteIfc);
+            run.Equal(link?.EntryName, "Site/Site.ifc", "the same site model, resolved");
+            run.Equal(
+                link?.ExpectedSha256,
+                "e1cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "and bound to the same digest, so opting in cannot skip the integrity check");
+            run.True(
+                plan.AvailableButNotImported.Any(line => line.Contains("link", StringComparison.OrdinalIgnoreCase)),
+                "the summary says the link is there and was not made");
+        });
+
+        run.Case("a bundle whose only artifact is the site model can still import", () =>
+        {
+            BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", ["Site/Site.ifc"]);
+
+            run.True(plan.CanImport, "the buildings are something to put in the document");
+            run.True(HasStep(plan, ImportStepKind.ContextBuildings), "and they are planned");
+        });
+
+        run.Case("no site model is one skip, carrying the manifest's own reason", () =>
+        {
+            BundleImportPlan plan = PlanFor(
+                """
+                {
+                  "version": "1.0.0",
+                  "hosts": {
+                    "revit": {
+                      "readiness": { "ifc_site": { "present": false, "reason": "ifc_site_not_produced" } }
+                    }
+                  }
+                }
+                """,
+                ["README.md"]);
+
+            SkippedImport? skip = FindSkip(plan, ImportStepKind.ContextBuildings);
+            run.True(skip?.ReasonCode == SkipReasonCode.ArtifactNotInManifest, "classified");
+            run.Contains(skip?.Reason, "did not produce it for this order", "the manifest's reason, translated");
+            run.True(FindSkip(plan, ImportStepKind.LinkSiteIfc) is null, "one artifact missing is one line, not two");
+            run.Equal(plan.OffByDefault.Count, 0, "and there is no link to offer");
+        });
     }
 
 

@@ -22,7 +22,22 @@ public enum ImportStepKind
     ToposurfaceFromSurfaceDxf,
 
     /// <summary>Insert ▸ Link IFC — kept as a coordinated reference, not opened as a model.</summary>
+    /// <remarks>
+    /// Off by default (<see cref="BundleImportPlan.OffByDefault"/>): <see cref="ContextBuildings"/>
+    /// puts the same buildings in the project as elements, and both at once shows each building twice.
+    /// </remarks>
     LinkSiteIfc,
+
+    /// <summary>
+    /// Every building in the site model copied into the project as its own Generic Model element,
+    /// the context terrain left out.
+    /// </summary>
+    /// <remarks>
+    /// The site model's own extrusions, reused rather than rebuilt: it carries one per building, where
+    /// the building mesh is one merged node and the footprints would have to be extruded here — see
+    /// <c>docs/adr/0011-context-buildings-come-from-the-site-model.md</c>.
+    /// </remarks>
+    ContextBuildings,
 
     /// <summary>Publish the pre-derived survey point / shared coordinates.</summary>
     SetSharedCoordinates,
@@ -325,6 +340,17 @@ public sealed class BundleImportPlan
     public required bool CanImport { get; init; }
 
     public IReadOnlyList<ImportStep> Steps { get; init; } = [];
+
+    /// <summary>
+    /// Steps this bundle can support that do not run unless a curator asks for them — resolved,
+    /// bound to their digests and checked like <see cref="Steps"/>, and not in it.
+    /// </summary>
+    /// <remarks>
+    /// Today that is the site model's link: its buildings are copied by default, and the link is
+    /// kept for the per-layer checklist to offer. Not a <see cref="Skipped"/> entry, because nothing
+    /// is wrong with it; the summary lists it under <see cref="AvailableButNotImported"/>.
+    /// </remarks>
+    public IReadOnlyList<ImportStep> OffByDefault { get; init; } = [];
 
     public IReadOnlyList<SkippedImport> Skipped { get; init; } = [];
 

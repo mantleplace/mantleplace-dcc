@@ -193,6 +193,8 @@ internal sealed partial class RevitBundleImporter(
                 return Once(() => LinkCadSurface(step));
             case ImportStepKind.LinkSiteIfc:
                 return Once(() => LinkSiteIfc(step));
+            case ImportStepKind.ContextBuildings:
+                return ImportContextBuildings(step);
             case ImportStepKind.SetSharedCoordinates:
                 return Once(() => SetSharedCoordinates(step));
             case ImportStepKind.RoadCentrelines:

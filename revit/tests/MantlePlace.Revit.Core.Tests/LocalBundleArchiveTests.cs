@@ -276,6 +276,24 @@ internal static class LocalBundleArchiveTests
             };
             run.Contains(archive.VerifyPlan(bad), "Site/notes.txt", "and one bad artifact aborts the lot");
 
+            // An off-by-default step is one a curator can switch on after the check has run, so it
+            // is checked with the rest rather than trusted to whoever switches it on.
+            BundleImportPlan badOptIn = new()
+            {
+                CanImport = true,
+                Steps = good.Steps,
+                OffByDefault =
+                [
+                    new ImportStep
+                    {
+                        Kind = ImportStepKind.LinkSiteIfc,
+                        EntryName = "Site/notes.txt",
+                        ExpectedSha256 = WrongSha256,
+                    },
+                ],
+            };
+            run.Contains(archive.VerifyPlan(badOptIn), "Site/notes.txt", "an off-by-default artifact is verified too");
+
             // SetSharedCoordinates names no entry — a sweep that hashed "" would report a bundle
             // corrupt over a step that touches no bytes.
             BundleImportPlan placementOnly = new()

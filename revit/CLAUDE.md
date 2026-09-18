@@ -199,6 +199,15 @@ follow.
   Never `yield` inside an open transaction — a chunked step commits, then yields — and never leave
   the session-wide `FailuresProcessing` hook attached across a slice boundary: between slices the
   curator is editing their own model (`RevitBundleImporter.InSlice`).
+- **The context buildings joined that set.** The step converts the site model with
+  `Application.OpenIFCDocument`, finds each building in the result by `BuiltInParameter.IFC_GUID`,
+  clones its solids with `SolidUtils.Clone` and gives them to a Generic Model `DirectShape`. The
+  converted document is closed in the slice that opened it, before the first chunk: a document held
+  across slices is closed only when a step ends through `StagedImport`, and an import abandoned from
+  the event handler does not. All of it compiles; none of it has run inside Revit. The part most
+  likely to be wrong is the GlobalId: if Revit's import does not record it where the step looks, the
+  step says so in one line and copies nothing. Which elements are buildings is not in that set — `SiteModelReader` reads it
+  from the IFC's text, headlessly ([ADR 0011](../docs/adr/0011-context-buildings-come-from-the-site-model.md)).
 
 ## Where knowledge lives
 

@@ -76,7 +76,16 @@ Revit licence.
   plugin does not remove ground it did not create in that run. A toposolid it does not recognise —
   yours, another order's, or one from an import that predates the stamp — is left alone and reported.
   See [ADR 0004](../docs/adr/0004-revit-terrain-identity.md);
-- links `Site/Site.ifc` as a coordinated reference;
+- copies every building in the site model (`Site/Site.ifc`) into the project as its own Generic
+  Model element — the platform's own extrusion, not one rebuilt here — so each can be selected,
+  hidden or coloured, and a renderer's live link sees it as model geometry. The site model's context
+  terrain is left out: the terrain is the toposolid. Each building carries
+  `Mantle Place Building {stem}/{build}/{GlobalId}` in Comments and follows the terrain's
+  reuse / refuse / create table, so a second import of the same build creates nothing, and buildings
+  from an earlier build are refused with the prefix to delete. The site model is no longer linked:
+  the plan keeps the link off by default for a per-layer checklist the import window does not have
+  yet, and the version-qualified companion `.rvt` is written only when it is linked. See
+  [ADR 0011](../docs/adr/0011-context-buildings-come-from-the-site-model.md);
 - sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
   this host's own block — falling back to `delivery.local_origin` on a bundle whose own block
   publishes no usable origin (`HPS-33`);
@@ -140,14 +149,16 @@ Account button reaches the same place through the same function, so the two can 
 
 **An import is staged, and shows itself.** Both ways in — `Import Bundle` and the vault window's
 `Import` — open the modeless `Bundle Import` window, which lists the plan's steps, marks each one
-`Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts the trees in as they
-go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent` raise, so Revit repaints
-between them and **Cancel** is honoured at the next boundary. Whatever committed before the cancel
-stays, and importing the same bundle again reuses the terrain, the site model link, the
-subdivisions, the road centrelines and the trees it finds and creates only what is missing. Road
-centrelines drawn by a build that predates their stamp carry none, so the first import after upgrading
-draws them once more; delete the older set by hand. The log's last line names the steps that
-completed and those that never ran. What no window can show is the inside of one commit: the terrain and the
+`Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts the context buildings
+and the trees in as they go. The import runs one step, or one chunk of 200 buildings or trees, per
+`ExternalEvent` raise, so Revit repaints between them and **Cancel** is honoured at the next
+boundary. Whatever committed before the cancel stays, and importing the same bundle again reuses the
+terrain, the subdivisions, the road centrelines, the context buildings and the trees it finds and
+creates only what is missing. Road centrelines drawn by a build that predates their stamp carry none,
+so the first import after upgrading draws them once more; delete the older set by hand. Opening the
+site model to copy from is one call and is not counted: the window shows the building count once it
+is open. The log's last line names the steps that completed and those that never ran. What no window
+can show is the inside of one commit: the terrain and the
 subdivisions are one commit each — and so is the drape's retype, which only a ground built before the
 terrain took the imagery type still needs — Revit reports "not responding" while one runs, and a
 Cancel pressed then takes effect when it finishes. Closing the window while it runs is a cancel.

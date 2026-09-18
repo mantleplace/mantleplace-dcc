@@ -99,15 +99,21 @@ public sealed class LocalBundleArchive : IDisposable
     /// deliverables carried none at all, and calling those bundles corrupt makes every one of them
     /// un-importable (HPS-27).
     /// </para>
+    /// <para>
+    /// <see cref="BundleImportPlan.OffByDefault"/> is checked too: a curator can switch one of those
+    /// on after this has run, and a check that covered only the default set would let that step
+    /// skip it. An entry two steps share is hashed once.
+    /// </para>
     /// </remarks>
     /// <returns><c>null</c> when everything checked out, or the reason to abort.</returns>
     public string? VerifyPlan(BundleImportPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
 
-        foreach (ImportStep step in plan.Steps)
+        HashSet<(string Entry, string? Sha256)> checkedEntries = [];
+        foreach (ImportStep step in plan.Steps.Concat(plan.OffByDefault))
         {
-            if (step.EntryName.Length == 0)
+            if (step.EntryName.Length == 0 || !checkedEntries.Add((step.EntryName, step.ExpectedSha256)))
             {
                 continue;
             }

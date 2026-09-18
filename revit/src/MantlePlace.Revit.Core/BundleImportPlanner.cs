@@ -52,6 +52,7 @@ public static class BundleImportPlanner
 
         BundleEntryIndex entries = new(entryNames);
         List<ImportStep> steps = [];
+        List<ImportStep> offByDefault = [];
         List<SkippedImport> skipped = [];
         List<string> notImported = [];
 
@@ -69,7 +70,7 @@ public static class BundleImportPlanner
             steps,
             skipped,
             drapeSteps.Count > 0 ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
-        PlanSiteIfc(manifest, entries, steps, skipped);
+        PlanSiteIfc(manifest, entries, steps, offByDefault, skipped, notImported);
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteContext(manifest, entries, steps, skipped);
 
@@ -97,6 +98,7 @@ public static class BundleImportPlanner
         {
             CanImport = canImport,
             Steps = steps,
+            OffByDefault = offByDefault,
             Skipped = skipped,
             AvailableButNotImported = notImported,
             BlockedReason = canImport
@@ -316,28 +318,55 @@ public static class BundleImportPlanner
         return true;
     }
 
+    /// <summary>
+    /// The site model is copied into the project by default, and its link is planned off by default.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One artifact, two ways to take it, and only one of them runs unless a curator asks: a link as
+    /// well as the copies would show every building twice, once selectable and once not. The link is
+    /// still resolved and bound to its digest here, so the per-layer checklist that offers it hands
+    /// the shim a step checked exactly like every other.
+    /// </para>
+    /// <para>
+    /// An absent site model is one skip, under the kind that would have run. Two lines for one
+    /// missing file would read as two problems.
+    /// </para>
+    /// </remarks>
     private static void PlanSiteIfc(
         BundleManifest manifest,
         BundleEntryIndex entries,
         List<ImportStep> steps,
-        List<SkippedImport> skipped)
+        List<ImportStep> offByDefault,
+        List<SkippedImport> skipped,
+        List<string> notImported)
     {
-        if (TryPlanArtifact(
+        if (!TryPlanArtifact(
                 manifest.SiteIfc,
                 manifest,
                 entries,
-                ImportStepKind.LinkSiteIfc,
+                ImportStepKind.ContextBuildings,
                 manifest.Readiness.IfcSite,
                 "IFC site model",
-                out ImportStep? step,
+                out ImportStep? copy,
                 out SkippedImport? skip,
                 out _))
         {
-            steps.Add(step!);
+            skipped.Add(skip!);
             return;
         }
 
-        skipped.Add(skip!);
+        steps.Add(copy!);
+        offByDefault.Add(new ImportStep
+        {
+            Kind = ImportStepKind.LinkSiteIfc,
+            EntryName = copy!.EntryName,
+            Units = copy.Units,
+            ExpectedSha256 = copy.ExpectedSha256,
+        });
+        notImported.Add(
+            $"{copy.EntryName} as a linked IFC — its buildings are copied into the project as elements "
+            + "instead, and linking it as well would show each one twice.");
     }
 
     /// <summary>
