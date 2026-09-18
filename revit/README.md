@@ -39,7 +39,8 @@ Downloads are written to `bundle.zip.part`, hashed, and renamed over `bundle.zip
 verify (⛔`HPS-26`). Nothing is ever evicted automatically: a purchased bundle stays until you press
 `Remove Download` (`HPS-44`).
 
-**Both windows this plugin opens are headed by the mark and their purpose** — `Vault`, `Sign In` —
+**Every window this plugin opens is headed by the mark and its purpose** — `Vault`, `Sign In`,
+`Bundle Import` —
 and their button faces are Title Case, the same rule the ribbon follows and for the same reason. The
 brand orange appears on exactly one control in the whole plugin, the vault browser's `Import`;
 everything else keeps Revit's own chrome, because an add-in that paints its own windows stops looking
@@ -128,10 +129,23 @@ else logs beside that zip. `Logs` selects the newest log under the cache, and wh
 none it opens the cache and says that a zip from elsewhere logged elsewhere. The About dialog on the
 Account button reaches the same place through the same function, so the two can never disagree.
 
+**An import is staged, and shows itself.** Both ways in — `Import Bundle` and the vault window's
+`Import` — open the modeless `Bundle Import` window, which lists the plan's steps, marks each one
+`Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts the trees in as they
+go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent` raise, so Revit repaints
+between them and **Cancel** is honoured at the next boundary. Whatever committed before the cancel
+stays, and importing the same bundle again reuses the terrain, the site model link, the subdivisions
+and the trees it finds and creates only what is missing — except the road centrelines, which carry no
+stamp yet and are created a second time. The log's last line names the steps that completed and those
+that never ran. What no window can show is the inside of one commit:
+the terrain, the subdivisions and the drape's retype are one commit each, Revit reports "not
+responding" while one runs, and a Cancel pressed then takes effect when it finishes. Closing the
+window while it runs is a cancel.
+
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
-runs unattended from a Revit journal or a tester script. An unattended run raises no dialog — it
-writes `<zip>.mantleplace-import.log` beside the bundle instead, because a `TaskDialog` during
-journal playback is never dismissed.
+runs unattended from a Revit journal or a tester script. An unattended run raises no dialog and opens
+no window — it runs synchronously and writes `<zip>.mantleplace-import.log` beside the bundle
+instead, because a `TaskDialog` or a modeless window during journal playback is never dismissed.
 
 ⛔ **Load the add-in by hand once after every deploy, before the first unattended run.** The
 assemblies are unsigned, so the first time Revit loads a *newly built* shim it raises

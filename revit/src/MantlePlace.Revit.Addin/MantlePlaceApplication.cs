@@ -401,6 +401,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _importHandler = new BundleImportEventHandler();
         _importEvent = ExternalEvent.Create(_importHandler);
 
+        // The handler re-raises its own event between slices of a staged import, so it holds it.
+        _importHandler.Attach(_importEvent);
+
         // CreateRibbonTab throws when the tab already exists — which happens whenever the .addin
         // manifest is installed both machine-wide and per-user. An unhandled throw here disables the
         // whole add-in with a load error, so a duplicate tab is treated as "already there".

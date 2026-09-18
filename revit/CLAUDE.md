@@ -46,7 +46,7 @@ The ones this tree already turns on:
 | `HPS-18` … `25`, `48` | list → materialize → poll → **re-list** → presign → download; explicit token list, never a scope keyword; one error-body precedence for auth and vault alike. |
 | `HPS-26` … `30`, `44` | write to `.part`, verify, rename; null sha is unknown not absent; eviction only on request.                                                                   |
 | `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers behind roads and site boundaries. Nothing else here projects.                        |
-| `HPS-51`              | signing in and out, the vault, the local import and the about surface take the standard's words. The casing is this host's; the words are not.                 |
+| `HPS-51`              | signing in and out, the vault, the local import, the import window and the about surface take the standard's words. The casing is this host's; the words are not. |
 
 ## Layout and the split that matters
 
@@ -188,6 +188,17 @@ follow.
   is possible. Hovering the two Bundles buttons in a running Revit is the check, and it is the one
   manual step [ADR 0010](../docs/adr/0010-tooltip-vignettes-are-drawn-not-photographed.md) leaves
   open.
+
+- **The staged import joined that set.** One step, or one chunk of trees, runs per
+  `ExternalEvent` raise, and the handler posts the next raise at `DispatcherPriority.Background` so
+  the window repaints and a Cancel click lands first. Whether Revit services a raise posted from
+  inside its own handler promptly, whether the modeless window actually repaints between slices, and
+  whether a Comments write on a `DirectShape` holds are compiled and unexecuted. What is settled
+  headlessly is everything about *when*: `StagedImport` decides the slice order, where a cancel lands
+  and what a failure costs, and `ImportChunking`/`TreeIdentity` decide the chunks and the resume.
+  Never `yield` inside an open transaction — a chunked step commits, then yields — and never leave
+  the session-wide `FailuresProcessing` hook attached across a slice boundary: between slices the
+  curator is editing their own model (`RevitBundleImporter.InSlice`).
 
 ## Where knowledge lives
 

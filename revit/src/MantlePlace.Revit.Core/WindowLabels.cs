@@ -1,8 +1,11 @@
+using System.Globalization;
+
 namespace MantlePlace.Revit.Core;
 
 /// <summary>
-/// The words on the two windows this plugin opens: their title bars, their headings and their
-/// button faces.
+/// The words on the windows this plugin opens — the vault, sign-in and import windows: their title
+/// bars, their headings, their button faces and, for the import window, its step rows and their
+/// states.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -76,4 +79,80 @@ public static class WindowLabels
 
     /// <summary>Dismiss a window whose work is over.</summary>
     public const string Close = "Close";
+
+    /// <summary>The import window's title bar.</summary>
+    public const string ImportWindowTitle = "Mantle Place Bundle Import";
+
+    /// <summary>
+    /// The import window's heading: the glossary's name for the action, and <c>HPS-51</c>'s word for
+    /// the window that shows it running.
+    /// </summary>
+    public const string ImportHeading = "Bundle Import";
+
+    /// <summary>A step's state, as its row in the import window says it (<c>HPS-51</c>).</summary>
+    public static string StateWord(ImportStepState state) => state switch
+    {
+        ImportStepState.Waiting => "Waiting",
+        ImportStepState.Importing => "Importing",
+        ImportStepState.Done => "Done",
+        ImportStepState.Failed => "Failed",
+        ImportStepState.Cancelled => "Cancelled",
+        ImportStepState.NotRun => "Not Run",
+        _ => state.ToString(),
+    };
+
+    /// <summary>
+    /// A step's row in the import window, and its name in the log's closing line.
+    /// </summary>
+    /// <remarks>
+    /// The glossary's words, not the planner's: a curator waits on "Terrain", not on
+    /// <c>ToposurfaceFromSurfaceTin</c>, and three kinds that each build the one terrain are one row
+    /// to them. The land-use polygons are <c>Subdivisions</c>, which is what they become
+    /// (<c>CONTEXT.md</c>), and the IFC is the <c>Site Model</c>.
+    /// </remarks>
+    public static string StepName(ImportStepKind kind) => kind switch
+    {
+        ImportStepKind.ToposurfaceFromPointsFile => "Terrain",
+        ImportStepKind.ToposurfaceFromSurfaceTin => "Terrain",
+        ImportStepKind.ToposurfaceFromSurfaceDxf => "Terrain",
+        ImportStepKind.LinkSiteIfc => "Site Model",
+        ImportStepKind.SetSharedCoordinates => "Shared Coordinates",
+        ImportStepKind.RoadCentrelines => "Road Centrelines",
+        ImportStepKind.SiteBoundaries => "Subdivisions",
+        ImportStepKind.Vegetation => "Trees",
+        ImportStepKind.ImageryDrape => "Imagery Drape",
+
+        // A kind added to the planner and never named here still gets a row rather than a throw on
+        // Revit's thread; the test that walks the enum is what makes it get a real name.
+        _ => kind.ToString(),
+    };
+
+    /// <summary>How far a chunked step has got, in the elements it creates: <c>250 of 600</c>.</summary>
+    public static string ProgressText(StepProgress progress)
+        => string.Format(CultureInfo.InvariantCulture, "{0:N0} of {1:N0}", progress.Done, progress.Total);
+
+    /// <summary>
+    /// The import window's status line: the step in flight, how far a chunked one has got, and a
+    /// cancel that is waiting for its boundary. Empty between steps.
+    /// </summary>
+    /// <remarks>
+    /// A step that is one commit shows its name and nothing else, because there is no part of a
+    /// commit to count; <see cref="SlowStepNotice"/> is where the log says so.
+    /// </remarks>
+    public static string StatusLine(StagedImport run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+
+        if (run.Current is not { } step)
+        {
+            return string.Empty;
+        }
+
+        string name = StepName(step.Step.Kind);
+        string line = step.Progress is { Total: > 0 } progress
+            ? $"{name}: {ProgressText(progress)}"
+            : $"{name}…";
+
+        return run.CancelRequested ? line + ". Cancelling at the next step or chunk." : line;
+    }
 }

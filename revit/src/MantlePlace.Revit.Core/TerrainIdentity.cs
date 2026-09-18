@@ -249,7 +249,8 @@ public static class TerrainIdentity
     }
 
     /// <summary>The build half of a stamp: a short, lower-case sha256 prefix, or <see cref="UnknownBuild"/>.</summary>
-    private static string BuildToken(string? artifactSha256)
+    /// <remarks>Shared with <see cref="TreeIdentity"/>, so every stamp names a build the same way.</remarks>
+    internal static string BuildToken(string? artifactSha256)
     {
         if (string.IsNullOrWhiteSpace(artifactSha256))
         {

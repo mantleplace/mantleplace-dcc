@@ -44,7 +44,7 @@ internal sealed partial class RevitBundleImporter
                 }
             }
 
-            if (curves.Count > 0 && TryCreateDirectShape(category, curves, FeatureName(feature, "Road")))
+            if (curves.Count > 0 && TryCreateDirectShape(category, curves, FeatureName(feature, "Road")) is not null)
             {
                 created++;
             }

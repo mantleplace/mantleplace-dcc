@@ -118,7 +118,7 @@ have to restart it to get a readable ribbon.
 ## Which mark file for which display scale
 
 Revit's ribbon takes exactly two images per button — `Image` at 16 px and `LargeImage` at 32 px —
-and scales whatever it is handed to the display. The plugin's two windows head themselves with a
+and scales whatever it is handed to the display. The plugin's windows head themselves with a
 third slot, 32 logical px beside the heading. Handing any of them a render that already matches the
 display scale is the difference between crisp and blurry on a high-DPI laptop:
 

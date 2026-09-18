@@ -44,25 +44,25 @@ internal sealed partial class RevitBundleImporter
     }
 
     /// <summary>
-    /// Creates one DirectShape, or reports nothing and returns false.
+    /// Creates one DirectShape, or reports nothing and returns <c>null</c>.
     /// </summary>
     /// <remarks>
     /// Per-element rather than per-layer, because Revit rejects individual shapes — a self-touching
     /// polyline, a crown whose radius rounds to nothing — and losing one road must not abort the
     /// transaction that holds the other forty-four.
     /// </remarks>
-    private bool TryCreateDirectShape(ElementId category, IList<GeometryObject> geometry, string name)
+    private DirectShape? TryCreateDirectShape(ElementId category, IList<GeometryObject> geometry, string name)
     {
         try
         {
             DirectShape shape = DirectShape.CreateElement(_document, category);
             shape.SetShape(geometry);
             shape.Name = name;
-            return true;
+            return shape;
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
         {
-            return false;
+            return null;
         }
     }
 

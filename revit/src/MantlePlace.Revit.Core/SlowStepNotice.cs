@@ -23,10 +23,14 @@ namespace MantlePlace.Revit.Core;
 /// ten-minute freeze arrived with no warning and read as a crash. So it is announced instead.
 /// </para>
 /// <para>
-/// ⛔ <b>A progress bar is not available.</b> There is no partial-progress UI inside a Revit API
-/// transaction, and the whole cost is inside one commit — so no line can be written while it runs.
-/// The line before it is the only line there will ever be, which is why it carries the whole
-/// explanation rather than a terse "working…".
+/// ⛔ <b>What cannot be shown is the inside of one commit.</b> This used to say that a progress bar
+/// was not available at all, and that was the decision: the whole import ran in one call on Revit's
+/// thread, so nothing could repaint until it returned. That is reversed — the import is staged
+/// (<see cref="StagedImport"/>), one step or one chunk per <c>ExternalEvent</c> raise, so the import
+/// window moves between steps and between chunks and Cancel is honoured at each boundary. What is
+/// still dark is a single <c>Transaction.Commit()</c>: it cannot yield, report part of itself, or be
+/// interrupted, and both of these steps spend their whole cost inside one. So the line before it is
+/// still the only line there will be <em>for that step</em>, and it says exactly that much.
 /// </para>
 /// <para>
 /// This is text, so it lives where text can be asserted. The shim decides nothing: it hands over the
@@ -115,9 +119,10 @@ public static class SlowStepNotice
             "{0} Revit rebuilds the whole terrain's element relations when the transaction commits, "
             + "and that cost tracks the terrain's point count rather than how much is being added. "
             + "On the one terrain this has been measured on ({1:N0} points) it took about {2} "
-            + "minutes. {3}. Revit will report \"not responding\" until it finishes and there is no "
-            + "progress to show — a Revit transaction has no partial-progress display. It has not "
-            + "crashed; leave it alone.",
+            + "minutes. {3}. That cost is inside one commit, and a commit cannot report part of itself "
+            + "or be interrupted: the import window shows every step and every chunk of trees, but "
+            + "not this, so Revit will report \"not responding\" until it finishes, and Cancel takes "
+            + "effect when it finishes. It has not crashed; leave it alone.",
             opening,
             MeasuredPointCount,
             measuredMinutes,

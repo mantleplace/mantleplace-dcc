@@ -105,6 +105,7 @@ internal sealed partial class RevitBundleImporter
             return true;
         }
 
+        _stepRolledBack = true;
         if (!swallower.SawError)
         {
             // Rolled back with nothing posted. Rare, and worth saying so rather than reporting a

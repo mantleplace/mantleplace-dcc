@@ -5,7 +5,7 @@ using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The vegetation step: one trunk-and-crown DirectShape per published tree.
+// The vegetation step: one trunk-and-crown DirectShape per published tree, in chunks, each stamped.
 internal sealed partial class RevitBundleImporter
 {
     /// <summary>Trunk height as a fraction of total height — the rest is crown.</summary>
@@ -18,19 +18,34 @@ internal sealed partial class RevitBundleImporter
     private const double CrownApexFraction = 0.05;
 
     /// <summary>
-    /// Trees as Generic Model DirectShapes, dimensioned from the CSV — Forma's "Vegetation" row.
+    /// Trees as Planting DirectShapes, dimensioned from the CSV — Forma's "Vegetation" row — created
+    /// in chunks, each tree stamped with its row.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The tree-points file carries <c>height_m</c> and <c>crown_radius_m</c> per tree, so these are
     /// real proxy geometry — a trunk and a tapered crown at the published size — rather than the
     /// markers a points-only layer would justify. Anything Revit refuses to build is counted and
     /// reported; one bad row must not cost the curator the other forty-three.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>One transaction per chunk, and a yield after each commit.</b> The whole layer used to be
+    /// one transaction, so the largest bundles' tens of thousands of trees were one uninterruptible
+    /// call. Each yield hands Revit its message loop back (<see cref="StagedImport"/>): the import
+    /// window moves, and a Cancel stops the step at the next boundary with every committed chunk
+    /// kept. Nothing may yield inside a transaction — the commit comes first, in
+    /// <see cref="CreateTreeChunk"/>, which is a separate method so that it cannot.
+    /// </para>
+    /// <para>
+    /// A cancelled chunk's trees are kept, so every tree carries its stamp
+    /// (<see cref="TreeIdentity"/>) and a re-import of the same build creates only what is missing.
+    /// </para>
     /// </remarks>
-    private void ImportVegetation(ImportStep step)
+    private IEnumerable<StepProgress> ImportVegetation(ImportStep step)
     {
         if (step.Frame is not { } frame)
         {
-            return;
+            yield break;
         }
 
         string csvPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
@@ -38,32 +53,105 @@ internal sealed partial class RevitBundleImporter
         if (parseError is not null)
         {
             Say(parseError);
-            return;
+            yield break;
+        }
+
+        string stem = _archive.Layout.Key.Stem;
+        TreeDecision decision = TreeIdentity.Decide(ExistingDirectShapeComments(), stem, step.ExpectedSha256, trees.Count);
+        if (decision.Disposition == TreeDisposition.RefuseStale)
+        {
+            Say(decision.Explanation);
+            yield break;
         }
 
         ElementId category = DirectShapeCategory(BuiltInCategory.OST_Planting);
+        IReadOnlyList<int> rows = decision.RowsToCreate;
         int created = 0;
+        int unstamped = 0;
+        foreach (ImportChunk chunk in ImportChunking.Chunks(rows.Count))
+        {
+            TreeChunkResult result = CreateTreeChunk(category, trees, rows, chunk, stem, step.ExpectedSha256);
+            if (!result.Committed)
+            {
+                // The swallower already said why, and the rollback took this chunk. The chunks before
+                // it stand, stamped; a re-import of this build picks up from here.
+                Say($"Stopped the trees after {created:N0} of {rows.Count:N0}: Revit did not accept a chunk.");
+                yield break;
+            }
+
+            created += result.Created;
+            unstamped += result.Unstamped;
+            yield return new StepProgress(chunk.Start + chunk.Count, rows.Count);
+        }
+
+        string summary = $"Imported {created:N0} tree(s) of {trees.Count:N0} from {step.EntryName}";
+        if (decision.AlreadyPresent > 0)
+        {
+            summary += $"; {decision.AlreadyPresent:N0} from an earlier import of this build were already present and left alone";
+        }
+
+        if (unstamped > 0)
+        {
+            summary += $"; {unstamped:N0} could not be stamped and will not be recognised by a re-import";
+        }
+
+        Say(summary + ".");
+    }
+
+    /// <summary>What one chunk's transaction did.</summary>
+    private readonly record struct TreeChunkResult(bool Committed, int Created, int Unstamped);
+
+    /// <summary>Creates, stamps and commits one chunk of trees.</summary>
+    private TreeChunkResult CreateTreeChunk(
+        ElementId category,
+        IReadOnlyList<SiteTree> trees,
+        IReadOnlyList<int> rows,
+        ImportChunk chunk,
+        string stem,
+        string? sha256)
+    {
+        int created = 0;
+        int unstamped = 0;
 
         ImportFailureSwallower swallower = new("Importing the vegetation");
         using Transaction transaction = BeginTransaction("Mantle Place: vegetation", swallower);
 
-        foreach (SiteTree tree in trees)
+        for (int index = chunk.Start; index < chunk.Start + chunk.Count; index++)
         {
-            if (BuildTreeGeometry(tree) is { Count: > 0 } geometry
-                && TryCreateDirectShape(category, geometry, "Tree"))
+            int row = rows[index];
+            if (BuildTreeGeometry(trees[row]) is not { Count: > 0 } geometry
+                || TryCreateDirectShape(category, geometry, "Tree") is not { } shape)
             {
-                created++;
+                continue;
+            }
+
+            created++;
+
+            // Comments is the tree's identity for the NEXT import. A tree it could not stamp is kept
+            // — it is real — and cannot be recognised later, which the summary says.
+            Parameter? comments = shape.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS);
+            if (comments is null || comments.IsReadOnly || !comments.Set(TreeIdentity.Stamp(stem, sha256, row + 1)))
+            {
+                unstamped++;
             }
         }
 
-        if (!CommitAndReport(transaction, swallower))
-        {
-            // The swallower already said why. Reporting the work below as done would be a lie:
-            // the rollback took all of it.
-            return;
-        }
+        return CommitAndReport(transaction, swallower)
+            ? new TreeChunkResult(true, created, unstamped)
+            : new TreeChunkResult(false, 0, 0);
+    }
 
-        Say($"Imported {created:N0} tree(s) of {trees.Count:N0} from {step.EntryName}.");
+    /// <summary>
+    /// The Comments of every DirectShape in the project. Whatever is not a tree stamp is ignored by
+    /// <see cref="TreeIdentity"/>, so there is no category filter here to get wrong when a Revit
+    /// without a Planting DirectShape category files the trees under Generic Model.
+    /// </summary>
+    private List<string?> ExistingDirectShapeComments()
+    {
+        using FilteredElementCollector collector = new(_document);
+        return [.. collector
+            .OfClass(typeof(DirectShape))
+            .Select(element => element.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString())];
     }
 
     /// <summary>
