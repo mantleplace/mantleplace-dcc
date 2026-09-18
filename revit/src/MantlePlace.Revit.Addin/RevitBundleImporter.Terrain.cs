@@ -462,14 +462,6 @@ internal sealed partial class RevitBundleImporter
             .Select(level => new CandidateLevel(level.Id.Value, level.Name, level.ProjectElevation))];
 
     /// <summary>
-    /// The toposolid type the terrain is built from, or <c>null</c> when the project has none usable.
-    /// </summary>
-    /// <remarks>
-    /// The choice itself is <see cref="ToposolidTypeChoice"/>'s. What lives here is reading a total
-    /// thickness out of Revit: the compound structure when there is one, the type's Default Thickness
-    /// parameter when there is not.
-    /// </remarks>
-    /// <summary>
     /// Whether any layer of <paramref name="structure"/> is a <c>Structure</c> — the difference
     /// between a ground type and a paving type.
     /// </summary>
@@ -496,6 +488,14 @@ internal sealed partial class RevitBundleImporter
         return false;
     }
 
+    /// <summary>
+    /// The toposolid type the terrain is built from, or <c>null</c> when the project has none usable.
+    /// </summary>
+    /// <remarks>
+    /// The choice itself is <see cref="ToposolidTypeChoice"/>'s. What lives here is reading a total
+    /// thickness out of Revit: the compound structure when there is one, the type's Default Thickness
+    /// parameter when there is not.
+    /// </remarks>
     private CandidateToposolidType? ChooseToposolidType()
     {
         List<CandidateToposolidType> candidates = [];
