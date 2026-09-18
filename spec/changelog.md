@@ -36,9 +36,9 @@ does not use it ignores.
 ⚠️ **Additive in the schema is not additive in every reader.** Unreal's tree-points reader as
 released through `unreal-0.4.0` matched the header as one exact string and counted five fields, so
 the new column would have dropped the whole tree layer on import, with the import still reporting
-success. The reader was fixed and released before the platform emitted the column, which is the
-order 1.0.0 was shipped in for the same reason. [Format](format.md) §4.4 now states the rule that
-reader broke.
+success. The platform emits the column only once a tagged Unreal release carries the fixed
+reader — the order 1.0.0 was shipped in, for the same reason. [Format](format.md) §4.4 now states
+the rule that reader broke.
 
 ### Within 1.0.1 — the vector layer vocabulary, stated (2026-09-18)
 

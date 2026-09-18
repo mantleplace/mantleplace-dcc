@@ -113,10 +113,12 @@ that a reader who encounters it knows it is deliberate rather than an undocument
 
 ### 4.4 Tabular artifacts, and the foliage type
 
-A delimited-text artifact carries a header row, and its manifest entry publishes that header as
-`columns`. ⛔ **A reader MUST resolve columns by header name, never by position, and MUST ignore a
-column it does not know.** A minor release may append a column; a reader that matches the header as
-one exact string, or counts fields, turns that additive change into a missing layer.
+Where a delimited-text artifact's manifest entry publishes `columns`, the file carries that list as
+its header row. ⛔ **A reader MUST resolve those columns by header name, never by position, and MUST
+ignore a column it does not know.** A minor release may append a column; a reader that matches the
+header as one exact string, or counts fields, turns that additive change into a missing layer. The
+corpus pins this in `manifest.treePointsRowCount`, with an appended, a reordered and a missing
+column.
 
 `Landcover/TreePoints.csv` is the case that exists today. From 1.2.0 its last column is
 `foliage_type`, and `landcover.tree_points.foliage_type_vocabulary` names the vocabulary its values
@@ -126,8 +128,10 @@ family, symbol or asset and never derives one.
 - **Vocabulary `"1"`** is `tree` and `shrub`. A point is a `shrub` where the ESA WorldCover 2021 v200
   class under it is Shrubland (20), and a `tree` for every other class and where WorldCover has no
   data. It is never inferred from `height_m` or `crown_radius_m`.
-- ⛔ **A value a host does not know MUST be read as `tree`.** The vocabulary may grow, and a new
-  value is a new vocabulary version — never a change of meaning for an existing one.
+- ⛔ **A host that reads `foliage_type` MUST read a value it does not know as `tree`.** The
+  vocabulary may grow, and a new value is a new vocabulary version — never a change of meaning for
+  an existing one. No host reads the value yet, so no corpus case binds this rule; one lands with
+  the first host that does.
 - A manifest without `foliage_type_vocabulary` has no `foliage_type` column; read every point as a
   tree.
 
