@@ -85,7 +85,7 @@ Revit licence.
   from an earlier build are refused with the prefix to delete. The site model is no longer linked:
   the plan keeps the link off by default for a per-layer checklist the import window does not have
   yet, and the version-qualified companion `.rvt` is written only when it is linked. See
-  [ADR 0011](../docs/adr/0011-context-buildings-come-from-the-site-model.md);
+  [ADR 0012](../docs/adr/0012-context-buildings-come-from-the-site-model.md);
 - sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
   this host's own block — falling back to `delivery.local_origin` on a bundle whose own block
   publishes no usable origin (`HPS-33`);
@@ -127,6 +127,15 @@ Revit licence.
   stop drawing, paint and graphic overrides are ignored), and the plugin never turns it off. Where
   Revit refuses the setting, the photograph is anchored to the origin instead and the log says to
   import again after turning smoothing on by hand;
+- writes the manifest's `attribution.sources[]` into a drafting view named **Mantle Place
+  Attribution** — one line per source, its attribution text, licence text and licence URL exactly
+  as the manifest gives them — ready to place on a sheet. The plugin makes no licensing decision of
+  its own; it copies what the manifest says. Beside it, Project Information carries a record of the
+  order, the build, the manifest version, the sources and the note's text, which is how a re-import
+  finds the note this one wrote: a later build of the same order rewrites that note, an unchanged one
+  leaves it alone, and any other note — one edited by hand, or another order's — is left as it is,
+  with a fresh one added beneath it. See
+  [ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md);
 - refuses to import anything at all when an artifact's bytes do not match the `sha256` its own
   manifest publishes, before a single element is created (⛔`HPS-26`);
 - tells you what it did **not** import and why, using the manifest's own

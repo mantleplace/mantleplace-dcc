@@ -19,6 +19,7 @@ internal static class SlowStepNoticeTests
         ImportStepKind.SetSharedCoordinates,
         ImportStepKind.RoadCentrelines,
         ImportStepKind.Vegetation,
+        ImportStepKind.AttributionAndProvenance,
     ];
 
     private static readonly ImportStepKind[] SlowKinds =

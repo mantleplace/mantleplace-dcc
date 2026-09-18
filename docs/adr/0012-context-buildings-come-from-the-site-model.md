@@ -1,10 +1,10 @@
 ---
-name: adr-0011-context-buildings-come-from-the-site-model
+name: adr-0012-context-buildings-come-from-the-site-model
 description: Revit's context buildings are the site model's own per-building extrusions, copied out of Revit's IFC import into Generic Model DirectShapes — not footprints extruded here, not the building glb, and no longer a link. Read before changing where Revit's buildings come from, before reaching for footprints or the glb to get one, and before asking why a building's height is not a parameter.
 status: accepted
 ---
 
-# 11. Context buildings come from the site model
+# 12. Context buildings come from the site model
 
 Date: 2026-09-17
 

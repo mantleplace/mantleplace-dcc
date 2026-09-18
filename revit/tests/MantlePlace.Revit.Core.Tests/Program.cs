@@ -19,6 +19,7 @@ exitCode |= SiteBoundaryIdentityTests.Run();
 exitCode |= SiteBoundaryCoextensionTests.Run();
 exitCode |= TerrainIdentityTests.Run();
 exitCode |= TreeIdentityTests.Run();
+exitCode |= AttributionTests.Run();
 exitCode |= BuildingIdentityTests.Run();
 exitCode |= SiteModelReaderTests.Run();
 exitCode |= DrapeLayeringTests.Run();

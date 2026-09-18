@@ -199,6 +199,17 @@ follow.
   Never `yield` inside an open transaction — a chunked step commits, then yields — and never leave
   the session-wide `FailuresProcessing` hook attached across a slice boundary: between slices the
   curator is editing their own model (`RevitBundleImporter.InSlice`).
+- **The attribution step joined that set.** `ViewDrafting.Create`, `TextNote.Create` and a
+  `TextNote.Text` write, and ExtensibleStorage — `SchemaBuilder` with `AccessLevel.Vendor` write
+  access, `Entity`, `ProjectInformation.SetEntity`/`GetEntity` — compile and have not been executed
+  inside Revit. Two of their failure modes are settled headlessly: `ProvenanceStorage.VendorId` is
+  asserted equal to the `.addin` file's `VendorId` (a vendor-write schema refuses any other add-in),
+  and every schema and field name is checked against the identifier rule Revit enforces. What is not
+  settled is whether the record reads back after a save and reopen in each of 2025, 2026 and 2027 —
+  the import log says `This project already records an import of order …` when it does. ⛔ **The
+  schema GUID is permanent:** changing a field under `ProvenanceStorage.SchemaGuid` breaks every
+  project that already holds the old definition, so a field change is a new GUID
+  ([ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md)).
 - **The context buildings joined that set.** The step converts the site model with
   `Application.OpenIFCDocument`, finds each building in the result by `BuiltInParameter.IFC_GUID`,
   clones its solids with `SolidUtils.Clone` and gives them to a Generic Model `DirectShape`. The
@@ -206,8 +217,8 @@ follow.
   across slices is closed only when a step ends through `StagedImport`, and an import abandoned from
   the event handler does not. All of it compiles; none of it has run inside Revit. The part most
   likely to be wrong is the GlobalId: if Revit's import does not record it where the step looks, the
-  step says so in one line and copies nothing. Which elements are buildings is not in that set — `SiteModelReader` reads it
-  from the IFC's text, headlessly ([ADR 0011](../docs/adr/0011-context-buildings-come-from-the-site-model.md)).
+  step says so in one line and copies nothing. Which elements are buildings is not in that set —
+  `SiteModelReader` reads it from the IFC's text, headlessly ([ADR 0012](../docs/adr/0012-context-buildings-come-from-the-site-model.md)).
 
 ## Where knowledge lives
 
