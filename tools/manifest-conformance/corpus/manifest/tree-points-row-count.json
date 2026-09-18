@@ -18,6 +18,11 @@
     "report the terrain and the imagery beside it as failed. A reader that collapses the two either",
     "reports a good bundle as failed or a truncated one as fine.",
     "",
+    "Columns are found by HEADER NAME, never by position. The manifest publishes",
+    "`landcover.tree_points.columns`, which makes the names the contract and the order not; a reader",
+    "ignores a column it does not know, so the platform can add one without dropping the layer for",
+    "every installed reader. Only a MISSING required column is a drifted contract.",
+    "",
     "`csv` is the payload verbatim, newlines included. `parsedRows` is what a conformant reader",
     "returns on a `parsed` outcome; it is not asserted on the others, where the rows are discarded.",
     "A refusal must NAME the declared count, so a user can see the two numbers that disagree."
@@ -63,6 +68,34 @@
       "csv": "lon,lat,z\n-105.6,36.3,2640.9\n",
       "declaredPointCount": 3,
       "outcome": "headerUnrecognised"
+    },
+    {
+      "name": "an extra trailing column is ignored, not a drifted contract",
+      "csv": "x,y,ground_z,height_m,crown_radius_m,foliage_type\n441959.50,4014372.50,2640.96,12.40,4.34,tree\n442059.50,4014272.50,,8.00,2.80,shrub\n441859.50,4014472.50,2650.00,3.10,1.09,tree\n",
+      "declaredPointCount": 3,
+      "outcome": "parsed",
+      "parsedRows": 3
+    },
+    {
+      "name": "columns are found by name, so a reordered header parses",
+      "csv": "height_m,crown_radius_m,x,y,ground_z\n12.40,4.34,441959.50,4014372.50,2640.96\n8.00,2.80,442059.50,4014272.50,\n3.10,1.09,441859.50,4014472.50,2650.00\n",
+      "declaredPointCount": 3,
+      "outcome": "parsed",
+      "parsedRows": 3
+    },
+    {
+      "name": "a missing required column is a drifted contract",
+      "csv": "x,y,ground_z,crown_radius_m\n441959.50,4014372.50,2640.96,4.34\n",
+      "declaredPointCount": 1,
+      "outcome": "headerUnrecognised",
+      "errorContains": "\"height_m\""
+    },
+    {
+      "name": "a row with fewer fields than the header is skipped, and the count says so",
+      "csv": "x,y,ground_z,height_m,crown_radius_m,foliage_type\n441959.50,4014372.50,2640.96,12.40,4.34,tree\n442059.50,4014272.50,,8.00\n441859.50,4014472.50,2650.00,3.10,1.09,tree\n",
+      "declaredPointCount": 3,
+      "outcome": "countMismatch",
+      "errorContains": "point_count 3"
     }
   ]
 }

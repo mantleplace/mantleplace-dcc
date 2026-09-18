@@ -15,9 +15,11 @@ enum class EMantlePlaceTreePointsOutcome : uint8
 	Parsed,
 
 	/**
-	 * The CSV's header is not the column contract this reader speaks. The layer is SKIPPED and the
-	 * rest of the import stands: the ETL changed a payload's shape, which is a fact about the
-	 * bundle rather than a failure of the terrain, the imagery or the buildings beside it.
+	 * The CSV's header lacks a column this reader needs (or there is no header at all). A column it
+	 * does not know is NOT this outcome: columns are found by name and extras are ignored. The
+	 * layer is SKIPPED and the rest of the import stands: the ETL changed a payload's shape, which
+	 * is a fact about the bundle rather than a failure of the terrain, the imagery or the buildings
+	 * beside it.
 	 */
 	HeaderUnrecognised,
 
@@ -39,10 +41,12 @@ enum class EMantlePlaceTreePointsOutcome : uint8
 struct FMantlePlaceTreePointsLogic
 {
 	/**
-	 * Parse the ETL's tree-points CSV (header "x,y,ground_z,height_m,crown_radius_m"; ground_z
-	 * may be empty when the DEM had no data — Position.Z then stays 0). Rows that fail to parse
-	 * are skipped rather than failing the layer, and OutError is filled on every non-Parsed
-	 * outcome.
+	 * Parse the ETL's tree-points CSV. Columns are resolved from the header BY NAME (trimmed,
+	 * case-insensitive), in any order: x, y, ground_z, height_m and crown_radius_m are required
+	 * and any other column is ignored, so the platform can add one without dropping the layer.
+	 * ground_z may be empty when the DEM had no data — Position.Z then stays 0. Rows that fail to
+	 * parse (too few fields, non-numeric x/y) are skipped rather than failing the layer, and
+	 * OutError is filled on every non-Parsed outcome.
 	 *
 	 * `DeclaredPointCount` is `unreal.foliage_points.point_count`, or 0 when the manifest
 	 * published none. The two halves of the tree-points integrity story are deliberately
