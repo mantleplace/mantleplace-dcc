@@ -117,6 +117,8 @@ public static class WindowLabels
     public static string StepName(ImportStepKind kind) => kind switch
     {
         ImportStepKind.SetSharedCoordinates => "Shared Coordinates",
+        ImportStepKind.SetSiteLocation => "Site Location",
+        ImportStepKind.SiteContextView => "Site Context View",
         ImportStepKind.AttributionAndProvenance => "Attribution",
         _ when ImportLayers.Of(kind) is { } layer => LayerName(layer),
 

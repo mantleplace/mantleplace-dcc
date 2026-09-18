@@ -80,6 +80,16 @@ Revit licence.
 - sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
   this host's own block — falling back to `delivery.local_origin` on a bundle whose own block
   publishes no usable origin (`HPS-33`);
+- sets the project's **site location** — Manage ▸ Location, which is what places the sun in every
+  view and renderer — from the latitude and longitude in `hosts.revit.georeference.origin`, verbatim,
+  and from nowhere else. The bundle publishes no time zone, so the project keeps the one it had:
+  Revit recalculates the zone from the longitude whenever the coordinates change, and the import puts
+  the old one back, because a zone derived from longitude is derivation. The log names the zone kept;
+- makes one 3D view, **Mantle Place Site Context**, and one view filter of the same name that
+  matches every element whose Comments begin with `Mantle Place` — everything an import stamped —
+  across every model category that has Comments. The filter goes on the new view with no override,
+  ready to hide, halftone or recolour the site context in any view it is added to. A second import
+  finds both by name and leaves them as they are;
 - draws the road centrelines from the `road_splines` vector layer as DirectShape linework, drapes
   the `land_use` boundaries onto the terrain as toposolid subdivisions, and places the trees from
   `Landcover/TreePoints.csv` at their published height and crown radius — the three rows that closed
@@ -153,8 +163,8 @@ layer the bundle carries (`Terrain`, `Site Model`, `Road Centrelines`, `Land Use
 `Land Cover Subdivisions`, `Trees`, `Imagery Drape`), all ticked. Nothing runs until `Import` is
 pressed. Both kinds of subdivision and the drape need the terrain, so unticking `Terrain` disables
 them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
-out creates nothing, and the log says it was left out by choice. The shared coordinates and the
-attribution are not layers and are written whatever is ticked. Leaving out the drape also builds the
+out creates nothing, and the log says it was left out by choice. The shared coordinates, the site
+location and the attribution are not layers and are written whatever is ticked. Leaving out the drape also builds the
 terrain on the project's own ground type rather than the imagery one. Closing the window before
 `Import` imports nothing and leaves the last run's log as it was.
 
@@ -163,8 +173,8 @@ steps, marks each one `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `
 the trees in as they go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent`
 raise, so Revit repaints between them and **Cancel** is honoured at the next boundary. Whatever
 committed before the cancel stays, and importing the same bundle again reuses the terrain, the site
-model link, the subdivisions, the road centrelines and the trees it finds and creates only what is
-missing. Road centrelines drawn by a build that predates their stamp carry none, so the first import
+model link, the subdivisions, the road centrelines, the trees and the site context view and filter it
+finds and creates only what is missing. Road centrelines drawn by a build that predates their stamp carry none, so the first import
 after upgrading draws them once more; delete the older set by hand. The log's last line names the
 steps that completed and those that never ran. What no window can show is the inside of one
 commit: the terrain and the

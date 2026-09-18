@@ -202,6 +202,15 @@ follow.
   curator is editing their own model (`RevitBundleImporter.InSlice`). The window opens on a
   checklist and raises nothing until Import is pressed; what each box shows, and what a plan
   without a layer looks like, is `ImportChecklist` and the planner's choice argument, both headless.
+- **The site location and the context view joined that set.** `SiteLocation.Latitude`/`Longitude`,
+  `View3D.CreateIsometric`, `ParameterFilterElement.Create` over every model category that
+  `ParameterFilterUtilities.GetFilterableParametersInCommon` says has Comments, the 2023+
+  `CreateBeginsWithRule` overload (case-insensitive — the case-sensitive one is deprecated) and
+  `View.AddFilter` compile and are unexecuted. The sign of a longitude is settled without Revit:
+  Revit's own `en-US/SiteAndWeatherStationName.txt` lists Boston at `-71.0335`, so a published
+  west-negative longitude goes in as it is. Not settled: that Revit lets a 3D view and a view
+  filter share the name `SiteContext` gives both, and that writing `SiteLocation.TimeZone` back
+  after the coordinates undoes the zone Revit recalculates from them.
 - **The attribution step joined that set.** `ViewDrafting.Create`, `TextNote.Create` and a
   `TextNote.Text` write, and ExtensibleStorage — `SchemaBuilder` with `AccessLevel.Vendor` write
   access, `Entity`, `ProjectInformation.SetEntity`/`GetEntity` — compile and have not been executed

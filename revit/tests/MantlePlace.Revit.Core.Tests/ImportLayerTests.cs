@@ -208,7 +208,7 @@ internal static class ImportLayerTests
             run.True(plan.CanImport, "can import");
             run.Equal(
                 string.Join(", ", plan.Steps.Select(step => step.Kind)),
-                "ToposurfaceFromPointsFile, LinkSiteIfc, SetSharedCoordinates, RoadCentrelines, SiteBoundaries, LandCover, Vegetation, AttributionAndProvenance, ImageryDrape",
+                "ToposurfaceFromPointsFile, LinkSiteIfc, SetSharedCoordinates, SetSiteLocation, RoadCentrelines, SiteBoundaries, LandCover, Vegetation, AttributionAndProvenance, SiteContextView, ImageryDrape",
                 "every step");
         });
 

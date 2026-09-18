@@ -16,8 +16,10 @@ internal static class SlowStepNoticeTests
         ImportStepKind.ToposurfaceFromSurfaceDxf,
         ImportStepKind.LinkSiteIfc,
         ImportStepKind.SetSharedCoordinates,
+        ImportStepKind.SetSiteLocation,
         ImportStepKind.RoadCentrelines,
         ImportStepKind.Vegetation,
+        ImportStepKind.SiteContextView,
         ImportStepKind.AttributionAndProvenance,
     ];
 
