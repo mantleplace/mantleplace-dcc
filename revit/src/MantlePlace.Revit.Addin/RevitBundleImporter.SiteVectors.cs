@@ -5,8 +5,8 @@ using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// What the three vector steps share — roads, site boundaries and vegetation: reading a layer, and
-// turning a feature into a DirectShape.
+// What more than one vector step shares — roads, site boundaries, vegetation: reading a layer,
+// naming a feature, and turning geometry into a DirectShape.
 internal sealed partial class RevitBundleImporter
 {
     /// <summary>
@@ -80,24 +80,6 @@ internal sealed partial class RevitBundleImporter
         return DirectShape.IsValidCategoryId(category, _document)
             ? category
             : new ElementId(BuiltInCategory.OST_GenericModel);
-    }
-
-    /// <summary>A vertex as a Revit point, or false when the layer published no elevation for it.</summary>
-    /// <remarks>
-    /// Z is ABSOLUTE orthometric height, the same reading the toposurface points take, so a vertex
-    /// with no Z has no elevation this host may invent — dropping it is the <c>HPS-20</c> reading and
-    /// zero would put the road two kilometres below the site.
-    /// </remarks>
-    private static bool TryVertex(SiteVertex vertex, out XYZ point)
-    {
-        point = XYZ.Zero;
-        if (vertex.ElevationM is not { } elevation)
-        {
-            return false;
-        }
-
-        point = new XYZ(MetresToInternal(vertex.EastM), MetresToInternal(vertex.NorthM), MetresToInternal(elevation));
-        return true;
     }
 
     private static string FeatureName(SiteFeature feature, string fallback)

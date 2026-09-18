@@ -30,8 +30,8 @@ namespace MantlePlace.Revit.Addin;
 /// changes to two steps do not touch one file. Three things stay here and nowhere else: the
 /// state steps hand to each other (the fields below), the step order (<see cref="ExecuteSteps"/>),
 /// and the session-wide failure hook (<see cref="Execute"/>). What every step shares — the log,
-/// the transaction, finding the ground — is <c>RevitBundleImporter.Plumbing.cs</c>, and what the
-/// three vector steps share is <c>RevitBundleImporter.SiteVectors.cs</c>.
+/// the transaction, finding the ground — is <c>RevitBundleImporter.Plumbing.cs</c>, and what
+/// more than one vector step shares is <c>RevitBundleImporter.SiteVectors.cs</c>.
 /// </para>
 /// </remarks>
 internal sealed partial class RevitBundleImporter(

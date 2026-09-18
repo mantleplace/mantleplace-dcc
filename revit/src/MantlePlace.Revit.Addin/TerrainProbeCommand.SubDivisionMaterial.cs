@@ -21,7 +21,7 @@ public sealed partial class TerrainProbeCommand
     /// rival explanations: retyping the host left every remembered id resolving, so ordering is
     /// irrelevant, and a single-layer type was refused identically, so the two-layer compound
     /// structure is not it either. Those arms are deleted rather than kept — a probe that still asks
-    /// an answered question is the scaffolding this file's deletion trigger exists to prevent.
+    /// an answered question is the scaffolding this command's deletion trigger exists to prevent.
     /// </para>
     /// <para>
     /// What is printed below is the <em>evidence</em> for that finding, which is cheap and worth

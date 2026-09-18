@@ -41,6 +41,12 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
+    private static double MetresToInternal(double metres)
+        => UnitUtils.ConvertToInternalUnits(metres, UnitTypeId.Meters);
+
+    private static double InternalToMetres(double internalUnits)
+        => UnitUtils.ConvertFromInternalUnits(internalUnits, UnitTypeId.Meters);
+
     /// <summary>
     /// Opens a transaction that will not stop for a dialog.
     /// </summary>
@@ -162,10 +168,4 @@ internal sealed partial class RevitBundleImporter
 
         return (mine ?? grounds.FirstOrDefault())?.Id ?? ElementId.InvalidElementId;
     }
-
-    private static double MetresToInternal(double metres)
-        => UnitUtils.ConvertToInternalUnits(metres, UnitTypeId.Meters);
-
-    private static double InternalToMetres(double internalUnits)
-        => UnitUtils.ConvertFromInternalUnits(internalUnits, UnitTypeId.Meters);
 }
