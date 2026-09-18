@@ -137,10 +137,10 @@ between them and **Cancel** is honoured at the next boundary. Whatever committed
 stays, and importing the same bundle again reuses the terrain, the site model link, the subdivisions
 and the trees it finds and creates only what is missing — except the road centrelines, which carry no
 stamp yet and are created a second time. The log's last line names the steps that completed and those
-that never ran. What no window can show is the inside of one commit:
-the terrain, the subdivisions and the drape's retype are one commit each, Revit reports "not
-responding" while one runs, and a Cancel pressed then takes effect when it finishes. Closing the
-window while it runs is a cancel.
+that never ran. What no window can show is the inside of one commit: the terrain and the
+subdivisions are one commit each — and so is the drape's retype, which only a ground built before the
+terrain took the imagery type still needs — Revit reports "not responding" while one runs, and a
+Cancel pressed then takes effect when it finishes. Closing the window while it runs is a cancel.
 
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
 runs unattended from a Revit journal or a tester script. An unattended run raises no dialog and opens
