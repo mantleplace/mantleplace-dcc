@@ -206,8 +206,8 @@ follow.
   `View.AddFilter` compile and are unexecuted. The sign of a longitude is settled without Revit:
   Revit's own `en-US/SiteAndWeatherStationName.txt` lists Boston at `-71.0335`, so a published
   west-negative longitude goes in as it is. Not settled: that Revit lets a 3D view and a view
-  filter share the name `SiteContext` gives both, and that the time zone Revit picks for itself
-  when the coordinates change is the site's.
+  filter share the name `SiteContext` gives both, and that writing `SiteLocation.TimeZone` back
+  after the coordinates undoes the zone Revit recalculates from them.
 
 ## Where knowledge lives
 

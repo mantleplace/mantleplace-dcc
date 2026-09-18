@@ -82,8 +82,9 @@ Revit licence.
   publishes no usable origin (`HPS-33`);
 - sets the project's **site location** — Manage ▸ Location, which is what places the sun in every
   view and renderer — from the latitude and longitude in `hosts.revit.georeference.origin`, verbatim,
-  and from nowhere else. The bundle publishes no time zone and the plugin sets none; Revit adjusts
-  the project's zone by itself when the coordinates change, and the log says which zone it chose;
+  and from nowhere else. The bundle publishes no time zone, so the project keeps the one it had:
+  Revit recalculates the zone from the longitude whenever the coordinates change, and the import puts
+  the old one back, because a zone derived from longitude is derivation. The log names the zone kept;
 - makes one 3D view, **Mantle Place Site Context**, and one view filter of the same name that
   matches every element whose Comments begin with `Mantle Place` — everything an import stamped —
   across every model category that has Comments. The filter goes on the new view with no override,

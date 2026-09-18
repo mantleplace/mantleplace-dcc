@@ -22,6 +22,7 @@ public enum NameHolder
 /// <summary>What the site context step does with one of its two elements.</summary>
 public enum NamedElementAction
 {
+    /// <summary>Make it, under its name.</summary>
     Create,
 
     /// <summary>Use the one found by name, as the curator left it.</summary>
@@ -75,8 +76,9 @@ public static class SiteContext
 
     /// <summary>The view filter's name, which is how a re-import finds it.</summary>
     /// <remarks>
-    /// The view's name as well, on purpose: they are one feature to the curator, and Revit keeps views
-    /// and filters in separate namespaces, so the two never collide with each other.
+    /// The view's name as well, on purpose: they are one feature to the curator. That Revit lets a
+    /// view and a filter share a name is unverified until a real import proves it — Revit refuses a
+    /// duplicate "filter element name", which reads as a filter-only namespace.
     /// </remarks>
     public const string FilterName = "Mantle Place Site Context";
 

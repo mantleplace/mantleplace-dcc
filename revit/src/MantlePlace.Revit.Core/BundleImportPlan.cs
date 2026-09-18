@@ -285,9 +285,8 @@ public sealed class SurveyPointPlacement
 /// </para>
 /// <para>
 /// No time zone. The manifest publishes none, and deriving one from longitude is derivation. Revit
-/// adjusts the project's time zone itself when a latitude or longitude is set — that is Revit's
-/// behaviour, documented on both setters, not this host's; the shim reports the zone Revit chose so
-/// the curator can check it.
+/// derives one anyway whenever a latitude or longitude is set — documented on both setters — so the
+/// shim reads the project's zone first and writes it back after, and the zone stays as it was.
 /// </para>
 /// </remarks>
 public sealed class SiteLocationPlacement

@@ -13,9 +13,9 @@ internal sealed partial class RevitBundleImporter
     /// radians Revit takes and checked they are on the globe (HPS-33).
     /// </summary>
     /// <remarks>
-    /// The time zone is not set. Revit adjusts it by itself when either setter runs — documented on
-    /// both — so the zone the project ends with is Revit's choice, and the log says what it chose
-    /// rather than leaving the curator to assume the plugin decided it.
+    /// The time zone is left as it was. Revit recalculates it from the new coordinates when either
+    /// setter runs — documented on both — and a zone derived from longitude is derivation whoever
+    /// does it, so the project's own is read first and written back after.
     /// </remarks>
     private void SetSiteLocation(ImportStep step)
     {
@@ -27,9 +27,10 @@ internal sealed partial class RevitBundleImporter
         ImportFailureSwallower swallower = new("Setting the site location");
         using Transaction transaction = BeginTransaction("Mantle Place: site location", swallower);
         SiteLocation site = _document.SiteLocation;
+        double timeZone = site.TimeZone;
         site.Latitude = placement.LatitudeRadians;
         site.Longitude = placement.LongitudeRadians;
-        double timeZone = site.TimeZone;
+        site.TimeZone = timeZone;
         if (!CommitAndReport(transaction, swallower))
         {
             return;
@@ -38,8 +39,8 @@ internal sealed partial class RevitBundleImporter
         Say(string.Format(
             CultureInfo.InvariantCulture,
             "Set the site location from the manifest: latitude {0}°, longitude {1}°. The bundle publishes "
-            + "no time zone, and Revit set the project's to UTC{2:+0.##;-0.##;+0} from these coordinates "
-            + "itself — check it under Manage ▸ Location before a sun study that depends on the clock.",
+            + "no time zone, so the project keeps its own, UTC{2:+0.##;-0.##;+0} — set the site's under "
+            + "Manage ▸ Location before a sun study that depends on the clock.",
             placement.LatitudeDeg,
             placement.LongitudeDeg,
             timeZone));
