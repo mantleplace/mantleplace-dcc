@@ -1,0 +1,40 @@
+{
+  "version": "1.0.0",
+  "vector": {
+    "present": true,
+    "layers": [
+      {
+        "name": "pier_decks",
+        "feature_count": 3,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/PierDecks.geojson",
+            "sha256": "8888888888888888888888888888888888888888888888888888888888888888"
+          }
+        ],
+        "surface": "timber"
+      },
+      {
+        "name": "road_splines",
+        "derived_from": "road",
+        "feature_count": 12,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/RoadSplines.geojson",
+            "sha256": "9999999999999999999999999999999999999999999999999999999999999999"
+          }
+        ]
+      }
+    ]
+  },
+  "job_id": "vl",
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
+    }
+  }
+}

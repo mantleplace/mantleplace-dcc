@@ -185,6 +185,14 @@
     "manifest.treePointsRowCount": [
       "unreal"
     ],
+    "manifest.vectorLayerUnknownName": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.vectorLayerVocabulary": [
+      "revit",
+      "unreal"
+    ],
     "projection.lonLatToUtm": [
       "revit",
       "unreal"

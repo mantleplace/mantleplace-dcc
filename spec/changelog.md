@@ -19,6 +19,24 @@ history, not contract.
 
 ## Semver era
 
+### Within 1.0.1 — the vector layer vocabulary, stated (2026-09-18)
+
+No schema version was published, and nothing a reader parses changed. The six names a
+`vector.layers` entry can carry, and what a layer's presence or absence means, are now written down
+in [format §6.3](format.md#63-vector-layers-by-name). The corpus gained
+`manifest.vectorLayerVocabulary`, which names every layer, and `manifest.vectorLayerUnknownName`,
+which a reader must accept while ignoring the name it does not know.
+
+The vocabulary lives in the prose and the corpus, not in the schema. The schema has always typed a
+layer's `name` as a free string. Closing it with an enum would narrow what validates, and under
+[compatibility](compatibility.md) §2 a narrowing is a MAJOR change. It would also turn every future
+layer into another release.
+
+One producer behaviour changed to make the absence rule true. A layer used to be skipped silently
+when reading it failed, while the rest of the set shipped, so a failed read looked like an empty
+area. Now any failed base layer withholds the whole set, and the packaging block reports it as a
+failure. That changed only when a set ships, not its shape, so this is not a version.
+
 ### 1.0.1 — the editorial patch (published and frozen 2026-08-24)
 
 Nothing a reader parses changed. 1.0.0 was published *ahead* of the producer cutover, so its

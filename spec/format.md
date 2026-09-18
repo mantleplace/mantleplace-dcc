@@ -216,6 +216,45 @@ importable", so that a caller can still identify the bundle it is holding.
 Two identifiers appear in the manifest and are **not interchangeable**: the per-rebuild job identity
 and the order identity. Only the order identity joins a bundle to its vault entry.
 
+### 6.3 Vector layers, by name
+
+The `vector` block describes the vector set: one entry in `vector.layers` per layer, each carrying a
+`name` and one row per delivered format. A consumer finds a layer by its `name` and then a file by
+its format row. It MUST NOT guess a layer from a file name (§3). It also MUST NOT fall back to a
+format it cannot read when the one it wants is missing. The corpus pins name-and-format selection
+with a decoy layer beside the one being selected.
+
+The schema types `name` as a plain string on purpose. **This table states the vocabulary**, and
+the corpus case `manifest.vectorLayerVocabulary` carries every name in it:
+
+| `name` | What it holds | Where it comes from |
+| --- | --- | --- |
+| `building` | Building footprints, with a height where the source has one | Overture buildings |
+| `road` | Road centrelines, with class and name | Overture transportation |
+| `water` | Water as the source maps it: streams as centrelines, bodies as polygons | Overture base |
+| `land_use` | Land-use areas, with class and subtype | Overture base |
+| `land_cover` | Physical ground cover, with a subtype such as forest | Overture base |
+| `road_splines` | The `road` centrelines draped onto the delivered elevation, carrying Z, an estimated width, class and name | Derived from `road`, and marked with `derived_from` |
+
+Every layer's coordinates are geographic, so §6's one projection exception applies to all of them.
+
+What presence and absence mean:
+
+- **A base layer is present exactly when the AOI holds at least one of its features after the clip
+  to the AOI.** An absent base layer means *zero features*, never a failure. The producer does not
+  ship a vector set with a layer it failed to read: when any base layer fails, the whole set is
+  withheld. The `vector` block then says `present: false` and lists no layers, and `packaging`
+  says why (§6.1).
+- **A layer is never emitted empty.** No entry carries a feature count of zero, and a consumer MUST
+  NOT expect a placeholder entry for a layer the AOI does not have.
+- **`road_splines` is best-effort.** It can be absent while `road` is present, and its absence says
+  nothing about whether the AOI has roads. A consumer that wants roads and finds no splines SHOULD
+  say so rather than report an AOI without roads.
+- ⛔ **A consumer MUST ignore a layer name it does not recognise.** The vocabulary grows additively.
+  A new name is a change to this table and to the corpus, not to the schema. A consumer that
+  refuses a bundle for carrying an unfamiliar layer turns every new layer into a breaking release.
+  The corpus case `manifest.vectorLayerUnknownName` pins this.
+
 ## 7. The sidecar manifest
 
 The vault publishes a versioned copy of the manifest beside the zip, so that a listing can show a
