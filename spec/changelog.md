@@ -33,9 +33,9 @@ layer's `name` as a free string. Closing it with an enum would narrow what valid
 layer into another release.
 
 One producer behaviour changed to make the absence rule true. A layer used to be skipped silently
-when reading it failed, while the rest of the set shipped, so a failed read looked like an empty
-area. Now any failed base layer withholds the whole set, and the packaging block reports it as a
-failure. That changed only when a set ships, not its shape, so this is not a version.
+when reading or writing it failed, while the rest of the set shipped, so a failure looked like an
+empty area. Now any failed base layer withholds the whole set, and the packaging block reports it
+as a failure. That changed only when a set ships, not its shape, so this is not a version.
 
 ### 1.0.1 — the editorial patch (published and frozen 2026-08-24)
 

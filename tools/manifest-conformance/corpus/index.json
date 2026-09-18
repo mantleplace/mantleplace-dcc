@@ -743,10 +743,11 @@
       "group": "manifest",
       "file": "manifest/vector-layer-vocabulary.json",
       "expect": "accept",
-      "reason": "Every name `vector.layers` can carry, in the producer's order, each with its own digest. The schema types a layer name as a free string, so this case is where the vocabulary is pinned (spec/format.md section 6.3): a host that finds a layer by name is finding it in this file. The distinct digests mean a host that picked the wrong layer reports the wrong sha, not merely a path.",
+      "reason": "Every name `vector.layers` can carry, in the producer's order, each with its own digest. The schema types a layer name as a free string, so this file is the vocabulary's executable form (spec/format.md section 6.3). Today every host asserts one layer here, road_splines, and selecting it among all six proves a reader does not stop at the first layer or match a prefix. A host that starts reading another layer by name asserts it against this file by adding that layer's expectation keys here. The distinct digests mean a host that picked the wrong layer reports the wrong sha, not merely a path.",
       "manifestVersion": "1.0.0",
       "expectations": {
         "jobId": "vl",
+        "hasRoadSplines": true,
         "roadSplinesPath": "Vector/RoadSplines.geojson",
         "roadSplinesSha256": "7777777777777777777777777777777777777777777777777777777777777777"
       }

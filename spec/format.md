@@ -221,32 +221,35 @@ and the order identity. Only the order identity joins a bundle to its vault entr
 The `vector` block describes the vector set: one entry in `vector.layers` per layer, each carrying a
 `name` and one row per delivered format. A consumer finds a layer by its `name` and then a file by
 its format row. It MUST NOT guess a layer from a file name (§3). It also MUST NOT fall back to a
-format it cannot read when the one it wants is missing. The corpus pins name-and-format selection
-with a decoy layer beside the one being selected.
+format it cannot read when the one it wants is missing. The corpus pins both:
+`manifest.roadSplinesGeojsonWins` puts a decoy layer beside the one being selected, and
+`manifest.roadSplinesGpkgOnly` offers only a format the reader does not take.
 
 The schema types `name` as a plain string on purpose. **This table states the vocabulary**, and
 the corpus case `manifest.vectorLayerVocabulary` carries every name in it:
 
-| `name` | What it holds | Where it comes from |
-| --- | --- | --- |
-| `building` | Building footprints, with a height where the source has one | Overture buildings |
-| `road` | Road centrelines, with class and name | Overture transportation |
-| `water` | Water as the source maps it: streams as centrelines, bodies as polygons | Overture base |
-| `land_use` | Land-use areas, with class and subtype | Overture base |
-| `land_cover` | Physical ground cover, with a subtype such as forest | Overture base |
-| `road_splines` | The `road` centrelines draped onto the delivered elevation, carrying Z, an estimated width, class and name | Derived from `road`, and marked with `derived_from` |
+| `name` | What it holds | Geometry | Where it comes from |
+| --- | --- | --- | --- |
+| `building` | Building footprints, with subtype and a height where the source has one | Polygons | Overture buildings |
+| `road` | Road centrelines (road segments only, not rail or paths), with class, subclass and name | Lines | Overture transportation |
+| `water` | Water as the source maps it: streams as centrelines, water bodies as polygons | Lines, polygons and points | Overture base |
+| `land_use` | Land-use areas, with class and subtype | Mostly polygons; lines and points occur | Overture base |
+| `land_cover` | Physical ground cover, with a subtype such as forest | Polygons | Overture base |
+| `road_splines` | The `road` centrelines draped onto the delivered elevation, carrying an estimated width, class and name | Lines with Z | Derived from `road`, and marked with `derived_from` |
 
-Every layer's coordinates are geographic, so §6's one projection exception applies to all of them.
+A layer's geometry can mix the families its row names, so a reader keys on each feature's own
+geometry type rather than on the layer. Every layer's coordinates are geographic, so §6's one
+projection exception applies to all of them.
 
 What presence and absence mean:
 
 - **A base layer is present exactly when the AOI holds at least one of its features after the clip
   to the AOI.** An absent base layer means *zero features*, never a failure. The producer does not
-  ship a vector set with a layer it failed to read: when any base layer fails, the whole set is
-  withheld. The `vector` block then says `present: false` and lists no layers, and `packaging`
+  ship a vector set with a layer it failed to read or write: when any base layer fails, the whole
+  set is withheld. The `vector` block then says `present: false` and lists no layers, and `packaging`
   says why (§6.1).
-- **A layer is never emitted empty.** No entry carries a feature count of zero, and a consumer MUST
-  NOT expect a placeholder entry for a layer the AOI does not have.
+- **A layer is never emitted empty.** The producer writes no entry with a feature count of zero,
+  and no placeholder entry for a layer the AOI does not have.
 - **`road_splines` is best-effort.** It can be absent while `road` is present, and its absence says
   nothing about whether the AOI has roads. A consumer that wants roads and finds no splines SHOULD
   say so rather than report an AOI without roads.
