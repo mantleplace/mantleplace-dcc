@@ -192,9 +192,12 @@ follow.
 
 - **The staged import joined that set.** One step, or one chunk of trees, runs per
   `ExternalEvent` raise, and the handler posts the next raise at `DispatcherPriority.Background` so
-  the window repaints and a Cancel click lands first. Whether Revit services a raise posted from
-  inside its own handler promptly, whether the modeless window actually repaints between slices, and
-  whether a Comments write on a `DirectShape` holds are compiled and unexecuted. What is settled
+  the window repaints and a Cancel click lands first. Revit does service a raise posted from inside
+  its own handler promptly: the harness below pressed Import in the real window in 2025, 2026 and
+  2027 and every slice ran with no mouse or keyboard input, the trees' ~47 chunks in under a minute
+  each time, and in 2026 with Revit minimized for the whole tree step. Whether the modeless window
+  actually repaints between slices, and whether a Comments write on a `DirectShape` holds, are
+  compiled and unexecuted. What is settled
   headlessly is everything about *when*: `StagedImport` decides the slice order, where a cancel lands
   and what a failure costs, and `ImportChunking`/`TreeIdentity` decide the chunks and the resume.
   Never `yield` inside an open transaction — a chunked step commits, then yields — and never leave
@@ -212,16 +215,19 @@ follow.
   settled without Revit: Revit's own `en-US/SiteAndWeatherStationName.txt` lists Boston at
   `-71.0335`, so a published west-negative longitude goes in as it is. Not settled: that writing
   `SiteLocation.TimeZone` back after the coordinates undoes the zone Revit recalculates from them.
-- **The attribution step joined that set.** `ViewDrafting.Create`, `TextNote.Create` and a
-  `TextNote.Text` write, and ExtensibleStorage — `SchemaBuilder` with `AccessLevel.Vendor` write
-  access, `Entity`, `ProjectInformation.SetEntity`/`GetEntity` — compile and have not been executed
-  inside Revit. Two of their failure modes are settled headlessly: `ProvenanceStorage.VendorId` is
-  asserted equal to the `.addin` file's `VendorId` (a vendor-write schema refuses any other add-in),
-  and every schema and field name is checked against the identifier rule Revit enforces. What is not
-  settled is whether the record reads back after a save and reopen in each of 2025, 2026 and 2027 —
-  the import log says `This project already records an import of order …` when it does. ⛔ **The
-  schema GUID is permanent:** changing a field under `ProvenanceStorage.SchemaGuid` breaks every
-  project that already holds the old definition, so a field change is a new GUID
+- **The attribution step has left that set.** `ViewDrafting.Create`, `TextNote.Create`, and
+  ExtensibleStorage — `SchemaBuilder` with `AccessLevel.Vendor` write access, `Entity`,
+  `ProjectInformation.SetEntity`/`GetEntity` — have run in Revit 2025, 2026 and 2027 through the
+  harness described under the tree family below: an import through the real import window, a save,
+  and a reopen in a fresh Revit process read the record back with every field, found the view with
+  every source line, and a second import said `This project already records an import of order …`
+  and kept the note. A `TextNote.Text` write (the rewrite path) has still not run: it needs a
+  second build of the same order. Two failure modes are also settled headlessly:
+  `ProvenanceStorage.VendorId` is asserted equal to the `.addin` file's `VendorId` (a vendor-write
+  schema refuses any other add-in), and every schema and field name is checked against the
+  identifier rule Revit enforces. ⛔ **The schema GUID is permanent:** changing a field under
+  `ProvenanceStorage.SchemaGuid` breaks every project that already holds the old definition, so a
+  field change is a new GUID
   ([ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md)).
 - **The context buildings joined that set.** The step converts the site model with
   `Application.OpenIFCDocument`, finds each building in the result by `BuiltInParameter.IFC_GUID`,
