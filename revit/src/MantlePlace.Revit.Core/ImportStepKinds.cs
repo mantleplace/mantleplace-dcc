@@ -51,7 +51,12 @@ public static class ImportStepKinds
         // Revit keeps no reference to the file any of them was read out of.
         ImportStepKind.RoadCentrelines => ExtractionLifetime.Transient,
         ImportStepKind.SiteBoundaries => ExtractionLifetime.Transient,
+        ImportStepKind.LandCover => ExtractionLifetime.Transient,
         ImportStepKind.Vegetation => ExtractionLifetime.Transient,
+
+        // The same file as LinkSiteIfc, and the opposite answer: the buildings are copied out of the
+        // site model into elements of the project's own, and nothing links to the IFC afterwards.
+        ImportStepKind.ContextBuildings => ExtractionLifetime.Transient,
 
         // Stated rather than left to the default arm below, because this is the first kind whose
         // answer is not obvious from what it builds. The drape becomes a material — geometry-free,
@@ -62,4 +67,20 @@ public static class ImportStepKinds
 
         _ => ExtractionLifetime.Retained,
     };
+
+    /// <summary>
+    /// Whether a step of this kind puts something from the bundle into the document, as opposed to
+    /// placing the project, crediting its sources, or organising what other steps put there.
+    /// </summary>
+    /// <remarks>
+    /// A plan whose steps are all on the <c>false</c> side is not an import: it would place the
+    /// project, write a drafting view of credits and name a view over a model with nothing in it, and
+    /// report "imported". The drape is content — it builds no geometry, but it writes the bundle's
+    /// photograph into a material.
+    /// </remarks>
+    public static bool ImportsContent(ImportStepKind kind) => kind is not (
+        ImportStepKind.SetSharedCoordinates
+        or ImportStepKind.SetSiteLocation
+        or ImportStepKind.AttributionAndProvenance
+        or ImportStepKind.SiteContextView);
 }

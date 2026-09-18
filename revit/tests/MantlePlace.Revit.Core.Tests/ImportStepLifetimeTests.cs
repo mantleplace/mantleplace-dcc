@@ -30,10 +30,16 @@ internal static class ImportStepLifetimeTests
                 true,
                 "IFC lifetime"));
 
+        run.Case("copied context buildings are transient — Revit keeps the elements, not the IFC", () =>
+            run.Equal(
+                ImportStepKinds.LifetimeOf(ImportStepKind.ContextBuildings) == ExtractionLifetime.Transient,
+                true,
+                "context buildings lifetime"));
+
         run.Case("the parity layers are transient — Revit builds elements, it stores no path", () =>
         {
             foreach (ImportStepKind kind in (ImportStepKind[])
-                [ImportStepKind.RoadCentrelines, ImportStepKind.SiteBoundaries, ImportStepKind.Vegetation])
+                [ImportStepKind.RoadCentrelines, ImportStepKind.SiteBoundaries, ImportStepKind.LandCover, ImportStepKind.Vegetation])
             {
                 run.Equal(
                     ImportStepKinds.LifetimeOf(kind) == ExtractionLifetime.Transient,

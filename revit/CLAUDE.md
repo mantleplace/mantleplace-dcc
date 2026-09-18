@@ -45,8 +45,8 @@ The ones this tree already turns on:
 | `HPS-14` … `17`       | refresh token via DPAPI, per-OS-user; access token memory-only; no store means memory-only auth, never a less-safe file.                                      |
 | `HPS-18` … `25`, `48` | list → materialize → poll → **re-list** → presign → download; explicit token list, never a scope keyword; one error-body precedence for auth and vault alike. |
 | `HPS-26` … `30`, `44` | write to `.part`, verify, rename; null sha is unknown not absent; eviction only on request.                                                                   |
-| `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers behind roads and site boundaries. Nothing else here projects.                        |
-| `HPS-51`              | signing in and out, the vault, the local import, the import window and the about surface take the standard's words. The casing is this host's; the words are not. |
+| `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers behind roads, site boundaries and land cover. Nothing else here projects.            |
+| `HPS-51`              | signing in and out, the vault, the local import, the import window and its checklist, and the about surface take the standard's words. The casing is this host's; the words are not. |
 
 ## Layout and the split that matters
 
@@ -116,8 +116,9 @@ takes the host's own noun, *toposolid* and never *toposurface*. Every button als
 `ToolTip`: without one Revit shows the `LongDescription` on hover, and that is a paragraph.
 
 **Which words a shared action takes is not this file's to decide** (`HPS-51`): signing in and out,
-the signed-in state and the wait either side of it, the vault, importing a bundle from disk and the
-about surface are said the same way in every host, and the standard's table is where they are said.
+the signed-in state and the wait either side of it, the vault, importing a bundle from disk, the
+import window with its checklist and step states, and the about surface are said the same way in
+every host, and the standard's table is where they are said.
 Title Case is the part that is Revit's, and a host construct keeps its own noun — *toposolid*.
 Changing one of those labels makes the other host wrong, so the standard moves first and both hosts
 follow.
@@ -198,7 +199,38 @@ follow.
   and what a failure costs, and `ImportChunking`/`TreeIdentity` decide the chunks and the resume.
   Never `yield` inside an open transaction — a chunked step commits, then yields — and never leave
   the session-wide `FailuresProcessing` hook attached across a slice boundary: between slices the
-  curator is editing their own model (`RevitBundleImporter.InSlice`).
+  curator is editing their own model (`RevitBundleImporter.InSlice`). The window opens on a
+  checklist and raises nothing until Import is pressed; what each box shows, and what a plan
+  without a layer looks like, is `ImportChecklist` and the planner's choice argument, both headless.
+- **The site location and the context view joined that set.** `SiteLocation.Latitude`/`Longitude`,
+  `View3D.CreateIsometric`, `ParameterFilterElement.Create` over every model category that
+  `ParameterFilterUtilities.GetFilterableParametersInCommon` says has Comments, the 2023+
+  `CreateBeginsWithRule` overload (case-insensitive — the case-sensitive one is deprecated) and
+  `View.AddFilter` compile and are unexecuted. The sign of a longitude is settled without Revit:
+  Revit's own `en-US/SiteAndWeatherStationName.txt` lists Boston at `-71.0335`, so a published
+  west-negative longitude goes in as it is. Not settled: that Revit lets a 3D view and a view
+  filter share the name `SiteContext` gives both, and that writing `SiteLocation.TimeZone` back
+  after the coordinates undoes the zone Revit recalculates from them.
+- **The attribution step joined that set.** `ViewDrafting.Create`, `TextNote.Create` and a
+  `TextNote.Text` write, and ExtensibleStorage — `SchemaBuilder` with `AccessLevel.Vendor` write
+  access, `Entity`, `ProjectInformation.SetEntity`/`GetEntity` — compile and have not been executed
+  inside Revit. Two of their failure modes are settled headlessly: `ProvenanceStorage.VendorId` is
+  asserted equal to the `.addin` file's `VendorId` (a vendor-write schema refuses any other add-in),
+  and every schema and field name is checked against the identifier rule Revit enforces. What is not
+  settled is whether the record reads back after a save and reopen in each of 2025, 2026 and 2027 —
+  the import log says `This project already records an import of order …` when it does. ⛔ **The
+  schema GUID is permanent:** changing a field under `ProvenanceStorage.SchemaGuid` breaks every
+  project that already holds the old definition, so a field change is a new GUID
+  ([ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md)).
+- **The context buildings joined that set.** The step converts the site model with
+  `Application.OpenIFCDocument`, finds each building in the result by `BuiltInParameter.IFC_GUID`,
+  clones its solids with `SolidUtils.Clone` and gives them to a Generic Model `DirectShape`. The
+  converted document is closed in the slice that opened it, before the first chunk: a document held
+  across slices is closed only when a step ends through `StagedImport`, and an import abandoned from
+  the event handler does not. All of it compiles; none of it has run inside Revit. The part most
+  likely to be wrong is the GlobalId: if Revit's import does not record it where the step looks, the
+  step says so in one line and copies nothing. Which elements are buildings is not in that set —
+  `SiteModelReader` reads it from the IFC's text, headlessly ([ADR 0012](../docs/adr/0012-context-buildings-come-from-the-site-model.md)).
 
 - **The tree family's calls left that set in Revit 2025 before they merged**, through a harness that
   compiles this tree's sources into one differently named assembly and loads it into a Revit of its

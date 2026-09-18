@@ -15,14 +15,19 @@ internal static class SlowStepNoticeTests
         ImportStepKind.ToposurfaceFromSurfaceTin,
         ImportStepKind.ToposurfaceFromSurfaceDxf,
         ImportStepKind.LinkSiteIfc,
+        ImportStepKind.ContextBuildings,
         ImportStepKind.SetSharedCoordinates,
+        ImportStepKind.SetSiteLocation,
         ImportStepKind.RoadCentrelines,
         ImportStepKind.Vegetation,
+        ImportStepKind.SiteContextView,
+        ImportStepKind.AttributionAndProvenance,
     ];
 
     private static readonly ImportStepKind[] SlowKinds =
     [
         ImportStepKind.SiteBoundaries,
+        ImportStepKind.LandCover,
         ImportStepKind.ImageryDrape,
     ];
 
@@ -49,6 +54,17 @@ internal static class SlowStepNoticeTests
             string? notice = SlowStepNotice.For(ImportStepKind.ImageryDrape, 80_372, 1);
             run.True(notice is not null, "the drape is announced");
             run.Contains(notice, "80,372", "it names the terrain's point count");
+            run.Contains(notice, "not responding", "it says what Revit is about to look like");
+        });
+
+        run.Case("the land-cover step announces itself — it is the same commit as the boundaries'", () =>
+        {
+            // Cutting a subdivision costs the same whichever layer published its polygon: the commit
+            // rebuilds the whole terrain's element relations either way.
+            string? notice = SlowStepNotice.For(ImportStepKind.LandCover, 80_372, 10);
+            run.True(notice is not null, "announced");
+            run.Contains(notice, "land cover", "it names the land cover, not the boundaries");
+            run.Contains(notice, "10", "it names how many subdivisions are coming");
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
         });
 

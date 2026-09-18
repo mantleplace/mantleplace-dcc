@@ -22,10 +22,37 @@ public enum ImportStepKind
     ToposurfaceFromSurfaceDxf,
 
     /// <summary>Insert ▸ Link IFC — kept as a coordinated reference, not opened as a model.</summary>
+    /// <remarks>
+    /// Its checklist row starts unchecked (<see cref="ImportLayers.OnByDefault"/>):
+    /// <see cref="ContextBuildings"/> puts the same buildings in the project as elements, and both at
+    /// once shows each building twice.
+    /// </remarks>
     LinkSiteIfc,
+
+    /// <summary>
+    /// Every building in the site model copied into the project as its own Generic Model element,
+    /// the context terrain left out.
+    /// </summary>
+    /// <remarks>
+    /// The site model's own extrusions, reused rather than rebuilt: it carries one per building, where
+    /// the building mesh is one merged node and the footprints would have to be extruded here — see
+    /// <c>docs/adr/0012-context-buildings-come-from-the-site-model.md</c>.
+    /// </remarks>
+    ContextBuildings,
 
     /// <summary>Publish the pre-derived survey point / shared coordinates.</summary>
     SetSharedCoordinates,
+
+    /// <summary>
+    /// Manage ▸ Location: the project's latitude and longitude, which is what places the sun.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="SetSharedCoordinates"/> because the two read different fields and
+    /// fail for different reasons: the survey point is a projected pair that may fall back to
+    /// <c>delivery.local_origin</c>, and the site location is the own block's lat/lon and nothing
+    /// else.
+    /// </remarks>
+    SetSiteLocation,
 
     /// <summary>
     /// Road centrelines from the <c>road_splines</c> vector layer — Forma's "Roads" row.
@@ -38,14 +65,36 @@ public enum ImportStepKind
     SiteBoundaries,
 
     /// <summary>
+    /// Ground cover from the <c>land_cover</c> vector layer, cut as subdivisions the way the
+    /// <see cref="SiteBoundaries"/> are. A different Overture layer from <c>land_use</c>, not a
+    /// second name for it: this one carries the physical subtype — forest and its like.
+    /// </summary>
+    LandCover,
+
+    /// <summary>
     /// Trees from the tree-points file, with real height and crown — Forma's "Vegetation" row.
     /// </summary>
     Vegetation,
 
     /// <summary>
+    /// The "Mantle Place Site Context" 3D view, and the view filter that finds every element an
+    /// import stamped (<see cref="SiteContext"/>).
+    /// </summary>
+    SiteContextView,
+
+    /// <summary>
     /// The satellite imagery draped on the terrain as a material texture — Forma's last row.
     /// </summary>
     ImageryDrape,
+
+    /// <summary>
+    /// The "Mantle Place Attribution" drafting view, and the provenance record on Project
+    /// Information — which bundle this project came from, and whose data is in it.
+    /// </summary>
+    /// <remarks>
+    /// Declared last so every kind before it keeps its number; its place in a plan is the planner's.
+    /// </remarks>
+    AttributionAndProvenance,
 }
 
 /// <summary>Which toposolid type the terrain step builds the ground on.</summary>
@@ -122,6 +171,27 @@ public enum SkipReasonCode
     /// failure a curator has no way to notice.
     /// </remarks>
     ExtentNotCorroborated,
+
+    /// <summary>
+    /// The host's own <c>georeference.origin</c> publishes no latitude and longitude pair.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="NoSurveyPoint"/>: that one is the projected pair, and a bundle can
+    /// carry either without the other.
+    /// </remarks>
+    NoGeographicOrigin,
+
+    /// <summary>
+    /// The published latitude or longitude is off the globe, so it was not handed to Revit to throw
+    /// on or to wrap.
+    /// </summary>
+    GeographicOriginOutOfRange,
+    /// <summary>The bundle carries this layer and the curator left it out of the import window's checklist.</summary>
+    /// <remarks>
+    /// The one skip that is not about the bundle. A support triage rule reading a log has to tell "the
+    /// trees did not come in" apart from "the trees were not wanted", and only this code does.
+    /// </remarks>
+    LeftOutByChoice,
 }
 
 /// <summary>
@@ -233,6 +303,34 @@ public sealed class SurveyPointPlacement
     public double ElevationM => 0.0;
 }
 
+/// <summary>
+/// The project's latitude and longitude, from <c>hosts.revit.georeference.origin</c> and nothing
+/// else (<c>HPS-33</c>).
+/// </summary>
+/// <remarks>
+/// <para>
+/// Degrees as published, radians as Revit's <c>SiteLocation</c> takes them. The conversion is a unit
+/// conversion and lives here with the check that the pair is on the globe, so the shim does no
+/// arithmetic of its own. The sign goes through as published: Revit's own site database lists Boston
+/// at -71.0335, west negative, which is the convention the manifest's lon/lat pair is in.
+/// </para>
+/// <para>
+/// No time zone. The manifest publishes none, and deriving one from longitude is derivation. Revit
+/// derives one anyway whenever a latitude or longitude is set — documented on both setters — so the
+/// shim reads the project's zone first and writes it back after, and the zone stays as it was.
+/// </para>
+/// </remarks>
+public sealed class SiteLocationPlacement
+{
+    public required double LatitudeDeg { get; init; }
+
+    public required double LongitudeDeg { get; init; }
+
+    public double LatitudeRadians => LatitudeDeg * Math.PI / 180.0;
+
+    public double LongitudeRadians => LongitudeDeg * Math.PI / 180.0;
+}
+
 /// <summary>One resolved action, with its bundle entry already checked to exist.</summary>
 public sealed class ImportStep
 {
@@ -256,6 +354,9 @@ public sealed class ImportStep
 
     /// <summary>Populated only for <see cref="ImportStepKind.SetSharedCoordinates"/>.</summary>
     public SurveyPointPlacement? SurveyPoint { get; init; }
+
+    /// <summary>Populated only for <see cref="ImportStepKind.SetSiteLocation"/>.</summary>
+    public SiteLocationPlacement? SiteLocation { get; init; }
 
     /// <summary>
     /// The frame this step's geometry is placed in, for the kinds whose artifact does not arrive
@@ -302,6 +403,12 @@ public sealed class ImportStep
     /// photograph to carry would lay a blank layer over the ground.
     /// </remarks>
     public TerrainToposolidType ToposolidType { get; init; } = TerrainToposolidType.Project;
+
+    /// <summary>
+    /// Populated only for <see cref="ImportStepKind.AttributionAndProvenance"/>: what the attribution view says
+    /// and what the provenance record stores, both copied from the manifest.
+    /// </summary>
+    public ProjectProvenance? Provenance { get; init; }
 }
 
 /// <summary>

@@ -288,18 +288,29 @@ internal sealed partial class RevitBundleImporter
     }
 
     /// <summary>
-    /// The Comments of every element that might be a tree: the Planting family instances and every
-    /// DirectShape. Whatever is not a tree stamp is ignored by <see cref="TreeIdentity"/>, so the
-    /// DirectShapes carry no category filter to get wrong when a Revit without a Planting DirectShape
-    /// category filed the fallback trees under Generic Model.
+    /// The Comments of every element that might be a tree: the Planting family instances, and every
+    /// DirectShape for the trees the fallback built.
     /// </summary>
     private List<string?> ExistingTreeComments()
     {
-        using FilteredElementCollector shapes = new(_document);
         using FilteredElementCollector instances = new(_document);
-        return [.. shapes
+        return [.. ExistingDirectShapeComments().Concat(instances
+            .OfClass(typeof(FamilyInstance))
+            .OfCategory(BuiltInCategory.OST_Planting)
+            .Select(element => element.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString()))];
+    }
+
+    /// <summary>
+    /// The Comments of every DirectShape in the project. Whatever is not a tree stamp is ignored by
+    /// <see cref="TreeIdentity"/>, and whatever is not a road stamp by <see cref="RoadIdentity"/>, so
+    /// there is no category filter here to get wrong when a Revit without a Planting or Roads
+    /// DirectShape category files them under Generic Model.
+    /// </summary>
+    private List<string?> ExistingDirectShapeComments()
+    {
+        using FilteredElementCollector collector = new(_document);
+        return [.. collector
             .OfClass(typeof(DirectShape))
-            .Concat(instances.OfClass(typeof(FamilyInstance)).OfCategory(BuiltInCategory.OST_Planting))
             .Select(element => element.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString())];
     }
 

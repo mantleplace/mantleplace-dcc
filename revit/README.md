@@ -76,10 +76,29 @@ Revit licence.
   plugin does not remove ground it did not create in that run. A toposolid it does not recognise —
   yours, another order's, or one from an import that predates the stamp — is left alone and reported.
   See [ADR 0004](../docs/adr/0004-revit-terrain-identity.md);
-- links `Site/Site.ifc` as a coordinated reference;
+- copies every building in the site model (`Site/Site.ifc`) into the project as its own Generic
+  Model element — the platform's own extrusion, not one rebuilt here — so each can be selected,
+  hidden or coloured, and a renderer's live link sees it as model geometry. The site model's context
+  terrain is left out: the terrain is the toposolid. Each building carries
+  `Mantle Place Building {stem}/{build}/{GlobalId}` in Comments and follows the terrain's
+  reuse / refuse / create table, so a second import of the same build creates nothing, and buildings
+  from an earlier build are refused with the prefix to delete. Linking the site model is still a row
+  in the import window's checklist, and it starts unticked; the version-qualified companion `.rvt` is
+  written only when it is linked. See
+  [ADR 0012](../docs/adr/0012-context-buildings-come-from-the-site-model.md);
 - sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
   this host's own block — falling back to `delivery.local_origin` on a bundle whose own block
   publishes no usable origin (`HPS-33`);
+- sets the project's **site location** — Manage ▸ Location, which is what places the sun in every
+  view and renderer — from the latitude and longitude in `hosts.revit.georeference.origin`, verbatim,
+  and from nowhere else. The bundle publishes no time zone, so the project keeps the one it had:
+  Revit recalculates the zone from the longitude whenever the coordinates change, and the import puts
+  the old one back, because a zone derived from longitude is derivation. The log names the zone kept;
+- makes one 3D view, **Mantle Place Site Context**, and one view filter of the same name that
+  matches every element whose Comments begin with `Mantle Place` — everything an import stamped —
+  across every model category that has Comments. The filter goes on the new view with no override,
+  ready to hide, halftone or recolour the site context in any view it is added to. A second import
+  finds both by name and leaves them as they are;
 - draws the road centrelines from the `road_splines` vector layer as DirectShape linework, drapes
   the `land_use` boundaries onto the terrain as toposolid subdivisions, and places the trees from
   `Landcover/TreePoints.csv` at their published height and crown radius — the three rows that closed
@@ -97,6 +116,15 @@ Revit licence.
   issue 174. All three are positioned from the same
   published origin as the survey point, and a bundle whose origin is in a CRS they cannot be brought
   into is **skipped with that reason** rather than placed ~2000 km out;
+- cuts the `land_cover` polygons into the terrain as subdivisions too, the same way and stamped
+  under their own kind. `land_cover` is a different layer from `land_use`, not a second name for it,
+  and it is the one carrying the physical subtype — forest and its like;
+- names each subdivision's drape material with the **renderer keyword** for its published `subtype`
+  — `Mantle Place Site Imagery {stem} grass`, and so on — so Enscape grows 3D grass on it without
+  anything being renamed by hand. The photograph stays; the keyword rides on the name, last, in the
+  renderer's own word order (`tall grass`, never `grass tall`). The table from subtype to keyword is
+  `RendererKeywords` in the pure core; a subtype it does not name, and a hole cut out of a polygon,
+  get no keyword;
 - drapes `Imagery/Drape.png` over the terrain as a real-world-scaled material texture — the last
   parity row — on a **duplicated** toposolid type, so the project's own type is
   never repainted. The rectangle the image is pinned to is not taken on trust: the only extent this
@@ -112,7 +140,7 @@ Revit licence.
   exporting one view under both settings and matching every region against the published
   photograph: anchored to the corner, the photograph sits within 1.6 m of the truth everywhere, on
   smooth ground. So the import turns the setting on **first**, reads it back, and writes the offsets
-  for the renderer that will draw them — the terrain from its corner, and every site-boundary
+  for the renderer that will draw them — the terrain from its corner, and every
   subdivision from its own, each with its own material, since one material carries one offset. The
   log says which origin each was written for and names the ribbon switch
   (Massing & Site ▸ Model Site ▸ Toposolid Smooth Shading) with what turning it off will do to the
@@ -120,6 +148,15 @@ Revit licence.
   stop drawing, paint and graphic overrides are ignored), and the plugin never turns it off. Where
   Revit refuses the setting, the photograph is anchored to the origin instead and the log says to
   import again after turning smoothing on by hand;
+- writes the manifest's `attribution.sources[]` into a drafting view named **Mantle Place
+  Attribution** — one line per source, its attribution text, licence text and licence URL exactly
+  as the manifest gives them — ready to place on a sheet. The plugin makes no licensing decision of
+  its own; it copies what the manifest says. Beside it, Project Information carries a record of the
+  order, the build, the manifest version, the sources and the note's text, which is how a re-import
+  finds the note this one wrote: a later build of the same order rewrites that note, an unchanged one
+  leaves it alone, and any other note — one edited by hand, or another order's — is left as it is,
+  with a fresh one added beneath it. See
+  [ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md);
 - refuses to import anything at all when an artifact's bytes do not match the `sha256` its own
   manifest publishes, before a single element is created (⛔`HPS-26`);
 - tells you what it did **not** import and why, using the manifest's own
@@ -140,23 +177,39 @@ else logs beside that zip. `Logs` selects the newest log under the cache, and wh
 none it opens the cache and says that a zip from elsewhere logged elsewhere. The About dialog on the
 Account button reaches the same place through the same function, so the two can never disagree.
 
-**An import is staged, and shows itself.** Both ways in — `Import Bundle` and the vault window's
-`Import` — open the modeless `Bundle Import` window, which lists the plan's steps, marks each one
-`Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts the trees in as they
-go. The import runs one step, or one chunk of 200 trees, per `ExternalEvent` raise, so Revit repaints
-between them and **Cancel** is honoured at the next boundary. Whatever committed before the cancel
-stays, and importing the same bundle again reuses the terrain, the site model link, the subdivisions
-and the trees it finds and creates only what is missing — except the road centrelines, which carry no
-stamp yet and are created a second time. The log's last line names the steps that completed and those
-that never ran. What no window can show is the inside of one commit: the terrain and the
+**An import brings in what you tick.** Both ways in — `Import Bundle` and the vault window's
+`Import` — open the modeless `Bundle Import` window on a checklist headed `Include`: one box for each
+layer the bundle carries (`Terrain`, `Context Buildings`, `Site Model`, `Road Centrelines`,
+`Land Use Subdivisions`, `Land Cover Subdivisions`, `Trees`, `Imagery Drape`), all ticked but
+`Site Model`: that row links the site model, whose buildings `Context Buildings` has already copied
+in, and ticking both shows every building twice. Nothing runs until `Import` is pressed. Both kinds of subdivision and the drape need the terrain, so unticking `Terrain` disables
+them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
+out creates nothing, and the log says it was left out by choice. The shared coordinates, the site
+location and the attribution are not layers and are written whatever is ticked. Leaving out the drape also builds the
+terrain on the project's own ground type rather than the imagery one. Closing the window before
+`Import` imports nothing and leaves the last run's log as it was.
+
+**An import is staged, and shows itself.** Once `Import` is pressed the window lists the chosen
+steps, marks each one `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts
+the context buildings and the trees in as they go. The import runs one step, or one chunk of 200
+buildings or trees, per `ExternalEvent` raise, so Revit repaints between them and **Cancel** is
+honoured at the next boundary. Whatever committed before the cancel stays, and importing the same
+bundle again reuses the terrain, the context buildings, the site model link, the subdivisions, the
+road centrelines, the trees and the site context view and filter it finds and creates only what is
+missing. Opening the site model to copy from is one call and is not counted: the window shows the
+building count once it is open. Road centrelines drawn by a build that predates their stamp carry none, so the first import
+after upgrading draws them once more; delete the older set by hand. The log's last line names the
+steps that completed and those that never ran. What no window can show is the inside of one
+commit: the terrain and the
 subdivisions are one commit each — and so is the drape's retype, which only a ground built before the
 terrain took the imagery type still needs — Revit reports "not responding" while one runs, and a
 Cancel pressed then takes effect when it finishes. Closing the window while it runs is a cancel.
 
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
 runs unattended from a Revit journal or a tester script. An unattended run raises no dialog and opens
-no window — it runs synchronously and writes `<zip>.mantleplace-import.log` beside the bundle
-instead, because a `TaskDialog` or a modeless window during journal playback is never dismissed.
+no window — it imports every layer, runs synchronously and writes `<zip>.mantleplace-import.log`
+beside the bundle instead, because a `TaskDialog` or a modeless window during journal playback is
+never dismissed.
 
 ⛔ **Load the add-in by hand once after every deploy, before the first unattended run.** The
 assemblies are unsigned, so the first time Revit loads a *newly built* shim it raises

@@ -3,23 +3,36 @@ using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The site-boundary step: subdivisions cut into the ground, stamped so a re-import finds them.
+// The subdivision steps: land-use and land-cover polygons cut into the ground, stamped so a
+// re-import finds them.
 internal sealed partial class RevitBundleImporter
 {
     /// <summary>
-    /// Property boundaries as toposolid subdivisions — Forma's "Site limits" row, by the mechanism
-    /// Forma itself offers alongside Model Lines.
+    /// A published polygon layer as toposolid subdivisions. For <c>land_use</c> that is property
+    /// boundaries — Forma's "Site limits" row, by the mechanism Forma itself offers alongside Model
+    /// Lines — and for <c>land_cover</c> the ground cover, cut the same way.
     /// </summary>
     /// <remarks>
-    /// A subdivision rather than a model line because the land-use polygons are 2-D: the GeoJSON
-    /// carries no third ordinate, so there is no honest elevation to draw them at. A subdivision is
-    /// projected onto the toposolid and follows the relief, which is both what Forma produces and
-    /// the only reading that does not need an elevation nobody published. With no toposolid in the
-    /// document there is nothing to project onto, and that is said rather than worked around.
+    /// <para>
+    /// A subdivision rather than a model line because the polygons are 2-D: the GeoJSON carries no
+    /// third ordinate, so there is no honest elevation to draw them at. A subdivision is projected
+    /// onto the toposolid and follows the relief, which is both what Forma produces and the only
+    /// reading that does not need an elevation nobody published. With no toposolid in the document
+    /// there is nothing to project onto, and that is said rather than worked around.
+    /// </para>
+    /// <para>
+    /// Each feature's published <c>subtype</c> is read here and nowhere else, so the renderer
+    /// keyword its material will carry is remembered by element for the drape
+    /// (<see cref="_subDivisionKeywords"/>) — for a subdivision this run cut, and for one an earlier
+    /// import left, alike.
+    /// </para>
     /// </remarks>
-    private void ImportSiteBoundaries(ImportStep step)
+    private void ImportSiteBoundaries(ImportStep step, GroundLayer layer)
     {
-        if (ReadVectorLayer(step, SiteGeometryKinds.Areas, "site boundaries") is not { } features)
+        GroundLayerWords words = GroundLayerWords.For(layer);
+        string label = words.Label;
+
+        if (ReadVectorLayer(step, SiteGeometryKinds.Areas, label) is not { } features)
         {
             return;
         }
@@ -28,18 +41,25 @@ internal sealed partial class RevitBundleImporter
         if (_document.GetElement(terrainId) is not Toposolid terrain)
         {
             Say(
-                $"Skipped the site boundaries ({step.EntryName}): they are draped onto the terrain as toposolid "
+                $"Skipped the {label} ({step.EntryName}): they are draped onto the terrain as toposolid "
                 + "subdivisions, and this project has no toposolid. Import the terrain first, then re-run.");
             return;
         }
 
         // Which features are already on the terrain is decided in the pure core from the stamps the
         // existing subdivisions carry, so a re-import creates nothing twice.
+        IReadOnlyList<string?> names = [.. features.Select(feature => (string?)feature.Name)];
+        string stem = _archive.Layout.Key.Stem;
         IReadOnlyList<NewSiteBoundary> newBoundaries = SiteBoundaryIdentity.NewFeatures(
+            layer,
             ExistingBoundaryStamps(terrain),
-            [.. features.Select(feature => (string?)feature.Name)],
-            _archive.Layout.Key.Stem);
+            names,
+            stem);
         int alreadyPresent = features.Count - newBoundaries.Count;
+
+        // The keywords for the subdivisions an earlier import cut, found by the stamp each carries.
+        // The ones this run cuts are remembered below, as each is created.
+        RememberKeywords(terrain, layer, RendererKeywords.ByStamp(features, SiteBoundaryIdentity.Stamps(layer, names, stem)));
 
         int created = 0;
         int declined = 0;
@@ -72,8 +92,8 @@ internal sealed partial class RevitBundleImporter
             Say(notice);
         }
 
-        ImportFailureSwallower swallower = new("Importing the site boundaries");
-        using Transaction transaction = BeginTransaction("Mantle Place: site boundaries", swallower);
+        ImportFailureSwallower swallower = new($"Importing the {label}");
+        using Transaction transaction = BeginTransaction($"Mantle Place: {label}", swallower);
 
         foreach (NewSiteBoundary boundary in newBoundaries)
         {
@@ -108,6 +128,10 @@ internal sealed partial class RevitBundleImporter
                 // Remembered for the drape, which prefers the stamp below but cannot use it for a
                 // subdivision that fails to take one.
                 _createdSubDivisionIds.Add(subdivision.Id);
+                if (RendererKeywords.ForRing(feature) is { } keyword)
+                {
+                    _subDivisionKeywords[subdivision.Id] = keyword;
+                }
 
                 // The plugin's first parameter write. Comments is the subdivision's identity for the
                 // NEXT import — a subdivision it could not stamp is kept (the boundary is real), it
@@ -133,7 +157,7 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        string summary = $"Imported {created:N0} site boundary subdivision(s) from {step.EntryName}";
+        string summary = $"Imported {created:N0} {words.Noun} subdivision(s) from {step.EntryName}";
         if (alreadyPresent > 0)
         {
             summary += $"; {alreadyPresent:N0} from an earlier import of this bundle were already present and left alone";
@@ -227,6 +251,34 @@ internal sealed partial class RevitBundleImporter
             if (SiteBoundaryCoextension.Describe(name, index + 1, footprint, groundFootprint) is { } line)
             {
                 Say(line);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Pairs each subdivision already on the terrain with the renderer keyword its published feature
+    /// names, by the stamp the subdivision carries.
+    /// </summary>
+    /// <remarks>
+    /// The pairing is <see cref="RendererKeywords.ByStamp"/>'s; this only reads the stamps off the
+    /// elements. A stamp is matched in full, so a subdivision of the other layer, of another order,
+    /// or a curator's own is never given a keyword here.
+    /// </remarks>
+    private void RememberKeywords(Toposolid terrain, GroundLayer layer, IReadOnlyDictionary<string, string> byStamp)
+    {
+        if (byStamp.Count == 0)
+        {
+            return;
+        }
+
+        foreach (ElementId id in terrain.GetSubDivisionIds())
+        {
+            if (_document.GetElement(id) is Toposolid subdivision
+                && subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString() is { } stamp
+                && SiteBoundaryIdentity.Parse(stamp, _archive.Layout.Key.Stem)?.Layer == layer
+                && byStamp.TryGetValue(stamp, out string? keyword))
+            {
+                _subDivisionKeywords[id] = keyword;
             }
         }
     }

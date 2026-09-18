@@ -163,6 +163,7 @@ public static class BundleManifestReader
         ReadBbox(manifest, root);
         ReadLayout(manifest, root);
         ReadRoadSplines(manifest, root);
+        ReadAttribution(manifest, root);
         refusal ??= ReadDelivery(manifest, root);
         ReadReadiness(manifest, root);
         ReadArtifacts(manifest, root);
@@ -204,6 +205,44 @@ public static class BundleManifestReader
         }
 
         return root.Object("attribution")?.Str("order_id") ?? string.Empty;
+    }
+
+    /// <summary>
+    /// <c>attribution.sources[]</c>, each field verbatim. An entry that is not an object, or that
+    /// carries no field this host writes, is skipped alone rather than abandoning the list.
+    /// </summary>
+    /// <remarks>
+    /// Never a refusal. Attribution is written into the project, not acted on, so a malformed entry
+    /// costs that entry and nothing else — refusing the bundle over it would take the terrain away
+    /// from a curator for the sake of one line of credits.
+    /// </remarks>
+    private static void ReadAttribution(BundleManifest manifest, JsonElement root)
+    {
+        if (root.Object("attribution")?.Array("sources") is not { } sources)
+        {
+            return;
+        }
+
+        List<AttributionSource> read = [];
+        foreach (JsonElement entry in sources.EnumerateArray())
+        {
+            if (entry.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            AttributionSource source = AttributionSourceJson.Read(entry);
+
+            if (source.ProviderId.Length > 0
+                || source.AttributionText is not null
+                || source.License is not null
+                || source.LicenseUrl is not null)
+            {
+                read.Add(source);
+            }
+        }
+
+        manifest.AttributionSources = read;
     }
 
     /// <summary>
@@ -269,6 +308,7 @@ public static class BundleManifestReader
         manifest.HasRoadSplines = !string.IsNullOrEmpty(manifest.RoadSplinesPath);
 
         manifest.LandUse = ReadVectorLayer(root, "land_use");
+        manifest.LandCover = ReadVectorLayer(root, "land_cover");
     }
 
     /// <summary>
