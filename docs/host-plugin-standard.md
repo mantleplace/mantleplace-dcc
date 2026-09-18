@@ -977,7 +977,7 @@ twice. Seven actions are shared, and each carries one set of words:
 | Either wait — authenticating in the browser, or refreshing      | `Signing In`         | the Account face, disabled for the wait                           | the auth button, disabled for the wait               |
 | Authenticated                                                  | `Signed In`          | the Account face                                                  | the panel's header line                              |
 | The surface that lists the vault                               | `Vault`              | the Bundles panel's button, and the vault window's heading        | the panel's heading                                  |
-| Import a bundle the user already holds on disk                 | `Import Bundle`      | the Bundles panel's button                                        | the local-import section — see the deviations table |
+| Import a bundle the user already holds on disk                 | `Import Bundle`      | the Bundles panel's button                                        | the local-import section's button                    |
 | Which build this is, and what it is running in                 | `About Mantle Place` | the Account dropdown, and the dialog it opens                     | nothing yet; these are the words when it grows one |
 
 **Casing is the host's own convention, and this rule does not touch it.** Title Case on a Revit
@@ -1012,9 +1012,9 @@ said `Remove download` beside `Prepare for Revit` — all of which the host's ow
 settled, which is exactly why casing is exempt here. What that pass then found underneath was
 word-level and a convention could not have reached it: the Revit ribbon had **no word at all** for
 being signed in, because a face that never reported a session had never needed one, and the two hosts
-name the local import differently to this day (below). Both hosts were naming the same actions from
-scratch, twice, because nothing said which of them were the same action — and host #3 would have
-named them a third time.
+named the local import differently — Unreal's control said `Import` with the word *bundle* left up in
+the section heading. Both hosts were naming the same actions from scratch, twice, because nothing
+said which of them were the same action — and host #3 would have named them a third time.
 
 _Enforcer:_ `agent-review`, plus whatever half of a host's words sits in a pure core. Revit's auth
 faces and its window labels are constants with a headless test — `AccountRibbon`, `WindowLabels` —
@@ -1034,7 +1034,6 @@ here rather than left for a future reader to discover as a contradiction.
 | Rule     | Deviation                                                                                                                                                                                                                                                                                                                                                                                   |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HPS-30` | The reference's **secret store** derives its blob name with its own per-code-unit walk and its own keep-set (`MantlePlaceSecretStore.cpp`, `ResolveSecretPath`), not with `SanitizeKeySegment`. It is inert today — `refresh_token` is the only key either host stores, and every derivation agrees on it — but the rule's secret-store sentence is ahead of this call site, not behind it. |
-| `HPS-51` | Unreal's local-import control is labelled `Import`, under a section headed `Import a local bundle (.zip)`: the word *bundle* is in the heading rather than on the control, where Revit's command is `Import Bundle`. It is one string in the Slate panel, which CI never compiles, so it moves with the next change to that panel rather than on its own. |
 
 Two places where the _silo prose_ was wrong and the code was right went the other way and are
 transcribed as shipped: `HPS-23` permits `"all"` as an explicit user-facing scope, and `HPS-44`

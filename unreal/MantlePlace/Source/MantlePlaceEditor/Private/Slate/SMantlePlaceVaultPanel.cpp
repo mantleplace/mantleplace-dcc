@@ -463,7 +463,7 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 					.OnClicked(this, &SMantlePlaceVaultPanel::OnLocalImportClicked)
 					[
 						SNew(STextBlock)
-						.Text(LOCTEXT("LocalImport", "Import"))
+						.Text(LOCTEXT("LocalImport", "Import Bundle"))
 						.Font(FMantlePlaceEditorStyle::GetFont(EFont::Body))
 						.ColorAndOpacity(FSlateColor(MantlePlacePalette::White()))
 					]

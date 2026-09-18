@@ -34,7 +34,7 @@ turns on most visibly, and which a patch here is most likely to break:
 | `HPS-32` | the paint-layer band legend is **data**. Which weight channel is which material is read from the manifest, never inferred from a filename. |
 | `HPS-33` | manifest values are applied verbatim. A paint layer's name is the platform's material name exactly — never prettified, never prefixed.    |
 | `HPS-46` | the conformance corpus's expectation keys are asserted. A case edited to expect something different turns the suite red.                   |
-| `HPS-51` | the vault panel's auth button and heading take the standard's words — the editor's own casing, not its own wording. The local-import label is the one that does not yet, and the standard records it. |
+| `HPS-51` | the vault panel's auth button, heading and local-import button take the standard's words — the editor's own casing, not its own wording. The words are the standard's table; the casing and the layout are this host's. |
 
 Root `CLAUDE.md`'s boundary section is the one to internalise: **this plugin applies pre-derived
 values and never derives them.** A patch that computes a placement value locally is refused even when
