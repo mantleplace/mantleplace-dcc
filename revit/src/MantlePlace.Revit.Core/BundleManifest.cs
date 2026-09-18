@@ -306,6 +306,12 @@ public sealed class BundleManifest
     /// </summary>
     public BundleArtifact? LandUse { get; internal set; }
 
+    /// <summary>
+    /// <c>vector.layers[name=="land_cover"]</c> geojson — the physical ground cover, whose
+    /// <c>subtype</c> names the renderer keyword a subdivision's material carries.
+    /// </summary>
+    public BundleArtifact? LandCover { get; internal set; }
+
     /// <summary><c>Landcover/TreePoints.csv</c> — Forma's "Vegetation" row.</summary>
     public BundleArtifact? TreePoints { get; internal set; }
 

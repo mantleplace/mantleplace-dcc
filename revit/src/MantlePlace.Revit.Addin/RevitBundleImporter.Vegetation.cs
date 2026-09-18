@@ -143,8 +143,9 @@ internal sealed partial class RevitBundleImporter
 
     /// <summary>
     /// The Comments of every DirectShape in the project. Whatever is not a tree stamp is ignored by
-    /// <see cref="TreeIdentity"/>, so there is no category filter here to get wrong when a Revit
-    /// without a Planting DirectShape category files the trees under Generic Model.
+    /// <see cref="TreeIdentity"/>, and whatever is not a road stamp by <see cref="RoadIdentity"/>, so
+    /// there is no category filter here to get wrong when a Revit without a Planting or Roads
+    /// DirectShape category files them under Generic Model.
     /// </summary>
     private List<string?> ExistingDirectShapeComments()
     {

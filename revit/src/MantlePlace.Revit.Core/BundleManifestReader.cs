@@ -269,6 +269,7 @@ public static class BundleManifestReader
         manifest.HasRoadSplines = !string.IsNullOrEmpty(manifest.RoadSplinesPath);
 
         manifest.LandUse = ReadVectorLayer(root, "land_use");
+        manifest.LandCover = ReadVectorLayer(root, "land_cover");
     }
 
     /// <summary>

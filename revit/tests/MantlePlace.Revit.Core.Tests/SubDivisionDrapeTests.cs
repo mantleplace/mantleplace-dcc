@@ -29,7 +29,7 @@ internal static class SubDivisionDrapeTests
         run.Case("every subdivision draped", () =>
         {
             string? clause = SubDivisionDrape.Clause(4, 0, []);
-            run.Contains(clause, "4 site boundary subdivision(s)", "the count");
+            run.Contains(clause, "4 subdivision(s)", "the count");
             run.True(clause?.StartsWith("; ", StringComparison.Ordinal) == true,
                 "the clause appends to the drape summary");
             run.True(clause?.Contains("untextured", StringComparison.Ordinal) == false,
@@ -49,7 +49,7 @@ internal static class SubDivisionDrapeTests
         run.Case("a partial refusal reports both halves", () =>
         {
             string? clause = SubDivisionDrape.Clause(12, 5, ["a subdivision had no writable Material parameter"]);
-            run.Contains(clause, "12 site boundary subdivision(s)", "the ones that worked");
+            run.Contains(clause, "12 subdivision(s)", "the ones that worked");
             run.Contains(clause, "5 subdivision(s) would not take it", "the ones that did not");
         });
 

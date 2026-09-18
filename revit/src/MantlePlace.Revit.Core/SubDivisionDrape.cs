@@ -1,7 +1,7 @@
 namespace MantlePlace.Revit.Core;
 
 /// <summary>
-/// What the log says about the site-boundary subdivisions after the drape has tried to give each one
+/// What the log says about the subdivisions after the drape has tried to give each one
 /// the aerial photograph.
 /// </summary>
 /// <remarks>
@@ -52,7 +52,9 @@ public static class SubDivisionDrape
 
         if (draped > 0)
         {
-            parts.Add($"the photograph also covers {draped:N0} site boundary subdivision(s)");
+            // Land use and land cover alike: which layer a subdivision came from is the polygon's
+            // business, not the element's (CONTEXT.md).
+            parts.Add($"the photograph also covers {draped:N0} subdivision(s)");
         }
 
         if (refused > 0)

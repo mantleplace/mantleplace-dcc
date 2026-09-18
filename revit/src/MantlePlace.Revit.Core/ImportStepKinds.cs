@@ -51,6 +51,7 @@ public static class ImportStepKinds
         // Revit keeps no reference to the file any of them was read out of.
         ImportStepKind.RoadCentrelines => ExtractionLifetime.Transient,
         ImportStepKind.SiteBoundaries => ExtractionLifetime.Transient,
+        ImportStepKind.LandCover => ExtractionLifetime.Transient,
         ImportStepKind.Vegetation => ExtractionLifetime.Transient,
 
         // Stated rather than left to the default arm below, because this is the first kind whose

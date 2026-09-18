@@ -779,12 +779,17 @@ internal static class ImportPlannerTests
 
             run.True(HasStep(plan, ImportStepKind.RoadCentrelines), "roads planned");
             run.True(HasStep(plan, ImportStepKind.SiteBoundaries), "site boundaries planned");
+            run.True(HasStep(plan, ImportStepKind.LandCover), "land cover planned");
             run.True(HasStep(plan, ImportStepKind.Vegetation), "vegetation planned");
 
             run.Equal(
                 FindStep(plan, ImportStepKind.RoadCentrelines)?.EntryName,
                 "Vector/RoadSplines.geojson",
                 "the road entry comes from the vector format table, not from convention");
+            run.Equal(
+                FindStep(plan, ImportStepKind.LandCover)?.EntryName,
+                "Vector/LandCover.geojson",
+                "the land-cover entry comes from its own layer, not from the land use");
             run.Equal(
                 FindStep(plan, ImportStepKind.Vegetation)?.EntryName,
                 "Landcover/TreePoints.csv",
@@ -881,6 +886,32 @@ internal static class ImportPlannerTests
             }
         });
 
+        run.Case("land cover without land use is its own layer, not a renamed one", () =>
+        {
+            // Two different Overture layers. A layer with no features in the area is left out of
+            // vector.layers entirely, so a bundle with land cover and no land use is ordinary.
+            BundleImportPlan plan = PlanFor(
+                $$"""
+                {
+                  "version": "1.0.0",
+                  {{MetricGeoreference}},
+                  "vector": {
+                    "layers": [
+                      { "name": "land_cover", "formats": [{ "format": "geojson", "path": "Vector/LandCover.geojson" }] }
+                    ]
+                  }
+                }
+                """,
+                ["README.md", "Vector/LandCover.geojson"]);
+
+            run.True(HasStep(plan, ImportStepKind.LandCover), "the land cover is planned");
+            run.Equal(
+                FindSkip(plan, ImportStepKind.SiteBoundaries)?.ReasonCode == SkipReasonCode.ArtifactNotInManifest,
+                true,
+                "and the land use is absent, not read from the land-cover file");
+            run.True(plan.CanImport, "land cover alone is importable content");
+        });
+
         run.Case("a road layer shipping no geojson is absent, not a gpkg this host cannot read", () =>
         {
             BundleImportPlan plan = PlanFor(
@@ -908,6 +939,7 @@ internal static class ImportPlannerTests
     [
         ImportStepKind.RoadCentrelines,
         ImportStepKind.SiteBoundaries,
+        ImportStepKind.LandCover,
         ImportStepKind.Vegetation,
     ];
 
@@ -916,6 +948,7 @@ internal static class ImportPlannerTests
         "README.md",
         "Vector/RoadSplines.geojson",
         "Vector/LandUse.geojson",
+        "Vector/LandCover.geojson",
         "Landcover/TreePoints.csv",
     ];
 
@@ -991,6 +1024,10 @@ internal static class ImportPlannerTests
               {
                 "name": "land_use",
                 "formats": [{ "format": "geojson", "path": "Vector/LandUse.geojson", "sha256": "bb" }]
+              },
+              {
+                "name": "land_cover",
+                "formats": [{ "format": "geojson", "path": "Vector/LandCover.geojson", "sha256": "cc" }]
               }
             ]
           }
