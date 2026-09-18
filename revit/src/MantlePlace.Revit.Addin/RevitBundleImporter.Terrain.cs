@@ -308,9 +308,10 @@ internal sealed partial class RevitBundleImporter
         if (declined is not null)
         {
             // Not a failure of the terrain, and not yet of the drape: the drape step still tries its
-            // own path, which retypes this ground after the fact — correct, and slow on a large one.
+            // own path, which retypes this ground after the fact — slow on a large one, and refused
+            // outright if the reason above was the type's own structure.
             Say($"The terrain was built on the project's own type \"{type.Name}\" rather than the "
-                + $"imagery type: {declined}. The satellite imagery step will retype it instead.");
+                + $"imagery type: {declined}. The satellite imagery step will try to retype it instead.");
         }
 
         Say(plan.Explanation

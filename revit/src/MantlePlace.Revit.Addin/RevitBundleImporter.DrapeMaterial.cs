@@ -174,6 +174,13 @@ internal sealed partial class RevitBundleImporter
     /// single cost in the import — and it bought nothing a type chosen at creation could not. The
     /// photograph itself is still the drape step's to write; the material is created here bare so the
     /// layer has something to wear, and the drape step finds it by the same name.
+    /// <para>
+    /// ⛔ <b>Contained, because it runs inside the terrain's transaction.</b> Everything here happens
+    /// in a sub-transaction that is rolled back on any refusal or Revit exception, so a type that
+    /// cannot be prepared costs the drape its fast path and nothing else: the terrain is still built,
+    /// on the project's type, and no half-made duplicate or bare material is committed beside it for
+    /// the drape step to find by name and trip over.
+    /// </para>
     /// </remarks>
     private ToposolidType? ImageryToposolidType(ElementId projectTypeId, out string? declined)
     {
@@ -186,19 +193,32 @@ internal sealed partial class RevitBundleImporter
             return null;
         }
 
-        if (DrapeMaterial(name) is not { } material)
+        using SubTransaction preparation = new(_document);
+        preparation.Start();
+
+        try
         {
-            declined = "this Revit build would not create an appearance asset for the photograph";
-            return null;
+            if (DrapeMaterial(name) is not { } material)
+            {
+                declined = "this Revit build would not create an appearance asset for the photograph";
+            }
+            else if (ImageryTypeFrom(projectType, name, material.Id, out string layering) is { } imagery)
+            {
+                preparation.Commit();
+                return imagery;
+            }
+            else
+            {
+                declined = layering;
+            }
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
+        {
+            declined = $"Revit refused to prepare it — {ex.Message}";
         }
 
-        ToposolidType? imagery = ImageryTypeFrom(projectType, name, material.Id, out string layering);
-        if (imagery is null)
-        {
-            declined = layering;
-        }
-
-        return imagery;
+        preparation.RollBack();
+        return null;
     }
 
     /// <summary>

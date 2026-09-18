@@ -76,10 +76,10 @@ public static class BundleImportPlanner
         // Last, and last for three reasons. The drape needs the terrain step to have run before it —
         // it writes the photograph into the material that step built the toposolid wearing; it also
         // drapes the site-boundary subdivisions this import created, which must exist before they
-        // can be draped; and it is the one
-        // kind whose Revit API surface has never executed anywhere, so if any step is going to fail
-        // it should be the one with nothing queued behind it. Execute runs a transaction per step and
-        // does not catch, so the order of this list is also the order of what survives.
+        // can be draped; and it is the one kind whose Revit API surface has never executed
+        // anywhere, so if any step is going to fail it should be the one with nothing queued behind
+        // it. Execute runs a transaction per step and does not catch, so the order of this list is
+        // also the order of what survives.
         steps.AddRange(drapeSteps);
         skipped.AddRange(drapeSkipped);
 
@@ -90,7 +90,7 @@ public static class BundleImportPlanner
         // whose only planned step was the survey point would report "imported" over an empty model.
         // The parity layers are on the creating side of that line: a bundle carrying roads and no
         // terrain still has something to put in the document. So is the drape, which builds no
-        // geometry but does write a material, and retypes ground an earlier import laid.
+        // geometry but does write a material, and retypes ground not already on the imagery type.
         bool canImport = steps.Exists(step => step.Kind != ImportStepKind.SetSharedCoordinates);
 
         return new BundleImportPlan

@@ -31,13 +31,15 @@ internal sealed partial class RevitBundleImporter
     /// terrain's type before the terrain exists (<see cref="ImportStep.ToposolidType"/>), and the
     /// terrain step creates the ground on the imagery type with a bare drape material, so what is
     /// left here is writing the photograph into that material. The retype below is kept for ground
-    /// this run did not build — ADR 0004's reuse arm keeps an earlier import's terrain, which may
-    /// predate the change — and it is the expensive half: 409 s on an 80,372-point toposolid.
+    /// not on that type: an earlier import's terrain kept by ADR 0004's reuse arm, which may predate
+    /// the change, or this run's terrain when the terrain step could not prepare the type. It is the
+    /// expensive half: 409 s on an 80,372-point toposolid.
     /// </para>
     /// <para>
-    /// ⚠️ <b>None of this is reachable by CI</b> (no Revit on a hosted runner), and none of it has
-    /// executed anywhere before this change. <c>AppearanceAssetEditScope</c>, the <c>UnifiedBitmap</c>
-    /// schema and <c>ToposolidType.Duplicate</c> all compile, which says nothing about what they do.
+    /// ⚠️ <b>None of this is reachable by CI</b> (no Revit on a hosted runner).
+    /// <c>AppearanceAssetEditScope</c>, the <c>UnifiedBitmap</c> schema and
+    /// <c>ToposolidType.Duplicate</c> — which the terrain step now calls too — all compile, which
+    /// says nothing about what they do; only a real import does.
     /// The one behaviour worth naming: whether a duplicated type's compound structure accepts the
     /// two-layer split for a toposolid as it does for a floor — <see cref="TryWearMaterial"/>
     /// refuses rather than half-applies if it does not.
@@ -115,8 +117,10 @@ internal sealed partial class RevitBundleImporter
         {
             transaction.RollBack();
             Say(
-                $"Skipped the satellite imagery ({step.EntryName}): {layering}, so the terrain was left "
-                + "untouched rather than half-changed.");
+                $"Skipped the satellite imagery ({step.EntryName}): {layering}, so "
+                + (wearsImageryType
+                    ? "the terrain's imagery layer carries no photograph."
+                    : "the terrain was left untouched rather than half-changed."));
             return;
         }
 

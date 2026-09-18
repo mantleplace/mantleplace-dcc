@@ -730,6 +730,29 @@ internal static class ImportPlannerTests
                 "an imagery type with no photograph to carry would be a blank layer on the ground");
         });
 
+        run.Case("the TIN path takes the imagery type too, not only the points file", () =>
+        {
+            // The preferred topo path, with a drape placed around the same origin the TIN is reduced
+            // against: 1,430 × 1,420 m either side of it, which is what the probe's pixel grid covers.
+            string layout = RevitLayout.Replace(
+                "\"contours\": \"Surface/Contours.dxf\"",
+                "\"contours\": \"Surface/Contours.dxf\", \"imagery_drape\": \"Imagery/Drape.png\"",
+                StringComparison.Ordinal);
+            const string tinDemBounds = """
+                "elevation": { "dem": { "crs": "EPSG:32610",
+                  "bounds_target_crs": [545173.5, 4186511.5, 546603.5, 4187931.5] } }
+                """;
+
+            BundleImportPlan plan = PlanFor(
+                $$"""{"version": "1.0.0", {{layout}}, {{TinHostBlock}}, {{ImageryWithGsd}}, {{tinDemBounds}}}""",
+                [.. FullBundle, "Imagery/Drape.png"]);
+
+            run.True(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is planned");
+            run.True(
+                FindStep(plan, ImportStepKind.ToposurfaceFromSurfaceTin)?.ToposolidType == TerrainToposolidType.Imagery,
+                "whichever tier builds the terrain, it is built on the type the drape will want");
+        });
+
         run.Case("a drape the planner refused leaves the terrain on the project's own type", () =>
         {
             // The pointer is there and the image is not readable: the drape is skipped, not planned,
