@@ -189,6 +189,17 @@ _Avoid_: mask, layer, overlay
 Imagery laid over terrain as its surface appearance.
 _Avoid_: overlay, texture, basemap
 
+**Site model**:
+The bundle's IFC of building massing and context terrain, one element per building. Say site model
+for the artifact; the buildings a host makes from it are context buildings. Unqualified "buildings"
+has meant this, the building mesh and the building footprints to different people.
+_Avoid_: buildings, the IFC, site file, massing
+
+**Foliage type**:
+The platform's closed vocabulary for what a planting point is — a tree, a shrub. A host maps a value
+to a family and never infers one from height or crown.
+_Avoid_: species, tree type, vegetation class
+
 ### What a host builds from a bundle
 
 **Terrain**:
@@ -209,6 +220,11 @@ A bundle's land-use polygons become subdivisions; a ground can hold many, and th
 another because the published polygons do. Say subdivision whatever it was cut from — where it came
 from is the polygon's business, not the element's.
 _Avoid_: district, region, site-boundary polygon, sub-toposolid
+
+**Context building**:
+One native element a host creates from the site model, per building in it. Selectable, renderable
+and stamped, where a linked site model is none of those.
+_Avoid_: building, massing, generic model, context geometry
 
 **Stamp**:
 The identity a host writes onto something it created so its next import recognises it. It names the
