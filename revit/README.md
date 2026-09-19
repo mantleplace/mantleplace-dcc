@@ -111,9 +111,10 @@ Revit licence.
   curator's edits to it survive a re-import — and a newer build's family reaches that project only
   when the curator reloads it. One family only — a shrub or any other foliage type waits for the
   platform to publish one, and the add-in never guesses a type from a height. **No render
-  substitution is set yet:** Twinmotion's lives on the project's family type rather than in the
-  `.rfa`, so for now a curator picks one asset on the one type by hand, and writing it at import is
-  issue 174. All three are positioned from the same
+  substitution is set, and the add-in never sets one:** linking the family to a renderer's tree
+  asset is the curator's step, in that renderer. Whether a substituted tree keeps its own height and
+  crown, or takes the family's one type `Height`, has not been seen in any renderer yet — issue
+  183. All three are positioned from the same
   published origin as the survey point, and a bundle whose origin is in a CRS they cannot be brought
   into is **skipped with that reason** rather than placed ~2000 km out;
 - cuts the `land_cover` polygons into the terrain as subdivisions too, the same way and stamped

@@ -249,6 +249,12 @@ follow.
   a Planting family already owns a built-in *type* parameter named `Height`, so the per-instance one
   is `Tree Height`; and a saved `.rfa` records its save folder and the Revit user name — see
   [`README.md` ▸ Authoring the tree family](./README.md#authoring-the-tree-family).
+- **The add-in is renderer-neutral.** It writes Revit elements sized as published, with names a
+  renderer recognises (`RendererKeywords`), and never a renderer's own storage — not Twinmotion's
+  substitution entity on a family type, not an Enscape asset link. The one click that links a family
+  to a renderer's asset is the curator's. Writing it at import was proposed and declined: it saves
+  that click by coupling a thin client to a schema one vendor owns and an asset GUID from another's
+  library. Do not reopen it without a reason that click does not already answer.
 
 ## Where knowledge lives
 
