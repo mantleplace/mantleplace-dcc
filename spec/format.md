@@ -147,8 +147,9 @@ family, symbol or asset and never derives one.
   data. It is never inferred from `height_m` or `crown_radius_m`.
 - ⛔ **A host that reads `foliage_type` MUST read a value it does not know as `tree`.** The
   vocabulary may grow, and a new value is a new vocabulary version — never a change of meaning for
-  an existing one. No host reads the value yet, so no corpus case binds this rule; one lands with
-  the first host that does.
+  an existing one. So a vocabulary the host does not know is no reason to ignore the column: the
+  values it knows keep their meaning, and it maps them. No host reads the value yet, so no corpus
+  case binds this rule; one lands with the first host that does.
 - A manifest without `foliage_type_vocabulary` has no `foliage_type` column; read every point as a
   tree.
 
