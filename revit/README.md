@@ -91,9 +91,13 @@ Revit licence.
   publishes no usable origin (`HPS-33`);
 - sets the project's **site location** — Manage ▸ Location, which is what places the sun in every
   view and renderer — from the latitude and longitude in `hosts.revit.georeference.origin`, verbatim,
-  and from nowhere else. The bundle publishes no time zone, so the project keeps the one it had:
-  Revit recalculates the zone from the longitude whenever the coordinates change, and the import puts
-  the old one back, because a zone derived from longitude is derivation. The log names the zone kept;
+  and from nowhere else. The time zone is the bundle's `location.time_zone`, written
+  after the coordinates, because Revit recalculates the zone from the longitude whenever they change
+  and a zone derived from longitude is derivation. Revit takes only UTC−12 to UTC+12, so a zone east
+  of +12 (Tonga, Samoa, Kiritimati, the Chatham Islands) wraps by a day: +13 goes in as −11,
+  the same clock time one calendar day later. Revit's daylight-saving switch cannot be set by an
+  add-in, so the log says whether the zone observes it. A bundle that publishes no zone leaves the
+  project's own in place, and the log names the zone set or kept;
 - makes one 3D view, **Mantle Place Site Context**, and one view filter of the same name that
   matches every element whose Comments begin with `Mantle Place` — everything an import stamped —
   across every model category that has Comments. The filter goes on the new view with no override,

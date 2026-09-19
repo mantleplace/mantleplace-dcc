@@ -223,6 +223,11 @@ follow.
   settled too, in 2026 and 2027 by a direct test and in all three by real imports: setting the
   coordinates makes Revit recalculate the zone in the same transaction (to 9 for Tokyo, to −5 for
   Boston), and writing the zone read beforehand back in the same transaction holds after the commit.
+  The published zone (`location.time_zone`) goes through the same write. `SiteTimeZone` decides what
+  is written, including the wrap for zones east of +12, and it is tested headlessly. A fractional
+  zone such as +5:45 has not yet been written into a real Revit.
+  `SunAndShadowSettings.UsesDST` is read-only in 2025's API, so daylight saving time is a log line
+  and never a write.
 - **The attribution step has left that set.** `ViewDrafting.Create`, `TextNote.Create`, and
   ExtensibleStorage — `SchemaBuilder` with `AccessLevel.Vendor` write access, `Entity`,
   `ProjectInformation.SetEntity`/`GetEntity` — have run in Revit 2025, 2026 and 2027 through the
