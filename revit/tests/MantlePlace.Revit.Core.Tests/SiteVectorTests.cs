@@ -400,5 +400,24 @@ internal static class SiteVectorTests
             run.Within(trees[0].HeightM, 3.38, 1e-9, "height, not crown radius");
             run.Within(trees[0].CrownRadiusM, 1.18, 1e-9, "crown radius, not height");
         });
+
+        run.Case("a column the reader does not know is ignored (MPB 1.2.0 appends foliage_type)", () =>
+        {
+            // A minor release may append a column (spec/format.md §4.4). 1.2.0 did exactly that,
+            // and a reader that counted fields would have lost every tree to an additive change.
+            string? error = TreePointsReader.TryParse(
+                """
+                x,y,ground_z,height_m,crown_radius_m,foliage_type
+                472195.00,4257585.00,2006.71,3.38,1.18,shrub
+                471835.00,4257485.00,1985.45,3.10,1.08,tree
+                """,
+                MetricFrame,
+                out IReadOnlyList<SiteTree> trees);
+
+            run.True(error is null, $"parsed: {error}");
+            run.Equal(trees.Count, 2, "both trees, the extra column notwithstanding");
+            run.Within(trees[0].HeightM, 3.38, 1e-9, "height still read by name");
+            run.Within(trees[1].CrownRadiusM, 1.08, 1e-9, "crown radius still read by name");
+        });
     }
 }
