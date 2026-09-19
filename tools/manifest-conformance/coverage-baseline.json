@@ -84,6 +84,10 @@
     "manifest.heightmapMissingSha": [
       "unreal"
     ],
+    "manifest.locationBlockIgnored": [
+      "revit",
+      "unreal"
+    ],
     "manifest.materializationSignals": [
       "revit",
       "unreal"
