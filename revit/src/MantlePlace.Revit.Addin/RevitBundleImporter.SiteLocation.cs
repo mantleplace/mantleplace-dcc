@@ -36,6 +36,6 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        Say(placement.Report(projectTimeZone));
+        Say(placement.LogLine(projectTimeZone));
     }
 }

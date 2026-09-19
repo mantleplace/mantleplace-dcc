@@ -91,10 +91,10 @@ Revit licence.
   publishes no usable origin (`HPS-33`);
 - sets the project's **site location** — Manage ▸ Location, which is what places the sun in every
   view and renderer — from the latitude and longitude in `hosts.revit.georeference.origin`, verbatim,
-  and from nowhere else. The time zone is the bundle's `location.time_zone` (MPB 1.1.0), written
+  and from nowhere else. The time zone is the bundle's `location.time_zone`, written
   after the coordinates, because Revit recalculates the zone from the longitude whenever they change
   and a zone derived from longitude is derivation. Revit takes only UTC−12 to UTC+12, so a zone east
-  of +12 (Tonga, Samoa, Kiritimati, the Chatham Islands) is written a day back: +13 goes in as −11,
+  of +12 (Tonga, Samoa, Kiritimati, the Chatham Islands) wraps by a day: +13 goes in as −11,
   the same clock time one calendar day later. Revit's daylight-saving switch cannot be set by an
   add-in, so the log says whether the zone observes it. A bundle that publishes no zone leaves the
   project's own in place, and the log names the zone set or kept;

@@ -614,7 +614,6 @@ internal static class ManifestReaderTests
             run.Equal(manifest.TimeZone?.Iana, "Asia/Kathmandu", "the zone name");
             run.Within(manifest.TimeZone?.UtcOffsetStandardH ?? 0.0, 5.75, 0.0, "the offset, unrounded");
             run.True(manifest.TimeZone?.ObservesDst == false, "an explicit false stays false");
-            run.Equal(manifest.TimeZone?.TzdataVersion, "2025b", "the tzdata release");
         });
 
         run.Case("an offset past any host's range is kept as published, not clamped", () =>

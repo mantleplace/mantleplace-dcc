@@ -1197,8 +1197,8 @@ internal static class ImportPlannerTests
 
             run.True(location?.TimeZone is not null, "the zone travels with the site location");
             run.Within(location?.TimeZoneToWrite(9.0) ?? 0.0, -7.0, 0.0, "the published zone, not the project's");
-            run.Contains(location?.Report(9.0), "UTC-7 (America/Denver), as published", "the log names the zone set");
-            run.Contains(location?.Report(9.0), "observes daylight saving", "and what Revit will not let the add-in set");
+            run.Contains(location?.LogLine(9.0), "UTC-7 (America/Denver), as published", "the log names the zone set");
+            run.Contains(location?.LogLine(9.0), "observes daylight saving", "and what Revit will not let the add-in set");
         });
 
         run.Case("with no published time zone the project keeps its own, and the log says so", () =>
@@ -1209,7 +1209,7 @@ internal static class ImportPlannerTests
 
             run.True(location?.TimeZone is null, "a 1.0.x bundle publishes none");
             run.Within(location?.TimeZoneToWrite(-5.0) ?? 0.0, -5.0, 0.0, "the zone read before the coordinates moved it");
-            run.Contains(location?.Report(-5.0), "publishes no time zone, so the project keeps its own, UTC-5", "said plainly");
+            run.Contains(location?.LogLine(-5.0), "publishes no time zone, so the project keeps its own, UTC-5", "said plainly");
         });
 
         run.Case("fractional zones are written as fractions, and named in hours and minutes", () =>
@@ -1222,7 +1222,7 @@ internal static class ImportPlannerTests
                     ImportStepKind.SetSiteLocation)?.SiteLocation;
 
                 run.Within(location?.TimeZoneToWrite(1.0) ?? double.NaN, hours, 0.0, $"{hours} verbatim");
-                run.Contains(location?.Report(1.0), named, $"{hours} reads as {named}");
+                run.Contains(location?.LogLine(1.0), named, $"{hours} reads as {named}");
             }
         });
 
@@ -1243,7 +1243,7 @@ internal static class ImportPlannerTests
 
             string? report = FindStep(
                 PlanFor(WithTimeZone(13.0, "Pacific/Tongatapu", "false"), ParityBundle),
-                ImportStepKind.SetSiteLocation)?.SiteLocation?.Report(0.0);
+                ImportStepKind.SetSiteLocation)?.SiteLocation?.LogLine(0.0);
             run.Contains(report, "Pacific/Tongatapu is UTC+13", "the published zone is named");
             run.Contains(report, "so the site's time zone is UTC-11", "and the one written");
             run.Contains(report, "a calendar day later", "and what moved");
@@ -1258,7 +1258,7 @@ internal static class ImportPlannerTests
                     ImportStepKind.SetSiteLocation)?.SiteLocation;
 
                 run.Within(location?.TimeZoneToWrite(-6.0) ?? double.NaN, -6.0, 0.0, $"{hours} is not written");
-                run.Contains(location?.Report(-6.0), "which is not a time zone", $"{hours} is named as unusable");
+                run.Contains(location?.LogLine(-6.0), "which is not a time zone", $"{hours} is named as unusable");
             }
         });
 
@@ -1268,7 +1268,7 @@ internal static class ImportPlannerTests
                 PlanFor(WithTimeZone(1.0, "Europe/Paris", null), ParityBundle),
                 ImportStepKind.SetSiteLocation)?.SiteLocation;
 
-            run.False(location?.Report(0.0)?.Contains("daylight", StringComparison.Ordinal) ?? true, "no claim either way");
+            run.False(location?.LogLine(0.0)?.Contains("daylight", StringComparison.Ordinal) ?? true, "no claim either way");
         });
 
         run.Case("the context view comes after every step that stamps an element, and before the drape", () =>

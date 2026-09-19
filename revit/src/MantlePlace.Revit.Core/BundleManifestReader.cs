@@ -253,8 +253,8 @@ public static class BundleManifestReader
     /// <remarks>
     /// Never a refusal, for the reason attribution is not one: the zone sets one project setting, so a
     /// malformed block costs that setting and nothing else. The project then keeps the zone it had,
-    /// which is what every 1.0.x bundle does. An offset that is not a finite number is malformed; one
-    /// outside any host's range is not, and is kept (<c>spec/format.md</c> §4.1).
+    /// which is what a bundle without the block does. An offset that does not read as a finite number
+    /// is malformed; one outside any host's range is not, and is kept (<c>spec/format.md</c> §4.1).
     /// </remarks>
     private static void ReadTimeZone(BundleManifest manifest, JsonElement root)
     {
@@ -265,21 +265,11 @@ public static class BundleManifestReader
             return;
         }
 
-        bool? observesDst = zone.TryGetProperty("observes_dst", out JsonElement dst)
-            ? dst.ValueKind switch
-            {
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                _ => null,
-            }
-            : null;
-
         manifest.TimeZone = new PublishedTimeZone
         {
             Iana = zone.Str("iana"),
             UtcOffsetStandardH = offset,
-            ObservesDst = observesDst,
-            TzdataVersion = zone.Str("tzdata_version"),
+            ObservesDst = zone.OptionalBool("observes_dst"),
         };
     }
 

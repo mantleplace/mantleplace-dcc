@@ -219,12 +219,12 @@ public sealed record AttributionSource(
     string? LicenseUrl);
 
 /// <summary>
-/// <c>location.time_zone</c> (from MPB 1.1.0), verbatim — a fact about the place, published for
+/// <c>location.time_zone</c>, verbatim — a fact about the place, published for
 /// every host, and applied here without being derived (<c>HPS-33</c>).
 /// </summary>
 /// <remarks>
 /// The offset is the one field a Revit site location takes, so it is the one this record cannot do
-/// without: a block with no numeric <c>utc_offset_standard_h</c> is not read at all. It is kept as
+/// without: a block whose <c>utc_offset_standard_h</c> does not read as a number is not read. It is kept as
 /// published — fractional, and unclamped to any host's range. Fitting it into Revit's is
 /// <see cref="SiteTimeZone"/>'s job, not the reader's.
 /// </remarks>
@@ -238,9 +238,6 @@ public sealed class PublishedTimeZone
 
     /// <summary><c>observes_dst</c>, or <c>null</c> when the block did not say — unknown, not no.</summary>
     public bool? ObservesDst { get; init; }
-
-    /// <summary><c>tzdata_version</c>, provenance only; empty when absent.</summary>
-    public string TzdataVersion { get; init; } = string.Empty;
 }
 
 /// <summary>The top-level <c>delivery</c> block — units and grid, host-neutral.</summary>
@@ -367,8 +364,8 @@ public sealed class BundleManifest
     public DeliveryFacts Delivery { get; internal set; } = new();
 
     /// <summary>
-    /// <c>location.time_zone</c>, or <c>null</c> on a 1.0.x manifest, which has no <c>location</c>
-    /// block, and on one whose block this reader could not use.
+    /// <c>location.time_zone</c>, or <c>null</c> on a manifest with no <c>location</c> block, and on
+    /// one whose block this reader could not use.
     /// </summary>
     public PublishedTimeZone? TimeZone { get; internal set; }
 
