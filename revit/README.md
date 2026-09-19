@@ -129,8 +129,7 @@ Revit licence.
   anything being renamed by hand. The photograph stays; the keyword rides on the name, last, in the
   renderer's own word order (`tall grass`, never `grass tall`). The table from subtype to keyword is
   `RendererKeywords` in the pure core; a subtype it does not name, and a hole cut out of a polygon,
-  get no keyword. Enscape growing grass on a keyworded material has not been watched yet — issue
-  183;
+  get no keyword. Enscape growing grass on a keyworded material has not been watched yet;
 - drapes `Imagery/Drape.png` over the terrain as a real-world-scaled material texture — the last
   parity row — on a **duplicated** toposolid type, so the project's own type is
   never repainted. The rectangle the image is pinned to is not taken on trust: the only extent this
