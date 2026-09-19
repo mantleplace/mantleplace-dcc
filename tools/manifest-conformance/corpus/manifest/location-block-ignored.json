@@ -1,0 +1,37 @@
+{
+  "version": "1.1.0",
+  "location": {
+    "time_zone": {
+      "iana": "America/Denver",
+      "utc_offset_standard_h": -7,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    },
+    "a_member_published_after_this_reader": {
+      "path": "Vector/decoy.geojson"
+    }
+  },
+  "vector": {
+    "layers": [
+      {
+        "name": "road_splines",
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/RoadSplines.geojson",
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ]
+      }
+    ]
+  },
+  "job_id": "location",
+  "order_id": "ord-location-1",
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      }
+    }
+  }
+}

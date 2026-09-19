@@ -99,10 +99,10 @@ agree, and the case file says so.
 
 ## Version
 
-Fixtures are written against the pinned manifest version, and the readers' floor is that same
-version. Everything below it is in the reject set: clean break, one supported version (`HPS-31`). The
-floor and the pin are deliberately split — `index.json`'s `manifestVersion` is the pin, and
-`verified-against.json` records each host's own.
+Fixtures are written against the pinned manifest version unless a case declares a later minor of
+its own (below), and the readers' floor is that same version. Everything below it is in the reject
+set: clean break, one supported version (`HPS-31`). The floor and the pin are deliberately split —
+`index.json`'s `manifestVersion` is the pin, and `verified-against.json` records each host's own.
 
 **Two version families.** A `manifestVersion` is an integer for the pre-history (`19`) and a semver
 string for the MPB era (`"1.0.0"`); the JSON type is what tells them apart, and the whole integer
@@ -116,6 +116,12 @@ Case ids and filenames are **version-agnostic** on purpose (`manifest.full`, not
 `manifest.v19.full`). Only the explicit version-gate rejects carry a number. A version bump is then
 three moves — new accept shape, previous version to the reject set, `manifestVersion` repinned —
 rather than a rename sweep across every case a host suite references.
+
+**An additive minor adds a case; it does not re-stamp the corpus.** Those three moves are for a
+release that moves the floor. A minor leaves the floor where it is, and a same-major reader must
+read both shapes, so the existing fixtures stay the documents they are and the new shape arrives as
+a case carrying its own `manifestVersion` — `manifest.locationBlockIgnored` is the first. Stamping a
+newer version onto a fixture that lacks what that version requires would make the fixture untrue.
 
 **The reject set waits for the slowest host.** It is host-invariant (no case carries `appliesTo`),
 so it may only name versions below the _lowest_ floor among registered hosts. v18 and v19 could
