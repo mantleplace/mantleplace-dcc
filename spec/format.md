@@ -84,10 +84,27 @@ licensing, attribution, and pipeline provenance.
 Every consumer reads this register. It is the half that answers *what is in this bundle, and under
 what terms*.
 
+**`location` — facts about the place (from 1.1.0).** Some facts are the same for every host because
+they describe the place, not a host's frame or units. Those live in the top-level `location` block,
+and every host MAY read it. The first is `location.time_zone`: the IANA zone name, the standard-time
+UTC offset in hours, whether the zone observes daylight saving, and the tzdata release the offsets
+were read from. It is resolved once, at the AOI-bbox centroid, so a bundle has one time zone even
+when its AOI straddles a zone line.
+
+- ⛔ **Apply it; never derive it.** A host MUST NOT compute a time zone from longitude, and MUST NOT
+  parse an offset out of the zone name: POSIX sign inversion makes `Etc/GMT+2` UTC−2.
+- The offset is fractional where the zone is (5.5, 5.75, 12.75) and is **not clamped** to any host's
+  range. Kiritimati is 14. A host whose API accepts only ±12 wraps the value and owns that choice.
+- Daylight-saving **dates** are not published, because they change every year. A host that needs them
+  resolves `iana` with its own tzdata; a host that only takes an on/off switch reads `observes_dst`.
+- `location` is not an artifact family. `licensing.site` classifies the IFC Site model, which is
+  unrelated.
+
 ### 4.2 `hosts.<hostId>` — pre-derived placement, one subtree per host
 
 Everything host-specific lives under `hosts.<hostId>`, and a consumer targeting a host reads
-**exactly that subtree**.
+**exactly that subtree** of the host blocks. Facts that are identical for every host do not belong
+here. They live in `location` (§4.1), which is never copied into a host subtree.
 
 ⛔ **A consumer MUST NOT read another host's block**, and MUST NOT merge two. The blocks are
 deliberately not shaped alike: one host wants a flat projected frame in metric UTM, another wants a
