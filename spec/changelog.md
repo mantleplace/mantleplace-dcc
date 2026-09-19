@@ -19,7 +19,7 @@ history, not contract.
 
 ## Semver era
 
-### 1.1.0 — the location block and its time zone (additive minor; publish date stamped at merge)
+### 1.1.0 — the location block and its time zone (additive minor; published and frozen 2026-09-19)
 
 A new **required** top-level block, `location`, holds facts about the place that are the same for
 every host. Unlike `hosts.<hostId>`, which a host reads only its own of, every host may read it
@@ -53,6 +53,8 @@ asks of a minor. "Narrowed" there means narrowing an existing field, and nothing
 **What a host must do.** Nothing, to keep importing: a 1.0.x reader ignores the unknown block, per
 [compatibility](compatibility.md) §3. A host that wants the sun right reads `location.time_zone`.
 Each host re-pins `verified-against.json` to 1.1.0 once its reader has been exercised against it.
+Both registered hosts did so on 2026-09-19, on the corpus case `manifest.locationBlockIgnored`, which
+binds a reader to accepting the block it does not consume.
 
 ### Within 1.0.1 — the vector layer vocabulary, stated (2026-09-18)
 
