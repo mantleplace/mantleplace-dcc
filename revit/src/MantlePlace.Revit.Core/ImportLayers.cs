@@ -169,10 +169,18 @@ public sealed class ImportChecklist
     /// <summary>What the curator has chosen, as the planner takes it.</summary>
     public ImportLayerChoice Choice => ImportLayerChoice.Only(Layers.Where(IsChecked));
 
-    /// <summary>Records a click on a layer's box. A click on a box that is not offered does nothing.</summary>
+    /// <summary>
+    /// Records a change to a layer's box, however it was made. A write to a box that is not offered,
+    /// or is disabled, does nothing.
+    /// </summary>
+    /// <remarks>
+    /// A disabled box is one nobody can toggle, so a write to it is not a choice. Keeping it out of
+    /// what the curator chose is what lets checking the prerequisite again give that choice back,
+    /// whatever the caller wrote in between.
+    /// </remarks>
     public void Set(ImportLayer layer, bool on)
     {
-        if (!Layers.Contains(layer))
+        if (!IsEnabled(layer))
         {
             return;
         }

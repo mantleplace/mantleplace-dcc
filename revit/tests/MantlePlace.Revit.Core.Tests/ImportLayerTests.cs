@@ -175,6 +175,19 @@ internal static class ImportLayerTests
             run.False(checklist.Choice.Includes(ImportLayer.LandUseSubdivisions), "subdivisions without the terrain are not chosen");
         });
 
+        run.Case("a write to a disabled box does not change what the curator had chosen", () =>
+        {
+            // The window listens to a box's Checked and Unchecked, which its own repaint of a disabled
+            // box raises too. The window drops those itself; this is the rule that makes a slip there
+            // harmless, rather than costing the curator what checking the terrain again gives back.
+            ImportChecklist checklist = new(Enum.GetValues<ImportLayer>());
+            checklist.Set(ImportLayer.Terrain, false);
+            checklist.Set(ImportLayer.LandUseSubdivisions, false);
+            checklist.Set(ImportLayer.Terrain, true);
+
+            run.True(checklist.IsChecked(ImportLayer.LandUseSubdivisions), "subdivisions were on before the terrain went, and are again");
+        });
+
         run.Case("a prerequisite the bundle does not carry disables nothing", () =>
         {
             // There is no terrain box to check, so a disabled drape would be a box nobody could ever
