@@ -218,6 +218,28 @@ public sealed record AttributionSource(
     string? License,
     string? LicenseUrl);
 
+/// <summary>
+/// <c>location.time_zone</c>, verbatim — a fact about the place, published for
+/// every host, and applied here without being derived (<c>HPS-33</c>).
+/// </summary>
+/// <remarks>
+/// The offset is the one field a Revit site location takes, so it is the one this record cannot do
+/// without: a block whose <c>utc_offset_standard_h</c> does not read as a number is not read. It is kept as
+/// published — fractional, and unclamped to any host's range. Fitting it into Revit's is
+/// <see cref="SiteTimeZone"/>'s job, not the reader's.
+/// </remarks>
+public sealed class PublishedTimeZone
+{
+    /// <summary><c>iana</c>, e.g. <c>"America/Denver"</c>; empty when the block named none.</summary>
+    public string Iana { get; init; } = string.Empty;
+
+    /// <summary><c>utc_offset_standard_h</c>: standard time, in hours east of UTC.</summary>
+    public required double UtcOffsetStandardH { get; init; }
+
+    /// <summary><c>observes_dst</c>, or <c>null</c> when the block did not say — unknown, not no.</summary>
+    public bool? ObservesDst { get; init; }
+}
+
 /// <summary>The top-level <c>delivery</c> block — units and grid, host-neutral.</summary>
 public sealed class DeliveryFacts
 {
@@ -340,6 +362,12 @@ public sealed class BundleManifest
     public IReadOnlyList<AttributionSource> AttributionSources { get; internal set; } = [];
 
     public DeliveryFacts Delivery { get; internal set; } = new();
+
+    /// <summary>
+    /// <c>location.time_zone</c>, or <c>null</c> on a manifest with no <c>location</c> block, and on
+    /// one whose block this reader could not use.
+    /// </summary>
+    public PublishedTimeZone? TimeZone { get; internal set; }
 
     public RevitReadiness Readiness { get; internal set; } = new();
 

@@ -473,7 +473,8 @@ public static class BundleImportPlanner
 
     /// <summary>
     /// The project's latitude and longitude, read from <c>hosts.revit.georeference.origin</c> and
-    /// applied verbatim (<c>HPS-33</c>).
+    /// applied verbatim (<c>HPS-33</c>), with the time zone from <c>location.time_zone</c> when the
+    /// bundle publishes one.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -525,7 +526,12 @@ public static class BundleImportPlanner
         steps.Add(new ImportStep
         {
             Kind = ImportStepKind.SetSiteLocation,
-            SiteLocation = new SiteLocationPlacement { LatitudeDeg = lat, LongitudeDeg = lon },
+            SiteLocation = new SiteLocationPlacement
+            {
+                LatitudeDeg = lat,
+                LongitudeDeg = lon,
+                TimeZone = manifest.TimeZone is { } zone ? new SiteTimeZone { Published = zone } : null,
+            },
         });
     }
 

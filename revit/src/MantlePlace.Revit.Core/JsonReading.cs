@@ -92,18 +92,22 @@ internal static class JsonReading
     }
 
     internal static bool Bool(this JsonElement parent, string field, bool fallback = false)
+        => parent.OptionalBool(field) ?? fallback;
+
+    /// <summary>A boolean field, or <c>null</c> when absent or not a boolean — unknown, not false.</summary>
+    internal static bool? OptionalBool(this JsonElement parent, string field)
     {
         if (parent.ValueKind != JsonValueKind.Object
             || !parent.TryGetProperty(field, out JsonElement child))
         {
-            return fallback;
+            return null;
         }
 
         return child.ValueKind switch
         {
             JsonValueKind.True => true,
             JsonValueKind.False => false,
-            _ => fallback,
+            _ => null,
         };
     }
 
