@@ -28,6 +28,7 @@ exitCode |= SiteModelReaderTests.Run();
 exitCode |= SiteContextTests.Run();
 exitCode |= DrapeLayeringTests.Run();
 exitCode |= SubDivisionDrapeTests.Run();
+exitCode |= SubDivisionMaterialTests.Run();
 exitCode |= RendererKeywordsTests.Run();
 exitCode |= RoadIdentityTests.Run();
 exitCode |= TerrainSmoothingTests.Run();
