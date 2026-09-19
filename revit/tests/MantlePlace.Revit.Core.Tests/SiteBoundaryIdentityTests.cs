@@ -137,7 +137,8 @@ internal static class SiteBoundaryIdentityTests
 
         run.Case("IsStampFor recognises this bundle's own subdivisions", () =>
         {
-            // The drape's re-find. A subdivision is typeless, so the material goes on the instance,
+            // The drape's re-find. The material goes on each subdivision itself — on the instance in
+            // Revit 2025, where a subdivision is typeless, and through its own type from 2026 —
             // and the instance has to be located on a RE-import where nothing was created.
             run.True(SiteBoundaryIdentity.IsStampFor($"Mantle Place Site Boundary {Stem}/Zone A", Stem),
                 "a stamp this plugin wrote for this bundle");

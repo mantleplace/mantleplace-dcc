@@ -1,3 +1,4 @@
+using System.Globalization;
 using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Core.Tests;
@@ -142,6 +143,44 @@ internal static class SlowStepNoticeTests
                     notice is not null && notice.Contains("no progress to show", StringComparison.Ordinal),
                     $"{kind} no longer claims there is no progress at all");
             }
+        });
+
+        run.Case("retyping subdivisions for the photograph announces itself", () =>
+        {
+            // Revit 2026 and later: every subdivision is typed and takes the photograph only through
+            // its type. The cost is in each ChangeTypeId call, not in the commit, so it is not the
+            // commit sentence the other steps say.
+            string? notice = SlowStepNotice.ForSubDivisionRetypes(33, 74_852);
+            run.True(notice is not null, "announced");
+            run.Contains(notice, "33 subdivision(s)", "it names how many are coming");
+            run.Contains(notice, "74,852", "it names this terrain's point count");
+            run.Contains(notice, "Revit 2026 and later", "it says why this Revit does it at all");
+            run.Contains(notice, "not responding", "it says what Revit is about to look like");
+            run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
+            run.False(
+                notice is not null && notice.Contains("one commit", StringComparison.Ordinal),
+                "it does not claim the wait is inside a commit: measured, the commit takes a second");
+        });
+
+        run.Case("the retype notice quotes its measurement and does not extrapolate", () =>
+        {
+            string? notice = SlowStepNotice.ForSubDivisionRetypes(800, 12_000);
+            run.Contains(notice, SlowStepNotice.MeasuredRetypeSubDivisions.ToString("N0", CultureInfo.InvariantCulture),
+                "the measured count");
+            run.Contains(notice, SlowStepNotice.MeasuredRetypeSeconds.ToString("N0", CultureInfo.InvariantCulture) + " seconds",
+                "the measured duration");
+            run.Contains(notice, "74,852", "the terrain it was measured on");
+            run.False(
+                notice is not null && notice.Contains("minutes", StringComparison.Ordinal),
+                "no duration is predicted for this terrain");
+        });
+
+        run.Case("no retypes, or an unknown terrain, is handled as the other notices handle it", () =>
+        {
+            run.True(SlowStepNotice.ForSubDivisionRetypes(0, 74_852) is null, "nothing to retype is silent");
+            run.True(SlowStepNotice.ForSubDivisionRetypes(-1, 74_852) is null, "a negative count is silent");
+            run.Contains(SlowStepNotice.ForSubDivisionRetypes(5, null), "not known to this run",
+                "an unknown count is said, never invented");
         });
 
         run.Case("every other step stays quiet", () =>

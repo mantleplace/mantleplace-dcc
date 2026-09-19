@@ -87,6 +87,13 @@ internal sealed partial class RevitBundleImporter
             Say(notice);
         }
 
+        // Revit 2026 and later: every typed subdivision not already on its material's type is one
+        // ChangeTypeId, seconds each. Counted before anything is written, like the notice above.
+        if (SlowStepNotice.ForSubDivisionRetypes(SubDivisionsToRetype(terrain, name, smoothed), _terrainVertexCount) is { } retypes)
+        {
+            Say(retypes);
+        }
+
         ImportFailureSwallower swallower = new("Applying the aerial photograph");
         using Transaction transaction = BeginTransaction("Mantle Place: satellite imagery", swallower);
 
@@ -205,18 +212,7 @@ internal sealed partial class RevitBundleImporter
     /// </summary>
     private ElementId SubDivisionMaterialId(Element subdivision, string name, string imagePath, DrapePlacement placement)
     {
-        // A subdivision this run cut and could not stamp is named by its id, under the land-use
-        // spelling this plugin has always used for it.
-        GroundStamp stamp = SiteBoundaryIdentity.Parse(
-            subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString(),
-            _archive.Layout.Key.Stem)
-            ?? new GroundStamp(GroundLayer.LandUse, subdivision.Id.Value.ToString(CultureInfo.InvariantCulture));
-
-        string materialName = GroundMaterialNames.PerSubDivision(
-            name,
-            stamp.Layer,
-            stamp.Token,
-            _subDivisionKeywords.GetValueOrDefault(subdivision.Id));
+        string materialName = SubDivisionMaterialName(subdivision, name, smoothed: true);
 
         DrapeOffset anchor = AnchorFor(subdivision, $"subdivision {subdivision.Id.Value}", placement, smoothed: true);
         ElementId id = DrapeMaterialId(materialName, imagePath, placement, anchor, out string? misplaced);
@@ -316,6 +312,57 @@ internal sealed partial class RevitBundleImporter
         }
 
         return ids;
+    }
+
+    /// <summary>
+    /// How many of the subdivisions this drape may touch it will retype to wear the photograph
+    /// (<see cref="SubDivisionMaterial.NeedsRetype"/>), counted before anything is written.
+    /// </summary>
+    /// <remarks>
+    /// A re-import's subdivisions are already on their types, so this is zero there, which is what
+    /// keeps a re-import from announcing a wait it will not have.
+    /// </remarks>
+    private int SubDivisionsToRetype(Toposolid terrain, string imageryName, bool smoothed)
+        => DrapeableSubDivisionIds(terrain)
+            .Select(_document.GetElement)
+            .Count(subdivision => subdivision is not null
+                && SubDivisionMaterial.NeedsRetype(
+                    RouteFor(subdivision, out _, out ToposolidType? own),
+                    own?.Name,
+                    SubDivisionMaterialName(subdivision, imageryName, smoothed)));
+
+    /// <summary>
+    /// Which way <paramref name="subdivision"/> can wear a material (<see cref="SubDivisionMaterial.Route"/>),
+    /// with the instance parameter and the type the answer was read from.
+    /// </summary>
+    private SubDivisionMaterialRoute RouteFor(Element subdivision, out Parameter? material, out ToposolidType? own)
+    {
+        material = subdivision.get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL);
+        own = _document.GetElement(subdivision.GetTypeId()) as ToposolidType;
+        return SubDivisionMaterial.Route(material is { IsReadOnly: false }, own is not null);
+    }
+
+    /// <summary>
+    /// The name of the drape material <paramref name="subdivision"/> wears: its own under smooth
+    /// shading (<see cref="GroundMaterialNames.PerSubDivision"/>), shared under flat
+    /// (<see cref="GroundMaterialNames.Shared"/>, the ground's own when there is no keyword).
+    /// </summary>
+    private string SubDivisionMaterialName(Element subdivision, string imageryName, bool smoothed)
+    {
+        string? keyword = _subDivisionKeywords.GetValueOrDefault(subdivision.Id);
+        if (!smoothed)
+        {
+            return GroundMaterialNames.Shared(imageryName, keyword);
+        }
+
+        // A subdivision this run cut and could not stamp is named by its id, under the land-use
+        // spelling this plugin has always used for it.
+        GroundStamp stamp = SiteBoundaryIdentity.Parse(
+            subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString(),
+            _archive.Layout.Key.Stem)
+            ?? new GroundStamp(GroundLayer.LandUse, subdivision.Id.Value.ToString(CultureInfo.InvariantCulture));
+
+        return GroundMaterialNames.PerSubDivision(imageryName, stamp.Layer, stamp.Token, keyword);
     }
 
     /// <summary>

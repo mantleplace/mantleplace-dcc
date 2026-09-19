@@ -10,11 +10,19 @@ namespace MantlePlace.Revit.Addin;
 public sealed partial class TerrainProbeCommand
 {
     /// <summary>
-    /// A site-boundary subdivision has no type, so what CAN give it the drape material?
+    /// In Revit 2025 a site-boundary subdivision has no type, so what CAN give it the drape material?
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The retype question is settled and is not asked here.</b> On order <c>eb00f56f</c>,
+    /// ⛔ <b>Everything below about typelessness was measured in Revit 2025, and it is not true of
+    /// 2026 or 2027.</b> Measured on bundle <c>9d2dfdbf</c>, 2026-09-19: in both, a subdivision is a
+    /// <c>Toposolid</c> on the document's default toposolid type, <c>TOPOSOLID_SUBDIVIDE_MATERIAL</c> is
+    /// absent, and a retype onto a duplicate of its own type holds, 33 of 33. The drape takes that
+    /// route there (<see cref="SubDivisionMaterial"/>). This probe still asks the 2025 questions, and on
+    /// 2026 or later its type column reads a real type rather than -1, which is the difference.
+    /// </para>
+    /// <para>
+    /// <b>In Revit 2025 the retype question is settled and is not asked here.</b> On order <c>eb00f56f</c>,
     /// 2026-08-25, all four subdivisions refused the drape with
     /// <c>InvalidOperationException: This Element cannot have type assigned.</c> — because
     /// <c>GetTypeId()</c> is <c>InvalidElementId</c> on every one of them. <c>ChangeTypeId</c> was
@@ -129,7 +137,8 @@ public sealed partial class TerrainProbeCommand
     }
 
     /// <summary>
-    /// The two mechanisms left once <c>ChangeTypeId</c> is settled as impossible.
+    /// The two mechanisms left once <c>ChangeTypeId</c> is settled as impossible — in Revit 2025, where
+    /// a subdivision is typeless.
     /// </summary>
     /// <remarks>
     /// <para>

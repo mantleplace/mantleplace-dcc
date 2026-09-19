@@ -122,12 +122,7 @@ public static class SlowStepNotice
     /// </remarks>
     private static string Describe(string opening, int measuredMinutes, int? terrainPointCount)
     {
-        string thisTerrain = terrainPointCount is { } count
-            ? string.Format(
-                CultureInfo.InvariantCulture,
-                "This terrain has {0:N0} points",
-                count)
-            : "This terrain's point count is not known to this run — it was built by an earlier import";
+        string thisTerrain = ThisTerrain(terrainPointCount);
 
         return string.Format(
             CultureInfo.InvariantCulture,
@@ -143,4 +138,62 @@ public static class SlowStepNotice
             measuredMinutes,
             thisTerrain);
     }
+
+    /// <summary>The point count of the terrain <see cref="ForSubDivisionRetypes"/> was measured on.</summary>
+    public const int MeasuredRetypePointCount = 74_852;
+
+    /// <summary>How many subdivisions that measurement retyped, one <c>ChangeTypeId</c> each.</summary>
+    public const int MeasuredRetypeSubDivisions = 33;
+
+    /// <summary>Rounded seconds those retypes took in Revit 2027, commit included.</summary>
+    /// <remarks>
+    /// 2026-09-19, bundle <c>9d2dfdbf</c>: one subdivision in 7.9 s, then 32 in 71.7 s, then a
+    /// one-second commit — 80 s. The fix's own real import in 2027 retyped the same 33 in 75 s.
+    /// </remarks>
+    public const int MeasuredRetypeSeconds = 80;
+
+    /// <summary>
+    /// The line to say before the drape retypes <paramref name="subDivisionCount"/> subdivisions so
+    /// they can wear the photograph, or <c>null</c> when there are none to retype.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Revit 2026 and later give every subdivision a type and no material of its own, so the drape
+    /// reaches one only by retyping it (<see cref="SubDivisionMaterial"/>). Measured on 2026-09-19:
+    /// each <c>ChangeTypeId</c> took about two and a half seconds in 2026 and 2027 on a
+    /// 74,852-point terrain, and the commit after all of them about one second. So the wait is in
+    /// the calls, one after another inside one slice of the import, and not inside a commit — the
+    /// sentence the other notices say about a commit would be wrong here.
+    /// </para>
+    /// <para>
+    /// The same rule as <see cref="Describe"/>: the measurement and this terrain are stated side by
+    /// side, and no duration is predicted from them.
+    /// </para>
+    /// </remarks>
+    public static string? ForSubDivisionRetypes(int subDivisionCount, int? terrainPointCount)
+    {
+        if (subDivisionCount <= 0)
+        {
+            return null;
+        }
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "Next: giving {0:N0} subdivision(s) the photograph. Revit 2026 and later give a subdivision "
+            + "a type and no material of its own, so each one is moved onto a type that wears the "
+            + "photograph, one at a time. On the one terrain this has been measured on ({1:N0} points), "
+            + "{2:N0} subdivisions took about {3:N0} seconds. {4}. Revit will report \"not responding\" "
+            + "until it finishes, and Cancel takes effect when it finishes. It has not crashed; leave it alone.",
+            subDivisionCount,
+            MeasuredRetypePointCount,
+            MeasuredRetypeSubDivisions,
+            MeasuredRetypeSeconds,
+            ThisTerrain(terrainPointCount));
+    }
+
+    /// <summary>This terrain's point count as a sentence, or the admission that it is not known.</summary>
+    private static string ThisTerrain(int? terrainPointCount)
+        => terrainPointCount is { } count
+            ? string.Format(CultureInfo.InvariantCulture, "This terrain has {0:N0} points", count)
+            : "This terrain's point count is not known to this run — it was built by an earlier import";
 }
