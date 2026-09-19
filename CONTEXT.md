@@ -195,9 +195,16 @@ for the artifact; the buildings a host makes from it are context buildings. Unqu
 has meant this, the building mesh and the building footprints to different people.
 _Avoid_: buildings, the IFC, site file, massing
 
+**Tree point**:
+One published point of the bundle's tree layer — a position, a ground height, a height and a crown
+radius — whatever its foliage type. A shrub is a tree point; the name is the manifest's, and a host
+does not rename what a pointer names.
+_Avoid_: planting point, tree (for a point of any foliage type), vegetation point
+
 **Foliage type**:
-The platform's closed vocabulary for what a planting point is — a tree, a shrub. A host maps a value
-to a family and never infers one from height or crown.
+The platform's closed vocabulary for what a tree point is — a tree, a shrub. A host maps a value to
+a family and never infers one from height or crown. "Tree" and "shrub" name the foliage type and
+nothing wider.
 _Avoid_: species, tree type, vegetation class
 
 ### What a host builds from a bundle
@@ -229,6 +236,6 @@ _Avoid_: building, massing, generic model, context geometry
 
 **Stamp**:
 The identity a host writes onto something it created so its next import recognises it. It names the
-order and, for the terrain and the trees, the build — never the element id, which identifies a run
+order and, for the terrain and the tree points, the build — never the element id, which identifies a run
 rather than a document.
 _Avoid_: tag, marker, label, key
