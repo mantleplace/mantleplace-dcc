@@ -55,12 +55,22 @@ public sealed record GroundLayerWords(string StampKind, string MaterialKind, str
     /// material's word are identity, and changing either would have a re-import miss every
     /// subdivision and material an earlier import made.
     /// </remarks>
+    /// <remarks>
+    /// ⛔ <b>Every layer is named here, and an unnamed one throws rather than falling through.</b>
+    /// The stamp's kind is the identity, and a default arm would give a layer nobody worded the
+    /// land-use spelling — so <see cref="SiteBoundaryIdentity.Parse"/> would read that layer's
+    /// subdivisions as land use, and a re-import would leave them alone as something else's.
+    /// </remarks>
     public static GroundLayerWords For(GroundLayer layer) => layer switch
     {
+        GroundLayer.LandUse => new("Site Boundary", "boundary", "site boundaries", "site boundary"),
         GroundLayer.LandCover => new("Land Cover", "land cover", "land cover", "land cover"),
         GroundLayer.Water => new("Water", "water body", "water bodies", "water"),
         GroundLayer.RoadSurface => new("Road Surface", "road surface", "road surfaces", "road"),
-        _ => new("Site Boundary", "boundary", "site boundaries", "site boundary"),
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(layer),
+            layer,
+            "This layer has no words, so its subdivisions have no identity of their own."),
     };
 }
 

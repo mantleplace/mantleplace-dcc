@@ -263,10 +263,10 @@ internal static class SiteVectorTests
             run.Equal(rings[3].Subtype, string.Empty, "no subtype property reads as empty, not as the class");
 
             // Which rings belong together, for the layers that cut a polygon whole (GroundCuts).
-            run.Equal(rings[0].Polygon, 1, "the first polygon of the layer");
-            run.Equal(rings[1].Polygon, 1, "its clearing belongs to it");
-            run.Equal(rings[2].Polygon, 2, "the MultiPolygon's second polygon is the layer's second");
-            run.Equal(rings[3].Polygon, 3, "and the next feature's is the third");
+            run.Equal(rings[0].PolygonOrdinal, 1, "the first polygon of the layer");
+            run.Equal(rings[1].PolygonOrdinal, 1, "its clearing belongs to it");
+            run.Equal(rings[2].PolygonOrdinal, 2, "the MultiPolygon's second polygon is the layer's second");
+            run.Equal(rings[3].PolygonOrdinal, 3, "and the next feature's is the third");
         });
 
         run.Case("a line belongs to no polygon", () =>
@@ -285,7 +285,7 @@ internal static class SiteVectorTests
                 out IReadOnlyList<SiteFeature> lines);
 
             run.True(error is null, $"parsed: {error}");
-            run.Equal(lines[0].Polygon, 0, "a stream centreline is no polygon's ring");
+            run.Equal(lines[0].PolygonOrdinal, 0, "a stream centreline is no polygon's ring");
         });
 
         run.Case("one malformed feature does not drop the layer, but malformed JSON does", () =>

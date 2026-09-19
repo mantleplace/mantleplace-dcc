@@ -15,6 +15,23 @@ internal static class GroundCutsTests
     {
         TestRun run = new();
 
+        run.Case("every step that cuts polygons names its layer, and nothing else does", () =>
+        {
+            // The shim dispatches through this and SlowStepNotice takes its words from it, so a kind
+            // missing here would run no step at all and a kind wrongly here would run the wrong one.
+            run.True(GroundCuts.LayerOf(ImportStepKind.SiteBoundaries) == GroundLayer.LandUse, "land use");
+            run.True(GroundCuts.LayerOf(ImportStepKind.LandCover) == GroundLayer.LandCover, "land cover");
+            run.True(GroundCuts.LayerOf(ImportStepKind.Water) == GroundLayer.Water, "water");
+            run.True(GroundCuts.LayerOf(ImportStepKind.RoadPolygons) == GroundLayer.RoadSurface, "road surfaces");
+
+            run.Equal(
+                Enum.GetValues<ImportStepKind>().Count(kind => GroundCuts.LayerOf(kind) is not null),
+                Enum.GetValues<GroundLayer>().Length,
+                "one step kind per layer, and no other kind claiming one");
+            run.True(GroundCuts.LayerOf(ImportStepKind.RoadCentrelines) is null, "the centrelines cut nothing");
+            run.True(GroundCuts.LayerOf(ImportStepKind.ImageryDrape) is null, "nor does the drape");
+        });
+
         run.Case("which layers cut a polygon whole, and which cut every ring", () =>
         {
             run.True(GroundCuts.CutsWholePolygons(GroundLayer.Water), "a water body's holes are islands");
@@ -192,6 +209,6 @@ internal static class GroundCutsTests
             Subtype = subtype,
             Classification = classification,
             IsHole = hole,
-            Polygon = polygon,
+            PolygonOrdinal = polygon,
         };
 }

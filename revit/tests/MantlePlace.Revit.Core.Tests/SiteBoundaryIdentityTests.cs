@@ -196,6 +196,24 @@ internal static class SiteBoundaryIdentityTests
             run.Equal(words.Select(w => w.Noun).Distinct(StringComparer.Ordinal).Count(), words.Length, "noun");
         });
 
+        run.Case("a layer nobody worded throws rather than borrowing land use's stamp", () =>
+        {
+            // The stamp's kind IS the identity. A default arm would give a new layer the land-use
+            // prefix, so Parse would read its subdivisions as land use and a re-import would leave
+            // them alone as something else's.
+            bool threw = false;
+            try
+            {
+                GroundLayerWords.For((GroundLayer)99);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                threw = true;
+            }
+
+            run.True(threw, "an unworded layer has no identity to lend or borrow");
+        });
+
         run.Case("the water and road-surface layers stamp under kinds of their own", () =>
         {
             run.Equal(

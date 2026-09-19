@@ -161,8 +161,8 @@ public static class ImportFailurePolicy
 
             ImportFailureKind.ToposolidSubregionOverlap =>
                 $"Subdivisions overlap each other in {places}. The published polygons genuinely do "
-                + "overlap — a road crosses the land use under it, a water body sits inside its land "
-                + "cover — and nothing was clipped or left out: Revit kept them all.",
+                + "overlap, within a layer and between layers alike, and nothing was clipped or left "
+                + "out: Revit kept them all.",
 
             ImportFailureKind.SlabShapeVerticesCoincident =>
                 $"Revit found {places} where two terrain points share the same position in plan and "

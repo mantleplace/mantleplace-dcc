@@ -48,7 +48,8 @@ internal sealed partial class RevitBundleImporter
         (IReadOnlyList<GroundCut> cuts, int strandedHoles) = GroundCuts.For(layer, rings);
         if (cuts.Count == 0)
         {
-            Say($"The {label} layer ({step.EntryName}) carries nothing this plugin could place.");
+            Say($"The {label} layer ({step.EntryName}) carries no polygon this plugin could cut: "
+                + $"{strandedHoles:N0} ring(s) are holes whose own polygon could not be read.");
             return;
         }
 
@@ -80,10 +81,9 @@ internal sealed partial class RevitBundleImporter
         int declined = 0;
         int unstamped = 0;
 
-        // The holes that will not be cut: the ones the reader left with no polygon, plus any the
-        // loop below cannot close. A hole that is not cut is ground the subdivision covers, so the
-        // count is said rather than dropped quietly.
-        int holesDropped = strandedHoles;
+        // A hole that is not cut is ground the subdivision covers and the bundle says it does not,
+        // so both ways of losing one are counted and said.
+        int holesUncut = 0;
 
         // Which cuts end up with a subdivision on the terrain: everything already present, plus
         // whatever this run manages to cut. A ring Revit declines, or one with too few edges to
@@ -127,6 +127,7 @@ internal sealed partial class RevitBundleImporter
             // an outer loop with its inner loops comes back as one subdivision with the holes left
             // out of it, in Revit 2025, 2026 and 2027 alike, whichever way round a ring is wound.
             List<CurveLoop> loops = [outer];
+            int uncut = 0;
             foreach (SiteFeature hole in cut.Holes)
             {
                 if (Loop(hole) is { } inner)
@@ -135,7 +136,7 @@ internal sealed partial class RevitBundleImporter
                 }
                 else
                 {
-                    holesDropped++;
+                    uncut++;
                 }
             }
 
@@ -143,6 +144,10 @@ internal sealed partial class RevitBundleImporter
             {
                 Toposolid subdivision = terrain.CreateSubDivision(_document, loops);
                 created++;
+
+                // Counted only now: there is no subdivision for a hole to be missing from until
+                // this call returns.
+                holesUncut += uncut;
                 onTerrain[boundary.Ordinal - 1] = true;
 
                 // Remembered for the drape, which prefers the stamp below but cannot use it for a
@@ -165,10 +170,9 @@ internal sealed partial class RevitBundleImporter
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
                 // A ring that self-intersects, or falls outside the terrain, is one boundary lost —
-                // not a reason to abandon the other two. Its holes go with it rather than counting
-                // as holes filled in: there is no subdivision left for them to be holes in.
+                // not a reason to abandon the other two. Its holes go with it and are not counted
+                // above: there is no subdivision left for them to be holes in.
                 declined++;
-                holesDropped -= loops.Count - 1;
             }
         }
 
@@ -195,9 +199,15 @@ internal sealed partial class RevitBundleImporter
             summary += $"; {unstamped:N0} could not be stamped and will not be recognised by a re-import";
         }
 
-        if (holesDropped > 0)
+        if (holesUncut > 0)
         {
-            summary += $"; {holesDropped:N0} hole(s) had too little shape to cut, so that much ground is covered";
+            summary += $"; {holesUncut:N0} hole(s) had too few edges to cut, so that much ground is covered";
+        }
+
+        if (strandedHoles > 0)
+        {
+            summary += $"; {strandedHoles:N0} hole(s) are holes of a polygon whose outer ring could not be "
+                + "read, so they were left out with it";
         }
 
         Say(summary + ".");

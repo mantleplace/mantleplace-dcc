@@ -54,6 +54,23 @@ public readonly record struct GroundCutPlan(IReadOnlyList<GroundCut> Cuts, int S
 public static class GroundCuts
 {
     /// <summary>
+    /// The polygon layer a step of this kind cuts, or <c>null</c> for a step that cuts none.
+    /// </summary>
+    /// <remarks>
+    /// The one place a step kind becomes a layer: the shim dispatches through it rather than
+    /// carrying a case per layer, and <see cref="SlowStepNotice"/> takes the layer's own words from
+    /// it. A fifth polygon layer is a row here and nowhere else in either.
+    /// </remarks>
+    public static GroundLayer? LayerOf(ImportStepKind kind) => kind switch
+    {
+        ImportStepKind.SiteBoundaries => GroundLayer.LandUse,
+        ImportStepKind.LandCover => GroundLayer.LandCover,
+        ImportStepKind.Water => GroundLayer.Water,
+        ImportStepKind.RoadPolygons => GroundLayer.RoadSurface,
+        _ => null,
+    };
+
+    /// <summary>
     /// Whether this layer's polygons are cut whole — one subdivision per polygon, holes left out —
     /// rather than one subdivision per ring.
     /// </summary>
@@ -78,7 +95,7 @@ public static class GroundCuts
         // outer ring the reader dropped must not hand its holes to the polygon before it.
         List<GroundCut> cuts = [];
         int stranded = 0;
-        foreach (IGrouping<int, SiteFeature> polygon in rings.GroupBy(ring => ring.Polygon))
+        foreach (IGrouping<int, SiteFeature> polygon in rings.GroupBy(ring => ring.PolygonOrdinal))
         {
             SiteFeature? outer = polygon.FirstOrDefault(ring => !ring.IsHole);
             if (outer is null)

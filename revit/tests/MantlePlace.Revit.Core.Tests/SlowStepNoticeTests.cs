@@ -195,6 +195,21 @@ internal static class SlowStepNoticeTests
             }
         });
 
+        run.Case("each polygon layer's notice is in that layer's own words", () =>
+        {
+            run.Contains(SlowStepNotice.For(ImportStepKind.LandCover, 80_372, 10), "Next: the land cover — 10", "land cover");
+            run.Contains(SlowStepNotice.For(ImportStepKind.Water, 80_372, 2), "Next: the water bodies — 2", "water");
+            run.Contains(SlowStepNotice.For(ImportStepKind.RoadPolygons, 80_372, 4), "Next: the road surfaces — 4", "road surfaces");
+            run.Contains(
+                SlowStepNotice.For(ImportStepKind.Water, 80_372, 2),
+                "as slow as the site boundaries were",
+                "the cost is the terrain's relation rebuild, so it is the boundaries' measurement");
+            run.Contains(
+                SlowStepNotice.For(ImportStepKind.SiteBoundaries, 80_372, 10),
+                "This is the slowest step of the import.",
+                "the site boundaries keep the line they have always had");
+        });
+
         run.Case("every kind is classified — a new one cannot be forgotten silently", () =>
         {
             // FastKinds ∪ SlowKinds must be the whole enum. A kind added to the core and left out of

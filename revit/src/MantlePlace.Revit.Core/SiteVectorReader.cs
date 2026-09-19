@@ -71,7 +71,7 @@ public sealed class SiteFeature
     /// reader dropped leaves holes that belong to no polygon rather than holes that attach
     /// themselves to the previous one.
     /// </remarks>
-    public int Polygon { get; init; }
+    public int PolygonOrdinal { get; init; }
 }
 
 /// <summary>
@@ -299,7 +299,7 @@ public static class SiteVectorReader
             WidthM = carried.WidthM,
             Subtype = carried.Subtype,
             IsHole = isHole,
-            Polygon = polygon,
+            PolygonOrdinal = polygon,
         });
     }
 

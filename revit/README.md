@@ -323,7 +323,10 @@ which way round a published ring is wound.
 
 **Where two subdivisions cover the same ground, neither is on top.** Measured in the same Revit
 2027, on an import that cut all four layers into one 74,852-point terrain — 23 land-use, 10
-land-cover, 1 water and 4 road subdivisions, the roads cut last and over everything. Revit posted an
+land-cover, 1 water and 4 road subdivisions, the roads cut last and over everything. The land-use,
+land-cover and water polygons are a real order's; no bundle on the machine published a
+`road_polygons` layer yet, so the road surfaces came from a hand-written one added to a scratch copy
+of that bundle. They exercise the add-in, and say nothing about what the platform publishes. Revit posted an
 overlap warning for each pair (15, 96, 3 and 26 places as the four steps ran) and kept every
 subdivision. A ray straight down over six road/land overlaps met a **land-cover** subdivision first
 every time, the road surface last or not at all, with every surface inside 0.02 ft (6 mm) of the
