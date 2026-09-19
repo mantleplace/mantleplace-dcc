@@ -229,14 +229,24 @@ follow.
   `ProvenanceStorage.SchemaGuid` breaks every project that already holds the old definition, so a
   field change is a new GUID
   ([ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md)).
-- **The context buildings joined that set.** The step converts the site model with
+- **The context buildings have left that set, in Revit 2027.** The step converts the site model with
   `Application.OpenIFCDocument`, finds each building in the result by `BuiltInParameter.IFC_GUID`,
   clones its solids with `SolidUtils.Clone` and gives them to a Generic Model `DirectShape`. The
   converted document is closed in the slice that opened it, before the first chunk: a document held
   across slices is closed only when a step ends through `StagedImport`, and an import abandoned from
-  the event handler does not. All of it compiles; none of it has run inside Revit. The part most
-  likely to be wrong is the GlobalId: if Revit's import does not record it where the step looks, the
-  step says so in one line and copies nothing. Which elements are buildings is not in that set —
+  the event handler does not. All of it ran in Revit 2027 through the harness described under the
+  tree family below, with the import pressed in the real window. Revit's import does record each
+  proxy's GlobalId in `IFC_GUID`: an 834-building site model came in as 834 stamped elements, every
+  one with a solid, in 22.7 s including the conversion. A second import of the same build copied
+  nothing and never converted the site model. 2025 and 2026 are left to the release gate. Three things
+  the run settled that reading would not have. Open IFC raises *IFC versions 4 and above are only
+  partially supported* on every IFC4 file, as a warning that waits for a click unless a failures
+  handler takes it, which the step's swallower does. A new `DirectShape` gets an `IfcGUID` of Revit's
+  own, not the source GlobalId, so the Comments stamp is the only identity. And the copy carries no
+  height, area or volume parameter. Open IFC turns an `IfcPropertySet` property into a project
+  parameter named `<set>.<property>`, ignores an `IfcElementQuantity`, and nothing it attaches
+  survives the solid's copy onto a `DirectShape`: a value the site model publishes reaches a building
+  only if this step writes it. Which elements are buildings is not in that set —
   `SiteModelReader` reads it from the IFC's text, headlessly ([ADR 0012](../docs/adr/0012-context-buildings-come-from-the-site-model.md)).
 
 - **The tree family's calls left that set in Revit 2025 before they merged**, through a harness that
