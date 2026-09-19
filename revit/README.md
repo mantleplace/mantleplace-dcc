@@ -116,9 +116,16 @@ Revit licence.
   when the curator reloads it. One family only — a shrub or any other foliage type waits for the
   platform to publish one, and the add-in never guesses a type from a height. **No render
   substitution is set, and the add-in never sets one:** linking the family to a renderer's tree
-  asset is the curator's step, in that renderer's own tool. Whether a substituted tree keeps its own height and
-  crown, or takes the family's one type `Height`, has not been seen in any renderer yet — issue
-  183. All three are positioned from the same
+  asset is the curator's step, in that renderer's own tool — and in Twinmotion it costs the
+  published sizes. Checked in **Twinmotion 2026.2 from Revit 2027, September 2026**: with a tree
+  asset set on the type's *Twinmotion Substitution*, every tree in the forest renders at that
+  asset's own size, and raising the family's built-in type `Height` does not move it, so a published
+  5 m tree and a 30 m one come out identical. Without a substitution the family renders as modelled,
+  each tree at its own published height and crown. Two more things a curator meets there: Twinmotion
+  applies a substitution only when **Enable Substitution** was ticked in the import that brought the
+  model in — setting one afterwards and synchronising into a scene imported without it does nothing
+  — and it goes on drawing the Revit geometry beside the substituted assets, which is a second
+  forest until the Revit trees are hidden in its scene graph. All three are positioned from the same
   published origin as the survey point, and a bundle whose origin is in a CRS they cannot be brought
   into is **skipped with that reason** rather than placed ~2000 km out;
 - cuts the `land_cover` polygons into the terrain as subdivisions too, the same way and stamped
