@@ -37,7 +37,9 @@
     "                  it was last reviewed against in verified-against.json",
     "                  (`verifiedAgainstCorpusVersion`); check_manifest_conformance.py fails a",
     "                  host that trails this number.",
-    "  manifestVersion the bundle-manifest version this corpus's fixtures are written against.",
+    "  manifestVersion the bundle-manifest version this corpus's fixtures are written against,",
+    "                  and the readers' floor. A case for a later additive minor declares its",
+    "                  own `manifestVersion` above it (corpus/README.md, 'Version').",
     "",
     "OWNERSHIP: maintainer-owned. A host that needs a new case proposes it here by pull",
     "request rather than forking a private copy."
@@ -762,6 +764,20 @@
       "expectations": {
         "roadSplinesPath": "Vector/RoadSplines.geojson",
         "roadSplinesSha256": "9999999999999999999999999999999999999999999999999999999999999999"
+      }
+    },
+    {
+      "id": "manifest.locationBlockIgnored",
+      "group": "manifest",
+      "file": "manifest/location-block-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 1.1.0 adds a required top-level `location` block, and no registered host consumes it yet. The fixture is versioned 1.1.0 and puts the block first, with a member beyond `time_zone` that no reader knows, since the block is open and is where later minors will grow. A reader MUST accept it and still read everything around it. Two readers fail here while every 1.0.0 case stays green: one that gates the version on equality with its floor rather than on the major, and one that refuses a top-level block it does not recognise. Either turns an additive minor into a breaking release (compatibility.md). Host-invariant on purpose -- ignoring a block nobody has taught you is every reader's obligation, not one host's.",
+      "manifestVersion": "1.1.0",
+      "expectations": {
+        "jobId": "location",
+        "orderId": "ord-location-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
       }
     },
     {
