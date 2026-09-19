@@ -19,7 +19,7 @@ history, not contract.
 
 ## Semver era
 
-### 1.2.0 — the foliage type
+### 1.2.0 — the foliage type (additive minor; published and frozen 2026-09-19)
 
 The tree-points CSV gains a sixth column, `foliage_type`, and `landcover.tree_points` gains an
 optional `foliage_type_vocabulary` naming the closed vocabulary its values are drawn from — `"1"`,
@@ -36,8 +36,8 @@ from 1.1.0, which both hosts took on 2026-09-19.
 released through `unreal-0.4.0` matched the header as one exact string and counted five fields, so
 the new column would have dropped the whole tree layer on import, with the import still reporting
 success. The platform emits the column only once a tagged Unreal release carries the fixed
-reader — the order 1.0.0 was shipped in, for the same reason. [Format](format.md) §4.4 now states
-the rule that reader broke.
+reader — `unreal-0.5.0`, tagged the same day — the order 1.0.0 was shipped in, for the same reason.
+[Format](format.md) §4.4 now states the rule that reader broke.
 
 ### 1.1.0 — the location block and its time zone (additive minor; published and frozen 2026-09-19)
 
