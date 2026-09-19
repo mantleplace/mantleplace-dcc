@@ -29,6 +29,8 @@ internal static class SlowStepNoticeTests
     [
         ImportStepKind.SiteBoundaries,
         ImportStepKind.LandCover,
+        ImportStepKind.Water,
+        ImportStepKind.RoadPolygons,
         ImportStepKind.ImageryDrape,
     ];
 

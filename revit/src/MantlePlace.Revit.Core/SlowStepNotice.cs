@@ -98,6 +98,21 @@ public static class SlowStepNotice
                 MeasuredSiteBoundariesMinutes,
                 terrainPointCount),
 
+            // Same again: the cost is the terrain's relation rebuild, not what the polygon is of.
+            ImportStepKind.Water => Describe(
+                "Next: the water bodies — "
+                    + plannedWorkItems.ToString("N0", CultureInfo.InvariantCulture)
+                    + " subdivision(s) to cut into the terrain, as slow as the site boundaries were.",
+                MeasuredSiteBoundariesMinutes,
+                terrainPointCount),
+
+            ImportStepKind.RoadPolygons => Describe(
+                "Next: the road surfaces — "
+                    + plannedWorkItems.ToString("N0", CultureInfo.InvariantCulture)
+                    + " subdivision(s) to cut into the terrain, as slow as the site boundaries were.",
+                MeasuredSiteBoundariesMinutes,
+                terrainPointCount),
+
             ImportStepKind.ImageryDrape => Describe(
                 "Next: the imagery drape. Retyping the terrain so it can wear the photograph costs "
                     + "almost as much as cutting the boundaries did, and for the same reason.",

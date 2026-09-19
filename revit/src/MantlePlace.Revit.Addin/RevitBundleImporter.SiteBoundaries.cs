@@ -3,14 +3,15 @@ using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The subdivision steps: land-use and land-cover polygons cut into the ground, stamped so a
-// re-import finds them.
+// The subdivision steps: the published polygon layers — land use, land cover, water bodies and road
+// surfaces — cut into the ground, stamped so a re-import finds them.
 internal sealed partial class RevitBundleImporter
 {
     /// <summary>
     /// A published polygon layer as toposolid subdivisions. For <c>land_use</c> that is property
     /// boundaries — Forma's "Site limits" row, by the mechanism Forma itself offers alongside Model
-    /// Lines — and for <c>land_cover</c> the ground cover, cut the same way.
+    /// Lines — and for <c>land_cover</c>, <c>water</c> and <c>road_polygons</c> the ground cover, the
+    /// water bodies and the road surfaces, cut the same way.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -18,13 +19,20 @@ internal sealed partial class RevitBundleImporter
     /// third ordinate, so there is no honest elevation to draw them at. A subdivision is projected
     /// onto the toposolid and follows the relief, which is both what Forma produces and the only
     /// reading that does not need an elevation nobody published. With no toposolid in the document
-    /// there is nothing to project onto, and that is said rather than worked around.
+    /// there is nothing to project onto, and that is said rather than worked around. A road surface
+    /// therefore comes in flat, at the terrain's own surface, rather than recessed into it.
     /// </para>
     /// <para>
-    /// Each feature's published <c>subtype</c> is read here and nowhere else, so the renderer
-    /// keyword its material will carry is remembered by element for the drape
-    /// (<see cref="_subDivisionKeywords"/>) — for a subdivision this run cut, and for one an earlier
-    /// import left, alike.
+    /// What each layer's rings become is <see cref="GroundCuts"/>'s: a land ring is its own
+    /// subdivision, while a water body or a road network is cut whole, with its islands and city
+    /// blocks left out of it. Nothing is clipped against another layer and no layer takes precedence
+    /// — the published polygons overlap because the ground they describe does, and Revit keeps them
+    /// all (<see cref="ImportFailurePolicy"/>).
+    /// </para>
+    /// <para>
+    /// The renderer keyword each cut's material will carry is decided there too, and remembered by
+    /// element for the drape (<see cref="_subDivisionKeywords"/>) — for a subdivision this run cut,
+    /// and for one an earlier import left, alike.
     /// </para>
     /// </remarks>
     private void ImportSiteBoundaries(ImportStep step, GroundLayer layer)
@@ -32,8 +40,15 @@ internal sealed partial class RevitBundleImporter
         GroundLayerWords words = GroundLayerWords.For(layer);
         string label = words.Label;
 
-        if (ReadVectorLayer(step, SiteGeometryKinds.Areas, label) is not { } features)
+        if (ReadVectorLayer(step, SiteGeometryKinds.Areas, label) is not { } rings)
         {
+            return;
+        }
+
+        (IReadOnlyList<GroundCut> cuts, int strandedHoles) = GroundCuts.For(layer, rings);
+        if (cuts.Count == 0)
+        {
+            Say($"The {label} layer ({step.EntryName}) carries nothing this plugin could place.");
             return;
         }
 
@@ -46,30 +61,35 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        // Which features are already on the terrain is decided in the pure core from the stamps the
+        // Which cuts are already on the terrain is decided in the pure core from the stamps the
         // existing subdivisions carry, so a re-import creates nothing twice.
-        IReadOnlyList<string?> names = [.. features.Select(feature => (string?)feature.Name)];
+        IReadOnlyList<string?> names = GroundCuts.Names(cuts);
         string stem = _archive.Layout.Key.Stem;
         IReadOnlyList<NewSiteBoundary> newBoundaries = SiteBoundaryIdentity.NewFeatures(
             layer,
             ExistingBoundaryStamps(terrain),
             names,
             stem);
-        int alreadyPresent = features.Count - newBoundaries.Count;
+        int alreadyPresent = cuts.Count - newBoundaries.Count;
 
         // The keywords for the subdivisions an earlier import cut, found by the stamp each carries.
         // The ones this run cuts are remembered below, as each is created.
-        RememberKeywords(terrain, layer, RendererKeywords.ByStamp(features, SiteBoundaryIdentity.Stamps(layer, names, stem)));
+        RememberKeywords(terrain, layer, GroundCuts.KeywordsByStamp(cuts, SiteBoundaryIdentity.Stamps(layer, names, stem)));
 
         int created = 0;
         int declined = 0;
         int unstamped = 0;
 
-        // Which features end up with a subdivision on the terrain: everything already present, plus
+        // The holes that will not be cut: the ones the reader left with no polygon, plus any the
+        // loop below cannot close. A hole that is not cut is ground the subdivision covers, so the
+        // count is said rather than dropped quietly.
+        int holesDropped = strandedHoles;
+
+        // Which cuts end up with a subdivision on the terrain: everything already present, plus
         // whatever this run manages to cut. A ring Revit declines, or one with too few edges to
         // close, leaves nothing behind — and a report naming a subdivision that does not exist is
         // the same lie as a summary counting one.
-        bool[] onTerrain = new bool[features.Count];
+        bool[] onTerrain = new bool[cuts.Count];
         Array.Fill(onTerrain, true);
         foreach (NewSiteBoundary boundary in newBoundaries)
         {
@@ -97,38 +117,38 @@ internal sealed partial class RevitBundleImporter
 
         foreach (NewSiteBoundary boundary in newBoundaries)
         {
-            SiteFeature feature = features[boundary.Ordinal - 1];
-            List<Curve> edges = [];
-            for (int index = 0; index < feature.Vertices.Count; index++)
-            {
-                SiteVertex from = feature.Vertices[index];
-                SiteVertex to = feature.Vertices[(index + 1) % feature.Vertices.Count];
-
-                // Flat by construction: a subdivision profile is projected onto the toposolid, so the
-                // loop's own elevation is irrelevant and zero keeps it well inside Revit's tolerance.
-                XYZ start = new(MetresToInternal(from.EastM), MetresToInternal(from.NorthM), 0.0);
-                XYZ end = new(MetresToInternal(to.EastM), MetresToInternal(to.NorthM), 0.0);
-                if (start.DistanceTo(end) > _document.Application.ShortCurveTolerance)
-                {
-                    edges.Add(Line.CreateBound(start, end));
-                }
-            }
-
-            if (edges.Count < 3)
+            GroundCut cut = cuts[boundary.Ordinal - 1];
+            if (Loop(cut.Outer) is not { } outer)
             {
                 continue;
             }
 
+            // The outer loop first and the holes after it, which is the order Revit reads them in:
+            // an outer loop with its inner loops comes back as one subdivision with the holes left
+            // out of it, in Revit 2025, 2026 and 2027 alike, whichever way round a ring is wound.
+            List<CurveLoop> loops = [outer];
+            foreach (SiteFeature hole in cut.Holes)
+            {
+                if (Loop(hole) is { } inner)
+                {
+                    loops.Add(inner);
+                }
+                else
+                {
+                    holesDropped++;
+                }
+            }
+
             try
             {
-                Toposolid subdivision = terrain.CreateSubDivision(_document, [CurveLoop.Create(edges)]);
+                Toposolid subdivision = terrain.CreateSubDivision(_document, loops);
                 created++;
                 onTerrain[boundary.Ordinal - 1] = true;
 
                 // Remembered for the drape, which prefers the stamp below but cannot use it for a
                 // subdivision that fails to take one.
                 _createdSubDivisionIds.Add(subdivision.Id);
-                if (RendererKeywords.ForRing(feature) is { } keyword)
+                if (cut.Keyword is { } keyword)
                 {
                     _subDivisionKeywords[subdivision.Id] = keyword;
                 }
@@ -145,8 +165,10 @@ internal sealed partial class RevitBundleImporter
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
                 // A ring that self-intersects, or falls outside the terrain, is one boundary lost —
-                // not a reason to abandon the other two.
+                // not a reason to abandon the other two. Its holes go with it rather than counting
+                // as holes filled in: there is no subdivision left for them to be holes in.
                 declined++;
+                holesDropped -= loops.Count - 1;
             }
         }
 
@@ -173,8 +195,40 @@ internal sealed partial class RevitBundleImporter
             summary += $"; {unstamped:N0} could not be stamped and will not be recognised by a re-import";
         }
 
+        if (holesDropped > 0)
+        {
+            summary += $"; {holesDropped:N0} hole(s) had too little shape to cut, so that much ground is covered";
+        }
+
         Say(summary + ".");
-        ReportCoextensiveBoundaries(ground, features, onTerrain);
+        ReportCoextensiveBoundaries(ground, cuts, onTerrain);
+    }
+
+    /// <summary>
+    /// One published ring as a closed Revit loop, or <c>null</c> when too few of its edges survive
+    /// the short-curve tolerance to close one.
+    /// </summary>
+    /// <remarks>
+    /// Flat by construction: a subdivision profile is projected onto the toposolid, so the loop's own
+    /// elevation is irrelevant and zero keeps it well inside Revit's tolerance.
+    /// </remarks>
+    private CurveLoop? Loop(SiteFeature ring)
+    {
+        List<Curve> edges = [];
+        for (int index = 0; index < ring.Vertices.Count; index++)
+        {
+            SiteVertex from = ring.Vertices[index];
+            SiteVertex to = ring.Vertices[(index + 1) % ring.Vertices.Count];
+
+            XYZ start = new(MetresToInternal(from.EastM), MetresToInternal(from.NorthM), 0.0);
+            XYZ end = new(MetresToInternal(to.EastM), MetresToInternal(to.NorthM), 0.0);
+            if (start.DistanceTo(end) > _document.Application.ShortCurveTolerance)
+            {
+                edges.Add(Line.CreateBound(start, end));
+            }
+        }
+
+        return edges.Count < 3 ? null : CurveLoop.Create(edges);
     }
 
     /// <summary>
@@ -229,7 +283,7 @@ internal sealed partial class RevitBundleImporter
     /// </remarks>
     private void ReportCoextensiveBoundaries(
         FootprintExtent? ground,
-        IReadOnlyList<SiteFeature> features,
+        IReadOnlyList<GroundCut> cuts,
         bool[] onTerrain)
     {
         if (ground is not { } groundFootprint)
@@ -237,16 +291,16 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        for (int index = 0; index < features.Count; index++)
+        for (int index = 0; index < cuts.Count; index++)
         {
-            if (!onTerrain[index] || FootprintExtent.Around(features[index].Vertices) is not { } footprint)
+            if (!onTerrain[index] || FootprintExtent.Around(cuts[index].Outer.Vertices) is not { } footprint)
             {
                 continue;
             }
 
             // The position is stated by the core alongside whatever name there is, because names are
             // not unique and an unnamed feature's stamp is its position (SiteBoundaryIdentity).
-            string name = FeatureName(features[index], "(unnamed)");
+            string name = FeatureName(cuts[index].Outer, "(unnamed)");
 
             if (SiteBoundaryCoextension.Describe(name, index + 1, footprint, groundFootprint) is { } line)
             {

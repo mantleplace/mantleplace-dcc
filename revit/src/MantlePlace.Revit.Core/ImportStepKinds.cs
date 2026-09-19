@@ -52,6 +52,8 @@ public static class ImportStepKinds
         ImportStepKind.RoadCentrelines => ExtractionLifetime.Transient,
         ImportStepKind.SiteBoundaries => ExtractionLifetime.Transient,
         ImportStepKind.LandCover => ExtractionLifetime.Transient,
+        ImportStepKind.Water => ExtractionLifetime.Transient,
+        ImportStepKind.RoadPolygons => ExtractionLifetime.Transient,
         ImportStepKind.Vegetation => ExtractionLifetime.Transient,
 
         // The same file as LinkSiteIfc, and the opposite answer: the buildings are copied out of the

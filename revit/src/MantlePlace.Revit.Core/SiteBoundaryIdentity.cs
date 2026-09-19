@@ -9,10 +9,10 @@ public readonly record struct NewSiteBoundary(int Ordinal, string Stamp);
 
 /// <summary>Which published polygon layer a subdivision was cut from.</summary>
 /// <remarks>
-/// The layer is the stamp's kind, so it is part of the identity: both layers stamp an unnamed
+/// The layer is the stamp's kind, so it is part of the identity: every layer stamps an unnamed
 /// feature by its position, and without the kind land-use feature 1 would read as land-cover
-/// feature 1 already cut. <c>land_use</c> and <c>land_cover</c> are two different Overture layers,
-/// not two names for one — a bundle can carry either, both or neither.
+/// feature 1 already cut. These are four different Overture layers, not four names for one — a
+/// bundle can carry any of them, all of them or none.
 /// </remarks>
 public enum GroundLayer
 {
@@ -21,6 +21,19 @@ public enum GroundLayer
 
     /// <summary><c>vector.layers[name=="land_cover"]</c>. Stamped <c>Mantle Place Land Cover</c>.</summary>
     LandCover,
+
+    /// <summary>
+    /// The polygons of <c>vector.layers[name=="water"]</c> — its water bodies, never its stream
+    /// centrelines. Stamped <c>Mantle Place Water</c>.
+    /// </summary>
+    Water,
+
+    /// <summary>
+    /// <c>vector.layers[name=="road_polygons"]</c> — the road surfaces, already widened, merged per
+    /// class and cut so no two overlap. Stamped <c>Mantle Place Road Surface</c>, which no road
+    /// centreline's <c>Mantle Place Road</c> stamp can be mistaken for.
+    /// </summary>
+    RoadSurface,
 }
 
 /// <summary>An owned subdivision stamp, taken apart: which layer, and the per-feature token.</summary>
@@ -45,6 +58,8 @@ public sealed record GroundLayerWords(string StampKind, string MaterialKind, str
     public static GroundLayerWords For(GroundLayer layer) => layer switch
     {
         GroundLayer.LandCover => new("Land Cover", "land cover", "land cover", "land cover"),
+        GroundLayer.Water => new("Water", "water body", "water bodies", "water"),
+        GroundLayer.RoadSurface => new("Road Surface", "road surface", "road surfaces", "road"),
         _ => new("Site Boundary", "boundary", "site boundaries", "site boundary"),
     };
 }
@@ -193,7 +208,8 @@ public static class SiteBoundaryIdentity
         return null;
     }
 
-    private static readonly GroundLayer[] Layers = [GroundLayer.LandUse, GroundLayer.LandCover];
+    /// <summary>Every layer whose stamps this reads, so a new one is recognised the day it is added.</summary>
+    private static readonly GroundLayer[] Layers = Enum.GetValues<GroundLayer>();
 
     /// <summary>Everything a stamp of this layer and bundle starts with, separator included.</summary>
     private static string OwnedPrefix(GroundLayer layer, string cacheKeyStem)

@@ -352,6 +352,29 @@ public sealed class BundleManifest
     /// </summary>
     public BundleArtifact? LandCover { get; internal set; }
 
+    /// <summary>
+    /// <c>vector.layers[name=="water"]</c> geojson — streams as centrelines and water bodies as
+    /// polygons in one layer. Only its polygons become subdivisions.
+    /// </summary>
+    public BundleArtifact? Water { get; internal set; }
+
+    /// <summary>
+    /// <c>vector.layers[name=="road_polygons"]</c> geojson — the road surfaces derived from
+    /// <c>road</c>, already widened, merged per class and cut so no two overlap.
+    /// </summary>
+    public BundleArtifact? RoadPolygons { get; internal set; }
+
+    /// <summary>
+    /// Whether the bundle carries the base <c>road</c> layer at all, in any format.
+    /// </summary>
+    /// <remarks>
+    /// The one thing that tells "this area has no roads" apart from "the road surfaces were not
+    /// derived for this order": <c>road_polygons</c> is best-effort and can be absent beside a
+    /// <c>road</c> layer that is not, and a consumer that reports no roads in that case is wrong
+    /// about the area rather than about the bundle (<c>spec/format.md</c> §6.3).
+    /// </remarks>
+    public bool HasRoadLayer { get; internal set; }
+
     /// <summary><c>Landcover/TreePoints.csv</c> — Forma's "Vegetation" row.</summary>
     public BundleArtifact? TreePoints { get; internal set; }
 

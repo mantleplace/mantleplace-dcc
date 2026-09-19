@@ -60,6 +60,18 @@ public sealed class SiteFeature
     /// not forest, and it must not be named as though it were.
     /// </remarks>
     public bool IsHole { get; init; }
+
+    /// <summary>
+    /// Which polygon of the layer this ring came out of, counting from one; zero for a line.
+    /// </summary>
+    /// <remarks>
+    /// The rings stay flat, one feature each, and this says which of them belong together — what
+    /// <see cref="GroundCuts"/> needs to cut a polygon as one subdivision with its holes in it. It is
+    /// the polygon's position in the layer rather than the ring's, so a polygon whose outer ring the
+    /// reader dropped leaves holes that belong to no polygon rather than holes that attach
+    /// themselves to the previous one.
+    /// </remarks>
+    public int Polygon { get; init; }
 }
 
 /// <summary>
@@ -127,6 +139,7 @@ public static class SiteVectorReader
                     + "FeatureCollection. Re-download this bundle from your vault at mantle.place/vault.";
             }
 
+            int polygons = 0;
             foreach (JsonElement feature in collection.EnumerateArray())
             {
                 if (feature.ValueKind != JsonValueKind.Object)
@@ -134,7 +147,7 @@ public static class SiteVectorReader
                     continue;
                 }
 
-                AppendFeature(feature, frame, accept, parsed);
+                AppendFeature(feature, frame, accept, parsed, ref polygons);
             }
         }
 
@@ -145,7 +158,8 @@ public static class SiteVectorReader
         JsonElement feature,
         SiteFrame frame,
         SiteGeometryKinds accept,
-        List<SiteFeature> parsed)
+        List<SiteFeature> parsed,
+        ref int polygons)
     {
         JsonElement? properties = feature.Object("properties");
         FeatureProperties carried = new(
@@ -180,7 +194,7 @@ public static class SiteVectorReader
         switch (type)
         {
             case "LineString":
-                AppendPath(coordinates, frame, closed: false, isHole: false, carried, parsed);
+                AppendPath(coordinates, frame, closed: false, isHole: false, polygon: 0, carried, parsed);
                 break;
 
             case "MultiLineString":
@@ -188,14 +202,14 @@ public static class SiteVectorReader
                 {
                     if (path.ValueKind == JsonValueKind.Array)
                     {
-                        AppendPath(path, frame, closed: false, isHole: false, carried, parsed);
+                        AppendPath(path, frame, closed: false, isHole: false, polygon: 0, carried, parsed);
                     }
                 }
 
                 break;
 
             case "Polygon":
-                AppendRings(coordinates, frame, carried, parsed);
+                AppendRings(coordinates, frame, carried, parsed, ++polygons);
                 break;
 
             case "MultiPolygon":
@@ -203,7 +217,7 @@ public static class SiteVectorReader
                 {
                     if (polygon.ValueKind == JsonValueKind.Array)
                     {
-                        AppendRings(polygon, frame, carried, parsed);
+                        AppendRings(polygon, frame, carried, parsed, ++polygons);
                     }
                 }
 
@@ -223,14 +237,15 @@ public static class SiteVectorReader
         JsonElement polygon,
         SiteFrame frame,
         FeatureProperties carried,
-        List<SiteFeature> parsed)
+        List<SiteFeature> parsed,
+        int ordinal)
     {
         int ring = 0;
         foreach (JsonElement path in polygon.EnumerateArray())
         {
             if (path.ValueKind == JsonValueKind.Array)
             {
-                AppendPath(path, frame, closed: true, isHole: ring > 0, carried, parsed);
+                AppendPath(path, frame, closed: true, isHole: ring > 0, ordinal, carried, parsed);
             }
 
             ring++;
@@ -242,6 +257,7 @@ public static class SiteVectorReader
         SiteFrame frame,
         bool closed,
         bool isHole,
+        int polygon,
         FeatureProperties carried,
         List<SiteFeature> parsed)
     {
@@ -283,6 +299,7 @@ public static class SiteVectorReader
             WidthM = carried.WidthM,
             Subtype = carried.Subtype,
             IsHole = isHole,
+            Polygon = polygon,
         });
     }
 

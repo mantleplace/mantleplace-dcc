@@ -20,8 +20,9 @@ internal sealed partial class RevitBundleImporter
     /// <para>
     /// Each centreline carries <c>Mantle Place Road {stem}/{row}</c> in its Comments
     /// (<see cref="RoadIdentity"/>), and a re-import draws only the rows it does not find, so the
-    /// roads are no longer doubled. No material and no width: a road surface is a published polygon
-    /// this host would cut, and the bundle does not publish one yet.
+    /// roads are no longer doubled. No material and no width: the road surface is a published
+    /// polygon of its own (<c>road_polygons</c>), cut as a subdivision by the step beside this one,
+    /// and widening a centreline here would be deriving what that layer already carries.
     /// </para>
     /// </remarks>
     private void ImportRoadCentrelines(ImportStep step)

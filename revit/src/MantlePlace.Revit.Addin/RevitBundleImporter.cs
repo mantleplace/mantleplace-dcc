@@ -205,6 +205,10 @@ internal sealed partial class RevitBundleImporter(
                 return Once(() => ImportSiteBoundaries(step, GroundLayer.LandUse));
             case ImportStepKind.LandCover:
                 return Once(() => ImportSiteBoundaries(step, GroundLayer.LandCover));
+            case ImportStepKind.Water:
+                return Once(() => ImportSiteBoundaries(step, GroundLayer.Water));
+            case ImportStepKind.RoadPolygons:
+                return Once(() => ImportSiteBoundaries(step, GroundLayer.RoadSurface));
             case ImportStepKind.Vegetation:
                 return ImportVegetation(step);
             case ImportStepKind.SiteContextView:

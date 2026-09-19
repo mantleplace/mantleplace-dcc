@@ -216,9 +216,10 @@ _Avoid_: main toposolid, base toposolid, alternate
 
 **Subdivision**:
 A toposolid cut into a ground, carrying its own surface, its own material and its own contour lines.
-A bundle's land-use and land-cover polygons become subdivisions; a ground can hold many, and they
-may overlap one another because the published polygons do. Say subdivision whatever it was cut from
-— where it came from is the polygon's business, not the element's.
+A bundle's land-use, land-cover, water and road-surface polygons all become subdivisions; a ground
+can hold many, and they may overlap one another because the published polygons do. One can have
+holes in it — a water body's islands, a road network's city blocks. Say subdivision whatever it was
+cut from — where it came from is the polygon's business, not the element's.
 _Avoid_: district, region, site-boundary polygon, sub-toposolid
 
 **Context building**:

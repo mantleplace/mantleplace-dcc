@@ -89,39 +89,18 @@ internal static class RendererKeywordsTests
                 "the class is not the subtype: land_use class grass under subtype managed stays unnamed");
         });
 
-        run.Case("ByStamp pairs each keyworded ring's stamp with its phrase, and leaves the rest out", () =>
+        run.Case("the layer table is water and asphalt, and nothing else takes a layer's word", () =>
         {
-            SiteVertex[] ring = [new(0, 0, null), new(1, 0, null), new(0, 1, null)];
-            SiteFeature[] rings =
-            [
-                new() { Vertices = ring, IsClosed = true, Subtype = "forest" },
-                new() { Vertices = ring, IsClosed = true, Subtype = "forest", IsHole = true },
-                new() { Vertices = ring, IsClosed = true, Subtype = "urban" },
-                new() { Vertices = ring, IsClosed = true, Subtype = "grass" },
-            ];
-
-            IReadOnlyDictionary<string, string> byStamp = RendererKeywords.ByStamp(rings, ["c/1", "c/2", "c/3", "c/4"]);
-            run.Equal(byStamp.Count, 2, "the forest's outer ring and the grass");
-            run.Equal(byStamp.GetValueOrDefault("c/1"), "wild grass", "forest");
-            run.Equal(byStamp.GetValueOrDefault("c/2"), null, "the hole");
-            run.Equal(byStamp.GetValueOrDefault("c/3"), null, "urban");
-            run.Equal(byStamp.GetValueOrDefault("c/4"), "grass", "grass");
-        });
-
-        run.Case("ByStamp refuses stamps that do not line up with the rings", () =>
-        {
-            SiteVertex[] ring = [new(0, 0, null), new(1, 0, null), new(0, 1, null)];
-            bool threw = false;
-            try
-            {
-                RendererKeywords.ByStamp([new SiteFeature { Vertices = ring, Subtype = "forest" }], []);
-            }
-            catch (ArgumentException)
-            {
-                threw = true;
-            }
-
-            run.True(threw, "a keyword on the wrong subdivision is worse than none");
+            // A layer whose subdivisions all wear one material is a rendering decision of its own, so
+            // a third entry arrives with a case here; this count is what makes one added without it fail.
+            run.Equal(RendererKeywords.ByLayer.Count, 2, "two layers publish one material between them");
+            run.Equal(RendererKeywords.ForLayer(GroundLayer.Water), "water", "Enscape reads water out of a material name");
+            run.Equal(
+                RendererKeywords.ForLayer(GroundLayer.RoadSurface),
+                "asphalt",
+                "what the surface is called; no renderer documents it as a keyword");
+            run.Equal(RendererKeywords.ForLayer(GroundLayer.LandUse), null, "land use reads each feature's own subtype");
+            run.Equal(RendererKeywords.ForLayer(GroundLayer.LandCover), null, "and so does land cover");
         });
 
         run.Case("the shared material under flat shading is the imagery name plus the keyword", () =>
@@ -159,13 +138,28 @@ internal static class RendererKeywordsTests
                 "land cover");
         });
 
-        run.Case("the two layers never share a per-subdivision material", () =>
+        run.Case("a water body and a road surface read as what they are", () =>
         {
-            // Unnamed features stamp by position in both layers, so token "1" exists twice.
-            run.False(
-                GroundMaterialNames.PerSubDivision(Imagery, GroundLayer.LandUse, "1", null)
-                    == GroundMaterialNames.PerSubDivision(Imagery, GroundLayer.LandCover, "1", null),
-                "land use 1 and land cover 1 carry different offsets and must be different materials");
+            run.Equal(
+                GroundMaterialNames.PerSubDivision(Imagery, GroundLayer.Water, "Lake Wendouree", "water"),
+                "Mantle Place Site Imagery order-7f3a water body Lake Wendouree water",
+                "a plain readable name that ends in the renderer's word");
+            run.Equal(
+                GroundMaterialNames.PerSubDivision(Imagery, GroundLayer.RoadSurface, "2", "asphalt"),
+                "Mantle Place Site Imagery order-7f3a road surface 2 asphalt",
+                "the road surfaces are merged per class, so most of them are unnamed");
+        });
+
+        run.Case("no two layers share a per-subdivision material", () =>
+        {
+            // Every layer stamps an unnamed feature by position, so token "1" exists in all four.
+            string[] names =
+            [
+                .. Enum.GetValues<GroundLayer>()
+                    .Select(layer => GroundMaterialNames.PerSubDivision(Imagery, layer, "1", null)),
+            ];
+
+            run.Equal(names.Distinct(StringComparer.Ordinal).Count(), names.Length, "feature 1 of each layer is its own material");
         });
 
         run.Case("characters Revit refuses in a name are replaced, and nothing else is", () =>
