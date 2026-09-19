@@ -66,6 +66,7 @@ internal sealed class ImportWindow : Window
     private TextBlock[] _states = [];
     private bool _finished;
     private bool _closeWhenFinished;
+    private bool _refreshing;
 
     /// <param name="begin">Called once, with the curator's choice, when Import is pressed.</param>
     /// <param name="dismiss">Called once when the window goes before Import was pressed.</param>
@@ -195,11 +196,11 @@ internal sealed class ImportWindow : Window
             rows.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             CheckBox box = new() { Content = WindowLabels.LayerName(layer), Margin = new Thickness(0, 2, 12, 2) };
-            box.Click += (_, _) =>
-            {
-                _checklist.Set(layer, box.IsChecked == true);
-                RefreshChecklist();
-            };
+            // Checked and Unchecked, not Click: a UI Automation Toggle — how a screen reader ticks a
+            // box — changes IsChecked without raising Click, and the box would show one thing while
+            // another was imported.
+            box.Checked += (_, _) => OnBoxChanged(layer, on: true);
+            box.Unchecked += (_, _) => OnBoxChanged(layer, on: false);
             Grid.SetRow(box, index);
             rows.Children.Add(box);
             _boxes[layer] = box;
@@ -217,18 +218,40 @@ internal sealed class ImportWindow : Window
         return panel;
     }
 
-    private void RefreshChecklist()
+    private void OnBoxChanged(ImportLayer layer, bool on)
     {
-        foreach (ImportLayer layer in _checklist.Layers)
+        // The repaint below writes IsChecked too, and those writes raise the same events. They are
+        // the model's own state coming back, not the curator's, so they neither reach it nor start a
+        // second repaint inside this one.
+        if (_refreshing)
         {
-            _boxes[layer].IsChecked = _checklist.IsChecked(layer);
-            _boxes[layer].IsEnabled = _checklist.IsEnabled(layer);
-            _notes[layer].Text = _checklist.MissingPrerequisite(layer) is { } missing
-                ? WindowLabels.Needs(missing)
-                : string.Empty;
+            return;
         }
 
-        _import.IsEnabled = _checklist.CanImport;
+        _checklist.Set(layer, on);
+        RefreshChecklist();
+    }
+
+    private void RefreshChecklist()
+    {
+        _refreshing = true;
+        try
+        {
+            foreach (ImportLayer layer in _checklist.Layers)
+            {
+                _boxes[layer].IsChecked = _checklist.IsChecked(layer);
+                _boxes[layer].IsEnabled = _checklist.IsEnabled(layer);
+                _notes[layer].Text = _checklist.MissingPrerequisite(layer) is { } missing
+                    ? WindowLabels.Needs(missing)
+                    : string.Empty;
+            }
+
+            _import.IsEnabled = _checklist.CanImport;
+        }
+        finally
+        {
+            _refreshing = false;
+        }
     }
 
     private Grid BuildSteps(StagedImport run)
