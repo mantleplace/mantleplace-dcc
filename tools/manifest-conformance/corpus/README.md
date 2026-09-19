@@ -120,8 +120,9 @@ rather than a rename sweep across every case a host suite references.
 **An additive minor adds a case; it does not re-stamp the corpus.** Those three moves are for a
 release that moves the floor. A minor leaves the floor where it is, and a same-major reader must
 read both shapes, so the existing fixtures stay the documents they are and the new shape arrives as
-a case carrying its own `manifestVersion` — `manifest.locationBlockIgnored` is the first. Stamping a
-newer version onto a fixture that lacks what that version requires would make the fixture untrue.
+a case carrying its own `manifestVersion` — `manifest.locationBlockIgnored` is the first and
+`manifest.foliageVocabularyIgnored` the second. Stamping a newer version onto a fixture that lacks
+what that version requires would make the fixture untrue.
 
 **The reject set waits for the slowest host.** It is host-invariant (no case carries `appliesTo`),
 so it may only name versions below the _lowest_ floor among registered hosts. v18 and v19 could

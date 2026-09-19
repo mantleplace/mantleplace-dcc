@@ -135,7 +135,8 @@ its header row. ⛔ **A reader MUST resolve those columns by header name, never 
 ignore a column it does not know.** A minor release may append a column; a reader that matches the
 header as one exact string, or counts fields, turns that additive change into a missing layer. The
 corpus pins this in `manifest.treePointsRowCount`, with an appended, a reordered and a missing
-column.
+column. That case is scoped to the one host whose block it reads; a host it does not reach pins the
+same rule in its own suite.
 
 `Landcover/TreePoints.csv` is the case that exists today. From 1.2.0 its last column is
 `foliage_type`, and `landcover.tree_points.foliage_type_vocabulary` names the vocabulary its values
