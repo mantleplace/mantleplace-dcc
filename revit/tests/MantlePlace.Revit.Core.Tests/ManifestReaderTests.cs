@@ -589,6 +589,77 @@ internal static class ManifestReaderTests
                 "an explicit false is a statement");
         });
 
+        run.Case("location.time_zone is read verbatim, fraction and all", () =>
+        {
+            BundleManifest manifest = BundleManifestReader.Parse(
+                """
+                  {
+                    "version": "1.1.0",
+                    "location": {
+                      "time_zone": {
+                        "iana": "Asia/Kathmandu",
+                        "utc_offset_standard_h": 5.75,
+                        "observes_dst": false,
+                        "tzdata_version": "2025b"
+                      },
+                      "a_member_no_reader_knows": {}
+                    }
+                  }
+                """);
+
+            run.Equal(
+                manifest.Error,
+                BundleManifestReader.Parse("""{"version": "1.1.0"}""").Error,
+                "the block, and the member no reader knows, change no verdict");
+            run.Equal(manifest.TimeZone?.Iana, "Asia/Kathmandu", "the zone name");
+            run.Within(manifest.TimeZone?.UtcOffsetStandardH ?? 0.0, 5.75, 0.0, "the offset, unrounded");
+            run.True(manifest.TimeZone?.ObservesDst == false, "an explicit false stays false");
+            run.Equal(manifest.TimeZone?.TzdataVersion, "2025b", "the tzdata release");
+        });
+
+        run.Case("an offset past any host's range is kept as published, not clamped", () =>
+        {
+            BundleManifest manifest = BundleManifestReader.Parse(
+                """{"version": "1.1.0", "location": {"time_zone": {"iana": "Pacific/Kiritimati", "utc_offset_standard_h": 14}}}""");
+
+            run.Within(manifest.TimeZone?.UtcOffsetStandardH ?? 0.0, 14.0, 0.0, "fitting it to Revit is not the reader's job");
+            run.True(manifest.TimeZone?.ObservesDst is null, "an absent observes_dst is unknown, not no");
+        });
+
+        run.Case("no location block, or no usable offset in one, is no time zone and no refusal", () =>
+        {
+            foreach (string location in (string[])
+            [
+                "",
+                """, "location": {}""",
+                """, "location": {"time_zone": null}""",
+                """, "location": {"time_zone": {"iana": "America/Denver"}}""",
+                """, "location": {"time_zone": {"iana": "America/Denver", "utc_offset_standard_h": "seven"}}""",
+                """, "location": {"time_zone": {"iana": "America/Denver", "utc_offset_standard_h": null}}""",
+            ])
+            {
+                BundleManifest manifest = BundleManifestReader.Parse(
+                    "{\"version\": \"1.1.0\"" + location + "}");
+
+                run.True(manifest.TimeZone is null, $"no zone from '{location}'");
+                run.Equal(
+                    manifest.Error,
+                    BundleManifestReader.Parse("""{"version": "1.1.0"}""").Error,
+                    $"and '{location}' changes no verdict");
+            }
+        });
+
+        run.Case("a time zone under hosts.revit is not the published one", () =>
+        {
+            // The platform publishes the zone at the top level because it describes the place, and a
+            // host block is this host's frame. Reading it from under hosts.revit would be reading a
+            // field nobody publishes there.
+            BundleManifest manifest = BundleManifestReader.Parse(
+                """{"version": "1.1.0", "hosts": {"revit": {"georeference": {"time_zone": {"iana": "America/Denver", "utc_offset_standard_h": -7}}}}}""");
+
+            run.True(manifest.TimeZone is null, "only location.time_zone is read");
+        });
+
         return run.Report("manifest reader");
     }
 }

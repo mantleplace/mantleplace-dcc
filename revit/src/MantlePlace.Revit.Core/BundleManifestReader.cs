@@ -164,6 +164,7 @@ public static class BundleManifestReader
         ReadLayout(manifest, root);
         ReadRoadSplines(manifest, root);
         ReadAttribution(manifest, root);
+        ReadTimeZone(manifest, root);
         refusal ??= ReadDelivery(manifest, root);
         ReadReadiness(manifest, root);
         ReadArtifacts(manifest, root);
@@ -243,6 +244,43 @@ public static class BundleManifestReader
         }
 
         manifest.AttributionSources = read;
+    }
+
+    /// <summary>
+    /// <c>location.time_zone</c>, each field verbatim. The top-level block every host may read, and
+    /// not <c>hosts.revit</c>: the zone describes the place, not this host's frame.
+    /// </summary>
+    /// <remarks>
+    /// Never a refusal, for the reason attribution is not one: the zone sets one project setting, so a
+    /// malformed block costs that setting and nothing else. The project then keeps the zone it had,
+    /// which is what every 1.0.x bundle does. An offset that is not a finite number is malformed; one
+    /// outside any host's range is not, and is kept (<c>spec/format.md</c> §4.1).
+    /// </remarks>
+    private static void ReadTimeZone(BundleManifest manifest, JsonElement root)
+    {
+        if (root.Object("location")?.Object("time_zone") is not { } zone
+            || zone.OptionalDouble("utc_offset_standard_h") is not { } offset
+            || !double.IsFinite(offset))
+        {
+            return;
+        }
+
+        bool? observesDst = zone.TryGetProperty("observes_dst", out JsonElement dst)
+            ? dst.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                _ => null,
+            }
+            : null;
+
+        manifest.TimeZone = new PublishedTimeZone
+        {
+            Iana = zone.Str("iana"),
+            UtcOffsetStandardH = offset,
+            ObservesDst = observesDst,
+            TzdataVersion = zone.Str("tzdata_version"),
+        };
     }
 
     /// <summary>

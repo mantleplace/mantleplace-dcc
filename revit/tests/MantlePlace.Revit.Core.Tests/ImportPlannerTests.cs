@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace MantlePlace.Revit.Core.Tests;
 
 /// <summary>
@@ -1187,6 +1189,88 @@ internal static class ImportPlannerTests
             }
         });
 
+        run.Case("a published time zone is written as published, after the coordinates", () =>
+        {
+            SiteLocationPlacement? location = FindStep(
+                PlanFor(WithTimeZone(-7.0, "America/Denver", "true"), ParityBundle),
+                ImportStepKind.SetSiteLocation)?.SiteLocation;
+
+            run.True(location?.TimeZone is not null, "the zone travels with the site location");
+            run.Within(location?.TimeZoneToWrite(9.0) ?? 0.0, -7.0, 0.0, "the published zone, not the project's");
+            run.Contains(location?.Report(9.0), "UTC-7 (America/Denver), as published", "the log names the zone set");
+            run.Contains(location?.Report(9.0), "observes daylight saving", "and what Revit will not let the add-in set");
+        });
+
+        run.Case("with no published time zone the project keeps its own, and the log says so", () =>
+        {
+            SiteLocationPlacement? location = FindStep(
+                PlanFor(ParityManifest(MetricGeoreference), ParityBundle),
+                ImportStepKind.SetSiteLocation)?.SiteLocation;
+
+            run.True(location?.TimeZone is null, "a 1.0.x bundle publishes none");
+            run.Within(location?.TimeZoneToWrite(-5.0) ?? 0.0, -5.0, 0.0, "the zone read before the coordinates moved it");
+            run.Contains(location?.Report(-5.0), "publishes no time zone, so the project keeps its own, UTC-5", "said plainly");
+        });
+
+        run.Case("fractional zones are written as fractions, and named in hours and minutes", () =>
+        {
+            foreach ((double hours, string named) in (ReadOnlySpan<(double, string)>)
+                [(5.5, "UTC+5:30"), (5.75, "UTC+5:45"), (-3.5, "UTC-3:30"), (-9.5, "UTC-9:30"), (0.0, "UTC+0")])
+            {
+                SiteLocationPlacement? location = FindStep(
+                    PlanFor(WithTimeZone(hours, "Zone/Under/Test", "false"), ParityBundle),
+                    ImportStepKind.SetSiteLocation)?.SiteLocation;
+
+                run.Within(location?.TimeZoneToWrite(1.0) ?? double.NaN, hours, 0.0, $"{hours} verbatim");
+                run.Contains(location?.Report(1.0), named, $"{hours} reads as {named}");
+            }
+        });
+
+        run.Case("a zone east of +12 wraps a day back to fit Revit, and the log says what that costs", () =>
+        {
+            // Revit's SiteLocation.TimeZone takes -12 to +12. Wrapping keeps the clock and moves the
+            // date a day; clamping would keep the date and put every hour of a sun study one out.
+            foreach ((double published, double written) in (ReadOnlySpan<(double, double)>)
+                [(13.0, -11.0), (14.0, -10.0), (12.75, -11.25), (12.0, 12.0), (-12.0, -12.0)])
+            {
+                SiteLocationPlacement? location = FindStep(
+                    PlanFor(WithTimeZone(published, "Pacific/Test", "false"), ParityBundle),
+                    ImportStepKind.SetSiteLocation)?.SiteLocation;
+
+                run.Within(location?.TimeZoneToWrite(0.0) ?? double.NaN, written, 0.0, $"{published} is written as {written}");
+                run.Equal(location?.TimeZone?.IsWrapped ?? false, published != written, $"{published} wrapped only past the edge");
+            }
+
+            string? report = FindStep(
+                PlanFor(WithTimeZone(13.0, "Pacific/Tongatapu", "false"), ParityBundle),
+                ImportStepKind.SetSiteLocation)?.SiteLocation?.Report(0.0);
+            run.Contains(report, "Pacific/Tongatapu is UTC+13", "the published zone is named");
+            run.Contains(report, "so the site's time zone is UTC-11", "and the one written");
+            run.Contains(report, "a calendar day later", "and what moved");
+        });
+
+        run.Case("an offset of a day or more is not a zone, so the project keeps its own", () =>
+        {
+            foreach (double hours in (double[])[24.0, -24.0, 30.0])
+            {
+                SiteLocationPlacement? location = FindStep(
+                    PlanFor(WithTimeZone(hours, "Broken/Zone", "false"), ParityBundle),
+                    ImportStepKind.SetSiteLocation)?.SiteLocation;
+
+                run.Within(location?.TimeZoneToWrite(-6.0) ?? double.NaN, -6.0, 0.0, $"{hours} is not written");
+                run.Contains(location?.Report(-6.0), "which is not a time zone", $"{hours} is named as unusable");
+            }
+        });
+
+        run.Case("an unstated observes_dst says nothing about daylight saving", () =>
+        {
+            SiteLocationPlacement? location = FindStep(
+                PlanFor(WithTimeZone(1.0, "Europe/Paris", null), ParityBundle),
+                ImportStepKind.SetSiteLocation)?.SiteLocation;
+
+            run.False(location?.Report(0.0)?.Contains("daylight", StringComparison.Ordinal) ?? true, "no claim either way");
+        });
+
         run.Case("the context view comes after every step that stamps an element, and before the drape", () =>
         {
             BundleImportPlan plan = PlanFor(
@@ -1318,6 +1402,21 @@ internal static class ImportPlannerTests
         """;
 
     private const string NoGeoreference = "\"hosts\": { \"revit\": {} }";
+
+    /// <summary>
+    /// <see cref="ParityManifest"/> at MPB 1.1.0, with a <c>location.time_zone</c> block;
+    /// <paramref name="observesDst"/> is the JSON literal, or <c>null</c> to leave the field out.
+    /// </summary>
+    private static string WithTimeZone(double hours, string iana, string? observesDst) =>
+        ParityManifest(MetricGeoreference).Replace(
+            "\"version\": \"1.0.0\",",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "\"version\": \"1.1.0\", \"location\": {{ \"time_zone\": {{ \"iana\": \"{0}\", \"utc_offset_standard_h\": {1}{2}, \"tzdata_version\": \"2025b\" }} }},",
+                iana,
+                hours,
+                observesDst is null ? string.Empty : ", \"observes_dst\": " + observesDst),
+            StringComparison.Ordinal);
 
     private static string ParityManifest(string georeference) =>
         $$"""

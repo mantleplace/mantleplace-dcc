@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace MantlePlace.Revit.Core;
 
 /// <summary>What the add-in will do to the Revit document, in order.</summary>
@@ -315,9 +318,11 @@ public sealed class SurveyPointPlacement
 /// at -71.0335, west negative, which is the convention the manifest's lon/lat pair is in.
 /// </para>
 /// <para>
-/// No time zone. The manifest publishes none, and deriving one from longitude is derivation. Revit
-/// derives one anyway whenever a latitude or longitude is set — documented on both setters — so the
-/// shim reads the project's zone first and writes it back after, and the zone stays as it was.
+/// The time zone is <c>location.time_zone</c>'s, from MPB 1.1.0, and nobody else's. Revit derives
+/// one from longitude whenever a latitude or longitude is set — documented on both setters — so the
+/// shim writes the zone after the coordinates: the published one when there is one, and otherwise
+/// the project's own, read before the coordinates moved it. A zone derived from longitude is
+/// derivation whoever does it, and it is wrong wherever a political boundary is not a meridian.
 /// </para>
 /// </remarks>
 public sealed class SiteLocationPlacement
@@ -329,6 +334,119 @@ public sealed class SiteLocationPlacement
     public double LatitudeRadians => LatitudeDeg * Math.PI / 180.0;
 
     public double LongitudeRadians => LongitudeDeg * Math.PI / 180.0;
+
+    /// <summary>The published zone, or <c>null</c> when the bundle published none this host can read.</summary>
+    public SiteTimeZone? TimeZone { get; init; }
+
+    /// <summary>
+    /// The hours to write to <c>SiteLocation.TimeZone</c>: the published zone's, or else
+    /// <paramref name="projectHours"/>, the zone the project had before the coordinates changed.
+    /// </summary>
+    public double TimeZoneToWrite(double projectHours) => TimeZone?.RevitHours ?? projectHours;
+
+    /// <summary>
+    /// What the log says the step did, given the zone the project had before it ran.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in the shim because every branch of it is a decision this host made about a
+    /// published value — kept, applied, wrapped, or refused — and a decision is asserted headlessly
+    /// (<c>HPS-02</c>).
+    /// </remarks>
+    public string Report(double projectHours)
+    {
+        StringBuilder text = new(string.Format(
+            CultureInfo.InvariantCulture,
+            "Set the site location from the manifest: latitude {0}°, longitude {1}°.",
+            LatitudeDeg,
+            LongitudeDeg));
+
+        if (TimeZone is null)
+        {
+            text.Append(CultureInfo.InvariantCulture, $" The bundle publishes no time zone, so the project keeps its own, {SiteTimeZone.FormatUtc(projectHours)} — set the site's under Manage ▸ Location before a sun study that depends on the clock.");
+            return text.ToString();
+        }
+
+        PublishedTimeZone published = TimeZone.Published;
+        string named = published.Iana.Length > 0 ? published.Iana : "The published zone";
+        if (TimeZone.RevitHours is not { } written)
+        {
+            text.Append(CultureInfo.InvariantCulture, $" The bundle publishes a time zone offset of {published.UtcOffsetStandardH} hours, which is not a time zone, so the project keeps its own, {SiteTimeZone.FormatUtc(projectHours)}.");
+            return text.ToString();
+        }
+
+        if (TimeZone.IsWrapped)
+        {
+            text.Append(CultureInfo.InvariantCulture, $" {named} is {SiteTimeZone.FormatUtc(published.UtcOffsetStandardH)}, and Revit takes only UTC-12 to UTC+12, so the site's time zone is {SiteTimeZone.FormatUtc(written)}: the same clock time a calendar day later, which moves the sun by less than half a degree.");
+        }
+        else
+        {
+            text.Append(CultureInfo.InvariantCulture, $" Time zone {SiteTimeZone.FormatUtc(written)}{(published.Iana.Length > 0 ? $" ({published.Iana})" : string.Empty)}, as published.");
+        }
+
+        text.Append(published.ObservesDst switch
+        {
+            true => " The zone observes daylight saving time, and an add-in cannot switch Revit's on: tick the "
+                + "daylight saving box under Manage ▸ Location before a sun study in the months it applies.",
+            false => " The zone does not observe daylight saving time: if the daylight saving box under "
+                + "Manage ▸ Location is ticked, untick it.",
+            null => string.Empty,
+        });
+
+        return text.ToString();
+    }
+}
+
+/// <summary>
+/// A published time zone fitted to Revit's <c>SiteLocation.TimeZone</c>, which takes −12 to +12
+/// hours and nothing past them.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Zones east of +12 exist — Tonga and Samoa at +13, Kiritimati at +14, the Chatham Islands at
+/// +12:45 — and the spec publishes their offsets unclamped and leaves the fit to the host
+/// (<c>spec/format.md</c> §4.1). This host wraps by 24 hours: +13 is written as −11. The clock time
+/// is kept and the date moves one day later, which moves the sun by less than half a degree.
+/// Clamping to +12 instead would keep the date and put every hour of a sun study one hour out, which
+/// is the larger error by far.
+/// </para>
+/// <para>
+/// An offset of a day or more is not a time zone, so there is nothing to wrap and nothing is written.
+/// </para>
+/// </remarks>
+public sealed class SiteTimeZone
+{
+    /// <summary>The largest offset, either side of UTC, that Revit accepts.</summary>
+    public const double RevitLimitHours = 12.0;
+
+    public required PublishedTimeZone Published { get; init; }
+
+    /// <summary>The hours written to Revit, or <c>null</c> when the published offset is not a zone.</summary>
+    public double? RevitHours => Wrap(Published.UtcOffsetStandardH);
+
+    /// <summary>True when the offset had to be moved by a day to fit Revit's range.</summary>
+    public bool IsWrapped => RevitHours is { } hours && hours != Published.UtcOffsetStandardH;
+
+    internal static double? Wrap(double hours)
+    {
+        if (!(Math.Abs(hours) < 24.0))
+        {
+            return null;
+        }
+
+        return hours > RevitLimitHours ? hours - 24.0
+            : hours < -RevitLimitHours ? hours + 24.0
+            : hours;
+    }
+
+    /// <summary><c>UTC-7</c>, <c>UTC+5:30</c>, <c>UTC+12:45</c>, <c>UTC+0</c>.</summary>
+    public static string FormatUtc(double hours)
+    {
+        int minutes = (int)Math.Round(Math.Abs(hours) * 60.0, MidpointRounding.AwayFromZero);
+        string sign = hours < 0.0 && minutes > 0 ? "-" : "+";
+        return minutes % 60 == 0
+            ? string.Format(CultureInfo.InvariantCulture, "UTC{0}{1}", sign, minutes / 60)
+            : string.Format(CultureInfo.InvariantCulture, "UTC{0}{1}:{2:00}", sign, minutes / 60, minutes % 60);
+    }
 }
 
 /// <summary>One resolved action, with its bundle entry already checked to exist.</summary>
