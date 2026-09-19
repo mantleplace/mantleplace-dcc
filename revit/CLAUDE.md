@@ -224,8 +224,11 @@ follow.
   coordinates makes Revit recalculate the zone in the same transaction (to 9 for Tokyo, to −5 for
   Boston), and writing the zone read beforehand back in the same transaction holds after the commit.
   The published zone (`location.time_zone`) goes through the same write. `SiteTimeZone` decides what
-  is written, including the wrap for zones east of +12, and it is tested headlessly. A fractional
-  zone such as +5:45 has not yet been written into a real Revit.
+  is written, including the wrap for zones east of +12, and it is tested headlessly. Both awkward
+  cases have run in Revit 2027 through the harness described under the tree family below, on a
+  cached bundle whose manifest was given a `location` block. After the commit, +5:45 read back as
+  5.75 and +13 as −11. So Revit takes a fractional zone as it is, and the wrap holds. They have
+  not run in 2025 or 2026.
   `SunAndShadowSettings.UsesDST` is read-only in 2025's API, so daylight saving time is a log line
   and never a write.
 - **The attribution step has left that set.** `ViewDrafting.Create`, `TextNote.Create`, and
