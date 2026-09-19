@@ -249,12 +249,13 @@ follow.
   a Planting family already owns a built-in *type* parameter named `Height`, so the per-instance one
   is `Tree Height`; and a saved `.rfa` records its save folder and the Revit user name — see
   [`README.md` ▸ Authoring the tree family](./README.md#authoring-the-tree-family).
-- **The add-in is renderer-neutral.** It writes Revit elements sized as published, with names a
-  renderer recognises (`RendererKeywords`), and never a renderer's own storage — not Twinmotion's
-  substitution entity on a family type, not an Enscape asset link. The one click that links a family
-  to a renderer's asset is the curator's. Writing it at import was proposed and declined: it saves
-  that click by coupling a thin client to a schema one vendor owns and an asset GUID from another's
-  library. Do not reopen it without a reason that click does not already answer.
+- **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
+  issue and reaches for their storage.** It writes Revit elements sized as published, with names a
+  renderer recognises (`RendererKeywords`), and leaves a renderer's own storage to the curator —
+  see [`README.md`](./README.md) on the tree family. Writing Twinmotion's substitution entity at
+  import was declined: it saves one click per project by coupling the add-in to an
+  ExtensibleStorage schema Autodesk owns and an asset GUID from Epic's library. Writing it later is
+  purely additive, which is why this is not an ADR.
 
 ## Where knowledge lives
 

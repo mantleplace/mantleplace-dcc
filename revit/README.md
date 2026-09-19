@@ -112,7 +112,7 @@ Revit licence.
   when the curator reloads it. One family only — a shrub or any other foliage type waits for the
   platform to publish one, and the add-in never guesses a type from a height. **No render
   substitution is set, and the add-in never sets one:** linking the family to a renderer's tree
-  asset is the curator's step, in that renderer. Whether a substituted tree keeps its own height and
+  asset is the curator's step, in that renderer's own tool. Whether a substituted tree keeps its own height and
   crown, or takes the family's one type `Height`, has not been seen in any renderer yet — issue
   183. All three are positioned from the same
   published origin as the survey point, and a bundle whose origin is in a CRS they cannot be brought
@@ -125,7 +125,8 @@ Revit licence.
   anything being renamed by hand. The photograph stays; the keyword rides on the name, last, in the
   renderer's own word order (`tall grass`, never `grass tall`). The table from subtype to keyword is
   `RendererKeywords` in the pure core; a subtype it does not name, and a hole cut out of a polygon,
-  get no keyword;
+  get no keyword. Enscape growing grass on a keyworded material has not been watched yet — issue
+  183;
 - drapes `Imagery/Drape.png` over the terrain as a real-world-scaled material texture — the last
   parity row — on a **duplicated** toposolid type, so the project's own type is
   never repainted. The rectangle the image is pinned to is not taken on trust: the only extent this
