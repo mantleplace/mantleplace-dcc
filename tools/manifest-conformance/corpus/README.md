@@ -99,10 +99,10 @@ agree, and the case file says so.
 
 ## Version
 
-Fixtures are written against the pinned manifest version, and the readers' floor is that same
-version. Everything below it is in the reject set: clean break, one supported version (`HPS-31`). The
-floor and the pin are deliberately split — `index.json`'s `manifestVersion` is the pin, and
-`verified-against.json` records each host's own.
+Fixtures are written against the pinned manifest version unless a case declares a later minor of
+its own (below), and the readers' floor is that same version. Everything below it is in the reject
+set: clean break, one supported version (`HPS-31`). The floor and the pin are deliberately split —
+`index.json`'s `manifestVersion` is the pin, and `verified-against.json` records each host's own.
 
 **Two version families.** A `manifestVersion` is an integer for the pre-history (`19`) and a semver
 string for the MPB era (`"1.0.0"`); the JSON type is what tells them apart, and the whole integer

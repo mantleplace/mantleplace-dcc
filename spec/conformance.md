@@ -13,10 +13,11 @@ says what it means precisely enough to argue about.
 
 The schema and the corpus are **normative**. The prose describes.
 
-They ship as a set. The corpus declares the manifest version its fixtures are written against, and
-that declaration is machine-checked against the fixtures themselves — a corpus whose stated version
-and actual fixtures disagree fails the gate before any host suite sees it. That is what makes
-"conforming to MPB *x.y.z*" a claim with a referent instead of a feeling.
+They ship as a set. The corpus declares the manifest version its fixtures are written against — a
+case written for a later additive minor declares its own — and each declaration is machine-checked
+against the fixtures themselves: a corpus whose stated version and actual fixtures disagree fails
+the gate before any host suite sees it. That is what makes "conforming to MPB *x.y.z*" a claim with
+a referent instead of a feeling.
 
 ## 2. What the corpus is
 
@@ -90,7 +91,8 @@ the platform has actually published. It runs on every pull request here as a req
 Two numbers record where a reader stands, and they are deliberately separate:
 
 - **The corpus pin** — the manifest version the fixtures are written against, declared once by the
-  corpus itself.
+  corpus itself. It moves with the readers' floor, not with every minor: an additive minor arrives
+  as a case carrying its own version.
 - **The per-host pin** — [`verified-against.json`](../tools/manifest-conformance/verified-against.json),
   one entry per host, recording the version that host's parser was actually **exercised** against.
   Registering is a claim of evidence, not of tolerance; raising a number means the tests were

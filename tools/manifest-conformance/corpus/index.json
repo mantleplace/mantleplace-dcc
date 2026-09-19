@@ -37,7 +37,9 @@
     "                  it was last reviewed against in verified-against.json",
     "                  (`verifiedAgainstCorpusVersion`); check_manifest_conformance.py fails a",
     "                  host that trails this number.",
-    "  manifestVersion the bundle-manifest version this corpus's fixtures are written against.",
+    "  manifestVersion the bundle-manifest version this corpus's fixtures are written against,",
+    "                  and the readers' floor. A case for a later additive minor declares its",
+    "                  own `manifestVersion` above it (corpus/README.md, 'Version').",
     "",
     "OWNERSHIP: maintainer-owned. A host that needs a new case proposes it here by pull",
     "request rather than forking a private copy."
