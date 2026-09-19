@@ -29,8 +29,9 @@ public enum SubDivisionMaterialRoute
 /// it calls the overload that takes the default and retypes afterwards.
 /// </para>
 /// <para>
-/// The instance write is asked first because it is free, and a retype costs about two and a half
-/// seconds per subdivision on a 74,852-point terrain (<see cref="SlowStepNotice.ForSubDivisionRetypes"/>).
+/// The instance write is asked first because it is free, and a retype is not: 33 of them took about
+/// 190 s of a real 2027 import on a 74,852-point terrain, most of it in the commit
+/// (<see cref="SlowStepNotice.ForSubDivisionRetypes"/>).
 /// </para>
 /// </remarks>
 public static class SubDivisionMaterial

@@ -148,18 +148,18 @@ internal static class SlowStepNoticeTests
         run.Case("retyping subdivisions for the photograph announces itself", () =>
         {
             // Revit 2026 and later: every subdivision is typed and takes the photograph only through
-            // its type. The cost is in each ChangeTypeId call, not in the commit, so it is not the
-            // commit sentence the other steps say.
+            // its type. Measured in a real 2027 import, the wait is the calls AND a two-minute commit,
+            // so the sentence names both — a probe on a reopened project had suggested the commit was
+            // free, and a notice built on that would have understated the wait by more than half.
             string? notice = SlowStepNotice.ForSubDivisionRetypes(33, 74_852);
             run.True(notice is not null, "announced");
             run.Contains(notice, "33 subdivision(s)", "it names how many are coming");
             run.Contains(notice, "74,852", "it names this terrain's point count");
             run.Contains(notice, "Revit 2026 and later", "it says why this Revit does it at all");
+            run.Contains(notice, "one commit", "it says most of the wait is inside a commit");
+            run.Contains(notice, "cannot report part of itself", "and why that part is dark");
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
             run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
-            run.False(
-                notice is not null && notice.Contains("one commit", StringComparison.Ordinal),
-                "it does not claim the wait is inside a commit: measured, the commit takes a second");
         });
 
         run.Case("the retype notice quotes its measurement and does not extrapolate", () =>

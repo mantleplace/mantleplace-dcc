@@ -145,12 +145,13 @@ public static class SlowStepNotice
     /// <summary>How many subdivisions that measurement retyped, one <c>ChangeTypeId</c> each.</summary>
     public const int MeasuredRetypeSubDivisions = 33;
 
-    /// <summary>Rounded seconds those retypes took in Revit 2027, commit included.</summary>
+    /// <summary>Rounded seconds those retypes took in a real Revit 2027 import, commit included.</summary>
     /// <remarks>
-    /// 2026-09-19, bundle <c>9d2dfdbf</c>: one subdivision in 7.9 s, then 32 in 71.7 s, then a
-    /// one-second commit — 80 s. The fix's own real import in 2027 retyped the same 33 in 75 s.
+    /// 2026-09-19, bundle <c>9d2dfdbf</c>, on ground already on the imagery type so nothing else was
+    /// retyped: 71 s of calls, then a 121 s commit. A probe on a saved and reopened project committed
+    /// the same retypes in about a second; an import does not, so the import is what is quoted.
     /// </remarks>
-    public const int MeasuredRetypeSeconds = 80;
+    public const int MeasuredRetypeSeconds = 190;
 
     /// <summary>
     /// The line to say before the drape retypes <paramref name="subDivisionCount"/> subdivisions so
@@ -159,11 +160,10 @@ public static class SlowStepNotice
     /// <remarks>
     /// <para>
     /// Revit 2026 and later give every subdivision a type and no material of its own, so the drape
-    /// reaches one only by retyping it (<see cref="SubDivisionMaterial"/>). Measured on 2026-09-19:
-    /// each <c>ChangeTypeId</c> took about two and a half seconds in 2026 and 2027 on a
-    /// 74,852-point terrain, and the commit after all of them about one second. So the wait is in
-    /// the calls, one after another inside one slice of the import, and not inside a commit — the
-    /// sentence the other notices say about a commit would be wrong here.
+    /// reaches one only by retyping it (<see cref="SubDivisionMaterial"/>). The wait is in two
+    /// halves, and the sentence says both: each <c>ChangeTypeId</c> takes seconds, one after another
+    /// inside one slice of the import, and then Revit rebuilds the terrain's element relations when
+    /// the transaction commits — the same dark commit the other notices describe.
     /// </para>
     /// <para>
     /// The same rule as <see cref="Describe"/>: the measurement and this terrain are stated side by
@@ -181,9 +181,11 @@ public static class SlowStepNotice
             CultureInfo.InvariantCulture,
             "Next: giving {0:N0} subdivision(s) the photograph. Revit 2026 and later give a subdivision "
             + "a type and no material of its own, so each one is moved onto a type that wears the "
-            + "photograph, one at a time. On the one terrain this has been measured on ({1:N0} points), "
-            + "{2:N0} subdivisions took about {3:N0} seconds. {4}. Revit will report \"not responding\" "
-            + "until it finishes, and Cancel takes effect when it finishes. It has not crashed; leave it alone.",
+            + "photograph, one at a time, and Revit then rebuilds the terrain's element relations when "
+            + "the transaction commits. On the one terrain this has been measured on ({1:N0} points), "
+            + "{2:N0} subdivisions took about {3:N0} seconds, most of it inside that one commit. {4}. "
+            + "A commit cannot report part of itself, so Revit will report \"not responding\" until it "
+            + "finishes, and Cancel takes effect when it finishes. It has not crashed; leave it alone.",
             subDivisionCount,
             MeasuredRetypePointCount,
             MeasuredRetypeSubDivisions,

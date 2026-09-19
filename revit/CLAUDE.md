@@ -251,8 +251,9 @@ follow.
   to drape both. In 2025 it is typeless and takes its material as an instance parameter. From 2026
   it is a `Toposolid` on the document's default toposolid type, the instance parameter is absent,
   and the material is its type's. The drape asks each element which shape it has and retypes a
-  typed one onto a type of its own, about two and a half seconds per subdivision
-  (`SubDivisionMaterial`). Never branch on the version number, and never "fix" a 2025-only
+  typed one onto a type of its own (`SubDivisionMaterial`): 33 of them cost about 190 s of a real
+  2027 import on a 74,852-point terrain, 71 s of calls and a 121 s commit — a probe on a reopened
+  project committed the same retypes in a second, so time a retype in an import, not a probe. Never branch on the version number, and never "fix" a 2025-only
   observation into a universal comment: that is how this one shipped.
 
 - **The tree family's calls left that set in Revit 2025 before they merged**, through a harness that
