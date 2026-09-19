@@ -1,0 +1,63 @@
+{
+  "version": "1.2.0",
+  "location": {
+    "time_zone": {
+      "iana": "America/Denver",
+      "utc_offset_standard_h": -7,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    }
+  },
+  "landcover": {
+    "tree_points": {
+      "path": "Landcover/TreePoints.csv",
+      "crs": "EPSG:32613",
+      "point_count": 2,
+      "min_height_m": 3,
+      "columns": [
+        "x",
+        "y",
+        "ground_z",
+        "height_m",
+        "crown_radius_m",
+        "foliage_type"
+      ],
+      "foliage_type_vocabulary": "1"
+    }
+  },
+  "vector": {
+    "layers": [
+      {
+        "name": "road_splines",
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/RoadSplines.geojson",
+            "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          }
+        ]
+      }
+    ]
+  },
+  "job_id": "foliage-vocabulary",
+  "order_id": "ord-foliage-vocabulary-1",
+  "hosts": {
+    "unreal": {
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb"
+      },
+      "foliage_points": {
+        "path": "Landcover/TreePoints.csv",
+        "columns": [
+          "x",
+          "y",
+          "ground_z",
+          "height_m",
+          "crown_radius_m",
+          "foliage_type"
+        ],
+        "point_count": 2
+      }
+    }
+  }
+}
