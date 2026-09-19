@@ -30,8 +30,7 @@ the CSV actually carries rather than a fixed list of five.
 Nothing is removed or re-meant, so this is a MINOR under [compatibility](compatibility.md) §2 and
 every host floor at 1.0.0 reads it. Both hosts re-pin to 1.2.0 with the column exercised: Unreal's
 tree-points reader resolves columns by header name, and Revit's reader already did. The pins move
-from 1.0.0 in one step; the only thing 1.1.0 added is the `location` block, which a reader that
-does not use it ignores.
+from 1.1.0, which both hosts took on 2026-09-19.
 
 ⚠️ **Additive in the schema is not additive in every reader.** Unreal's tree-points reader as
 released through `unreal-0.4.0` matched the header as one exact string and counted five fields, so
@@ -39,6 +38,43 @@ the new column would have dropped the whole tree layer on import, with the impor
 success. The platform emits the column only once a tagged Unreal release carries the fixed
 reader — the order 1.0.0 was shipped in, for the same reason. [Format](format.md) §4.4 now states
 the rule that reader broke.
+
+### 1.1.0 — the location block and its time zone (additive minor; published and frozen 2026-09-19)
+
+A new **required** top-level block, `location`, holds facts about the place that are the same for
+every host. Unlike `hosts.<hostId>`, which a host reads only its own of, every host may read it
+([format](format.md) §4.1). Its first member is `location.time_zone`:
+
+| Field                   | Meaning                                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| `iana`                  | IANA zone name, e.g. `America/Denver`. The authority for a host with tzdata.              |
+| `utc_offset_standard_h` | Standard-time offset in hours; the smallest offset in the build year. Fractional, unclamped. |
+| `observes_dst`          | Whether the clocks show more than one offset in the build year.                           |
+| `tzdata_version`        | The IANA tzdata release the offsets came from. Provenance only.                           |
+
+**Why it is not under `hosts.revit`.** The Revit plugin asked for it there so that `SiteLocation`
+could be completed without deriving a zone from longitude. But Unreal's SunSky takes a time zone
+too, and neither host takes a zone name: both take a standard offset and a separate daylight-saving
+switch. So the numbers are pre-computed once, beside the name, and published where every host can
+read them.
+
+**Where it is resolved.** At the AOI-bbox centroid, the point `delivery` already resolves from, for
+the year of `updated_at`. The boundaries cover the whole globe, open ocean included (`Etc/GMT±N`), so
+the block is always present on a 1.1.0 manifest.
+
+**Attribution.** The zone is looked up in timezone-boundary-builder's boundaries, which are ODbL.
+Every bundle credits them in `attribution.sources`.
+
+**Required, and still a minor.** Each published schema pins `version.const` to exactly one version,
+so "required" binds only a producer writing a 1.1.0 manifest; no 1.0.x document is ever validated
+against it. To a consumer the block is additive, which is what [compatibility](compatibility.md) §2
+asks of a minor. "Narrowed" there means narrowing an existing field, and nothing existing changed.
+
+**What a host must do.** Nothing, to keep importing: a 1.0.x reader ignores the unknown block, per
+[compatibility](compatibility.md) §3. A host that wants the sun right reads `location.time_zone`.
+Each host re-pins `verified-against.json` to 1.1.0 once its reader has been exercised against it.
+Both registered hosts did so on 2026-09-19, on the corpus case `manifest.locationBlockIgnored`, which
+binds a reader to accepting the block it does not consume.
 
 ### Within 1.0.1 — the vector layer vocabulary, stated (2026-09-18)
 

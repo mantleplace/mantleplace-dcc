@@ -142,12 +142,17 @@ follow.
 - **The expiry skew is a constant with no parameter.** That is deliberate — the reference host takes
   it as an argument and its shim can pass `0`. Do not add an override "for testability"; the point
   is that there is nowhere to put a zero.
-- **Revit API risk is real and not caught by the compiler.** `RevitLinkType.CreateFromIFC`,
-  `Toposolid.Create`, `ProjectLocation.SetProjectPosition`, and — added with the Forma-parity steps —
-  `Toposolid.CreateSubDivision`, `DirectShape.SetShape` over curves,
-  `GeometryCreationUtilities.CreateBlendGeometry`, and — added with the imagery drape —
-  `AppearanceAssetEditScope`, the `UnifiedBitmap` schema and `ToposolidType.Duplicate` compile but
-  have not yet been executed inside Revit. Compiling is worth more than nothing: it is what caught
+- **Revit API risk is real and not caught by the compiler.** `GeometryCreationUtilities.CreateBlendGeometry`
+  (the tree step's fallback when the family will not load) compiles but has not yet been executed
+  inside Revit. `Toposolid.Create`, `ProjectLocation.SetProjectPosition`, `Toposolid.CreateSubDivision`,
+  `DirectShape.SetShape` over curves, `AppearanceAssetEditScope`, the `UnifiedBitmap` schema and
+  `ToposolidType.Duplicate` have left that set: the harness imports of 2026-09-18 ran each of them in
+  Revit 2025, 2026 and 2027, and the drape's own read-back put the texture writes in the log.
+  `RevitLinkType.CreateFromIFC` has too: the unattended re-imports of 2026-09-18, which take every
+  layer, linked the site model in all three, and so did a 2027 import from the install slot. `Application.GetAssets` and
+  `AppearanceAssetElement.Create`, the drape material's fallback for a project with no appearance
+  asset, ran in a 2027 probe on 2026-09-19.
+  Compiling is worth more than nothing: it is what caught
   `AssetEditScope` not existing (it is `AppearanceAssetEditScope`), what surfaced
   `AssetPropertyDistance.GetUnitTypeId()`, which replaced a guess about texture units with a read,
   and what settled the scope of `Toposolid.SetSmoothedSurface` in one build — `CS0176` says it is
@@ -195,9 +200,10 @@ follow.
   the window repaints and a Cancel click lands first. Revit does service a raise posted from inside
   its own handler promptly: the harness below pressed Import in the real window in 2025, 2026 and
   2027 and every slice ran with no mouse or keyboard input, the trees' ~47 chunks in under a minute
-  each time, and in 2026 with Revit minimized for the whole tree step. Whether the modeless window
-  actually repaints between slices, and whether a Comments write on a `DirectShape` holds, are
-  compiled and unexecuted. What is settled
+  each time, and in 2026 with Revit minimized for the whole tree step. A Comments write on a
+  `DirectShape` holds: the re-imports in a fresh Revit process found all 290 road centrelines by the
+  stamp in their Comments, in each of the three. Whether the modeless window actually repaints
+  between slices is compiled and unexecuted. What is settled
   headlessly is everything about *when*: `StagedImport` decides the slice order, where a cancel lands
   and what a failure costs, and `ImportChunking`/`TreeIdentity` decide the chunks and the resume.
   Never `yield` inside an open transaction — a chunked step commits, then yields — and never leave
@@ -213,8 +219,10 @@ follow.
   site location" and "Mantle Place: site context view" transactions committing, so Revit does let a
   3D view and a view filter share the name `SiteContext` gives both. The sign of a longitude is
   settled without Revit: Revit's own `en-US/SiteAndWeatherStationName.txt` lists Boston at
-  `-71.0335`, so a published west-negative longitude goes in as it is. Not settled: that writing
-  `SiteLocation.TimeZone` back after the coordinates undoes the zone Revit recalculates from them.
+  `-71.0335`, so a published west-negative longitude goes in as it is. The time zone write-back is
+  settled too, in 2026 and 2027 by a direct test and in all three by real imports: setting the
+  coordinates makes Revit recalculate the zone in the same transaction (to 9 for Tokyo, to −5 for
+  Boston), and writing the zone read beforehand back in the same transaction holds after the commit.
 - **The attribution step has left that set.** `ViewDrafting.Create`, `TextNote.Create`, and
   ExtensibleStorage — `SchemaBuilder` with `AccessLevel.Vendor` write access, `Entity`,
   `ProjectInformation.SetEntity`/`GetEntity` — have run in Revit 2025, 2026 and 2027 through the
@@ -229,15 +237,35 @@ follow.
   `ProvenanceStorage.SchemaGuid` breaks every project that already holds the old definition, so a
   field change is a new GUID
   ([ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md)).
-- **The context buildings joined that set.** The step converts the site model with
+- **The context buildings have left that set.** The step converts the site model with
   `Application.OpenIFCDocument`, finds each building in the result by `BuiltInParameter.IFC_GUID`,
   clones its solids with `SolidUtils.Clone` and gives them to a Generic Model `DirectShape`. The
   converted document is closed in the slice that opened it, before the first chunk: a document held
   across slices is closed only when a step ends through `StagedImport`, and an import abandoned from
-  the event handler does not. All of it compiles; none of it has run inside Revit. The part most
-  likely to be wrong is the GlobalId: if Revit's import does not record it where the step looks, the
-  step says so in one line and copies nothing. Which elements are buildings is not in that set —
+  the event handler does not. All of it ran in Revit 2027 through the harness described under the
+  tree family below, with the import pressed in the real window. Revit's import does record each
+  proxy's GlobalId in `IFC_GUID`: an 834-building site model came in as 834 stamped elements, every
+  one with a solid, in 22.7 s including the conversion. A second import of the same build copied
+  nothing and never converted the site model. The harness imports of 2026-09-18 had already copied
+  834 of 834 buildings in Revit 2025 and 2026 as well, and a re-import in a fresh Revit process
+  found all 834 and copied none. Three things the run settled that reading would not have. Open IFC raises *IFC versions 4 and above are only
+  partially supported* on every IFC4 file, as a warning that waits for a click unless a failures
+  handler takes it, which the step's swallower does. A new `DirectShape` gets an `IfcGUID` of Revit's
+  own, not the source GlobalId, so the Comments stamp is the only identity. And the copy carries no
+  height, area or volume parameter. Open IFC turns an `IfcPropertySet` property into a project
+  parameter named `<set>.<property>`, ignores an `IfcElementQuantity`, and nothing it attaches
+  survives the solid's copy onto a `DirectShape`: a value the site model publishes reaches a building
+  only if this step writes it. Which elements are buildings is not in that set —
   `SiteModelReader` reads it from the IFC's text, headlessly ([ADR 0012](../docs/adr/0012-context-buildings-come-from-the-site-model.md)).
+
+- **A toposolid subdivision is a different element in 2025 than in 2026 and 2027**, and one build has
+  to drape both. In 2025 it is typeless and takes its material as an instance parameter. From 2026
+  it is a `Toposolid` on the document's default toposolid type, the instance parameter is absent,
+  and the material is its type's. The drape asks each element which shape it has and retypes a
+  typed one onto a type of its own (`SubDivisionMaterial`): 33 of them cost about 190 s of a real
+  2027 import on a 74,852-point terrain, 71 s of calls and a 121 s commit — a probe on a reopened
+  project committed the same retypes in a second, so time a retype in an import, not a probe. Never branch on the version number, and never "fix" a 2025-only
+  observation into a universal comment: that is how this one shipped.
 
 - **The tree family's calls left that set in Revit 2025 before they merged**, through a harness that
   compiles this tree's sources into one differently named assembly and loads it into a Revit of its
@@ -245,10 +273,18 @@ follow.
   `FamilyLabel`, formulas, `AssociateElementParameterToFamilyParameter`) and the tree step's
   `LoadFamily`, `EditFamily` and level-hosted `NewFamilyInstance` executed in Revit 2025, measured
   against the numbers that drove them. 2026 and 2027 load the same 2025-saved family by upgrading it
-  on load, which only the release gate proves. Two things it settled that reading would not have:
+  on load, and the harness imports of 2026-09-18 placed 9,293 of 9,293 trees with it in each; the
+  measured accuracy is still 2025's alone. Two things it settled that reading would not have:
   a Planting family already owns a built-in *type* parameter named `Height`, so the per-instance one
   is `Tree Height`; and a saved `.rfa` records its save folder and the Revit user name — see
   [`README.md` ▸ Authoring the tree family](./README.md#authoring-the-tree-family).
+- **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
+  issue and reaches for their storage.** It writes Revit elements sized as published, with names a
+  renderer recognises (`RendererKeywords`), and leaves a renderer's own storage to the curator —
+  see [`README.md`](./README.md) on the tree family. Writing Twinmotion's substitution entity at
+  import was declined: it saves one click per project by coupling the add-in to an
+  ExtensibleStorage schema Autodesk owns and an asset GUID from Epic's library. Writing it later is
+  purely additive, which is why this is not an ADR.
 
 ## Where knowledge lives
 

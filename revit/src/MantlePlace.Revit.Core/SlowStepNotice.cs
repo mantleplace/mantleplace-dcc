@@ -122,12 +122,7 @@ public static class SlowStepNotice
     /// </remarks>
     private static string Describe(string opening, int measuredMinutes, int? terrainPointCount)
     {
-        string thisTerrain = terrainPointCount is { } count
-            ? string.Format(
-                CultureInfo.InvariantCulture,
-                "This terrain has {0:N0} points",
-                count)
-            : "This terrain's point count is not known to this run — it was built by an earlier import";
+        string thisTerrain = ThisTerrain(terrainPointCount);
 
         return string.Format(
             CultureInfo.InvariantCulture,
@@ -143,4 +138,64 @@ public static class SlowStepNotice
             measuredMinutes,
             thisTerrain);
     }
+
+    /// <summary>The point count of the terrain <see cref="ForSubDivisionRetypes"/> was measured on.</summary>
+    public const int MeasuredRetypePointCount = 74_852;
+
+    /// <summary>How many subdivisions that measurement retyped, one <c>ChangeTypeId</c> each.</summary>
+    public const int MeasuredRetypeSubDivisions = 33;
+
+    /// <summary>Rounded seconds those retypes took in a real Revit 2027 import, commit included.</summary>
+    /// <remarks>
+    /// 2026-09-19, bundle <c>9d2dfdbf</c>, on ground already on the imagery type so nothing else was
+    /// retyped: 71 s of calls, then a 121 s commit. A probe on a saved and reopened project committed
+    /// the same retypes in about a second; an import does not, so the import is what is quoted.
+    /// </remarks>
+    public const int MeasuredRetypeSeconds = 190;
+
+    /// <summary>
+    /// The line to say before the drape retypes <paramref name="subDivisionCount"/> subdivisions so
+    /// they can wear the photograph, or <c>null</c> when there are none to retype.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Revit 2026 and later give every subdivision a type and no material of its own, so the drape
+    /// reaches one only by retyping it (<see cref="SubDivisionMaterial"/>). The wait is in two
+    /// halves, and the sentence says both: each <c>ChangeTypeId</c> takes seconds, one after another
+    /// inside one slice of the import, and then Revit rebuilds the terrain's element relations when
+    /// the transaction commits — the same dark commit the other notices describe.
+    /// </para>
+    /// <para>
+    /// The same rule as <see cref="Describe"/>: the measurement and this terrain are stated side by
+    /// side, and no duration is predicted from them.
+    /// </para>
+    /// </remarks>
+    public static string? ForSubDivisionRetypes(int subDivisionCount, int? terrainPointCount)
+    {
+        if (subDivisionCount <= 0)
+        {
+            return null;
+        }
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "Next: giving {0:N0} subdivision(s) the photograph. Revit 2026 and later give a subdivision "
+            + "a type and no material of its own, so each one is moved onto a type that wears the "
+            + "photograph, one at a time, and Revit then rebuilds the terrain's element relations when "
+            + "the transaction commits. On the one terrain this has been measured on ({1:N0} points), "
+            + "{2:N0} subdivisions took about {3:N0} seconds, most of it inside that one commit. {4}. "
+            + "A commit cannot report part of itself, so Revit will report \"not responding\" until it "
+            + "finishes, and Cancel takes effect when it finishes. It has not crashed; leave it alone.",
+            subDivisionCount,
+            MeasuredRetypePointCount,
+            MeasuredRetypeSubDivisions,
+            MeasuredRetypeSeconds,
+            ThisTerrain(terrainPointCount));
+    }
+
+    /// <summary>This terrain's point count as a sentence, or the admission that it is not known.</summary>
+    private static string ThisTerrain(int? terrainPointCount)
+        => terrainPointCount is { } count
+            ? string.Format(CultureInfo.InvariantCulture, "This terrain has {0:N0} points", count)
+            : "This terrain's point count is not known to this run — it was built by an earlier import";
 }

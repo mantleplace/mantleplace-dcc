@@ -152,15 +152,43 @@ internal sealed partial class RevitBundleImporter
                     .Cast<AppearanceAssetElement>()
                     .FirstOrDefault();
 
-            if (template is null)
+            if (template is not null)
+            {
+                drapeMaterial.AppearanceAssetId = template.Duplicate(name).Id;
+            }
+            else if (LibraryGenericAsset() is { } library)
+            {
+                drapeMaterial.AppearanceAssetId = AppearanceAssetElement.Create(_document, name, library).Id;
+            }
+            else
             {
                 return null;
             }
-
-            drapeMaterial.AppearanceAssetId = template.Duplicate(name).Id;
         }
 
         return drapeMaterial;
+    }
+
+    /// <summary>
+    /// Revit's own library "Generic" appearance asset, for a project that holds no appearance asset
+    /// at all. <c>null</c> when this Revit's library has none.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ A project started with no template holds none — measured in Revit 2027 on 2026-09-19: 0
+    /// appearance asset elements, where the default template holds 120. Before this fallback the
+    /// terrain step, which runs before any family has brought one in, declined the imagery type there
+    /// and the drape step paid for a retype of the whole terrain instead: the harness imports of
+    /// 2026-09-18, all into such a project, committed that retype in 129 s (2025), 107 s (2026) and
+    /// 63 s (2027) on a 74,852-point toposolid. The library has an asset named exactly
+    /// "Generic" with the generic diffuse slot the drape writes, and
+    /// <c>AppearanceAssetElement.Create</c> from it gives an editable one. Asking the library costs
+    /// several seconds (3,104 assets), which is why it is asked last.
+    /// </remarks>
+    private Asset? LibraryGenericAsset()
+    {
+        return _document.Application.GetAssets(AssetType.Appearance)
+            .FirstOrDefault(asset => string.Equals(asset.Name, "Generic", StringComparison.Ordinal)
+                && asset.FindByName(Generic.GenericDiffuse) is not null);
     }
 
     /// <summary>
@@ -313,17 +341,18 @@ internal sealed partial class RevitBundleImporter
             return false;
         }
 
-        // ⛔ NOT ChangeTypeId. A toposolid subdivision is a TYPELESS element: GetTypeId() is
-        // InvalidElementId, Element.IsValidType is false for every candidate singly and in bulk, and
-        // ChangeTypeId throws "This Element cannot have type assigned" — it refuses the operation,
-        // not the type. Measured on order eb00f56f, 2026-08-25, four of four; the same run ruled out
-        // both rival explanations, retyping the host having left every subdivision id resolving and
-        // a single-layer type having been refused identically.
+        // ⛔ How a subdivision takes a material depends on the Revit version, so the element is asked,
+        // never the version (SubDivisionMaterial). Measured in Revit 2025 (order eb00f56f, 2026-08-25,
+        // four of four): a subdivision is TYPELESS — GetTypeId() is InvalidElementId, IsValidType is
+        // false for every candidate, ChangeTypeId throws "This Element cannot have type assigned" — and
+        // the material is the instance's TOPOSOLID_SUBDIVIDE_MATERIAL. That is also the cheaper
+        // mechanism, so it is asked first. Paint would need get_Geometry plus a search across 2,725
+        // faces for the upward one, and stores its result per face, where a regeneration may drop it.
         //
-        // So the material goes on the INSTANCE, which is the shape an element with no type has to
-        // use. It is also the cheaper of the two mechanisms that work: Paint needs get_Geometry plus
-        // a search across 2,725 faces for the upward one, and stores its result per-face where a
-        // toposolid regeneration is free to drop it. This is one parameter write that survives.
+        // Measured in Revit 2026 and 2027 (bundle 9d2dfdbf, 2026-09-19, 33 of 33 each): a subdivision
+        // is a Toposolid on the document's default toposolid type, the instance parameter is ABSENT,
+        // and a retype onto a duplicated type holds. So a typed subdivision wears the photograph
+        // through a type of its own, built the way the terrain's is (SubDivisionTypeFor).
         foreach (ElementId subdivisionId in DrapeableSubDivisionIds(terrain))
         {
             if (_document.GetElement(subdivisionId) is not Element subdivision)
@@ -334,37 +363,26 @@ internal sealed partial class RevitBundleImporter
                 continue;
             }
 
-            if (subdivision.get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL) is not { IsReadOnly: false } material)
-            {
-                refusedSubDivisions++;
-                Trace($"  drape: subdivision {subdivisionId.Value} has no writable Material parameter.");
-                refusals.Add("a subdivision had no writable Material parameter");
-                continue;
-            }
+            SubDivisionMaterialRoute route = RouteFor(subdivision, out Parameter? material, out ToposolidType? own);
 
             try
             {
-                ElementId wanted = materialFor(subdivision);
-                bool wrote = material.Set(wanted);
+                string? refusal = route switch
+                {
+                    SubDivisionMaterialRoute.Instance => WearOnInstance(subdivision, material!, materialFor(subdivision)),
+                    SubDivisionMaterialRoute.Type => WearThroughType(subdivision, own!, materialFor(subdivision)),
+                    _ => "a subdivision had neither a writable Material parameter nor a toposolid type",
+                };
 
-                // ⛔ Read back. The same four texture properties two methods down are read back for
-                // the same reason, and that read-back is what caught the drape going in as feet and
-                // tiling the photograph twelve times across the site. A Set returning true is a
-                // claim about the call, not about what Revit stored.
-                ElementId stored = subdivision
-                    .get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL)
-                    ?.AsElementId() ?? ElementId.InvalidElementId;
-
-                if (wrote && stored == wanted)
+                if (refusal is null)
                 {
                     drapedSubDivisions++;
                     continue;
                 }
 
                 refusedSubDivisions++;
-                Trace($"  drape: subdivision {subdivisionId.Value} did not keep the material — "
-                    + $"Set returned {wrote}, reads back {stored.Value}.");
-                refusals.Add("the material did not hold on a subdivision");
+                Trace($"  drape: subdivision {subdivisionId.Value} was not draped — {refusal}.");
+                refusals.Add(refusal);
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
@@ -377,6 +395,107 @@ internal sealed partial class RevitBundleImporter
 
         refusalReason = refusals.Count == 0 ? null : string.Join(" / ", refusals);
         return true;
+    }
+
+    /// <summary>
+    /// Writes <paramref name="wanted"/> into a typeless subdivision's own Material parameter, and
+    /// reads it back.
+    /// </summary>
+    /// <returns><c>null</c> when it holds, otherwise why not.</returns>
+    private static string? WearOnInstance(Element subdivision, Parameter material, ElementId wanted)
+    {
+        bool wrote = material.Set(wanted);
+
+        // ⛔ Read back. The same four texture properties further down are read back for the same
+        // reason, and that read-back is what caught the drape going in as feet and tiling the
+        // photograph twelve times across the site. A Set returning true is a claim about the call,
+        // not about what Revit stored.
+        ElementId stored = subdivision
+            .get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL)
+            ?.AsElementId() ?? ElementId.InvalidElementId;
+
+        return wrote && stored == wanted
+            ? null
+            : $"the material did not hold on a subdivision (Set returned {wrote}, reads back {stored.Value})";
+    }
+
+    /// <summary>
+    /// Moves a typed subdivision onto the type that wears <paramref name="wanted"/>, unless it is
+    /// already on it, and reads the result back.
+    /// </summary>
+    /// <returns><c>null</c> when it holds, otherwise why not.</returns>
+    private string? WearThroughType(Element subdivision, ToposolidType own, ElementId wanted)
+    {
+        if (_document.GetElement(wanted) is not Material drape)
+        {
+            return "this Revit would not create the subdivision's drape material";
+        }
+
+        if (SubDivisionTypeFor(own, drape, out string layering) is not { } type)
+        {
+            return layering;
+        }
+
+        // ⛔ Only when it is not already on it. A re-import finds the subdivision on its type, and
+        // each retype costs seconds (SlowStepNotice.ForSubDivisionRetypes).
+        if (subdivision.GetTypeId() != type.Id)
+        {
+            subdivision.ChangeTypeId(type.Id);
+        }
+
+        bool onType = subdivision.GetTypeId() == type.Id;
+        bool wearsIt = type.GetCompoundStructure() is { LayerCount: > 0 } structure && structure.GetMaterialId(0) == wanted;
+        return onType && wearsIt
+            ? null
+            : $"the drape type did not hold on a subdivision (on the type: {onType}, its top layer wears the photograph: {wearsIt})";
+    }
+
+    /// <summary>
+    /// The toposolid type a typed subdivision wears <paramref name="drape"/> through, named from the
+    /// material (<see cref="SubDivisionMaterial.TypeName"/>) and found again by that name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Built by <see cref="ImageryTypeFrom"/>, the terrain's own builder, from the subdivision's own
+    /// type: a duplicate whose top layer is split into a thin photograph over the original material,
+    /// so the subdivision keeps its type's thickness and its sides keep their material.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Except when the subdivision is already on a type whose top layer is a photograph</b>
+    /// (<see cref="SubDivisionMaterial.IsLayeredImageryType"/>) — this bundle's for another material,
+    /// after a renderer keyword changed between builds, or any bundle's imagery type that the document
+    /// made its default. Splitting that layer again would stack a second one or be refused as too
+    /// thin, so the duplicate only changes which material the thin layer wears.
+    /// </para>
+    /// </remarks>
+    private ToposolidType? SubDivisionTypeFor(ToposolidType own, Material drape, out string layering)
+    {
+        string name = SubDivisionMaterial.TypeName(drape.Name);
+        if (!SubDivisionMaterial.IsLayeredImageryType(own.Name))
+        {
+            return ImageryTypeFrom(own, name, drape.Id, out layering);
+        }
+
+        ToposolidType? type = new FilteredElementCollector(_document)
+            .OfClass(typeof(ToposolidType))
+            .Cast<ToposolidType>()
+            .FirstOrDefault(candidate => string.Equals(candidate.Name, name, StringComparison.Ordinal))
+            ?? own.Duplicate(name) as ToposolidType;
+
+        if (type?.GetCompoundStructure() is not { LayerCount: > 0 } structure)
+        {
+            layering = $"Revit would not duplicate the subdivision's type \"{own.Name}\"";
+            return null;
+        }
+
+        if (structure.GetMaterialId(0) != drape.Id)
+        {
+            structure.SetMaterialId(0, drape.Id);
+            type.SetCompoundStructure(structure);
+        }
+
+        layering = SidesClause(type.GetCompoundStructure());
+        return type;
     }
 
     /// <summary>

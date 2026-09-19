@@ -144,8 +144,9 @@ public static class SiteBoundaryIdentity
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The drape needs this because it cannot use <c>ChangeTypeId</c>: a subdivision is a typeless
-    /// element, so the material goes on the instance, and the instance has to be found. Finding it by
+    /// The drape needs this because the material goes on each subdivision itself — on the instance in
+    /// Revit 2025, where a subdivision is typeless, and through a type of its own in 2026 and 2027,
+    /// where it is typed (<see cref="SubDivisionMaterial"/>) — so the instance has to be found. Finding it by
     /// stamp rather than by an id remembered from this session is what makes a RE-import able to
     /// repair un-draped patches — the remembered list is empty whenever the boundaries already exist,
     /// so a second import used to drape nothing at all while reporting success.
