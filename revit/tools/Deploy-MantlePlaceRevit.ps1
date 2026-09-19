@@ -209,6 +209,11 @@ if ([string]::IsNullOrWhiteSpace($version)) {
 
 $addinsRoot = Join-Path $env:APPDATA 'Autodesk/Revit/Addins'
 
+# Read once, before the loop: one run is one install, and Check-RevitInstall.ps1 groups the add-ins
+# folders by their stamps. A clock read per folder crossed a second between two of them and made
+# the check report one deploy as folders that disagree.
+$installedAt = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
+
 foreach ($revitVersion in $RevitVersions) {
     $destination = Join-Path $addinsRoot $revitVersion
     if (-not (Test-Path -LiteralPath $destination)) {
@@ -229,7 +234,7 @@ foreach ($revitVersion in $RevitVersions) {
         schema = 1
         source = $(if ($fromRelease) { 'release' } else { 'source-tree' })
         version = $version
-        installedAt = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
+        installedAt = $installedAt
     }
     if (-not $fromRelease) {
         $stamp['sha'] = $sourceSha
