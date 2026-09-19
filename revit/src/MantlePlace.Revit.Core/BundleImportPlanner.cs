@@ -537,7 +537,8 @@ public static class BundleImportPlanner
 
     /// <summary>
     /// The three Forma-parity layers — road centrelines, site boundaries and vegetation — and the
-    /// land cover, which is cut as subdivisions beside the site boundaries.
+    /// three layers cut as subdivisions beside the site boundaries: land cover, the water bodies and
+    /// the road surfaces, in that order after them.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -589,11 +590,64 @@ public static class BundleImportPlanner
             skipped);
 
         PlanPlacedArtifact(
+            manifest.Water,
+            frame,
+            entries,
+            ImportStepKind.Water,
+            "water bodies",
+            steps,
+            skipped);
+
+        PlanRoadPolygons(manifest, frame, entries, steps, skipped);
+
+        PlanPlacedArtifact(
             manifest.TreePoints,
             frame,
             entries,
             ImportStepKind.Vegetation,
             "trees",
+            steps,
+            skipped);
+    }
+
+    /// <summary>
+    /// The road surfaces, or the one absence this host may not report as "no roads".
+    /// </summary>
+    /// <remarks>
+    /// <c>road_polygons</c> is derived from <c>road</c> and is best-effort: it can be absent from a
+    /// bundle whose area is full of roads (<c>spec/format.md</c> §6.3). So when the base layer is
+    /// there and the surfaces are not, the skip says the surfaces were not derived rather than
+    /// offering the re-download that <see cref="PlanPlacedArtifact"/>'s absence suggests — there is
+    /// nothing in the vault to re-download. A bundle with neither keeps the ordinary absence: the
+    /// area really may have no roads.
+    /// </remarks>
+    private static void PlanRoadPolygons(
+        BundleManifest manifest,
+        SiteFrame? frame,
+        BundleEntryIndex entries,
+        List<ImportStep> steps,
+        List<SkippedImport> skipped)
+    {
+        if (manifest.RoadPolygons is null && manifest.HasRoadLayer)
+        {
+            skipped.Add(new SkippedImport
+            {
+                Kind = ImportStepKind.RoadPolygons,
+                ReasonCode = SkipReasonCode.DerivedLayerNotPublished,
+                Reason = "This bundle carries roads but no road surfaces, so none were cut into the "
+                    + "terrain. The surfaces are derived from the centrelines when they can be, and "
+                    + "this order's were not — which says nothing about the roads in this area. The "
+                    + "road centrelines still import.",
+            });
+            return;
+        }
+
+        PlanPlacedArtifact(
+            manifest.RoadPolygons,
+            frame,
+            entries,
+            ImportStepKind.RoadPolygons,
+            "road surfaces",
             steps,
             skipped);
     }

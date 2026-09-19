@@ -266,6 +266,16 @@ follow.
   only if this step writes it. Which elements are buildings is not in that set —
   `SiteModelReader` reads it from the IFC's text, headlessly ([ADR 0012](../docs/adr/0012-context-buildings-come-from-the-site-model.md)).
 
+- **A subdivision cut from an outer loop plus its inner loops has left that set**, in all three
+  versions. `Toposolid.CreateSubDivision` takes a list of curve loops and documents nothing about
+  more than one: measured 2026-09-19 in 2025, 2026 and 2027, an outer loop with its inner loops comes
+  back as ONE subdivision with the holes left out of its surface, the sketch profile carries a loop
+  per ring, the winding of a ring is not read, and no failure of any severity is posted — see
+  [`README.md` ▸ Holes in a subdivision](./README.md#holes-in-a-subdivision). That is what the water
+  bodies and the road surfaces are cut with (`GroundCuts`); the two land layers still cut one
+  subdivision per ring, because their stamps are positions in the layer and grouping the rings now
+  would move every stamp after the first polygon with a hole.
+
 - **A toposolid subdivision is a different element in 2025 than in 2026 and 2027**, and one build has
   to drape both. In 2025 it is typeless and takes its material as an instance parameter. From 2026
   it is a `Toposolid` on the document's default toposolid type, the instance parameter is absent,

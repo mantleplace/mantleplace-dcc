@@ -337,6 +337,33 @@ public static class BundleManifestReader
 
         manifest.LandUse = ReadVectorLayer(root, "land_use");
         manifest.LandCover = ReadVectorLayer(root, "land_cover");
+        manifest.Water = ReadVectorLayer(root, "water");
+        manifest.RoadPolygons = ReadVectorLayer(root, "road_polygons");
+
+        // Not an artifact: this host reads no road centreline out of the base layer (it takes the
+        // draped road_splines instead). All it is asked is whether the layer is there, because that
+        // is what makes a missing road_polygons "not derived" rather than "no roads here".
+        manifest.HasRoadLayer = HasVectorLayer(root, "road");
+    }
+
+    /// <summary>Whether the <c>vector</c> block lists a layer of this name, in any format.</summary>
+    private static bool HasVectorLayer(JsonElement root, string layerName)
+    {
+        if (root.Object("vector")?.Array("layers") is not { } layers)
+        {
+            return false;
+        }
+
+        foreach (JsonElement layer in layers.EnumerateArray())
+        {
+            if (layer.ValueKind == JsonValueKind.Object
+                && string.Equals(layer.Str("name"), layerName, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

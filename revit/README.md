@@ -131,12 +131,28 @@ Revit licence.
 - cuts the `land_cover` polygons into the terrain as subdivisions too, the same way and stamped
   under their own kind. `land_cover` is a different layer from `land_use`, not a second name for it,
   and it is the one carrying the physical subtype — forest and its like;
+- cuts the `water` layer's **water bodies** and the `road_polygons` layer's **road surfaces** into
+  the terrain as subdivisions as well, after the two land layers and stamped under kinds of their
+  own. Polygons only: the streams in `water` stay out, because widening a centreline into an area is
+  deriving what nobody published. A road surface comes in **flat**, at the terrain's own surface —
+  recessing it is issue 158. These two keep their **holes**: a water body's islands and a merged road
+  network's city blocks are cut out of the subdivision rather than becoming subdivisions of their
+  own, which is what the land layers do with an inner ring. Nothing is clipped against another layer
+  and no layer wins where two meet — the published polygons overlap because the ground does, and
+  Revit keeps them all, with the overlaps counted in the log. `road_polygons` is derived from `road`
+  and is **best-effort**: where a bundle carries the roads and not the surfaces, the log says the
+  surfaces were not derived for that order rather than reporting an area without roads;
 - names each subdivision's drape material with the **renderer keyword** for its published `subtype`
   — `Mantle Place Site Imagery {stem} grass`, and so on — so Enscape grows 3D grass on it without
   anything being renamed by hand. The photograph stays; the keyword rides on the name, last, in the
   renderer's own word order (`tall grass`, never `grass tall`). The table from subtype to keyword is
   `RendererKeywords` in the pure core; a subtype it does not name, and a hole cut out of a polygon,
-  get no keyword. Enscape growing grass on a keyworded material has not been watched yet;
+  get no keyword. The water bodies and the road surfaces take their word from the **layer** instead —
+  `water` and `asphalt` — because a reservoir, a pond and a swimming pool are one material and the
+  road surfaces are merged per class before they are published. Those two are plain material names
+  first: Enscape documents `water` as one of the words it reads, nothing documents `asphalt` to any
+  renderer, and no renderer effect is claimed as verified. Enscape growing grass on a keyworded
+  material has not been watched yet;
 - drapes `Imagery/Drape.png` over the terrain as a real-world-scaled material texture — the last
   parity row — on a **duplicated** toposolid type, so the project's own type is
   never repainted. The rectangle the image is pinned to is not taken on trust: the only extent this
@@ -192,9 +208,10 @@ Account button reaches the same place through the same function, so the two can 
 **An import brings in what you tick.** Both ways in — `Import Bundle` and the vault window's
 `Import` — open the modeless `Bundle Import` window on a checklist headed `Include`: one box for each
 layer the bundle carries (`Terrain`, `Context Buildings`, `Site Model`, `Road Centrelines`,
-`Land Use Subdivisions`, `Land Cover Subdivisions`, `Trees`, `Imagery Drape`), all ticked but
+`Land Use Subdivisions`, `Land Cover Subdivisions`, `Water Subdivisions`, `Road Subdivisions`,
+`Trees`, `Imagery Drape`), all ticked but
 `Site Model`: that row links the site model, whose buildings `Context Buildings` has already copied
-in, and ticking both shows every building twice. Nothing runs until `Import` is pressed. Both kinds of subdivision and the drape need the terrain, so unticking `Terrain` disables
+in, and ticking both shows every building twice. Nothing runs until `Import` is pressed. Every kind of subdivision and the drape need the terrain, so unticking `Terrain` disables
 them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
 out creates nothing, and the log says it was left out by choice. The shared coordinates, the site
 location and the attribution are not layers and are written whatever is ticked. Leaving out the drape also builds the
@@ -283,6 +300,39 @@ hand-written playback file until somebody does establish it. **The registration 
 better evidence anyway**: they are Revit reporting the parent it actually assigned, they appear
 before any click, and a `Jrn.RibbonEvent` that fires only tells you a command ran, never what the
 button looked like or where it hung.
+
+### Holes in a subdivision
+
+`Toposolid.CreateSubDivision` takes a list of curve loops, and what it does with more than one of
+them is undocumented. Measured 2026-09-19 in **Revit 2025 (25.4.60.9), 2026 (26.5.0.55) and 2027
+(27.2.0.39)**, on a toposolid built from a 121-point grid, one subdivision per case, each in its own
+transaction:
+
+| Loops in the call | What came back |
+| --- | --- |
+| Outer, one inner | One subdivision, sketch profile of 2 loops, up-facing area within 0.03 % of outer − inner |
+| Outer, one inner wound the same way as the outer | Identical — the winding is not read |
+| Outer, two inner | One subdivision, 3 loops, area within 0.03 % of outer − both |
+| Two disjoint outers | One subdivision covering both, 2 loops |
+| One outer (control) | One subdivision, 1 loop |
+
+Every case committed with no failure message of any severity, in all three versions. So an outer
+loop with its inner loops **is** one subdivision with the holes left out of it, and that is how the
+water bodies and the road surfaces are cut (`GroundCuts`). It is also why nothing in this tree asks
+which way round a published ring is wound.
+
+**Where two subdivisions cover the same ground, neither is on top.** Measured in the same Revit
+2027, on an import that cut all four layers into one 74,852-point terrain — 23 land-use, 10
+land-cover, 1 water and 4 road subdivisions, the roads cut last and over everything. The land-use,
+land-cover and water polygons are a real order's; no bundle on the machine published a
+`road_polygons` layer yet, so the road surfaces came from a hand-written one added to a scratch copy
+of that bundle. They exercise the add-in, and say nothing about what the platform publishes. Revit posted an
+overlap warning for each pair (15, 96, 3 and 26 places as the four steps ran) and kept every
+subdivision. A ray straight down over six road/land overlaps met a **land-cover** subdivision first
+every time, the road surface last or not at all, with every surface inside 0.02 ft (6 mm) of the
+others: they are coincident, and the cut order does not decide what draws. So a renderer keyword is
+never a way to paint one published polygon over another — where the curator needs one surface to
+win, they choose it in the model.
 
 ### Authoring the tree family
 

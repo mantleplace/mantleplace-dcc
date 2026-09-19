@@ -183,6 +183,13 @@ internal sealed partial class RevitBundleImporter(
     {
         ArgumentNullException.ThrowIfNull(step);
 
+        // Every polygon layer runs the same step, in its own words (GroundCuts.LayerOf), so a new
+        // one is a row in the core rather than a case here.
+        if (GroundCuts.LayerOf(step.Kind) is { } groundLayer)
+        {
+            return Once(() => ImportSiteBoundaries(step, groundLayer));
+        }
+
         switch (step.Kind)
         {
             case ImportStepKind.ToposurfaceFromPointsFile:
@@ -201,10 +208,6 @@ internal sealed partial class RevitBundleImporter(
                 return Once(() => SetSiteLocation(step));
             case ImportStepKind.RoadCentrelines:
                 return Once(() => ImportRoadCentrelines(step));
-            case ImportStepKind.SiteBoundaries:
-                return Once(() => ImportSiteBoundaries(step, GroundLayer.LandUse));
-            case ImportStepKind.LandCover:
-                return Once(() => ImportSiteBoundaries(step, GroundLayer.LandCover));
             case ImportStepKind.Vegetation:
                 return ImportVegetation(step);
             case ImportStepKind.SiteContextView:

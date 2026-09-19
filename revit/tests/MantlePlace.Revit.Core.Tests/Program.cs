@@ -30,6 +30,7 @@ exitCode |= DrapeLayeringTests.Run();
 exitCode |= SubDivisionDrapeTests.Run();
 exitCode |= SubDivisionMaterialTests.Run();
 exitCode |= RendererKeywordsTests.Run();
+exitCode |= GroundCutsTests.Run();
 exitCode |= RoadIdentityTests.Run();
 exitCode |= TerrainSmoothingTests.Run();
 exitCode |= DrapeAnchorTests.Run();

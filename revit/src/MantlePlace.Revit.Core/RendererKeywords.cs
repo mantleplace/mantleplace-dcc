@@ -27,8 +27,10 @@ namespace MantlePlace.Revit.Core;
 /// names can land between its words.
 /// </para>
 /// <para>
-/// Water is deliberately absent. <c>land_cover</c>'s <c>wetland</c> is not open water, and the water
-/// layer ships stream centrelines rather than polygons, so no subdivision here is water.
+/// Water is deliberately absent from the subtype table. <c>land_cover</c>'s <c>wetland</c> is not
+/// open water, and the <c>water</c> layer's own polygons take their word from the layer
+/// (<see cref="ByLayer"/>) rather than from a subtype: a reservoir, a pond and a swimming pool are
+/// all water.
 /// </para>
 /// </remarks>
 public static class RendererKeywords
@@ -60,6 +62,37 @@ public static class RendererKeywords
     };
 
     /// <summary>
+    /// The word a whole layer's subdivisions carry, whatever each feature's subtype says.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two layers publish one material between them. Every polygon in <c>water</c> is water — the
+    /// subtypes under it (<c>reservoir</c>, <c>pond</c>, <c>human_made</c> for a swimming pool) are
+    /// the kind of water body, not a different surface — and every polygon in <c>road_polygons</c> is
+    /// a road surface, merged per class before it was published.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>These are plain material names first and renderer keywords second.</b> Enscape's
+    /// documentation lists <c>water</c> among the words it reads out of a material name; nothing
+    /// documents <c>asphalt</c> to any renderer, and it is here because it is what the surface is
+    /// called. No renderer effect is claimed as verified for either — that is a licensed check a
+    /// human makes.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyDictionary<GroundLayer, string> ByLayer { get; } = new Dictionary<GroundLayer, string>
+    {
+        [GroundLayer.Water] = "water",
+        [GroundLayer.RoadSurface] = "asphalt",
+    };
+
+    /// <summary>
+    /// The phrase every subdivision of <paramref name="layer"/> carries, or <c>null</c> for a layer
+    /// whose word comes from each feature's own subtype instead.
+    /// </summary>
+    public static string? ForLayer(GroundLayer layer)
+        => ByLayer.TryGetValue(layer, out string? keyword) ? keyword : null;
+
+    /// <summary>
     /// The renderer phrase for <paramref name="subtype"/>, or <c>null</c> — no keyword — for a
     /// subtype the table does not name, an empty one, or none.
     /// </summary>
@@ -68,48 +101,16 @@ public static class RendererKeywords
 
     /// <summary>The renderer phrase for the subdivision one published ring becomes.</summary>
     /// <remarks>
-    /// A hole gets none. Every ring is cut as its own subdivision, inner ones included, and an inner
-    /// ring is where the polygon's subtype is <em>not</em> — the clearing in a forest — so naming it
-    /// for the subtype would grow the forest's grass exactly where the bundle says the forest stops.
+    /// A hole gets none. In the two land layers every ring is cut as its own subdivision, inner ones
+    /// included, and an inner ring is where the polygon's subtype is <em>not</em> — the clearing in a
+    /// forest — so naming it for the subtype would grow the forest's grass exactly where the bundle
+    /// says the forest stops. The layers that keep their holes never ask: their word is the layer's
+    /// (<see cref="ForLayer"/>) and a hole of theirs becomes no subdivision at all
+    /// (<see cref="GroundCuts"/>).
     /// </remarks>
     public static string? ForRing(SiteFeature feature)
     {
         ArgumentNullException.ThrowIfNull(feature);
         return feature.IsHole ? null : For(feature.Subtype);
-    }
-
-    /// <summary>
-    /// Each ring's stamp paired with its renderer phrase, for the rings that have one.
-    /// </summary>
-    /// <param name="rings">The parsed layer.</param>
-    /// <param name="stamps">
-    /// The stamp of every ring, in the same order (<see cref="SiteBoundaryIdentity.Stamps"/>).
-    /// </param>
-    /// <remarks>
-    /// What lets a subdivision an earlier import cut be given its keyword: the shim reads the stamp
-    /// off the element and looks it up here. Keyed on the full stamp, so the other layer's
-    /// subdivisions, another order's and a curator's own never match.
-    /// </remarks>
-    public static IReadOnlyDictionary<string, string> ByStamp(
-        IReadOnlyList<SiteFeature> rings,
-        IReadOnlyList<string> stamps)
-    {
-        ArgumentNullException.ThrowIfNull(rings);
-        ArgumentNullException.ThrowIfNull(stamps);
-        if (rings.Count != stamps.Count)
-        {
-            throw new ArgumentException("One stamp per ring, in layer order.", nameof(stamps));
-        }
-
-        Dictionary<string, string> byStamp = new(StringComparer.Ordinal);
-        for (int index = 0; index < rings.Count; index++)
-        {
-            if (ForRing(rings[index]) is { } keyword)
-            {
-                byStamp[stamps[index]] = keyword;
-            }
-        }
-
-        return byStamp;
     }
 }

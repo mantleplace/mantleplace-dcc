@@ -27,6 +27,8 @@ public enum ImportLayer
     RoadCentrelines,
     LandUseSubdivisions,
     LandCoverSubdivisions,
+    WaterSubdivisions,
+    RoadSubdivisions,
     Trees,
     ImageryDrape,
 }
@@ -45,6 +47,8 @@ public static class ImportLayers
         ImportStepKind.RoadCentrelines => ImportLayer.RoadCentrelines,
         ImportStepKind.SiteBoundaries => ImportLayer.LandUseSubdivisions,
         ImportStepKind.LandCover => ImportLayer.LandCoverSubdivisions,
+        ImportStepKind.Water => ImportLayer.WaterSubdivisions,
+        ImportStepKind.RoadPolygons => ImportLayer.RoadSubdivisions,
         ImportStepKind.Vegetation => ImportLayer.Trees,
         ImportStepKind.ImageryDrape => ImportLayer.ImageryDrape,
         _ => null,
@@ -54,14 +58,16 @@ public static class ImportLayers
     /// The layer this one cannot be imported without, or <c>null</c> for one that stands alone.
     /// </summary>
     /// <remarks>
-    /// Both kinds of subdivision are cut into the ground and the drape is a material the ground
-    /// wears, so all three need the terrain. Roads, trees and context buildings carry their own Z and
-    /// do not; the site model is a link.
+    /// Every kind of subdivision is cut into the ground and the drape is a material the ground
+    /// wears, so all of them need the terrain. Road centrelines, trees and context buildings carry
+    /// their own Z and do not; the site model is a link.
     /// </remarks>
     public static ImportLayer? PrerequisiteOf(ImportLayer layer) => layer switch
     {
         ImportLayer.LandUseSubdivisions => ImportLayer.Terrain,
         ImportLayer.LandCoverSubdivisions => ImportLayer.Terrain,
+        ImportLayer.WaterSubdivisions => ImportLayer.Terrain,
+        ImportLayer.RoadSubdivisions => ImportLayer.Terrain,
         ImportLayer.ImageryDrape => ImportLayer.Terrain,
         _ => null,
     };
