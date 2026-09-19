@@ -34,6 +34,8 @@ internal static class ImportLayerTests
             run.True(ImportLayers.Of(ImportStepKind.RoadCentrelines) == ImportLayer.RoadCentrelines, "the roads");
             run.True(ImportLayers.Of(ImportStepKind.SiteBoundaries) == ImportLayer.LandUseSubdivisions, "the land-use polygons");
             run.True(ImportLayers.Of(ImportStepKind.LandCover) == ImportLayer.LandCoverSubdivisions, "the land-cover polygons");
+            run.True(ImportLayers.Of(ImportStepKind.Water) == ImportLayer.WaterSubdivisions, "the water bodies");
+            run.True(ImportLayers.Of(ImportStepKind.RoadPolygons) == ImportLayer.RoadSubdivisions, "the road surfaces");
             run.True(ImportLayers.Of(ImportStepKind.Vegetation) == ImportLayer.Trees, "the tree points");
             run.True(ImportLayers.Of(ImportStepKind.ImageryDrape) == ImportLayer.ImageryDrape, "the drape");
 
@@ -60,6 +62,8 @@ internal static class ImportLayerTests
         {
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.LandUseSubdivisions) == ImportLayer.Terrain, "land-use subdivisions are cut into the ground");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.LandCoverSubdivisions) == ImportLayer.Terrain, "and so are land-cover ones");
+            run.True(ImportLayers.PrerequisiteOf(ImportLayer.WaterSubdivisions) == ImportLayer.Terrain, "and the water bodies");
+            run.True(ImportLayers.PrerequisiteOf(ImportLayer.RoadSubdivisions) == ImportLayer.Terrain, "and the road surfaces");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.ImageryDrape) == ImportLayer.Terrain, "the drape is worn by the ground");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.Terrain) is null, "the terrain");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.SiteModel) is null, "the site model is linked on its own");
@@ -93,6 +97,11 @@ internal static class ImportLayerTests
             run.Equal(WindowLabels.LayerName(ImportLayer.ContextBuildings), "Context Buildings", "the glossary's context buildings");
             run.Equal(WindowLabels.LayerName(ImportLayer.LandUseSubdivisions), "Land Use Subdivisions", "the glossary's subdivision, told apart by its layer");
             run.Equal(WindowLabels.LayerName(ImportLayer.LandCoverSubdivisions), "Land Cover Subdivisions", "the other layer's subdivisions");
+            run.Equal(WindowLabels.LayerName(ImportLayer.WaterSubdivisions), "Water Subdivisions", "the water bodies (HPS-51)");
+            run.Equal(
+                WindowLabels.LayerName(ImportLayer.RoadSubdivisions),
+                "Road Subdivisions",
+                "the road surfaces, told apart from the Road Centrelines row above them");
             run.Equal(WindowLabels.LayerName(ImportLayer.ImageryDrape), "Imagery Drape", "the drape");
         });
 
@@ -112,7 +121,8 @@ internal static class ImportLayerTests
 
             run.Equal(
                 string.Join(", ", checklist.Layers),
-                "Terrain, ContextBuildings, SiteModel, RoadCentrelines, LandUseSubdivisions, LandCoverSubdivisions, Trees, ImageryDrape",
+                "Terrain, ContextBuildings, SiteModel, RoadCentrelines, LandUseSubdivisions, LandCoverSubdivisions, "
+                    + "WaterSubdivisions, RoadSubdivisions, Trees, ImageryDrape",
                 "every layer the plan has a step for, and no other");
         });
 
@@ -143,7 +153,14 @@ internal static class ImportLayerTests
             ImportChecklist checklist = new(Enum.GetValues<ImportLayer>());
             checklist.Set(ImportLayer.Terrain, false);
 
-            foreach (ImportLayer dependent in new[] { ImportLayer.LandUseSubdivisions, ImportLayer.LandCoverSubdivisions, ImportLayer.ImageryDrape })
+            foreach (ImportLayer dependent in new[]
+                     {
+                         ImportLayer.LandUseSubdivisions,
+                         ImportLayer.LandCoverSubdivisions,
+                         ImportLayer.WaterSubdivisions,
+                         ImportLayer.RoadSubdivisions,
+                         ImportLayer.ImageryDrape,
+                     })
             {
                 run.False(checklist.IsEnabled(dependent), $"{dependent} cannot be toggled");
                 run.False(checklist.IsChecked(dependent), $"{dependent} reads unchecked");
@@ -226,7 +243,9 @@ internal static class ImportLayerTests
             run.True(plan.CanImport, "can import");
             run.Equal(
                 string.Join(", ", plan.Steps.Select(step => step.Kind)),
-                "ToposurfaceFromPointsFile, ContextBuildings, LinkSiteIfc, SetSharedCoordinates, SetSiteLocation, RoadCentrelines, SiteBoundaries, LandCover, Vegetation, AttributionAndProvenance, SiteContextView, ImageryDrape",
+                "ToposurfaceFromPointsFile, ContextBuildings, LinkSiteIfc, SetSharedCoordinates, SetSiteLocation, "
+                    + "RoadCentrelines, SiteBoundaries, LandCover, Water, RoadPolygons, Vegetation, "
+                    + "AttributionAndProvenance, SiteContextView, ImageryDrape",
                 "every step");
         });
 
@@ -313,12 +332,14 @@ internal static class ImportLayerTests
         "Vector/RoadSplines.geojson",
         "Vector/LandUse.geojson",
         "Vector/LandCover.geojson",
+        "Vector/Water.geojson",
+        "Vector/RoadPolygons.geojson",
         "Landcover/TreePoints.csv",
     ];
 
     /// <summary>
-    /// A bundle carrying one of every layer: a terrain, the site model, the three parity layers and a
-    /// drape the image's own grid corroborates.
+    /// A bundle carrying one of every layer: a terrain, the site model, the three parity layers, the
+    /// three other polygon layers cut as subdivisions, and a drape the image's own grid corroborates.
     /// </summary>
     private const string Everything = """
         {
@@ -349,7 +370,10 @@ internal static class ImportLayerTests
             "layers": [
               { "name": "road_splines", "formats": [{ "format": "geojson", "path": "Vector/RoadSplines.geojson", "sha256": "aa" }] },
               { "name": "land_use", "formats": [{ "format": "geojson", "path": "Vector/LandUse.geojson", "sha256": "bb" }] },
-              { "name": "land_cover", "formats": [{ "format": "geojson", "path": "Vector/LandCover.geojson", "sha256": "cc" }] }
+              { "name": "land_cover", "formats": [{ "format": "geojson", "path": "Vector/LandCover.geojson", "sha256": "cc" }] },
+              { "name": "water", "formats": [{ "format": "geojson", "path": "Vector/Water.geojson", "sha256": "dd" }] },
+              { "name": "road", "formats": [{ "format": "geojson", "path": "Vector/Road.geojson", "sha256": "ee" }] },
+              { "name": "road_polygons", "formats": [{ "format": "geojson", "path": "Vector/RoadPolygons.geojson", "sha256": "ff" }] }
             ]
           }
         }

@@ -186,14 +186,57 @@ internal static class SiteBoundaryIdentityTests
             run.Equal(use.MaterialKind, "boundary", "the material word every earlier import wrote");
         });
 
-        run.Case("the two layers differ in every word", () =>
+        run.Case("no two layers share a word", () =>
         {
-            GroundLayerWords use = GroundLayerWords.For(GroundLayer.LandUse);
-            GroundLayerWords cover = GroundLayerWords.For(GroundLayer.LandCover);
-            run.False(use.StampKind == cover.StampKind, "stamp kind");
-            run.False(use.MaterialKind == cover.MaterialKind, "material word");
-            run.False(use.Label == cover.Label, "log label");
-            run.False(use.Noun == cover.Noun, "noun");
+            GroundLayerWords[] words = [.. Enum.GetValues<GroundLayer>().Select(GroundLayerWords.For)];
+
+            run.Equal(words.Select(w => w.StampKind).Distinct(StringComparer.Ordinal).Count(), words.Length, "stamp kind");
+            run.Equal(words.Select(w => w.MaterialKind).Distinct(StringComparer.Ordinal).Count(), words.Length, "material word");
+            run.Equal(words.Select(w => w.Label).Distinct(StringComparer.Ordinal).Count(), words.Length, "log label");
+            run.Equal(words.Select(w => w.Noun).Distinct(StringComparer.Ordinal).Count(), words.Length, "noun");
+        });
+
+        run.Case("a layer nobody worded throws rather than borrowing land use's stamp", () =>
+        {
+            // The stamp's kind IS the identity. A default arm would give a new layer the land-use
+            // prefix, so Parse would read its subdivisions as land use and a re-import would leave
+            // them alone as something else's.
+            bool threw = false;
+            try
+            {
+                GroundLayerWords.For((GroundLayer)99);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                threw = true;
+            }
+
+            run.True(threw, "an unworded layer has no identity to lend or borrow");
+        });
+
+        run.Case("the water and road-surface layers stamp under kinds of their own", () =>
+        {
+            run.Equal(
+                SiteBoundaryIdentity.Stamp(GroundLayer.Water, Stem, "Lake Wendouree", 1),
+                $"Mantle Place Water {Stem}/Lake Wendouree",
+                "a named water body");
+            run.Equal(
+                SiteBoundaryIdentity.Stamp(GroundLayer.RoadSurface, Stem, null, 7),
+                $"Mantle Place Road Surface {Stem}/7",
+                "the road surfaces are merged per class and carry no name");
+        });
+
+        run.Case("a road surface's stamp is not a road centreline's", () =>
+        {
+            // Both say "Mantle Place Road", and a stamp that one step reads as the other's would
+            // have a re-import skip a surface it never cut — or a centreline it did.
+            string surface = SiteBoundaryIdentity.Stamp(GroundLayer.RoadSurface, Stem, null, 1);
+            run.Equal(
+                RoadIdentity.Decide([surface], Stem, 1).RowsToCreate.Count,
+                1,
+                "a road surface on the terrain is no centreline the road step has already drawn");
+            run.False(SiteBoundaryIdentity.IsStampFor(RoadIdentity.Stamp(Stem, 1), Stem), "nor the other way round");
+            run.True(SiteBoundaryIdentity.Parse(surface, Stem)?.Layer == GroundLayer.RoadSurface, "and the surface is a surface");
         });
 
         run.Case("a land-cover feature stamps under its own kind", () =>

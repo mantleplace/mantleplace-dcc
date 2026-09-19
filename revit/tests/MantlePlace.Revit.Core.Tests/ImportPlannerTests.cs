@@ -933,6 +933,8 @@ internal static class ImportPlannerTests
             run.True(HasStep(plan, ImportStepKind.RoadCentrelines), "roads planned");
             run.True(HasStep(plan, ImportStepKind.SiteBoundaries), "site boundaries planned");
             run.True(HasStep(plan, ImportStepKind.LandCover), "land cover planned");
+            run.True(HasStep(plan, ImportStepKind.Water), "water planned");
+            run.True(HasStep(plan, ImportStepKind.RoadPolygons), "road surfaces planned");
             run.True(HasStep(plan, ImportStepKind.Vegetation), "vegetation planned");
 
             run.Equal(
@@ -943,6 +945,14 @@ internal static class ImportPlannerTests
                 FindStep(plan, ImportStepKind.LandCover)?.EntryName,
                 "Vector/LandCover.geojson",
                 "the land-cover entry comes from its own layer, not from the land use");
+            run.Equal(
+                FindStep(plan, ImportStepKind.Water)?.EntryName,
+                "Vector/Water.geojson",
+                "the water entry comes from its own layer");
+            run.Equal(
+                FindStep(plan, ImportStepKind.RoadPolygons)?.EntryName,
+                "Vector/RoadPolygons.geojson",
+                "the road surfaces come from road_polygons, never from the centrelines beside them");
             run.Equal(
                 FindStep(plan, ImportStepKind.Vegetation)?.EntryName,
                 "Landcover/TreePoints.csv",
@@ -1037,6 +1047,38 @@ internal static class ImportPlannerTests
                     true,
                     $"{kind} absent from the manifest");
             }
+        });
+
+        run.Case("roads with no road surfaces is a derived layer nobody produced, not an area without roads", () =>
+        {
+            // road_polygons is derived from road and is best-effort (spec/format.md §6.3). Saying
+            // "no roads in this bundle" here would be a statement about the area, and a wrong one —
+            // and telling the curator to re-download would send them after something nobody has.
+            BundleImportPlan plan = PlanFor(
+                ParityManifest(MetricGeoreference).Replace("road_polygons", "road_surfaces_someday", StringComparison.Ordinal),
+                ParityBundle);
+
+            SkippedImport? skip = FindSkip(plan, ImportStepKind.RoadPolygons);
+            run.True(skip?.ReasonCode == SkipReasonCode.DerivedLayerNotPublished, "the skip is about the derivation");
+            run.Contains(skip?.Reason, "carries roads but no road surfaces", "it says the roads are there");
+            run.Contains(skip?.Reason, "says nothing about the roads in this area", "and refuses to report the area as roadless");
+            run.False(HasStep(plan, ImportStepKind.RoadPolygons), "nothing is cut");
+            run.True(HasStep(plan, ImportStepKind.RoadCentrelines), "the centrelines still import");
+        });
+
+        run.Case("no road layer either is the ordinary absence", () =>
+        {
+            // Both layers gone: this AOI really may have no roads, so the ordinary "not in this
+            // bundle" reason stands rather than a sentence about a derivation that was never owed.
+            BundleImportPlan plan = PlanFor(
+                ParityManifest(MetricGeoreference)
+                    .Replace("\"name\": \"road_polygons\"", "\"name\": \"road_surfaces_someday\"", StringComparison.Ordinal)
+                    .Replace("\"name\": \"road\"", "\"name\": \"rail_someday\"", StringComparison.Ordinal),
+                ParityBundle);
+
+            run.True(
+                FindSkip(plan, ImportStepKind.RoadPolygons)?.ReasonCode == SkipReasonCode.ArtifactNotInManifest,
+                "no road layer to contradict, so the plain absence is the true one");
         });
 
         run.Case("land cover without land use is its own layer, not a renamed one", () =>
@@ -1335,6 +1377,8 @@ internal static class ImportPlannerTests
         ImportStepKind.RoadCentrelines,
         ImportStepKind.SiteBoundaries,
         ImportStepKind.LandCover,
+        ImportStepKind.Water,
+        ImportStepKind.RoadPolygons,
         ImportStepKind.Vegetation,
     ];
 
@@ -1344,6 +1388,8 @@ internal static class ImportPlannerTests
         "Vector/RoadSplines.geojson",
         "Vector/LandUse.geojson",
         "Vector/LandCover.geojson",
+        "Vector/Water.geojson",
+        "Vector/RoadPolygons.geojson",
         "Landcover/TreePoints.csv",
     ];
 
@@ -1438,6 +1484,18 @@ internal static class ImportPlannerTests
               {
                 "name": "land_cover",
                 "formats": [{ "format": "geojson", "path": "Vector/LandCover.geojson", "sha256": "cc" }]
+              },
+              {
+                "name": "water",
+                "formats": [{ "format": "geojson", "path": "Vector/Water.geojson", "sha256": "dd" }]
+              },
+              {
+                "name": "road",
+                "formats": [{ "format": "geojson", "path": "Vector/Road.geojson", "sha256": "ee" }]
+              },
+              {
+                "name": "road_polygons",
+                "formats": [{ "format": "geojson", "path": "Vector/RoadPolygons.geojson", "sha256": "ff" }]
               }
             ]
           }

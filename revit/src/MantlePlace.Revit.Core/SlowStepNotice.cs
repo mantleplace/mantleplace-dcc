@@ -89,10 +89,11 @@ public static class SlowStepNotice
                 MeasuredSiteBoundariesMinutes,
                 terrainPointCount),
 
-            // The same commit as the boundaries': a subdivision costs the terrain's relation rebuild
-            // whichever layer published its polygon, so it is announced against the same measurement.
-            ImportStepKind.LandCover => Describe(
-                "Next: the land cover — "
+            // Every other polygon layer, in its own words: a subdivision costs the terrain's relation
+            // rebuild whichever layer published the polygon, so all of them are announced against the
+            // one measurement, and against the site boundaries the curator has just watched.
+            _ when GroundCuts.LayerOf(kind) is { } layer => Describe(
+                "Next: the " + GroundLayerWords.For(layer).Label + " — "
                     + plannedWorkItems.ToString("N0", CultureInfo.InvariantCulture)
                     + " subdivision(s) to cut into the terrain, as slow as the site boundaries were.",
                 MeasuredSiteBoundariesMinutes,

@@ -139,6 +139,8 @@ public static class WindowLabels
         ImportLayer.RoadCentrelines => "Road Centrelines",
         ImportLayer.LandUseSubdivisions => "Land Use Subdivisions",
         ImportLayer.LandCoverSubdivisions => "Land Cover Subdivisions",
+        ImportLayer.WaterSubdivisions => "Water Subdivisions",
+        ImportLayer.RoadSubdivisions => "Road Subdivisions",
         ImportLayer.Trees => "Trees",
         ImportLayer.ImageryDrape => "Imagery Drape",
         _ => layer.ToString(),

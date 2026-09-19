@@ -160,8 +160,9 @@ public static class ImportFailurePolicy
                 + "before, the older terrain is still there.",
 
             ImportFailureKind.ToposolidSubregionOverlap =>
-                $"Site-boundary subdivisions overlap each other in {places}. The published land-use "
-                + "polygons genuinely do overlap; Revit kept them all.",
+                $"Subdivisions overlap each other in {places}. The published polygons genuinely do "
+                + "overlap, within a layer and between layers alike, and nothing was clipped or left "
+                + "out: Revit kept them all.",
 
             ImportFailureKind.SlabShapeVerticesCoincident =>
                 $"Revit found {places} where two terrain points share the same position in plan and "

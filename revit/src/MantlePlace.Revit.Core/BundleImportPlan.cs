@@ -74,6 +74,25 @@ public enum ImportStepKind
     LandCover,
 
     /// <summary>
+    /// The water bodies of the <c>water</c> vector layer, cut as subdivisions after the two land
+    /// layers.
+    /// </summary>
+    /// <remarks>
+    /// Polygons only. That layer's stream centrelines stay out: turning a centreline into an area
+    /// means inventing a width, which is derivation and belongs upstream.
+    /// </remarks>
+    Water,
+
+    /// <summary>
+    /// Road surfaces from the <c>road_polygons</c> vector layer, cut as subdivisions.
+    /// </summary>
+    /// <remarks>
+    /// The published surfaces, applied: already widened by the estimated width, merged per class and
+    /// cut so no two overlap. They come in flat, at the terrain's own surface.
+    /// </remarks>
+    RoadPolygons,
+
+    /// <summary>
     /// Trees from the tree-points file, with real height and crown — Forma's "Vegetation" row.
     /// </summary>
     Vegetation,
@@ -188,6 +207,17 @@ public enum SkipReasonCode
     /// on or to wrap.
     /// </summary>
     GeographicOriginOutOfRange,
+    /// <summary>
+    /// A layer derived from another is not in this bundle, while the layer it comes from is.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="ArtifactNotInManifest"/>, and the distinction is what the curator is
+    /// told: <c>road_polygons</c> is best-effort and its absence says nothing about whether the area
+    /// has roads (<c>spec/format.md</c> §6.3), so "no road surfaces were derived for this order" is
+    /// true where "no roads in this bundle" would not be. Re-downloading does not fix it.
+    /// </remarks>
+    DerivedLayerNotPublished,
+
     /// <summary>The bundle carries this layer and the curator left it out of the import window's checklist.</summary>
     /// <remarks>
     /// The one skip that is not about the bundle. A support triage rule reading a log has to tell "the
