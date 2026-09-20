@@ -536,6 +536,20 @@ public sealed class ImportStep
     public DrapePlacement? Drape { get; init; }
 
     /// <summary>
+    /// The closed vocabulary this step's <c>foliage_type</c> values are drawn from, as
+    /// <c>landcover.tree_points.foliage_type_vocabulary</c> published it. Read only for
+    /// <see cref="ImportStepKind.Vegetation"/>.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the step for the same reason <see cref="Frame"/> and <see cref="Crop"/> are: the
+    /// manifest is the authority on what the CSV's values mean, and the shim must not have to go
+    /// looking for it. <c>null</c> is <em>the manifest named no vocabulary</em> — never "the one
+    /// this build knows" — and it is what every bundle before MPB 1.2.0 carries
+    /// (<see cref="FoliageTypes"/>).
+    /// </remarks>
+    public string? FoliageTypeVocabulary { get; init; }
+
+    /// <summary>
     /// The area of interest, in local metres — points outside it are dropped before Revit sees
     /// them. Populated for <see cref="ImportStepKind.ToposurfaceFromPointsFile"/> and
     /// <see cref="ImportStepKind.ToposurfaceFromSurfaceTin"/>.

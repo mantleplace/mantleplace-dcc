@@ -64,6 +64,17 @@ public sealed class BundleArtifact
     public int? TriangleCount { get; init; }
 
     public int? FootprintCount { get; init; }
+
+    /// <summary>
+    /// Raw <c>foliage_type_vocabulary</c>, tree points only — the closed vocabulary the CSV's
+    /// <c>foliage_type</c> values are drawn from, or <c>null</c> where the manifest named none.
+    /// </summary>
+    /// <remarks>
+    /// Optional, and added by MPB 1.2.0. <c>null</c> is <em>the manifest named no vocabulary</em>,
+    /// which is not the same as naming the one this build knows: without it the column's values are
+    /// uninterpretable and every point is a tree (<c>spec/format.md</c> §4.4).
+    /// </remarks>
+    public string? FoliageTypeVocabulary { get; init; }
 }
 
 /// <summary>One <c>hosts.&lt;hostId&gt;.readiness.&lt;path&gt;</c> entry.</summary>

@@ -26,7 +26,7 @@ public static class SurfaceTinFrame
     /// </summary>
     /// <remarks>
     /// The output is metres on every tier, because the subtraction consumes the artifact's unit here
-    /// rather than deferring it to the shim — the same shape as <see cref="SiteTree"/>, whose
+    /// rather than deferring it to the shim — the same shape as <see cref="SiteTreePoint"/>, whose
     /// coordinates arrive converted for the same reason. A caller that also applied
     /// <c>ImportStep.Units</c> would convert twice.
     /// </remarks>

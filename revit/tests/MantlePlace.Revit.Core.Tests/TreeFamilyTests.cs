@@ -32,23 +32,23 @@ internal static class TreeFamilyTests
         });
 
         run.Case("a published tree fits", () =>
-            run.True(TreeFamily.Fits(new SiteTree(10.0, 20.0, 100.0, 12.0, 3.0)), "an ordinary tree"));
+            run.True(TreeFamily.Fits(new SiteTreePoint(10.0, 20.0, 100.0, 12.0, 3.0, FoliageType.Tree)), "an ordinary tree"));
 
         run.Case("a tree with no height or no crown does not", () =>
         {
-            run.False(TreeFamily.Fits(new SiteTree(0.0, 0.0, 0.0, 0.0, 3.0)), "zero height");
-            run.False(TreeFamily.Fits(new SiteTree(0.0, 0.0, 0.0, 12.0, 0.0)), "zero crown");
-            run.False(TreeFamily.Fits(new SiteTree(0.0, 0.0, 0.0, -1.0, 3.0)), "negative height");
-            run.False(TreeFamily.Fits(new SiteTree(0.0, 0.0, 0.0, double.NaN, 3.0)), "NaN height");
-            run.False(TreeFamily.Fits(new SiteTree(0.0, 0.0, 0.0, 12.0, double.PositiveInfinity)), "infinite crown");
+            run.False(TreeFamily.Fits(new SiteTreePoint(0.0, 0.0, 0.0, 0.0, 3.0, FoliageType.Tree)), "zero height");
+            run.False(TreeFamily.Fits(new SiteTreePoint(0.0, 0.0, 0.0, 12.0, 0.0, FoliageType.Tree)), "zero crown");
+            run.False(TreeFamily.Fits(new SiteTreePoint(0.0, 0.0, 0.0, -1.0, 3.0, FoliageType.Tree)), "negative height");
+            run.False(TreeFamily.Fits(new SiteTreePoint(0.0, 0.0, 0.0, double.NaN, 3.0, FoliageType.Tree)), "NaN height");
+            run.False(TreeFamily.Fits(new SiteTreePoint(0.0, 0.0, 0.0, 12.0, double.PositiveInfinity, FoliageType.Tree)), "infinite crown");
         });
 
         run.Case("a crown too small for its apex to be a curve does not fit", () =>
         {
             // The apex is a fixed fraction of the crown, so a crown of one centimetre asks Revit for
             // a half-millimetre circle, which is under its shortest curve.
-            run.False(TreeFamily.Fits(new SiteTree(0.0, 0.0, 0.0, 12.0, 0.01)), "one-centimetre crown");
-            run.True(TreeFamily.Fits(new SiteTree(0.0, 0.0, 0.0, 12.0, 0.2)), "twenty-centimetre crown");
+            run.False(TreeFamily.Fits(new SiteTreePoint(0.0, 0.0, 0.0, 12.0, 0.01, FoliageType.Tree)), "one-centimetre crown");
+            run.True(TreeFamily.Fits(new SiteTreePoint(0.0, 0.0, 0.0, 12.0, 0.2, FoliageType.Tree)), "twenty-centimetre crown");
         });
 
         run.Case("the family's formulas are written from the same proportions the fallback builds with", () =>

@@ -709,6 +709,7 @@ public static class BundleManifestReader
                 Path = string.Empty,
                 HorizontalFrame = detail?.OptionalStr("crs"),
                 FootprintCount = detail?.OptionalInt("point_count"),
+                FoliageTypeVocabulary = detail?.OptionalStr("foliage_type_vocabulary"),
             });
 
         ReadImagery(manifest, root, elevation);
@@ -851,6 +852,7 @@ public static class BundleManifestReader
             Georeference = template.Georeference,
             TriangleCount = template.TriangleCount,
             FootprintCount = template.FootprintCount,
+            FoliageTypeVocabulary = template.FoliageTypeVocabulary,
         };
     }
 

@@ -80,6 +80,16 @@ internal sealed class TestRun
         }
     }
 
+    /// <summary>An enum, reported by name — "expected Shrub, got Tree" rather than "1, 0".</summary>
+    internal void Equal<TEnum>(TEnum actual, TEnum expected, string detail)
+        where TEnum : struct, Enum
+    {
+        if (!actual.Equals(expected))
+        {
+            Fail($"{detail} — expected {expected}, got {actual}");
+        }
+    }
+
     internal void Within(double actual, double expected, double tolerance, string detail)
     {
         if (double.IsNaN(actual) || Math.Abs(actual - expected) > tolerance)
