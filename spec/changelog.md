@@ -29,7 +29,7 @@ reads it.
   frame, with its `extent`, `extent_crs`, `units`, pixel `width` and `height`, and `sha256`. On a
   State Plane delivery it names a drape baked from the delivered State Plane imagery,
   `Imagery/Drape.StatePlane.png`; where the delivery grid is already the metric UTM grid it names
-  `Imagery/Drape.png`. The rules are [format](format.md) §6.4.
+  `Imagery/Drape.png`. Why a drape is carried per frame is [format](format.md) §6.4.
 - **`imagery.drape` is unchanged in shape and is now described as what it always was**: the
   fixed-frame drape, on the AOI's metric UTM grid on every delivery. Before 1.3.0 a State Plane
   bundle carried no drape on its delivery grid at all, so a Revit reader that placed
