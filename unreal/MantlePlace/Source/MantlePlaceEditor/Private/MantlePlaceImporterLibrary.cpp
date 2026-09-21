@@ -1118,8 +1118,15 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				}
 				Result.CreatedActors.Add(SplineActor->GetActorLabel());
 			}
-			// A layer whose roads all failed to place must not read like an AOI with no roads.
-			Log.Add(FMantlePlaceRoadSplinesLogic::DescribeOutcome(LinesSeen, SplineIndex));
+			// A layer whose roads all failed to place must not read like an AOI with no roads. The
+			// outcome is about the parse (what could be placed); a spawn failure is a different
+			// cause and gets its own line rather than borrowing the projection reason.
+			Log.Add(FMantlePlaceRoadSplinesLogic::DescribeOutcome(LinesSeen, Splines.Num()));
+			if (SplineIndex < Splines.Num())
+			{
+				Log.Add(FString::Printf(
+				    TEXT("Road splines: %d spline actor(s) could not be spawned."), Splines.Num() - SplineIndex));
+			}
 		}
 	}
 

@@ -119,13 +119,12 @@ bool FMantlePlaceRoadSplinesLogic::IsUtmEpsg(int32 Epsg)
 bool FMantlePlaceRoadSplinesLogic::LonLatToUtm(
     double LonDeg, double LatDeg, int32 Epsg, double& OutEastingM, double& OutNorthingM)
 {
-	const bool bNorth = Epsg >= 32601 && Epsg <= 32660;
-	const bool bSouth = Epsg >= 32701 && Epsg <= 32760;
+	const bool bSouth = Epsg >= 32701; // meaningful only past the guard: IsUtmEpsg owns the ranges
 	if (!IsUtmEpsg(Epsg) || LatDeg < -84.0 || LatDeg > 84.0 || LonDeg < -180.0 || LonDeg > 180.0)
 	{
 		return false;
 	}
-	const int32 Zone = Epsg - (bNorth ? 32600 : 32700);
+	const int32 Zone = Epsg - (bSouth ? 32700 : 32600);
 	const double Lon0Rad = FMath::DegreesToRadians(-183.0 + 6.0 * Zone);
 
 	const double LatRad = FMath::DegreesToRadians(LatDeg);

@@ -231,6 +231,8 @@ bool FMantlePlaceRoadSplinesLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("non-UTM origin refuses even an empty layer: the origin is the fault"),
 			FLogic::ParseGeoJson(NoRoads, OriginEastingM, OriginNorthingM, WebMercatorEpsg, Splines, LinesSeen, RefusedEmptyError));
 		TestEqual(TEXT("empty layer refuses with the same reason"), RefusedEmptyError, RefusedError);
+		TestTrue(TEXT("a refusal does not read as 'the layer has no roads'"),
+			!RefusedError.Contains(TEXT("no roads")));
 
 		// An empty layer is a success with zero, and knows it saw nothing.
 		FString EmptyError;
@@ -262,8 +264,8 @@ bool FMantlePlaceRoadSplinesLogicTest::RunTest(const FString& Parameters)
 		const FString AllLine = FLogic::DescribeOutcome(4, 4);
 		TestNotEqual(TEXT("empty and all-unplaceable read differently"), EmptyLine, NoneLine);
 		TestTrue(TEXT("empty says the layer had no roads"), EmptyLine.Contains(TEXT("no road")));
-		TestTrue(TEXT("empty is not a warning"), !EmptyLine.Contains(TEXT("could not")));
-		TestTrue(TEXT("all-unplaceable says none could be placed"), NoneLine.Contains(TEXT("none could be placed")));
+		TestTrue(TEXT("empty is not a warning"), !EmptyLine.Contains(TEXT("NOT placed")));
+		TestTrue(TEXT("all-unplaceable says NOT placed"), NoneLine.Contains(TEXT("NOT placed")));
 		TestTrue(TEXT("all-unplaceable names how many were present"), NoneLine.Contains(TEXT("4")));
 		TestTrue(TEXT("partial names placed and present"),
 			PartialLine.Contains(TEXT("3")) && PartialLine.Contains(TEXT("4")));

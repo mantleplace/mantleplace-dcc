@@ -41,7 +41,7 @@ turns on most visibly, and which a patch here is most likely to break:
 | `HPS-46` | the conformance corpus's expectation keys are asserted. A case edited to expect something different turns the suite red.                   |
 | `HPS-51` | the vault panel's auth button, heading and local-import button take the standard's words — the editor's own casing, not its own wording. The words are the standard's table; the casing and the layout are this host's. |
 | `HPS-52` | placement reads the `unreal` block's own pointers first; a host-neutral file is the fallback, never the first reach.                                                                       |
-| `HPS-53` | a file is placed only where its frame can be shown to be this host's metric UTM frame, and a refusal is a **named** skip. Both halves are open deviations here — the tree-point reader does not check the frame, and the road-spline reader drops a refused point without naming it. |
+| `HPS-53` | a file is placed only where its frame can be shown to be this host's metric UTM frame, and a refusal is a **named** skip. Both halves are open deviations here — the tree-point reader does not check the frame, and the road-spline reader still drops a single refused point without naming it (a non-UTM origin, or a layer nothing could place, is now named). |
 
 Root `CLAUDE.md`'s boundary section is the one to internalise: **this plugin applies pre-derived
 values and never derives them.** A patch that computes a placement value locally is refused even when
