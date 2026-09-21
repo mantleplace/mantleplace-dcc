@@ -45,6 +45,7 @@ internal static class SiteVectorTests
         RunFrameCases(run);
         RunVectorCases(run);
         RunTreeCases(run);
+        RunFoliageVocabularyCases(run);
 
         return run.Report("site vector readers");
     }
@@ -326,16 +327,17 @@ internal static class SiteVectorTests
     {
         run.Case("the tree CSV lands in the frame, carrying the dimensions that make it geometry", () =>
         {
-            string? error = TreePointsReader.TryParse(
+            TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m
                 472195.00,4257585.00,2006.71,3.38,1.18
                 471835.00,4257485.00,1985.45,3.10,1.08
                 """,
                 MetricFrame,
-                out IReadOnlyList<SiteTree> trees);
+                foliageVocabulary: null);
 
-            run.True(error is null, $"parsed: {error}");
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            IReadOnlyList<SiteTreePoint> trees = parse.Points;
             run.Equal(trees.Count, 2, "two trees");
             run.Within(trees[0].EastM, 600.0, 1e-6, "east offset");
             run.Within(trees[0].NorthM, 535.0, 1e-6, "north offset");
@@ -349,34 +351,34 @@ internal static class SiteVectorTests
             // The ETL leaves ground_z empty where the DEM had no data. Reading that as 0.0 puts a
             // tree two kilometres below the terrain it belongs to, which looks like a modelling
             // mistake rather than a data gap (HPS-20: unknown is not zero).
-            string? error = TreePointsReader.TryParse(
+            TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m
                 472195.00,4257585.00,,3.38,1.18
                 471835.00,4257485.00,1985.45,3.10,1.08
                 """,
                 MetricFrame,
-                out IReadOnlyList<SiteTree> trees);
+                foliageVocabulary: null);
 
-            run.True(error is null, $"parsed: {error}");
-            run.Equal(trees.Count, 1, "the row with no ground elevation is dropped");
-            run.Within(trees[0].GroundElevationM, 1985.45, 1e-9, "the row that did have one survives");
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points.Count, 1, "the row with no ground elevation is dropped");
+            run.Within(parse.Points[0].GroundElevationM, 1985.45, 1e-9, "the row that did have one survives");
         });
 
         run.Case("a missing or unrecognised header is a read failure, not an empty layer", () =>
         {
             run.Contains(
-                TreePointsReader.TryParse("472195.00,4257585.00,2006.71,3.38,1.18", MetricFrame, out _),
+                TreePointsReader.Parse("472195.00,4257585.00,2006.71,3.38,1.18", MetricFrame, null).Failure,
                 "header",
                 "a headerless file is refused");
 
             run.Contains(
-                TreePointsReader.TryParse("a,b,c\n1,2,3", MetricFrame, out _),
+                TreePointsReader.Parse("a,b,c\n1,2,3", MetricFrame, null).Failure,
                 "header",
                 "an unrecognised header is refused");
 
             run.Contains(
-                TreePointsReader.TryParse(string.Empty, MetricFrame, out _),
+                TreePointsReader.Parse(string.Empty, MetricFrame, null).Failure,
                 "empty",
                 "an empty file says so");
         });
@@ -386,38 +388,239 @@ internal static class SiteVectorTests
             // The manifest publishes `columns`, so the order is contract rather than convention. A
             // reader that indexed positionally would silently swap height for crown radius the day
             // the ETL reorders them, and every tree would still be a tree.
-            string? error = TreePointsReader.TryParse(
+            TreePointsParse parse = TreePointsReader.Parse(
                 """
                 crown_radius_m,height_m,ground_z,y,x
                 1.18,3.38,2006.71,4257585.00,472195.00
                 """,
                 MetricFrame,
-                out IReadOnlyList<SiteTree> trees);
+                foliageVocabulary: null);
 
-            run.True(error is null, $"parsed: {error}");
-            run.Equal(trees.Count, 1, "one tree");
-            run.Within(trees[0].EastM, 600.0, 1e-6, "east offset");
-            run.Within(trees[0].HeightM, 3.38, 1e-9, "height, not crown radius");
-            run.Within(trees[0].CrownRadiusM, 1.18, 1e-9, "crown radius, not height");
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points.Count, 1, "one tree");
+            run.Within(parse.Points[0].EastM, 600.0, 1e-6, "east offset");
+            run.Within(parse.Points[0].HeightM, 3.38, 1e-9, "height, not crown radius");
+            run.Within(parse.Points[0].CrownRadiusM, 1.18, 1e-9, "crown radius, not height");
         });
 
-        run.Case("a column the reader does not know is ignored (MPB 1.2.0 appends foliage_type)", () =>
+        run.Case("a column the reader does not know is still ignored, not a drifted contract", () =>
         {
-            // A minor release may append a column (spec/format.md §4.4). 1.2.0 did exactly that,
-            // and a reader that counted fields would have lost every tree to an additive change.
-            string? error = TreePointsReader.TryParse(
+            // §4.4: a reader MUST ignore a column it does not know. `manifest.treePointsRowCount`
+            // pins it for the host whose block it reads, and this host's own suite pins it here.
+            // `foliage_type` used to be the unknown column in this case; it is known now, so the
+            // rule needs a column that is still unknown or nothing tests it at all.
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m,foliage_type,canopy_cover
+                472195.00,4257585.00,2006.71,3.38,1.18,shrub,0.62
+                471835.00,4257485.00,1985.45,3.10,1.08,tree,0.44
+                """,
+                MetricFrame,
+                FoliageTypes.KnownVocabulary);
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points.Count, 2, "both points, the unknown column notwithstanding");
+            run.Within(parse.Points[0].HeightM, 3.38, 1e-9, "height still read by name");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Shrub, "and the column beside it still maps");
+            run.Equal(parse.UnknownFoliageValues, 0, "an unknown COLUMN is not an unknown VALUE");
+        });
+
+        run.Case("the published foliage type rides on the point, mapped and never inferred", () =>
+        {
+            // spec/format.md §4.4: vocabulary "1" is `tree` and `shrub`, and the platform owns the
+            // classification. The shrub here is the TALLER of the two on purpose — a reader that
+            // guessed from height_m would get this case backwards.
+            TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m,foliage_type
                 472195.00,4257585.00,2006.71,3.38,1.18,shrub
                 471835.00,4257485.00,1985.45,3.10,1.08,tree
                 """,
                 MetricFrame,
-                out IReadOnlyList<SiteTree> trees);
+                FoliageTypes.KnownVocabulary);
 
-            run.True(error is null, $"parsed: {error}");
-            run.Equal(trees.Count, 2, "both trees, the extra column notwithstanding");
-            run.Within(trees[0].HeightM, 3.38, 1e-9, "height still read by name");
-            run.Within(trees[1].CrownRadiusM, 1.08, 1e-9, "crown radius still read by name");
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points.Count, 2, "both points");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Shrub, "the shrub is a shrub");
+            run.Equal(parse.Points[1].FoliageType, FoliageType.Tree, "the tree is a tree");
+            run.Within(parse.Points[0].HeightM, 3.38, 1e-9, "height still read by name");
+            run.Within(parse.Points[1].CrownRadiusM, 1.08, 1e-9, "crown radius still read by name");
+            run.Equal(parse.Notes.Count, 0, "a bundle that says what it means needs no note");
+        });
+
+        run.Case("a foliage type this add-in does not know reads as a tree, and is counted", () =>
+        {
+            // ⛔ spec/format.md §4.4: a host MUST read a value it does not know as `tree`. The
+            // vocabulary grows by adding values, never by changing what an existing one means.
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m,foliage_type
+                472195.00,4257585.00,2006.71,3.38,1.18,hedgerow
+                471835.00,4257485.00,1985.45,3.10,1.08,shrub
+                """,
+                MetricFrame,
+                FoliageTypes.KnownVocabulary);
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points.Count, 2, "an unknown value costs no point");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "hedgerow reads as a tree");
+            run.Equal(parse.Points[1].FoliageType, FoliageType.Shrub, "the value beside it keeps its meaning");
+            run.Equal(parse.UnknownFoliageValues, 1, "counted, so the log can say so");
+            run.Equal(parse.EmptyFoliageCells, 0, "an unknown value is not an empty cell");
+        });
+
+        run.Case("an empty foliage cell reads as a tree, counted apart from an unknown value", () =>
+        {
+            // The two are different failures: an empty cell is an ETL that did not classify the
+            // point, an unknown value is a vocabulary this build has not caught up with. Rolling
+            // them into one number would hide whichever is rarer.
+            // The foliage column sits in the MIDDLE here on purpose: the second row's cell is
+            // whitespace, and as a trailing cell it would be stripped by the whole-line trim before
+            // the cell reader ever saw it — the case would pass without exercising anything.
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,foliage_type,height_m,crown_radius_m
+                472195.00,4257585.00,2006.71,,3.38,1.18
+                471835.00,4257485.00,1985.45,   ,3.10,1.08
+                """,
+                MetricFrame,
+                FoliageTypes.KnownVocabulary);
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points.Count, 2, "an empty foliage cell costs no point, unlike an empty ground_z");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "empty reads as a tree");
+            run.Equal(parse.Points[1].FoliageType, FoliageType.Tree, "whitespace is empty");
+            run.Equal(parse.EmptyFoliageCells, 2, "both counted");
+            run.Equal(parse.UnknownFoliageValues, 0, "empty is not unknown");
+        });
+
+        run.Case("a row short of the foliage column is a tree, not a dropped row", () =>
+        {
+            // The five columns that make geometry are required; the sixth is not. A row that stops
+            // before it is a 1.1.0-shaped row inside a 1.2.0 file, which is a tree.
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m,foliage_type
+                472195.00,4257585.00,2006.71,3.38,1.18
+                """,
+                MetricFrame,
+                FoliageTypes.KnownVocabulary);
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points.Count, 1, "the row stands");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "and it is a tree");
+            run.Equal(parse.EmptyFoliageCells, 1, "counted as the missing classification it is");
+        });
+    }
+
+    private static void RunFoliageVocabularyCases(TestRun run)
+    {
+        run.Case("no vocabulary and no column is the 1.1.0 shape: every point is a tree, silently", () =>
+        {
+            // spec/format.md §4.4: "A manifest without `foliage_type_vocabulary` has no
+            // `foliage_type` column; read every point as a tree." Nothing is wrong, so nothing is said.
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m
+                472195.00,4257585.00,2006.71,3.38,1.18
+                """,
+                MetricFrame,
+                foliageVocabulary: null);
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "every point is a tree");
+            run.Equal(parse.Notes.Count, 0, "the ordinary older bundle says nothing");
+        });
+
+        run.Case("a vocabulary this add-in does not know still maps the values it knows", () =>
+        {
+            // ⛔ spec/format.md §4.4: a vocabulary the host does not know is NO reason to ignore the
+            // column. A new value is a new vocabulary version, never a change of meaning for an
+            // existing one — so `shrub` is still a shrub under vocabulary "2".
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m,foliage_type
+                472195.00,4257585.00,2006.71,3.38,1.18,shrub
+                471835.00,4257485.00,1985.45,3.10,1.08,espalier
+                """,
+                MetricFrame,
+                foliageVocabulary: "2");
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Shrub, "a known value keeps its meaning");
+            run.Equal(parse.Points[1].FoliageType, FoliageType.Tree, "the vocabulary's new value reads as a tree");
+            run.Equal(parse.UnknownFoliageValues, 1, "and is counted");
+            run.Equal(parse.Notes.Count, 1, "said once, not once per row");
+            run.Contains(parse.Notes[0], "newer", "the note says the vocabulary is newer than the add-in");
+        });
+
+        run.Case("a column with no vocabulary to read it by is ignored, and said once", () =>
+        {
+            // The manifest is the authority on what the values mean. Without it they are
+            // uninterpretable — but a silent drop would hide the publisher's mistake.
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m,foliage_type
+                472195.00,4257585.00,2006.71,3.38,1.18,shrub
+                """,
+                MetricFrame,
+                foliageVocabulary: null);
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points.Count, 1, "the point still lands: the five columns that matter parsed");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "an uninterpretable value is not read");
+            run.Equal(parse.UnknownFoliageValues, 0, "the column was not read, so nothing in it was unknown");
+            run.Equal(parse.Notes.Count, 1, "one note");
+            run.Contains(parse.Notes[0], "vocabulary", "which names what is missing");
+        });
+
+        run.Case("a vocabulary with no column to read is the same tree, said once", () =>
+        {
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m
+                472195.00,4257585.00,2006.71,3.38,1.18
+                """,
+                MetricFrame,
+                FoliageTypes.KnownVocabulary);
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "every point is a tree");
+            run.Equal(parse.Notes.Count, 1, "one note");
+            run.Contains(parse.Notes[0], "column", "which names what is missing");
+        });
+
+        run.Case("the foliage type is read by header name, wherever the column sits", () =>
+        {
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                foliage_type,crown_radius_m,height_m,ground_z,y,x
+                shrub,1.18,3.38,2006.71,4257585.00,472195.00
+                """,
+                MetricFrame,
+                FoliageTypes.KnownVocabulary);
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Shrub, "first column, still the foliage type");
+            run.Within(parse.Points[0].HeightM, 3.38, 1e-9, "and the geometry columns are unmoved");
+        });
+
+        run.Case("the vocabulary's values are matched exactly, not by case or by prefix", () =>
+        {
+            // The vocabulary is closed and the platform owns it. Accepting `Shrub` or `shrubland`
+            // would be this add-in inventing a value the platform never published.
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m,foliage_type
+                472195.00,4257585.00,2006.71,3.38,1.18,Shrub
+                471835.00,4257485.00,1985.45,3.10,1.08,shrubland
+                """,
+                MetricFrame,
+                FoliageTypes.KnownVocabulary);
+
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "`Shrub` is not `shrub`");
+            run.Equal(parse.Points[1].FoliageType, FoliageType.Tree, "`shrubland` is not `shrub`");
+            run.Equal(parse.UnknownFoliageValues, 2, "both counted as unknown");
         });
     }
 }

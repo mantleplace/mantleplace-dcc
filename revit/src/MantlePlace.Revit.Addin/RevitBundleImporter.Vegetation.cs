@@ -50,12 +50,21 @@ internal sealed partial class RevitBundleImporter
         }
 
         string csvPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
-        string? parseError = TreePointsReader.TryParse(File.ReadAllText(csvPath), frame, out IReadOnlyList<SiteTree> trees);
-        if (parseError is not null)
+        // The vocabulary rides on the step because the manifest owns what the CSV's foliage values
+        // mean. Nothing here reads a point's foliage type yet — one Planting family is what this
+        // build ships — so every point is placed as a tree, exactly as it was before the column
+        // existed. The shrub family, and what the parse's notes and counts have to say, land with it.
+        TreePointsParse parse = TreePointsReader.Parse(
+            File.ReadAllText(csvPath),
+            frame,
+            step.FoliageTypeVocabulary);
+        if (parse.Failure is not null)
         {
-            Say(parseError);
+            Say(parse.Failure);
             yield break;
         }
+
+        IReadOnlyList<SiteTreePoint> trees = parse.Points;
 
         string stem = _archive.Layout.Key.Stem;
         TreeDecision decision = TreeIdentity.Decide(ExistingTreeComments(), stem, step.ExpectedSha256, trees.Count);
@@ -223,7 +232,7 @@ internal sealed partial class RevitBundleImporter
     /// <summary>Creates, stamps and commits one chunk of trees.</summary>
     private TreeChunkResult CreateTreeChunk(
         TreeGeometry geometry,
-        IReadOnlyList<SiteTree> trees,
+        IReadOnlyList<SiteTreePoint> trees,
         IReadOnlyList<int> rows,
         ImportChunk chunk,
         string stem,
@@ -267,7 +276,7 @@ internal sealed partial class RevitBundleImporter
     }
 
     /// <summary>One tree by whichever path this step is on, or <c>null</c> when Revit refused it.</summary>
-    private Element? CreateTree(TreeGeometry geometry, SiteTree tree, out bool sized)
+    private Element? CreateTree(TreeGeometry geometry, SiteTreePoint tree, out bool sized)
     {
         sized = true;
         if (geometry.IsFamily)
@@ -324,7 +333,7 @@ internal sealed partial class RevitBundleImporter
     /// of the frame's axes Revit reads as the axis of revolution. The crown's top radius is a small
     /// fraction of its base rather than zero, because a degenerate loop is not a curve loop.
     /// </remarks>
-    private static List<GeometryObject>? BuildTreeGeometry(SiteTree tree)
+    private static List<GeometryObject>? BuildTreeGeometry(SiteTreePoint tree)
     {
         double height = MetresToInternal(tree.HeightM);
         double crownRadius = MetresToInternal(tree.CrownRadiusM);

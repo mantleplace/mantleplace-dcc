@@ -78,6 +78,9 @@
     "manifest.foliagePointsVerified": [
       "unreal"
     ],
+    "manifest.foliageTypeUnknownValue": [
+      "revit"
+    ],
     "manifest.foliageVocabularyIgnored": [
       "revit",
       "unreal"

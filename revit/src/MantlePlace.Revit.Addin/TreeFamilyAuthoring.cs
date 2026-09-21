@@ -357,7 +357,13 @@ internal static class TreeFamilyAuthoring
             Level level = new FilteredElementCollector(project).OfClass(typeof(Level)).Cast<Level>()
                 .OrderBy(candidate => candidate.ProjectElevation).First();
 
-            SiteTree tree = new(EastM: 12.0, NorthM: -7.5, GroundElevationM: 104.25, HeightM: 13.5, CrownRadiusM: 2.75);
+            SiteTreePoint tree = new(
+                EastM: 12.0,
+                NorthM: -7.5,
+                GroundElevationM: 104.25,
+                HeightM: 13.5,
+                CrownRadiusM: 2.75,
+                FoliageType: FoliageType.Tree);
             FamilyInstance instance = TreeInstances.Place(project, symbol, level, tree, out bool sized);
             project.Regenerate();
 
