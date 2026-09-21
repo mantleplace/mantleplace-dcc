@@ -304,6 +304,29 @@ What presence and absence mean:
   refuses a bundle for carrying an unfamiliar layer turns every new layer into a breaking release.
   The corpus case `manifest.vectorLayerUnknownName` pins this.
 
+### 6.4 The imagery drape, per host
+
+A drape is an image stretched over terrain, and its only coordinates are its `extent`. That extent
+is **placement**: it is stated in one projected CRS and one linear unit, and a consumer can use it
+only if that CRS is the one its own origin is in. A rectangle aligned to one grid is not a
+rectangle on another — a UTM-aligned image is rotated on a State Plane grid — so an extent in the
+wrong CRS cannot be converted into a right one by arithmetic on its four numbers.
+
+- **`imagery.drape` is the fixed-frame drape.** Its pixels are on the AOI's metric UTM grid on every
+  delivery, whatever the delivery CRS. It is the image `hosts.unreal.imagery_drape` points at.
+- **`hosts.revit.drape` is the Revit host's drape** (1.3.0). Its `extent_crs` is always the Revit
+  origin's `crs_projected` and its `units` is always the origin's linear unit — the producer checks
+  both before it publishes the pointer. On a delivery whose grid is already metric UTM it names the
+  same file as `imagery.drape`; on a State Plane delivery it names a second image baked on the
+  State Plane grid. Its `width` and `height` are the image's own, and the producer has checked that
+  they agree with the extent to within two pixels.
+- ⛔ **A consumer MUST NOT drape an extent whose CRS is not its origin's CRS**, and MUST NOT
+  reproject one to make it fit. Refuse, and say why: the terrain imports untextured, and that is the
+  honest result.
+- A consumer reading a bundle from before 1.3.0 finds no drape in its own block. It MAY fall back to
+  `imagery.drape` only when that entry's `extent_crs` is its origin's CRS, which it is on a metric
+  delivery and not on a State Plane one.
+
 ## 7. The sidecar manifest
 
 The vault publishes a versioned copy of the manifest beside the zip, so that a listing can show a

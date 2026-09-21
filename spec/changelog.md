@@ -19,6 +19,22 @@ history, not contract.
 
 ## Semver era
 
+### 1.3.0 — files state their frame, and a host is handed its own (additive minor; not yet published)
+
+One minor carries the whole change: every item below is additive, and nothing is removed or
+re-meant, so it is a MINOR under [compatibility](compatibility.md) §2 and every host floor at 1.0.0
+reads it.
+
+- **`hosts.revit.drape`** is new and optional: the satellite imagery drape in the Revit origin's
+  frame, with its `extent`, `extent_crs`, `units`, pixel `width` and `height`, and `sha256`. On a
+  State Plane delivery it names a drape baked from the delivered State Plane imagery,
+  `Imagery/Drape.StatePlane.png`; where the delivery grid is already the metric UTM grid it names
+  `Imagery/Drape.png`. The rules are [format](format.md) §6.4.
+- **`imagery.drape` is unchanged in shape and is now described as what it always was**: the
+  fixed-frame drape, on the AOI's metric UTM grid on every delivery. Before 1.3.0 a State Plane
+  bundle carried no drape on its delivery grid at all, so a Revit reader that placed
+  `imagery.drape` against a State Plane origin had nothing correct to place.
+
 ### 1.2.0 — the foliage type (additive minor; published and frozen 2026-09-19)
 
 The tree-points CSV gains a sixth column, `foliage_type`, and `landcover.tree_points` gains an
