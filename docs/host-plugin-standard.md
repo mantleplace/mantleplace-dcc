@@ -1,6 +1,6 @@
 ---
 name: host-plugin-standard
-description: The normative rulebook every Mantle Place DCC host plugin implements — the four-layer shape, sign-in and the secret store, the vault client, the bundle cache and its integrity rules, manifest consumption, and the conformance obligations that hold each host to them. Read before touching auth, the vault client, the cache, or manifest consumption in any host, and before starting a plugin for a new DCC host. Rule ids are `HPS-NN` and every one cited anywhere in this repository resolves here.
+description: The normative rulebook every Mantle Place DCC host plugin implements — the four-layer shape, sign-in and the secret store, the vault client, the bundle cache and its integrity rules, manifest consumption, the frames a host may place content from, and the conformance obligations that hold each host to them. Read before touching auth, the vault client, the cache, manifest consumption or placement in any host, and before starting a plugin for a new DCC host. Rule ids are `HPS-NN` and every one cited anywhere in this repository resolves here.
 ---
 
 # Host Plugin Standard — what every Mantle Place DCC plugin must do
@@ -58,6 +58,7 @@ host met the contract for real:
 | **v1.7** | `HPS-51` — the shared user-facing actions carry one set of words in every host, and a host construct carries the host's own noun. Unreal's panel said `Sign In` and `Sign Out`, Revit's ribbon said `Sign in` and `Sign out`, and Revit's vault window said `Remove download`; nothing said which of those words were shared, so each host went on naming the same actions by itself |
 | **v1.8** | `HPS-51` gains an eighth action, the window that shows a bundle import running and stops it. The Revit import ran as one call on the host's thread, so Revit reported "not responding" for minutes with nothing to show and nothing to cancel; the staged import that fixed it has a window whose surface the reference host will need too, so its words were fixed here before the second host named them differently |
 | **v1.9** | `HPS-51` gains a ninth action, choosing what a bundle import brings in before its steps run. A Revit import brought in every step the planner found, and a curator who wanted the terrain alone had no way to leave the rest out but to hold a bundle that lacked it; the checklist that fixed it is a surface the reference host's roadmapped picker will share, so its words were fixed here before either host named them — and `Layers`, the word both hosts' developers use for the rows, was kept off the screen, because it already names three other things in the glossary and two more in the reference host's editor |
+| **v1.10** | ⛔`HPS-52` and ⛔`HPS-53`, plus `HPS-54` — place from the host block first, place only what can be shown to be in the host frame, and declare which kind of frame the host has; `HPS-45` narrowed in the same pass to a fallback that reaches a UTM origin and nothing else. The suite had assumed every host frame was a UTM zone and never said so, and two hosts met a State Plane foot delivery and did opposite things: Revit refused each layer it could not place and named the reason, while Unreal's tree-point reader subtracted its metric UTM origin from foot State Plane coordinates and reported success with every tree a thousand kilometres off site. Both were defensible readings of `HPS-33`, `HPS-35` and `HPS-45` as written, which is what made this a hole in the standard rather than one host's bug |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -667,13 +668,25 @@ importable", so streaming and the vault join key survive. The per-rebuild ETL `j
 
 _Enforcer:_ `automation-test` (corpus `manifest.baseOnDemand`).
 
-**`HPS-45` — A host projects coordinates locally only where the manifest gives it no pre-derived
-value, and where it does, it matches the corpus known answers.** `HPS-33` is the default and stays
-the default: placement values come pre-computed and are applied verbatim. But a host importing
-geometry whose own coordinates are geographic — the reference case is a `vector` GeoJSON layer in
-lon/lat that must land in a UTM-origin frame — has to project, because the manifest describes the
-layer rather than every vertex in it. That narrow case is permitted, and it is the _only_ projection
-a host may perform: `HPS-03`'s ban on a geoprocessing stack is unchanged.
+**`HPS-45` — Local projection is a fallback, it reaches a UTM origin and nothing else, and where a
+host does project it matches the corpus known answers.** `HPS-33` is the default and stays the
+default: placement values come pre-computed and are applied verbatim, and `HPS-52` decides which
+pointer a host reaches for first. But a host importing geometry whose own coordinates are geographic
+— the reference case is a `vector` GeoJSON layer in lon/lat that must land in a UTM-origin frame —
+has to project, because the manifest describes the layer rather than every vertex in it. That narrow
+case is permitted, and it is the _only_ projection a host may perform: `HPS-03`'s ban on a
+geoprocessing stack is unchanged.
+
+**The permitted projection is lon/lat → UTM, so a host whose own origin is not a UTM zone does not
+project at all.** That was assumed rather than stated, and the assumption underneath it was that
+every host frame is a UTM zone; an order-frame host on a State Plane delivery is the case that breaks
+it. Such a host has no projection to perform, so a geographic layer it holds no host-frame copy of
+(`HPS-52`) is **skipped with a named reason** while the rest of the import proceeds. **A host never
+widens its projection to reach another grid** — not a second forward transform, and not projecting
+into UTM and converting across. That is a geoprocessing stack by instalments and is refused at
+review even when the arithmetic is correct. The linear unit travels with the origin: a UTM zone is
+metric by definition, so a foot unit published on a UTM origin is an internally inconsistent
+manifest and fails closed under `HPS-35` rather than being reconciled.
 
 A host that performs no such projection **does not claim the `projection` corpus group** and skips
 it — and **records why in its `verified-against.json` evidence prose**, because an unclaimed group
@@ -682,7 +695,12 @@ as `0/1`. A host that does claim it MUST match corpus `projection.lonLatToUtm` w
 tolerance, including the southern-hemisphere false northing. Getting the zone or the false northing
 wrong places geometry kilometres away while every test that does not check numbers still passes.
 
-_Enforcer:_ `automation-test` (corpus `projection.lonLatToUtm`), where the group is claimed.
+_Enforcer:_ `automation-test` (corpus `projection.lonLatToUtm`), where the group is claimed — that
+case proves the arithmetic of a projection performed. The half added here, **the named skip where a
+host's origin is not a UTM zone**, has no corpus case and none is named for it: it wants a bundle
+whose origin is on another grid beside a geographic layer, and the corpus carries no such pair. Until
+it lands that half is `agent-review`, and the per-host test where a host has one — Revit's
+`SiteFrame.CanPlaceGeographic` is the only one today.
 
 **`HPS-47` — A host decides "is this bundle materialized" from the manifest's neutral signals,
 never from its own content alone.** The signals, any one of which means materialized: a known host
@@ -1043,6 +1061,102 @@ Review is the enforcer of record; a test covers what a host has already moved ou
 
 ---
 
+## 11. Frames and placement (`HPS-52` … `HPS-54`)
+
+The glossary's words are load-bearing in this section and are used exactly as it defines them —
+*frame*, *host frame*, *delivery tier*, *delivery CRS*, *fixed-frame host*, *order-frame host*
+([`CONTEXT.md`](../CONTEXT.md), _Units and frames_). Two of them do most of the work: a **frame**
+belongs to a file, and a **host frame** belongs to a host. They are separate words because one bundle
+carries files in more than one frame **on purpose** — the same ground, stated for whichever host each
+file was made for — so "what frame is this bundle in" is a question with no answer, and a host that
+asks it has already gone wrong.
+
+This section is the frames half of `HPS-33` and `HPS-35`. Neither of those said that a file states a
+frame, nor what a host does with one whose frame it cannot match, and the silence read as permission:
+a host may subtract its own origin from whatever a file happens to hold and call the result a
+position. Section 6 says what a host does with a *value*; this says which *file* a host is entitled
+to place at all.
+
+⛔ **`HPS-52` — A host places from its own host block first.** Where the host block points at content
+already in the host frame, **that pointer is the placement path on every delivery tier** — not a
+metric path and an imperial one, and not a path chosen after the fact by what the tier turned out to
+be. A host-neutral pointer, and the `HPS-45` projection behind it, are the **fallback**: they are
+what a host uses for content its block does not carry, including a bundle produced before the block
+carried it. The subtree boundary is unchanged — a host reads exactly its own block and never a
+sibling's (`HPS-36`).
+
+The order matters because the two paths are not equally safe. A host-neutral file is in whatever frame
+its producer found convenient, which on one delivery tier is the host frame and on the next is not; a
+host that reaches for it first is right by coincidence and wrong silently. Reaching for the block
+first also makes the gap legible: when the block carries no host-frame copy of something, that is a
+**format** gap with a name and a version to fix it in, rather than a host quietly placing the nearest
+file it could find.
+
+This already decides live paths rather than a future one. Revit's terrain points come from its own
+block, are in its frame on every tier, and import on every tier. Its tree points come from a
+**host-neutral** pointer that happens to be in the delivery CRS — so they land correctly on the
+order-frame host and the same family does not on the fixed-frame host, which is the coincidence this
+ordering exists to stop a host relying on. The imagery drape and the `vector` layers are what no host
+block carries a host-frame copy of yet, which is why those are the ones that fall to `HPS-45` and are
+skipped where it cannot reach.
+
+**A pointer sitting in the host block is not itself the showing `HPS-53` asks for.** A block that
+points at content in some other frame is a format defect, and the host still refuses the file by
+name rather than placing it on the strength of where the pointer was found.
+
+_Enforcer:_ `agent-review`. **No corpus case covers this yet, and none is named here** — one needs a
+bundle whose host block points at host-frame content beside a host-neutral copy of the same content
+in another frame, and the format does not publish that pair on every tier yet. A case named before it
+exists is the dangling reference this document was written to stop.
+
+⛔ **`HPS-53` — A host places a file only where it can show the file's frame is its host frame, and
+otherwise refuses that file by name.** Read the frame from the thing you are placing — never from the
+bundle, never from the delivery tier, and never from the last file that worked. A host about to place
+projected coordinates reads **both halves** of the frame the format states for them, the CRS and the
+linear unit, and where it cannot read both, or reads a CRS that is not its own, the file is
+**unplaceable**. An unstated CRS is never assumed to match, and neither is an unstated unit.
+
+⛔ **The refusal is a named skip, and it is never a conversion.** The host reports which content it
+did not place and why, in the words the user is already reading the import in (`HPS-51`), and the
+import brings in everything else. It does not reproject, does not scale a unit to reconcile a
+mismatch, and does not fall back to a default frame: this is `HPS-35`'s fail-closed rule applied to
+frames, and `HPS-33`'s apply-verbatim boundary is what forbids the arithmetic that would "fix" it.
+The failure being guarded is arithmetic that succeeds — foot coordinates minus a metre origin is a
+number that looks exactly like a position, and every test that does not check where content landed
+stays green.
+
+**Where the format states no frame beside a pointer, one substitute is permitted, and it is a
+comparison of published values:** content whose coordinates fall outside the extent the host's own
+block publishes is not in this frame, and is refused on that evidence alone. **The comparison runs
+one way.** Falling inside the extent is not proof of the frame — only the absence of proof against
+it — so this is a backstop that refuses, never a licence that places, and a host does not report it
+as having shown anything. It stays as the backstop once a stated frame arrives beside the pointer,
+because a producer can state a frame wrongly. Comparing two published numbers derives no placement
+value, so the thin-client boundary is intact.
+
+_Enforcer:_ `automation-test` per host, wherever the host has moved the decision into a pure core —
+Revit's `SiteFrame` (`CanPlaceGeographic`, `CanPlaceProjected`) is the furthest any host has taken
+it, and it decides the CRS half only — plus `agent-review` for the rest. **The shared corpus case
+does not exist yet and is not named here**: it wants a file in a foot frame beside a metric origin,
+with a refusal naming the reason as the expected result. Until it lands, the per-host tests and
+review are the whole of the enforcement.
+
+**`HPS-54` — A host is a fixed-frame host or an order-frame host, and says which in its own
+`CLAUDE.md`.** Both kinds are the glossary's, and so is which of the two hosts is which; what this
+rule adds is that a host **says it itself**, in its own onboarding document, where anyone working in
+that tree reads it before touching placement rather than one document further out.
+
+A new host declares it **when its block is designed**, not when it first meets a delivery tier that
+makes the difference visible. The declaration is what tells a reader whether a file stated in the
+delivery CRS is this host's frame or another host's — the same file, the same tier, opposite answers —
+and a host that has not said which it is cannot apply `HPS-52` or `HPS-53` at all, because it has not
+said what its host frame is.
+
+_Enforcer:_ `agent-review` — one statement in each host's onboarding document, checkable by reading
+two files and checked by nothing else.
+
+---
+
 ## Reference-implementation deviations
 
 The shipped code is the version-of-record. This standard is a transcription of it, and
@@ -1051,6 +1165,7 @@ here rather than left for a future reader to discover as a contradiction.
 
 | Rule     | Deviation                                                                                                                                                                                                                                                                                                                                                                                   |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HPS-53` | The reference's **tree-point reader** is the call site the rule was written against and does not implement it yet: `MantlePlaceTreePointsLogic.cpp` subtracts the Unreal origin straight from the CSV's own easting and northing (`ProjectedToUeCm(UtmX - OriginEastingM, …)`) and reads `ground_z` as metres, and the `foliage_points` entry in the Unreal host block gives it no CRS or unit to check against. The rule is ahead of this call site; the fix is a host bug on the tracker, not a rule this standard is waiting to be sure of. The **named** half is behind in a second place: `MantlePlaceRoadSplinesLogic.cpp` drops a point its projection refused and returns the layer, so a layer whose every point failed imports as zero splines and reports success — a refusal with no name on it, which is the same shape one layer over. |
 | `HPS-30` | The reference's **secret store** derives its blob name with its own per-code-unit walk and its own keep-set (`MantlePlaceSecretStore.cpp`, `ResolveSecretPath`), not with `SanitizeKeySegment`. It is inert today — `refresh_token` is the only key either host stores, and every derivation agrees on it — but the rule's secret-store sentence is ahead of this call site, not behind it. |
 
 Two places where the _silo prose_ was wrong and the code was right went the other way and are
@@ -1071,12 +1186,16 @@ records that eviction is deliberately explicit-only.
 | The .NET SDK trigger (`HPS-43`)                                                                                                                                                                                           | `doc-only`                                             |
 | The local install slot and its check script (`HPS-50`)                                                                                                                                                                    | `agent-review`, proven by running the scripts          |
 | The shared user-facing vocabulary (`HPS-51`)                                                                                                                                                              | `agent-review`; a pure-core test where a host has one  |
+| Placing from the host block, and refusing a file whose frame the host cannot match (`HPS-52`, `HPS-53`)                                                                                                    | `agent-review`, plus a pure-core test where a host has moved the decision out of its shim; **no corpus case yet** for either |
+| The host's frame kind, declared in its own `CLAUDE.md` (`HPS-54`)                                                                                                                                          | `agent-review`                                         |
 
 Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS-33`) appear in both rows —
-the corpus proves the behaviour, review catches the shape a vector cannot see.
+the corpus proves the behaviour, review catches the shape a vector cannot see. `HPS-53` carries two
+in **one** row instead, because no shared vector exists for it yet: its automation half is each
+host's own pure-core test, and it joins the corpus row on the day the case lands.
 
 The rules that **cannot fail loudly** are `HPS-07`, `HPS-10`, `HPS-20`, `HPS-21`, `HPS-23`,
-`HPS-24`, `HPS-25a`, `HPS-26`, `HPS-27`, `HPS-30`, `HPS-31`, `HPS-32`, `HPS-33` and `HPS-49`. Each one produces a plugin that
+`HPS-24`, `HPS-25a`, `HPS-26`, `HPS-27`, `HPS-30`, `HPS-31`, `HPS-32`, `HPS-33`, `HPS-49`, `HPS-52` and `HPS-53`. Each one produces a plugin that
 imports successfully and is wrong. They are the reason this standard is normative. `HPS-46` sits
 beside them one level up: its failure mode is a conformance suite that stays green while asserting
 nothing, which is how every other silent failure gets back in.
