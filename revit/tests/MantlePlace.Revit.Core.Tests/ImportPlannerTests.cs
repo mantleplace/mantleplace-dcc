@@ -962,6 +962,46 @@ internal static class ImportPlannerTests
                 "the step carries the frame it is to be placed in");
         });
 
+        run.Case("the vegetation step carries the foliage vocabulary the manifest named", () =>
+        {
+            // Carried on the step for the reason `Frame` and `Crop` are: the manifest is the
+            // authority on what the CSV's foliage values mean, and the shim must not have to go
+            // looking for it. MPB 1.2.0's key, optional and absent from every older bundle.
+            BundleImportPlan withVocabulary = PlanFor(
+                $$"""
+                {
+                  "version": "1.2.0",
+                  "layout": { "tree_points": "Landcover/TreePoints.csv" },
+                  {{MetricGeoreference}},
+                  "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv",
+                                                  "crs": "EPSG:32613",
+                                                  "foliage_type_vocabulary": "1" } }
+                }
+                """,
+                ["README.md", "Landcover/TreePoints.csv"]);
+
+            run.Equal(
+                FindStep(withVocabulary, ImportStepKind.Vegetation)?.FoliageTypeVocabulary,
+                "1",
+                "the published vocabulary rides on the step");
+
+            BundleImportPlan without = PlanFor(
+                $$"""
+                {
+                  "version": "1.0.0",
+                  "layout": { "tree_points": "Landcover/TreePoints.csv" },
+                  {{MetricGeoreference}},
+                  "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv", "crs": "EPSG:32613" } }
+                }
+                """,
+                ["README.md", "Landcover/TreePoints.csv"]);
+
+            run.Equal(
+                FindStep(without, ImportStepKind.Vegetation)?.FoliageTypeVocabulary,
+                null,
+                "a manifest that names none carries none — which is not the same as naming \"1\"");
+        });
+
         run.Case("a bundle carrying ONLY parity layers is still importable", () =>
         {
             // The predicate that decides this deliberately excludes SetSharedCoordinates, because

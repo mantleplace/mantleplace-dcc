@@ -1,0 +1,83 @@
+{
+  "$comment": [
+    "The two rules `spec/format.md` §4.4 states with a ⛔ and nothing anywhere binds, because until",
+    "now no host read the value. Both are about what a reader does when the platform has moved on",
+    "and the installed plugin has not, which is the state every plugin spends most of its life in.",
+    "",
+    "⛔ A value the host does not know reads as `tree`. The vocabulary is closed and the platform",
+    "owns it; it grows by GAINING values, and a new value is a new vocabulary version rather than a",
+    "change of meaning for an existing one. So the fallback is a named default, never a refusal and",
+    "never a guess: an unrecognised foliage type is a plant this reader has no family for, and a",
+    "tree is what the layer is otherwise made of.",
+    "",
+    "⛔ A vocabulary id the host does not know is NO reason to ignore the column. This is the rule a",
+    "defensive reader gets backwards: seeing `\"2\"` where it was taught `\"1\"`, it drops the column",
+    "and reports a forest of trees, silently losing every shrub the platform DID publish in a value",
+    "it already understood. The values it knows keep their meaning and are mapped; only the ones it",
+    "does not fall back.",
+    "",
+    "Values are matched EXACTLY. `Shrub` and `shrubland` are values this vocabulary does not contain,",
+    "so they take the same fallback -- a reader that case-folds or prefix-matches is inventing",
+    "members the platform never published, and the day `shrubland` means something else it is",
+    "already wrong.",
+    "",
+    "⛔ The foliage type is NEVER derived from `height_m` or `crown_radius_m`. The rows below make a",
+    "reader that guesses fail: the shrub in the first row is TALLER than the tree beside it, because",
+    "the classification comes from the land-cover class under the point rather than from its size.",
+    "",
+    "What this case does NOT bind: how a host LOGS any of it, and what it does when the manifest and",
+    "the header disagree about whether the column exists at all. §4.4 states neither, and a corpus",
+    "case that pinned one host's answer would oblige every other host to a decision it never made.",
+    "",
+    "There is no `columns` list here. Every row's `csv` carries its own header, one row reorders it",
+    "and one omits the sixth column entirely, so a declared list would be a second statement of the",
+    "shape with nothing to check it against.",
+    "",
+    "`csv` is the payload verbatim, newlines included. `foliageTypes` is one value per row the",
+    "reader produced, in order, in the vocabulary's own words. A reader that DROPS a row it cannot",
+    "classify fails on the count before it fails on a value: the foliage type is not one of the five",
+    "columns that make geometry, and losing a point over it is the layer thinning itself for a",
+    "reason no one can see.",
+    "",
+    "Scoped to `revit` because it is the first host to read the column; Unreal's counterpart takes",
+    "the scope off. Nothing in the rules above is Revit's."
+  ],
+  "rows": [
+    {
+      "name": "the vocabulary this reader knows maps both its values, and neither from the dimensions",
+      "foliageTypeVocabulary": "1",
+      "csv": "x,y,ground_z,height_m,crown_radius_m,foliage_type\n441959.50,4014372.50,2640.96,4.10,1.40,shrub\n442059.50,4014272.50,2638.00,3.20,1.05,tree\n",
+      "foliageTypes": ["shrub", "tree"]
+    },
+    {
+      "name": "a value this reader does not know is a tree, and the values beside it are unharmed",
+      "foliageTypeVocabulary": "1",
+      "csv": "x,y,ground_z,height_m,crown_radius_m,foliage_type\n441959.50,4014372.50,2640.96,12.40,4.34,hedgerow\n442059.50,4014272.50,2638.00,1.10,0.60,shrub\n441859.50,4014472.50,2650.00,3.10,1.09,tree\n",
+      "foliageTypes": ["tree", "shrub", "tree"]
+    },
+    {
+      "name": "a vocabulary this reader does not know still maps the values it does",
+      "foliageTypeVocabulary": "2",
+      "csv": "x,y,ground_z,height_m,crown_radius_m,foliage_type\n441959.50,4014372.50,2640.96,1.40,0.90,shrub\n442059.50,4014272.50,2638.00,8.00,2.80,espalier\n441859.50,4014472.50,2650.00,3.10,1.09,tree\n",
+      "foliageTypes": ["shrub", "tree", "tree"]
+    },
+    {
+      "name": "the vocabulary's values are matched exactly, never by case and never by prefix",
+      "foliageTypeVocabulary": "1",
+      "csv": "x,y,ground_z,height_m,crown_radius_m,foliage_type\n441959.50,4014372.50,2640.96,1.40,0.90,Shrub\n442059.50,4014272.50,2638.00,1.20,0.80,shrubland\n441859.50,4014472.50,2650.00,1.10,0.70,shrub\n",
+      "foliageTypes": ["tree", "tree", "shrub"]
+    },
+    {
+      "name": "the column is found by header name, wherever the platform puts it",
+      "foliageTypeVocabulary": "1",
+      "csv": "foliage_type,crown_radius_m,height_m,ground_z,y,x\nshrub,0.90,1.40,2640.96,4014372.50,441959.50\ntree,4.34,12.40,2638.00,4014272.50,442059.50\n",
+      "foliageTypes": ["shrub", "tree"]
+    },
+    {
+      "name": "a manifest that names no vocabulary has no column to read: every point is a tree",
+      "foliageTypeVocabulary": null,
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n441959.50,4014372.50,2640.96,1.40,0.90\n442059.50,4014272.50,2638.00,8.00,2.80\n",
+      "foliageTypes": ["tree", "tree"]
+    }
+  ]
+}

@@ -85,13 +85,19 @@ internal static class ManifestConformanceTests
 
     private static void DriveCase(TestRun run, CorpusCase corpusCase)
     {
-        // The group's one id-dispatched case: its `expect: "vector"` rows drive the
-        // materialization decision (HPS-47) rather than the whole parser. A second vector case
-        // added to the corpus lands in the unsupported-expect failure below until taught, so the
-        // dispatch cannot silently skip it.
+        // The group's id-dispatched cases: their `expect: "vector"` rows drive one decision each —
+        // the materialization verdict (HPS-47), the published foliage type (format.md §4.4) —
+        // rather than the whole parser. A third vector case added to the corpus lands in the
+        // unsupported-expect failure below until taught, so the dispatch cannot silently skip it.
         if (string.Equals(corpusCase.Id, "manifest.materializationSignals", StringComparison.Ordinal))
         {
             DriveMaterializationSignals(run, corpusCase);
+            return;
+        }
+
+        if (string.Equals(corpusCase.Id, "manifest.foliageTypeUnknownValue", StringComparison.Ordinal))
+        {
+            DriveFoliageTypeVectors(run, corpusCase);
             return;
         }
 
@@ -181,6 +187,87 @@ internal static class ManifestConformanceTests
             }
         }
     }
+
+    /// <summary>
+    /// The frame the foliage vectors are placed against: UTM 13N, an origin beside the rows' own
+    /// eastings and northings. The placement is incidental here — what is under test is the sixth
+    /// column, and a row that would not place at all could not carry a foliage type to assert.
+    /// </summary>
+    private static readonly SiteFrame FoliageFrame = new()
+    {
+        Origin = new GeoOrigin
+        {
+            Epsg = 32613,
+            Easting = 441859.50,
+            Northing = 4014272.50,
+            LinearUnit = LinearUnit.Metre,
+        },
+    };
+
+    /// <summary>
+    /// Drives <c>manifest.foliageTypeUnknownValue</c>: each row is a tree-points payload and the
+    /// vocabulary its manifest named, with the foliage type a conformant reader produces for every
+    /// row of it (<c>spec/format.md</c> §4.4).
+    /// </summary>
+    /// <remarks>
+    /// Through <see cref="TreePointsReader.Parse"/>, the public seam — the same entry point the
+    /// import uses, so a reader that passes here is the reader the curator gets. The counts and the
+    /// notes the parse also produces are deliberately NOT asserted from the corpus: §4.4 states
+    /// neither, and they are this host's own, pinned in <c>SiteVectorTests</c>.
+    /// </remarks>
+    private static void DriveFoliageTypeVectors(TestRun run, CorpusCase corpusCase)
+    {
+        using VectorDocument vectors = VectorDocument.Parse(corpusCase.Payload);
+        IReadOnlyList<VectorNode> rows = vectors.Root.Items("rows");
+        if (rows.Count == 0)
+        {
+            run.Fail("the vector file has no non-empty `rows` array — zero rows would report "
+                + "green for the wrong reason (HPS-40)");
+            return;
+        }
+
+        foreach (VectorNode row in rows)
+        {
+            string name = row.Str("name") ?? string.Empty;
+            string? csv = row.Str("csv");
+            IReadOnlyList<VectorNode> expected = row.Items("foliageTypes");
+
+            if (name.Length == 0 || csv is null || expected.Count == 0)
+            {
+                run.Fail($"row '{name}' is missing `name`, a `csv` string, or a `foliageTypes` array");
+                continue;
+            }
+
+            // An explicit JSON null is a VALUE here, and the one this rule turns on: it is the
+            // manifest naming no vocabulary, which is not the same as naming the one this build
+            // knows. `Str` records a null as read, so the row cannot be skipped for free.
+            string? vocabulary = row.Str("foliageTypeVocabulary");
+
+            TreePointsParse parse = TreePointsReader.Parse(csv, FoliageFrame, vocabulary);
+            run.True(parse.Failure is null, $"row '{name}': parsed ({parse.Failure})");
+            run.Equal(parse.Points.Count, expected.Count, $"row '{name}': a point per published row");
+
+            for (int index = 0; index < expected.Count && index < parse.Points.Count; index++)
+            {
+                run.Equal(
+                    Spell(parse.Points[index].FoliageType),
+                    expected[index].AsString(),
+                    $"row '{name}', point {index + 1}");
+            }
+        }
+
+        foreach (string unread in vectors.UnreadPaths())
+        {
+            run.Fail($"'{unread}' is a vector value nothing in this suite read.");
+        }
+    }
+
+    /// <summary>The vocabulary's own word for a foliage type — what the corpus states.</summary>
+    private static string Spell(FoliageType foliage) => foliage switch
+    {
+        FoliageType.Shrub => "shrub",
+        _ => "tree",
+    };
 
     private static void AssertExpectations(TestRun run, CorpusCase corpusCase, BundleManifest manifest)
     {

@@ -738,6 +738,12 @@ public static class BundleImportPlanner
             EntryName = entry,
             ExpectedSha256 = artifact.Sha256,
             Frame = frame,
+
+            // Carried for every placed artifact rather than branched on the one kind that has it:
+            // only `landcover.tree_points` publishes a foliage vocabulary, so this is null for the
+            // rest by the manifest's own shape, and a branch here would be a second place to keep
+            // in step with it.
+            FoliageTypeVocabulary = artifact.FoliageTypeVocabulary,
         });
     }
 

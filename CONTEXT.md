@@ -207,6 +207,20 @@ a family and never infers one from height or crown. "Tree" and "shrub" name the 
 nothing wider.
 _Avoid_: species, tree type, vegetation class
 
+**Shrub (foliage type)**:
+A tree point the platform classified as a shrub. It is a plant, at a position, with a height and a
+crown radius, and a host gives it its own family. Say *shrub foliage type* wherever the ground sense
+below could be meant.
+_Avoid_: bush, scrub, shrub (unqualified, where both senses are in play)
+
+**Shrub (land cover)**:
+A published land-cover polygon whose subtype is `shrub` — a *ground surface*, which a host paints
+with a material named for tall growth. It is scrubby ground, not a plant, and the polygon says
+nothing about what stands on it: a tree point of either foliage type can sit inside one. Two
+platform vocabularies happened on the same word and neither is ours to rename, which is why both are
+here.
+_Avoid_: shrubland, shrub layer, shrub (unqualified, where both senses are in play)
+
 ### What a host builds from a bundle
 
 **Terrain**:

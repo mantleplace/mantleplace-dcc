@@ -149,8 +149,9 @@ family, symbol or asset and never derives one.
 - ⛔ **A host that reads `foliage_type` MUST read a value it does not know as `tree`.** The
   vocabulary may grow, and a new value is a new vocabulary version — never a change of meaning for
   an existing one. So a vocabulary the host does not know is no reason to ignore the column: the
-  values it knows keep their meaning, and it maps them. No host reads the value yet, so no corpus
-  case binds this rule; one lands with the first host that does.
+  values it knows keep their meaning, and it maps them. `manifest.foliageTypeUnknownValue` binds
+  both halves, scoped to the first host that read the value; a second host reading it takes the
+  scope off rather than adding a case of its own.
 - A manifest without `foliage_type_vocabulary` has no `foliage_type` column; read every point as a
   tree.
 

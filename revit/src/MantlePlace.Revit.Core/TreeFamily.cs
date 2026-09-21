@@ -90,7 +90,7 @@ public static class TreeFamily
     /// <summary>
     /// Whether Revit can build this tree at its published size, as a family instance or a DirectShape.
     /// </summary>
-    public static bool Fits(SiteTree tree)
+    public static bool Fits(SiteTreePoint tree)
         => double.IsFinite(tree.HeightM)
             && double.IsFinite(tree.CrownRadiusM)
             && tree.HeightM * TrunkHeightFraction >= MinimumDimensionM

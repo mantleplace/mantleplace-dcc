@@ -795,6 +795,14 @@
       }
     },
     {
+      "id": "manifest.foliageTypeUnknownValue",
+      "group": "manifest",
+      "file": "manifest/foliage-type-unknown-value.json",
+      "expect": "vector",
+      "reason": "The two ⛔ rules in format.md §4.4 that nothing bound, because until now no host read the value. A value the host does not know reads as `tree`, and a vocabulary id it does not know is no reason to ignore the column -- the values it knows keep their meaning. The second is the one a defensive reader gets backwards: seeing a vocabulary it was not taught it drops the column, reports a forest of trees, and silently loses every shrub the platform published in a value it already understood. Values match exactly, so `Shrub` and `shrubland` take the fallback rather than a near miss. And nothing is derived from the dimensions: the first row's shrub is taller than the tree beside it, so a reader that guesses from `height_m` fails here. What a host LOGS, and what it does when the manifest and the header disagree about the column existing, are deliberately NOT bound -- §4.4 states neither. `appliesTo: revit` only because Revit is the first host to read the column; the rules are every host's, and the Unreal counterpart takes the scope off.",
+      "appliesTo": "revit"
+    },
+    {
       "id": "manifest.materializationSignals",
       "group": "manifest",
       "file": "manifest/materialization-signals.json",

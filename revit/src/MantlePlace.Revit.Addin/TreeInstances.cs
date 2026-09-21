@@ -28,7 +28,7 @@ internal static class TreeInstances
     /// should know stands at the family's default size or at its level's elevation.
     /// </para>
     /// </remarks>
-    internal static FamilyInstance Place(Document document, FamilySymbol symbol, Level level, SiteTree tree, out bool sized)
+    internal static FamilyInstance Place(Document document, FamilySymbol symbol, Level level, SiteTreePoint tree, out bool sized)
     {
         double ground = MetresToInternal(tree.GroundElevationM);
         XYZ location = new(MetresToInternal(tree.EastM), MetresToInternal(tree.NorthM), ground);
