@@ -168,32 +168,37 @@ and it does not by itself say what unit any one file is in.
 _Avoid_: units (unqualified), imperial bundle, metric bundle
 
 **Delivery tier**:
-What an order's unit system resolved to for its AOI: the published name for which kind of projected
-grid, in which linear unit, the delivered files sit on. Two imperial orders can land on different
-delivery tiers.
+The published name for what an order's unit system resolved to on its AOI — which grid the delivery
+is stated on, and in which linear unit. Two imperial orders can land on different delivery tiers, and
+on one of them no foot grid exists, so the origin and the files are stated in different units.
 _Avoid_: imperial tier, foot tier, State Plane bundle
 
 **Delivery CRS**:
-The one projected coordinate reference system a delivery tier names for an order. Files that follow
-the order are in it; files built for a fixed-frame host are not.
+The projected coordinate reference system an order's delivery names, where it names one. It belongs
+to the delivery, not to every file in the bundle: each file states its own frame, and a fixed-frame
+host's content need not be in it.
 _Avoid_: bundle CRS, project CRS, the EPSG
 
 **Frame**:
-The coordinate reference system and linear unit one file's coordinates are in. A frame belongs to a
-file, never to a bundle.
-_Avoid_: bundle units, coordinate system (for a whole bundle)
+What one file's coordinates are stated in — a coordinate reference system, or an offset from a stated
+origin, and a linear unit. A frame belongs to a file, never to a bundle and never to a host block.
+The word has also been used for the delivery CRS and for whether a file's coordinates are absolute
+or offsets; each of those is one part of a frame.
+_Avoid_: bundle units, coordinate system (for a whole bundle), delivery frame
 
 **Host frame**:
-The frame a DCC host's own content is built in — every file its host block points at.
+The coordinate reference system a DCC host's origin is stated in on one order, which is where the
+content made for that host lands. It is the host's, not its files': each file the host block points
+at still states its own frame.
 _Avoid_: plugin units, import units
 
 **Fixed-frame host**:
-A DCC host whose application has one unit, so its host frame is the same on every order whatever the
-unit system. Unreal is one: its content is metric on an imperial order.
+A DCC host with one native unit, so its host frame does not vary with the order's unit system.
+Unreal is one: the content made for it is metric on an imperial order.
 _Avoid_: metric host, metric-only plugin
 
 **Order-frame host**:
-A DCC host whose host frame follows the order: the delivery CRS and its linear unit. Revit is one.
+A DCC host whose host frame follows the order's delivery instead of staying fixed. Revit is one.
 _Avoid_: imperial host, unit-aware plugin
 
 ### What a bundle carries
