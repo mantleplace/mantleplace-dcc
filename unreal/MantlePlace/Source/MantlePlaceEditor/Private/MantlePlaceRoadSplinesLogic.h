@@ -28,6 +28,9 @@ struct FMantlePlaceRoadSpline
  */
 struct FMantlePlaceRoadSplinesLogic
 {
+	/** True when Epsg is a WGS84 UTM zone: 326xx (north, 1-60) or 327xx (south, 1-60). */
+	static bool IsUtmEpsg(int32 Epsg);
+
 	/**
 	 * WGS84 lon/lat (degrees) -> UTM easting/northing (meters) for the zone encoded in Epsg
 	 * (326xx = north, 327xx = south). Returns false for a non-UTM EPSG or out-of-range input.
@@ -39,7 +42,15 @@ struct FMantlePlaceRoadSplinesLogic
 	 * OriginEastingM/OriginNorthingM/Epsg come from the manifest's unreal.georeference block.
 	 * LineString and MultiLineString geometries are accepted (each MultiLineString part becomes
 	 * its own spline, mirroring the ETL's per-part rows); other geometry types are skipped.
-	 * Fails closed (false + OutError) only on invalid JSON or a missing features array.
+	 * Fails closed (false + OutError) on invalid JSON, a missing features array, or an Epsg that
+	 * is not a UTM zone. The last is checked first and refuses the whole layer, empty or not: the
+	 * origin is what is wrong, and left to the per-point projection it would drop every point of
+	 * every road and return success with zero splines.
+	 *
+	 * `OutLinesSeen` counts the line parts the layer carried (a MultiLineString part counts once,
+	 * a Point never), whether or not they could be placed. It exists because dropping is invisible
+	 * on its own: a layer of roads that all failed and a layer with no roads both return zero
+	 * splines, and the count is what lets the caller say which happened. See DescribeOutcome.
 	 */
 	static bool ParseGeoJson(
 	    const FString& JsonText,
@@ -47,5 +58,14 @@ struct FMantlePlaceRoadSplinesLogic
 	    double OriginNorthingM,
 	    int32 Epsg,
 	    TArray<FMantlePlaceRoadSpline>& OutSplines,
+	    int32& OutLinesSeen,
 	    FString& OutError);
+
+	/**
+	 * The importer's one-line status for a road layer that parsed: how many line parts were
+	 * present against how many became splines. An empty layer reads as a plain success; a layer
+	 * whose roads were all unplaceable, or some of them, says so and names both numbers, so the
+	 * two cannot be mistaken for each other.
+	 */
+	static FString DescribeOutcome(int32 LinesSeen, int32 SplinesCreated);
 };

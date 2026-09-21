@@ -1066,6 +1066,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		TArray<uint8> GeoJsonBytes;
 		FString GeoJsonText, SplinesError;
 		TArray<FMantlePlaceRoadSpline> Splines;
+		int32 LinesSeen = 0;
 		bool bParsed = false;
 		if (!Reader.TryReadFile(Manifest.RoadSplinesPath, GeoJsonBytes))
 		{
@@ -1075,7 +1076,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		{
 			FFileHelper::BufferToString(GeoJsonText, GeoJsonBytes.GetData(), GeoJsonBytes.Num());
 			bParsed = FMantlePlaceRoadSplinesLogic::ParseGeoJson(
-			    GeoJsonText, Manifest.OriginEastingM, Manifest.OriginNorthingM, Manifest.Epsg, Splines, SplinesError);
+			    GeoJsonText, Manifest.OriginEastingM, Manifest.OriginNorthingM, Manifest.Epsg, Splines, LinesSeen, SplinesError);
 			if (!bParsed)
 			{
 				Log.Add(FString::Printf(TEXT("Road splines skipped: %s"), *SplinesError));
@@ -1117,7 +1118,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				}
 				Result.CreatedActors.Add(SplineActor->GetActorLabel());
 			}
-			Log.Add(FString::Printf(TEXT("Road splines created (%d spline actor(s))."), SplineIndex));
+			// A layer whose roads all failed to place must not read like an AOI with no roads.
+			Log.Add(FMantlePlaceRoadSplinesLogic::DescribeOutcome(LinesSeen, SplineIndex));
 		}
 	}
 
