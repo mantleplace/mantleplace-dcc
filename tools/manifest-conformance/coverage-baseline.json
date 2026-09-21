@@ -193,6 +193,9 @@
       "revit",
       "unreal"
     ],
+    "manifest.treePointsFrame": [
+      "unreal"
+    ],
     "manifest.treePointsRowCount": [
       "unreal"
     ],

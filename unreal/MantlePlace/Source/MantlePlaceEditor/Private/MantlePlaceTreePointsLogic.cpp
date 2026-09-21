@@ -8,6 +8,7 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
     const FString& CsvText,
     double OriginEastingM,
     double OriginNorthingM,
+    const FVector2D& LandscapeSpanUeCm,
     int32 DeclaredPointCount,
     TArray<FMantlePlaceTreePointRow>& OutRows,
     FString& OutError)
@@ -55,6 +56,21 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		return EMantlePlaceTreePointsOutcome::HeaderUnrecognised;
 	}
 
+	// HPS-53: with no published extent there is nothing to hold the file against, and an unstated
+	// frame is never assumed to match. Refused here rather than after the rows, because no row
+	// could change the answer.
+	if (LandscapeSpanUeCm.X <= 0.0 || LandscapeSpanUeCm.Y <= 0.0)
+	{
+		OutError = TEXT("TreePoints.csv states no CRS and no unit, and the manifest's Unreal block publishes "
+		                "no landscape extent to check its coordinates against, so the file cannot be shown "
+		                "to be in this host's metric UTM frame. Nothing is converted or assumed.");
+		return EMantlePlaceTreePointsOutcome::Unplaceable;
+	}
+	const double HalfSpanNorthCm = LandscapeSpanUeCm.X / 2.0;
+	const double HalfSpanEastCm = LandscapeSpanUeCm.Y / 2.0;
+	int32 OutsideCount = 0;
+	FString FirstOutsideX, FirstOutsideY;
+
 	OutRows.Reserve(Lines.Num() - 1);
 	for (int32 LineIndex = 1; LineIndex < Lines.Num(); ++LineIndex)
 	{
@@ -80,6 +96,35 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		Row.CrownRadiusM = FCString::Atof(*Fields[ColumnIndex[ColumnCrown]]);
 		Row.GroundZM = static_cast<float>(GroundZM);
 		OutRows.Add(Row);
+
+		// The landscape is centred on the origin, so its extent in this frame is +/- half its span.
+		// A comparison of two published values, in the units they were published in.
+		if (FMath::Abs(Row.Position.X) > HalfSpanNorthCm || FMath::Abs(Row.Position.Y) > HalfSpanEastCm)
+		{
+			if (OutsideCount++ == 0)
+			{
+				FirstOutsideX = Fields[ColumnIndex[ColumnX]];
+				FirstOutsideY = Fields[ColumnIndex[ColumnY]];
+			}
+		}
+	}
+
+	// HPS-53: a point outside the extent this host's own block publishes is not in this frame, and
+	// the frame belongs to the FILE — so the rows that happened to land inside go too. The failure
+	// this guards is arithmetic that succeeds: foot State Plane coordinates minus a metre UTM origin
+	// is a finite number a thousand kilometres away that looks exactly like a position. Never a
+	// conversion (HPS-33): nothing here scales a unit or reprojects to reconcile the mismatch.
+	if (OutsideCount > 0)
+	{
+		OutError = FString::Printf(
+		    TEXT("TreePoints.csv is not in this host's frame: %d of %d point(s) fall outside the landscape "
+		         "extent the manifest publishes (%.1f m east-west by %.1f m north-south, centred on the "
+		         "origin); the first is x=%s, y=%s. Unreal places metric UTM coordinates only, and a file "
+		         "stated on another grid or in another unit is refused rather than converted."),
+		    OutsideCount, OutRows.Num(), LandscapeSpanUeCm.Y / 100.0, LandscapeSpanUeCm.X / 100.0,
+		    *FirstOutsideX, *FirstOutsideY);
+		OutRows.Reset();
+		return EMantlePlaceTreePointsOutcome::Unplaceable;
 	}
 
 	// The manifest's own row count, checked against what this reader produced. A mismatch is a

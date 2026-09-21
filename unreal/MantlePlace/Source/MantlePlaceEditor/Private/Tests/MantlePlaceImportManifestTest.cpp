@@ -513,6 +513,68 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 	AssertTupleExpectation(T, Case, TEXT("drapeAlignmentMeasured"), TEXT("drapeAlignmentMeasuredTolerance"),
 		{ Alignment.CoveredPercent, Alignment.OvershootRatio });
 }
+
+/**
+ * One row of a tree-points known-answer table, through the pure parser. Shared by the two cases
+ * that drive FMantlePlaceTreePointsLogic::ParseCsv — the count table and the frame table — so the
+ * outcome names and what a refusal owes (a reason, and no rows) are stated once.
+ */
+void AssertTreePointsRow(
+	FAutomationTestBase& T,
+	const FCase& Case,
+	const TSharedPtr<FJsonObject>& Row,
+	double OriginEastingM,
+	double OriginNorthingM,
+	const FVector2D& LandscapeSpanUeCm)
+{
+	const FString Name = RowString(Row, TEXT("name"));
+	const FString ErrorContains = RowString(Row, TEXT("errorContains"));
+	// Absent on the frame table, where no row is about the count: 0 is "the manifest published none".
+	const int32 Declared = static_cast<int32>(RowNumber(Row, TEXT("declaredPointCount")));
+
+	TArray<FMantlePlaceTreePointRow> Parsed;
+	FString Error;
+	const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
+		RowString(Row, TEXT("csv")), OriginEastingM, OriginNorthingM, LandscapeSpanUeCm, Declared, Parsed, Error);
+
+	const TCHAR* ActualOutcome = TEXT("?");
+	switch (Outcome)
+	{
+	case EMantlePlaceTreePointsOutcome::Parsed:             ActualOutcome = TEXT("parsed"); break;
+	case EMantlePlaceTreePointsOutcome::HeaderUnrecognised: ActualOutcome = TEXT("headerUnrecognised"); break;
+	case EMantlePlaceTreePointsOutcome::CountMismatch:      ActualOutcome = TEXT("countMismatch"); break;
+	case EMantlePlaceTreePointsOutcome::Unplaceable:        ActualOutcome = TEXT("unplaceable"); break;
+	}
+	T.TestEqual(
+		FString::Printf(TEXT("[%s] \"%s\" outcome (%s)"), *Case.Id, *Name, *Error),
+		FString(ActualOutcome), RowString(Row, TEXT("outcome")));
+
+	if (Outcome == EMantlePlaceTreePointsOutcome::Parsed)
+	{
+		int32 ExpectedRows = 0;
+		if (Row.IsValid() && Row->TryGetNumberField(TEXT("parsedRows"), ExpectedRows))
+		{
+			T.TestEqual(
+				FString::Printf(TEXT("[%s] \"%s\" row count"), *Case.Id, *Name),
+				Parsed.Num(), ExpectedRows);
+		}
+		return;
+	}
+
+	// Every non-parsed outcome must SAY why; a bare "tree points failed" leaves a user with no way
+	// to tell a drifted column from a truncated download from a file on another grid (HPS-53).
+	T.TestFalse(FString::Printf(TEXT("[%s] \"%s\" states a reason"), *Case.Id, *Name), Error.IsEmpty());
+	T.TestEqual(
+		FString::Printf(TEXT("[%s] \"%s\" discards the rows it will not stand behind"), *Case.Id, *Name),
+		Parsed.Num(), 0);
+	if (!ErrorContains.IsEmpty())
+	{
+		T.TestTrue(
+			FString::Printf(TEXT("[%s] \"%s\" message contains \"%s\" (got: %s)"),
+				*Case.Id, *Name, *ErrorContains, *Error),
+			Error.Contains(ErrorContains));
+	}
+}
 } // namespace
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -654,64 +716,40 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
 		for (const TSharedPtr<FJsonObject>& Row : Vectors)
 		{
-			const FString Name = RowString(Row, TEXT("name"));
-			const FString Csv = RowString(Row, TEXT("csv"));
-			const int32 Declared = static_cast<int32>(RowNumber(Row, TEXT("declaredPointCount")));
-			const FString ExpectedOutcome = RowString(Row, TEXT("outcome"));
-			const FString ErrorContains = RowString(Row, TEXT("errorContains"));
-
-			// The origin is the reference fixture's, so a row's coordinates land where the rest of
-			// the corpus says they land; this table is about the COUNT, not the frame math.
-			TArray<FMantlePlaceTreePointRow> Parsed;
-			FString Error;
-			const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
-				Csv, 441959.5, 4014372.5, Declared, Parsed, Error);
-
-			const TCHAR* ActualOutcome = TEXT("?");
-			switch (Outcome)
-			{
-			case EMantlePlaceTreePointsOutcome::Parsed:             ActualOutcome = TEXT("parsed"); break;
-			case EMantlePlaceTreePointsOutcome::HeaderUnrecognised: ActualOutcome = TEXT("headerUnrecognised"); break;
-			case EMantlePlaceTreePointsOutcome::CountMismatch:      ActualOutcome = TEXT("countMismatch"); break;
-			}
-			TestEqual(
-				FString::Printf(TEXT("[%s] \"%s\" outcome"), *Case->Id, *Name),
-				FString(ActualOutcome), ExpectedOutcome);
-
-			if (Outcome == EMantlePlaceTreePointsOutcome::Parsed)
-			{
-				int32 ExpectedRows = 0;
-				if (Row.IsValid() && Row->TryGetNumberField(TEXT("parsedRows"), ExpectedRows))
-				{
-					TestEqual(
-						FString::Printf(TEXT("[%s] \"%s\" row count"), *Case->Id, *Name),
-						Parsed.Num(), ExpectedRows);
-				}
-			}
-			else
-			{
-				// Every non-parsed outcome must SAY why; a bare "tree points failed" leaves a user
-				// with no way to tell a drifted column from a truncated download.
-				TestFalse(
-					FString::Printf(TEXT("[%s] \"%s\" states a reason"), *Case->Id, *Name),
-					Error.IsEmpty());
-				TestEqual(
-					FString::Printf(TEXT("[%s] \"%s\" discards the rows it will not stand behind"),
-						*Case->Id, *Name),
-					Parsed.Num(), 0);
-				if (!ErrorContains.IsEmpty())
-				{
-					TestTrue(
-						FString::Printf(TEXT("[%s] \"%s\" message contains \"%s\" (got: %s)"),
-							*Case->Id, *Name, *ErrorContains, *Error),
-						Error.Contains(ErrorContains));
-				}
-			}
+			// The origin and the landscape span are the reference fixture's, so a row's coordinates
+			// land where the rest of the corpus says they land; this table is about the COUNT, not
+			// the frame — manifest.treePointsFrame, below, is the one about that.
+			AssertTreePointsRow(*this, *Case, Row, 441959.5, 4014372.5, FVector2D(140100.0, 142500.0));
 		}
 	}
 	else
 	{
 		AddError(TEXT("corpus case manifest.treePointsRowCount has gone missing"));
+	}
+
+	// --- HPS-53: a tree-point file outside the landscape's published extent is refused ---------
+	// The origin and the span both come from the embedded manifest THROUGH this host's parser, so
+	// what is proven is the path the importer takes — Parse, GetAoiSizeUeCm, ParseCsv — and not a
+	// span this file happened to get right. The just-inside and just-outside rows sit between the
+	// two half-spans, so an extent with its axes swapped fails here rather than on a user's site.
+	if (const FCase* Case = FindCase(Cases, TEXT("manifest.treePointsFrame")))
+	{
+		Driven.Add(Case->Id);
+		FString ManifestError;
+		const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(
+			RowBodyAsText(Case->PayloadObject, TEXT("manifest")), ManifestError);
+		TestTrue(Case->What(*FString::Printf(TEXT("embedded manifest parses (%s)"), *ManifestError)), M.bValid);
+
+		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("rows"));
+		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
+		for (const TSharedPtr<FJsonObject>& Row : Vectors)
+		{
+			AssertTreePointsRow(*this, *Case, Row, M.OriginEastingM, M.OriginNorthingM, M.GetAoiSizeUeCm());
+		}
+	}
+	else
+	{
+		AddError(TEXT("corpus case manifest.treePointsFrame has gone missing"));
 	}
 
 	// Vector cases' `expectations`, swept once every id-dispatched assertion above has run. HPS-46
