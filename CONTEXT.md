@@ -156,6 +156,46 @@ _Avoid_: build, run, materialization, order
 The area of interest an order covers.
 _Avoid_: region, extent, tile, site
 
+### Units and frames
+
+"An imperial bundle" has meant a bundle whose every file is in feet, and it has meant an order whose
+customer chose feet. Neither is what ships: the same bundle carries files in more than one frame, on
+purpose, and a reader who assumes one frame per bundle places something in the wrong one.
+
+**Unit system**:
+The customer's choice on an order — metric or imperial. It says what the customer asked to work in,
+and it does not by itself say what unit any one file is in.
+_Avoid_: units (unqualified), imperial bundle, metric bundle
+
+**Delivery tier**:
+What an order's unit system resolved to for its AOI: the published name for which kind of projected
+grid, in which linear unit, the delivered files sit on. Two imperial orders can land on different
+delivery tiers.
+_Avoid_: imperial tier, foot tier, State Plane bundle
+
+**Delivery CRS**:
+The one projected coordinate reference system a delivery tier names for an order. Files that follow
+the order are in it; files built for a fixed-frame host are not.
+_Avoid_: bundle CRS, project CRS, the EPSG
+
+**Frame**:
+The coordinate reference system and linear unit one file's coordinates are in. A frame belongs to a
+file, never to a bundle.
+_Avoid_: bundle units, coordinate system (for a whole bundle)
+
+**Host frame**:
+The frame a DCC host's own content is built in — every file its host block points at.
+_Avoid_: plugin units, import units
+
+**Fixed-frame host**:
+A DCC host whose application has one unit, so its host frame is the same on every order whatever the
+unit system. Unreal is one: its content is metric on an imperial order.
+_Avoid_: metric host, metric-only plugin
+
+**Order-frame host**:
+A DCC host whose host frame follows the order: the delivery CRS and its linear unit. Revit is one.
+_Avoid_: imperial host, unit-aware plugin
+
 ### What a bundle carries
 
 **Manifest**:
