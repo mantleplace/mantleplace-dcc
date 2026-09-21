@@ -1139,7 +1139,9 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	//
 	// The bytes reaching here have already been through the integrity pre-check above, so this
 	// layer is no longer the unverified exception in the chain. What is still checked HERE is the
-	// row count: the digest proves the bytes, the count proves the rows this reader made of them.
+	// row count — the digest proves the bytes, the count proves the rows this reader made of them —
+	// and the frame: the pointer states no CRS and no unit, so the rows are held against the
+	// landscape extent this block publishes and a file outside it is refused by name (HPS-53).
 	if (Manifest.bHasFoliagePoints)
 	{
 		TArray<uint8> CsvBytes;
@@ -1154,6 +1156,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			TArray<FMantlePlaceTreePointRow> Rows;
 			const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
 			    CsvText, Manifest.OriginEastingM, Manifest.OriginNorthingM,
+			    Manifest.GetAoiSizeUeCm(), // zero when the block publishes no landscape transform, which refuses
 			    Manifest.FoliagePointsCount, Rows, TreesError);
 			if (Outcome == EMantlePlaceTreePointsOutcome::CountMismatch)
 			{
@@ -1167,7 +1170,9 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			{
 				// A drifted column contract stays a SKIP, as it always has been. It says the ETL
 				// changed this payload's shape, which is not a reason to report the terrain, the
-				// imagery and the buildings beside it as failed.
+				// imagery and the buildings beside it as failed. A file that is not in this host's
+				// frame is the same news (HPS-53): a NAMED skip, no table made, so nothing downstream
+				// scatters a forest a thousand kilometres off site.
 				Log.Add(FString::Printf(TEXT("Tree points skipped: %s"), *TreesError));
 			}
 			else

@@ -1196,6 +1196,14 @@
       "appliesTo": "unreal"
     },
     {
+      "id": "manifest.treePointsFrame",
+      "group": "manifest",
+      "file": "manifest/tree-points-frame.json",
+      "expect": "vector",
+      "reason": "A tree-point file in a foot frame beside a metric origin (HPS-53). `hosts.unreal.foliage_points` states a path and no frame, the fixed-frame host's origin is metric UTM on every order, and the file beside it is in the delivery CRS -- which on a State Plane foot tier is another grid in another unit. Foot coordinates minus a metre origin is a number that looks exactly like a position: the reader this case was written against reported success with every tree a thousand kilometres off site. The permitted substitute for a frame the format does not state is a comparison of published values, and it runs one way: a file with any point outside the landscape extent its own block publishes is `unplaceable` -- a named skip that keeps no rows and converts nothing -- while a file inside it is placed as before and has been shown nothing. The just-inside and just-outside rows sit between the two half-spans, so an extent with its axes swapped fails.",
+      "appliesTo": "unreal"
+    },
+    {
       "id": "manifest.drapeAlignmentDiverges",
       "group": "manifest",
       "file": "manifest/drape-alignment-diverges.json",

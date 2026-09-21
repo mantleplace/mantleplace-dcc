@@ -1136,10 +1136,14 @@ value, so the thin-client boundary is intact.
 
 _Enforcer:_ `automation-test` per host, wherever the host has moved the decision into a pure core —
 Revit's `SiteFrame` (`CanPlaceGeographic`, `CanPlaceProjected`) is the furthest any host has taken
-it, and it decides the CRS half only — plus `agent-review` for the rest. **The shared corpus case
-does not exist yet and is not named here**: it wants a file in a foot frame beside a metric origin,
-with a refusal naming the reason as the expected result. Until it lands, the per-host tests and
-review are the whole of the enforcement.
+it, and it decides the CRS half only — plus `agent-review` for the rest. The corpus case is
+`manifest.treePointsFrame`: a tree-point file in a foot frame beside a metric origin, with a refusal
+naming the reason as the expected result. It pins the **extent substitute**, which is the only half
+a vector can reach while the format states no frame beside the pointer, and it carries `appliesTo`
+for the fixed-frame host, because the extent it compares against is the one that host's block
+publishes. A case for the **stated** frame — a CRS and a unit read beside the pointer, and a file
+refused because they are not the host's — does not exist yet and is not named here; it waits on the
+format stating one.
 
 **`HPS-54` — A host is a fixed-frame host or an order-frame host, and says which in its own
 `CLAUDE.md`.** Both kinds are the glossary's, and so is which of the two hosts is which; what this
@@ -1165,7 +1169,7 @@ here rather than left for a future reader to discover as a contradiction.
 
 | Rule     | Deviation                                                                                                                                                                                                                                                                                                                                                                                   |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HPS-53` | The reference's **tree-point reader** is the call site the rule was written against and does not implement it yet: `MantlePlaceTreePointsLogic.cpp` subtracts the Unreal origin straight from the CSV's own easting and northing (`ProjectedToUeCm(UtmX - OriginEastingM, …)`) and reads `ground_z` as metres, and the `foliage_points` entry in the Unreal host block gives it no CRS or unit to check against. The rule is ahead of this call site; the fix is a host bug on the tracker, not a rule this standard is waiting to be sure of. The **named** half is behind in a second place, narrower than it was: `MantlePlaceRoadSplinesLogic.cpp` now refuses the whole layer by name when the origin is not a UTM zone, and reports a layer whose roads all failed to place as such rather than as an empty one, but it still drops a single point its projection refused without naming it — a refusal with no name on it, one layer over. |
+| `HPS-53` | The reference's **tree-point reader** is the call site the rule was written against, and it now implements the half the format lets it: `MantlePlaceTreePointsLogic.cpp` holds every row against the landscape extent its own block publishes and refuses the whole file by name when any falls outside (`manifest.treePointsFrame`), or when the block publishes no landscape extent to hold it against — which its own pure-core test proves, and which means a bundle that ships a terrain mesh and no heightmap brings in no tree points. What is still open there is not the host's to close — the `foliage_points` entry in the Unreal host block states no CRS and no unit, so the reader has no frame to **read** and the extent substitute is the whole of its check until the format states one. The **named** half is behind in a second place, narrower than it was: `MantlePlaceRoadSplinesLogic.cpp` now refuses the whole layer by name when the origin is not a UTM zone, and reports a layer whose roads all failed to place as such rather than as an empty one, but it still drops a single point its projection refused without naming it — a refusal with no name on it, one layer over. |
 | `HPS-30` | The reference's **secret store** derives its blob name with its own per-code-unit walk and its own keep-set (`MantlePlaceSecretStore.cpp`, `ResolveSecretPath`), not with `SanitizeKeySegment`. It is inert today — `refresh_token` is the only key either host stores, and every derivation agrees on it — but the rule's secret-store sentence is ahead of this call site, not behind it. |
 
 Two places where the _silo prose_ was wrong and the code was right went the other way and are
@@ -1178,7 +1182,7 @@ records that eviction is deliberately explicit-only.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Version floor, host registration, floor declaration (`HPS-31`, `HPS-38`, `HPS-39`)                                                                                                                                        | `ci-manifest-conformance`                              |
 | Headless conformance of the pure cores (`HPS-42`)                                                                                                                                                                         | `ci-revit-tests` (Revit), `ci-ue-compile` (Unreal)     |
-| Protocol behaviour with corpus vectors (`HPS-04`, `HPS-07`, `HPS-10` … `HPS-12`, `HPS-19` … `HPS-25`, `HPS-25a`, `HPS-27`, `HPS-28`, `HPS-30`, `HPS-33` … `HPS-35`, `HPS-37`, `HPS-40`, `HPS-45` … `HPS-49`)                         | `automation-test`, per host, against the shared corpus |
+| Protocol behaviour with corpus vectors (`HPS-04`, `HPS-07`, `HPS-10` … `HPS-12`, `HPS-19` … `HPS-25`, `HPS-25a`, `HPS-27`, `HPS-28`, `HPS-30`, `HPS-33` … `HPS-35`, `HPS-37`, `HPS-40`, `HPS-45` … `HPS-49`, `HPS-53`)               | `automation-test`, per host, against the shared corpus |
 | Secrets, browser flow, cache promotion, pointer-driven paths, dumb-consumer doctrine (`HPS-03` … `HPS-06`, `HPS-06a`, `HPS-08`, `HPS-09`, `HPS-13` … `HPS-18`, `HPS-23`, `HPS-26`, `HPS-29`, `HPS-32`, `HPS-33`, `HPS-36`, `HPS-44`) | `agent-review`                                         |
 | The triad — pure cores testable without the DCC (`HPS-02`)                                                                                                                                                                | `automation-test` + `agent-review`                     |
 | Four-layer completeness, corpus coverage (`HPS-01`, `HPS-41`)                                                                                                                                                             | `pr-review`                                            |
@@ -1186,13 +1190,14 @@ records that eviction is deliberately explicit-only.
 | The .NET SDK trigger (`HPS-43`)                                                                                                                                                                                           | `doc-only`                                             |
 | The local install slot and its check script (`HPS-50`)                                                                                                                                                                    | `agent-review`, proven by running the scripts          |
 | The shared user-facing vocabulary (`HPS-51`)                                                                                                                                                              | `agent-review`; a pure-core test where a host has one  |
-| Placing from the host block, and refusing a file whose frame the host cannot match (`HPS-52`, `HPS-53`)                                                                                                    | `agent-review`, plus a pure-core test where a host has moved the decision out of its shim; **no corpus case yet** for either |
+| Placing from the host block, and refusing a file whose frame the host cannot match (`HPS-52`, `HPS-53`)                                                                                                    | `agent-review`, plus a pure-core test where a host has moved the decision out of its shim; **no corpus case yet** for `HPS-52`, and none for the stated-frame half of `HPS-53` |
 | The host's frame kind, declared in its own `CLAUDE.md` (`HPS-54`)                                                                                                                                          | `agent-review`                                         |
 
 Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS-33`) appear in both rows —
-the corpus proves the behaviour, review catches the shape a vector cannot see. `HPS-53` carries two
-in **one** row instead, because no shared vector exists for it yet: its automation half is each
-host's own pure-core test, and it joins the corpus row on the day the case lands.
+the corpus proves the behaviour, review catches the shape a vector cannot see. `HPS-53` appears twice
+as well — in the corpus row and in its own — for a narrower reason than the rest: the corpus proves
+its extent substitute (`manifest.treePointsFrame`), and the stated-frame half is still each host's
+own pure-core test and review, because no vector can state a frame the format does not publish.
 
 The rules that **cannot fail loudly** are `HPS-07`, `HPS-10`, `HPS-20`, `HPS-21`, `HPS-23`,
 `HPS-24`, `HPS-25a`, `HPS-26`, `HPS-27`, `HPS-30`, `HPS-31`, `HPS-32`, `HPS-33`, `HPS-49`, `HPS-52` and `HPS-53`. Each one produces a plugin that

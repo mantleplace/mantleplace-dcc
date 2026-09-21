@@ -1,0 +1,134 @@
+{
+  "$comment": [
+    "A tree-point file with a point outside the extent its host block publishes is not in the host",
+    "frame, and is refused by name rather than placed (HPS-53).",
+    "",
+    "`hosts.unreal.foliage_points` states a path and no frame: no CRS, no linear unit. A fixed-frame",
+    "host's origin is metric UTM on every order, while the file beside it is in the delivery CRS, which",
+    "on a State Plane foot tier is another grid in another unit. Foot coordinates minus a metre origin",
+    "is a number that looks exactly like a position, so a reader that subtracts and places reports",
+    "success with every tree a thousand kilometres off site.",
+    "",
+    "Where the format states no frame beside a pointer, HPS-53 permits one substitute, and it is a",
+    "comparison of published values: a point outside the extent this host's own block publishes is not",
+    "in this frame. The extent here is the landscape's — `heightmap.landscape_transform`, the span the",
+    "reader already applies to the Landscape, centred on the georeference origin. With the embedded",
+    "`manifest` that is 8 x 126 quads at 141.369... cm east and 138.988... cm north: 712.5 m either side",
+    "of the origin's easting and 700.5 m either side of its northing. The two half-spans differ on",
+    "purpose, and the just-inside / just-outside rows sit between them, so a reader that swaps the",
+    "axes of the extent fails two rows rather than none.",
+    "",
+    "The comparison runs ONE way. A file inside the extent is `parsed`, which is the absence of",
+    "evidence against its frame and never a showing of it. A file with ANY point outside is",
+    "`unplaceable`: the frame belongs to the file, not to the point, so one point off the landscape",
+    "refuses the layer rather than being dropped from it — a reader that keeps the points that happen",
+    "to land inside is placing a file it has evidence against.",
+    "",
+    "`unplaceable` is a named SKIP, never a conversion and never a failure of the import: the reader",
+    "does not scale feet to metres, does not reproject, keeps none of the rows, says why, and the",
+    "terrain, the imagery and the buildings beside the layer import as they would have.",
+    "",
+    "`manifest` is one embedded document every row is read against; `csv` is the payload verbatim.",
+    "The foot row's coordinates are the MAGNITUDE a State Plane foot grid states for this AOI, not a",
+    "projection of the same trees — nothing here converts them, so nothing depends on their digits.",
+    "`parsedRows` is asserted on a `parsed` outcome only; on `unplaceable` the rows are discarded."
+  ],
+  "manifest": {
+    "version": "1.0.0",
+    "job_id": "fixture-mpb-tree-points-frame",
+    "hosts": {
+      "unreal": {
+        "georeference": {
+          "crs_projected": "EPSG:32613",
+          "crs_geographic": "EPSG:4326",
+          "origin": {
+            "lon": -105.64620798739834,
+            "lat": 36.27254939041837,
+            "utm": {
+              "epsg": 32613,
+              "easting_m": 441959.49999999854,
+              "northing_m": 4014372.4999999995
+            },
+            "ground_orthometric_h_m": 2640.955078125
+          },
+          "planet_shape": "Flat",
+          "is_projected": true
+        },
+        "heightmap": {
+          "path": "Elevation/Heightmap.png",
+          "format": "png-16bit-grayscale",
+          "resolution": 1009,
+          "row0_is_north": true,
+          "native_gsd_m": 1,
+          "landscape_post_spacing_m": 1.4136904761904763,
+          "uint16_mapping": {
+            "z_min_m": 2577.826171875,
+            "z_max_m": 2962.585693359375,
+            "datum": "EGM2008-orthometric",
+            "to_meters": "z_m = z_min_m + (u16/65535)*(z_max_m - z_min_m)",
+            "quantization_step_m": 0.005871053963292515
+          },
+          "landscape_transform": {
+            "z_scale_percent": 75.14834403991699,
+            "scale_x_percent": 141.36904761904762,
+            "scale_y_percent": 138.98809523809524,
+            "location_z_offset_cm": 277020.59326171875,
+            "section_size_quads": 63,
+            "sections_per_component": 2,
+            "component_count_x": 8,
+            "component_count_y": 8
+          },
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "foliage_points": {
+          "path": "Landcover/TreePoints.csv",
+          "columns": [
+            "x",
+            "y",
+            "ground_z",
+            "height_m",
+            "crown_radius_m"
+          ]
+        }
+      }
+    }
+  },
+  "rows": [
+    {
+      "name": "a file inside the landscape extent is placed as it always was",
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n441959.50,4014372.50,2640.96,12.40,4.34\n442059.50,4014272.50,,8.00,2.80\n441859.50,4014472.50,2650.00,3.10,1.09\n",
+      "outcome": "parsed",
+      "parsedRows": 3
+    },
+    {
+      "name": "a State Plane foot file beside a metric UTM origin is unplaceable, not a thousand kilometres away",
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n1817612.40,1919384.75,8664.57,40.68,14.24\n1817940.49,1919056.66,,26.25,9.19\n1817284.31,1919712.84,8694.23,10.17,3.58\n",
+      "outcome": "unplaceable",
+      "errorContains": "outside the landscape extent"
+    },
+    {
+      "name": "one point off the landscape refuses the file: the frame belongs to the file, not to the point",
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n441959.50,4014372.50,2640.96,12.40,4.34\n451959.50,4014372.50,2640.96,8.00,2.80\n441859.50,4014472.50,2650.00,3.10,1.09\n",
+      "outcome": "unplaceable",
+      "errorContains": "1 of 3"
+    },
+    {
+      "name": "712 m east and 700 m north of the origin are inside both half-spans",
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n442671.50,4014372.50,2640.96,12.40,4.34\n441959.50,4015072.50,2640.96,8.00,2.80\n441247.50,4013672.50,2640.96,3.10,1.09\n",
+      "outcome": "parsed",
+      "parsedRows": 3
+    },
+    {
+      "name": "713 m east is outside the easting half-span of 712.5 m",
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n442672.50,4014372.50,2640.96,12.40,4.34\n",
+      "outcome": "unplaceable",
+      "errorContains": "outside the landscape extent"
+    },
+    {
+      "name": "701 m north is outside the northing half-span of 700.5 m, though inside the easting one",
+      "csv": "x,y,ground_z,height_m,crown_radius_m\n441959.50,4015073.50,2640.96,12.40,4.34\n",
+      "outcome": "unplaceable",
+      "errorContains": "outside the landscape extent"
+    }
+  ]
+}

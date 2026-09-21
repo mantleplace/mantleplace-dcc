@@ -15,6 +15,10 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 {
 	const double OriginEastingM = 441959.5;
 	const double OriginNorthingM = 4014372.5;
+	// The reference fixture's landscape, in UE axis order (X = North, Y = East): 8 x 126 quads at
+	// 138.988... cm north and 141.369... cm east. What FMantlePlaceVaultManifest::GetAoiSizeUeCm()
+	// returns for it; the corpus case manifest.treePointsFrame drives the two together.
+	const FVector2D LandscapeSpanUeCm(140100.0, 142500.0);
 
 	// --- Happy path: rows -> Local Projected Frame, empty ground_z tolerated, bad row skipped ---
 	{
@@ -32,7 +36,7 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 		// literal in this file — what stays here is the frame math, which is this host's own.
 		TestTrue(TEXT("csv parses"),
 		    FMantlePlaceTreePointsLogic::ParseCsv(
-		        Csv, OriginEastingM, OriginNorthingM, /*DeclaredPointCount*/ 0, Rows, Error)
+		        Csv, OriginEastingM, OriginNorthingM, LandscapeSpanUeCm, /*DeclaredPointCount*/ 0, Rows, Error)
 		        == EMantlePlaceTreePointsOutcome::Parsed);
 		TestEqual(TEXT("no parse error"), Error, FString());
 		TestEqual(TEXT("3 valid rows (malformed skipped)"), Rows.Num(), 3);
@@ -77,7 +81,7 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 		TArray<FMantlePlaceTreePointRow> Expected;
 		FString Error;
 		FMantlePlaceTreePointsLogic::ParseCsv(
-		    Reference, OriginEastingM, OriginNorthingM, /*DeclaredPointCount*/ 0, Expected, Error);
+		    Reference, OriginEastingM, OriginNorthingM, LandscapeSpanUeCm, /*DeclaredPointCount*/ 0, Expected, Error);
 		TestEqual(TEXT("reference parses 2 rows"), Expected.Num(), 2);
 
 		const TPair<const TCHAR*, const FString*> Variants[] = {
@@ -90,7 +94,7 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 			FString VariantError;
 			TestTrue(FString::Printf(TEXT("%s parses"), Variant.Key),
 			    FMantlePlaceTreePointsLogic::ParseCsv(*Variant.Value, OriginEastingM, OriginNorthingM,
-			        /*DeclaredPointCount*/ 2, Rows, VariantError)
+			        LandscapeSpanUeCm, /*DeclaredPointCount*/ 2, Rows, VariantError)
 			        == EMantlePlaceTreePointsOutcome::Parsed);
 			TestEqual(FString::Printf(TEXT("%s: no error"), Variant.Key), VariantError, FString());
 			TestEqual(FString::Printf(TEXT("%s: row count"), Variant.Key), Rows.Num(), Expected.Num());
@@ -117,20 +121,73 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 		// reports a good bundle as failed or a truncated one as fine.
 		TestTrue(TEXT("wrong header is HeaderUnrecognised"),
 		    FMantlePlaceTreePointsLogic::ParseCsv(
-		        TEXT("lon,lat,z\n1,2,3\n"), OriginEastingM, OriginNorthingM,
+		        TEXT("lon,lat,z\n1,2,3\n"), OriginEastingM, OriginNorthingM, LandscapeSpanUeCm,
 		        /*DeclaredPointCount*/ 0, Rows, Error)
 		        == EMantlePlaceTreePointsOutcome::HeaderUnrecognised);
 		TestFalse(TEXT("and it says why"), Error.IsEmpty());
 		TestTrue(TEXT("a missing required column is HeaderUnrecognised"),
 		    FMantlePlaceTreePointsLogic::ParseCsv(
 		        TEXT("x,y,ground_z,crown_radius_m,foliage_type\n441959.50,4014372.50,2640.96,4.34,tree\n"),
-		        OriginEastingM, OriginNorthingM, /*DeclaredPointCount*/ 0, Rows, Error)
+		        OriginEastingM, OriginNorthingM, LandscapeSpanUeCm, /*DeclaredPointCount*/ 0, Rows, Error)
 		        == EMantlePlaceTreePointsOutcome::HeaderUnrecognised);
 		TestTrue(TEXT("and it names the missing column"), Error.Contains(TEXT("\"height_m\"")));
 		TestTrue(TEXT("empty text is HeaderUnrecognised too"),
 		    FMantlePlaceTreePointsLogic::ParseCsv(
-		        FString(), OriginEastingM, OriginNorthingM, /*DeclaredPointCount*/ 0, Rows, Error)
+		        FString(), OriginEastingM, OriginNorthingM, LandscapeSpanUeCm, /*DeclaredPointCount*/ 0, Rows, Error)
 		        == EMantlePlaceTreePointsOutcome::HeaderUnrecognised);
+	}
+
+	// --- A file that is not in this host's frame is refused, never converted (HPS-53) ---
+	{
+		// What a State Plane foot delivery publishes beside the same metric UTM origin. Subtracting
+		// the origin from these succeeds, which is the whole hazard: the result is a finite number
+		// more than a thousand kilometres from the site, and it looks exactly like a position.
+		const FString FootFrame =
+		    TEXT("x,y,ground_z,height_m,crown_radius_m\n")
+		        TEXT("1817612.40,1919384.75,8664.57,40.68,14.24\n")
+		    TEXT("1817940.49,1919056.66,,26.25,9.19\n");
+
+		TArray<FMantlePlaceTreePointRow> Rows;
+		FString Error;
+		TestTrue(TEXT("a foot-frame file is Unplaceable"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(FootFrame, OriginEastingM, OriginNorthingM,
+		        LandscapeSpanUeCm, /*DeclaredPointCount*/ 2, Rows, Error)
+		        == EMantlePlaceTreePointsOutcome::Unplaceable);
+		TestEqual(TEXT("and it keeps none of the rows"), Rows.Num(), 0);
+		TestTrue(TEXT("and it names the evidence"), Error.Contains(TEXT("outside the landscape extent")));
+		TestTrue(TEXT("and how much of the file it was"), Error.Contains(TEXT("2 of 2")));
+
+		// The frame belongs to the file, not to the point: one row off the landscape refuses the
+		// layer rather than being dropped from it. Keeping the rows that happen to land inside
+		// would be placing a file there is evidence against.
+		const FString OneOutside =
+		    TEXT("x,y,ground_z,height_m,crown_radius_m\n")
+		        TEXT("441959.50,4014372.50,2640.96,12.40,4.34\n")
+		    TEXT("451959.50,4014372.50,2640.96,8.00,2.80\n"); // 10 km east of a 1.4 km landscape
+		TestTrue(TEXT("one point outside refuses the whole file"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(OneOutside, OriginEastingM, OriginNorthingM,
+		        LandscapeSpanUeCm, /*DeclaredPointCount*/ 0, Rows, Error)
+		        == EMantlePlaceTreePointsOutcome::Unplaceable);
+		TestEqual(TEXT("and the rows inside go with it"), Rows.Num(), 0);
+		TestTrue(TEXT("and the count says it was one"), Error.Contains(TEXT("1 of 2")));
+
+		// The refusal outranks the count: whether every row survived the parse is a question about
+		// a file this host places, and this one it does not.
+		TestTrue(TEXT("a foot-frame file with a wrong count is still Unplaceable, not CountMismatch"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(FootFrame, OriginEastingM, OriginNorthingM,
+		        LandscapeSpanUeCm, /*DeclaredPointCount*/ 5, Rows, Error)
+		        == EMantlePlaceTreePointsOutcome::Unplaceable);
+
+		// No published extent is no evidence either way, and an unstated frame is never assumed to
+		// match: with nothing to compare against, the file is unplaceable rather than trusted.
+		const FString InFrame =
+		    TEXT("x,y,ground_z,height_m,crown_radius_m\n441959.50,4014372.50,2640.96,12.40,4.34\n");
+		TestTrue(TEXT("no landscape extent to check against is Unplaceable"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(InFrame, OriginEastingM, OriginNorthingM,
+		        FVector2D::ZeroVector, /*DeclaredPointCount*/ 0, Rows, Error)
+		        == EMantlePlaceTreePointsOutcome::Unplaceable);
+		TestEqual(TEXT("and it keeps no rows"), Rows.Num(), 0);
+		TestTrue(TEXT("and it says that is why"), Error.Contains(TEXT("no landscape extent")));
 	}
 
 	return true;
