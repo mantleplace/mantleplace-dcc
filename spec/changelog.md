@@ -34,6 +34,14 @@ reads it.
   fixed-frame drape, on the AOI's metric UTM grid on every delivery. Before 1.3.0 a State Plane
   bundle carried no drape on its delivery grid at all, so a Revit reader that placed
   `imagery.drape` against a State Plane origin had nothing correct to place.
+- **`hosts.<hostId>.file_frame`** is new on `hosts.unreal` and `hosts.revit`, beside the
+  `georeference` it is read with: the CRS and the horizontal and vertical units every file the block
+  points at shares, as a projected or a local frame ([format](format.md) §4.2). Unreal's is the
+  AOI's metric UTM zone on every delivery; Revit's follows the delivery.
+- **`hosts.revit.vectors`** is new: the vector layers the Revit host places, as GeoJSON in its own
+  frame on every delivery, so a State Plane delivery no longer leaves Revit with only a geographic
+  set it may not project ([format](format.md) §6.5). `hosts.revit.readiness` gains `vectors`.
+- **`vector.crs`** is new: `EPSG:4326`, stating the frame the shared set has always been in.
 
 ### 1.2.0 — the foliage type (additive minor; published and frozen 2026-09-19)
 
