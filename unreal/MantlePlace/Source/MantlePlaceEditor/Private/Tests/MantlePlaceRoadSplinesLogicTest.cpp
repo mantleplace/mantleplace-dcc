@@ -150,11 +150,13 @@ bool FMantlePlaceRoadSplinesLogicTest::RunTest(const FString& Parameters)
 		                                        OriginLonDeg, OriginLatDeg);
 
 		TArray<FMantlePlaceRoadSpline> Splines;
+		int32 LinesSeen = -1;
 		FString Error;
 		TestTrue(TEXT("geojson parses"),
-			FLogic::ParseGeoJson(GeoJson, OriginEastingM, OriginNorthingM, Epsg, Splines, Error));
+			FLogic::ParseGeoJson(GeoJson, OriginEastingM, OriginNorthingM, Epsg, Splines, LinesSeen, Error));
 		TestEqual(TEXT("no parse error"), Error, FString());
 		TestEqual(TEXT("LineString + 2 MultiLineString parts, Point skipped"), Splines.Num(), 3);
+		TestEqual(TEXT("every line part was seen, the Point was not one"), LinesSeen, 3);
 
 		if (Splines.Num() == 3)
 		{
@@ -185,12 +187,90 @@ bool FMantlePlaceRoadSplinesLogicTest::RunTest(const FString& Parameters)
 	// --- Fail-closed on structural problems only ----------------------------------------------
 	{
 		TArray<FMantlePlaceRoadSpline> Splines;
+		int32 LinesSeen = 0;
 		FString Error;
 		TestFalse(TEXT("invalid JSON fails"),
-			FLogic::ParseGeoJson(TEXT("not json"), OriginEastingM, OriginNorthingM, Epsg, Splines, Error));
+			FLogic::ParseGeoJson(TEXT("not json"), OriginEastingM, OriginNorthingM, Epsg, Splines, LinesSeen, Error));
 		TestFalse(TEXT("missing features fails"),
 			FLogic::ParseGeoJson(TEXT("{\"type\":\"FeatureCollection\"}"),
-				OriginEastingM, OriginNorthingM, Epsg, Splines, Error));
+				OriginEastingM, OriginNorthingM, Epsg, Splines, LinesSeen, Error));
+	}
+
+	// --- A layer nothing could place is not an empty layer ------------------------------------
+	// The two used to be the same log line. A non-UTM origin makes every point fail projection,
+	// every spline drop to under two points, and the importer report "created (0 spline actor(s))"
+	// -- indistinguishable from an AOI with no roads.
+	{
+		const FString OneRoad = FString::Printf(LR"JSON(
+{ "type": "FeatureCollection", "features": [ {
+  "type": "Feature", "properties": {},
+  "geometry": { "type": "LineString", "coordinates": [[%.14f, %.14f, 0.0], [%.14f, %.14f, 0.0]] }
+} ] }
+)JSON",
+		                                        OriginLonDeg, OriginLatDeg, OriginLonDeg + 0.001, OriginLatDeg);
+		const FString NoRoads = TEXT("{\"type\":\"FeatureCollection\",\"features\":[]}");
+
+		// Refused up front, by name, before any point is projected.
+		constexpr int32 WebMercatorEpsg = 3857;
+		TestFalse(TEXT("3857 is not a UTM zone"), FLogic::IsUtmEpsg(WebMercatorEpsg));
+		TestFalse(TEXT("0 (no georeference block) is not a UTM zone"), FLogic::IsUtmEpsg(0));
+		TestTrue(TEXT("32613 is a north UTM zone"), FLogic::IsUtmEpsg(32613));
+		TestTrue(TEXT("32760 is a south UTM zone"), FLogic::IsUtmEpsg(32760));
+		TestFalse(TEXT("32661 is past the last north zone"), FLogic::IsUtmEpsg(32661));
+
+		TArray<FMantlePlaceRoadSpline> Splines;
+		int32 LinesSeen = 0;
+		FString RefusedError;
+		TestFalse(TEXT("non-UTM origin refuses a layer that has roads"),
+			FLogic::ParseGeoJson(OneRoad, OriginEastingM, OriginNorthingM, WebMercatorEpsg, Splines, LinesSeen, RefusedError));
+		TestTrue(TEXT("the refusal names the EPSG"), RefusedError.Contains(TEXT("3857")));
+		TestTrue(TEXT("the refusal says why: not a UTM zone"), RefusedError.Contains(TEXT("UTM")));
+		TestEqual(TEXT("nothing was seen, nothing was projected"), LinesSeen, 0);
+
+		FString RefusedEmptyError;
+		TestFalse(TEXT("non-UTM origin refuses even an empty layer: the origin is the fault"),
+			FLogic::ParseGeoJson(NoRoads, OriginEastingM, OriginNorthingM, WebMercatorEpsg, Splines, LinesSeen, RefusedEmptyError));
+		TestEqual(TEXT("empty layer refuses with the same reason"), RefusedEmptyError, RefusedError);
+		TestTrue(TEXT("a refusal does not read as 'the layer has no roads'"),
+			!RefusedError.Contains(TEXT("no roads")));
+
+		// An empty layer is a success with zero, and knows it saw nothing.
+		FString EmptyError;
+		int32 EmptySeen = -1;
+		TestTrue(TEXT("empty layer succeeds"),
+			FLogic::ParseGeoJson(NoRoads, OriginEastingM, OriginNorthingM, Epsg, Splines, EmptySeen, EmptyError));
+		TestEqual(TEXT("empty layer: zero splines"), Splines.Num(), 0);
+		TestEqual(TEXT("empty layer: zero lines seen"), EmptySeen, 0);
+
+		// Lines present but none placeable: an out-of-band latitude fails every point, so this is
+		// the same shape a partly-bad layer produces, reached without a non-UTM origin.
+		const FString Unplaceable = TEXT(R"JSON(
+{ "type": "FeatureCollection", "features": [ {
+  "type": "Feature", "properties": {},
+  "geometry": { "type": "LineString", "coordinates": [[0.0, 89.0, 0.0], [0.001, 89.0, 0.0]] }
+} ] }
+)JSON");
+		int32 UnplaceableSeen = -1;
+		FString UnplaceableError;
+		TestTrue(TEXT("a layer with only unplaceable lines is still structurally valid"),
+			FLogic::ParseGeoJson(Unplaceable, OriginEastingM, OriginNorthingM, Epsg, Splines, UnplaceableSeen, UnplaceableError));
+		TestEqual(TEXT("unplaceable: zero splines"), Splines.Num(), 0);
+		TestEqual(TEXT("unplaceable: but the line was seen"), UnplaceableSeen, 1);
+
+		// The two outcomes read differently, and the partial one names both numbers.
+		const FString EmptyLine = FLogic::DescribeOutcome(0, 0);
+		const FString NoneLine = FLogic::DescribeOutcome(4, 0);
+		const FString PartialLine = FLogic::DescribeOutcome(4, 3);
+		const FString AllLine = FLogic::DescribeOutcome(4, 4);
+		TestNotEqual(TEXT("empty and all-unplaceable read differently"), EmptyLine, NoneLine);
+		TestTrue(TEXT("empty says the layer had no roads"), EmptyLine.Contains(TEXT("no road")));
+		TestTrue(TEXT("empty is not a warning"), !EmptyLine.Contains(TEXT("NOT placed")));
+		TestTrue(TEXT("all-unplaceable says NOT placed"), NoneLine.Contains(TEXT("NOT placed")));
+		TestTrue(TEXT("all-unplaceable names how many were present"), NoneLine.Contains(TEXT("4")));
+		TestTrue(TEXT("partial names placed and present"),
+			PartialLine.Contains(TEXT("3")) && PartialLine.Contains(TEXT("4")));
+		TestTrue(TEXT("partial says the rest were dropped"), PartialLine.Contains(TEXT("dropped")));
+		TestTrue(TEXT("all placed reports the created count"), AllLine.Contains(TEXT("created (4")));
 	}
 
 	return true;

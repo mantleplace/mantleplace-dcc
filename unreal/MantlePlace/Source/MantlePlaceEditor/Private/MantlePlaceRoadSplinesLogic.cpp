@@ -54,7 +54,8 @@ void AppendGeometry(
     double OriginEastingM,
     double OriginNorthingM,
     int32 Epsg,
-    TArray<FMantlePlaceRoadSpline>& OutSplines)
+    TArray<FMantlePlaceRoadSpline>& OutSplines,
+    int32& OutLinesSeen)
 {
 	if (!Geometry.IsValid())
 	{
@@ -90,6 +91,7 @@ void AppendGeometry(
 
 	for (const TArray<TSharedPtr<FJsonValue>>* Line : Lines)
 	{
+		++OutLinesSeen;
 		FMantlePlaceRoadSpline Spline = Prototype;
 		for (const TSharedPtr<FJsonValue>& PointValue : *Line)
 		{
@@ -108,17 +110,21 @@ void AppendGeometry(
 }
 }
 
+bool FMantlePlaceRoadSplinesLogic::IsUtmEpsg(int32 Epsg)
+{
+	// UTM EPSG ranges: 32601-32660 (north) / 32701-32760 (south).
+	return (Epsg >= 32601 && Epsg <= 32660) || (Epsg >= 32701 && Epsg <= 32760);
+}
+
 bool FMantlePlaceRoadSplinesLogic::LonLatToUtm(
     double LonDeg, double LatDeg, int32 Epsg, double& OutEastingM, double& OutNorthingM)
 {
-	// UTM EPSG ranges: 32601-32660 (north) / 32701-32760 (south).
-	const bool bNorth = Epsg >= 32601 && Epsg <= 32660;
-	const bool bSouth = Epsg >= 32701 && Epsg <= 32760;
-	if ((!bNorth && !bSouth) || LatDeg < -84.0 || LatDeg > 84.0 || LonDeg < -180.0 || LonDeg > 180.0)
+	const bool bSouth = Epsg >= 32701; // meaningful only past the guard: IsUtmEpsg owns the ranges
+	if (!IsUtmEpsg(Epsg) || LatDeg < -84.0 || LatDeg > 84.0 || LonDeg < -180.0 || LonDeg > 180.0)
 	{
 		return false;
 	}
-	const int32 Zone = Epsg - (bNorth ? 32600 : 32700);
+	const int32 Zone = Epsg - (bSouth ? 32700 : 32600);
 	const double Lon0Rad = FMath::DegreesToRadians(-183.0 + 6.0 * Zone);
 
 	const double LatRad = FMath::DegreesToRadians(LatDeg);
@@ -161,9 +167,20 @@ bool FMantlePlaceRoadSplinesLogic::ParseGeoJson(
     double OriginNorthingM,
     int32 Epsg,
     TArray<FMantlePlaceRoadSpline>& OutSplines,
+    int32& OutLinesSeen,
     FString& OutError)
 {
 	OutSplines.Reset();
+	OutLinesSeen = 0;
+
+	if (!IsUtmEpsg(Epsg))
+	{
+		OutError = FString::Printf(
+		    TEXT("the origin's EPSG:%d is not a UTM zone (32601-32660 or 32701-32760), so road centerlines "
+		         "cannot be projected into the frame; the whole layer is refused rather than dropped point by point."),
+		    Epsg);
+		return false;
+	}
 
 	TSharedPtr<FJsonObject> Root;
 	const TSharedRef<TJsonReader<TCHAR>> Reader = TJsonReaderFactory<TCHAR>::Create(JsonText);
@@ -201,8 +218,31 @@ bool FMantlePlaceRoadSplinesLogic::ParseGeoJson(
 		const TSharedPtr<FJsonObject>* Geometry = nullptr;
 		if (Feature->TryGetObjectField(TEXT("geometry"), Geometry) && Geometry != nullptr)
 		{
-			AppendGeometry(*Geometry, Prototype, OriginEastingM, OriginNorthingM, Epsg, OutSplines);
+			AppendGeometry(*Geometry, Prototype, OriginEastingM, OriginNorthingM, Epsg, OutSplines, OutLinesSeen);
 		}
 	}
 	return true;
+}
+
+FString FMantlePlaceRoadSplinesLogic::DescribeOutcome(int32 LinesSeen, int32 SplinesCreated)
+{
+	if (LinesSeen <= 0)
+	{
+		return TEXT("Road splines: the layer has no roads (0 spline actor(s)).");
+	}
+	if (SplinesCreated <= 0)
+	{
+		return FString::Printf(
+		    TEXT("Road splines NOT placed: the layer has %d road line(s) but none could be placed "
+		         "(each had fewer than two projectable points), so 0 spline actor(s) were created."),
+		    LinesSeen);
+	}
+	if (SplinesCreated < LinesSeen)
+	{
+		return FString::Printf(
+		    TEXT("Road splines created (%d spline actor(s)) from %d road line(s); %d dropped as unplaceable "
+		         "(fewer than two projectable points)."),
+		    SplinesCreated, LinesSeen, LinesSeen - SplinesCreated);
+	}
+	return FString::Printf(TEXT("Road splines created (%d spline actor(s))."), SplinesCreated);
 }
