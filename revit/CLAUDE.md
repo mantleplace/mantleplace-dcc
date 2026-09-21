@@ -19,6 +19,12 @@ root is one level up.
   hosts. Revit 2024 is out of range — .NET Framework 4.8, where `System.Text.Json` is a package.
 - **SDK:** pinned in [`global.json`](./global.json). This is the first thing that bites on a fresh
   machine.
+- **Frame:** Revit is an **order-frame host** (`HPS-54`) — the host frame follows the order's
+  delivery, so the survey point this host applies, and the content placed against it, are stated in
+  the **delivery CRS and its linear unit**, metric or foot. That makes the frame a per-order fact
+  rather than a constant: a file built in the AOI's metric UTM zone for the fixed-frame host — the
+  imagery drape is the one that bites — is not in this host's frame on a delivery tier whose linear
+  unit is the foot, and is skipped with a stated reason (`HPS-53`), never reprojected.
 - **Role:** host #2, and the Host Plugin Standard's debugger. Being maximally unlike Unreal is the
   point — where the four-layer shape does not fit .NET, that is a finding to file against the
   standard, not a thing to quietly work around.
@@ -45,8 +51,10 @@ The ones this tree already turns on:
 | `HPS-14` … `17`       | refresh token via DPAPI, per-OS-user; access token memory-only; no store means memory-only auth, never a less-safe file.                                      |
 | `HPS-18` … `25`, `48` | list → materialize → poll → **re-list** → presign → download; explicit token list, never a scope keyword; one error-body precedence for auth and vault alike. |
 | `HPS-26` … `30`, `44` | write to `.part`, verify, rename; null sha is unknown not absent; eviction only on request.                                                                   |
-| `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers behind roads, site boundaries and land cover. Nothing else here projects.            |
+| `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers behind roads, site boundaries and land cover. Nothing else here projects, and the projection reaches a UTM origin only — on a State Plane origin there is no projection to perform and the layer is skipped. |
 | `HPS-51`              | signing in and out, the vault, the local import, the import window and its checklist, and the about surface take the standard's words. The casing is this host's; the words are not. |
+| `HPS-52`              | placement reads `hosts.revit` first. The terrain points come from that block and are in this frame; the tree points come from the host-neutral `landcover.tree_points` and are in this frame only because the delivery CRS is. |
+| `HPS-53`              | `SiteFrame` is where this rule is decided — `CanPlaceGeographic`, `CanPlaceProjected` — and the refusals are what its tests assert. It judges the layer's **CRS**; the linear unit still travels with the origin rather than being read off the file. |
 
 ## Layout and the split that matters
 

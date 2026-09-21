@@ -17,6 +17,11 @@ root is one level up.
   engine plugin dependency is a new thing a stranger's project has to have enabled.
 - **Modules:** `MantlePlaceRuntime` (Runtime) and `MantlePlaceEditor` (Editor). The version lives in
   the `.uplugin` and nowhere else.
+- **Frame:** Unreal is a **fixed-frame host** (`HPS-54`) — one native unit, so its host frame does
+  not move with the order's unit system. The content made for this host, and the origin it is placed
+  against, are **metric UTM on every order, an imperial one included**: a bundle's delivery CRS is
+  not this host's frame unless it happens to be the AOI's UTM zone, and a file stated on another grid
+  is one this host refuses rather than converts (`HPS-53`, and the open deviations below).
 - **Role:** host #1, and the reference host. Where a rule was written with Unreal in mind, this is
   the tree that shows what it meant — which makes an expedient shortcut here more expensive than the
   same shortcut elsewhere.
@@ -35,6 +40,8 @@ turns on most visibly, and which a patch here is most likely to break:
 | `HPS-33` | manifest values are applied verbatim. A paint layer's name is the platform's material name exactly — never prettified, never prefixed.    |
 | `HPS-46` | the conformance corpus's expectation keys are asserted. A case edited to expect something different turns the suite red.                   |
 | `HPS-51` | the vault panel's auth button, heading and local-import button take the standard's words — the editor's own casing, not its own wording. The words are the standard's table; the casing and the layout are this host's. |
+| `HPS-52` | placement reads the `unreal` block's own pointers first; a host-neutral file is the fallback, never the first reach.                                                                       |
+| `HPS-53` | a file is placed only where its frame can be shown to be this host's metric UTM frame, and a refusal is a **named** skip. Both halves are open deviations here — the tree-point reader does not check the frame, and the road-spline reader drops a refused point without naming it. |
 
 Root `CLAUDE.md`'s boundary section is the one to internalise: **this plugin applies pre-derived
 values and never derives them.** A patch that computes a placement value locally is refused even when
