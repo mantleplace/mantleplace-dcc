@@ -362,6 +362,35 @@ own frame, rather than asking it to convert.
 
 The shared set beside it is unchanged, and no host block points at it.
 
+### 6.6 Tree points, per host
+
+`Landcover/TreePoints.csv` follows the delivered elevation: `x` and `y` are in the delivery CRS and
+`ground_z` is in the delivered elevation's vertical unit, so on a State Plane delivery all three are
+feet, and on a delivery whose region has no projected foot zone the coordinates are metres beside
+foot heights. `height_m` and `crown_radius_m` are metres on every delivery, as their names say.
+From 1.3.0 `landcover.tree_points` states that frame beside the path — `crs`, `units` (the
+`ground_z` column) and `horizontal_units` (`x`, `y`) — so a reader can refuse a file it cannot show
+to be in its frame instead of assuming one. No column is renamed: `x`, `y` and `ground_z` assert no
+unit, and the two that do are honest.
+
+A fixed-frame host reads points in its own frame, and the delivered file is only in that frame on a
+metric delivery. So the bundle carries the trees once per frame a host needs:
+
+- **`hosts.unreal.foliage_points` names only a file in the Unreal frame** — its `crs` is
+  `georeference.crs_projected`, and its `units` and `horizontal_units` are `m`, by schema. On a
+  metric delivery that is `Landcover/TreePoints.csv`, and one file carries both pointers. On any
+  foot delivery it is `Landcover/TreePointsMetric.csv`: the same trees, `x` and `y` reprojected into
+  the metric UTM grid and `ground_z` re-sampled in metres, every other column carried verbatim.
+- The producer chooses between the two by comparing the frames the files state with the host's, and
+  never by the delivery tier. Where neither file is in the Unreal frame — a foot delivery built
+  before 1.3.0, until its next rebuild — the block carries no `foliage_points` at all, rather than a
+  pointer at a foot file.
+- `sha256` and `point_count` on the pointer are the named file's, not the delivered file's; the two
+  files hold the same trees, so `point_count` agrees, and the hashes differ.
+
+What a host does with a tree-point file it cannot show to be in its frame — refuse it, name why, and
+never convert it — is the host standard's (`HPS-52`, `HPS-53`), not this document's.
+
 ## 7. The sidecar manifest
 
 The vault publishes a versioned copy of the manifest beside the zip, so that a listing can show a

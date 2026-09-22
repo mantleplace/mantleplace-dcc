@@ -42,6 +42,14 @@ reads it.
   frame on every delivery, so a State Plane delivery no longer leaves Revit with only a geographic
   set it may not project ([format](format.md) §6.5). `hosts.revit.readiness` gains `vectors`.
 - **`vector.crs`** is new: `EPSG:4326`, stating the frame the shared set has always been in.
+- **`landcover.tree_points` and `hosts.unreal.foliage_points` each state their file's frame** —
+  `crs`, `units` (the `ground_z` column) and `horizontal_units` (`x`, `y`) — and REQUIRE it. The
+  Unreal pointer's units are `m` by schema, and on a foot delivery it names a new file,
+  `Landcover/TreePointsMetric.csv`, the same trees restated in the metric UTM grid; on a metric
+  delivery it still names `Landcover/TreePoints.csv`. Before 1.3.0 it named the delivered file on
+  every delivery, so on a State Plane delivery a reader subtracting its metric origin put every tree
+  a thousand kilometres off site. A foot delivery built before 1.3.0 carries no `foliage_points`
+  until its next rebuild. No column is renamed ([format](format.md) §6.6).
 
 ### 1.2.0 — the foliage type (additive minor; published and frozen 2026-09-19)
 
