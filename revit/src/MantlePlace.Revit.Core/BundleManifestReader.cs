@@ -47,6 +47,12 @@ public static class BundleManifestReader
     internal const string ProjectedFrame = "absolute_projected";
 
     /// <summary>
+    /// What <see cref="BundleArtifact.HorizontalFrame"/> reads on a deliverable whose coordinates are
+    /// east/north offsets about <c>hosts.revit.georeference.origin</c>.
+    /// </summary>
+    internal const string LocalFrame = "local_enu";
+
+    /// <summary>
     /// Deliverable sub-objects of the <c>hosts.revit</c> block — this host's OWN block (HPS-33). Each
     /// is optional, and each present one carries a <c>sha256</c> the schema makes required (HPS-34).
     /// </summary>
@@ -54,8 +60,10 @@ public static class BundleManifestReader
     private const string RevitSurfaceDxf = "surface_dxf";
     private const string RevitIfcSite = "ifc_site";
 
+    private const string RevitDrape = "drape";
+
     private static readonly string[] RevitDeliverableKeys =
-        [RevitToposurfacePoints, RevitSurfaceDxf, RevitIfcSite];
+        [RevitToposurfacePoints, RevitSurfaceDxf, RevitIfcSite, RevitDrape];
 
     /// <summary>
     /// The envelope every host block lives under at MPB 1.0.0. One key replaces the roster: a host
@@ -167,6 +175,8 @@ public static class BundleManifestReader
         ReadTimeZone(manifest, root);
         refusal ??= ReadDelivery(manifest, root);
         ReadReadiness(manifest, root);
+        ReadFileFrame(manifest, root);
+        ReadOwnVectors(manifest, root);
         ReadArtifacts(manifest, root);
         refusal ??= ReadGeoreference(manifest, root);
 
@@ -605,7 +615,113 @@ public static class BundleManifestReader
             ToposurfacePoints = ReadReadinessPath(revit, "toposurface_points"),
             IfcSite = ReadReadinessPath(revit, "ifc_site"),
             SurfaceDxf = ReadReadinessPath(revit, "surface_dxf"),
+            Vectors = ReadReadinessPath(revit, "vectors"),
         };
+    }
+
+    /// <summary>
+    /// <c>hosts.revit.file_frame</c>, as declared. Every field is read verbatim; whether the frame is
+    /// this host's is <see cref="SiteFrame.Holds"/>'s question, asked where a refusal can be asserted.
+    /// </summary>
+    private static void ReadFileFrame(BundleManifest manifest, JsonElement root)
+    {
+        if (RevitHostBlock(root)?.Object("file_frame") is not { } frame)
+        {
+            return;
+        }
+
+        FileFrameKind kind = frame.Str("type") switch
+        {
+            "projected" => FileFrameKind.Projected,
+            "local" => FileFrameKind.Local,
+            _ => FileFrameKind.Unknown,
+        };
+
+        GeoOrigin? origin = null;
+        if (frame.Object("origin") is { } local)
+        {
+            // An unreadable unit leaves the origin with no position rather than a metric guess, so
+            // SiteFrame.Holds refuses it.
+            bool unitRead = TryReadLinearUnit(local.Str("linear_unit"), out LinearUnit unit);
+            origin = new GeoOrigin
+            {
+                Easting = unitRead ? local.OptionalDouble("easting") : null,
+                Northing = unitRead ? local.OptionalDouble("northing") : null,
+                LinearUnit = unit,
+            };
+        }
+
+        manifest.FileFrame = new FileFrame
+        {
+            Kind = kind,
+            Epsg = GeoProjection.TryParseEpsg(frame.OptionalStr(kind == FileFrameKind.Local ? "base_crs" : "crs")),
+            Origin = origin,
+            HorizontalUnit = frame.Str("horizontal_unit"),
+        };
+    }
+
+    /// <summary>
+    /// Replaces the shared vector layers with this host's own copy, on a bundle that verdicts one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The verdict decides, not the copy's presence: a bundle that says <c>vectors</c> is absent has
+    /// told this host there is nothing in its frame, and the shared lon/lat set beside it is the
+    /// fallback the format keeps for bundles cut before the verdict existed (<c>HPS-52</c>,
+    /// <c>spec/format.md</c> §6.5). So on such a bundle every layer the copy lacks is <c>null</c>,
+    /// never the shared one.
+    /// </para>
+    /// <para>
+    /// Each layer's <c>horizontal_frame</c> and <c>units</c> are carried verbatim; the planner decides
+    /// whether this host can place them.
+    /// </para>
+    /// </remarks>
+    private static void ReadOwnVectors(BundleManifest manifest, JsonElement root)
+    {
+        if (!manifest.VectorsFromOwnBlock)
+        {
+            return;
+        }
+
+        JsonElement? layers = RevitHostBlock(root)?.Object("vectors")?.Array("layers");
+
+        manifest.RoadSplines = ReadOwnVectorLayer(layers, "road_splines");
+        manifest.LandUse = ReadOwnVectorLayer(layers, "land_use");
+        manifest.LandCover = ReadOwnVectorLayer(layers, "land_cover");
+        manifest.Water = ReadOwnVectorLayer(layers, "water");
+        manifest.RoadPolygons = ReadOwnVectorLayer(layers, "road_polygons");
+    }
+
+    private static BundleArtifact? ReadOwnVectorLayer(JsonElement? layers, string layerName)
+    {
+        if (layers is not { } array)
+        {
+            return null;
+        }
+
+        foreach (JsonElement layer in array.EnumerateArray())
+        {
+            if (layer.ValueKind != JsonValueKind.Object
+                || !string.Equals(layer.Str("name"), layerName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string path = layer.Str("path");
+            return string.IsNullOrWhiteSpace(path)
+                ? null
+                : new BundleArtifact
+                {
+                    Path = path,
+                    Sha256 = layer.OptionalStr("sha256"),
+                    Format = "geojson",
+                    HorizontalFrame = layer.Str("horizontal_frame"),
+                    Units = layer.Str("units"),
+                    FromOwnBlock = true,
+                };
+        }
+
+        return null;
     }
 
     private static ReadinessPath ReadReadinessPath(JsonElement host, string key)
@@ -764,6 +880,24 @@ public static class BundleManifestReader
 
         manifest.ImageryDrapeExtent = ReadGroundExtent(drape, "extent", "extent_crs");
         manifest.DemBounds = ReadGroundExtent(elevation?.Object("dem"), "bounds_target_crs", "crs");
+
+        // This host's own drape (MPB 1.3.0), in its own frame. Its pointer is the block's own
+        // `path`: the layout table names the fixed-frame drape, which on a State Plane delivery is a
+        // different image.
+        if (RevitHostBlock(root)?.Object("drape") is { } own
+            && own.Str("path") is { Length: > 0 } ownPath)
+        {
+            manifest.RevitDrape = new BundleArtifact
+            {
+                Path = ownPath,
+                Sha256 = own.OptionalStr("sha256"),
+                Format = own.OptionalStr("format"),
+                Units = own.Str("units"),
+                HorizontalFrame = own.OptionalStr("extent_crs"),
+                FromOwnBlock = true,
+            };
+            manifest.RevitDrapeExtent = ReadGroundExtent(own, "extent", "extent_crs");
+        }
     }
 
     /// <summary>
@@ -928,6 +1062,24 @@ public static class BundleManifestReader
                     + "re-cuts the bundle on the current pipeline.",
                     key,
                     manifest.Version);
+            }
+        }
+
+        // MPB 1.3.0's own vector copy makes each layer's hash required the same way.
+        if (revit.Object("vectors")?.Array("layers") is { } layers)
+        {
+            foreach (JsonElement layer in layers.EnumerateArray())
+            {
+                if (layer.ValueKind == JsonValueKind.Object && layer.OptionalStr("sha256") is null)
+                {
+                    return string.Format(
+                        CultureInfo.InvariantCulture,
+                        "hosts.revit.vectors layer \"{0}\" has no sha256, and this bundle's manifest ({1}) is "
+                        + "required to publish one. Re-download this AOI from your vault at mantle.place/vault — "
+                        + "rebuilding it there re-cuts the bundle on the current pipeline.",
+                        layer.Str("name"),
+                        manifest.Version);
+                }
             }
         }
 

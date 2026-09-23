@@ -1,0 +1,185 @@
+{
+  "version": "1.3.0",
+  "location": {
+    "time_zone": {
+      "iana": "America/Denver",
+      "utc_offset_standard_h": -7,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    }
+  },
+  "layout": {
+    "imagery_drape": "Imagery/Drape.png",
+    "tree_points": "Landcover/TreePoints.csv"
+  },
+  "delivery": {
+    "unit_system": "imperial",
+    "tier": "sp_ftus",
+    "horizontal_epsg": 2231,
+    "linear_unit": "ftUS",
+    "label": "NAD83 / Colorado North (ftUS)"
+  },
+  "imagery": {
+    "present": true,
+    "file": "Imagery/Imagery.tif",
+    "gsd_m": 0.6,
+    "units": "ftUS",
+    "drape": {
+      "source": "Imagery/Imagery.tif",
+      "format": "png-rgb-8bit",
+      "extent": [
+        470985.4,
+        4256592.8,
+        472204.6,
+        4257507.2
+      ],
+      "extent_crs": "EPSG:32613",
+      "effective_gsd_m": 0.6,
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  },
+  "landcover": {
+    "tree_points": {
+      "path": "Landcover/TreePoints.csv",
+      "crs": "EPSG:2231",
+      "units": "ftUS",
+      "horizontal_units": "ftUS",
+      "point_count": 2,
+      "min_height_m": 3,
+      "columns": [
+        "x",
+        "y",
+        "ground_z",
+        "height_m",
+        "crown_radius_m",
+        "foliage_type"
+      ],
+      "foliage_type_vocabulary": "1"
+    }
+  },
+  "vector": {
+    "crs": "EPSG:4326",
+    "layers": [
+      {
+        "name": "road_splines",
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/RoadSplines.geojson",
+            "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          }
+        ]
+      }
+    ]
+  },
+  "job_id": "revit-own-frame",
+  "order_id": "ord-revit-own-frame-1",
+  "hosts": {
+    "unreal": {
+      "engine_min_version": "5.7",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "origin": {
+          "lon": -105.32557885004304,
+          "lat": 38.46130517000308,
+          "utm": {
+            "epsg": 32613,
+            "easting_m": 471595.0,
+            "northing_m": 4257050.0
+          },
+          "ground_orthometric_h_m": 2034.5
+        },
+        "planet_shape": "Flat",
+        "is_projected": true
+      },
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:32613",
+        "horizontal_unit": "m",
+        "vertical_unit": "m"
+      },
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb",
+        "up_axis": "y",
+        "nanite_recommended": true,
+        "note": "First-class terrain option; import via Interchange glTF (Y-up->Z-up auto).",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    },
+    "revit": {
+      "host_min_version": "2025",
+      "units_note": "Apply georeference.origin verbatim as the survey point; every artifact's Z is absolute orthometric height.",
+      "georeference": {
+        "crs_projected": "EPSG:2231",
+        "crs_geographic": "EPSG:4326",
+        "vertical_datum": "NAVD88-orthometric",
+        "grid_rotation_deg": 0.0,
+        "is_projected": true,
+        "origin": {
+          "lon": -105.32557885004304,
+          "lat": 38.46130517000308,
+          "projected": {
+            "epsg": 2231,
+            "easting": 1450131.2,
+            "northing": 13171825.6,
+            "linear_unit": "ftUS"
+          }
+        }
+      },
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:2231",
+        "horizontal_unit": "ftUS",
+        "vertical_unit": "ftUS"
+      },
+      "vectors": {
+        "format": "geojson",
+        "layers": [
+          {
+            "name": "road_splines",
+            "path": "Site/Vector/RoadSplines.geojson",
+            "horizontal_frame": "absolute_projected",
+            "units": "ftUS",
+            "vertical_reference": "absolute",
+            "feature_count": 1,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      "drape": {
+        "path": "Imagery/Drape.StatePlane.png",
+        "format": "png-rgb-8bit",
+        "extent": [
+          1448131.2,
+          13170325.6,
+          1452131.2,
+          13173325.6
+        ],
+        "extent_crs": "EPSG:2231",
+        "units": "ftUS",
+        "width": 2032,
+        "height": 1524,
+        "effective_gsd_m": 0.6,
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "readiness": {
+        "toposurface_points": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "ifc_site": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "surface_dxf": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "vectors": {
+          "present": true
+        }
+      }
+    }
+  }
+}

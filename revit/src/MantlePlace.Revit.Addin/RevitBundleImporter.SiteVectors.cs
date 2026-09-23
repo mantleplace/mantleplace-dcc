@@ -15,7 +15,9 @@ internal sealed partial class RevitBundleImporter
     /// <returns><c>null</c> when there is nothing to build.</returns>
     private IReadOnlyList<SiteFeature>? ReadVectorLayer(ImportStep step, SiteGeometryKinds accept, string label)
     {
-        if (step.Frame is not { } frame)
+        // The planner states the route for every vector step it plans: lon/lat for the shared set,
+        // subtraction or offsets for this host's own copy.
+        if (step.Frame is not { } frame || step.Layer is not { } layer)
         {
             return null;
         }
@@ -24,6 +26,7 @@ internal sealed partial class RevitBundleImporter
         string? parseError = SiteVectorReader.TryParse(
             File.ReadAllText(path),
             frame,
+            layer,
             accept,
             label,
             out IReadOnlyList<SiteFeature> features);

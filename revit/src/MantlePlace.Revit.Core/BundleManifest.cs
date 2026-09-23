@@ -86,6 +86,13 @@ public sealed class BundleArtifact
     /// coordinates are metres beside foot heights (<c>spec/format.md</c> §6.6).
     /// </remarks>
     public string? HorizontalUnits { get; init; }
+
+    /// <summary>
+    /// True for a file this host's own block points at in this host's frame — <c>hosts.revit.vectors</c>
+    /// and <c>hosts.revit.drape</c> — whose <see cref="HorizontalFrame"/> is <c>absolute_projected</c>
+    /// or <c>local_enu</c> rather than a CRS.
+    /// </summary>
+    public bool FromOwnBlock { get; init; }
 }
 
 /// <summary>One <c>hosts.&lt;hostId&gt;.readiness.&lt;path&gt;</c> entry.</summary>
@@ -113,8 +120,50 @@ public sealed class RevitReadiness
 
     public ReadinessPath SurfaceDxf { get; init; } = new();
 
+    /// <summary>
+    /// Whether <c>hosts.revit.vectors</c> shipped. MPB 1.3.0 made the verdict required, so an
+    /// undeclared one marks a bundle cut before this host had a copy of its own.
+    /// </summary>
+    public ReadinessPath Vectors { get; init; } = new();
+
     /// <summary>True when <c>hosts.revit.readiness</c> was present at all.</summary>
     public bool Declared { get; init; }
+}
+
+/// <summary>The two shapes a <c>hosts.&lt;hostId&gt;.file_frame</c> takes, plus the one it may grow.</summary>
+public enum FileFrameKind
+{
+    /// <summary>A type this reader does not know. Fails closed: a frame it cannot read is a file it cannot place.</summary>
+    Unknown,
+
+    /// <summary>The files' coordinates are in the named CRS.</summary>
+    Projected,
+
+    /// <summary>The files are offsets about an origin that is part of the frame's identity.</summary>
+    Local,
+}
+
+/// <summary>
+/// <c>hosts.revit.file_frame</c> (MPB 1.3.0): the frame every file this host's block points at shares,
+/// as declared — never inferred (<c>spec/format.md</c> §4.2).
+/// </summary>
+/// <remarks>
+/// It describes the FILES. The survey point keeps its own unit, and on a local grid the two differ:
+/// the origin is metres and the files are feet. So the unit here is compared with each file's own
+/// <c>units</c> and never substituted for the origin's.
+/// </remarks>
+public sealed class FileFrame
+{
+    public FileFrameKind Kind { get; init; }
+
+    /// <summary><c>crs</c> for a projected frame, <c>base_crs</c> for a local one; <c>null</c> when unstated or unreadable.</summary>
+    public int? Epsg { get; init; }
+
+    /// <summary>A local frame's <c>origin</c>, in the unit it states; <c>null</c> for a projected frame.</summary>
+    public GeoOrigin? Origin { get; init; }
+
+    /// <summary>Raw <c>horizontal_unit</c>, as published.</summary>
+    public string HorizontalUnit { get; init; } = string.Empty;
 }
 
 /// <summary>A pre-derived geographic origin, applied verbatim and never re-derived (HPS-33).</summary>
@@ -363,40 +412,57 @@ public sealed class BundleManifest
     public bool HasRoadSplines { get; internal set; }
 
     /// <summary>
-    /// The same <c>road_splines</c> geojson as an artifact the planner can resolve — Forma's "Roads"
-    /// row.
+    /// The <c>road_splines</c> this host places, as an artifact the planner can resolve — Forma's
+    /// "Roads" row.
     /// </summary>
     /// <remarks>
-    /// The three flat members above are what the shared corpus asserts, and they stay: the corpus
-    /// pins layer selection (name AND format, no fallback to a format this host cannot read), which
-    /// is a contract fact every host shares. This is the same pointer shaped like every other
-    /// artifact so one planner path can handle it.
+    /// <para>
+    /// The three flat members above are what the shared corpus asserts, and they stay the shared
+    /// set's: the corpus pins layer selection (name AND format, no fallback to a format this host
+    /// cannot read), which is a contract fact every host shares.
+    /// </para>
+    /// <para>
+    /// This one, and the four layers below, come from this host's own block first (<c>HPS-52</c>).
+    /// A bundle that verdicts <c>hosts.revit.readiness.vectors</c> — every MPB 1.3.0 bundle — is
+    /// placed from <c>hosts.revit.vectors</c> alone, in this host's own frame, on every delivery; a
+    /// layer that copy lacks had no features in the area (<c>spec/format.md</c> §6.5). Only a bundle
+    /// cut before the verdict existed falls back to the shared lon/lat set.
+    /// </para>
     /// </remarks>
     public BundleArtifact? RoadSplines { get; internal set; }
 
     /// <summary>
-    /// <c>vector.layers[name=="land_use"]</c> geojson — Forma's "Site limits / property boundaries"
-    /// row.
+    /// The <c>land_use</c> layer this host places — Forma's "Site limits / property boundaries" row.
+    /// Chosen as <see cref="RoadSplines"/> is.
     /// </summary>
     public BundleArtifact? LandUse { get; internal set; }
 
     /// <summary>
-    /// <c>vector.layers[name=="land_cover"]</c> geojson — the physical ground cover, whose
+    /// The <c>land_cover</c> layer this host places — the physical ground cover, whose
     /// <c>subtype</c> names the renderer keyword a subdivision's material carries.
     /// </summary>
     public BundleArtifact? LandCover { get; internal set; }
 
     /// <summary>
-    /// <c>vector.layers[name=="water"]</c> geojson — streams as centrelines and water bodies as
-    /// polygons in one layer. Only its polygons become subdivisions.
+    /// The <c>water</c> layer this host places — streams as centrelines and water bodies as polygons
+    /// in one layer. Only its polygons become subdivisions.
     /// </summary>
     public BundleArtifact? Water { get; internal set; }
 
     /// <summary>
-    /// <c>vector.layers[name=="road_polygons"]</c> geojson — the road surfaces derived from
+    /// The <c>road_polygons</c> layer this host places — the road surfaces derived from
     /// <c>road</c>, already widened, merged per class and cut so no two overlap.
     /// </summary>
     public BundleArtifact? RoadPolygons { get; internal set; }
+
+    /// <summary>
+    /// True when the vector layers above come from <c>hosts.revit.vectors</c> rather than the
+    /// shared set — that is, when the bundle verdicts the copy at all, present or not.
+    /// </summary>
+    public bool VectorsFromOwnBlock => Readiness.Vectors.Declared;
+
+    /// <summary><c>hosts.revit.file_frame</c>, or <c>null</c> on a bundle cut before MPB 1.3.0.</summary>
+    public FileFrame? FileFrame { get; internal set; }
 
     /// <summary>
     /// Whether the bundle carries the base <c>road</c> layer at all, in any format.
@@ -481,6 +547,20 @@ public sealed class BundleManifest
     /// against the drape's own pixel grid before using it and refuses when it cannot.
     /// </remarks>
     public GroundExtent? DemBounds { get; internal set; }
+
+    /// <summary>
+    /// <c>hosts.revit.drape</c> (MPB 1.3.0) — the drape in this host's own frame, which the planner
+    /// reaches for before <see cref="ImageryDrape"/> (<c>HPS-52</c>). <see cref="BundleArtifact.Units"/>
+    /// is its extent's unit.
+    /// </summary>
+    /// <remarks>
+    /// On a State Plane delivery it names an image baked on the State Plane grid; where the delivery
+    /// grid is already the metric UTM grid it names the shared image (<c>spec/format.md</c> §6.4).
+    /// </remarks>
+    public BundleArtifact? RevitDrape { get; internal set; }
+
+    /// <summary><c>hosts.revit.drape.extent</c> in its <c>extent_crs</c>, or <c>null</c> when unreadable.</summary>
+    public GroundExtent? RevitDrapeExtent { get; internal set; }
 
     /// <summary>
     /// <c>imagery.gsd_m</c> — the imagery's ground sample distance in METRES, or <c>null</c> when

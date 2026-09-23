@@ -1122,18 +1122,20 @@ This already decides live paths rather than a future one. Revit's terrain points
 block, are in its frame on every tier, and import on every tier. Its tree points come from a
 **host-neutral** pointer that happens to be in the delivery CRS — so they land correctly on the
 order-frame host and the same family does not on the fixed-frame host, which is the coincidence this
-ordering exists to stop a host relying on. The imagery drape and the `vector` layers are what no host
-block carries a host-frame copy of yet, which is why those are the ones that fall to `HPS-45` and are
-skipped where it cannot reach.
+ordering exists to stop a host relying on. The imagery drape and the `vector` layers were the gap
+until MPB 1.3.0 gave Revit's block a copy of each in its own frame; Revit places those first on every
+tier, and the host-neutral drape and the `HPS-45` projection remain only for a bundle cut before its
+block carried them.
 
 **A pointer sitting in the host block is not itself the showing `HPS-53` asks for.** A block that
 points at content in some other frame is a format defect, and the host still refuses the file by
 name rather than placing it on the strength of where the pointer was found.
 
-_Enforcer:_ `agent-review`. **No corpus case covers this yet, and none is named here** — one needs a
-bundle whose host block points at host-frame content beside a host-neutral copy of the same content
-in another frame, and the format does not publish that pair on every tier yet. A case named before it
-exists is the dangling reference this document was written to stop.
+_Enforcer:_ `agent-review`, and for the Revit host the corpus case
+`manifest.revitOwnFramePointers`: a State Plane bundle whose block points at host-frame vector and
+drape copies beside host-neutral copies of the same content in another frame, with the pointers the
+host takes expected to be its own block's. It carries `appliesTo` for that host, because the pair it
+states is that block's; a case for the fixed-frame host's own pointers is that host's to add.
 
 ⛔ **`HPS-53` — A host places a file only where it can show the file's frame is its host frame, and
 otherwise refuses that file by name.** Read the frame from the thing you are placing — never from the
@@ -1169,11 +1171,13 @@ because a producer can state a frame wrongly. Comparing two published numbers de
 value, so the thin-client boundary is intact.
 
 _Enforcer:_ `automation-test` per host, wherever the host has moved the decision into a pure core —
-Revit's `SiteFrame` (`CanPlaceGeographic`, `CanPlaceProjected`) is the furthest any host has taken
-it, and it decides the CRS half only — plus `agent-review` for the rest. Two corpus cases pin it, both
-carrying `appliesTo` for the fixed-frame host, because the pointer and the extent they read are
-that host's block's. `manifest.treePointsFrame` pins the **extent substitute**: a tree-point file in
-a foot frame beside a metric origin, under a pointer that states no frame, refused by name.
+Revit's `SiteFrame` is the furthest any host has taken it: `CanPlaceGeographic` and
+`CanPlaceProjected` decide the CRS half, and `IsInOriginUnit` and `Holds` — whether the host block's
+declared `file_frame` is the origin's frame — decide the unit half for the files its own block points
+at — plus `agent-review` for the rest. Two corpus cases pin it, both carrying `appliesTo` for the
+fixed-frame host, because the pointer and the extent they read are that host's block's.
+`manifest.treePointsFrame` pins the **extent substitute**: a tree-point file in a foot frame beside a
+metric origin, under a pointer that states no frame, refused by name.
 `manifest.treePointsStatedFrame` pins the **stated** frame: a CRS and both units read beside the
 pointer, a file refused because they are not the host's or are not all there, and the extent still
 refusing rows that contradict a frame stated as the host's.

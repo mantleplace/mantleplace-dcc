@@ -75,15 +75,16 @@ public sealed class SiteFeature
 }
 
 /// <summary>
-/// Parses a bundle <c>vector</c> GeoJSON layer into features placed in a <see cref="SiteFrame"/>.
-/// Pure.
+/// Parses a bundle GeoJSON vector layer into features placed in a <see cref="SiteFrame"/>. Pure.
 /// </summary>
 /// <remarks>
 /// <para>
-/// RFC 7946 fixes the coordinate reference system at WGS84 lon/lat, which is what the bundle's
-/// layers ship (<c>"crs": … CRS84</c>), so every position goes through <see cref="SiteFrame"/>'s
-/// one permitted forward projection (<c>HPS-45</c>). Nothing here decides WHICH layer is read — the
-/// path comes from a manifest pointer and the planner picks it (<c>HPS-32</c>).
+/// A layer reaches the frame by one of the routes a <see cref="LayerFrame"/> names. The shared
+/// <c>vector</c> set is WGS84 lon/lat, as RFC 7946 fixes it, so every position goes through the one
+/// permitted forward projection (<c>HPS-45</c>). This host's own copy, <c>hosts.revit.vectors</c>, is
+/// already in this host's frame — absolute in the origin's CRS, or offsets about it — and is placed
+/// by subtraction and scaling alone (<c>spec/format.md</c> §6.5). Nothing here decides WHICH layer
+/// is read, or by which route — the planner does, from the manifest (<c>HPS-32</c>).
 /// </para>
 /// <para>
 /// One malformed feature is dropped and the layer survives; malformed JSON, or a document with no
@@ -100,11 +101,22 @@ public static class SiteVectorReader
     /// <summary>Fewest vertices a closed ring needs once its repeated closing position is dropped.</summary>
     public const int MinimumRingVertices = 3;
 
+    /// <summary>Parses a lon/lat layer of the shared <c>vector</c> set.</summary>
+    /// <inheritdoc cref="TryParse(string, SiteFrame, LayerFrame, SiteGeometryKinds, string, out IReadOnlyList{SiteFeature})"/>
+    public static string? TryParse(
+        string geoJsonText,
+        SiteFrame frame,
+        SiteGeometryKinds accept,
+        string label,
+        out IReadOnlyList<SiteFeature> features)
+        => TryParse(geoJsonText, frame, LayerFrame.Geographic, accept, label, out features);
+
     /// <summary>
     /// Parses a layer.
     /// </summary>
     /// <param name="geoJsonText">The layer file's text.</param>
     /// <param name="frame">The frame to place vertices in.</param>
+    /// <param name="layer">What the file's coordinates are, and the unit they and any Z are in.</param>
     /// <param name="accept">Which geometries to take.</param>
     /// <param name="label">What to call the layer in a failure message, in the user's words.</param>
     /// <param name="features">The parsed features; empty on failure.</param>
@@ -112,11 +124,13 @@ public static class SiteVectorReader
     public static string? TryParse(
         string geoJsonText,
         SiteFrame frame,
+        LayerFrame layer,
         SiteGeometryKinds accept,
         string label,
         out IReadOnlyList<SiteFeature> features)
     {
         ArgumentNullException.ThrowIfNull(frame);
+        Placement placement = new(frame, layer);
 
         List<SiteFeature> parsed = [];
         features = parsed;
@@ -147,7 +161,7 @@ public static class SiteVectorReader
                     continue;
                 }
 
-                AppendFeature(feature, frame, accept, parsed, ref polygons);
+                AppendFeature(feature, placement, accept, parsed, ref polygons);
             }
         }
 
@@ -156,7 +170,7 @@ public static class SiteVectorReader
 
     private static void AppendFeature(
         JsonElement feature,
-        SiteFrame frame,
+        Placement placement,
         SiteGeometryKinds accept,
         List<SiteFeature> parsed,
         ref int polygons)
@@ -194,7 +208,7 @@ public static class SiteVectorReader
         switch (type)
         {
             case "LineString":
-                AppendPath(coordinates, frame, closed: false, isHole: false, polygon: 0, carried, parsed);
+                AppendPath(coordinates, placement, closed: false, isHole: false, polygon: 0, carried, parsed);
                 break;
 
             case "MultiLineString":
@@ -202,14 +216,14 @@ public static class SiteVectorReader
                 {
                     if (path.ValueKind == JsonValueKind.Array)
                     {
-                        AppendPath(path, frame, closed: false, isHole: false, polygon: 0, carried, parsed);
+                        AppendPath(path, placement, closed: false, isHole: false, polygon: 0, carried, parsed);
                     }
                 }
 
                 break;
 
             case "Polygon":
-                AppendRings(coordinates, frame, carried, parsed, ++polygons);
+                AppendRings(coordinates, placement, carried, parsed, ++polygons);
                 break;
 
             case "MultiPolygon":
@@ -217,7 +231,7 @@ public static class SiteVectorReader
                 {
                     if (polygon.ValueKind == JsonValueKind.Array)
                     {
-                        AppendRings(polygon, frame, carried, parsed, ++polygons);
+                        AppendRings(polygon, placement, carried, parsed, ++polygons);
                     }
                 }
 
@@ -235,7 +249,7 @@ public static class SiteVectorReader
     /// </summary>
     private static void AppendRings(
         JsonElement polygon,
-        SiteFrame frame,
+        Placement placement,
         FeatureProperties carried,
         List<SiteFeature> parsed,
         int ordinal)
@@ -245,7 +259,7 @@ public static class SiteVectorReader
         {
             if (path.ValueKind == JsonValueKind.Array)
             {
-                AppendPath(path, frame, closed: true, isHole: ring > 0, ordinal, carried, parsed);
+                AppendPath(path, placement, closed: true, isHole: ring > 0, ordinal, carried, parsed);
             }
 
             ring++;
@@ -254,7 +268,7 @@ public static class SiteVectorReader
 
     private static void AppendPath(
         JsonElement path,
-        SiteFrame frame,
+        Placement placement,
         bool closed,
         bool isHole,
         int polygon,
@@ -264,7 +278,7 @@ public static class SiteVectorReader
         List<SiteVertex> vertices = [];
         foreach (JsonElement position in path.EnumerateArray())
         {
-            if (TryReadPosition(position, frame, out SiteVertex vertex))
+            if (TryReadPosition(position, placement, out SiteVertex vertex))
             {
                 vertices.Add(vertex);
             }
@@ -310,7 +324,7 @@ public static class SiteVectorReader
         double? WidthM,
         string Subtype);
 
-    private static bool TryReadPosition(JsonElement position, SiteFrame frame, out SiteVertex vertex)
+    private static bool TryReadPosition(JsonElement position, Placement placement, out SiteVertex vertex)
     {
         vertex = default;
 
@@ -319,8 +333,8 @@ public static class SiteVectorReader
             return false;
         }
 
-        double? lon = null;
-        double? lat = null;
+        double? first = null;
+        double? second = null;
         double? elevation = null;
 
         int ordinal = 0;
@@ -334,10 +348,10 @@ public static class SiteVectorReader
             switch (ordinal)
             {
                 case 0:
-                    lon = number;
+                    first = number;
                     break;
                 case 1:
-                    lat = number;
+                    second = number;
                     break;
                 case 2:
                     elevation = number;
@@ -349,16 +363,23 @@ public static class SiteVectorReader
             ordinal++;
         }
 
-        if (lon is not { } lonDeg
-            || lat is not { } latDeg
-            || !frame.TryProjectToLocalMetres(lonDeg, latDeg, out double east, out double north))
+        // Lon then lat on the shared set, easting then northing on this host's own copy: GeoJSON
+        // orders a position x first whatever its frame.
+        if (first is not { } x
+            || second is not { } y
+            || !placement.Frame.TryPlace(placement.Layer, x, y, out double east, out double north))
         {
             return false;
         }
 
-        vertex = new SiteVertex(east, north, elevation);
+        // A Z is real orthometric height in the file's own unit, never an offset (spec/format.md
+        // §6.5); the shared set's is metres.
+        vertex = new SiteVertex(east, north, elevation * LinearUnits.MetresPerUnit(placement.Layer.Unit));
         return true;
     }
+
+    /// <summary>The frame a layer is placed in, and the route its coordinates take into it.</summary>
+    private readonly record struct Placement(SiteFrame Frame, LayerFrame Layer);
 
     /// <summary>
     /// Whether two vertices are the same position in plan, at the tolerance a closing repetition

@@ -799,13 +799,30 @@
       "group": "manifest",
       "file": "manifest/host-frames-ignored.json",
       "expect": "accept",
-      "reason": "MPB 1.3.0 adds keys and removes none: `delivery.label`, `vector.crs`, a `hosts.<hostId>.file_frame` beside each host's `georeference`, `hosts.revit.vectors` and `hosts.revit.drape` with `hosts.revit.readiness.vectors`, and `crs`/`units`/`horizontal_units` on both tree-point pointers, which the schema now REQUIRES there (`landcover.tree_points.crs` was optional before, and the Revit reader already read it; `units` and `horizontal_units` are new on both). No registered host reads any of the new members yet. The fixture is versioned 1.3.0 and carries every one of them, each in the shape the 1.3.0 schema gives it: `delivery.label`, `vector.crs`, the three frame members on both tree-point pointers, and on each host block a projected `file_frame` beside its `georeference` -- the Unreal block with its mesh and foliage pointers, the Revit block with `vectors`, `drape` and a `readiness` that verdicts `vectors` -- plus the `location` block and six-name `columns` a 1.2.0-or-later manifest must have. A reader MUST accept it and still read everything around the new keys. Two readers fail here while every earlier case stays green: one that gates the version on equality with its floor or with the last minor it saw, and one that refuses a member it does not recognise inside a block it does read -- `file_frame` sits inside each host's own block, `label` inside `delivery`, `units` inside `landcover.tree_points`, and each reader walks at least one of those. Either turns an additive minor into a breaking release (compatibility.md). What a reader does WITH a file frame -- refusing a file whose declared frame is not its block's -- is HPS-53's business and a later case's, not this one's. Host-invariant on purpose: ignoring a key nobody has taught you is every reader's obligation, not one host's.",
+      "reason": "MPB 1.3.0 adds keys and removes none: `delivery.label`, `vector.crs`, a `hosts.<hostId>.file_frame` beside each host's `georeference`, `hosts.revit.vectors` and `hosts.revit.drape` with `hosts.revit.readiness.vectors`, and `crs`/`units`/`horizontal_units` on both tree-point pointers, which the schema now REQUIRES there (`landcover.tree_points.crs` was optional before, and the Revit reader already read it; `units` and `horizontal_units` are new on both). What any host does with the members is other cases' business: the Revit host's own vector and drape pointers are manifest.revitOwnFramePointers'. The fixture is versioned 1.3.0 and carries every one of them, each in the shape the 1.3.0 schema gives it: `delivery.label`, `vector.crs`, the three frame members on both tree-point pointers, and on each host block a projected `file_frame` beside its `georeference` -- the Unreal block with its mesh and foliage pointers, the Revit block with `vectors`, `drape` and a `readiness` that verdicts `vectors` -- plus the `location` block and six-name `columns` a 1.2.0-or-later manifest must have. A reader MUST accept it and still read everything around the new keys. Two readers fail here while every earlier case stays green: one that gates the version on equality with its floor or with the last minor it saw, and one that refuses a member it does not recognise inside a block it does read -- `file_frame` sits inside each host's own block, `label` inside `delivery`, `units` inside `landcover.tree_points`, and each reader walks at least one of those. Either turns an additive minor into a breaking release (compatibility.md). What a reader does WITH a file frame -- refusing a file whose declared frame is not its block's -- is HPS-53's business and a later case's, not this one's. Host-invariant on purpose: ignoring a key nobody has taught you is every reader's obligation, not one host's.",
       "manifestVersion": "1.3.0",
       "expectations": {
         "jobId": "host-frames",
         "orderId": "ord-host-frames-1",
         "roadSplinesPath": "Vector/RoadSplines.geojson",
         "roadSplinesSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    },
+    {
+      "id": "manifest.revitOwnFramePointers",
+      "group": "manifest",
+      "file": "manifest/revit-own-frame-pointers.json",
+      "expect": "accept",
+      "manifestVersion": "1.3.0",
+      "appliesTo": "revit",
+      "reason": "HPS-52 for the Revit host: it places from its own block first. The fixture is a State Plane delivery (sp_ftus, EPSG:2231, US survey feet) that carries each thing twice, once per frame (format.md §6.4, §6.5): the shared `vector` set in lon/lat beside `hosts.revit.vectors` in the delivery CRS, and the shared `imagery.drape` on the metric UTM grid beside `hosts.revit.drape` on the State Plane grid. The shared selection is asserted unchanged (roadSplinesPath and roadSplinesSha256 are the host-invariant layer-selection facts every host shares), and the pointers this host takes are asserted to be its own block's: a reader that reaches for the shared copy first reports `Vector/RoadSplines.geojson` and `Imagery/Drape.png` here, and on a real State Plane bundle places nothing, because neither shared copy is in the Revit origin's frame. Revit-scoped because the pair is: the Unreal host's own copies are a different set (`hosts.unreal.imagery_drape`, `hosts.unreal.foliage_points`), and asserting them is that host's case. What the planner does with a pointer whose declared frame is not this host's -- refuse it by name (HPS-53) -- is host-local and asserted in the Revit suite, not here.",
+      "expectations": {
+        "jobId": "revit-own-frame",
+        "orderId": "ord-revit-own-frame-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "revitRoadSplinesPath": "Site/Vector/RoadSplines.geojson",
+        "revitDrapePath": "Imagery/Drape.StatePlane.png"
       }
     },
     {

@@ -186,6 +186,9 @@
     "manifest.revitBlockIgnored": [
       "unreal"
     ],
+    "manifest.revitOwnFramePointers": [
+      "revit"
+    ],
     "manifest.revitOwnGeoreference": [
       "revit"
     ],
