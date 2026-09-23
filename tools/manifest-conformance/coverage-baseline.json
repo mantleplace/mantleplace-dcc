@@ -91,6 +91,10 @@
     "manifest.heightmapMissingSha": [
       "unreal"
     ],
+    "manifest.hostFramesIgnored": [
+      "revit",
+      "unreal"
+    ],
     "manifest.locationBlockIgnored": [
       "revit",
       "unreal"
