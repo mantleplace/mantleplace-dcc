@@ -176,7 +176,7 @@ internal static class RibbonImagery
 
     /// <summary>Revit's current UI theme, as the pure core spells it.</summary>
     /// <remarks>
-    /// <c>UIThemeManager</c> has existed since Revit 2024, so the 2025 floor covers 2025, 2026 and
+    /// <c>UIThemeManager</c> has existed since Revit 2024, so the 2025 compile target covers 2025, 2026 and
     /// 2027 with one code path and no version check.
     /// </remarks>
     internal static RibbonTheme CurrentTheme()

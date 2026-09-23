@@ -17,6 +17,10 @@ root is one level up.
   compile time: a `net8.0` project referencing Revit _2027_'s `RevitAPI.dll` errors with
   **`CS1705`**. So `RevitApiDir` is what pins the supported range, and raising it silently drops
   hosts. Revit 2024 is out of range — .NET Framework 4.8, where `System.Text.Json` is a package.
+  What the compile target forbids is a **member** absent from 2025's API, by reflection or
+  otherwise. A 2025 member whose element shape or accepted values differ in 2026 and later may be
+  used when the element is asked what it accepts (`SubDivisionMaterial`); a branch on the version
+  number may not. Here *floor* means the oldest supported manifest version, never this.
 - **SDK:** pinned in [`global.json`](./global.json). This is the first thing that bites on a fresh
   machine.
 - **Frame:** Revit is an **order-frame host** (`HPS-54`) — the host frame follows the order's
@@ -81,7 +85,7 @@ test a real enforcer for ⛔`HPS-26`. Reach for `Addin` only when the code needs
 
 `Core` and `Client` are `net8.0` rather than `net10.0` for two reasons: Revit 2025 and 2026 run on
 .NET 8, and the next .NET host to land extracts its shared code **from this shipped code**
-(`HPS-43`). Do not raise the floor without a reason.
+(`HPS-43`). Do not raise the target framework without a reason.
 
 The suite multi-targets `net8.0;net10.0` and CI runs both. Supporting three Revit versions from one
 build is a forward-compatibility bet, and running the suite on both runtimes is the cheapest honest
@@ -169,7 +173,7 @@ follow.
   was never written. Reflection tells you a member exists; only the compiler tells you how it is
   shaped, and `GetMembers()` will happily list a static method as though it were an instance one.
   Treat their behaviour as unverified until a real import proves it — and note that `Toposolid`
-  itself is Revit 2024+, so the 2025 floor is also the floor for the topo path. There is a way to
+  itself is Revit 2024+, so the 2025 compile target also bounds the topo path. There is a way to
   drive them without a human: set `MANTLEPLACE_BUNDLE_ZIP` and the import command skips its file
   picker, so a journal or a test script can run it unattended (`LocalBundleSource`).
 - **The ribbon is in that set too, and it has no unattended path at all.** The Account split button
