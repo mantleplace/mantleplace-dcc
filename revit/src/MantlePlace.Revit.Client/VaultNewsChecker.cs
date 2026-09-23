@@ -88,6 +88,13 @@ public sealed class VaultNewsChecker
     /// <summary>Raised with the unannounced orders one listing found, already claimed for this process.</summary>
     public event EventHandler<IReadOnlyList<VaultBundle>>? Arrived;
 
+    /// <summary>
+    /// Raised with every listing that succeeded, after <see cref="Arrived"/>, so that other work that
+    /// needs the vault's state reads this listing rather than making a request of its own
+    /// (<see cref="PrepareRejoiner"/>).
+    /// </summary>
+    public event EventHandler<VaultListing>? Listed;
+
     /// <summary>How long between two background listings.</summary>
     public TimeSpan Interval { get; }
 
@@ -126,6 +133,8 @@ public sealed class VaultNewsChecker
             {
                 Arrived?.Invoke(this, news.Arrivals);
             }
+
+            Listed?.Invoke(this, listing);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

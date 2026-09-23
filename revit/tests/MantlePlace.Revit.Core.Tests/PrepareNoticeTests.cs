@@ -61,6 +61,11 @@ internal static class PrepareNoticeTests
             run.True(PrepareNotices.For(Order, Label, PrepareEnding.Cancelled, string.Empty, vaultOpen: false, signedIn: true) is null, "cancelled");
         });
 
+        run.Case("an interruption is never announced: nothing has ended, and the re-join tells the ending", () =>
+        {
+            run.True(PrepareNotices.For(Order, Label, PrepareEnding.Interrupted, "The platform is unavailable.", vaultOpen: false, signedIn: true) is null, "interrupted");
+        });
+
         run.Case("while the vault is open, the vault is the notice", () =>
         {
             foreach (PrepareEnding ending in Enum.GetValues<PrepareEnding>())

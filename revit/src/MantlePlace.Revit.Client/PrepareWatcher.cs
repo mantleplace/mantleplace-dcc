@@ -96,17 +96,26 @@ public sealed class PrepareRun
 {
     private readonly CancellationTokenSource _cancel = new();
     private volatile string _lastMessage;
+    private volatile bool _interrupted;
 
-    internal PrepareRun(VaultBundle bundle)
+    internal PrepareRun(VaultBundle bundle, DateTimeOffset startedAt, bool rejoined)
     {
         Bundle = bundle;
         OrderId = bundle.OrderId;
         Label = PrepareNotices.LabelOf(bundle.AoiLabel, bundle.OrderId);
+        StartedAt = startedAt;
+        Rejoined = rejoined;
         _lastMessage = PrepareMessages.Starting(Label);
     }
 
     /// <summary>The order being prepared.</summary>
     public string OrderId { get; }
+
+    /// <summary>When the curator pressed Prepare — in an earlier Revit, for a re-joined one.</summary>
+    public DateTimeOffset StartedAt { get; }
+
+    /// <summary>Whether this is an interrupted Prepare picked back up, rather than one pressed in this session.</summary>
+    public bool Rejoined { get; }
 
     /// <summary>The bundle's name as the curator reads it.</summary>
     public string Label { get; }
@@ -144,6 +153,16 @@ public sealed class PrepareRun
 
     internal CancellationToken Token => _cancel.Token;
 
+    /// <summary>Whether Revit stopped watching this one rather than the curator cancelling it.</summary>
+    internal bool WasInterrupted => _interrupted;
+
+    /// <summary>Stops watching because Revit is going, leaving the Prepare to be re-joined.</summary>
+    internal void Interrupt()
+    {
+        _interrupted = true;
+        Cancel();
+    }
+
     internal void Say(string message) => _lastMessage = message;
 
     internal void Downloaded(VaultBundle bundle) => Bundle = bundle;
@@ -174,16 +193,28 @@ public sealed class PrepareRun
 /// everything after the first line. Nothing here touches a window or the ribbon; a subscriber that
 /// does hops to Revit's UI thread itself, as <c>AuthSession.StateChanged</c>'s subscribers do.
 /// </para>
+/// <para>
+/// <b>The Prepare can outlive Revit too.</b> Each one is written to the ledger as it starts and
+/// struck off as it ends, unless Revit is what ended it (<see cref="InterruptAll"/>). What a closed or
+/// crashed Revit leaves there, the next one re-joins (<see cref="Rejoin"/>, <see cref="PrepareRejoiner"/>).
+/// </para>
 /// </remarks>
 public sealed class PrepareWatcher
 {
     private readonly IPrepareSteps _steps;
+    private readonly IPrepareLedger _ledger;
     private readonly object _gate = new();
     private readonly List<PrepareRun> _runs = [];
 
     public PrepareWatcher(IPrepareSteps steps)
+        : this(steps, NoLedger.Instance)
+    {
+    }
+
+    public PrepareWatcher(IPrepareSteps steps, IPrepareLedger ledger)
     {
         _steps = steps;
+        _ledger = ledger;
     }
 
     /// <summary>A Prepare said something new; read it from <see cref="PrepareRun.LastMessage"/>.</summary>
@@ -231,6 +262,23 @@ public sealed class PrepareWatcher
     /// be a second poll loop, spending the rate budget twice on one order.
     /// </remarks>
     public PrepareRun Prepare(VaultBundle bundle, out bool joined)
+        => Watch(bundle, DateTimeOffset.UtcNow, rejoined: false, out joined);
+
+    /// <summary>
+    /// Re-joins an interrupted Prepare of <paramref name="bundle"/>, asked for at
+    /// <paramref name="startedAt"/> in an earlier Revit — or joins the watch already on it.
+    /// </summary>
+    /// <remarks>
+    /// The same start as a Prepare pressed now: the platform answers "joined" for a job still running
+    /// and "already delivered" for one that finished while Revit was closed (<c>HPS-24</c>), so no
+    /// second build is queued, and how it ends is announced as any Prepare's is. The one difference is
+    /// a start that fails: that ends <see cref="PrepareEnding.Interrupted"/>, silently, and is tried
+    /// again at the next sign-in. The curator did not press anything this session.
+    /// </remarks>
+    public PrepareRun Rejoin(VaultBundle bundle, DateTimeOffset startedAt)
+        => Watch(bundle, startedAt, rejoined: true, out _);
+
+    private PrepareRun Watch(VaultBundle bundle, DateTimeOffset startedAt, bool rejoined, out bool joined)
     {
         ArgumentNullException.ThrowIfNull(bundle);
 
@@ -243,7 +291,7 @@ public sealed class PrepareWatcher
                 return existing;
             }
 
-            run = new PrepareRun(bundle);
+            run = new PrepareRun(bundle, startedAt, rejoined);
             _runs.Add(run);
         }
 
@@ -254,15 +302,16 @@ public sealed class PrepareWatcher
     }
 
     /// <summary>
-    /// Cancels every Prepare, for shutdown. It does not wait: a step already in flight finishes on
-    /// its own thread, ends <see cref="PrepareEnding.Cancelled"/> or <see cref="PrepareEnding.Failed"/>,
-    /// and is never announced, because the shim has stopped listening before it calls this.
+    /// Stops watching every Prepare, for shutdown, and leaves each one in the ledger to be re-joined.
+    /// It does not wait: a step already in flight finishes on its own thread, ends
+    /// <see cref="PrepareEnding.Interrupted"/>, and is never announced, because the shim has stopped
+    /// listening before it calls this.
     /// </summary>
-    public void CancelAll()
+    public void InterruptAll()
     {
         foreach (PrepareRun run in Runs)
         {
-            run.Cancel();
+            run.Interrupt();
         }
     }
 
@@ -270,6 +319,10 @@ public sealed class PrepareWatcher
     {
         PrepareEnding ending;
         string detail = string.Empty;
+
+        // Before the first request, off the caller's thread: the record may wait on a lock another
+        // Revit holds, and an entry written after the network would miss a crash during it.
+        Record(() => _ledger.Started(run.OrderId, run.StartedAt));
 
         try
         {
@@ -289,6 +342,15 @@ public sealed class PrepareWatcher
             Say(run, ex.Message);
         }
 
+        // ⛔ Whatever a step made of the cancel — a throw, or a failure it returned — an interrupted
+        // Prepare ends interrupted. Struck off the ledger as anything else, it is lost for good.
+        if (run.WasInterrupted)
+        {
+            ending = PrepareEnding.Interrupted;
+        }
+
+        Record(() => _ledger.Ended(run.OrderId, ending));
+
         lock (_gate)
         {
             _runs.Remove(run);
@@ -298,11 +360,34 @@ public sealed class PrepareWatcher
         Ended?.Invoke(this, run);
     }
 
+    /// <summary>A ledger that cannot be written costs a re-join, never a Prepare.</summary>
+    private static void Record(Action write)
+    {
+        try
+        {
+            write();
+        }
+#pragma warning disable CA1031 // The ledger is a convenience; the Prepare is what the curator asked for.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+        }
+    }
+
     private async Task<(PrepareEnding Ending, string Detail)> PrepareAsync(PrepareRun run, CancellationToken token)
     {
         VaultResult<MaterializeStart> start = await _steps.StartAsync(run.OrderId, token).ConfigureAwait(false);
         if (!start.Succeeded)
         {
+            // A re-join whose order is still listed and available was not refused for good (that is
+            // settled against the listing before it starts), so it is tried again rather than
+            // reported as a failure the curator did nothing this session to cause.
+            if (run.Rejoined)
+            {
+                Say(run, start.Error!);
+                return (PrepareEnding.Interrupted, start.Error!);
+            }
+
             return Fail(run, start.Error!);
         }
 
@@ -378,5 +463,19 @@ public sealed class PrepareWatcher
     private sealed class Relay<T>(Action<T> report) : IProgress<T>
     {
         public void Report(T value) => report(value);
+    }
+
+    /// <summary>For a watcher nothing re-joins after: the tests' default.</summary>
+    private sealed class NoLedger : IPrepareLedger
+    {
+        internal static readonly NoLedger Instance = new();
+
+        public void Started(string orderId, DateTimeOffset startedAt)
+        {
+        }
+
+        public void Ended(string orderId, PrepareEnding ending)
+        {
+        }
     }
 }

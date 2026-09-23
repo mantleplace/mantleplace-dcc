@@ -65,6 +65,9 @@ exitCode |= PrepareWatcherTests.Run();
 exitCode |= VaultNewsTests.Run();
 exitCode |= AnnouncedOrderStoreTests.Run();
 exitCode |= VaultNewsCheckerTests.Run();
+exitCode |= InterruptedPreparesTests.Run();
+exitCode |= InterruptedPrepareStoreTests.Run();
+exitCode |= PrepareRejoinerTests.Run();
 exitCode |= CacheConformanceTests.Run();
 exitCode |= BundleCacheTests.Run();
 

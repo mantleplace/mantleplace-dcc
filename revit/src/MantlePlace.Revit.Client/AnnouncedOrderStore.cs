@@ -8,10 +8,10 @@ namespace MantlePlace.Revit.Client;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>One file per machine, not per Revit version.</b> Revit 2025 and 2027 open side by side list
-/// the same vault; with a record each, both would announce every new order. Each change is a
-/// read-decide-write under an exclusive open of the file itself, so the first process to claim an
-/// order announces it and the other reads it back already announced.
+/// <b>One file per machine, not per Revit version</b> (<see cref="MachineRecordFile"/>). Revit 2025
+/// and 2027 open side by side list the same vault; with a record each, both would announce every new
+/// order. The first process to claim an order announces it and the other reads it back already
+/// announced.
 /// </para>
 /// <para>
 /// ⚠ <b>A record that cannot be written still announces.</b> A duplicate notice is a smaller failure
@@ -23,16 +23,12 @@ namespace MantlePlace.Revit.Client;
 /// <para>
 /// A file that is not a record — damaged, or emptied by a write that failed halfway — is a machine
 /// that has never listed: its next listing is taken as seen, which costs at most one listing's news,
-/// never a flood. The record is serialised before the file is truncated, so only a failure of the
-/// write itself can leave it that way.
+/// never a flood.
 /// </para>
 /// </remarks>
 public sealed class AnnouncedOrderStore
 {
-    private const int LockAttempts = 10;
-    private static readonly TimeSpan LockRetry = TimeSpan.FromMilliseconds(50);
-
-    private readonly string _path;
+    private readonly MachineRecordFile _file;
     private readonly object _gate = new();
 
     /// <summary>What this process last read or wrote; <c>null</c> until it has read the record once.</summary>
@@ -40,15 +36,11 @@ public sealed class AnnouncedOrderStore
 
     public AnnouncedOrderStore(string path)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        _path = path;
+        _file = new MachineRecordFile(path);
     }
 
     /// <summary>Where the record lives: beside the bundle cache, under the curator's local app data.</summary>
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "MantlePlace",
-        "announced-orders.json");
+    public static string DefaultPath => MachineRecordFile.InLocalAppData("announced-orders.json");
 
     /// <summary>Claims the unannounced orders in <paramref name="listing"/> for this process.</summary>
     public VaultNewsResult Claim(VaultListing listing, string? email)
@@ -73,9 +65,11 @@ public sealed class AnnouncedOrderStore
         {
             try
             {
-                using FileStream file = OpenExclusive();
-                (AnnouncedOrders after, T result) = change(Read(file));
-                Write(file, after);
+                (AnnouncedOrders after, T result) = _file.Change(bytes =>
+                {
+                    (AnnouncedOrders changed, T answer) = change(Read(bytes));
+                    return (Serialise(changed), (changed, answer));
+                });
                 _last = after;
                 return result;
             }
@@ -93,37 +87,16 @@ public sealed class AnnouncedOrderStore
         }
     }
 
-    private FileStream OpenExclusive()
+    private static AnnouncedOrders Read(byte[] bytes)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-
-        for (int attempt = 1; ; attempt++)
-        {
-            try
-            {
-                return new FileStream(_path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            }
-            catch (IOException ex) when (attempt < LockAttempts && IsHeldByAnother(ex))
-            {
-                // The other Revit is mid-claim; a claim is a few milliseconds.
-                Thread.Sleep(LockRetry);
-            }
-        }
-    }
-
-    /// <summary>A sharing or lock violation: another process has the file. Nothing else is retried.</summary>
-    private static bool IsHeldByAnother(IOException ex) => (ex.HResult & 0xFFFF) is 32 or 33;
-
-    private static AnnouncedOrders Read(FileStream file)
-    {
-        if (file.Length == 0)
+        if (bytes.Length == 0)
         {
             return AnnouncedOrders.Empty;
         }
 
         try
         {
-            using JsonDocument document = JsonDocument.Parse(file);
+            using JsonDocument document = JsonDocument.Parse(bytes);
             JsonElement root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
             {
@@ -146,14 +119,6 @@ public sealed class AnnouncedOrderStore
             && array.ValueKind == JsonValueKind.Array
             ? [.. array.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)]
             : [];
-
-    private static void Write(FileStream file, AnnouncedOrders record)
-    {
-        byte[] bytes = Serialise(record);
-        file.Position = 0;
-        file.SetLength(0);
-        file.Write(bytes);
-    }
 
     private static byte[] Serialise(AnnouncedOrders record)
     {

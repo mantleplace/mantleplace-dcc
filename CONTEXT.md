@@ -137,6 +137,12 @@ Asking the platform to build an order's bundle for this host, and fetching the b
 built. The platform's API calls the same request a materialize.
 _Avoid_: materialize, build
 
+**Interrupted Prepare**:
+A Prepare the host stopped watching because the host closed or crashed before the Prepare ended — not
+one the curator cancelled, and not one whose poll ran out. Picking it back up is a **re-join**: the
+platform's job never paused, so nothing resumes.
+_Avoid_: orphaned Prepare, pending Prepare, resumed Prepare
+
 **Unannounced order**:
 An order available in the vault that the curator has not yet been told about on this machine —
 neither by a notice nor by seeing it listed in the vault browser. Not the same as an order that has

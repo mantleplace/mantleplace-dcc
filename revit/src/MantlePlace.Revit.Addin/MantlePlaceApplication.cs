@@ -20,6 +20,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
     private static PrepareWatcher? _watcher;
     private static AnnouncedOrderStore? _announced;
     private static VaultNewsChecker? _news;
+    private static PrepareRejoiner? _rejoiner;
     private static readonly SignInEdge SignIns = new();
     private static ExternalEvent? _importEvent;
     private static BundleImportEventHandler? _importHandler;
@@ -367,6 +368,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         if (signedIn)
         {
+            // Armed first, so the listing woken next is the one it re-joins from: any Prepare a
+            // closed or crashed Revit was watching is picked back up without a request of its own.
+            _rejoiner?.Arm();
             _news?.Wake();
         }
 
@@ -435,6 +439,13 @@ public sealed class MantlePlaceApplication : IExternalApplication
         => OnUiThread(() => PrepareNotifier.OnArrived(arrivals, VaultBrowserCommand.IsOpen));
 
     /// <summary>
+    /// Hands each background listing to the re-joiner, which acts on it only after a sign-in
+    /// (<see cref="PrepareRejoiner.OnListed"/>). No hop: it touches the record and the watcher, never
+    /// a window, and stays on the listing's thread-pool thread.
+    /// </summary>
+    private static void OnVaultListed(object? sender, VaultListing listing) => _rejoiner?.OnListed(listing);
+
+    /// <summary>
     /// Repaints every ribbon image when the curator changes Revit's UI theme.
     /// </summary>
     /// <remarks>
@@ -483,13 +494,20 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
         _vault = new VaultClient(endpoints, _session);
         _cache = new BundleCache();
-        _watcher = new PrepareWatcher(new VaultPrepareSteps(_vault, _cache));
+        AuthSession session = _session;
+        InterruptedPrepareStore interrupted = new(
+            InterruptedPrepareStore.DefaultPath, PrepareOwners.Current, PrepareOwners.IsAlive, () => session.UserEmail);
+        _watcher = new PrepareWatcher(new VaultPrepareSteps(_vault, _cache), interrupted);
         _announced = new AnnouncedOrderStore(AnnouncedOrderStore.DefaultPath);
 
         // IsOpen is read off Revit's thread here, and that is safe: it is one reference compared with
         // null, and a check that sees the window a moment late costs one listing, not a wrong notice —
         // the notice itself re-reads it after the hop.
         _news = new VaultNewsChecker(new SessionNewsSource(_session, _vault), _announced, () => VaultBrowserCommand.IsOpen);
+
+        // Armed by each sign-in, the restore below being the first, and re-joins from the listing
+        // above rather than making one of its own (HPS-55).
+        _rejoiner = new PrepareRejoiner(interrupted, _watcher);
 
         // Created during OnStartup because ExternalEvent.Create must run on Revit's own thread, and
         // a modeless window has no other moment when that is guaranteed.
@@ -602,6 +620,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _session.StateChanged += OnAuthStateChanged;
         _watcher.Ended += OnPrepareEnded;
         _news.Arrived += OnNewsArrived;
+        _news.Listed += OnVaultListed;
         BeginSessionRestore(_session);
         ApplyAccountState();
 
@@ -623,12 +642,16 @@ public sealed class MantlePlaceApplication : IExternalApplication
             application.ThemeChanged -= OnThemeChanged;
         }
 
+        // Stopped before the watcher is interrupted, so no re-join starts a Prepare behind it.
+        _rejoiner?.Stop();
+
         // Before the ribbon goes: a Prepare ending during teardown would badge a button Revit has
-        // already taken apart. Cancelled, never announced.
+        // already taken apart. Interrupted, never announced, and left in the record for the next
+        // Revit to re-join.
         if (_watcher is not null)
         {
             _watcher.Ended -= OnPrepareEnded;
-            _watcher.CancelAll();
+            _watcher.InterruptAll();
         }
 
         // Stopped before it is unsubscribed: a listing that lands after the stop claims nothing, so
@@ -637,6 +660,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         {
             _news.Stop();
             _news.Arrived -= OnNewsArrived;
+            _news.Listed -= OnVaultListed;
         }
 
         PrepareNotifier.Forget();
@@ -665,6 +689,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _importHandler = null;
         _watcher = null;
         _news = null;
+        _rejoiner = null;
         _announced = null;
         _vault = null;
         _cache = null;
