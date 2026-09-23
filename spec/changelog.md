@@ -19,7 +19,7 @@ history, not contract.
 
 ## Semver era
 
-### 1.3.0 — files state their frame, and a host is handed its own (additive minor; not yet published)
+### 1.3.0 — files state their frame, and a host is handed its own (additive minor; published and frozen 2026-09-23)
 
 One minor carries the whole change: every item below is additive, and nothing is removed or
 re-meant, so it is a MINOR under [compatibility](compatibility.md) §2 and every host floor at 1.0.0
