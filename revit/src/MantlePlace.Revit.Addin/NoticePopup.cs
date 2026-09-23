@@ -10,7 +10,8 @@ using MantlePlace.Revit.Core;
 namespace MantlePlace.Revit.Addin;
 
 /// <summary>
-/// One Prepare notice: a small window in the corner of Revit's that never takes focus.
+/// One notice — a Prepare that ended, or an order new in the vault: a small window in the corner of
+/// Revit's that never takes focus.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -38,9 +39,12 @@ internal sealed class NoticePopup : Window
 
     private readonly DispatcherTimer _timer;
 
-    internal NoticePopup(PrepareNotice notice, IntPtr revitWindow)
+    /// <param name="selectOrderId">The order a click selects in the vault; <c>null</c> for none in particular.</param>
+    /// <param name="text">What the notice says.</param>
+    /// <param name="revitWindow">The window the notice belongs to.</param>
+    internal NoticePopup(string? selectOrderId, string text, IntPtr revitWindow)
     {
-        Notice = notice;
+        SelectOrderId = selectOrderId;
 
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
@@ -54,11 +58,11 @@ internal sealed class NoticePopup : Window
         BorderBrush = BrandChrome.Frozen(BrandPalette.Mantle);
         BorderThickness = new Thickness(1, 1, 1, 1);
         Cursor = Cursors.Hand;
-        ToolTip = notice.Text;
+        ToolTip = text;
 
         new WindowInteropHelper(this) { Owner = revitWindow };
 
-        Content = BuildLayout(notice);
+        Content = BuildLayout(text);
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(PrepareNotices.ShowSeconds) };
         _timer.Tick += (_, _) =>
@@ -78,7 +82,8 @@ internal sealed class NoticePopup : Window
     /// <summary>The curator clicked the notice: open the vault on its bundle.</summary>
     internal event EventHandler? Chosen;
 
-    internal PrepareNotice Notice { get; }
+    /// <summary>The order a click selects in the vault, when the notice is about one.</summary>
+    internal string? SelectOrderId { get; }
 
     /// <summary>Moves the notice to <paramref name="place"/>, in device-independent pixels.</summary>
     internal void PlaceAt(NoticeRect place)
@@ -87,7 +92,7 @@ internal sealed class NoticePopup : Window
         Top = place.Top;
     }
 
-    private UIElement BuildLayout(PrepareNotice notice)
+    private UIElement BuildLayout(string text)
     {
         Button dismiss = new()
         {
@@ -118,7 +123,7 @@ internal sealed class NoticePopup : Window
 
         TextBlock body = new()
         {
-            Text = notice.Text,
+            Text = text,
             TextWrapping = TextWrapping.Wrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = SystemColors.WindowTextBrush,

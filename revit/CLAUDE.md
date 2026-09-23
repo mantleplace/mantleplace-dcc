@@ -52,6 +52,7 @@ The ones this tree already turns on:
 | `HPS-04` … `13`       | PKCE `S256` in the system browser, loopback on the literal `127.0.0.1`, five-state machine driven from the corpus table.                                      |
 | `HPS-14` … `17`       | refresh token via DPAPI, per-OS-user; access token memory-only; no store means memory-only auth, never a less-safe file.                                      |
 | `HPS-18` … `25`, `48` | list → materialize → poll → **re-list** → presign → download; explicit token list, never a scope keyword; one error-body precedence for auth and vault alike. |
+| `HPS-55`              | the background listing is `VaultNewsChecker`, its interval and floor `VaultNewsCadence`, and which auth transition is a sign-in `SignInEdge` — a startup restore is one, a token renewal is not. Which orders are news is `VaultNews`, over the one per-machine record `AnnouncedOrderStore` shares between every Revit on the machine. |
 | `HPS-26` … `30`, `44` | write to `.part`, verify, rename; null sha is unknown not absent; eviction only on request.                                                                   |
 | `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers of a bundle whose block carries no `hosts.revit.vectors`. Nothing else here projects, and the projection reaches a UTM origin only — on a State Plane origin there is no projection to perform and the layer is skipped. |
 | `HPS-51`              | signing in and out, the vault, the local import, the import window with its checklist, its unavailable list (`WindowLabels.UnavailableReason`, decided per `SkipReasonCode`) and its unit-system line (`DeliveryHeader`), and the about surface take the standard's words. The casing is this host's; the words are not. |
@@ -329,6 +330,11 @@ follow.
   What it did not run is a Revit that was itself the foreground application, which only a human at
   the keyboard can: a harness that took the foreground to test it would steal the user's. Which
   notice, when, and where it sits are `PrepareNotices`, `VaultBadge` and `NoticeStack`, headless.
+  The new-order notice (`VaultNewsChecker`, `PrepareNotifier.OnArrived`) rides the same popup and
+  badge but has **not** run inside Revit: its loop's first listing racing the startup restore, the
+  wake on sign-in, and a notice raised from a background listing are compiled and unexecuted. What
+  is settled headlessly is which orders are news (`VaultNews`), the per-machine record two Revits
+  share (`AnnouncedOrderStore`), and when the checker asks (`VaultNewsChecker.CheckAsync`).
 - **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
   issue and reaches for their storage.** It writes Revit elements sized as published, with names a
   renderer recognises (`RendererKeywords`), and leaves a renderer's own storage to the curator —

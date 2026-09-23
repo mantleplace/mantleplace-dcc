@@ -61,6 +61,9 @@ exitCode |= VaultConformanceTests.Run();
 exitCode |= MaterializeJobTests.Run();
 exitCode |= PrepareNoticeTests.Run();
 exitCode |= PrepareWatcherTests.Run();
+exitCode |= VaultNewsTests.Run();
+exitCode |= AnnouncedOrderStoreTests.Run();
+exitCode |= VaultNewsCheckerTests.Run();
 exitCode |= CacheConformanceTests.Run();
 exitCode |= BundleCacheTests.Run();
 

@@ -18,6 +18,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
     private static VaultClient? _vault;
     private static BundleCache? _cache;
     private static PrepareWatcher? _watcher;
+    private static AnnouncedOrderStore? _announced;
+    private static VaultNewsChecker? _news;
+    private static readonly SignInEdge SignIns = new();
     private static ExternalEvent? _importEvent;
     private static BundleImportEventHandler? _importHandler;
 
@@ -63,6 +66,12 @@ public sealed class MantlePlaceApplication : IExternalApplication
     /// Prepare outlives the window (<see cref="PrepareWatcher"/>).
     /// </summary>
     internal static PrepareWatcher Watcher => _watcher ?? throw NotStarted();
+
+    /// <summary>
+    /// This machine's record of announced orders, shared with every other Revit on it
+    /// (<see cref="AnnouncedOrderStore"/>). The vault browser records what it lists here.
+    /// </summary>
+    internal static AnnouncedOrderStore Announced => _announced ?? throw NotStarted();
 
     /// <summary>The only supported way onto Revit's document thread from a modeless window.</summary>
     internal static ExternalEvent ImportEvent => _importEvent ?? throw NotStarted();
@@ -347,6 +356,29 @@ public sealed class MantlePlaceApplication : IExternalApplication
     /// </remarks>
     private static void OnAuthStateChanged(object? sender, AuthState state)
     {
+        // A sign-in — the startup restore included — lists the vault now rather than at the next
+        // tick (HPS-55); a renewal does not (SignInEdge). Locked because AuthSession raises this
+        // outside its own lock, from whichever thread finished the work.
+        bool signedIn;
+        lock (SignIns)
+        {
+            signedIn = SignIns.Observe(state);
+        }
+
+        if (signedIn)
+        {
+            _news?.Wake();
+        }
+
+        OnUiThread(ApplyAccountState);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> on Revit's UI thread: now when already on it, posted otherwise,
+    /// and not at all once the add-in has shut down.
+    /// </summary>
+    private static void OnUiThread(Action action)
+    {
         Dispatcher? dispatcher = _uiDispatcher;
         if (dispatcher is null)
         {
@@ -355,11 +387,11 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         if (dispatcher.CheckAccess())
         {
-            ApplyAccountState();
+            action();
             return;
         }
 
-        _ = dispatcher.BeginInvoke(new Action(ApplyAccountState));
+        _ = dispatcher.BeginInvoke(action);
     }
 
     /// <summary>
@@ -374,28 +406,33 @@ public sealed class MantlePlaceApplication : IExternalApplication
     /// </remarks>
     private static void OnPrepareEnded(object? sender, PrepareRun run)
     {
-        Dispatcher? dispatcher = _uiDispatcher;
-        if (dispatcher is null)
+        OnUiThread(() =>
         {
-            return;
-        }
-
-        void Notify()
-        {
-            if (_session is { } session)
+            if (_session is not { } session || _announced is not { } announced)
             {
-                PrepareNotifier.OnEnded(run, VaultBrowserCommand.IsOpen, session.State == AuthState.Authenticated);
+                return;
             }
-        }
 
-        if (dispatcher.CheckAccess())
-        {
-            Notify();
-            return;
-        }
-
-        _ = dispatcher.BeginInvoke(new Action(Notify));
+            // A notice about this order means it is not news to the background listing any more:
+            // one order, one notice. Recorded off Revit's thread, because the record waits on a lock
+            // another Revit may hold.
+            if (PrepareNotifier.OnEnded(run, VaultBrowserCommand.IsOpen, session.State == AuthState.Authenticated))
+            {
+                _ = Task.Run(() => announced.Announce(run.OrderId));
+            }
+        });
     }
+
+    /// <summary>
+    /// Marshals orders the background listing found onto Revit's UI thread, then tells the curator
+    /// (<see cref="PrepareNotifier.OnArrived"/>).
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <see cref="VaultNewsChecker.Arrived"/> is raised on a thread-pool thread — the hop is
+    /// <see cref="OnPrepareEnded"/>'s, for its reason. Whether the vault is open is read after the hop.
+    /// </remarks>
+    private static void OnNewsArrived(object? sender, IReadOnlyList<VaultBundle> arrivals)
+        => OnUiThread(() => PrepareNotifier.OnArrived(arrivals, VaultBrowserCommand.IsOpen));
 
     /// <summary>
     /// Repaints every ribbon image when the curator changes Revit's UI theme.
@@ -447,6 +484,12 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _vault = new VaultClient(endpoints, _session);
         _cache = new BundleCache();
         _watcher = new PrepareWatcher(new VaultPrepareSteps(_vault, _cache));
+        _announced = new AnnouncedOrderStore(AnnouncedOrderStore.DefaultPath);
+
+        // IsOpen is read off Revit's thread here, and that is safe: it is one reference compared with
+        // null, and a check that sees the window a moment late costs one listing, not a wrong notice —
+        // the notice itself re-reads it after the hop.
+        _news = new VaultNewsChecker(new SessionNewsSource(_session, _vault), _announced, () => VaultBrowserCommand.IsOpen);
 
         // Created during OnStartup because ExternalEvent.Create must run on Revit's own thread, and
         // a modeless window has no other moment when that is guaranteed.
@@ -482,8 +525,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
             LongDescription =
                 "Open the vault browser: it lists the bundles you own, prepares their Revit deliverables, "
                 + "downloads them and imports them. Closing it while a bundle builds does not cancel the "
-                + "job: you are told when it is ready to import, and reopening shows it still going. This "
-                + "is the one surface that needs you signed in.",
+                + "job: you are told when it is ready to import, and reopening shows it still going. You "
+                + "are told, too, when a new order arrives in your vault. This is the one surface that "
+                + "needs you signed in.",
         });
         RibbonImagery.Give(vault, RibbonGlyph.Vault);
         RibbonImagery.GiveVignette(vault, Vignette.Vault);
@@ -557,8 +601,13 @@ public sealed class MantlePlaceApplication : IExternalApplication
         // a transition that landed while the ribbon was still being built is not missed.
         _session.StateChanged += OnAuthStateChanged;
         _watcher.Ended += OnPrepareEnded;
+        _news.Arrived += OnNewsArrived;
         BeginSessionRestore(_session);
         ApplyAccountState();
+
+        // Its first listing is now, and asks nothing while the restore above is still signing in;
+        // the restore's own sign-in wakes it (OnAuthStateChanged, SignInEdge).
+        _news.Start();
 
         return Result.Succeeded;
     }
@@ -580,6 +629,14 @@ public sealed class MantlePlaceApplication : IExternalApplication
         {
             _watcher.Ended -= OnPrepareEnded;
             _watcher.CancelAll();
+        }
+
+        // Stopped before it is unsubscribed: a listing that lands after the stop claims nothing, so
+        // no order is recorded as announced with nobody left to announce it.
+        if (_news is not null)
+        {
+            _news.Stop();
+            _news.Arrived -= OnNewsArrived;
         }
 
         PrepareNotifier.Forget();
@@ -607,6 +664,8 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _importEvent = null;
         _importHandler = null;
         _watcher = null;
+        _news = null;
+        _announced = null;
         _vault = null;
         _cache = null;
         _endpoints = null;

@@ -137,6 +137,12 @@ Asking the platform to build an order's bundle for this host, and fetching the b
 built. The platform's API calls the same request a materialize.
 _Avoid_: materialize, build
 
+**Unannounced order**:
+An order available in the vault that the curator has not yet been told about on this machine —
+neither by a notice nor by seeing it listed in the vault browser. Not the same as an order that has
+not been prepared.
+_Avoid_: new order, unseen order, unread order
+
 **Bundle**:
 A published unit of real-world site data a host plugin imports. What one is, and what it contains, is
 described in [`spec/`](spec/).

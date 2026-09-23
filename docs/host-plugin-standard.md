@@ -63,6 +63,7 @@ host met the contract for real:
 | **v1.12** | ⛔`HPS-53` names the one statement that stands in for an unstated unit: `delivery.linear_unit`, for a file the format says follows the delivered unit. Revit stored the tree points' `ground_z` as metres, and on a State Plane delivery the column is feet, so every tree stood hundreds of metres above its terrain; bundles cut before MPB 1.3.0 state no unit beside that pointer, and read literally the rule left a host a choice between refusing every such tree file and keeping the bug. The terrain's points had always resolved their unit this way, so the precedent was written down rather than invented |
 | **v1.13** | ⛔`HPS-34`'s Revit row gains the MPB 1.3.0 own-copy pointers, `revit.drape` and each layer of `revit.vectors`, whose `sha256` the schema requires; the shared `vector` layers stay optional. The Revit reader began refusing a present own copy with no hash in the change that first placed from it, and the table still listed only the three v19 deliverables |
 | **v1.14** | `HPS-51` gains a tenth action, saying before a bundle import runs what the bundle holds and the import cannot offer. Revit's checklist was built from the plan, so a layer the planner skipped never became a row: the curator saw a shorter list and no reason, and read the reason only in the closing report, in the planner's words, EPSG codes included. The list that fixed it speaks to the user and leaves the technical sentence to the log, and the reference host's roadmapped picker will meet the same bundles, so its words were fixed here first |
+| **v1.15** | `HPS-55` — a vault listing nobody asked for is bounded. Revit began telling the curator about orders they never prepared from it, which means listing the vault in the background on every signed-in session; nothing in the standard bounded a request the curator did not make, and the only polling rule, `HPS-25`, is about a job someone is waiting on |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -298,7 +299,7 @@ _Enforcer:_ `agent-review`.
 
 ---
 
-## 4. Vault client (`HPS-18` … `HPS-25`, `HPS-48`)
+## 4. Vault client (`HPS-18` … `HPS-25`, `HPS-48`, `HPS-55`)
 
 Spec source: `FMantlePlaceVaultLogic`
 (`unreal/Plugins/MantlePlaceDcc/unreal/MantlePlace/Source/MantlePlaceRuntime/Private/MantlePlaceVaultLogic.{h,cpp}`).
@@ -445,6 +446,30 @@ Extracting a machine-readable `code` (`refunded` / `revoked`) for UI logic is a 
 and unaffected by this order.
 
 _Enforcer:_ `automation-test` (corpus `vault.errorBodyPrecedence`).
+
+**`HPS-55` — A vault listing nobody asked for is bounded: a declared interval with a hard floor,
+signed in only, never while the host's vault surface is open, and silent when it fails.** A host
+that tells the curator about orders they never prepared from it — an order bought on the web that
+finishes while the host is open, one built overnight — has to list the vault unasked, since the
+platform has no push channel. That listing costs a request on every signed-in session, including
+the ones where nobody is waiting on anything, so a host declares:
+
+- an interval (Revit's is 15 min) and a hard floor (5 min) that no configuration goes below — a web
+  order takes minutes to hours to build, and nothing is gained below that. One listing at start and
+  one at each sign-in come on top of the interval, and the floor does not delay them; a token
+  renewal is not a sign-in;
+- **no request while signed out**, and none while the vault surface is open, whose own listing is
+  the one the curator is reading;
+- **silence on failure**: no notice and no sign-in prompt for a request the curator did not make.
+  The order is still news at the next listing that succeeds.
+
+A background listing never prepares and never downloads; either would spend build time, bandwidth or
+disk nobody asked for. What it announces is an order **first becoming available** in the vault, once
+per machine, however many host processes list it. The first listing on a machine, and an account's
+first listing on it, are taken as already seen, so installing a host is not a flood of orders bought
+months ago.
+
+_Enforcer:_ `agent-review`, plus a pure-core test where a host has one.
 
 ---
 
@@ -1258,6 +1283,7 @@ records that eviction is deliberately explicit-only.
 | The shared user-facing vocabulary (`HPS-51`)                                                                                                                                                              | `agent-review`; a pure-core test where a host has one  |
 | Placing from the host block, and refusing a file whose frame the host cannot match (`HPS-52`, `HPS-53`)                                                                                                    | `agent-review`, plus a pure-core test where a host has moved the decision out of its shim; **no corpus case yet** for `HPS-52`; both halves of `HPS-53` have one, for the fixed-frame host |
 | The host's frame kind, declared in its own `CLAUDE.md` (`HPS-54`)                                                                                                                                          | `agent-review`                                         |
+| The bounds on a vault listing nobody asked for (`HPS-55`)                                                                                                                                                  | `agent-review`; a pure-core test where a host has one  |
 
 Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS-33`) appear in both rows —
 the corpus proves the behaviour, review catches the shape a vector cannot see. `HPS-53` appears twice

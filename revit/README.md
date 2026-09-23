@@ -43,6 +43,17 @@ bundle. The Vault button carries a badge counting those notices until the vault 
 curator who was looking elsewhere. Nothing is announced while the vault is open (it already says),
 after a Cancel, or for a failure while signed out.
 
+An order you never prepared from Revit is announced the same way — one bought on the web that
+finished while Revit was open, or one built while it was closed. While you are signed in, Revit
+lists the vault at startup, at sign-in and every 15 minutes (`HPS-55`), and says
+`<order> is in your vault.`, or `<N> new orders are in your vault.` for several at once. Clicking
+opens the vault, where `Prepare for Revit` builds it; nothing is prepared or downloaded unasked. An
+order is announced once per machine, however many Revits are open, and never again once the vault
+has listed it. The first listing on a machine, or under an account new to it, is taken as seen,
+so installing the add-in does not announce every order you already own. The record of what was
+announced is `%LOCALAPPDATA%\MantlePlace\announced-orders.json`, and holds order ids and a digest of
+each account's address, never the address.
+
 Downloads are written to `bundle.zip.part`, hashed, and renamed over `bundle.zip` only once they
 verify (⛔`HPS-26`). Nothing is ever evicted automatically: a purchased bundle stays until you press
 `Remove Download` (`HPS-44`).

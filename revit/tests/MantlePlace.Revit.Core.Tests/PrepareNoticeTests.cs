@@ -119,8 +119,8 @@ internal static class PrepareNoticeTests
         run.Case("the Vault tooltip says what the badge means, and nothing when there is none", () =>
         {
             run.Equal(VaultBadge.ToolTipFor(0), VaultBadge.ToolTip, "the button's own tooltip");
-            run.Equal(VaultBadge.ToolTipFor(1), "1 bundle you prepared has an update. Open the vault to see it.", "singular");
-            run.Equal(VaultBadge.ToolTipFor(3), "3 bundles you prepared have an update. Open the vault to see them.", "plural");
+            run.Equal(VaultBadge.ToolTipFor(1), "1 update in your vault. Open the vault to see it.", "singular");
+            run.Equal(VaultBadge.ToolTipFor(3), "3 updates in your vault. Open the vault to see them.", "plural — a new order and a Prepare both count");
         });
 
         run.Case("notices stack upward from the owner's bottom-right corner", () =>

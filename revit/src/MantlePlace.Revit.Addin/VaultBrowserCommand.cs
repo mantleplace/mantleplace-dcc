@@ -15,7 +15,10 @@ public sealed class VaultBrowserCommand : IExternalCommand
 {
     private static VaultBrowserWindow? _window;
 
-    /// <summary>Whether the vault browser is open — the one thing that silences a Prepare notice.</summary>
+    /// <summary>
+    /// Whether the vault browser is open — which silences every notice, and pauses the background
+    /// listing while the window owns the listing (<c>HPS-55</c>).
+    /// </summary>
     internal static bool IsOpen => _window is not null;
 
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)

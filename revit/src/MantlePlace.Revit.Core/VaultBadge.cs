@@ -3,7 +3,8 @@ using System.Globalization;
 namespace MantlePlace.Revit.Core;
 
 /// <summary>
-/// What the Vault button shows while prepared bundles have news the curator has not seen. Pure.
+/// What the Vault button shows while orders have news the curator has not seen — a Prepare that
+/// ended, or an order new in the vault. Pure.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -43,11 +44,11 @@ public static class VaultBadge
         _ => count.ToString(CultureInfo.InvariantCulture),
     };
 
-    /// <summary>The Vault button's tooltip for <paramref name="count"/> bundles with news.</summary>
+    /// <summary>The Vault button's tooltip for <paramref name="count"/> orders with news.</summary>
     public static string ToolTipFor(int count) => count switch
     {
         <= 0 => ToolTip,
-        1 => "1 bundle you prepared has an update. Open the vault to see it.",
-        _ => $"{count.ToString(CultureInfo.InvariantCulture)} bundles you prepared have an update. Open the vault to see them.",
+        1 => "1 update in your vault. Open the vault to see it.",
+        _ => $"{count.ToString(CultureInfo.InvariantCulture)} updates in your vault. Open the vault to see them.",
     };
 }
