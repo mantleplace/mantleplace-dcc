@@ -140,7 +140,7 @@ internal static class PrepareWatcherTests
             run.True(watcher.Watching(Bundle.OrderId) is null, "not watched");
         });
 
-        run.Case("cancel-all stops every watch, as shutdown needs", () =>
+        run.Case("interrupt-all stops every watch, as shutdown needs, and ends each interrupted", () =>
         {
             FakeSteps steps = new() { Hold = new TaskCompletionSource() };
             PrepareWatcher watcher = new(steps);
@@ -148,12 +148,70 @@ internal static class PrepareWatcherTests
             PrepareRun two = watcher.Prepare(new VaultBundle { OrderId = "order-2" }, out _);
 
             run.Equal(watcher.Runs.Count, 2, "two watched");
-            watcher.CancelAll();
+            watcher.InterruptAll();
             Wait(one);
             Wait(two);
 
-            run.Equal(one.Ending == PrepareEnding.Cancelled && two.Ending == PrepareEnding.Cancelled, true, "both cancelled");
+            run.Equal(one.Ending == PrepareEnding.Interrupted && two.Ending == PrepareEnding.Interrupted, true, "both interrupted, not cancelled");
             run.Equal(watcher.Runs.Count, 0, "none watched");
+        });
+
+        run.Case("an interrupted step that returns a failure still ends interrupted, and stays in the ledger", () =>
+        {
+            FakeSteps steps = new() { Hold = new TaskCompletionSource(), FailOnCancel = true };
+            FakeLedger ledger = new();
+            PrepareWatcher watcher = new(steps, ledger);
+            PrepareRun prepared = watcher.Prepare(Bundle, out _);
+
+            watcher.InterruptAll();
+            Wait(prepared);
+
+            run.Equal(prepared.Ending == PrepareEnding.Interrupted, true, "interrupted, whatever the step made of the cancel");
+            run.Equal(ledger.Lines, "started order-1|ended order-1 Interrupted", "written at the start, told of the interruption");
+        });
+
+        run.Case("the ledger hears every Prepare start and end, in order", () =>
+        {
+            FakeLedger ledger = new();
+            PrepareRun prepared = new PrepareWatcher(new FakeSteps(), ledger).Prepare(Bundle, out _);
+            Wait(prepared);
+
+            run.Equal(ledger.Lines, "started order-1|ended order-1 Ready", "start, then end");
+        });
+
+        run.Case("a ledger that throws costs nothing but the re-join", () =>
+        {
+            PrepareRun prepared = new PrepareWatcher(new FakeSteps(), new FakeLedger { Throws = true }).Prepare(Bundle, out _);
+            Wait(prepared);
+
+            run.Equal(prepared.Ending == PrepareEnding.Ready, true, "still ready");
+        });
+
+        run.Case("a re-join joins a watch already on the order, and keeps the original ask's time", () =>
+        {
+            FakeSteps steps = new() { Hold = new TaskCompletionSource() };
+            PrepareWatcher watcher = new(steps);
+            DateTimeOffset asked = new(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
+
+            PrepareRun rejoined = watcher.Rejoin(Bundle, asked);
+            PrepareRun pressed = watcher.Prepare(Bundle, out bool joined);
+
+            run.True(rejoined.Rejoined && rejoined.StartedAt == asked, "a re-join, from the old ask");
+            run.True(joined && ReferenceEquals(rejoined, pressed), "pressing Prepare follows it");
+            steps.Hold.SetResult();
+            Wait(rejoined);
+        });
+
+        run.Case("a re-join whose start fails ends interrupted; a pressed Prepare's ends failed", () =>
+        {
+            FakeSteps steps = new() { Start = VaultResult<MaterializeStart>.Failed("The platform is unavailable.") };
+            PrepareRun rejoined = new PrepareWatcher(steps).Rejoin(Bundle, DateTimeOffset.UtcNow);
+            PrepareRun pressed = new PrepareWatcher(steps).Prepare(Bundle, out _);
+            Wait(rejoined);
+            Wait(pressed);
+
+            run.Equal(rejoined.Ending == PrepareEnding.Interrupted, true, "re-join: interrupted, to be tried again");
+            run.Equal(pressed.Ending == PrepareEnding.Failed, true, "pressed: failed, as before");
         });
 
         run.Case("a step that throws ends the Prepare failed rather than leaving it watched forever", () =>
@@ -226,6 +284,9 @@ internal static class PrepareWatcherTests
 
         internal Exception? Throw { get; init; }
 
+        /// <summary>When set, a cancelled poll returns a failure rather than throwing.</summary>
+        internal bool FailOnCancel { get; init; }
+
         internal int Starts => _starts;
 
         internal int Polls => _polls;
@@ -247,7 +308,14 @@ internal static class PrepareWatcherTests
             Interlocked.Increment(ref _polls);
             if (Hold is { } hold)
             {
-                await hold.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await hold.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (FailOnCancel)
+                {
+                    return new PollOutcome(VaultResult<MaterializeStatus>.Failed("The request was cancelled."), OutOfPolls: false);
+                }
             }
 
             return Poll;
@@ -258,6 +326,42 @@ internal static class PrepareWatcherTests
             Interlocked.Increment(ref _downloads);
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(Download(bundle));
+        }
+    }
+
+    /// <summary>Writes down what the watcher tells the ledger.</summary>
+    private sealed class FakeLedger : IPrepareLedger
+    {
+        private readonly List<string> _lines = [];
+
+        internal bool Throws { get; init; }
+
+        internal string Lines
+        {
+            get
+            {
+                lock (_lines)
+                {
+                    return string.Join('|', _lines);
+                }
+            }
+        }
+
+        public void Started(string orderId, DateTimeOffset startedAt) => Write($"started {orderId}");
+
+        public void Ended(string orderId, PrepareEnding ending) => Write($"ended {orderId} {ending}");
+
+        private void Write(string line)
+        {
+            if (Throws)
+            {
+                throw new IOException("the record is locked");
+            }
+
+            lock (_lines)
+            {
+                _lines.Add(line);
+            }
         }
     }
 }

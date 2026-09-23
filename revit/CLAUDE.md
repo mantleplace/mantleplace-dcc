@@ -339,6 +339,13 @@ follow.
   wake on sign-in, and a notice raised from a background listing are compiled and unexecuted. What
   is settled headlessly is which orders are news (`VaultNews`), the per-machine record two Revits
   share (`AnnouncedOrderStore`), and when the checker asks (`VaultNewsChecker.CheckAsync`).
+  Re-joining an **interrupted Prepare** is in the same state: the watcher writes each Prepare to
+  `InterruptedPrepareStore` as it starts and strikes it off as it ends, unless Revit ended it
+  (`PrepareEnding.Interrupted`), and `PrepareRejoiner` picks up what a closed or crashed Revit left,
+  at each sign-in. Which entries a process may take (age, account, whether the owning process still
+  runs) is `InterruptedPrepares`, headless, and so are the record and the re-joiner themselves; the
+  startup restore waking the re-joiner, and a notice for a re-joined Prepare, are compiled and
+  unexecuted. Both records share one exclusive-open helper, `MachineRecordFile`.
 - **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
   issue and reaches for their storage.** It writes Revit elements sized as published, with names a
   renderer recognises (`RendererKeywords`), and leaves a renderer's own storage to the curator —

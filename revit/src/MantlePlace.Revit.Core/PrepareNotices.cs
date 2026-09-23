@@ -15,8 +15,15 @@ public enum PrepareEnding
     /// </summary>
     StillPreparing,
 
-    /// <summary>The curator pressed Cancel, or Revit is shutting down.</summary>
+    /// <summary>The curator pressed Cancel.</summary>
     Cancelled,
+
+    /// <summary>
+    /// Revit stopped watching before the Prepare ended: it is shutting down, or a re-join could not
+    /// reach the platform. The job goes on, and the next start or sign-in re-joins it
+    /// (<see cref="InterruptedPrepares"/>). Never announced.
+    /// </summary>
+    Interrupted,
 }
 
 /// <summary>What the curator is told about one Prepare, and which bundle it opens the vault on.</summary>
@@ -29,10 +36,11 @@ public readonly record struct PrepareNotice(string OrderId, PrepareEnding Ending
 /// <para>
 /// A notice is for a job nobody is watching. <b>While the vault is open there is none</b>: the vault
 /// already shows what happened, and a second saying of it is noise. <b>A cancel is never announced</b>:
-/// the curator pressed it. <b>Signed out, only a download that finished is</b>: a failure after a
-/// sign-out is the sign-out's doing, which the curator chose, and the job goes on untouched on the
-/// platform (<c>HPS-24</c>). A bundle that finished downloading is on disk, and importing it needs no
-/// sign-in at all, so that one is still news.
+/// the curator pressed it. <b>Nor is an interruption</b>: nothing has ended, and the re-join
+/// announces the real ending when there is one. <b>Signed out, only a download that finished
+/// is</b>: a failure after a sign-out is the sign-out's doing, which the curator chose, and the job
+/// goes on untouched on the platform (<c>HPS-24</c>). A bundle that finished downloading is on disk,
+/// and importing it needs no sign-in at all, so that one is still news.
 /// </para>
 /// <para>
 /// Signed-out is read when the Prepare <em>ends</em>, not from the auth event stream. A token the
@@ -65,7 +73,7 @@ public static class PrepareNotices
         bool vaultOpen,
         bool signedIn)
     {
-        if (vaultOpen || ending == PrepareEnding.Cancelled)
+        if (vaultOpen || ending is PrepareEnding.Cancelled or PrepareEnding.Interrupted)
         {
             return null;
         }
