@@ -256,6 +256,12 @@ public sealed class DeliveryFacts
 {
     public UnitSystem UnitSystem { get; init; }
 
+    /// <summary>
+    /// Raw <c>delivery.unit_system</c>, kept so a value this reader does not know can still be shown
+    /// as published (<see cref="DeliveryHeader"/>) rather than as <see cref="UnitSystem.Unspecified"/>.
+    /// </summary>
+    public string UnitSystemValue { get; init; } = string.Empty;
+
     /// <summary>Raw <c>delivery.tier</c> (<c>metric</c>, <c>sp_ftus</c>, <c>sp_ft</c>, <c>local_ft</c>).</summary>
     public string Tier { get; init; } = string.Empty;
 

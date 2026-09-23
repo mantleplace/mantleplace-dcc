@@ -59,6 +59,7 @@ host met the contract for real:
 | **v1.8** | `HPS-51` gains an eighth action, the window that shows a bundle import running and stops it. The Revit import ran as one call on the host's thread, so Revit reported "not responding" for minutes with nothing to show and nothing to cancel; the staged import that fixed it has a window whose surface the reference host will need too, so its words were fixed here before the second host named them differently |
 | **v1.9** | `HPS-51` gains a ninth action, choosing what a bundle import brings in before its steps run. A Revit import brought in every step the planner found, and a curator who wanted the terrain alone had no way to leave the rest out but to hold a bundle that lacked it; the checklist that fixed it is a surface the reference host's roadmapped picker will share, so its words were fixed here before either host named them — and `Layers`, the word both hosts' developers use for the rows, was kept off the screen, because it already names three other things in the glossary and two more in the reference host's editor |
 | **v1.10** | ⛔`HPS-52` and ⛔`HPS-53`, plus `HPS-54` — place from the host block first, place only what can be shown to be in the host frame, and declare which kind of frame the host has; `HPS-45` narrowed in the same pass to a fallback that reaches a UTM origin and nothing else. The suite had assumed every host frame was a UTM zone and never said so, and two hosts met a State Plane foot delivery and did opposite things: Revit refused each layer it could not place and named the reason, while Unreal's tree-point reader subtracted its metric UTM origin from foot State Plane coordinates and reported success with every tree a thousand kilometres off site. Both were defensible readings of `HPS-33`, `HPS-35` and `HPS-45` as written, which is what made this a hole in the standard rather than one host's bug |
+| **v1.11** | `HPS-51` gains a tenth action, saying an order's unit system, linear unit and delivery CRS before a bundle import's steps run. Nothing in the Revit import window said whether the order was metric or imperial, what linear unit its delivery was stated in, or which grid, so a curator learned it by opening the zip; the reference host's importer has the same gap, so the words were fixed here before either host named them — and the delivery CRS is printed as published rather than named from a table, because a table in a plugin is a second authority on a value the format owns |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -988,7 +989,7 @@ scripts are proven by being run, and the rule by the check script's line at the 
 **`HPS-51` — The shared actions carry the same words in every host; anything naming a host construct
 carries the host's own noun.** A curator who signs in to Revit in the morning and to Unreal in the
 afternoon is doing one thing twice, and the plugin that calls it two things has made them learn it
-twice. Nine actions are shared, and each carries one set of words:
+twice. Ten actions are shared, and each carries one set of words:
 
 | The action                                                     | The words            | Revit says it on                                                 | Unreal says it on                                    |
 | -------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
@@ -1001,6 +1002,7 @@ twice. Nine actions are shared, and each carries one set of words:
 | Which build this is, and what it is running in                 | `About Mantle Place` | the Account dropdown, and the dialog it opens                     | nothing yet; these are the words when it grows one |
 | Show a bundle import running, step by step, and stop it        | `Bundle Import`, `Cancel`; a step reads `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run` | the import window's heading, its stop button and each step's row | nothing yet; these are the words when it grows one |
 | Choose what a bundle import brings in, before its steps run    | `Include` over the list, `Import` to start; a row that cannot be chosen until another is reads `Needs` and that row's name | the import window, before its steps | nothing yet; these are the words when it grows one |
+| Say an order's unit system, the linear unit its delivery is stated in, and its delivery CRS, before a bundle import's steps run | `Metric` or `Imperial`; `metres`, `US survey feet` or `international feet`; the delivery CRS as the format publishes it — its `EPSG:` code until the format publishes a display label — or `local grid` on the tier that names none. A unit system, or a tier naming no CRS, that the format adds later is shown as published, never mapped to one of these | the import window, under the bundle's name | nothing yet; these are the words when it grows one |
 
 **A row in that list is named for what it builds, and a step is named the same.** The glossary's
 word where it has one — `Terrain`, `Site Model`, and names built on it, as `Land Use Subdivisions`
@@ -1053,7 +1055,8 @@ the section heading. Both hosts were naming the same actions from scratch, twice
 said which of them were the same action — and host #3 would have named them a third time.
 
 _Enforcer:_ `agent-review`, plus whatever half of a host's words sits in a pure core. Revit's auth
-faces and its window labels are constants with a headless test — `AccountRibbon`, `WindowLabels` —
+faces, its window labels and its unit-system line are constants with a headless test —
+`AccountRibbon`, `WindowLabels`, `DeliveryHeader` —
 because the shim is never built in CI (`HPS-02`, `HPS-42`). The ribbon's own faces are not: `Sign
 Out`, `Vault`, `Import Bundle` and `About Mantle Place` are literals in `MantlePlaceApplication`,
 where nothing but review reads them, and Unreal's are inline in the Slate panel on the same terms.

@@ -52,7 +52,7 @@ The ones this tree already turns on:
 | `HPS-18` … `25`, `48` | list → materialize → poll → **re-list** → presign → download; explicit token list, never a scope keyword; one error-body precedence for auth and vault alike. |
 | `HPS-26` … `30`, `44` | write to `.part`, verify, rename; null sha is unknown not absent; eviction only on request.                                                                   |
 | `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers behind roads, site boundaries and land cover. Nothing else here projects, and the projection reaches a UTM origin only — on a State Plane origin there is no projection to perform and the layer is skipped. |
-| `HPS-51`              | signing in and out, the vault, the local import, the import window and its checklist, and the about surface take the standard's words. The casing is this host's; the words are not. |
+| `HPS-51`              | signing in and out, the vault, the local import, the import window with its checklist and its unit-system line (`DeliveryHeader`), and the about surface take the standard's words. The casing is this host's; the words are not. |
 | `HPS-52`              | placement reads `hosts.revit` first. The terrain points come from that block and are in this frame; the tree points come from the host-neutral `landcover.tree_points` and are in this frame only because the delivery CRS is. |
 | `HPS-53`              | `SiteFrame` is where this rule is decided — `CanPlaceGeographic`, `CanPlaceProjected` — and the refusals are what its tests assert. It judges the layer's **CRS**; the linear unit still travels with the origin rather than being read off the file. |
 

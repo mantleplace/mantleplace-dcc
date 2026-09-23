@@ -68,10 +68,14 @@ internal sealed class ImportWindow : Window
     private bool _closeWhenFinished;
     private bool _refreshing;
 
+    /// <param name="deliveryLine">The order's unit system, linear unit and delivery CRS; <c>null</c> shows no line.</param>
+    /// <param name="unitsDisagreement">Shown only when set: the project displays the other unit system.</param>
     /// <param name="begin">Called once, with the curator's choice, when Import is pressed.</param>
     /// <param name="dismiss">Called once when the window goes before Import was pressed.</param>
     internal ImportWindow(
         string bundleName,
+        string? deliveryLine,
+        string? unitsDisagreement,
         ImportChecklist checklist,
         IntPtr revitWindow,
         Action<ImportLayerChoice> begin,
@@ -90,7 +94,7 @@ internal sealed class ImportWindow : Window
         // it is changing and minimises with it.
         new WindowInteropHelper(this) { Owner = revitWindow };
 
-        Content = BuildLayout(bundleName);
+        Content = BuildLayout(bundleName, deliveryLine, unitsDisagreement);
         _body.Child = BuildChecklist();
         BrandChrome.MakePrimary(_import);
 
@@ -160,7 +164,7 @@ internal sealed class ImportWindow : Window
         }
     }
 
-    private UIElement BuildLayout(string bundleName)
+    private UIElement BuildLayout(string bundleName, string? deliveryLine, string? unitsDisagreement)
     {
         StackPanel buttons = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
         buttons.Children.Add(_import);
@@ -169,6 +173,18 @@ internal sealed class ImportWindow : Window
 
         StackPanel top = new();
         top.Children.Add(new TextBlock { Text = bundleName, TextTrimming = TextTrimming.CharacterEllipsis });
+
+        // Under the name and above the checklist, so it is read before anything is chosen, and it
+        // stays through the run. No line at all for a bundle that publishes no delivery block.
+        if (deliveryLine is not null)
+        {
+            top.Children.Add(new TextBlock { Text = deliveryLine, Opacity = 0.7, TextTrimming = TextTrimming.CharacterEllipsis });
+        }
+
+        if (unitsDisagreement is not null)
+        {
+            top.Children.Add(new TextBlock { Text = unitsDisagreement, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+        }
         top.Children.Add(_body);
         top.Children.Add(_progress);
         top.Children.Add(_status);
