@@ -79,7 +79,7 @@ public static class PrepareNotices
         {
             PrepareEnding.Ready => $"{label} is downloaded and ready to import.",
             PrepareEnding.StillPreparing =>
-                $"{label} is still being prepared. Open the vault later and press {WindowLabels.PrepareForRevit} to pick it up.",
+                $"{label} is still being prepared. Open the vault later and press “{WindowLabels.PrepareForRevit}” to pick it up.",
             _ => string.IsNullOrWhiteSpace(detail)
                 ? $"Couldn't prepare {label}."
                 : $"Couldn't prepare {label}. {detail.Trim()}",

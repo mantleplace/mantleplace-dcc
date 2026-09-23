@@ -363,22 +363,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
     }
 
     /// <summary>
-    /// Repaints every ribbon image when the curator changes Revit's UI theme.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// ⚠ <b><c>ThemeChanged</c> is raised for the canvas theme too</b>, and the two are set
-    /// independently in Options: a curator on a dark canvas with a light UI is an ordinary
-    /// configuration. <c>ThemeChangedType</c> is the only thing that separates them, and repainting
-    /// on a canvas change would swap the ribbon to a set nothing on it is drawn for.
-    /// </para>
-    /// <para>
-    /// No dispatcher hop, unlike <see cref="OnAuthStateChanged"/>. A Revit API event is raised on
-    /// Revit's own thread by contract; an <c>AuthSession</c> transition is raised on whichever thread
-    /// finished the work, which is why that one needs the hop and this one does not.
-    /// </para>
-    /// </remarks>
-    /// <summary>
     /// Marshals a Prepare's ending onto Revit's UI thread, then tells the curator if there is anything
     /// to tell (<see cref="PrepareNotifier"/>).
     /// </summary>
@@ -413,6 +397,22 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _ = dispatcher.BeginInvoke(new Action(Notify));
     }
 
+    /// <summary>
+    /// Repaints every ribbon image when the curator changes Revit's UI theme.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠ <b><c>ThemeChanged</c> is raised for the canvas theme too</b>, and the two are set
+    /// independently in Options: a curator on a dark canvas with a light UI is an ordinary
+    /// configuration. <c>ThemeChangedType</c> is the only thing that separates them, and repainting
+    /// on a canvas change would swap the ribbon to a set nothing on it is drawn for.
+    /// </para>
+    /// <para>
+    /// No dispatcher hop, unlike <see cref="OnAuthStateChanged"/>. A Revit API event is raised on
+    /// Revit's own thread by contract; an <c>AuthSession</c> transition is raised on whichever thread
+    /// finished the work, which is why that one needs the hop and this one does not.
+    /// </para>
+    /// </remarks>
     private static void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
     {
         if (e is null || e.ThemeChangedType != ThemeType.UITheme)

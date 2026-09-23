@@ -212,9 +212,13 @@ public sealed class PrepareWatcher
     {
         lock (_gate)
         {
-            return _runs.Find(held => string.Equals(held.OrderId, orderId, StringComparison.Ordinal));
+            return Find(orderId);
         }
     }
+
+    /// <summary>The run for <paramref name="orderId"/>. Callers hold <see cref="_gate"/>.</summary>
+    private PrepareRun? Find(string orderId)
+        => _runs.Find(held => string.Equals(held.OrderId, orderId, StringComparison.Ordinal));
 
     /// <summary>
     /// Starts watching a Prepare of <paramref name="bundle"/>, or joins the one already watching it.
@@ -233,7 +237,7 @@ public sealed class PrepareWatcher
         PrepareRun run;
         lock (_gate)
         {
-            if (_runs.Find(held => string.Equals(held.OrderId, bundle.OrderId, StringComparison.Ordinal)) is { } existing)
+            if (Find(bundle.OrderId) is { } existing)
             {
                 joined = true;
                 return existing;
@@ -249,7 +253,11 @@ public sealed class PrepareWatcher
         return run;
     }
 
-    /// <summary>Cancels every Prepare. Revit is shutting down; nothing may outlive the add-in.</summary>
+    /// <summary>
+    /// Cancels every Prepare, for shutdown. It does not wait: a step already in flight finishes on
+    /// its own thread, ends <see cref="PrepareEnding.Cancelled"/> or <see cref="PrepareEnding.Failed"/>,
+    /// and is never announced, because the shim has stopped listening before it calls this.
+    /// </summary>
     public void CancelAll()
     {
         foreach (PrepareRun run in Runs)

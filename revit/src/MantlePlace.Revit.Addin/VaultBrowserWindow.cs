@@ -295,15 +295,20 @@ internal sealed class VaultBrowserWindow : Window
     }
 
     /// <summary>
-    /// Cancels the refresh in flight, and the Prepare of the selected row — or, when that row is not
-    /// being prepared, the newest Prepare there is.
+    /// Cancels the refresh in flight, and the Prepare of the selected row — or, with no row selected,
+    /// the one Prepare there is when there is exactly one.
     /// </summary>
+    /// <remarks>
+    /// Never a guess among several: cancelling a bundle the curator is not looking at throws away a
+    /// wait they chose. With two running and none selected, Cancel stops only the refresh.
+    /// </remarks>
     private void CancelWork()
     {
         _work?.Cancel();
 
-        PrepareRun? run = Selected is { } bundle ? _watcher.Watching(bundle.OrderId) : null;
-        run ??= _watcher.Runs is { Count: > 0 } running ? running[^1] : null;
+        PrepareRun? run = Selected is { } bundle
+            ? _watcher.Watching(bundle.OrderId)
+            : _watcher.Runs is { Count: 1 } running ? running[0] : null;
         run?.Cancel();
     }
 
