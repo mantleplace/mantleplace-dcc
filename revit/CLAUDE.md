@@ -309,6 +309,26 @@ follow.
   harness. That run also executed `GeometryCreationUtilities.CreateBlendGeometry` for the first
   time, in all three, by building the shrub's DirectShape fallback and measuring it; the tree's
   fallback, which makes the same call, has still never had to run in an import.
+- **The Prepare notice and the Vault badge have left that set, with one edge still open.** A
+  Prepare belongs to `PrepareWatcher`, not to the vault window, and `PrepareNotifier` tells the
+  curator when one ends with the window closed. That means a `NoticePopup` owned by Revit's window,
+  made unable to activate by `ShowActivated = false` plus `WS_EX_NOACTIVATE`, and a badge drawn at
+  run time over the Vault glyph by `RenderTargetBitmap` and assigned to `RibbonButton.LargeImage`.
+  On 2026-09-22 the harness described under the tree family below ran the real notifier, popup,
+  badge and `VaultBrowserCommand.Open` in Revit 2025 and 2027, on scripted Prepare steps with no
+  network. It measured:
+  - Revit's thread-active window, its focus window and the foreground were unchanged as two notices
+    appeared and stacked.
+  - Each notice carried `WS_EX_NOACTIVATE`.
+  - The badged image reached the ribbon, and `UIControlledApplication.MainWindowHandle` read after
+    startup named the main window.
+  - A click opened the vault and cleared both the notices and the badge.
+  - With the vault open, nothing was announced.
+  - An untouched notice closed itself while the badge kept counting it.
+
+  What it did not run is a Revit that was itself the foreground application, which only a human at
+  the keyboard can: a harness that took the foreground to test it would steal the user's. Which
+  notice, when, and where it sits are `PrepareNotices`, `VaultBadge` and `NoticeStack`, headless.
 - **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
   issue and reaches for their storage.** It writes Revit elements sized as published, with names a
   renderer recognises (`RendererKeywords`), and leaves a renderer's own storage to the curator —
