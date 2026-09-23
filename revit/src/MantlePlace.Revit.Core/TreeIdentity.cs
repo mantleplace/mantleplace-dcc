@@ -53,8 +53,8 @@ public readonly record struct ExistingTreePoint(string? Comments, string? Family
 /// finished import from a cancelled one.
 /// </para>
 /// <para>
-/// <b>One stamp for every tree point, shrubs included.</b> The stamp identifies the row and the build,
-/// not the family, so a point whose family changes between plugin versions is still recognised.
+/// <b>One stamp for every tree point, shrubs included:</b> it identifies the row and the build, not
+/// the family.
 /// </para>
 /// <para>
 /// ⛔ Nothing here deletes, for the terrain's reason: an element a curator may have moved, hidden or
@@ -69,8 +69,7 @@ public static class TreeIdentity
     public static string Stamp(string cacheKeyStem, string? artifactSha256, int oneBasedRow)
     {
         ArgumentNullException.ThrowIfNull(cacheKeyStem);
-        return Prefix + cacheKeyStem + "/" + TerrainIdentity.BuildToken(artifactSha256) + "/"
-            + oneBasedRow.ToString(CultureInfo.InvariantCulture);
+        return BuildPrefix(cacheKeyStem, artifactSha256) + oneBasedRow.ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -94,7 +93,7 @@ public static class TreeIdentity
         // cache-key stems are truncated hashes, where one being a prefix of another is a collision
         // waiting rather than a hypothetical.
         string ours = Prefix + cacheKeyStem + "/";
-        string thisBuild = ours + TerrainIdentity.BuildToken(artifactSha256) + "/";
+        string thisBuild = BuildPrefix(cacheKeyStem, artifactSha256);
 
         HashSet<string> present = new(StringComparer.Ordinal);
         int stale = 0;

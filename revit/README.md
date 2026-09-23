@@ -127,8 +127,7 @@ Revit licence.
   2026**: with an asset set on a type's *Twinmotion Substitution*, every instance of that type
   renders at that asset's own size, and raising the family's built-in type `Height` does not move
   it, so a published 5 m tree and a 30 m one come out identical. Without a substitution a type
-  renders as modelled, each instance at its own published height and crown. The substitution is
-  set per type, so the two families take one each. Two more things a curator meets there: Twinmotion
+  renders as modelled, each instance at its own published height and crown. Two more things a curator meets there: Twinmotion
   applies a substitution only when **Enable Substitution** was ticked in the import that brought the
   model in — setting one afterwards and synchronising into a scene imported without it does nothing
   — and it goes on drawing the Revit geometry beside the substituted assets, which is a second
