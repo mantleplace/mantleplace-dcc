@@ -57,6 +57,31 @@ struct FMantlePlaceLandscapeLayer
 };
 
 /**
+ * The manifest's top-level `delivery` block: which unit system the order asked for, which linear unit
+ * its delivered files are in, and which grid they are stated on. Host-neutral, and read here for ONE
+ * purpose -- telling the user what the bundle is in (HPS-51's words, FMantlePlaceDeliveryLogic).
+ *
+ * No placement value comes from it. This host is fixed-frame (HPS-54): its origin and every file its
+ * own block points at are metric UTM on every order, so `hosts.unreal` stays the only source of
+ * anything placed (HPS-33, HPS-52). That is also why the values are kept as the raw published strings
+ * rather than enums, and why an unknown one is not a refusal: nothing here acts on them, so there is
+ * nothing to fail closed (HPS-35) -- a value this host has no word for is shown as published.
+ *
+ * The format publishes no display label for the delivery CRS, so there is no field for one; the line
+ * prints the EPSG code, and this plugin looks up no CRS names.
+ */
+struct FMantlePlaceDeliveryFacts
+{
+	bool bDeclared = false;          // the manifest carried a `delivery` object at all; bundles built
+	                                  // before the block existed carry none, and say nothing
+	FString UnitSystem;              // delivery.unit_system verbatim ("metric", "imperial"); empty if absent
+	FString LinearUnit;              // delivery.linear_unit verbatim ("m", "ftUS", "ft"); empty if absent
+	bool bHasHorizontalEpsg = false; // false when delivery.horizontal_epsg is absent or null -- null is
+	                                  // what the `local_ft` tier publishes, whose files have no named CRS
+	int32 HorizontalEpsg = 0;        // delivery.horizontal_epsg, e.g. 6543
+};
+
+/**
  * The pre-baked, UE-ready subset of a vault bundle's Metadata/manifest.json — i.e. the
  * `unreal` block (the platform<->host contract). Pure data + placement math, no engine actors,
  * so it is unit-testable headless. The platform computes every transform value; we apply
@@ -87,6 +112,7 @@ struct FMantlePlaceVaultManifest
 	                                 // this reader does not speak.
 	FString DeliveryModel;          // packaging.delivery_model, e.g. "base_on_demand" (v14 Vault
 	                                 // Pick-and-Process); empty if absent
+	FMantlePlaceDeliveryFacts Delivery; // the top-level `delivery` block, for DISPLAY only -- see the type
 
 	// --- Heightmap (-> Landscape) ------------------------------------------------------
 	bool bHasHeightmap = false;

@@ -400,6 +400,19 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		M.DeliveryModel = GetString(*PackagingPtr, TEXT("delivery_model"));
 	}
 
+	// `delivery`: display only (see FMantlePlaceDeliveryFacts). Verbatim, never validated -- nothing
+	// below reads it, so an unknown value is a word the user is shown, not a refusal.
+	if (const TSharedPtr<FJsonObject>* DeliveryPtr = GetObject(Root, TEXT("delivery")))
+	{
+		M.Delivery.bDeclared = true;
+		M.Delivery.UnitSystem = GetString(*DeliveryPtr, TEXT("unit_system"));
+		M.Delivery.LinearUnit = GetString(*DeliveryPtr, TEXT("linear_unit"));
+		double HorizontalEpsg = 0.0;
+		// A JSON null reads as no number, which is what the `local_ft` tier means by it.
+		M.Delivery.bHasHorizontalEpsg = (*DeliveryPtr)->TryGetNumberField(TEXT("horizontal_epsg"), HorizontalEpsg);
+		M.Delivery.HorizontalEpsg = M.Delivery.bHasHorizontalEpsg ? FMath::RoundToInt(HorizontalEpsg) : 0;
+	}
+
 	// Road splines: the derived "road_splines" layer of the ODbL Vector/ set (top-level sibling of
 	// `unreal`). The importer consumes the GeoJSON format only; a gpkg-only bundle (base tier) is
 	// treated as not shipping splines. Read before the unreal-presence check so streaming-adjacent
