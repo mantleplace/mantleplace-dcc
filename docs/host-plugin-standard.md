@@ -62,6 +62,7 @@ host met the contract for real:
 | **v1.11** | `HPS-51` gains the words for what a bundle is delivered in — unit system, linear unit, delivery CRS. Neither host said it anywhere: a curator learned an order was in feet by opening the zip, and an Unreal user on an imperial order met foot GIS and CAD files beside metric content with nothing on screen having said so. Both hosts were about to print the same three facts, so their words were fixed here before either did |
 | **v1.12** | ⛔`HPS-53` names the one statement that stands in for an unstated unit: `delivery.linear_unit`, for a file the format says follows the delivered unit. Revit stored the tree points' `ground_z` as metres, and on a State Plane delivery the column is feet, so every tree stood hundreds of metres above its terrain; bundles cut before MPB 1.3.0 state no unit beside that pointer, and read literally the rule left a host a choice between refusing every such tree file and keeping the bug. The terrain's points had always resolved their unit this way, so the precedent was written down rather than invented |
 | **v1.13** | ⛔`HPS-34`'s Revit row gains the MPB 1.3.0 own-copy pointers, `revit.drape` and each layer of `revit.vectors`, whose `sha256` the schema requires; the shared `vector` layers stay optional. The Revit reader began refusing a present own copy with no hash in the change that first placed from it, and the table still listed only the three v19 deliverables |
+| **v1.14** | `HPS-51` gains a tenth action, saying before a bundle import runs what the bundle holds and the import cannot offer. Revit's checklist was built from the plan, so a layer the planner skipped never became a row: the curator saw a shorter list and no reason, and read the reason only in the closing report, in the planner's words, EPSG codes included. The list that fixed it speaks to the user and leaves the technical sentence to the log, and the reference host's roadmapped picker will meet the same bundles, so its words were fixed here first |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -992,7 +993,7 @@ scripts are proven by being run, and the rule by the check script's line at the 
 **`HPS-51` — The shared actions carry the same words in every host; anything naming a host construct
 carries the host's own noun.** A curator who signs in to Revit in the morning and to Unreal in the
 afternoon is doing one thing twice, and the plugin that calls it two things has made them learn it
-twice. Nine actions are shared, and each carries one set of words:
+twice. Ten actions are shared, and each carries one set of words:
 
 | The action                                                     | The words            | Revit says it on                                                 | Unreal says it on                                    |
 | -------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
@@ -1005,6 +1006,7 @@ twice. Nine actions are shared, and each carries one set of words:
 | Which build this is, and what it is running in                 | `About Mantle Place` | the Account dropdown, and the dialog it opens                     | nothing yet; these are the words when it grows one |
 | Show a bundle import running, step by step, and stop it        | `Bundle Import`, `Cancel`; a step reads `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run` | the import window's heading, its stop button and each step's row | nothing yet; these are the words when it grows one |
 | Choose what a bundle import brings in, before its steps run    | `Include` over the list, `Import` to start; a row that cannot be chosen until another is reads `Needs` and that row's name | the import window, before its steps | nothing yet; these are the words when it grows one |
+| Say what a bundle holds that an import cannot offer, and why, before its steps run | `Unavailable` over the list; each entry is the row's name and one sentence from the table below — never a box | the import window, below its checklist | nothing yet; these are the words when it grows one |
 
 **A row in that list is named for what it builds, and a step is named the same.** The glossary's
 word where it has one — `Terrain`, `Site Model`, and names built on it, as `Land Use Subdivisions`
@@ -1019,6 +1021,30 @@ disabled box with no reason beside it reads as a bug.
 are different facts for a curator deciding whether to import again — the first left stamped work in
 the project that a re-import reuses, the second left nothing — so they are different words, and a
 host that shows one word for both has hidden which steps a re-import will pick up.
+
+**What a bundle holds and an import cannot offer is said before the import, in two registers.** A
+row the host cannot import — a file it cannot place in its frame, a file the manifest names and the
+zip lacks, a unit it cannot read, an image it cannot put on the right ground, a deliverable the bundle
+was cut without — is not a row that was never there, and a shorter list with no reason reads as a
+bug. So it is listed under `Unavailable`, below the rows that can be chosen, and cannot be ticked.
+The window speaks to the user: what is missing and what to do, one sentence over every row it is
+true of. The host's own technical reason, EPSG codes and paths included, stays in its log, which is
+where support reads it. Something the bundle says it has none of — a layer it declares had no
+features in the area, imagery it declares unavailable, a derived layer the order never got — is not
+withheld, no vault can change it, and it is not listed. A bundle with nothing withheld shows nothing extra, and an import
+nobody is there to choose for still imports everything it can and logs the rest. The sentences are
+these words, the host's name where the table says *host*, each pluralised for more than one row:
+
+| What stops the row                                               | The words |
+| ---------------------------------------------------------------- | --------- |
+| the bundle was cut before the format carried it in this host's frame, or carries no origin to place it against | *This bundle was built before* host *could receive this. Download the bundle again from your vault to get it.* |
+| the manifest says nothing of it, where the order could have had it | *This bundle does not carry this. Add it to the order in your vault, then download the bundle again.* |
+| the manifest names a file the bundle does not contain            | *This bundle is missing the file for this. Download the bundle again from your vault to get it.* |
+| a unit this host cannot read                                     | *This bundle measures this in a unit this version of Mantle Place cannot read. Update Mantle Place to import it.* |
+| the ground an image covers cannot be confirmed, or the image cannot be read | *Mantle Place could not confirm which ground this covers. Download the bundle again from your vault to get it.* |
+
+Which of a host's skip reasons says which sentence is that host's to decide, and belongs where its
+tests reach it; the sentences are not.
 
 **What a bundle is delivered in is said in one set of words too.** A host that tells the user which
 unit system, linear unit and delivery CRS a bundle is in reads them verbatim off the manifest's

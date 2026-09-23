@@ -783,7 +783,7 @@ internal static class ImportPlannerTests
 
             SkippedImport? skip = FindSkip(plan, ImportStepKind.ImageryDrape);
             run.Equal(
-                skip?.ReasonCode == SkipReasonCode.ArtifactNotInManifest,
+                skip?.ReasonCode == SkipReasonCode.DeclaredAbsent,
                 true,
                 "the producer's own absence is the reason");
             run.Contains(skip?.Reason, "Re-ordering will not change that", "and re-downloading is not advised");

@@ -224,6 +224,19 @@ public enum SkipReasonCode
     /// trees did not come in" apart from "the trees were not wanted", and only this code does.
     /// </remarks>
     LeftOutByChoice,
+
+    /// <summary>
+    /// The bundle says this layer is absent, and no re-download can change that: a layer this host's
+    /// own copy lacks had no features in the area, and imagery declared absent was unavailable for
+    /// the site.
+    /// </summary>
+    /// <remarks>
+    /// Split from <see cref="ArtifactNotInManifest"/>, which is the bundle saying nothing — an absence
+    /// the order can sometimes fix from the vault. The import window lists that one and stays silent
+    /// on this one (<see cref="WindowLabels.UnavailableReason"/>), so the two must not share a code.
+    /// Declared last so every code before it keeps its number.
+    /// </remarks>
+    DeclaredAbsent,
 }
 
 /// <summary>
