@@ -23,8 +23,9 @@ namespace MantlePlace.Revit.Addin;
 /// "I am done looking", not "throw away the thing I paid for".
 /// </para>
 /// <para>
-/// Built in code rather than XAML: it is a header, one list and five buttons, and a code-only window
-/// has no build-action, resource-lookup or designer surface to go wrong inside a Revit add-in.
+/// Built in code rather than XAML: it is a header, a search field, one list and five buttons, and a
+/// code-only window has no build-action, resource-lookup or designer surface to go wrong inside a
+/// Revit add-in.
 /// </para>
 /// </remarks>
 internal sealed class VaultBrowserWindow : Window
@@ -36,6 +37,7 @@ internal sealed class VaultBrowserWindow : Window
     private readonly BundleImportEventHandler _importHandler;
 
     private readonly ListBox _list = new() { Margin = new Thickness(0, 0, 0, 8), MinHeight = 220 };
+    private readonly System.Windows.Controls.TextBox _search = new() { ToolTip = WindowLabels.SearchToolTip, VerticalContentAlignment = VerticalAlignment.Center };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, MinHeight = 40 };
     private readonly Button _refresh = new() { Content = WindowLabels.Refresh, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
     private readonly Button _prepare = new() { Content = WindowLabels.PrepareForRevit, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
@@ -43,18 +45,26 @@ internal sealed class VaultBrowserWindow : Window
     private readonly Button _remove = new() { Content = WindowLabels.RemoveDownload, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
     private readonly Button _cancel = new() { Content = WindowLabels.Cancel, Padding = new Thickness(12, 4, 12, 4), IsEnabled = false };
 
-    private List<VaultBundle> _bundles = [];
+    /// <summary>
+    /// A row for every bundle the listing gave, whether the filter shows it or not. The list holds
+    /// the subset <see cref="VaultRows.Matches"/> keeps, as the same row objects, so a row rewritten
+    /// while hidden reads right when the filter lets it back in.
+    /// </summary>
+    private List<VaultRow> _rows = [];
+    private int _skippedRows;
     private CancellationTokenSource? _work;
 
     /// <summary>
     /// One list row. It exists so a row can be found and rewritten after a download, a removal or an
     /// import — the ListBox held bare strings, so the only way to update one was to rebuild all of
     /// them, and rebuilding all of them is what made <see cref="RefreshAsync"/> the only refresh
-    /// there was.
+    /// there was. It is also what an action reads its bundle from: the selected row, never an index,
+    /// because under a filter the list's indices are not the listing's.
     /// </summary>
     private sealed class VaultRow(VaultBundle bundle, string text)
     {
-        internal VaultBundle Bundle { get; } = bundle;
+        /// <summary>Settable so the re-list after a download can hand the row the facts it was checked against.</summary>
+        internal VaultBundle Bundle { get; set; } = bundle;
 
         internal string Text { get; set; } = text;
 
@@ -78,8 +88,9 @@ internal sealed class VaultBrowserWindow : Window
         Title = WindowLabels.VaultWindowTitle;
         Width = 720;
 
-        // Exactly the header taller than it was, so the list still shows every row it did.
-        Height = 460 + BrandChrome.HeaderHeight;
+        // The header and the search row taller than it was, so the list keeps about the rows it
+        // showed before either.
+        Height = 460 + BrandChrome.HeaderHeight + 32;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         // Owned by Revit's main window so it stays in front of it and minimises with it, rather
@@ -93,6 +104,7 @@ internal sealed class VaultBrowserWindow : Window
         _import.Click += (_, _) => _ = ImportAsync();
         _remove.Click += (_, _) => RemoveSelected();
         _cancel.Click += (_, _) => _work?.Cancel();
+        _search.TextChanged += (_, _) => OnSearchChanged();
 
         _importHandler.Completed += OnImportCompleted;
         Closed += (_, _) => _importHandler.Completed -= OnImportCompleted;
@@ -113,19 +125,37 @@ internal sealed class VaultBrowserWindow : Window
         buttons.Children.Add(_remove);
         buttons.Children.Add(_cancel);
 
+        // Below the buttons, above the list it narrows.
+        DockPanel search = new() { Margin = new Thickness(0, 0, 0, 8) };
+        TextBlock searchLabel = new()
+        {
+            Text = WindowLabels.Search,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        DockPanel.SetDock(searchLabel, Dock.Left);
+        search.Children.Add(searchLabel);
+        search.Children.Add(_search);
+
         DockPanel root = new() { Margin = new Thickness(12) };
         BrandChrome.AddHeader(root, WindowLabels.VaultHeading);
         DockPanel.SetDock(buttons, Dock.Top);
+        DockPanel.SetDock(search, Dock.Top);
         DockPanel.SetDock(_status, Dock.Bottom);
         root.Children.Add(buttons);
+        root.Children.Add(search);
         root.Children.Add(_status);
         root.Children.Add(_list);
         return root;
     }
 
-    private VaultBundle? Selected => _list.SelectedIndex >= 0 && _list.SelectedIndex < _bundles.Count
-        ? _bundles[_list.SelectedIndex]
-        : null;
+    /// <summary>
+    /// The bundle whose row is selected. Read off the row itself: an index into the listing would name
+    /// a different bundle as soon as the filter hid a row above it.
+    /// </summary>
+    private VaultBundle? Selected => (_list.SelectedItem as VaultRow)?.Bundle;
+
+    private bool Filtering => !string.IsNullOrWhiteSpace(_search.Text);
 
     private async Task RefreshAsync()
     {
@@ -144,28 +174,17 @@ internal sealed class VaultBrowserWindow : Window
                 return;
             }
 
-            // Selection survives a refresh. Losing it is the other reason a curator clicks Refresh
-            // twice: they lose their place and go looking for it.
-            string? selectedOrderId = Selected?.OrderId;
+            _rows = [.. listing!.Bundles.Select(bundle => new VaultRow(bundle, Describe(bundle)))];
+            _skippedRows = listing.Warnings.Count;
 
-            _bundles = [.. listing!.Bundles];
-            _list.Items.Clear();
-            foreach (VaultBundle bundle in _bundles)
-            {
-                _list.Items.Add(new VaultRow(bundle, Describe(bundle)));
-            }
-
-            if (selectedOrderId is not null)
-            {
-                _list.SelectedIndex = _bundles.FindIndex(
-                    bundle => string.Equals(bundle.OrderId, selectedOrderId, StringComparison.Ordinal));
-            }
+            // Selection survives a refresh, as long as the bundle still matches the filter. Losing it
+            // is the other reason a curator clicks Refresh twice: they lose their place and go
+            // looking for it.
+            ShowMatchingRows();
 
             // ⛔HPS-21: rows that were skipped are SAID, not swallowed. A silent skip hides platform
-            // corruption for as long as it lasts.
-            Report(listing.Warnings.Count == 0
-                ? $"{_bundles.Count} bundle(s)."
-                : $"{_bundles.Count} bundle(s). {listing.Warnings.Count} row(s) were unreadable and skipped.");
+            // corruption for as long as it lasts, and a filter does not hide it either.
+            ReportCount();
         }
         finally
         {
@@ -385,6 +404,45 @@ internal sealed class VaultBrowserWindow : Window
 
     private void OnImportCompleted(object? sender, string report) => Report(report);
 
+    /// <summary>
+    /// Re-filters as the curator types. Local to the window: nothing is sent to the platform.
+    /// </summary>
+    private void OnSearchChanged()
+    {
+        ShowMatchingRows();
+
+        // The count only while nothing is in flight: a download's progress is the line the curator
+        // is waiting on, and typing must not overwrite it.
+        if (_work is null)
+        {
+            ReportCount();
+        }
+    }
+
+    /// <summary>
+    /// Puts the rows the filter keeps into the list, keeping the selected bundle selected if it is
+    /// still among them.
+    /// </summary>
+    /// <remarks>
+    /// Which rows, and which index is selected among them, is <see cref="VaultRows.Show"/>'s to
+    /// decide and the headless suite's to hold; this only puts the answer into the list.
+    /// </remarks>
+    private void ShowMatchingRows()
+    {
+        VaultView<VaultRow> view = VaultRows.Show(_rows, row => row.Bundle, _search.Text, Selected?.OrderId);
+
+        _list.Items.Clear();
+        foreach (VaultRow row in view.Shown)
+        {
+            _list.Items.Add(row);
+        }
+
+        _list.SelectedIndex = view.SelectedIndex;
+    }
+
+    private void ReportCount()
+        => Report(VaultRows.CountLine(_list.Items.Count, _rows.Count, _skippedRows, Filtering));
+
     private async Task<bool> BeginAsync(string message)
     {
         if (_work is not null)
@@ -434,13 +492,22 @@ internal sealed class VaultBrowserWindow : Window
     /// </remarks>
     private void UpdateRow(VaultBundle bundle, CacheEntry entry)
     {
+        // Rewritten whether or not the filter shows it, so the row reads right when it is let back
+        // in. Only a shown row needs re-seating.
+        VaultRow? target = _rows.Find(
+            row => string.Equals(row.Bundle.OrderId, bundle.OrderId, StringComparison.Ordinal));
+        if (target is null)
+        {
+            return;
+        }
+
+        target.Bundle = bundle;
+        target.Text = Describe(bundle, entry);
+
         for (int index = 0; index < _list.Items.Count; index++)
         {
-            if (_list.Items[index] is VaultRow row
-                && string.Equals(row.Bundle.OrderId, bundle.OrderId, StringComparison.Ordinal))
+            if (_list.Items[index] is VaultRow row && ReferenceEquals(row, target))
             {
-                row.Text = Describe(bundle, entry);
-
                 // A ListBox of plain objects does not re-read ToString on its own. Re-seating the
                 // item is what makes the row redraw, and it keeps the selection where it was.
                 bool wasSelected = _list.SelectedIndex == index;
@@ -461,14 +528,7 @@ internal sealed class VaultBrowserWindow : Window
             _cache.InspectQuick(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion));
 
     private static string Describe(VaultBundle bundle, CacheEntry entry)
-    {
-        string area = bundle.AreaKm2 is { } km2
-            ? km2.ToString("0.##", CultureInfo.InvariantCulture) + " km²"
-            : "area unknown";
-
-        string label = bundle.AoiLabel.Length > 0 ? bundle.AoiLabel : bundle.OrderId;
-        return $"{label} — {area} — {bundle.Status} — {entry.Describe()}";
-    }
+        => VaultRows.Describe(bundle, entry.Describe());
 
     private static string Describe(MaterializeStatus status, VaultBundle bundle)
     {

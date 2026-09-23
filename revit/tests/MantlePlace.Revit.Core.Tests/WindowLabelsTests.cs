@@ -198,6 +198,28 @@ internal static class WindowLabelsTests
             run.Equal(WindowLabels.ProgressText(new StepProgress(1_250, 4_532)), "1,250 of 4,532", "chunk progress");
         });
 
+        run.Case("the search label and the unknown words are Title Case", () =>
+        {
+            foreach (string label in new[]
+            {
+                WindowLabels.Search,
+                WindowLabels.AreaUnknown,
+                WindowLabels.SizeUnknown,
+                WindowLabels.ManifestVersionUnknown,
+            })
+            {
+                foreach (string word in label.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    run.True(char.IsUpper(word[0]), $"\"{word}\" in \"{label}\" is capitalised");
+                }
+            }
+
+            run.Equal(WindowLabels.Search, "Search", "the search field's label");
+            run.Equal(WindowLabels.AreaUnknown, "Area Unknown", "an area the listing did not give");
+            run.Equal(WindowLabels.SizeUnknown, "Size Unknown", "a size the listing did not give");
+            run.Equal(WindowLabels.ManifestVersionUnknown, "Manifest Version Unknown", "a version the listing did not give");
+        });
+
         return run.Report("window labels");
     }
 }

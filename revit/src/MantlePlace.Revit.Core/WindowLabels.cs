@@ -83,6 +83,24 @@ public static class WindowLabels
     /// <summary>Dismiss a window whose work is over.</summary>
     public const string Close = "Close";
 
+    /// <summary>
+    /// The label beside the vault window's search field. It narrows the list by area label and
+    /// nothing else (<see cref="VaultRows.Matches"/>); the field's tooltip says so.
+    /// </summary>
+    public const string Search = "Search";
+
+    /// <summary>The search field's tooltip: what it matches, so an order id typed into it failing is not a surprise.</summary>
+    public const string SearchToolTip = "Shows only the bundles whose area label contains this text.";
+
+    /// <summary>A vault row whose listing gave no area. Was <c>area unknown</c>, beside the Title Case words below.</summary>
+    public const string AreaUnknown = "Area Unknown";
+
+    /// <summary>A vault row whose listing gave no size: ⛔<c>HPS-20</c>, unknown and never zero.</summary>
+    public const string SizeUnknown = "Size Unknown";
+
+    /// <summary>A vault row whose listing gave no manifest version.</summary>
+    public const string ManifestVersionUnknown = "Manifest Version Unknown";
+
     /// <summary>The import window's title bar.</summary>
     public const string ImportWindowTitle = "Mantle Place Bundle Import";
 
