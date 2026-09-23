@@ -60,6 +60,7 @@ host met the contract for real:
 | **v1.9** | `HPS-51` gains a ninth action, choosing what a bundle import brings in before its steps run. A Revit import brought in every step the planner found, and a curator who wanted the terrain alone had no way to leave the rest out but to hold a bundle that lacked it; the checklist that fixed it is a surface the reference host's roadmapped picker will share, so its words were fixed here before either host named them — and `Layers`, the word both hosts' developers use for the rows, was kept off the screen, because it already names three other things in the glossary and two more in the reference host's editor |
 | **v1.10** | ⛔`HPS-52` and ⛔`HPS-53`, plus `HPS-54` — place from the host block first, place only what can be shown to be in the host frame, and declare which kind of frame the host has; `HPS-45` narrowed in the same pass to a fallback that reaches a UTM origin and nothing else. The suite had assumed every host frame was a UTM zone and never said so, and two hosts met a State Plane foot delivery and did opposite things: Revit refused each layer it could not place and named the reason, while Unreal's tree-point reader subtracted its metric UTM origin from foot State Plane coordinates and reported success with every tree a thousand kilometres off site. Both were defensible readings of `HPS-33`, `HPS-35` and `HPS-45` as written, which is what made this a hole in the standard rather than one host's bug |
 | **v1.11** | `HPS-51` gains the words for what a bundle is delivered in — unit system, linear unit, delivery CRS. Neither host said it anywhere: a curator learned an order was in feet by opening the zip, and an Unreal user on an imperial order met foot GIS and CAD files beside metric content with nothing on screen having said so. Both hosts were about to print the same three facts, so their words were fixed here before either did |
+| **v1.12** | ⛔`HPS-53` names the one statement that stands in for an unstated unit: `delivery.linear_unit`, for a file the format says follows the delivered unit. Revit stored the tree points' `ground_z` as metres, and on a State Plane delivery the column is feet, so every tree stood hundreds of metres above its terrain; bundles cut before MPB 1.3.0 state no unit beside that pointer, and read literally the rule left a host a choice between refusing every such tree file and keeping the bug. The terrain's points had always resolved their unit this way, so the precedent was written down rather than invented |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -1140,6 +1141,14 @@ bundle, never from the delivery tier, and never from the last file that worked. 
 projected coordinates reads **both halves** of the frame the format states for them, the CRS and the
 linear unit, and where it cannot read both, or reads a CRS that is not its own, the file is
 **unplaceable**. An unstated CRS is never assumed to match, and neither is an unstated unit.
+
+**One statement stands in for an unstated unit, and only where the format makes it.** Where the format
+says a file's values follow the delivered linear unit — the terrain points, and the tree points'
+`ground_z` column before MPB 1.3.0 stated its unit beside the pointer — a host reads
+`delivery.linear_unit` as that file's unit, and a bundle stating neither is metric, as every bundle
+before the `delivery` block was. That reads a published statement about the file; it does not infer a
+unit from the tier, and a file the format does not tie to the delivered unit has no such fallback. A
+unit the file does state always wins.
 
 ⛔ **The refusal is a named skip, and it is never a conversion.** The host reports which content it
 did not place and why, in the words the user is already reading the import in (`HPS-51`), and the

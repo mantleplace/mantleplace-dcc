@@ -75,6 +75,17 @@ public sealed class BundleArtifact
     /// uninterpretable and every point is a tree (<c>spec/format.md</c> §4.4).
     /// </remarks>
     public string? FoliageTypeVocabulary { get; init; }
+
+    /// <summary>
+    /// Raw <c>horizontal_units</c>, tree points only — the unit of the <c>x</c> and <c>y</c>
+    /// columns, where <see cref="Units"/> is the <c>ground_z</c> column's — or <c>null</c> where the
+    /// manifest stated none.
+    /// </summary>
+    /// <remarks>
+    /// Added by MPB 1.3.0. The two differ on a delivery with no projected foot zone, whose
+    /// coordinates are metres beside foot heights (<c>spec/format.md</c> §6.6).
+    /// </remarks>
+    public string? HorizontalUnits { get; init; }
 }
 
 /// <summary>One <c>hosts.&lt;hostId&gt;.readiness.&lt;path&gt;</c> entry.</summary>

@@ -334,7 +334,7 @@ internal static class SiteVectorTests
                 471835.00,4257485.00,1985.45,3.10,1.08
                 """,
                 MetricFrame,
-                foliageVocabulary: null);
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             IReadOnlyList<SiteTreePoint> trees = parse.Points;
@@ -344,6 +344,27 @@ internal static class SiteVectorTests
             run.Within(trees[0].GroundElevationM, 2006.71, 1e-9, "ground_z is absolute orthometric metres");
             run.Within(trees[0].HeightM, 3.38, 1e-9, "height");
             run.Within(trees[0].CrownRadiusM, 1.18, 1e-9, "crown radius");
+        });
+
+        run.Case("ground_z is read in the unit it is published in, so a foot delivery's trees stand on the ground", () =>
+        {
+            // A real sp_ftus bundle's first row: ground_z 313.56 is US survey feet, beside terrain
+            // points at ~303 ftUS. Read as metres it stands the tree ~218 m above the toposolid.
+            // height_m and crown_radius_m are metres on every delivery, as their names say.
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m
+                1450459.2833,13171825.6,313.56,19.62,6.87
+                """,
+                FootFrame,
+                foliageVocabulary: null,
+                groundUnit: LinearUnit.UsSurveyFoot);
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Within(parse.Points[0].EastM, 100.0, 1e-3, "x is feet in the origin's CRS, converted once");
+            run.Within(parse.Points[0].GroundElevationM, 313.56 * 1200.0 / 3937.0, 1e-9, "ground_z is feet, stored as metres");
+            run.Within(parse.Points[0].HeightM, 19.62, 1e-9, "height_m stays metres");
+            run.Within(parse.Points[0].CrownRadiusM, 6.87, 1e-9, "crown_radius_m stays metres");
         });
 
         run.Case("a row the DEM had no ground for is dropped, not placed at zero", () =>
@@ -358,7 +379,7 @@ internal static class SiteVectorTests
                 471835.00,4257485.00,1985.45,3.10,1.08
                 """,
                 MetricFrame,
-                foliageVocabulary: null);
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points.Count, 1, "the row with no ground elevation is dropped");
@@ -368,17 +389,17 @@ internal static class SiteVectorTests
         run.Case("a missing or unrecognised header is a read failure, not an empty layer", () =>
         {
             run.Contains(
-                TreePointsReader.Parse("472195.00,4257585.00,2006.71,3.38,1.18", MetricFrame, null).Failure,
+                TreePointsReader.Parse("472195.00,4257585.00,2006.71,3.38,1.18", MetricFrame, null, groundUnit: LinearUnit.Metre).Failure,
                 "header",
                 "a headerless file is refused");
 
             run.Contains(
-                TreePointsReader.Parse("a,b,c\n1,2,3", MetricFrame, null).Failure,
+                TreePointsReader.Parse("a,b,c\n1,2,3", MetricFrame, null, groundUnit: LinearUnit.Metre).Failure,
                 "header",
                 "an unrecognised header is refused");
 
             run.Contains(
-                TreePointsReader.Parse(string.Empty, MetricFrame, null).Failure,
+                TreePointsReader.Parse(string.Empty, MetricFrame, null, groundUnit: LinearUnit.Metre).Failure,
                 "empty",
                 "an empty file says so");
         });
@@ -394,7 +415,7 @@ internal static class SiteVectorTests
                 1.18,3.38,2006.71,4257585.00,472195.00
                 """,
                 MetricFrame,
-                foliageVocabulary: null);
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points.Count, 1, "one tree");
@@ -416,7 +437,7 @@ internal static class SiteVectorTests
                 471835.00,4257485.00,1985.45,3.10,1.08,tree,0.44
                 """,
                 MetricFrame,
-                FoliageTypes.KnownVocabulary);
+                FoliageTypes.KnownVocabulary, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points.Count, 2, "both points, the unknown column notwithstanding");
@@ -437,7 +458,7 @@ internal static class SiteVectorTests
                 471835.00,4257485.00,1985.45,3.10,1.08,tree
                 """,
                 MetricFrame,
-                FoliageTypes.KnownVocabulary);
+                FoliageTypes.KnownVocabulary, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points.Count, 2, "both points");
@@ -459,7 +480,7 @@ internal static class SiteVectorTests
                 471835.00,4257485.00,1985.45,3.10,1.08,shrub
                 """,
                 MetricFrame,
-                FoliageTypes.KnownVocabulary);
+                FoliageTypes.KnownVocabulary, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points.Count, 2, "an unknown value costs no point");
@@ -484,7 +505,7 @@ internal static class SiteVectorTests
                 471835.00,4257485.00,1985.45,   ,3.10,1.08
                 """,
                 MetricFrame,
-                FoliageTypes.KnownVocabulary);
+                FoliageTypes.KnownVocabulary, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points.Count, 2, "an empty foliage cell costs no point, unlike an empty ground_z");
@@ -504,7 +525,7 @@ internal static class SiteVectorTests
                 472195.00,4257585.00,2006.71,3.38,1.18
                 """,
                 MetricFrame,
-                FoliageTypes.KnownVocabulary);
+                FoliageTypes.KnownVocabulary, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points.Count, 1, "the row stands");
@@ -525,7 +546,7 @@ internal static class SiteVectorTests
                 472195.00,4257585.00,2006.71,3.38,1.18
                 """,
                 MetricFrame,
-                foliageVocabulary: null);
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "every point is a tree");
@@ -544,7 +565,7 @@ internal static class SiteVectorTests
                 471835.00,4257485.00,1985.45,3.10,1.08,espalier
                 """,
                 MetricFrame,
-                foliageVocabulary: "2");
+                foliageVocabulary: "2", groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points[0].FoliageType, FoliageType.Shrub, "a known value keeps its meaning");
@@ -564,7 +585,7 @@ internal static class SiteVectorTests
                 472195.00,4257585.00,2006.71,3.38,1.18,shrub
                 """,
                 MetricFrame,
-                foliageVocabulary: null);
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points.Count, 1, "the point still lands: the five columns that matter parsed");
@@ -582,7 +603,7 @@ internal static class SiteVectorTests
                 472195.00,4257585.00,2006.71,3.38,1.18
                 """,
                 MetricFrame,
-                FoliageTypes.KnownVocabulary);
+                FoliageTypes.KnownVocabulary, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "every point is a tree");
@@ -598,7 +619,7 @@ internal static class SiteVectorTests
                 shrub,1.18,3.38,2006.71,4257585.00,472195.00
                 """,
                 MetricFrame,
-                FoliageTypes.KnownVocabulary);
+                FoliageTypes.KnownVocabulary, groundUnit: LinearUnit.Metre);
 
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points[0].FoliageType, FoliageType.Shrub, "first column, still the foliage type");
@@ -616,7 +637,7 @@ internal static class SiteVectorTests
                 471835.00,4257485.00,1985.45,3.10,1.08,shrubland
                 """,
                 MetricFrame,
-                FoliageTypes.KnownVocabulary);
+                FoliageTypes.KnownVocabulary, groundUnit: LinearUnit.Metre);
 
             run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "`Shrub` is not `shrub`");
             run.Equal(parse.Points[1].FoliageType, FoliageType.Tree, "`shrubland` is not `shrub`");

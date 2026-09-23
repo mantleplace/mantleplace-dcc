@@ -10,7 +10,10 @@ namespace MantlePlace.Revit.Core;
 /// A <em>tree point</em> is any published point of the tree layer, whatever its foliage type — the
 /// layer is named for what it publishes, not for what grows there.
 /// </remarks>
-/// <param name="GroundElevationM">Absolute orthometric height of the ground beneath it.</param>
+/// <param name="GroundElevationM">
+/// Absolute orthometric height of the ground beneath it, in metres whatever unit the file carried
+/// it in.
+/// </param>
 /// <param name="HeightM">Total height, ground to apex.</param>
 /// <param name="CrownRadiusM">Crown radius at its widest.</param>
 /// <param name="FoliageType">As the platform classified it; never derived from the dimensions.</param>
@@ -102,7 +105,16 @@ public static class TreePointsReader
     /// <c>landcover.tree_points.foliage_type_vocabulary</c> as published, or <c>null</c> where the
     /// manifest carried none.
     /// </param>
-    public static TreePointsParse Parse(string csvText, SiteFrame frame, string? foliageVocabulary)
+    /// <param name="groundUnit">
+    /// The unit of the <c>ground_z</c> column, as the planner resolved it — feet on a foot delivery
+    /// (<c>spec/format.md</c> §6.6). Required rather than defaulted to metres: a caller that forgot
+    /// it would stand every tree on a foot delivery at 3.28 times its ground height.
+    /// </param>
+    public static TreePointsParse Parse(
+        string csvText,
+        SiteFrame frame,
+        string? foliageVocabulary,
+        LinearUnit groundUnit)
     {
         ArgumentNullException.ThrowIfNull(frame);
 
@@ -147,7 +159,7 @@ public static class TreePointsReader
                 continue;
             }
 
-            if (!TryReadRow(fields, columns, frame, out SiteTreePoint point))
+            if (!TryReadRow(fields, columns, frame, groundUnit, out SiteTreePoint point))
             {
                 continue;
             }
@@ -237,6 +249,7 @@ public static class TreePointsReader
         string[] fields,
         Dictionary<string, int> columns,
         SiteFrame frame,
+        LinearUnit groundUnit,
         out SiteTreePoint point)
     {
         point = default;
@@ -251,7 +264,9 @@ public static class TreePointsReader
             return false;
         }
 
-        point = new SiteTreePoint(east, north, ground, height, crown, FoliageType.Tree);
+        // Only ground_z has a unit to read. height_m and crown_radius_m say theirs in their names.
+        double groundM = ground * LinearUnits.MetresPerUnit(groundUnit);
+        point = new SiteTreePoint(east, north, groundM, height, crown, FoliageType.Tree);
         return true;
     }
 

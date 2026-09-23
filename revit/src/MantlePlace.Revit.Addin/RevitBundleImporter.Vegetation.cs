@@ -57,7 +57,8 @@ internal sealed partial class RevitBundleImporter
         TreePointsParse parse = TreePointsReader.Parse(
             File.ReadAllText(csvPath),
             frame,
-            step.FoliageTypeVocabulary);
+            step.FoliageTypeVocabulary,
+            step.Units);
         if (parse.Failure is not null)
         {
             Say(parse.Failure);

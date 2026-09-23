@@ -1002,6 +1002,91 @@ internal static class ImportPlannerTests
                 "a manifest that names none carries none — which is not the same as naming \"1\"");
         });
 
+        run.Case("the vegetation step carries the unit ground_z is published in", () =>
+        {
+            // MPB 1.3.0 states the tree file's frame beside its path; `units` is the ground_z
+            // column's. Before it, the file stated none, and ground_z followed the delivered
+            // elevation — the same fallback the terrain's own points take.
+            run.True(
+                FindStep(PlanFor(FootTreeManifest("\"units\": \"ftUS\", \"horizontal_units\": \"ftUS\"", delivery: false), FootTreeBundle), ImportStepKind.Vegetation)?.Units == LinearUnit.UsSurveyFoot,
+                "a stated unit is read");
+
+            run.True(
+                FindStep(PlanFor(FootTreeManifest(stated: null, delivery: true), FootTreeBundle), ImportStepKind.Vegetation)?.Units == LinearUnit.UsSurveyFoot,
+                "an older foot bundle falls back to delivery.linear_unit, as the terrain does");
+
+            run.True(
+                FindStep(
+                    PlanFor(
+                        $$"""
+                        {
+                          "version": "1.0.0",
+                          "layout": { "tree_points": "Landcover/TreePoints.csv" },
+                          {{MetricGeoreference}},
+                          "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv", "crs": "EPSG:32613" } }
+                        }
+                        """,
+                        ["README.md", "Landcover/TreePoints.csv"]),
+                    ImportStepKind.Vegetation)?.Units == LinearUnit.Metre,
+                "a bundle stating neither is metric, which every pre-delivery bundle was");
+        });
+
+        run.Case("on a local grid the plan is metres and ground_z is feet, and each is read as stated", () =>
+        {
+            // local_ft: no projected foot zone exists, so x and y are metric UTM, beside the metric
+            // origin they are subtracted from, while ground_z is international feet (spec/format.md
+            // §6.6). The one tier where the two units differ.
+            BundleImportPlan plan = PlanFor(
+                $$"""
+                {
+                  "version": "1.3.0",
+                  "layout": { "tree_points": "Landcover/TreePoints.csv" },
+                  {{MetricGeoreference}},
+                  "delivery": { "unit_system": "imperial", "tier": "local_ft", "linear_unit": "ft" },
+                  "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv", "crs": "EPSG:32613",
+                                                  "units": "ft", "horizontal_units": "m" } }
+                }
+                """,
+                FootTreeBundle);
+
+            run.True(HasStep(plan, ImportStepKind.Vegetation), "metre coordinates beside a metre origin are placed");
+            run.True(
+                FindStep(plan, ImportStepKind.Vegetation)?.Units == LinearUnit.InternationalFoot,
+                "and ground_z is read as the feet it is stated in");
+        });
+
+        run.Case("a tree file whose units this host cannot use is refused, not scaled by a guess", () =>
+        {
+            BundleImportPlan unknownGround = PlanFor(
+                FootTreeManifest("\"units\": \"furlong\", \"horizontal_units\": \"ftUS\"", delivery: false),
+                FootTreeBundle);
+            run.False(HasStep(unknownGround, ImportStepKind.Vegetation), "an unknown ground unit plans nothing");
+            run.True(
+                FindSkip(unknownGround, ImportStepKind.Vegetation)?.ReasonCode == SkipReasonCode.UnitNotUnderstood,
+                "and says the unit was not understood");
+
+            // x and y are subtracted from the origin in the ORIGIN's unit. A file stating another
+            // contradicts its own CRS, and is refused rather than reconciled (HPS-35, HPS-53).
+            BundleImportPlan otherPlan = PlanFor(
+                FootTreeManifest("\"units\": \"ftUS\", \"horizontal_units\": \"m\"", delivery: false),
+                FootTreeBundle);
+            run.False(HasStep(otherPlan, ImportStepKind.Vegetation), "a plan unit other than the origin's plans nothing");
+            run.True(
+                FindSkip(otherPlan, ImportStepKind.Vegetation)?.ReasonCode == SkipReasonCode.CoordinateSystemNotSupported,
+                "and is refused as not in this host's frame");
+            run.Contains(
+                FindSkip(otherPlan, ImportStepKind.Vegetation)?.Reason,
+                "\"m\"",
+                "naming the unit it states");
+
+            BundleImportPlan unknownPlan = PlanFor(
+                FootTreeManifest("\"units\": \"ftUS\", \"horizontal_units\": \"league\"", delivery: false),
+                FootTreeBundle);
+            run.True(
+                FindSkip(unknownPlan, ImportStepKind.Vegetation)?.ReasonCode == SkipReasonCode.UnitNotUnderstood,
+                "an unknown plan unit is not understood either");
+        });
+
         run.Case("a bundle carrying ONLY parity layers is still importable", () =>
         {
             // The predicate that decides this deliberately excludes SetSharedCoordinates, because
@@ -1488,6 +1573,23 @@ internal static class ImportPlannerTests
         """;
 
     private const string NoGeoreference = "\"hosts\": { \"revit\": {} }";
+
+    private static readonly string[] FootTreeBundle = ["README.md", "Landcover/TreePoints.csv"];
+
+    /// <summary>
+    /// A State Plane foot bundle carrying only tree points in the delivery CRS; <paramref name="stated"/>
+    /// is the tree entry's unit members as JSON, or <c>null</c> for a file that states none.
+    /// </summary>
+    private static string FootTreeManifest(string? stated, bool delivery) =>
+        $$"""
+        {
+          "version": "1.3.0",
+          "layout": { "tree_points": "Landcover/TreePoints.csv" },
+          {{FootGeoreference}},
+          {{(delivery ? "\"delivery\": { \"unit_system\": \"imperial\", \"tier\": \"sp_ftus\", \"horizontal_epsg\": 2231, \"linear_unit\": \"ftUS\" }," : string.Empty)}}
+          "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv", "crs": "EPSG:2231"{{(stated is null ? string.Empty : ", " + stated)}} } }
+        }
+        """;
 
     /// <summary>
     /// <see cref="ParityManifest"/> at MPB 1.1.0, with a <c>location.time_zone</c> block;

@@ -563,6 +563,7 @@ public static class BundleImportPlanner
         SiteFrame? frame = SiteFrame.For(manifest);
 
         PlanPlacedArtifact(
+            manifest,
             manifest.RoadSplines,
             frame,
             entries,
@@ -572,6 +573,7 @@ public static class BundleImportPlanner
             skipped);
 
         PlanPlacedArtifact(
+            manifest,
             manifest.LandUse,
             frame,
             entries,
@@ -581,6 +583,7 @@ public static class BundleImportPlanner
             skipped);
 
         PlanPlacedArtifact(
+            manifest,
             manifest.LandCover,
             frame,
             entries,
@@ -590,6 +593,7 @@ public static class BundleImportPlanner
             skipped);
 
         PlanPlacedArtifact(
+            manifest,
             manifest.Water,
             frame,
             entries,
@@ -601,6 +605,7 @@ public static class BundleImportPlanner
         PlanRoadPolygons(manifest, frame, entries, steps, skipped);
 
         PlanPlacedArtifact(
+            manifest,
             manifest.TreePoints,
             frame,
             entries,
@@ -643,6 +648,7 @@ public static class BundleImportPlanner
         }
 
         PlanPlacedArtifact(
+            manifest,
             manifest.RoadPolygons,
             frame,
             entries,
@@ -664,6 +670,7 @@ public static class BundleImportPlanner
     /// the same rule <c>HPS-35</c> applies to an unreadable unit one level up.
     /// </remarks>
     private static void PlanPlacedArtifact(
+        BundleManifest manifest,
         BundleArtifact? artifact,
         SiteFrame? frame,
         BundleEntryIndex entries,
@@ -732,10 +739,21 @@ public static class BundleImportPlanner
             return;
         }
 
+        // A lon/lat layer has no linear unit to read. A projected one does, and it is resolved the
+        // way the terrain's is (TryResolveUnits) — which is what stands a foot delivery's trees on
+        // the ground rather than at 3.28 times its height.
+        LinearUnit units = LinearUnit.Unspecified;
+        if (!geographic && UnplaceableUnits(artifact, manifest, frame, label, out units) is { } refusal)
+        {
+            skipped.Add(new SkippedImport { Kind = kind, ReasonCode = refusal.Code, Reason = refusal.Reason });
+            return;
+        }
+
         steps.Add(new ImportStep
         {
             Kind = kind,
             EntryName = entry,
+            Units = units,
             ExpectedSha256 = artifact.Sha256,
             Frame = frame,
 
@@ -1029,18 +1047,75 @@ public static class BundleImportPlanner
     }
 
     /// <summary>
+    /// Why a projected artifact's units stop it being placed, or <c>null</c> with the resolved
+    /// <paramref name="units"/> when they do not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>units</c> is the file's own, resolved with the terrain's rule. A stated
+    /// <c>horizontal_units</c> — the tree points', since MPB 1.3.0 — is checked, not used: the plan
+    /// coordinates are subtracted from the origin in the ORIGIN's unit (<see cref="SiteFrame"/>), so
+    /// a file stating another has contradicted its own CRS and is refused rather than reconciled
+    /// (<c>HPS-35</c>, <c>HPS-53</c>).
+    /// </para>
+    /// </remarks>
+    private static (SkipReasonCode Code, string Reason)? UnplaceableUnits(
+        BundleArtifact artifact,
+        BundleManifest manifest,
+        SiteFrame frame,
+        string label,
+        out LinearUnit units)
+    {
+        if (!TryResolveUnits(artifact, manifest, out units))
+        {
+            return (SkipReasonCode.UnitNotUnderstood,
+                $"The {label} declare units \"{artifact.Units}\", which this plugin does not understand. "
+                + "Importing them could place them at the wrong height, so they were left out.");
+        }
+
+        if (artifact.HorizontalUnits is not { } stated)
+        {
+            return null;
+        }
+
+        if (!TryReadUnitToken(stated, out LinearUnit plan))
+        {
+            return (SkipReasonCode.UnitNotUnderstood,
+                $"The {label} declare plan units \"{stated}\", which this plugin does not understand. "
+                + "Importing them could place them at the wrong scale, so they were left out.");
+        }
+
+        LinearUnit origin = frame.Origin.LinearUnit == LinearUnit.Unspecified ? LinearUnit.Metre : frame.Origin.LinearUnit;
+        return plan == origin
+            ? null
+            : (SkipReasonCode.CoordinateSystemNotSupported,
+                $"The {label} are in \"{stated}\", but this project's origin is in "
+                + $"\"{LinearUnits.ToManifestToken(origin)}\". A file that disagrees with the origin it is "
+                + "placed against is not in this host's frame, so they were left out.");
+    }
+
+    /// <summary>
     /// Per-artifact <c>units</c> wins; the <c>delivery</c> block is the fallback; a bundle that
     /// states neither is metric, which is what every pre-<c>delivery</c> bundle was.
     /// </summary>
     private static bool TryResolveUnits(BundleArtifact artifact, BundleManifest manifest, out LinearUnit units)
     {
-        switch (artifact.Units)
+        if (artifact.Units is null)
         {
-            case null:
-                units = manifest.Delivery.LinearUnit == LinearUnit.Unspecified
-                    ? LinearUnit.Metre
-                    : manifest.Delivery.LinearUnit;
-                return true;
+            units = manifest.Delivery.LinearUnit == LinearUnit.Unspecified
+                ? LinearUnit.Metre
+                : manifest.Delivery.LinearUnit;
+            return true;
+        }
+
+        return TryReadUnitToken(artifact.Units, out units);
+    }
+
+    /// <summary>The three linear units the ETL delivers in, by their manifest token.</summary>
+    private static bool TryReadUnitToken(string token, out LinearUnit units)
+    {
+        switch (token)
+        {
             case "m":
                 units = LinearUnit.Metre;
                 return true;
