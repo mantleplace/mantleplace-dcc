@@ -11,6 +11,7 @@ exitCode |= ImportLayerTests.Run();
 exitCode |= SurfacePointsTests.Run();
 exitCode |= SurfaceTinTests.Run();
 exitCode |= SiteVectorTests.Run();
+exitCode |= HostFramePlacementTests.Run();
 exitCode |= ProjectionConformanceTests.Run();
 exitCode |= CacheKeySanitiserTests.Run();
 exitCode |= ImportStepLifetimeTests.Run();

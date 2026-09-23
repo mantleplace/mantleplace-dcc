@@ -33,6 +33,8 @@ internal static class ManifestConformanceTests
         "roadSplinesPath",
         "roadSplinesSha256",
         "hasRoadSplines",
+        "revitRoadSplinesPath",
+        "revitDrapePath",
         "toposurfacePointsSha256",
         "surfaceDxfSha256",
         "ifcSiteSha256",
@@ -312,6 +314,18 @@ internal static class ManifestConformanceTests
         if (ConformanceCorpus.WantsBool(corpusCase, "hasRoadSplines", out bool hasRoadSplines))
         {
             run.Equal(manifest.HasRoadSplines, hasRoadSplines, "hasRoadSplines");
+        }
+
+        // The pointers this host PLACES from, which HPS-52 takes from its own block first — not the
+        // host-invariant selection above, which stays the shared set's.
+        if (ConformanceCorpus.WantsString(corpusCase, "revitRoadSplinesPath", out string revitRoadSplinesPath))
+        {
+            run.Equal(manifest.RoadSplines?.Path ?? string.Empty, revitRoadSplinesPath, "revitRoadSplinesPath");
+        }
+
+        if (ConformanceCorpus.WantsString(corpusCase, "revitDrapePath", out string revitDrapePath))
+        {
+            run.Equal(manifest.RevitDrape?.Path ?? string.Empty, revitDrapePath, "revitDrapePath");
         }
 
         // The three v19 `revit.*` hashes. Asserting the VALUE rather than a has-hash flag is what

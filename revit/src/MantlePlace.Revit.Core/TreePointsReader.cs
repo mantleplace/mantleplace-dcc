@@ -61,10 +61,10 @@ public sealed record TreePointsParse
 /// </summary>
 /// <remarks>
 /// <para>
-/// The file is absolute AOI-UTM — the DEM's own CRS, whatever the delivery tier — so unlike the
-/// toposurface points it is not already local, and unlike the vector layers it is not geographic.
-/// <see cref="SiteFrame"/> owns both the subtraction and the refusal when the bundle's origin is in
-/// a different CRS entirely.
+/// The file is absolute, in the delivery CRS its manifest entry states — so unlike the toposurface
+/// points it is not already local, and unlike the vector layers it is not geographic.
+/// <see cref="SiteFrame"/> owns both the subtraction and the refusal when that CRS is not the
+/// origin's.
 /// </para>
 /// <para>
 /// Columns are resolved from the HEADER, not by position. The manifest publishes

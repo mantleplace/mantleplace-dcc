@@ -542,11 +542,12 @@ public static class BundleImportPlanner
     /// </summary>
     /// <remarks>
     /// <para>
-    /// All three carry coordinates that are absolute — lon/lat for the vector layers, AOI-UTM for the
-    /// tree points — where every artifact this host imported before them was either already local
-    /// (the toposurface points) or placed by Revit's own link machinery (the DXF, the IFC). So they
-    /// share a gate the older kinds do not have: without the manifest's pre-derived origin there is
-    /// no frame to place them in, and this host does not work one out for itself (<c>HPS-33</c>).
+    /// All three carry coordinates that are absolute — lon/lat for the vector layers, the delivery
+    /// CRS for the tree points — where every artifact this host imported before them was either
+    /// already local (the toposurface points) or placed by Revit's own link machinery (the DXF, the
+    /// IFC). So they share a gate the older kinds do not have: without the manifest's pre-derived
+    /// origin there is no frame to place them in, and this host does not work one out for itself
+    /// (<c>HPS-33</c>).
     /// </para>
     /// <para>
     /// They are planned independently of the terrain. A road centreline carries its own draped Z, so
@@ -570,7 +571,8 @@ public static class BundleImportPlanner
             ImportStepKind.RoadCentrelines,
             "road centrelines",
             steps,
-            skipped);
+            skipped,
+            VectorAbsence(manifest, "road centrelines"));
 
         PlanPlacedArtifact(
             manifest,
@@ -580,7 +582,8 @@ public static class BundleImportPlanner
             ImportStepKind.SiteBoundaries,
             "site boundaries",
             steps,
-            skipped);
+            skipped,
+            VectorAbsence(manifest, "site boundaries"));
 
         PlanPlacedArtifact(
             manifest,
@@ -590,7 +593,8 @@ public static class BundleImportPlanner
             ImportStepKind.LandCover,
             "land cover",
             steps,
-            skipped);
+            skipped,
+            VectorAbsence(manifest, "land cover"));
 
         PlanPlacedArtifact(
             manifest,
@@ -600,7 +604,8 @@ public static class BundleImportPlanner
             ImportStepKind.Water,
             "water bodies",
             steps,
-            skipped);
+            skipped,
+            VectorAbsence(manifest, "water bodies"));
 
         PlanRoadPolygons(manifest, frame, entries, steps, skipped);
 
@@ -655,7 +660,8 @@ public static class BundleImportPlanner
             ImportStepKind.RoadPolygons,
             "road surfaces",
             steps,
-            skipped);
+            skipped,
+            VectorAbsence(manifest, "road surfaces"));
     }
 
     /// <summary>
@@ -664,11 +670,13 @@ public static class BundleImportPlanner
     /// </summary>
     /// <remarks>
     /// The CRS check is the point of this method. A bundle cut on a State-Plane foot tier publishes
-    /// its origin in that CRS, while the tree points stay AOI-UTM and the GeoJSON stays lon/lat —
-    /// so the frame genuinely cannot place them, and subtracting one CRS's easting from another's
+    /// its origin in that CRS, while the GeoJSON stays lon/lat — so the frame genuinely cannot place
+    /// it. The tree points pass because they follow the delivery CRS, and the check reads the CRS
+    /// they state rather than trusting that they do: subtracting one CRS's easting from another's
     /// yields a number that looks like a coordinate and is ~2000 km wrong. Failing closed here is
     /// the same rule <c>HPS-35</c> applies to an unreadable unit one level up.
     /// </remarks>
+    /// <param name="absence">What to say when <paramref name="artifact"/> is <c>null</c>, or <c>null</c> for the vault's remedy.</param>
     private static void PlanPlacedArtifact(
         BundleManifest manifest,
         BundleArtifact? artifact,
@@ -677,7 +685,8 @@ public static class BundleImportPlanner
         ImportStepKind kind,
         string label,
         List<ImportStep> steps,
-        List<SkippedImport> skipped)
+        List<SkippedImport> skipped,
+        string? absence = null)
     {
         if (artifact is null)
         {
@@ -685,7 +694,7 @@ public static class BundleImportPlanner
             {
                 Kind = kind,
                 ReasonCode = SkipReasonCode.ArtifactNotInManifest,
-                Reason = $"No {label} in this bundle. Open your vault at mantle.place/vault, add the Revit "
+                Reason = absence ?? $"No {label} in this bundle. Open your vault at mantle.place/vault, add the Revit "
                     + "deliverables to this order, then re-download.",
             });
             return;
@@ -717,35 +726,37 @@ public static class BundleImportPlanner
             return;
         }
 
-        bool geographic = string.Equals(
-            artifact.HorizontalFrame,
-            BundleManifestReader.GeographicFrame,
-            StringComparison.Ordinal);
+        // Three routes into the frame, and each has its own refusal. This host's own copy is in its
+        // own frame by declaration, and is placed once the block shows that it is (HPS-53). A shared
+        // lon/lat layer takes the one projection HPS-45 permits. The tree points name their CRS.
+        LinearUnit units = LinearUnit.Unspecified;
+        LayerFrame? layer = null;
+        (SkipReasonCode Code, string Reason)? refusal;
 
-        bool placeable = geographic
-            ? frame.CanPlaceGeographic
-            : frame.CanPlaceProjected(GeoProjection.TryParseEpsg(artifact.HorizontalFrame) ?? 0);
-
-        if (!placeable)
+        if (artifact.FromOwnBlock)
         {
-            skipped.Add(new SkippedImport
-            {
-                Kind = kind,
-                ReasonCode = SkipReasonCode.CoordinateSystemNotSupported,
-                Reason = $"The {label} are in \"{artifact.HorizontalFrame}\", which this plugin cannot place "
-                    + $"into this bundle's coordinate system (EPSG:{frame.Epsg}). Importing them anyway would "
-                    + "put them a long way from the site, so they were left out.",
-            });
-            return;
+            refusal = OwnFrameRefusal(artifact, manifest, frame, label, out LayerFrame own);
+            layer = own;
+            units = own.Unit;
+        }
+        else if (string.Equals(artifact.HorizontalFrame, BundleManifestReader.GeographicFrame, StringComparison.Ordinal))
+        {
+            refusal = frame.CanPlaceGeographic ? null : CrsRefusal(artifact, frame, label);
+            layer = LayerFrame.Geographic;
+        }
+        else
+        {
+            // A projected file names its CRS, and its units are resolved the way the terrain's are
+            // (TryResolveUnits) — which is what stands a foot delivery's trees on the ground rather
+            // than at 3.28 times its height.
+            refusal = frame.CanPlaceProjected(GeoProjection.TryParseEpsg(artifact.HorizontalFrame) ?? 0)
+                ? UnplaceableUnits(artifact, manifest, frame, label, out units)
+                : CrsRefusal(artifact, frame, label);
         }
 
-        // A lon/lat layer has no linear unit to read. A projected one does, and it is resolved the
-        // way the terrain's is (TryResolveUnits) — which is what stands a foot delivery's trees on
-        // the ground rather than at 3.28 times its height.
-        LinearUnit units = LinearUnit.Unspecified;
-        if (!geographic && UnplaceableUnits(artifact, manifest, frame, label, out units) is { } refusal)
+        if (refusal is { } refused)
         {
-            skipped.Add(new SkippedImport { Kind = kind, ReasonCode = refusal.Code, Reason = refusal.Reason });
+            skipped.Add(new SkippedImport { Kind = kind, ReasonCode = refused.Code, Reason = refused.Reason });
             return;
         }
 
@@ -754,6 +765,7 @@ public static class BundleImportPlanner
             Kind = kind,
             EntryName = entry,
             Units = units,
+            Layer = layer,
             ExpectedSha256 = artifact.Sha256,
             Frame = frame,
 
@@ -772,17 +784,19 @@ public static class BundleImportPlanner
     /// <remarks>
     /// <para>
     /// It reuses the whole placement path: the extent goes through <see cref="SiteFrame"/>, so a
-    /// bundle with no origin yields <see cref="SkipReasonCode.NoSiteFrame"/> and a foot-tier bundle
-    /// whose DEM stays metric UTM yields <see cref="SkipReasonCode.CoordinateSystemNotSupported"/>,
-    /// both without a line of arithmetic written for this row.
+    /// bundle with no origin yields <see cref="SkipReasonCode.NoSiteFrame"/> and a bundle on a State
+    /// Plane delivery whose only drape is on the metric UTM grid yields
+    /// <see cref="SkipReasonCode.CoordinateSystemNotSupported"/>, both without a line of arithmetic
+    /// written for this row.
     /// </para>
     /// <para>
-    /// What is new is where the extent comes from. The drape's declared extent is in
-    /// <c>unreal.imagery_drape</c>, which this host may not read; the host-neutral
-    /// <c>elevation.dem.bounds_target_crs</c> carries the same four numbers but is not declared by
-    /// the published schema at all. So the fallback is used only when the image's own pixel grid
-    /// agrees with it, and the day <c>imagery.drape</c> lands the fallback and this corroboration
-    /// both become dead code.
+    /// The extent comes from the most specific source the bundle carries. This host's own
+    /// <c>hosts.revit.drape</c> (MPB 1.3.0) is on the origin's grid on every delivery and is taken
+    /// first (<c>HPS-52</c>); its extent is declared, and is refused rather than corroborated when its
+    /// CRS or unit is not the origin's (<c>HPS-53</c>). Without it, the host-neutral
+    /// <c>imagery.drape</c> declares its own extent on the metric UTM grid. Only a bundle carrying
+    /// neither falls back to <c>elevation.dem.bounds_target_crs</c>, which the published schema does
+    /// not declare, and that is used only when the image's own pixel grid agrees with it.
     /// </para>
     /// </remarks>
     private static void PlanImageryDrape(
@@ -811,7 +825,11 @@ public static class BundleImportPlanner
             return;
         }
 
-        if (manifest.ImageryDrape is not { } drape)
+        // This host's own drape first, on its own grid (HPS-52). When it is present the shared one
+        // is never a fallback: on a State Plane delivery it is on the UTM grid, and where the grids
+        // agree the own pointer already names the same file.
+        bool own = manifest.RevitDrape is not null;
+        if ((manifest.RevitDrape ?? manifest.ImageryDrape) is not { } drape)
         {
             Skip(
                 SkipReasonCode.ArtifactNotInManifest,
@@ -839,8 +857,11 @@ public static class BundleImportPlanner
             return;
         }
 
-        bool fromDrapeBlock = manifest.ImageryDrapeExtent is { IsUsable: true };
-        if ((fromDrapeBlock ? manifest.ImageryDrapeExtent : manifest.DemBounds) is not { IsUsable: true } extent)
+        // An own drape's extent is declared, and so is the shared drape block's; only the DEM's
+        // bounds are inferred and have to be corroborated against the image.
+        bool fromDrapeBlock = own || manifest.ImageryDrapeExtent is { IsUsable: true };
+        GroundExtent? declared = own ? manifest.RevitDrapeExtent : manifest.ImageryDrapeExtent;
+        if ((fromDrapeBlock ? declared : manifest.DemBounds) is not { IsUsable: true } extent)
         {
             Skip(
                 SkipReasonCode.ExtentNotCorroborated,
@@ -850,13 +871,27 @@ public static class BundleImportPlanner
             return;
         }
 
-        if (!frame.CanPlaceProjected(extent.Epsg))
+        // The own drape states its extent's unit, and it has to be the origin's: the edges are
+        // subtracted in that unit (HPS-53). The shared drape states none; its CRS is metric UTM.
+        LinearUnit extentUnit = LinearUnit.Unspecified;
+        if (own && !TryReadUnitToken(drape.Units ?? string.Empty, out extentUnit))
+        {
+            Skip(
+                SkipReasonCode.UnitNotUnderstood,
+                $"The satellite imagery's extent is in \"{drape.Units}\", which this plugin does not "
+                + "understand, so the terrain was left untextured rather than draped at a guessed scale.");
+            return;
+        }
+
+        if (!frame.CanPlaceProjected(extent.Epsg) || (own && !frame.IsInOriginUnit(extentUnit)))
         {
             Skip(
                 SkipReasonCode.CoordinateSystemNotSupported,
-                $"The satellite imagery covers a rectangle in EPSG:{extent.Epsg}, which this plugin cannot "
-                + $"place into this bundle's coordinate system (EPSG:{frame.Epsg}). Draping it anyway would "
-                + "stretch the image over the wrong ground, so the terrain was left untextured.");
+                $"The satellite imagery covers a rectangle in EPSG:{extent.Epsg}"
+                + (own ? $", in \"{drape.Units}\"" : string.Empty)
+                + $", which this plugin cannot place into this project's coordinate system (EPSG:{frame.Epsg}). "
+                + "Draping it anyway would stretch the image over the wrong ground, so the terrain was left "
+                + "untextured.");
             return;
         }
 
@@ -1045,6 +1080,112 @@ public static class BundleImportPlanner
         };
         return true;
     }
+
+    private static (SkipReasonCode Code, string Reason) CrsRefusal(BundleArtifact artifact, SiteFrame frame, string label)
+        => (SkipReasonCode.CoordinateSystemNotSupported,
+            $"The {label} are in \"{artifact.HorizontalFrame}\", which this plugin cannot place into this "
+            + $"project's coordinate system (EPSG:{frame.Epsg}). Importing them anyway would put them a long "
+            + "way from the site, so they were left out.");
+
+    /// <summary>
+    /// Why a file this host's own block points at cannot be placed, or <c>null</c> with the
+    /// <paramref name="layer"/> frame it is placed in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A pointer sitting in this host's block is not itself the showing <c>HPS-53</c> asks for. The
+    /// block has to declare a <c>file_frame</c>, and it has to be this host's frame
+    /// (<see cref="SiteFrame.Holds"/>); the file has to be in that frame's unit; and an absolute file
+    /// has to be in the origin's unit (<see cref="SiteFrame.IsInOriginUnit"/>), since that is the unit
+    /// it is subtracted in. Each failure is a producer defect, and each is refused by name; none is
+    /// converted.
+    /// </para>
+    /// <para>
+    /// A <c>horizontal_frame</c> or <c>vertical_reference</c> this plugin does not know fails closed,
+    /// as the schema instructs: a Z that might be an offset cannot be placed as a height.
+    /// </para>
+    /// </remarks>
+    private static (SkipReasonCode Code, string Reason)? OwnFrameRefusal(
+        BundleArtifact artifact,
+        BundleManifest manifest,
+        SiteFrame frame,
+        string label,
+        out LayerFrame layer)
+    {
+        layer = default;
+
+        if (!TryReadUnitToken(artifact.Units ?? string.Empty, out LinearUnit units))
+        {
+            return (SkipReasonCode.UnitNotUnderstood,
+                $"The {label} declare units \"{artifact.Units}\", which this plugin does not understand. "
+                + "Importing them could place them at the wrong scale, so they were left out.");
+        }
+
+        LayerCoordinates? coordinates = artifact.HorizontalFrame switch
+        {
+            BundleManifestReader.ProjectedFrame => LayerCoordinates.AbsoluteProjected,
+            BundleManifestReader.LocalFrame => LayerCoordinates.LocalOffsets,
+            _ => null,
+        };
+
+        const string LeftOut = " Importing them anyway would put them in the wrong place, so they were left out.";
+
+        if (coordinates is not { } kind)
+        {
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"The {label} are in a \"{artifact.HorizontalFrame}\" frame, which this plugin does not know." + LeftOut);
+        }
+
+        if (artifact.VerticalReference is { } vertical
+            && !string.Equals(vertical, BundleManifestReader.AbsoluteHeight, StringComparison.Ordinal))
+        {
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"The {label} carry heights referenced as \"{vertical}\", which this plugin does not know." + LeftOut);
+        }
+
+        if (manifest.FileFrame is not { } declared)
+        {
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"This bundle declares no frame for the Revit files, so the {label} cannot be shown to be in "
+                + "this project's." + LeftOut);
+        }
+
+        if (!frame.Holds(declared))
+        {
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"This bundle declares the Revit files' frame as one this project's origin (EPSG:{frame.Epsg}) "
+                + $"is not, so the {label} cannot be shown to be in it." + LeftOut);
+        }
+
+        if (declared.HorizontalUnit != units)
+        {
+            string declaredUnit = declared.HorizontalUnit is { } unit ? LinearUnits.ToManifestToken(unit) : "no unit this plugin knows";
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"The {label} are in \"{artifact.Units}\", but this bundle declares the Revit files in "
+                + $"\"{declaredUnit}\"." + LeftOut);
+        }
+
+        if (kind == LayerCoordinates.AbsoluteProjected && !frame.IsInOriginUnit(units))
+        {
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"The {label} are absolute coordinates in \"{artifact.Units}\", but this project's origin is "
+                + $"in \"{LinearUnits.ToManifestToken(frame.Origin.LinearUnit)}\"." + LeftOut);
+        }
+
+        layer = new LayerFrame(kind, units);
+        return null;
+    }
+
+    /// <summary>
+    /// What to say about a vector layer this host has no pointer for.
+    /// </summary>
+    /// <remarks>
+    /// On a bundle that carries this host's own copy, a layer the copy lacks had no features in the
+    /// area, and the vault has nothing more to give (<c>spec/format.md</c> §6.5). Without the copy the
+    /// shared set is read, and its absence keeps the vault's remedy.
+    /// </remarks>
+    private static string? VectorAbsence(BundleManifest manifest, string label)
+        => manifest.VectorsFromOwnBlock ? $"No {label} in this bundle: there are none in this area." : null;
 
     /// <summary>
     /// Why a projected artifact's units stop it being placed, or <c>null</c> with the resolved

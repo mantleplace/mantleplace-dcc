@@ -504,6 +504,12 @@ public sealed class ImportStep
     public LinearUnit Units { get; init; } = LinearUnit.Unspecified;
 
     /// <summary>
+    /// How a vector layer's coordinates reach <see cref="Frame"/>: lon/lat, absolute in the origin's
+    /// CRS, or offsets about it, each in its file's unit. Populated only for the vector layers.
+    /// </summary>
+    public LayerFrame? Layer { get; init; }
+
+    /// <summary>
     /// The manifest's sha256 for <see cref="EntryName"/>, or <c>null</c> when it advertised none.
     /// </summary>
     /// <remarks>

@@ -23,8 +23,10 @@ root is one level up.
   delivery, so the survey point this host applies, and the content placed against it, are stated in
   the **delivery CRS and its linear unit**, metric or foot. That makes the frame a per-order fact
   rather than a constant: a file built in the AOI's metric UTM zone for the fixed-frame host — the
-  imagery drape is the one that bites — is not in this host's frame on a delivery tier whose linear
-  unit is the foot, and is skipped with a stated reason (`HPS-53`), never reprojected.
+  shared imagery drape is the one that bites — is not in this host's frame on a State Plane delivery,
+  and is skipped with a stated reason (`HPS-53`), never reprojected. Since MPB 1.3.0 this host's
+  block carries its own drape and vector layers in its own frame on every delivery, and the planner
+  places those first (`HPS-52`).
 - **Role:** host #2, and the Host Plugin Standard's debugger. Being maximally unlike Unreal is the
   point — where the four-layer shape does not fit .NET, that is a finding to file against the
   standard, not a thing to quietly work around.
@@ -51,10 +53,10 @@ The ones this tree already turns on:
 | `HPS-14` … `17`       | refresh token via DPAPI, per-OS-user; access token memory-only; no store means memory-only auth, never a less-safe file.                                      |
 | `HPS-18` … `25`, `48` | list → materialize → poll → **re-list** → presign → download; explicit token list, never a scope keyword; one error-body precedence for auth and vault alike. |
 | `HPS-26` … `30`, `44` | write to `.part`, verify, rename; null sha is unknown not absent; eviction only on request.                                                                   |
-| `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers behind roads, site boundaries and land cover. Nothing else here projects, and the projection reaches a UTM origin only — on a State Plane origin there is no projection to perform and the layer is skipped. |
+| `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers of a bundle whose block carries no `hosts.revit.vectors`. Nothing else here projects, and the projection reaches a UTM origin only — on a State Plane origin there is no projection to perform and the layer is skipped. |
 | `HPS-51`              | signing in and out, the vault, the local import, the import window with its checklist and its unit-system line (`DeliveryHeader`), and the about surface take the standard's words. The casing is this host's; the words are not. |
-| `HPS-52`              | placement reads `hosts.revit` first. The terrain points come from that block and are in this frame; the tree points come from the host-neutral `landcover.tree_points` and are in this frame only because the delivery CRS is. |
-| `HPS-53`              | `SiteFrame` is where this rule is decided — `CanPlaceGeographic`, `CanPlaceProjected` — and the refusals are what its tests assert. It judges the layer's **CRS**; the linear unit still travels with the origin rather than being read off the file. |
+| `HPS-52`              | placement reads `hosts.revit` first. The terrain points, the vector layers (`vectors`) and the drape (`drape`) come from that block and are in this frame; only a bundle whose block carries no copy falls back to the shared set. The tree points come from the host-neutral `landcover.tree_points` and are in this frame only because the delivery CRS is. |
+| `HPS-53`              | `SiteFrame` decides the frame — `CanPlaceGeographic` and `CanPlaceProjected` for the CRS, `Holds` for whether the block's declared `file_frame` is the origin's frame, `IsInOriginUnit` for an absolute file's unit — and the planner's `OwnFrameRefusal` checks each own-block file against that `file_frame`. The refusals are what the tests assert. A file's own `units` is read, never the origin's substituted for it: on a local grid they differ. |
 
 ## Layout and the split that matters
 
