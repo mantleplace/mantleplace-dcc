@@ -339,13 +339,26 @@ follow.
   wake on sign-in, and a notice raised from a background listing are compiled and unexecuted. What
   is settled headlessly is which orders are news (`VaultNews`), the per-machine record two Revits
   share (`AnnouncedOrderStore`), and when the checker asks (`VaultNewsChecker.CheckAsync`).
-  Re-joining an **interrupted Prepare** is in the same state: the watcher writes each Prepare to
+  Re-joining an **interrupted Prepare** went further. The watcher writes each Prepare to
   `InterruptedPrepareStore` as it starts and strikes it off as it ends, unless Revit ended it
   (`PrepareEnding.Interrupted`), and `PrepareRejoiner` picks up what a closed or crashed Revit left,
-  at each sign-in. Which entries a process may take (age, account, whether the owning process still
-  runs) is `InterruptedPrepares`, headless, and so are the record and the re-joiner themselves; the
-  startup restore waking the re-joiner, and a notice for a re-joined Prepare, are compiled and
-  unexecuted. Both records share one exclusive-open helper, `MachineRecordFile`.
+  at each sign-in. On 2026-09-23 the harness described under the tree family below killed a Revit
+  2025, and then a 2027, while its watcher held a Prepare, and a fresh Revit of the same version
+  re-joined it through the real record, liveness check, notifier and popup, on scripted steps and a
+  scripted vault. It measured:
+  - The killed process's entry was on disk, owned by its process id and start time.
+  - `PrepareOwners.IsAlive` read a running process as live, and the same id with another start
+    time as gone.
+  - The crashed Revit's Prepare and the reused-id one were re-joined from their original asks; the
+    live owner's was left alone.
+  - Both notices appeared inactive, with `WS_EX_NOACTIVATE`, the badge counted two, and the active
+    window, focus and foreground were unchanged.
+  - Both entries were struck off once the Prepares ended.
+
+  What it did not run is the add-in's own wiring: the startup restore's sign-in waking
+  `PrepareRejoiner.Wake`, and `OnShutdown` calling `InterruptAll`. Those are compiled and
+  unexecuted, because the harness never signs in. Which entries a process may take is
+  `InterruptedPrepares`, headless. Both records share one exclusive-open helper, `MachineRecordFile`.
 - **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
   issue and reaches for their storage.** It writes Revit elements sized as published, with names a
   renderer recognises (`RendererKeywords`), and leaves a renderer's own storage to the curator —
