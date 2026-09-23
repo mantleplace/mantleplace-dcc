@@ -122,6 +122,8 @@ internal sealed partial class RevitBundleImporter
         {
             EntryName = step.EntryName,
             PointCount = points.Count,
+            RowsWithoutGround = parse.RowsWithoutGround,
+            UnreadableRows = parse.UnreadableRows,
             HasVocabulary = step.FoliageTypeVocabulary is not null,
             TreesCreated = total.Trees,
             ShrubsCreated = total.Shrubs,

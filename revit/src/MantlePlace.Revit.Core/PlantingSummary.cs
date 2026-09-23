@@ -28,6 +28,12 @@ public sealed record PlantingTally
     /// <summary>Whether the shrubs were family instances rather than DirectShapes.</summary>
     public bool ShrubsAsFamily { get; init; }
 
+    /// <summary>Rows the parse left out for an empty <c>ground_z</c> (<see cref="TreePointsParse.RowsWithoutGround"/>).</summary>
+    public int RowsWithoutGround { get; init; }
+
+    /// <summary>Rows the parse left out as unreadable (<see cref="TreePointsParse.UnreadableRows"/>).</summary>
+    public int UnreadableRows { get; init; }
+
     public int AlreadyPresent { get; init; }
 
     public int Unbuildable { get; init; }
@@ -88,6 +94,10 @@ public static class PlantingSummary
             }
         }
 
+        // Rows the parse left out are said first: they never reached the "of" count, so without
+        // these clauses a half-blank ground_z column reads as a whole layer.
+        Suffix(sentence, tally.RowsWithoutGround, "had no ground elevation in the file and were left out");
+        Suffix(sentence, tally.UnreadableRows, "could not be read and were left out");
         Suffix(sentence, tally.AlreadyPresent, "from an earlier import of this build were already present and left alone");
         Suffix(sentence, tally.Unbuildable, "had a height or crown too small for Revit to build and were left out");
         Suffix(sentence, tally.Unsized, "would not take their published size or elevation and stand at the family's default");

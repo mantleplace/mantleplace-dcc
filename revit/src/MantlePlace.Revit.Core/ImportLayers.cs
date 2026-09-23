@@ -112,8 +112,17 @@ public sealed class ImportLayerChoice
 }
 
 /// <summary>
+/// Rows a bundle holds and an import cannot offer, for one reason: what the import window lists
+/// below its checklist.
+/// </summary>
+/// <param name="Layers">The rows, in the order the steps run.</param>
+/// <param name="Reason">One sentence over all of them, in the curator's register (<see cref="WindowLabels.UnavailableReason"/>).</param>
+public sealed record UnavailableLayers(IReadOnlyList<ImportLayer> Layers, string Reason);
+
+/// <summary>
 /// The import window's checklist before the steps run: which layers the bundle carries, which are
-/// checked, which cannot be because what they need is not, and whether anything is left to import.
+/// checked, which cannot be because what they need is not, whether anything is left to import, and
+/// which the bundle holds and cannot offer, and why.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -132,22 +141,44 @@ public sealed class ImportChecklist
 
     /// <param name="carried">The layers the bundle has a step for. Nothing else is offered.</param>
     public ImportChecklist(IEnumerable<ImportLayer> carried)
+        : this(carried, [])
+    {
+    }
+
+    /// <param name="carried">The layers the bundle has a step for. Nothing else is offered.</param>
+    /// <param name="skipped">The plan's skips, which say why a layer that is not offered is not.</param>
+    public ImportChecklist(IEnumerable<ImportLayer> carried, IEnumerable<SkippedImport> skipped)
     {
         ArgumentNullException.ThrowIfNull(carried);
+        ArgumentNullException.ThrowIfNull(skipped);
 
         Layers = [.. carried.Distinct().Order()];
         _wanted = [.. Layers.Where(ImportLayers.OnByDefault)];
+        Unavailable = UnavailableFrom(Layers, skipped);
     }
 
     /// <summary>The checklist for everything a plan made with <see cref="ImportLayerChoice.All"/> would build.</summary>
     public static ImportChecklist For(BundleImportPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        return new ImportChecklist(plan.Steps.Select(step => ImportLayers.Of(step.Kind)).OfType<ImportLayer>());
+        return new ImportChecklist(
+            plan.Steps.Select(step => ImportLayers.Of(step.Kind)).OfType<ImportLayer>(),
+            plan.Skipped);
     }
 
     /// <summary>The rows, in the order the steps run.</summary>
     public IReadOnlyList<ImportLayer> Layers { get; }
+
+    /// <summary>
+    /// What the window lists below the rows: each layer the bundle holds and this import cannot
+    /// offer, grouped under one sentence per reason, in the order the steps run. Empty for a bundle
+    /// with nothing withheld, which is what a current bundle should be.
+    /// </summary>
+    /// <remarks>
+    /// Never a box: nothing here can be ticked. The list is said before any step runs because the
+    /// same reasons, in the planner's words, otherwise reach the curator only in the closing report.
+    /// </remarks>
+    public IReadOnlyList<UnavailableLayers> Unavailable { get; }
 
     /// <summary>
     /// The prerequisite a layer needs and does not have, or <c>null</c>. What the window writes beside
@@ -201,5 +232,51 @@ public sealed class ImportChecklist
         {
             _wanted.Remove(layer);
         }
+    }
+
+    /// <summary>Which of the layers not offered the window lists, and under which sentence.</summary>
+    /// <remarks>
+    /// <para>
+    /// One reason per layer: the first of its skips, in plan order, that the window has a sentence
+    /// for — and a skip about a file the bundle holds before one about a file it lacks, which is
+    /// the weakest thing to say. A terrain no tier could build carries a skip per tier: the TIN's
+    /// absence comes first in plan order and is not why the points file failed, and the suppressed
+    /// fallback's is silent because the skip that suppressed it is the reason.
+    /// </para>
+    /// <para>
+    /// Layers are grouped by the sentence they would each be said under alone, so two codes that
+    /// tell the curator the same thing are one sentence over all their rows, not two identical ones.
+    /// </para>
+    /// </remarks>
+    private static List<UnavailableLayers> UnavailableFrom(IReadOnlyList<ImportLayer> offered, IEnumerable<SkippedImport> skipped)
+    {
+        List<SkippedImport> skips = [.. skipped];
+        List<(ImportLayer Layer, SkipReasonCode Code)> withheld = [];
+
+        foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
+        {
+            if (offered.Contains(layer))
+            {
+                continue;
+            }
+
+            SkippedImport? reason = skips
+                .Where(skip => ImportLayers.Of(skip.Kind) == layer && WindowLabels.UnavailableReason(skip.ReasonCode, 1) is not null)
+                .OrderBy(skip => skip.ReasonCode == SkipReasonCode.ArtifactNotInManifest)
+                .FirstOrDefault();
+            if (reason is not null)
+            {
+                withheld.Add((layer, reason.ReasonCode));
+            }
+        }
+
+        return
+        [
+            .. withheld
+                .GroupBy(entry => WindowLabels.UnavailableReason(entry.Code, 1), StringComparer.Ordinal)
+                .Select(group => new UnavailableLayers(
+                    [.. group.Select(entry => entry.Layer)],
+                    WindowLabels.UnavailableReason(group.First().Code, group.Count())!)),
+        ];
     }
 }

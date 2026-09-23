@@ -210,7 +210,7 @@ internal static class HostFramePlacementTests
 
             run.True(Has(plan, ImportStepKind.RoadCentrelines), "the layer that shipped is planned");
             SkippedImport? water = Skip(plan, ImportStepKind.Water);
-            run.True(water?.ReasonCode == SkipReasonCode.ArtifactNotInManifest, "the missing one is not in the manifest");
+            run.True(water?.ReasonCode == SkipReasonCode.DeclaredAbsent, "the missing one is declared absent, not merely unlisted");
             run.Contains(water?.Reason, "none in this area", "and is not sent back to the vault for it");
         });
     }

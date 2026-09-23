@@ -676,7 +676,10 @@ public static class BundleImportPlanner
     /// yields a number that looks like a coordinate and is ~2000 km wrong. Failing closed here is
     /// the same rule <c>HPS-35</c> applies to an unreadable unit one level up.
     /// </remarks>
-    /// <param name="absence">What to say when <paramref name="artifact"/> is <c>null</c>, or <c>null</c> for the vault's remedy.</param>
+    /// <param name="absence">
+    /// What to say when <paramref name="artifact"/> is <c>null</c> because the bundle declares the
+    /// layer absent (<see cref="SkipReasonCode.DeclaredAbsent"/>), or <c>null</c> for the vault's remedy.
+    /// </param>
     private static void PlanPlacedArtifact(
         BundleManifest manifest,
         BundleArtifact? artifact,
@@ -693,7 +696,7 @@ public static class BundleImportPlanner
             skipped.Add(new SkippedImport
             {
                 Kind = kind,
-                ReasonCode = SkipReasonCode.ArtifactNotInManifest,
+                ReasonCode = absence is null ? SkipReasonCode.ArtifactNotInManifest : SkipReasonCode.DeclaredAbsent,
                 Reason = absence ?? $"No {label} in this bundle. Open your vault at mantle.place/vault, add the Revit "
                     + "deliverables to this order, then re-download.",
             });
@@ -818,7 +821,7 @@ public static class BundleImportPlanner
         if (manifest.ImageryAbsentByDeclaration)
         {
             Skip(
-                SkipReasonCode.ArtifactNotInManifest,
+                SkipReasonCode.DeclaredAbsent,
                 "This bundle states that it carries no satellite imagery, so the terrain is imported "
                 + "untextured. Re-ordering will not change that — the imagery was unavailable for this "
                 + "site when the bundle was cut.");

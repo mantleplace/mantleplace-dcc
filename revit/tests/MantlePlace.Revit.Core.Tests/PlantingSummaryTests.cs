@@ -78,6 +78,22 @@ internal static class PlantingSummaryTests
                     + "; 2 could not be stamped and will not be recognised by a re-import.",
                 "totals, not per type"));
 
+        run.Case("rows the parse dropped are said first, in either sentence", () =>
+        {
+            run.Equal(
+                PlantingSummary.Sentence(Base with { TreesCreated = 90, RowsWithoutGround = 65, UnreadableRows = 2, AlreadyPresent = 5 }),
+                "Imported 90 tree point(s) of 130 from Landcover/TreePoints.csv: 90 tree(s) as \"Mantle Place Tree\" instances"
+                    + "; 65 had no ground elevation in the file and were left out"
+                    + "; 2 could not be read and were left out"
+                    + "; 5 from an earlier import of this build were already present and left alone.",
+                "before the build's own suffixes");
+            run.Equal(
+                PlantingSummary.Sentence(Base with { HasVocabulary = false, TreesCreated = 90, RowsWithoutGround = 65 }),
+                "Imported 90 tree(s) of 130 from Landcover/TreePoints.csv as \"Mantle Place Tree\" instances"
+                    + "; 65 had no ground elevation in the file and were left out.",
+                "and without a vocabulary, as main's sentence said it");
+        });
+
         run.Case("empty and unknown foliage cells are counted, each read as a tree", () =>
             run.Equal(
                 PlantingSummary.Sentence(Base with { TreesCreated = 120, EmptyFoliageCells = 7, UnknownFoliageValues = 1 }),

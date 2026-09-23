@@ -18,6 +18,7 @@ internal static class ImportLayerTests
         RunLayerCases(run);
         RunChecklistCases(run);
         RunPlannerCases(run);
+        RunUnavailableCases(run);
 
         return run.Report("import layers");
     }
@@ -319,6 +320,240 @@ internal static class ImportLayerTests
             run.Contains(plan.BlockedReason, "left out", "the refusal names the choice rather than blaming the bundle");
         });
     }
+
+    private static void RunUnavailableCases(TestRun run)
+    {
+        run.Case("every skip reason has a decided sentence for the window, or is decided to have none", () =>
+        {
+            // Null is a decision, not a gap: the window lists what a bundle holds and cannot offer,
+            // so an absence, a choice, a tier another tier replaced and a skip that is no row's say
+            // nothing there. A code added without a line here fails, so none is shown by accident.
+            Dictionary<SkipReasonCode, string?> expected = new()
+            {
+                [SkipReasonCode.NoSiteFrame] = BuiltBefore,
+                [SkipReasonCode.CoordinateSystemNotSupported] = BuiltBefore,
+                [SkipReasonCode.EntryNotInArchive] = "This bundle is missing the file for this. Download the bundle again from your vault to get it.",
+                [SkipReasonCode.UnitNotUnderstood] = "This bundle measures this in a unit this version of Mantle Place cannot read. Update Mantle Place to import it.",
+                [SkipReasonCode.ExtentNotCorroborated] = "Mantle Place could not confirm which ground this covers. Download the bundle again from your vault to get it.",
+                [SkipReasonCode.ArtifactNotInManifest] = "This bundle does not carry this. Add it to the order in your vault, then download the bundle again.",
+                [SkipReasonCode.DeclaredAbsent] = null,
+                [SkipReasonCode.DerivedLayerNotPublished] = null,
+                [SkipReasonCode.SupersededByFallback] = null,
+                [SkipReasonCode.FallbackSuppressed] = null,
+                [SkipReasonCode.NoSurveyPoint] = null,
+                [SkipReasonCode.NoGeographicOrigin] = null,
+                [SkipReasonCode.GeographicOriginOutOfRange] = null,
+                [SkipReasonCode.LeftOutByChoice] = null,
+            };
+
+            foreach (SkipReasonCode code in Enum.GetValues<SkipReasonCode>())
+            {
+                if (!expected.TryGetValue(code, out string? sentence))
+                {
+                    run.Fail($"{code} has no decided sentence for the window");
+                    continue;
+                }
+
+                run.Equal(WindowLabels.UnavailableReason(code, 1), sentence, $"{code}'s sentence");
+            }
+        });
+
+        run.Case("a sentence over more than one row speaks of them all", () =>
+        {
+            run.Equal(
+                WindowLabels.UnavailableReason(SkipReasonCode.CoordinateSystemNotSupported, 3),
+                "This bundle was built before Revit could receive these. Download the bundle again from your vault to get them.",
+                "the bundle that predates a format change");
+            run.Equal(
+                WindowLabels.UnavailableReason(SkipReasonCode.EntryNotInArchive, 2),
+                "This bundle is missing the files for these. Download the bundle again from your vault to get them.",
+                "the incomplete bundle");
+            run.Equal(
+                WindowLabels.UnavailableReason(SkipReasonCode.UnitNotUnderstood, 2),
+                "This bundle measures these in a unit this version of Mantle Place cannot read. Update Mantle Place to import them.",
+                "the unreadable unit");
+            run.Equal(
+                WindowLabels.UnavailableReason(SkipReasonCode.ArtifactNotInManifest, 2),
+                "This bundle does not carry these. Add them to the order in your vault, then download the bundle again.",
+                "the bundle cut without them");
+            run.Equal(
+                WindowLabels.UnavailableReason(SkipReasonCode.ExtentNotCorroborated, 2),
+                "Mantle Place could not confirm which ground these cover. Download the bundle again from your vault to get them.",
+                "the ground nobody could confirm");
+        });
+
+        run.Case("the window's sentences speak to the curator, and keep the planner's words out", () =>
+        {
+            // The log keeps the technical register — EPSG codes, file paths, unit tokens. The window
+            // says what is missing and what to do, and says it without the glossary's avoided word.
+            foreach (SkipReasonCode code in Enum.GetValues<SkipReasonCode>())
+            {
+                foreach (int count in new[] { 1, 2 })
+                {
+                    if (WindowLabels.UnavailableReason(code, count) is not { } sentence)
+                    {
+                        continue;
+                    }
+
+                    run.False(sentence.Contains("EPSG", StringComparison.Ordinal), $"{code} names no CRS");
+                    run.False(sentence.Contains('"', StringComparison.Ordinal), $"{code} quotes no token");
+                    run.False(sentence.Contains("layer", StringComparison.OrdinalIgnoreCase), $"{code} keeps \"layer\" off the page");
+                }
+            }
+        });
+
+        run.Case("the list below the checklist says HPS-51's word", () =>
+        {
+            run.Equal(WindowLabels.UnavailableHeading, "Unavailable", "the heading over what cannot be offered");
+        });
+
+        run.Case("a bundle that carries every layer shows nothing unavailable", () =>
+        {
+            ImportChecklist checklist = ImportChecklist.For(PlanFor(Everything, EverythingBundle));
+
+            run.Equal(checklist.Unavailable.Count, 0, "nothing extra below the checklist");
+        });
+
+        run.Case("a layer the bundle was cut without is listed, with the vault's remedy", () =>
+        {
+            // The shared set cannot say whether an unlisted layer had no features or was never asked
+            // for, and the planner's own sentence sends the curator to the vault; the window agrees.
+            string withoutWater = Everything.Replace(
+                """{ "name": "water", "formats": [{ "format": "geojson", "path": "Vector/Water.geojson", "sha256": "dd" }] },""",
+                string.Empty,
+                StringComparison.Ordinal);
+            BundleImportPlan plan = PlanFor(withoutWater, EverythingBundle);
+            ImportChecklist checklist = ImportChecklist.For(plan);
+
+            run.True(
+                plan.Skipped.Any(skip => skip.Kind == ImportStepKind.Water && skip.ReasonCode == SkipReasonCode.ArtifactNotInManifest),
+                "the fixture lost its water from the manifest");
+            run.False(checklist.Layers.Contains(ImportLayer.WaterSubdivisions), "no row is offered");
+            run.Equal(
+                string.Join(" | ", checklist.Unavailable.Select(group => $"{string.Join(", ", group.Layers)}: {group.Reason}")),
+                "WaterSubdivisions: This bundle does not carry this. Add it to the order in your vault, then download the bundle again.",
+                "it is listed as something the order could have");
+        });
+
+        run.Case("a layer the bundle says it does not have is not listed as withheld", () =>
+        {
+            // The producer's own "no imagery for this site" is not a thing the bundle holds and
+            // cannot offer, and no vault can change it. The planner still says so, in the log.
+            string noImagery = Everything.Replace(
+                "\"imagery\": { \"present\": true, \"gsd_m\": 0.3 },",
+                "\"imagery\": { \"present\": false },",
+                StringComparison.Ordinal);
+            BundleImportPlan plan = PlanFor(noImagery, EverythingBundle);
+
+            run.True(
+                plan.Skipped.Any(skip => skip.Kind == ImportStepKind.ImageryDrape && skip.ReasonCode == SkipReasonCode.DeclaredAbsent),
+                "the fixture declares its imagery absent");
+            run.Equal(ImportChecklist.For(plan).Unavailable.Count, 0, "nothing is listed as unavailable");
+        });
+
+        run.Case("a State Plane bundle from before Revit had its own copies lists what it holds and cannot offer, once", () =>
+        {
+            // The case the issue is about: the bundle holds the shared lon/lat set and the UTM drape,
+            // this host cannot place either on a foot origin, and the curator used to see a shorter
+            // checklist and no reason until the import had run.
+            BundleImportPlan plan = PlanFor(StatePlaneBeforeOwnCopies, EverythingBundle);
+            ImportChecklist checklist = ImportChecklist.For(plan);
+
+            run.Equal(
+                string.Join(", ", checklist.Layers),
+                "Terrain, ContextBuildings, SiteModel, Planting",
+                "only what this host can place is offered");
+            run.Equal(checklist.Unavailable.Count, 1, "one reason, so one sentence");
+
+            UnavailableLayers? group = checklist.Unavailable.FirstOrDefault();
+            run.Equal(
+                string.Join(", ", group?.Layers ?? []),
+                "RoadCentrelines, LandUseSubdivisions, LandCoverSubdivisions, WaterSubdivisions, RoadSubdivisions, ImageryDrape",
+                "every withheld row, in the order the steps run");
+            run.Equal(
+                group?.Reason,
+                "This bundle was built before Revit could receive these. Download the bundle again from your vault to get them.",
+                "in the curator's register");
+
+            // The log keeps the planner's register, EPSG codes included.
+            run.Contains(
+                plan.Skipped.Single(skip => skip.Kind == ImportStepKind.ImageryDrape).Reason,
+                "EPSG:2231",
+                "the technical sentence is untouched");
+        });
+
+        run.Case("different reasons are different sentences, each over its own rows", () =>
+        {
+            string[] withoutTrees = [.. EverythingBundle.Where(entry => !entry.EndsWith("TreePoints.csv", StringComparison.Ordinal))];
+            BundleImportPlan plan = BundleImportPlanner.Plan(
+                BundleManifestReader.Parse(Everything),
+                withoutTrees,
+                _ => null);
+            ImportChecklist checklist = ImportChecklist.For(plan);
+
+            run.Equal(checklist.Unavailable.Count, 2, "a missing file and an image nobody could read");
+            run.Equal(
+                string.Join(" | ", checklist.Unavailable.Select(group => $"{string.Join(", ", group.Layers)}: {group.Reason}")),
+                "Planting: This bundle is missing the file for this. Download the bundle again from your vault to get it. | "
+                    + "ImageryDrape: Mantle Place could not confirm which ground this covers. Download the bundle again from your vault to get it.",
+                "in the order the steps run");
+        });
+
+        run.Case("a terrain no tier could build is listed with the first reason a curator can act on", () =>
+        {
+            // Three tiers, three skips, one row. The TIN's absence comes first and is the weakest
+            // reason; the suppressed fallback says nothing of its own. The unreadable unit that
+            // suppressed it is the reason.
+            string chainPoints = Everything.Replace(
+                "\"elevation\": { \"dem\":",
+                "\"elevation\": { \"points_csv\": { \"units\": \"chain\" }, \"dem\":",
+                StringComparison.Ordinal);
+            BundleImportPlan plan = PlanFor(chainPoints, EverythingBundle);
+            ImportChecklist checklist = ImportChecklist.For(plan);
+
+            run.False(checklist.Layers.Contains(ImportLayer.Terrain), "the fixture has no terrain to offer");
+            UnavailableLayers? terrain = checklist.Unavailable.FirstOrDefault(group => group.Layers.Contains(ImportLayer.Terrain));
+            run.Equal(
+                terrain?.Reason,
+                "This bundle measures this in a unit this version of Mantle Place cannot read. Update Mantle Place to import it.",
+                "the unit, once");
+        });
+
+        run.Case("a layer offered is never also listed as unavailable", () =>
+        {
+            // The TIN's skip beside a points-file terrain is a tier passed over, not a row withheld.
+            ImportChecklist checklist = new(
+                [ImportLayer.Terrain],
+                [new SkippedImport { Kind = ImportStepKind.ToposurfaceFromSurfaceTin, ReasonCode = SkipReasonCode.NoSiteFrame, Reason = "technical" }]);
+
+            run.Equal(checklist.Unavailable.Count, 0, "the terrain has its box");
+        });
+
+        run.Case("a skip that is no row's is not listed", () =>
+        {
+            ImportChecklist checklist = new(
+                [ImportLayer.Terrain],
+                [new SkippedImport { Kind = ImportStepKind.SetSharedCoordinates, ReasonCode = SkipReasonCode.NoSiteFrame, Reason = "technical" }]);
+
+            run.Equal(checklist.Unavailable.Count, 0, "placing the project is not a row");
+        });
+    }
+
+    private const string BuiltBefore =
+        "This bundle was built before Revit could receive this. Download the bundle again from your vault to get it.";
+
+    /// <summary>
+    /// <see cref="Everything"/> on a State Plane foot origin, cut before MPB 1.3.0 gave this host its
+    /// own copies: the tree points follow the delivery CRS and are placed, while the lon/lat vector
+    /// set and the UTM drape cannot be.
+    /// </summary>
+    private static readonly string StatePlaneBeforeOwnCopies = Everything
+        .Replace("\"crs_projected\": \"EPSG:32613\"", "\"crs_projected\": \"EPSG:2231\"", StringComparison.Ordinal)
+        .Replace(
+            "\"projected\": { \"epsg\": 32613, \"easting\": 471595.0, \"northing\": 4257050.0, \"linear_unit\": \"m\" }",
+            "\"projected\": { \"epsg\": 2231, \"easting\": 1450131.2, \"northing\": 13171825.6, \"linear_unit\": \"ftUS\" }",
+            StringComparison.Ordinal)
+        .Replace("\"crs\": \"EPSG:32613\" } },", "\"crs\": \"EPSG:2231\" } },", StringComparison.Ordinal);
 
     private static ImportLayerChoice AllBut(ImportLayer layer)
         => ImportLayerChoice.Only(Enum.GetValues<ImportLayer>().Where(candidate => candidate != layer));
