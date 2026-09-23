@@ -1145,8 +1145,10 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// The bytes reaching here have already been through the integrity pre-check above, so this
 	// layer is no longer the unverified exception in the chain. What is still checked HERE is the
 	// row count — the digest proves the bytes, the count proves the rows this reader made of them —
-	// and the frame: the pointer states no CRS and no unit, so the rows are held against the
-	// landscape extent this block publishes and a file outside it is refused by name (HPS-53).
+	// and the frame (HPS-53): the CRS and units the pointer states must be this host's, and the rows
+	// are held against the landscape extent this block publishes as the backstop — the whole of the
+	// check on a bundle older than MPB 1.3.0, whose pointer states no frame. Either way a file not in
+	// this frame is refused by name.
 	if (Manifest.bHasFoliagePoints)
 	{
 		TArray<uint8> CsvBytes;
@@ -1160,8 +1162,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 			FFileHelper::BufferToString(CsvText, CsvBytes.GetData(), CsvBytes.Num());
 			TArray<FMantlePlaceTreePointRow> Rows;
 			const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
-			    CsvText, Manifest.OriginEastingM, Manifest.OriginNorthingM,
-			    Manifest.GetAoiSizeUeCm(), // zero when the block publishes no landscape transform, which refuses
+			    CsvText, Manifest.OriginEastingM, Manifest.OriginNorthingM, Manifest.GetFoliagePointsFrame(),
+			    Manifest.GetAoiSizeUeCm(), // zero when the block publishes no landscape transform
 			    Manifest.FoliagePointsCount, Rows, TreesError);
 			if (Outcome == EMantlePlaceTreePointsOutcome::CountMismatch)
 			{

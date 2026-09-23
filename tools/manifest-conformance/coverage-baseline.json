@@ -203,6 +203,9 @@
     "manifest.treePointsRowCount": [
       "unreal"
     ],
+    "manifest.treePointsStatedFrame": [
+      "unreal"
+    ],
     "manifest.vectorLayerUnknownName": [
       "revit",
       "unreal"

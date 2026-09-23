@@ -32,13 +32,45 @@ enum class EMantlePlaceTreePointsOutcome : uint8
 
 	/**
 	 * The file cannot be placed in this host's frame (HPS-53). Unreal is a fixed-frame host: its
-	 * origin is metric UTM on every order, while the file is in whatever frame the delivery tier
-	 * gave it, and `unreal.foliage_points` states no CRS and no unit to tell the two apart. What
-	 * the block DOES publish is the landscape's extent, and a point outside it is not in this
-	 * frame. The layer is SKIPPED with the reason, nothing is converted — no unit is scaled and
-	 * nothing is reprojected (HPS-33) — and the rest of the import stands.
+	 * origin is metric UTM on every order, while a tree-point file can be in whatever frame the
+	 * delivery tier gave it. From MPB 1.3.0 `unreal.foliage_points` states the file's CRS and units,
+	 * and a stated frame that is not this host's — or one the pointer fails to state in full — is
+	 * this outcome. Before 1.3.0 it states none, and a point outside the landscape extent the block
+	 * publishes is the evidence instead; that extent test stays as the backstop behind a stated
+	 * frame too, because a producer can state a frame wrongly. The layer is SKIPPED with the
+	 * reason, nothing is converted — no unit is scaled and nothing is reprojected (HPS-33) — and
+	 * the rest of the import stands.
 	 */
 	Unplaceable,
+};
+
+/**
+ * The frame `unreal.foliage_points` states for its file, beside the frame this host places in.
+ * Every string is the manifest's, verbatim; empty means the manifest did not state it. Built by
+ * `FMantlePlaceVaultManifest::GetFoliagePointsFrame()`, so the parser decides what was published
+ * and this unit decides what that means.
+ */
+struct FMantlePlaceTreePointsFrame
+{
+	FString Crs;             // unreal.foliage_points.crs — the CRS `x` and `y` are in
+	FString Units;           // unreal.foliage_points.units — the unit of `ground_z`
+	FString HorizontalUnits; // unreal.foliage_points.horizontal_units — the unit of `x` and `y`
+
+	/** unreal.georeference.crs_projected: this host's frame, the one its origin is stated in. */
+	FString HostCrs;
+
+	/**
+	 * The manifest's version is one whose format requires the pointer to state its frame (MPB 1.3.0
+	 * and later). A required frame that is missing is refused rather than read as "pre-1.3.0": the
+	 * version is what says which kind of bundle this is, never the absence of a key (HPS-35).
+	 */
+	bool bRequired = false;
+
+	/** Any of the three frame keys was published, or the version says they must be. */
+	bool IsStated() const
+	{
+		return bRequired || !Crs.IsEmpty() || !Units.IsEmpty() || !HorizontalUnits.IsEmpty();
+	}
 };
 
 /**
@@ -69,21 +101,28 @@ struct FMantlePlaceTreePointsLogic
 	 * makes that silent. Zero means unknown, never zero rows: a published count of 0 with no
 	 * points is indistinguishable from an absent one, and both import cleanly.
 	 *
+	 * `Frame` is what the pointer states (HPS-53). Where it states a frame, the file is placed only
+	 * if that frame is this host's: the CRS equal to `georeference.crs_projected` and both units
+	 * `m`, each compared verbatim — a stated frame that is anything else, or one stated only in
+	 * part, is Unplaceable before a row is read. Where the pointer states none (a manifest older
+	 * than 1.3.0), the extent below is the whole of the check.
+	 *
 	 * `LandscapeSpanUeCm` is `FMantlePlaceVaultManifest::GetAoiSizeUeCm()`: the landscape's
 	 * published span in UE axis order (X = North, Y = East), centred on the origin; zero when the
-	 * block publishes no heightmap. It is the one backstop HPS-53 permits where the format states
-	 * no frame beside the pointer, and it is a comparison of published values, never a derivation.
-	 * **It runs one way.** Any row outside the span makes the FILE Unplaceable — the frame belongs
-	 * to the file, not to the point, so rows that happen to land inside are not kept — and so does
-	 * a span of zero, because an unstated frame is never assumed to match. Rows inside the span
-	 * prove nothing about the frame; they are only the absence of evidence against it, and Parsed
-	 * does not claim otherwise. The check runs before the count: whether every row survived is a
-	 * question about a file this host places.
+	 * block publishes no heightmap. It is a comparison of published values, never a derivation,
+	 * and **it runs one way.** Any row outside the span makes the FILE Unplaceable — the frame
+	 * belongs to the file, not to the point, so rows that happen to land inside are not kept.
+	 * Rows inside the span prove nothing about the frame; they are only the absence of evidence
+	 * against it. A span of zero is therefore no evidence either way: behind a stated frame that
+	 * matched, the file is placed (a mesh-only bundle brings its trees), and behind an unstated
+	 * one it is refused, because an unstated frame is never assumed to match. The check runs
+	 * before the count: whether every row survived is a question about a file this host places.
 	 */
 	static EMantlePlaceTreePointsOutcome ParseCsv(
 	    const FString& CsvText,
 	    double OriginEastingM,
 	    double OriginNorthingM,
+	    const FMantlePlaceTreePointsFrame& Frame,
 	    const FVector2D& LandscapeSpanUeCm,
 	    int32 DeclaredPointCount,
 	    TArray<FMantlePlaceTreePointRow>& OutRows,

@@ -8,6 +8,7 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
     const FString& CsvText,
     double OriginEastingM,
     double OriginNorthingM,
+    const FMantlePlaceTreePointsFrame& Frame,
     const FVector2D& LandscapeSpanUeCm,
     int32 DeclaredPointCount,
     TArray<FMantlePlaceTreePointRow>& OutRows,
@@ -56,10 +57,51 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		return EMantlePlaceTreePointsOutcome::HeaderUnrecognised;
 	}
 
-	// HPS-53: with no published extent there is nothing to hold the file against, and an unstated
-	// frame is never assumed to match. Refused here rather than after the rows, because no row
-	// could change the answer.
-	if (LandscapeSpanUeCm.X <= 0.0 || LandscapeSpanUeCm.Y <= 0.0)
+	// HPS-53: the frame the pointer states is read first, and read in full. All three strings are
+	// compared verbatim against what this host places in — its own georeference's CRS, in metres —
+	// and nothing about them is interpreted: a CRS written another way is a different CRS here,
+	// because deciding two spellings are one frame is a derivation this host does not make.
+	// Refused before any row is read, because no row could change the answer.
+	const bool bFrameStated = Frame.IsStated();
+	if (bFrameStated)
+	{
+		const auto Shown = [](const FString& Value) {
+			return Value.IsEmpty() ? FString(TEXT("(not stated)")) : FString::Printf(TEXT("\"%s\""), *Value);
+		};
+		if (Frame.Crs.IsEmpty() || Frame.Units.IsEmpty() || Frame.HorizontalUnits.IsEmpty())
+		{
+			OutError = FString::Printf(
+			    TEXT("TreePoints.csv does not state its frame in full: the manifest's Unreal block gives crs %s, "
+			         "units %s and horizontal_units %s, and this manifest version requires all three. An "
+			         "unstated frame is never assumed to be this host's metric UTM frame."),
+			    *Shown(Frame.Crs), *Shown(Frame.Units), *Shown(Frame.HorizontalUnits));
+			return EMantlePlaceTreePointsOutcome::Unplaceable;
+		}
+		if (Frame.HostCrs.IsEmpty() || !Frame.Crs.Equals(Frame.HostCrs, ESearchCase::CaseSensitive))
+		{
+			OutError = FString::Printf(
+			    TEXT("TreePoints.csv's stated CRS is %s, which is not this host's frame (%s, the Unreal "
+			         "block's georeference). Unreal places metric UTM coordinates only, and a file stated on "
+			         "another grid is refused rather than reprojected."),
+			    *Shown(Frame.Crs), *Shown(Frame.HostCrs));
+			return EMantlePlaceTreePointsOutcome::Unplaceable;
+		}
+		if (!Frame.Units.Equals(TEXT("m"), ESearchCase::CaseSensitive)
+		    || !Frame.HorizontalUnits.Equals(TEXT("m"), ESearchCase::CaseSensitive))
+		{
+			OutError = FString::Printf(
+			    TEXT("TreePoints.csv's stated unit is not metres (units %s, horizontal_units %s). Unreal places "
+			         "metric coordinates only, and a file stated in another unit is refused rather than scaled."),
+			    *Shown(Frame.Units), *Shown(Frame.HorizontalUnits));
+			return EMantlePlaceTreePointsOutcome::Unplaceable;
+		}
+	}
+
+	// HPS-53's backstop: the landscape extent this block publishes. With none published there is
+	// nothing to hold the file against, which is no evidence either way — so a stated frame that
+	// matched stands, and an unstated one is refused, because it is never assumed to match.
+	const bool bHasExtent = LandscapeSpanUeCm.X > 0.0 && LandscapeSpanUeCm.Y > 0.0;
+	if (!bHasExtent && !bFrameStated)
 	{
 		OutError = TEXT("TreePoints.csv states no CRS and no unit, and the manifest's Unreal block publishes "
 		                "no landscape extent to check its coordinates against, so the file cannot be shown "
@@ -99,7 +141,8 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 
 		// The landscape is centred on the origin, so its extent in this frame is +/- half its span.
 		// A comparison of two published values, in the units they were published in.
-		if (FMath::Abs(Row.Position.X) > HalfSpanNorthCm || FMath::Abs(Row.Position.Y) > HalfSpanEastCm)
+		if (bHasExtent
+		    && (FMath::Abs(Row.Position.X) > HalfSpanNorthCm || FMath::Abs(Row.Position.Y) > HalfSpanEastCm))
 		{
 			if (OutsideCount++ == 0)
 			{

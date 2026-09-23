@@ -1218,6 +1218,14 @@
       "appliesTo": "unreal"
     },
     {
+      "id": "manifest.treePointsStatedFrame",
+      "group": "manifest",
+      "file": "manifest/tree-points-stated-frame.json",
+      "expect": "vector",
+      "reason": "A tree-point pointer that states its frame is placed only where that frame is this host's (HPS-53, MPB 1.3.0). `hosts.unreal.foliage_points` states `crs`, `units` and `horizontal_units`, and the format says they are always the fixed-frame host's own: `georeference.crs_projected`, in metres. A reader compares them with its own georeference verbatim and refuses by name what does not match -- a State Plane foot CRS, feet for `ground_z`, US survey feet for `x` and `y` -- before a row is read, scaling and reprojecting nothing. The manifest's version, not the presence of the keys, says a frame is owed: a 1.3.0 pointer that omits one member, or all three, is refused rather than read as a bundle from before the format could state one. The landscape extent stays as the backstop behind a stated frame, because a producer can state one wrongly: foot rows under a pointer that says metres are refused on the extent's evidence. Each row lays its members over one embedded 1.3.0 manifest, so the refusals are proven through the parser.",
+      "appliesTo": "unreal"
+    },
+    {
       "id": "manifest.drapeAlignmentDiverges",
       "group": "manifest",
       "file": "manifest/drape-alignment-diverges.json",
