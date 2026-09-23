@@ -206,7 +206,14 @@ none it opens the cache and says that a zip from elsewhere logged elsewhere. The
 Account button reaches the same place through the same function, so the two can never disagree.
 
 **An import brings in what you tick.** Both ways in — `Import Bundle` and the vault window's
-`Import` — open the modeless `Bundle Import` window on a checklist headed `Include`: one box for each
+`Import` — open the modeless `Bundle Import` window on a checklist headed `Include`. Above it, under
+the bundle's name, one line says what the order's `delivery` block publishes — unit system, linear
+unit and delivery CRS, as in `Imperial · US survey feet · EPSG:6543` — read as published and never
+looked up. The CRS is the block's own `label` where it has one, its EPSG code on a bundle built
+before the label existed, and `no delivery CRS` where the block names neither; a bundle built before
+the block itself existed shows no line. The words are `HPS-51`'s. A second line appears only when
+the project displays lengths in the other unit system, and it changes nothing: Project Units are
+yours. Then the checklist: one box for each
 layer the bundle carries (`Terrain`, `Context Buildings`, `Site Model`, `Road Centrelines`,
 `Land Use Subdivisions`, `Land Cover Subdivisions`, `Water Subdivisions`, `Road Subdivisions`,
 `Trees`, `Imagery Drape`), all ticked but

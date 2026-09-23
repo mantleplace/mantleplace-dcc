@@ -70,9 +70,23 @@ internal sealed class ActiveImport : IDisposable
         ZipPath = zipPath;
         _importer = new RevitBundleImporter(application, document, archive, log.Append);
         Checklist = ImportChecklist.For(plan);
+        DeliveryLine = DeliveryHeader.Describe(manifest.Delivery);
+        UnitsDisagreement = DeliveryHeader.DisplayDisagreement(manifest.Delivery, LengthUnitTypeId(document));
     }
 
     internal string ZipPath { get; }
+
+    /// <summary>
+    /// The order's unit system, linear unit and delivery CRS, for the import window's header; <c>null</c>
+    /// for a bundle built before the <c>delivery</c> block existed.
+    /// </summary>
+    internal string? DeliveryLine { get; }
+
+    /// <summary>
+    /// Set only when the project displays lengths in the other unit system. Said, never acted on:
+    /// display units are the curator's.
+    /// </summary>
+    internal string? UnitsDisagreement { get; }
 
     /// <summary>What the bundle carries, for the import window to offer before anything runs.</summary>
     internal ImportChecklist Checklist { get; }
@@ -98,6 +112,10 @@ internal sealed class ActiveImport : IDisposable
         (false, { WasCancelled: true }) => "The import was cancelled.",
         _ => "Bundle imported.",
     };
+
+    /// <summary>The unit the project formats lengths in, as the <c>TypeId</c> the pure core reads.</summary>
+    private static string LengthUnitTypeId(Document document)
+        => document.GetUnits().GetFormatOptions(SpecTypeId.Length).GetUnitTypeId().TypeId;
 
     /// <summary>
     /// Opens a bundle, plans it and verifies it — everything that must pass before any element is

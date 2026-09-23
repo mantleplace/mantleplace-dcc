@@ -59,6 +59,7 @@ host met the contract for real:
 | **v1.8** | `HPS-51` gains an eighth action, the window that shows a bundle import running and stops it. The Revit import ran as one call on the host's thread, so Revit reported "not responding" for minutes with nothing to show and nothing to cancel; the staged import that fixed it has a window whose surface the reference host will need too, so its words were fixed here before the second host named them differently |
 | **v1.9** | `HPS-51` gains a ninth action, choosing what a bundle import brings in before its steps run. A Revit import brought in every step the planner found, and a curator who wanted the terrain alone had no way to leave the rest out but to hold a bundle that lacked it; the checklist that fixed it is a surface the reference host's roadmapped picker will share, so its words were fixed here before either host named them — and `Layers`, the word both hosts' developers use for the rows, was kept off the screen, because it already names three other things in the glossary and two more in the reference host's editor |
 | **v1.10** | ⛔`HPS-52` and ⛔`HPS-53`, plus `HPS-54` — place from the host block first, place only what can be shown to be in the host frame, and declare which kind of frame the host has; `HPS-45` narrowed in the same pass to a fallback that reaches a UTM origin and nothing else. The suite had assumed every host frame was a UTM zone and never said so, and two hosts met a State Plane foot delivery and did opposite things: Revit refused each layer it could not place and named the reason, while Unreal's tree-point reader subtracted its metric UTM origin from foot State Plane coordinates and reported success with every tree a thousand kilometres off site. Both were defensible readings of `HPS-33`, `HPS-35` and `HPS-45` as written, which is what made this a hole in the standard rather than one host's bug |
+| **v1.11** | `HPS-51` gains the words for what a bundle is delivered in — unit system, linear unit, delivery CRS. Neither host said it anywhere: a curator learned an order was in feet by opening the zip, and an Unreal user on an imperial order met foot GIS and CAD files beside metric content with nothing on screen having said so. Both hosts were about to print the same three facts, so their words were fixed here before either did |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -1016,6 +1017,27 @@ are different facts for a curator deciding whether to import again — the first
 the project that a re-import reuses, the second left nothing — so they are different words, and a
 host that shows one word for both has hidden which steps a re-import will pick up.
 
+**What a bundle is delivered in is said in one set of words too.** A host that tells the user which
+unit system, linear unit and delivery CRS a bundle is in reads them verbatim off the manifest's
+`delivery` block, for display — no placement value comes from it — and says them as one line, the
+three joined by ` · ` in that order, as *Imperial · US survey feet · EPSG:6543*. A host may introduce
+the line in its own layout; the three are these words:
+
+| The published value                              | The words            |
+| ------------------------------------------------ | -------------------- |
+| `unit_system` `metric`, `imperial`               | `Metric`, `Imperial` |
+| `linear_unit` `m`, `ftUS`, `ft`                  | `metres`, `US survey feet`, `international feet` |
+| `label` present                                  | the label, verbatim  |
+| no `label`, `horizontal_epsg` present            | `EPSG:` and the code — a host looks up no CRS names, so it does not rebuild the label a bundle before the label existed lacks |
+| neither                                          | `no delivery CRS`    |
+| a required value absent                          | `not stated`         |
+| a value this table has no word for               | the published value, verbatim — never a guess |
+
+A bundle with no `delivery` block, built before the block existed, gets no line: it is not assumed to
+be metric. Revit's place for the line is its import window; Unreal says it in the import
+summary, followed on a foot `linear_unit` by a line of its own saying that its content is metric
+(`HPS-54`) — a fixed-frame host's statement about itself, and outside this table.
+
 **Casing is the host's own convention, and this rule does not touch it.** Title Case on a Revit
 ribbon, because every Autodesk tab beside ours uses it; the editor's own style in Unreal. So is the
 punctuation of a wait: `Signing In…` and `Signing in...` are one word in two hosts' typography and
@@ -1053,7 +1075,8 @@ the section heading. Both hosts were naming the same actions from scratch, twice
 said which of them were the same action — and host #3 would have named them a third time.
 
 _Enforcer:_ `agent-review`, plus whatever half of a host's words sits in a pure core. Revit's auth
-faces and its window labels are constants with a headless test — `AccountRibbon`, `WindowLabels` —
+faces, its window labels and its delivery line are constants with a headless test —
+`AccountRibbon`, `WindowLabels`, `DeliveryHeader` —
 because the shim is never built in CI (`HPS-02`, `HPS-42`). The ribbon's own faces are not: `Sign
 Out`, `Vault`, `Import Bundle` and `About Mantle Place` are literals in `MantlePlaceApplication`,
 where nothing but review reads them, and Unreal's are inline in the Slate panel on the same terms.

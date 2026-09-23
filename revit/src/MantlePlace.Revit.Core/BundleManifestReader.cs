@@ -477,9 +477,11 @@ public static class BundleManifestReader
         {
             Declared = true,
             UnitSystem = unitSystem,
+            UnitSystemValue = delivery.Str("unit_system"),
             Tier = delivery.Str("tier"),
             LinearUnit = linearUnit,
             HorizontalEpsg = delivery.OptionalInt("horizontal_epsg"),
+            Label = delivery.OptionalStr("label"),
             LocalOrigin = localOrigin,
         };
 

@@ -173,6 +173,8 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         _fromVault = fromVault;
         _window = new ImportWindow(
             Path.GetFileName(import.ZipPath),
+            import.DeliveryLine,
+            import.UnitsDisagreement,
             import.Checklist,
             revitWindow,
             BeginChosen,
