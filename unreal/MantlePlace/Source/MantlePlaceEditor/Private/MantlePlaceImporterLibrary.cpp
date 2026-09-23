@@ -5,6 +5,7 @@
 #include "MantlePlaceCoverageRasterLogic.h"
 #include "MantlePlaceCesiumAvailabilityLogic.h"
 #include "MantlePlaceCoverageRasters.h"
+#include "MantlePlaceDeliveryLogic.h"
 #include "MantlePlaceDrape.h"
 #include "MantlePlaceDrapeAlignmentLogic.h"
 #include "MantlePlaceImportManifest.h"
@@ -514,6 +515,10 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// a semver string, so by here this is always MAJOR.MINOR.PATCH.
 	Log.Add(FString::Printf(TEXT("Bundle manifest version %s (jobId %s)."),
 		*Manifest.Version, *MantlePlaceImportNaming::ShortIdentity(Manifest.JobId)));
+
+	// What the bundle is delivered in and, on an imperial order, that this host's content is not.
+	// Read off the host-neutral `delivery` block for display only; nothing below places from it.
+	Log.Append(FMantlePlaceDeliveryLogic::DescribeDelivery(Manifest.Delivery));
 
 	ZipPhase.Reset();
 

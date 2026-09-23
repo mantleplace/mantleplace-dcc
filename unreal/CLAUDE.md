@@ -39,7 +39,7 @@ turns on most visibly, and which a patch here is most likely to break:
 | `HPS-32` | the paint-layer band legend is **data**. Which weight channel is which material is read from the manifest, never inferred from a filename. |
 | `HPS-33` | manifest values are applied verbatim. A paint layer's name is the platform's material name exactly — never prettified, never prefixed.    |
 | `HPS-46` | the conformance corpus's expectation keys are asserted. A case edited to expect something different turns the suite red.                   |
-| `HPS-51` | the vault panel's auth button, heading and local-import button take the standard's words — the editor's own casing, not its own wording. The words are the standard's table; the casing and the layout are this host's. |
+| `HPS-51` | the vault panel's auth button, heading and local-import button take the standard's words — the editor's own casing, not its own wording. The words are the standard's table; the casing and the layout are this host's. The import summary's delivery line takes the standard's words for unit system, linear unit and delivery CRS (`MantlePlaceDeliveryLogic`), read off the `delivery` block for display and never for placement, and on a foot delivery adds that this host's content is metric. |
 | `HPS-52` | placement reads the `unreal` block's own pointers first; a host-neutral file is the fallback, never the first reach.                                                                       |
 | `HPS-53` | a file is placed only where its frame can be shown to be this host's metric UTM frame, and a refusal is a **named** skip. The tree-point reader refuses a file with any point outside the landscape extent this block publishes (`MantlePlaceTreePointsLogic`, corpus case `manifest.treePointsFrame`), and one whose block publishes no landscape extent at all, so a mesh-only bundle brings in no tree points — a backstop that refuses and never a showing that places, and the whole of the check until the format states a CRS and a unit beside `foliage_points`. One open deviation: the road-spline reader still drops a single refused point without naming it (a non-UTM origin, or a layer nothing could place, is now named). |
 
@@ -59,8 +59,9 @@ MantlePlace/Content/Python/              the Cesium streaming helper. Spawns act
 
 **Put the decision in a `*Logic` translation unit.** That is the pattern already here —
 `MantlePlaceLandscapeWeightsLogic`, `MantlePlaceCoverageRasterLogic`, `MantlePlaceRoadSplinesLogic`,
-`MantlePlaceTreePointsLogic`, `MantlePlaceDrapeAlignmentLogic`, `MantlePlaceIntegrityLogic`,
-`MantlePlaceVaultLogic`, `MantlePlaceAuthLogic`, `MantlePlaceBundleCacheLogic` — and each one has a
+`MantlePlaceTreePointsLogic`, `MantlePlaceDrapeAlignmentLogic`, `MantlePlaceDeliveryLogic`,
+`MantlePlaceIntegrityLogic`, `MantlePlaceVaultLogic`, `MantlePlaceAuthLogic`,
+`MantlePlaceBundleCacheLogic` — and each one has a
 headless test beside it. The importer *executes*; the Logic unit *decides*. The test question is the design question: if asserting it needs a running
 editor and a real bundle, it is in the wrong translation unit.
 
