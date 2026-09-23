@@ -321,7 +321,7 @@ struct FMantlePlaceVaultManifest
 	 * whose format obliges the pointer to state it, so a missing frame there is refused rather than
 	 * mistaken for a bundle built before the format had one.
 	 */
-	FMantlePlaceTreePointsFrame GetFoliagePointsFrame() const;
+	FMantlePlaceTreePointsFrame GetFoliagePointsFrame() const; // callers include MantlePlaceTreePointsLogic.h
 };
 
 namespace MantlePlaceImportManifest

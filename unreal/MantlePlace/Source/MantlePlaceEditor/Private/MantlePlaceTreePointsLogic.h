@@ -47,8 +47,8 @@ enum class EMantlePlaceTreePointsOutcome : uint8
 /**
  * The frame `unreal.foliage_points` states for its file, beside the frame this host places in.
  * Every string is the manifest's, verbatim; empty means the manifest did not state it. Built by
- * `FMantlePlaceVaultManifest::GetFoliagePointsFrame()`, so the parser decides what was published
- * and this unit decides what that means.
+ * `FMantlePlaceVaultManifest::GetFoliagePointsFrame()`, so the parser reports what was published
+ * (and whether its version owes a frame) and this unit decides what that means.
  */
 struct FMantlePlaceTreePointsFrame
 {
@@ -62,19 +62,23 @@ struct FMantlePlaceTreePointsFrame
 	/**
 	 * The manifest's version is one whose format requires the pointer to state its frame (MPB 1.3.0
 	 * and later). A required frame that is missing is refused rather than read as "pre-1.3.0": the
-	 * version is what says which kind of bundle this is, never the absence of a key (HPS-35).
+	 * version is what says which kind of bundle this is, never the absence of a key. A manifest
+	 * whose shape contradicts its own version fails closed (HPS-35).
 	 */
 	bool bRequired = false;
 
-	/** Any of the three frame keys was published, or the version says they must be. */
-	bool IsStated() const
+	/**
+	 * A frame is owed: the version says the pointer must state one, or it states at least part of
+	 * one. An owed frame is checked in full, and a missing member refuses the file.
+	 */
+	bool IsOwed() const
 	{
 		return bRequired || !Crs.IsEmpty() || !Units.IsEmpty() || !HorizontalUnits.IsEmpty();
 	}
 };
 
 /**
- * Pure (engine-/IO-free) logic for the tree-points layer: Landcover/TreePoints.csv text ->
+ * Pure (engine-/IO-free) logic for the tree-points layer: the CSV `foliage_points.path` names ->
  * DataTable rows in the Local Projected Frame. On a metric order the CSV ships absolute AOI-UTM
  * x/y, which is this host's frame, so no geographic projection is needed — just the same
  * origin-relative frame math the rest of the importer uses. On another delivery tier the file is

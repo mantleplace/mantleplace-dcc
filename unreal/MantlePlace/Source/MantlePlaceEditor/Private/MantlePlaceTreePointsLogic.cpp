@@ -20,7 +20,7 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	CsvText.ParseIntoArrayLines(Lines, /*bCullEmpty*/ true);
 	if (Lines.Num() == 0)
 	{
-		OutError = TEXT("TreePoints.csv is empty: it has no header row naming the columns x, y, ground_z, "
+		OutError = TEXT("The tree-point file is empty: it has no header row naming the columns x, y, ground_z, "
 		                "height_m and crown_radius_m.");
 		return EMantlePlaceTreePointsOutcome::HeaderUnrecognised;
 	}
@@ -51,7 +51,7 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	if (Missing.Num() > 0)
 	{
 		OutError = FString::Printf(
-		    TEXT("TreePoints.csv has no %s column (it needs x, y, ground_z, height_m and crown_radius_m, "
+		    TEXT("The tree-point file has no %s column (it needs x, y, ground_z, height_m and crown_radius_m, "
 		         "in any order). The ETL column contract changed; the tree-points layer is skipped."),
 		    *FString::Join(Missing, TEXT(", ")));
 		return EMantlePlaceTreePointsOutcome::HeaderUnrecognised;
@@ -62,8 +62,8 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	// and nothing about them is interpreted: a CRS written another way is a different CRS here,
 	// because deciding two spellings are one frame is a derivation this host does not make.
 	// Refused before any row is read, because no row could change the answer.
-	const bool bFrameStated = Frame.IsStated();
-	if (bFrameStated)
+	const bool bFrameOwed = Frame.IsOwed();
+	if (bFrameOwed)
 	{
 		const auto Shown = [](const FString& Value) {
 			return Value.IsEmpty() ? FString(TEXT("(not stated)")) : FString::Printf(TEXT("\"%s\""), *Value);
@@ -71,7 +71,7 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		if (Frame.Crs.IsEmpty() || Frame.Units.IsEmpty() || Frame.HorizontalUnits.IsEmpty())
 		{
 			OutError = FString::Printf(
-			    TEXT("TreePoints.csv does not state its frame in full: the manifest's Unreal block gives crs %s, "
+			    TEXT("The tree-point file does not state its frame in full: the manifest's Unreal block gives crs %s, "
 			         "units %s and horizontal_units %s, and this manifest version requires all three. An "
 			         "unstated frame is never assumed to be this host's metric UTM frame."),
 			    *Shown(Frame.Crs), *Shown(Frame.Units), *Shown(Frame.HorizontalUnits));
@@ -80,7 +80,7 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		if (Frame.HostCrs.IsEmpty() || !Frame.Crs.Equals(Frame.HostCrs, ESearchCase::CaseSensitive))
 		{
 			OutError = FString::Printf(
-			    TEXT("TreePoints.csv's stated CRS is %s, which is not this host's frame (%s, the Unreal "
+			    TEXT("The tree-point file's stated CRS is %s, which is not this host's frame (%s, the Unreal "
 			         "block's georeference). Unreal places metric UTM coordinates only, and a file stated on "
 			         "another grid is refused rather than reprojected."),
 			    *Shown(Frame.Crs), *Shown(Frame.HostCrs));
@@ -90,7 +90,7 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		    || !Frame.HorizontalUnits.Equals(TEXT("m"), ESearchCase::CaseSensitive))
 		{
 			OutError = FString::Printf(
-			    TEXT("TreePoints.csv's stated unit is not metres (units %s, horizontal_units %s). Unreal places "
+			    TEXT("The tree-point file's stated unit is not metres (units %s, horizontal_units %s). Unreal places "
 			         "metric coordinates only, and a file stated in another unit is refused rather than scaled."),
 			    *Shown(Frame.Units), *Shown(Frame.HorizontalUnits));
 			return EMantlePlaceTreePointsOutcome::Unplaceable;
@@ -101,9 +101,9 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	// nothing to hold the file against, which is no evidence either way — so a stated frame that
 	// matched stands, and an unstated one is refused, because it is never assumed to match.
 	const bool bHasExtent = LandscapeSpanUeCm.X > 0.0 && LandscapeSpanUeCm.Y > 0.0;
-	if (!bHasExtent && !bFrameStated)
+	if (!bHasExtent && !bFrameOwed)
 	{
-		OutError = TEXT("TreePoints.csv states no CRS and no unit, and the manifest's Unreal block publishes "
+		OutError = TEXT("The tree-point file states no CRS and no unit, and the manifest's Unreal block publishes "
 		                "no landscape extent to check its coordinates against, so the file cannot be shown "
 		                "to be in this host's metric UTM frame. Nothing is converted or assumed.");
 		return EMantlePlaceTreePointsOutcome::Unplaceable;
@@ -160,7 +160,7 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	if (OutsideCount > 0)
 	{
 		OutError = FString::Printf(
-		    TEXT("TreePoints.csv is not in this host's frame: %d of %d point(s) fall outside the landscape "
+		    TEXT("The tree-point file is not in this host's frame: %d of %d point(s) fall outside the landscape "
 		         "extent the manifest publishes (%.1f m east-west by %.1f m north-south, centred on the "
 		         "origin); the first is x=%s, y=%s. Unreal places metric UTM coordinates only, and a file "
 		         "stated on another grid or in another unit is refused rather than converted."),
@@ -176,7 +176,7 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	if (DeclaredPointCount > 0 && OutRows.Num() != DeclaredPointCount)
 	{
 		OutError = FString::Printf(
-		    TEXT("TreePoints.csv parsed %d row(s) but the manifest declares point_count %d. The "
+		    TEXT("The tree-point file parsed %d row(s) but the manifest declares point_count %d. The "
 		         "payload and the manifest disagree; refusing to import a subset of the layer."),
 		    OutRows.Num(), DeclaredPointCount);
 		OutRows.Reset();

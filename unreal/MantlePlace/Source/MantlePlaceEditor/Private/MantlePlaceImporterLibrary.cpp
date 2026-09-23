@@ -1170,7 +1170,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				// A count that disagrees with the payload FAILS the import rather than skipping the
 				// layer: the rows that did parse are a silent subset, and a scatter built from a
 				// subset reads as a sparse forest rather than as an error.
-				Log.Add(FString::Printf(TEXT("Tree points FAILED: %s"), *TreesError));
+				Log.Add(FString::Printf(
+					TEXT("Tree points FAILED (%s): %s"), *Manifest.FoliagePointsPath, *TreesError));
 				bAllRequestedSucceeded = false;
 			}
 			else if (Outcome != EMantlePlaceTreePointsOutcome::Parsed)
@@ -1180,7 +1181,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 				// imagery and the buildings beside it as failed. A file that is not in this host's
 				// frame is the same news (HPS-53): a NAMED skip, no table made, so nothing downstream
 				// scatters a forest a thousand kilometres off site.
-				Log.Add(FString::Printf(TEXT("Tree points skipped: %s"), *TreesError));
+				Log.Add(FString::Printf(
+					TEXT("Tree points skipped (%s): %s"), *Manifest.FoliagePointsPath, *TreesError));
 			}
 			else
 			{

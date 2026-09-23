@@ -8,7 +8,7 @@
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceIntegrityLogic.h"      // which payloads the pre-check covers, as a list
 #include "MantlePlaceLandscapeWeightsLogic.h" // the band legend the corpus states the answer for
-#include "MantlePlaceTreePointsLogic.h"     // the row-count cross-check the vector table drives
+#include "MantlePlaceTreePointsLogic.h"     // the row-count and frame checks the vector tables drive
 #include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion
 #include "Tests/MantlePlaceConformanceCorpus.h"
 
@@ -515,11 +515,42 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 }
 
 /**
- * The case's embedded `manifest`, with the row's `foliagePoints` members laid over
- * `hosts.unreal.foliage_points`: a string sets that member and a null removes it. One manifest per
- * case and a few members per row keeps the table about the frame and not about the document.
+ * Lay a row's overlay object over `Target`: a member set to null is removed, any other value
+ * replaces. False when the row carries the overlay and there is no target to lay it on, so a
+ * fixture that drifted fails loudly instead of quietly testing the unmodified manifest.
  */
-FString ManifestWithFoliagePoints(const FCase& Case, const TSharedPtr<FJsonObject>& Row)
+bool OverlayMembers(const TSharedPtr<FJsonObject>& Row, const TCHAR* OverlayField, const TSharedPtr<FJsonObject>& Target)
+{
+	const TSharedPtr<FJsonObject>* Overlay = nullptr;
+	if (!Row.IsValid() || !Row->TryGetObjectField(OverlayField, Overlay))
+	{
+		return true;
+	}
+	if (!Target.IsValid())
+	{
+		return false;
+	}
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Member : (*Overlay)->Values)
+	{
+		if (!Member.Value.IsValid() || Member.Value->IsNull())
+		{
+			Target->RemoveField(Member.Key);
+		}
+		else
+		{
+			Target->SetField(Member.Key, Member.Value);
+		}
+	}
+	return true;
+}
+
+/**
+ * The case's embedded `manifest` with the row's overlays laid on it: `root` over the document,
+ * `unreal` over `hosts.unreal` and `foliagePoints` over `hosts.unreal.foliage_points`, in that
+ * order. One manifest per case and a few members per row keeps the table about the frame and not
+ * about the document. Empty — which no parser accepts — when an overlay has nothing to land on.
+ */
+FString ManifestWithOverlays(const FCase& Case, const TSharedPtr<FJsonObject>& Row)
 {
 	TSharedPtr<FJsonObject> Manifest;
 	const TSharedRef<TJsonReader<TCHAR>> Reader =
@@ -528,27 +559,16 @@ FString ManifestWithFoliagePoints(const FCase& Case, const TSharedPtr<FJsonObjec
 	{
 		return FString();
 	}
-
-	const TSharedPtr<FJsonObject>* Hosts = nullptr;
-	const TSharedPtr<FJsonObject>* Unreal = nullptr;
-	const TSharedPtr<FJsonObject>* FoliagePoints = nullptr;
-	const TSharedPtr<FJsonObject>* Overrides = nullptr;
-	if (Manifest->TryGetObjectField(TEXT("hosts"), Hosts)
-		&& (*Hosts)->TryGetObjectField(TEXT("unreal"), Unreal)
-		&& (*Unreal)->TryGetObjectField(TEXT("foliage_points"), FoliagePoints)
-		&& Row.IsValid() && Row->TryGetObjectField(TEXT("foliagePoints"), Overrides))
+	const auto Child = [](const TSharedPtr<FJsonObject>& Parent, const TCHAR* Field) {
+		const TSharedPtr<FJsonObject>* Found = nullptr;
+		return Parent.IsValid() && Parent->TryGetObjectField(Field, Found) ? *Found : TSharedPtr<FJsonObject>();
+	};
+	const TSharedPtr<FJsonObject> Unreal = Child(Child(Manifest, TEXT("hosts")), TEXT("unreal"));
+	if (!OverlayMembers(Row, TEXT("root"), Manifest)
+		|| !OverlayMembers(Row, TEXT("unreal"), Unreal)
+		|| !OverlayMembers(Row, TEXT("foliagePoints"), Child(Unreal, TEXT("foliage_points"))))
 	{
-		for (const TPair<FString, TSharedPtr<FJsonValue>>& Member : (*Overrides)->Values)
-		{
-			if (!Member.Value.IsValid() || Member.Value->IsNull())
-			{
-				(*FoliagePoints)->RemoveField(Member.Key);
-			}
-			else
-			{
-				(*FoliagePoints)->SetField(Member.Key, Member.Value);
-			}
-		}
+		return FString();
 	}
 
 	FString Text;
@@ -787,7 +807,7 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestTrue(Case->What(*FString::Printf(TEXT("embedded manifest parses (%s)"), *ManifestError)), M.bValid);
 		// A manifest older than 1.3.0 states no frame, and this table is the extent substitute alone.
 		const FMantlePlaceTreePointsFrame Frame = M.GetFoliagePointsFrame();
-		TestFalse(Case->What(TEXT("a pre-1.3.0 pointer reads as stating no frame")), Frame.IsStated());
+		TestFalse(Case->What(TEXT("a pre-1.3.0 pointer that states no frame owes none")), Frame.IsOwed());
 
 		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("rows"));
 		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
@@ -802,8 +822,8 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 	}
 
 	// --- HPS-53: the frame the pointer states is read, and must be this host's (MPB 1.3.0) ------
-	// Each row restates `hosts.unreal.foliage_points`' three frame members on the one embedded
-	// manifest, and the manifest is parsed again per row, so what is proven is the importer's
+	// Each row lays its own members over the one embedded manifest — the pointer's frame, and
+	// where it matters the version or the heightmap — and the manifest is parsed again per row, so what is proven is the importer's
 	// path — Parse, GetFoliagePointsFrame, ParseCsv — including that a missing member is read as
 	// missing rather than defaulted, and that the version, not the keys, says a frame is owed.
 	if (const FCase* Case = FindCase(Cases, TEXT("manifest.treePointsStatedFrame")))
@@ -815,7 +835,7 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		{
 			FString ManifestError;
 			const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(
-				ManifestWithFoliagePoints(*Case, Row), ManifestError);
+				ManifestWithOverlays(*Case, Row), ManifestError);
 			TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": embedded manifest parses (%s)"),
 				*RowString(Row, TEXT("name")), *ManifestError)), M.bValid);
 			AssertTreePointsRow(*this, *Case, Row, M.OriginEastingM, M.OriginNorthingM,
