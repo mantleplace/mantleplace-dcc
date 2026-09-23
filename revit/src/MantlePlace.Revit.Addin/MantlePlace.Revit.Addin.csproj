@@ -74,13 +74,15 @@
   </ItemGroup>
 
   <!--
-    The Mantle Place Tree Planting family, authored by TreeFamilyAuthoring.cs in Revit 2025 and embedded
-    rather than copied beside the DLL: the deploy and package scripts carry .dll/.pdb/.json only, and
-    a family that travels inside the assembly cannot be left behind by either. The tree step writes it
-    out under its family name before loading it, because Revit names a loaded family after its file.
+    The Mantle Place Tree and Mantle Place Shrub Planting families, authored by
+    PlantingFamilyAuthoring.cs in Revit 2025 and embedded rather than copied beside the DLL: the deploy
+    and package scripts carry .dll/.pdb/.json only, and a family that travels inside the assembly
+    cannot be left behind by either. The planting step writes each out under its family name before
+    loading it, because Revit names a loaded family after its file.
   -->
   <ItemGroup>
     <EmbeddedResource Include="Families\MantlePlaceTree.rfa" LogicalName="MantlePlace.Revit.Addin.Families.MantlePlaceTree.rfa" />
+    <EmbeddedResource Include="Families\MantlePlaceShrub.rfa" LogicalName="MantlePlace.Revit.Addin.Families.MantlePlaceShrub.rfa" />
   </ItemGroup>
 
   <!--

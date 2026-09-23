@@ -266,6 +266,12 @@ platform vocabularies happened on the same word and neither is ours to rename, w
 here.
 _Avoid_: shrubland, shrub layer, shrub (unqualified, where both senses are in play)
 
+**Planting (Revit)**:
+Revit's own category for plants, and the one row of Revit's import checklist that brings in the tree
+points of every foliage type. It is the host's noun for a host construct, not a Mantle Place word:
+the layer is the tree layer and each point is a tree point, in every host.
+_Avoid_: planting (for the layer or a point), planting point, vegetation
+
 ### What a host builds from a bundle
 
 **Terrain**:

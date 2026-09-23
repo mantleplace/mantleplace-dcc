@@ -152,9 +152,7 @@ follow.
 - **The expiry skew is a constant with no parameter.** That is deliberate — the reference host takes
   it as an argument and its shim can pass `0`. Do not add an override "for testability"; the point
   is that there is nowhere to put a zero.
-- **Revit API risk is real and not caught by the compiler.** `GeometryCreationUtilities.CreateBlendGeometry`
-  (the tree step's fallback when the family will not load) compiles but has not yet been executed
-  inside Revit. `Toposolid.Create`, `ProjectLocation.SetProjectPosition`, `Toposolid.CreateSubDivision`,
+- **Revit API risk is real and not caught by the compiler.** `Toposolid.Create`, `ProjectLocation.SetProjectPosition`, `Toposolid.CreateSubDivision`,
   `DirectShape.SetShape` over curves, `AppearanceAssetEditScope`, the `UnifiedBitmap` schema and
   `ToposolidType.Duplicate` have left that set: the harness imports of 2026-09-18 ran each of them in
   Revit 2025, 2026 and 2027, and the drape's own read-back put the texture writes in the log.
@@ -297,7 +295,7 @@ follow.
 
 - **The tree family's calls left that set in Revit 2025 before they merged**, through a harness that
   compiles this tree's sources into one differently named assembly and loads it into a Revit of its
-  own, beside whatever the install slot holds. The Family API calls in `TreeFamilyAuthoring` (`NewExtrusion`, `NewBlend`, `NewRadialDimension` with a
+  own, beside whatever the install slot holds. The Family API calls in `PlantingFamilyAuthoring` (`NewExtrusion`, `NewBlend`, `NewRadialDimension` with a
   `FamilyLabel`, formulas, `AssociateElementParameterToFamilyParameter`) and the tree step's
   `LoadFamily`, `EditFamily` and level-hosted `NewFamilyInstance` executed in Revit 2025, measured
   against the numbers that drove them. 2026 and 2027 load the same 2025-saved family by upgrading it
@@ -305,7 +303,12 @@ follow.
   measured accuracy is still 2025's alone. Two things it settled that reading would not have:
   a Planting family already owns a built-in *type* parameter named `Height`, so the per-instance one
   is `Tree Height`; and a saved `.rfa` records its save folder and the Revit user name — see
-  [`README.md` ▸ Authoring the tree family](./README.md#authoring-the-tree-family).
+  [`README.md` ▸ Authoring the Planting families](./README.md#authoring-the-planting-families).
+  The shrub family went the same way on 2026-09-22: authored and measured in Revit 2025, then
+  placed by a real import of a hand-built shrub bundle in 2025, 2026 and 2027 through the same
+  harness. That run also executed `GeometryCreationUtilities.CreateBlendGeometry` for the first
+  time, in all three, by building the shrub's DirectShape fallback and measuring it; the tree's
+  fallback, which makes the same call, has still never had to run in an import.
 - **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
   issue and reaches for their storage.** It writes Revit elements sized as published, with names a
   renderer recognises (`RendererKeywords`), and leaves a renderer's own storage to the curator —

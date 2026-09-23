@@ -5,10 +5,13 @@ namespace MantlePlace.Revit.Core;
 /// <summary>One parameter a loaded tree family carries, as the tree step needs to see it.</summary>
 public readonly record struct TreeFamilyParameter(string Name, bool IsInstance);
 
-/// <summary>The tree step's choice of geometry, and the sentence a curator gets when it falls back.</summary>
+/// <summary>
+/// The planting step's choice of geometry for one family, and the sentence a curator gets when it
+/// falls back.
+/// </summary>
 public sealed class TreeFamilyDecision
 {
-    /// <summary>Place instances of <see cref="TreeFamily.FamilyName"/>; otherwise build DirectShapes.</summary>
+    /// <summary>Place instances of the family; otherwise build DirectShapes.</summary>
     public required bool UseFamily { get; init; }
 
     /// <summary>The level instances are hosted on, or <c>0</c> on the fallback.</summary>
@@ -29,7 +32,8 @@ public sealed class TreeFamilyDecision
 /// how much of the height is trunk, how thick the trunk is, how narrow the crown's tip — is the
 /// family's own fixed proportion, the same for every tree. That is Revit proxy geometry for a
 /// published point, not a classification of it: nothing here picks a species, a shape or a family
-/// from a tree's size, and a foliage type waits for the platform to publish one.
+/// from a tree's size. The family is picked by the point's published foliage type
+/// (<see cref="PlantingFamilies"/>); a shrub is <see cref="ShrubFamily"/>'s.
 /// </para>
 /// <para>
 /// The proportions live here, not in the shim, because two things build from them and must agree:
@@ -103,7 +107,7 @@ public static class TreeFamily
 }
 
 /// <summary>
-/// Decides whether the tree step places <see cref="TreeFamily"/> instances or falls back to
+/// Decides, per family, whether the planting step places instances of it or falls back to
 /// DirectShapes. Pure.
 /// </summary>
 /// <remarks>
@@ -119,14 +123,20 @@ public static class TreeFamily
 /// ⛔ <b>A type parameter where an instance one belongs is missing.</b> Written to a type, every tree
 /// would take the last row's height; the step would report success and every tree would be wrong.
 /// </para>
+/// <para>
+/// <b>Each family decides for itself.</b> A shrub family that fails to load does not pull the trees
+/// onto DirectShapes, and the other way round; each fallback has its own sentence.
+/// </para>
 /// </remarks>
 public static class TreeFamilyChoice
 {
+    /// <param name="foliage">Which family this decides for: <see cref="TreeFamily"/> or <see cref="ShrubFamily"/>.</param>
     /// <param name="loadFailure">Why the family could not be loaded, or <c>null</c> when it is in the project.</param>
     /// <param name="typeCount">How many types the loaded family has. Unread when <paramref name="loadFailure"/> is set.</param>
     /// <param name="parameters">The loaded family's parameters. Unread when <paramref name="loadFailure"/> is set.</param>
     /// <param name="levels">Every level in the project.</param>
     public static TreeFamilyDecision Decide(
+        FoliageType foliage,
         string? loadFailure,
         int typeCount,
         IReadOnlyCollection<TreeFamilyParameter> parameters,
@@ -135,29 +145,30 @@ public static class TreeFamilyChoice
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(levels);
 
+        string height = PlantingFamilies.HeightParameter(foliage);
         if (loadFailure is not null)
         {
-            return Fallback($"could not be loaded ({loadFailure.TrimEnd('.')})");
+            return Fallback(foliage, $"could not be loaded ({loadFailure.TrimEnd('.')})");
         }
 
         if (typeCount == 0)
         {
-            return Fallback("in this project has no type to place, so it is not the one this plugin ships");
+            return Fallback(foliage, "in this project has no type to place, so it is not the one this plugin ships");
         }
 
-        foreach (string required in (string[])[TreeFamily.HeightParameter, TreeFamily.CrownRadiusParameter])
+        foreach (string required in (string[])[height, TreeFamily.CrownRadiusParameter])
         {
             if (!parameters.Any(parameter => parameter.IsInstance
                     && string.Equals(parameter.Name, required, StringComparison.Ordinal)))
             {
-                return Fallback($"in this project has no \"{required}\" instance parameter, so it is not "
-                    + "the one this plugin ships and cannot be given each tree's size");
+                return Fallback(foliage, $"in this project has no \"{required}\" instance parameter, so it is not "
+                    + $"the one this plugin ships and cannot be given each {Singular(foliage)}'s size");
             }
         }
 
         if (levels.Count == 0)
         {
-            return Fallback("needs a level to host it, and this project has none");
+            return Fallback(foliage, "needs a level to host it, and this project has none");
         }
 
         // The lowest level, so that the offset from it is the only thing carrying the ground elevation,
@@ -166,12 +177,14 @@ public static class TreeFamilyChoice
         return new TreeFamilyDecision { UseFamily = true, LevelId = host.Id };
     }
 
-    private static TreeFamilyDecision Fallback(string why) => new()
+    private static TreeFamilyDecision Fallback(FoliageType foliage, string why) => new()
     {
         UseFamily = false,
-        Explanation = $"The \"{TreeFamily.FamilyName}\" Planting family {why}, so the trees were built as "
-            + "DirectShapes on the Planting category instead: the same size and place, but with no "
-            + $"{TreeFamily.HeightParameter} or {TreeFamily.CrownRadiusParameter} to edit and no family type "
-            + "to give a render substitution.",
+        Explanation = $"The \"{PlantingFamilies.FamilyName(foliage)}\" Planting family {why}, so the "
+            + $"{Singular(foliage)}s were built as DirectShapes on the Planting category instead: the same size "
+            + $"and place, but with no {PlantingFamilies.HeightParameter(foliage)} or "
+            + $"{TreeFamily.CrownRadiusParameter} to edit and no family type to give a render substitution.",
     };
+
+    private static string Singular(FoliageType foliage) => foliage == FoliageType.Shrub ? "shrub" : "tree";
 }

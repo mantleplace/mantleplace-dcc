@@ -60,7 +60,7 @@ internal static class TreeFamilyTests
 
         run.Case("a loaded family with both instance parameters is used, on the lowest level", () =>
         {
-            TreeFamilyDecision decision = TreeFamilyChoice.Decide(null, 1, Complete, Levels);
+            TreeFamilyDecision decision = TreeFamilyChoice.Decide(FoliageType.Tree, null, 1, Complete, Levels);
             run.True(decision.UseFamily, "family");
             run.True(decision.LevelId == 302, "the lowest level hosts, the offset carries the rest");
             run.Equal(decision.Explanation, string.Empty, "nothing to tell anyone");
@@ -68,7 +68,7 @@ internal static class TreeFamilyTests
 
         run.Case("a family that did not load falls back to DirectShapes and says why", () =>
         {
-            TreeFamilyDecision decision = TreeFamilyChoice.Decide("the file is missing", 0, [], Levels);
+            TreeFamilyDecision decision = TreeFamilyChoice.Decide(FoliageType.Tree, "the file is missing", 0, [], Levels);
             run.False(decision.UseFamily, "fallback");
             run.Contains(decision.Explanation, "the file is missing", "the reason is passed through");
             run.Contains(decision.Explanation, "DirectShape", "it says what was built instead");
@@ -78,6 +78,7 @@ internal static class TreeFamilyTests
         run.Case("a family of that name without the parameters is not ours to drive", () =>
         {
             TreeFamilyDecision decision = TreeFamilyChoice.Decide(
+                FoliageType.Tree,
                 null,
                 1,
                 [new(TreeFamily.HeightParameter, IsInstance: true)],
@@ -89,6 +90,7 @@ internal static class TreeFamilyTests
         run.Case("a type parameter where an instance one belongs is missing, not close enough", () =>
         {
             TreeFamilyDecision decision = TreeFamilyChoice.Decide(
+                FoliageType.Tree,
                 null,
                 1,
                 [new(TreeFamily.HeightParameter, IsInstance: false), new(TreeFamily.CrownRadiusParameter, IsInstance: true)],
@@ -99,21 +101,21 @@ internal static class TreeFamilyTests
 
         run.Case("a family of that name with no type cannot be placed", () =>
         {
-            TreeFamilyDecision decision = TreeFamilyChoice.Decide(null, 0, Complete, Levels);
+            TreeFamilyDecision decision = TreeFamilyChoice.Decide(FoliageType.Tree, null, 0, Complete, Levels);
             run.False(decision.UseFamily, "fallback");
             run.Contains(decision.Explanation, "no type", "it says why");
         });
 
         run.Case("the fallback names the parameters it cannot offer, from their constants", () =>
         {
-            TreeFamilyDecision decision = TreeFamilyChoice.Decide("gone", 0, [], Levels);
+            TreeFamilyDecision decision = TreeFamilyChoice.Decide(FoliageType.Tree, "gone", 0, [], Levels);
             run.Contains(decision.Explanation, TreeFamily.HeightParameter, "the height parameter");
             run.Contains(decision.Explanation, TreeFamily.CrownRadiusParameter, "the crown parameter");
         });
 
         run.Case("a project with no level falls back rather than failing", () =>
         {
-            TreeFamilyDecision decision = TreeFamilyChoice.Decide(null, 1, Complete, []);
+            TreeFamilyDecision decision = TreeFamilyChoice.Decide(FoliageType.Tree, null, 1, Complete, []);
             run.False(decision.UseFamily, "fallback");
             run.Contains(decision.Explanation, "level", "it says why");
         });
