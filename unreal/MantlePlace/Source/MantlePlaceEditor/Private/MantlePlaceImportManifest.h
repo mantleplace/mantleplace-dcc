@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 
 class FJsonObject;
+struct FMantlePlaceTreePointsFrame;
 
 /**
  * How to read a UE-ready raster's pixels back as data (`ue_ready[].value_mapping`). The shape
@@ -137,6 +138,8 @@ struct FMantlePlaceVaultManifest
 
 	// --- Georeference (flat planet, single UTM zone) -----------------------------------
 	int32 Epsg = 0;
+	FString CrsProjected;           // georeference.crs_projected verbatim ("EPSG:32613"): this host's frame,
+	                                // the one a pointer's stated `crs` is compared against (HPS-53)
 	double OriginEastingM = 0.0;
 	double OriginNorthingM = 0.0;
 	double GroundOrthometricHM = 0.0; // elevation at the centroid (= mesh ground z=0 reference)
@@ -189,6 +192,11 @@ struct FMantlePlaceVaultManifest
 	int32 FoliagePointsCount = 0; // unreal.foliage_points.point_count; 0 when the manifest omits it. The
 	                              // parsed row count is checked against this after the CSV is read -- a
 	                              // digest proves the bytes, and only the count proves the ROWS survived.
+	FString FoliagePointsCrs;             // unreal.foliage_points.crs, verbatim; empty when not stated.
+	FString FoliagePointsUnits;           // unreal.foliage_points.units (ground_z), verbatim.
+	FString FoliagePointsHorizontalUnits; // unreal.foliage_points.horizontal_units (x, y), verbatim.
+	                                      // All three are REQUIRED from MPB 1.3.0 and absent before it;
+	                                      // FMantlePlaceTreePointsLogic decides what they mean.
 
 	// --- Landscape layers (-> Landscape weightmap layers; unreal.landscape_layers) ------
 	// Landscape-paintable rasters this host is addressed by name. All of them are parsed and
@@ -306,6 +314,14 @@ struct FMantlePlaceVaultManifest
 
 	/** The named `unreal.landscape_layers` entry, or nullptr when this bundle ships none. */
 	const FMantlePlaceLandscapeLayer* FindLandscapeLayer(const TCHAR* Name) const;
+
+	/**
+	 * The frame `unreal.foliage_points` states, beside this host's own, for
+	 * FMantlePlaceTreePointsLogic::ParseCsv. Marked required when the manifest's version is one
+	 * whose format obliges the pointer to state it, so a missing frame there is refused rather than
+	 * mistaken for a bundle built before the format had one.
+	 */
+	FMantlePlaceTreePointsFrame GetFoliagePointsFrame() const; // callers include MantlePlaceTreePointsLogic.h
 };
 
 namespace MantlePlaceImportManifest

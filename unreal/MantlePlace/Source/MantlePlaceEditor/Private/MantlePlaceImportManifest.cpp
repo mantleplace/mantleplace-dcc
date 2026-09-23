@@ -3,6 +3,7 @@
 #include "MantlePlaceImportManifest.h"
 
 #include "MantlePlaceDrapeAlignmentLogic.h" // the `alignment` descriptor is classified, not skimmed
+#include "MantlePlaceTreePointsLogic.h"     // FMantlePlaceTreePointsFrame
 #include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion (the MPB clean-break floor)
 
 #include "Dom/JsonObject.h"
@@ -114,6 +115,22 @@ const FMantlePlaceLandscapeLayer* FMantlePlaceVaultManifest::FindLandscapeLayer(
 {
 	return LandscapeLayers.FindByPredicate(
 		[Name](const FMantlePlaceLandscapeLayer& Layer) { return Layer.Name == Name; });
+}
+
+FMantlePlaceTreePointsFrame FMantlePlaceVaultManifest::GetFoliagePointsFrame() const
+{
+	// The first MPB version whose `foliage_points` must state its frame. A version below it is a
+	// bundle built before the format could say, and only there is the extent substitute the whole
+	// of the check (HPS-53).
+	static const FString FirstVersionStatingTreePointsFrame = TEXT("1.3.0");
+
+	FMantlePlaceTreePointsFrame Frame;
+	Frame.Crs = FoliagePointsCrs;
+	Frame.Units = FoliagePointsUnits;
+	Frame.HorizontalUnits = FoliagePointsHorizontalUnits;
+	Frame.HostCrs = CrsProjected;
+	Frame.bRequired = !MantlePlaceIsManifestVersionBelowFloor(Version, FirstVersionStatingTreePointsFrame);
+	return Frame;
 }
 
 // ── Parsing ────────────────────────────────────────────────────────────────
@@ -525,7 +542,8 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		// EPSG is provenance-only on the consumer side: the contract places the AOI in a flat frame at world
 		// origin and deliberately instantiates no AGeoReferencingSystem / no LWC in v1, so "EPSG parsed
 		// but otherwise unused" is by design, not a bug.
-		M.Epsg = ParseEpsg(GetString(Geo, TEXT("crs_projected")));
+		M.CrsProjected = GetString(Geo, TEXT("crs_projected"));
+		M.Epsg = ParseEpsg(M.CrsProjected);
 		if (const TSharedPtr<FJsonObject>* OriginPtr = GetObject(Geo, TEXT("origin")))
 		{
 			const TSharedPtr<FJsonObject> Origin = *OriginPtr;
@@ -614,6 +632,12 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		// row count is not cross-checked, and the importer says which of the two it did.
 		M.FoliagePointsSha256 = GetString(*FoliagePointsPtr, TEXT("sha256"));
 		M.FoliagePointsCount = GetInt(*FoliagePointsPtr, TEXT("point_count"));
+		// The file's frame, as stated (MPB 1.3.0). Read verbatim and judged nowhere here: whether
+		// it is this host's frame is FMantlePlaceTreePointsLogic's call, and a frame that is not
+		// refuses the layer by name rather than the manifest (HPS-53).
+		M.FoliagePointsCrs = GetString(*FoliagePointsPtr, TEXT("crs"));
+		M.FoliagePointsUnits = GetString(*FoliagePointsPtr, TEXT("units"));
+		M.FoliagePointsHorizontalUnits = GetString(*FoliagePointsPtr, TEXT("horizontal_units"));
 	}
 	M.bHasFoliagePoints = !M.FoliagePointsPath.IsEmpty();
 

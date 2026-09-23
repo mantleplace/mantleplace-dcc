@@ -8,7 +8,7 @@
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceIntegrityLogic.h"      // which payloads the pre-check covers, as a list
 #include "MantlePlaceLandscapeWeightsLogic.h" // the band legend the corpus states the answer for
-#include "MantlePlaceTreePointsLogic.h"     // the row-count cross-check the vector table drives
+#include "MantlePlaceTreePointsLogic.h"     // the row-count and frame checks the vector tables drive
 #include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion
 #include "Tests/MantlePlaceConformanceCorpus.h"
 
@@ -515,9 +515,72 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 }
 
 /**
- * One row of a tree-points known-answer table, through the pure parser. Shared by the two cases
- * that drive FMantlePlaceTreePointsLogic::ParseCsv — the count table and the frame table — so the
- * outcome names and what a refusal owes (a reason, and no rows) are stated once.
+ * Lay a row's overlay object over `Target`: a member set to null is removed, any other value
+ * replaces. False when the row carries the overlay and there is no target to lay it on, so a
+ * fixture that drifted fails loudly instead of quietly testing the unmodified manifest.
+ */
+bool OverlayMembers(const TSharedPtr<FJsonObject>& Row, const TCHAR* OverlayField, const TSharedPtr<FJsonObject>& Target)
+{
+	const TSharedPtr<FJsonObject>* Overlay = nullptr;
+	if (!Row.IsValid() || !Row->TryGetObjectField(OverlayField, Overlay))
+	{
+		return true;
+	}
+	if (!Target.IsValid())
+	{
+		return false;
+	}
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Member : (*Overlay)->Values)
+	{
+		if (!Member.Value.IsValid() || Member.Value->IsNull())
+		{
+			Target->RemoveField(Member.Key);
+		}
+		else
+		{
+			Target->SetField(Member.Key, Member.Value);
+		}
+	}
+	return true;
+}
+
+/**
+ * The case's embedded `manifest` with the row's overlays laid on it: `root` over the document,
+ * `unreal` over `hosts.unreal` and `foliagePoints` over `hosts.unreal.foliage_points`, in that
+ * order. One manifest per case and a few members per row keeps the table about the frame and not
+ * about the document. Empty — which no parser accepts — when an overlay has nothing to land on.
+ */
+FString ManifestWithOverlays(const FCase& Case, const TSharedPtr<FJsonObject>& Row)
+{
+	TSharedPtr<FJsonObject> Manifest;
+	const TSharedRef<TJsonReader<TCHAR>> Reader =
+		TJsonReaderFactory<TCHAR>::Create(RowBodyAsText(Case.PayloadObject, TEXT("manifest")));
+	if (!FJsonSerializer::Deserialize(Reader, Manifest) || !Manifest.IsValid())
+	{
+		return FString();
+	}
+	const auto Child = [](const TSharedPtr<FJsonObject>& Parent, const TCHAR* Field) {
+		const TSharedPtr<FJsonObject>* Found = nullptr;
+		return Parent.IsValid() && Parent->TryGetObjectField(Field, Found) ? *Found : TSharedPtr<FJsonObject>();
+	};
+	const TSharedPtr<FJsonObject> Unreal = Child(Child(Manifest, TEXT("hosts")), TEXT("unreal"));
+	if (!OverlayMembers(Row, TEXT("root"), Manifest)
+		|| !OverlayMembers(Row, TEXT("unreal"), Unreal)
+		|| !OverlayMembers(Row, TEXT("foliagePoints"), Child(Unreal, TEXT("foliage_points"))))
+	{
+		return FString();
+	}
+
+	FString Text;
+	const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Text);
+	FJsonSerializer::Serialize(Manifest.ToSharedRef(), Writer);
+	return Text;
+}
+
+/**
+ * One row of a tree-points known-answer table, through the pure parser. Shared by the three cases
+ * that drive FMantlePlaceTreePointsLogic::ParseCsv — the count table and the two frame tables — so
+ * the outcome names and what a refusal owes (a reason, and no rows) are stated once.
  */
 void AssertTreePointsRow(
 	FAutomationTestBase& T,
@@ -525,6 +588,7 @@ void AssertTreePointsRow(
 	const TSharedPtr<FJsonObject>& Row,
 	double OriginEastingM,
 	double OriginNorthingM,
+	const FMantlePlaceTreePointsFrame& Frame,
 	const FVector2D& LandscapeSpanUeCm)
 {
 	const FString Name = RowString(Row, TEXT("name"));
@@ -535,7 +599,8 @@ void AssertTreePointsRow(
 	TArray<FMantlePlaceTreePointRow> Parsed;
 	FString Error;
 	const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
-		RowString(Row, TEXT("csv")), OriginEastingM, OriginNorthingM, LandscapeSpanUeCm, Declared, Parsed, Error);
+		RowString(Row, TEXT("csv")), OriginEastingM, OriginNorthingM, Frame, LandscapeSpanUeCm, Declared, Parsed,
+		Error);
 
 	const TCHAR* ActualOutcome = TEXT("?");
 	switch (Outcome)
@@ -719,7 +784,8 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 			// The origin and the landscape span are the reference fixture's, so a row's coordinates
 			// land where the rest of the corpus says they land; this table is about the COUNT, not
 			// the frame — manifest.treePointsFrame, below, is the one about that.
-			AssertTreePointsRow(*this, *Case, Row, 441959.5, 4014372.5, FVector2D(140100.0, 142500.0));
+			AssertTreePointsRow(*this, *Case, Row, 441959.5, 4014372.5, FMantlePlaceTreePointsFrame(),
+				FVector2D(140100.0, 142500.0));
 		}
 	}
 	else
@@ -739,17 +805,46 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(
 			RowBodyAsText(Case->PayloadObject, TEXT("manifest")), ManifestError);
 		TestTrue(Case->What(*FString::Printf(TEXT("embedded manifest parses (%s)"), *ManifestError)), M.bValid);
+		// A manifest older than 1.3.0 states no frame, and this table is the extent substitute alone.
+		const FMantlePlaceTreePointsFrame Frame = M.GetFoliagePointsFrame();
+		TestFalse(Case->What(TEXT("a pre-1.3.0 pointer that states no frame owes none")), Frame.IsOwed());
 
 		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("rows"));
 		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
 		for (const TSharedPtr<FJsonObject>& Row : Vectors)
 		{
-			AssertTreePointsRow(*this, *Case, Row, M.OriginEastingM, M.OriginNorthingM, M.GetAoiSizeUeCm());
+			AssertTreePointsRow(*this, *Case, Row, M.OriginEastingM, M.OriginNorthingM, Frame, M.GetAoiSizeUeCm());
 		}
 	}
 	else
 	{
 		AddError(TEXT("corpus case manifest.treePointsFrame has gone missing"));
+	}
+
+	// --- HPS-53: the frame the pointer states is read, and must be this host's (MPB 1.3.0) ------
+	// Each row lays its own members over the one embedded manifest — the pointer's frame, and
+	// where it matters the version or the heightmap — and the manifest is parsed again per row, so what is proven is the importer's
+	// path — Parse, GetFoliagePointsFrame, ParseCsv — including that a missing member is read as
+	// missing rather than defaulted, and that the version, not the keys, says a frame is owed.
+	if (const FCase* Case = FindCase(Cases, TEXT("manifest.treePointsStatedFrame")))
+	{
+		Driven.Add(Case->Id);
+		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("rows"));
+		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
+		for (const TSharedPtr<FJsonObject>& Row : Vectors)
+		{
+			FString ManifestError;
+			const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(
+				ManifestWithOverlays(*Case, Row), ManifestError);
+			TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": embedded manifest parses (%s)"),
+				*RowString(Row, TEXT("name")), *ManifestError)), M.bValid);
+			AssertTreePointsRow(*this, *Case, Row, M.OriginEastingM, M.OriginNorthingM,
+				M.GetFoliagePointsFrame(), M.GetAoiSizeUeCm());
+		}
+	}
+	else
+	{
+		AddError(TEXT("corpus case manifest.treePointsStatedFrame has gone missing"));
 	}
 
 	// Vector cases' `expectations`, swept once every id-dispatched assertion above has run. HPS-46
