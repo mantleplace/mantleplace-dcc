@@ -1034,7 +1034,7 @@ the line in its own layout; the three are these words:
 | a value this table has no word for               | the published value, verbatim — never a guess |
 
 A bundle with no `delivery` block, built before the block existed, gets no line: it is not assumed to
-be metric. Revit's place for the line is its import window; Unreal says it in the import
+be metric. Revit says the line on its import window; Unreal says it in the import
 summary, followed on a foot `linear_unit` by a line of its own saying that its content is metric
 (`HPS-54`) — a fixed-frame host's statement about itself, and outside this table.
 
@@ -1080,6 +1080,8 @@ faces, its window labels and its delivery line are constants with a headless tes
 because the shim is never built in CI (`HPS-02`, `HPS-42`). The ribbon's own faces are not: `Sign
 Out`, `Vault`, `Import Bundle` and `About Mantle Place` are literals in `MantlePlaceApplication`,
 where nothing but review reads them, and Unreal's are inline in the Slate panel on the same terms.
+Unreal's delivery line is the exception there: it is decided in `MantlePlaceDeliveryLogic`, whose
+headless test asserts the words.
 Review is the enforcer of record; a test covers what a host has already moved out of its shim.
 
 ---
