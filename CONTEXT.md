@@ -272,6 +272,11 @@ points of every foliage type. It is the host's noun for a host construct, not a 
 the layer is the tree layer and each point is a tree point, in every host.
 _Avoid_: planting (for the layer or a point), planting point, vegetation
 
+**Published contours**:
+The contour linework a bundle ships: one flat line per contour, at the elevation the file states and
+the interval the order was built with. It is fixed, and does not follow later edits to a terrain.
+_Avoid_: contours (unqualified), contour lines
+
 ### What a host builds from a bundle
 
 **Terrain**:
@@ -294,14 +299,9 @@ holes in it — a water body's islands, a road network's city blocks. Say subdiv
 cut from — where it came from is the polygon's business, not the element's.
 _Avoid_: district, region, site-boundary polygon, sub-toposolid
 
-**Published contours**:
-The contour linework a bundle ships, drawn by a host as lines at the elevations the file states. It
-is fixed at the interval the order was built with and does not follow later edits to the terrain.
-_Avoid_: contours (unqualified), contour lines
-
 **Toposolid contours**:
-The contour lines Revit draws on a toposolid from its own surface, at the interval the project sets.
-They follow the surface as it is edited; published contours do not.
+The contour lines Revit draws on a toposolid from its own surface, at an interval Revit's own
+settings choose. They follow the surface as it is edited; published contours do not.
 _Avoid_: contours (unqualified)
 
 **Context building**:

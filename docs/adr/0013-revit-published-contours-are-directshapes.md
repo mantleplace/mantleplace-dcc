@@ -29,24 +29,30 @@ they are the published surface's, and a user who wants their own contours edits 
 ## Decision
 
 **Each published contour becomes one `DirectShape` whose curves are the polyline's segments, on a
-dedicated "Published Contours" subcategory** — in the Topography category where Revit accepts a
-`DirectShape` there, Generic Models otherwise, as roads fall back.
+dedicated "Published Contours" subcategory** — in the Topography category if Revit accepts a
+`DirectShape` there, which nobody has checked yet, and Generic Models otherwise, as roads fall back.
 
 - **Placed from the host block only** (`HPS-52`, `HPS-53`). The file is placed only through a
-  `contours` pointer in Revit's own block, whose frame the block's `file_frame` states. The
-  host-neutral `elevation.contours` pointer states no frame, and a bundle carrying only that keeps
-  the "Also in this bundle" line it has today.
+  `contours` pointer in Revit's own block, whose frame the block's `file_frame` states. `HPS-52`
+  would allow the host-neutral `elevation.contours` pointer as a fallback, but `HPS-53` closes that
+  door: the pointer states no frame, and the extent substitute can only refuse a file, never place
+  one. A bundle carrying only that pointer keeps the "Also in this bundle" line, with a clause
+  saying the bundle predates Revit contour support, or giving the reason the block's readiness
+  entry states where it states one.
 - **At the published elevation.** Z gets the same unit conversion as the TIN's vertices and nothing
   else. The lines will not sit exactly on the surface, because Revit re-triangulates the vertices it
   is given; an offset to lift them clear would be a placement value computed here, which the root
   `CLAUDE.md` refuses.
 - **Clipped to the terrain's crop window**, exactly at its edges, so the published contours end
-  where the terrain ends. The window is the one the terrain tiers already use.
-- **Build-scoped identity, refused on an earlier build.** The layer is stamped
-  `{stem}/{build}` in Comments, and [ADR 0004](0004-revit-terrain-identity.md)'s table applies to
-  the layer as a whole: this build's contours are reused, and an earlier build's refuse the step and
-  name the prefix to delete. Contours drawn from one build over a terrain from another would
-  disagree with the surface under them, silently.
+  where the terrain ends. The window is the one the terrain tiers already use, and where it is
+  unavailable the contours are left unclipped with the same log line, exactly as the terrain is.
+- **Build-scoped identity, refused on an earlier build.** Each contour is stamped
+  `Mantle Place Contours {stem}/{build}` in Comments, where the build half is the twelve-character
+  token of the contours file's sha256, and [ADR 0004](0004-revit-terrain-identity.md)'s table applies
+  to the layer as a whole: this build's contours are reused, and an earlier build's refuse the step
+  and name the prefix to delete, as [ADR 0012](0012-context-buildings-come-from-the-site-model.md)
+  does for a layer of many elements. Two builds' contours in one project would overlap as two
+  interleaved sets that nothing tells apart on screen.
 - **Off by default, and not gated on the terrain row.** The toposolid already draws contours, and
   linework over a user's own surface is a legitimate use.
 - **Toposolid contour display is never touched.** It is a setting the user owns.
@@ -67,5 +73,7 @@ dedicated "Published Contours" subcategory** — in the Topography category wher
 
 - **Published contours cannot be edited as lines.** A user who wants editable contours draws their
   own or uses the toposolid's.
-- **Index contours and elevation labels are not part of this.** They are a follow-up, and whether
-  the index rule is published or chosen here is still open.
+- **The contours do not check the terrain's build.** The step is not gated on the terrain, so a
+  newer build's contours can be drawn over an older build's terrain that ADR 0004 kept. Each layer
+  refuses its own earlier build; neither compares itself with the other.
+- **Index contours and elevation labels are not part of this.** They are a follow-up.
