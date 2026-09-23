@@ -1010,7 +1010,7 @@ twice. Nine actions are shared, and each carries one set of words:
 word where it has one — `Terrain`, `Site Model`, and names built on it, as `Land Use Subdivisions`
 and `Imagery Drape` are on *subdivision* and *drape* — and the host's own noun only for a host
 construct the glossary does not name. The list and
-the steps that follow it are one surface, so a curator who ticked `Trees` watches `Trees` import. **Every row starts checked** unless a host has a
+the steps that follow it are one surface, so a curator who ticked `Planting` watches `Planting` import. **Every row starts checked** unless a host has a
 stated reason to start one unchecked, and an import nobody is there to choose for brings in
 everything. A row that needs another is disabled while that one is unchecked, and says which — a
 disabled box with no reason beside it reads as a bug.

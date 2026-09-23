@@ -95,6 +95,64 @@ internal static class TreeIdentityTests
             run.True(differs.Disposition == TreeDisposition.RefuseStale, "unknown is not a sameness anyone showed");
         });
 
+        run.Case("a reused row whose family disagrees with its foliage type is counted", () =>
+        {
+            // An older plugin placed this build's shrubs as trees. They are reused as they are, and
+            // counted, so the curator knows which ones to delete to rebuild them.
+            SiteTreePoint[] points =
+            [
+                new(0.0, 0.0, 0.0, 12.0, 3.0, FoliageType.Tree),
+                new(0.0, 0.0, 0.0, 1.5, 1.0, FoliageType.Shrub),
+                new(0.0, 0.0, 0.0, 1.5, 1.0, FoliageType.Shrub),
+                new(0.0, 0.0, 0.0, 12.0, 3.0, FoliageType.Tree),
+            ];
+            ExistingTreePoint[] existing =
+            [
+                new(TreeIdentity.Stamp(Stem, Build, 1), TreeFamily.FamilyName),
+                new(TreeIdentity.Stamp(Stem, Build, 2), TreeFamily.FamilyName),
+                new(TreeIdentity.Stamp(Stem, Build, 3), ShrubFamily.FamilyName),
+                new(TreeIdentity.Stamp(Stem, Build, 4), ShrubFamily.FamilyName),
+            ];
+            run.Equal(TreeIdentity.FoliageMismatches(existing, Stem, Build, points), 2, "row 2 a tree, row 4 a shrub");
+        });
+
+        run.Case("a DirectShape has no foliage type to disagree with", () =>
+        {
+            SiteTreePoint[] points = [new(0.0, 0.0, 0.0, 1.5, 1.0, FoliageType.Shrub)];
+            run.Equal(
+                TreeIdentity.FoliageMismatches([new(TreeIdentity.Stamp(Stem, Build, 1), null)], Stem, Build, points),
+                0,
+                "an earlier fallback is left out of the count");
+        });
+
+        run.Case("only this build's rows, and only our families, are compared", () =>
+        {
+            SiteTreePoint[] points = [new(0.0, 0.0, 0.0, 1.5, 1.0, FoliageType.Shrub)];
+            ExistingTreePoint[] existing =
+            [
+                new(TreeIdentity.Stamp(Stem, Rebuild, 1), TreeFamily.FamilyName),
+                new(TreeIdentity.Stamp("other-order", Build, 1), TreeFamily.FamilyName),
+                new(TreeIdentity.Stamp(Stem, Build, 1), "RPC Tree - Deciduous"),
+                new(TreeIdentity.Stamp(Stem, Build, 2), TreeFamily.FamilyName),
+                new(TreeIdentity.Stamp(Stem, Build, 1) + "0", TreeFamily.FamilyName),
+                new("Mantle Place Tree " + Stem + "/0123456789ab/x", TreeFamily.FamilyName),
+                new(null, TreeFamily.FamilyName),
+            ];
+            run.Equal(
+                TreeIdentity.FoliageMismatches(existing, Stem, Build, points),
+                0,
+                "another build, another order, a curator's family, a row past the file, and no row at all");
+        });
+
+        run.Case("the mismatch note names the Comments prefix to delete, and is silent at zero", () =>
+        {
+            run.Equal(TreeIdentity.FoliageMismatchNote(0, Stem, Build), string.Empty, "nothing to say");
+            string note = TreeIdentity.FoliageMismatchNote(3, Stem, Build);
+            run.Contains(note, "3 tree point(s)", "the count");
+            run.Contains(note, "\"Mantle Place Tree order-7f3a/0123456789ab/\"", "this build's prefix, quoted");
+            run.Contains(note, "left as they are", "reused, never modified");
+        });
+
         return run.Report("tree identity");
     }
 }

@@ -29,7 +29,9 @@ public enum ImportLayer
     LandCoverSubdivisions,
     WaterSubdivisions,
     RoadSubdivisions,
-    Trees,
+
+    /// <summary>The tree points, of every foliage type: Revit's Planting category, and the host's own noun.</summary>
+    Planting,
     ImageryDrape,
 }
 
@@ -49,7 +51,7 @@ public static class ImportLayers
         ImportStepKind.LandCover => ImportLayer.LandCoverSubdivisions,
         ImportStepKind.Water => ImportLayer.WaterSubdivisions,
         ImportStepKind.RoadPolygons => ImportLayer.RoadSubdivisions,
-        ImportStepKind.Vegetation => ImportLayer.Trees,
+        ImportStepKind.Vegetation => ImportLayer.Planting,
         ImportStepKind.ImageryDrape => ImportLayer.ImageryDrape,
         _ => null,
     };

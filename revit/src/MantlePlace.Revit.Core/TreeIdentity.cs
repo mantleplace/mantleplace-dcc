@@ -29,8 +29,12 @@ public sealed class TreeDecision
     public string Explanation { get; init; } = string.Empty;
 }
 
+/// <summary>One element that might be a tree point: its Comments, and its family's name if it has one.</summary>
+/// <param name="FamilyName">The family's name for a family instance; <c>null</c> for a DirectShape.</param>
+public readonly record struct ExistingTreePoint(string? Comments, string? FamilyName);
+
 /// <summary>
-/// Decides which published trees an import still has to create, and the stamp each one carries.
+/// Decides which published tree points an import still has to create, and the stamp each one carries.
 /// Pure.
 /// </summary>
 /// <remarks>
@@ -47,6 +51,10 @@ public sealed class TreeDecision
 /// chunks in the project, stamped; a re-import of the same build finds them and creates the rest. A
 /// step-level stamp could only have said "some of this bundle's trees are here", which cannot tell a
 /// finished import from a cancelled one.
+/// </para>
+/// <para>
+/// <b>One stamp for every tree point, shrubs included.</b> The stamp identifies the row and the build,
+/// not the family, so a point whose family changes between plugin versions is still recognised.
 /// </para>
 /// <para>
 /// ⛔ Nothing here deletes, for the terrain's reason: an element a curator may have moved, hidden or
@@ -143,4 +151,74 @@ public static class TreeIdentity
             AlreadyPresent = alreadyPresent,
         };
     }
+
+    /// <summary>
+    /// How many of this build's rows already in the project stand as the family of the other foliage
+    /// type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same build placed by a plugin that did not read the foliage type has its shrubs as trees.
+    /// Those rows are reused as they are — the step never modifies an element it did not create in
+    /// this run — so the count is what the curator is told, with
+    /// <see cref="FoliageMismatchNote"/>'s prefix to delete to rebuild them.
+    /// </para>
+    /// <para>
+    /// Only our two families are compared (<see cref="PlantingFamilies.FoliageTypeOf"/>). A DirectShape
+    /// from an earlier fallback has no foliage type to disagree with, and a curator's own family is
+    /// not ours to judge.
+    /// </para>
+    /// </remarks>
+    /// <param name="points">The parsed tree points; a stamp's row is a one-based position in them.</param>
+    public static int FoliageMismatches(
+        IEnumerable<ExistingTreePoint> existing,
+        string cacheKeyStem,
+        string? artifactSha256,
+        IReadOnlyList<SiteTreePoint> points)
+    {
+        ArgumentNullException.ThrowIfNull(existing);
+        ArgumentNullException.ThrowIfNull(cacheKeyStem);
+        ArgumentNullException.ThrowIfNull(points);
+
+        string thisBuild = BuildPrefix(cacheKeyStem, artifactSha256);
+        int mismatches = 0;
+        foreach (ExistingTreePoint element in existing)
+        {
+            if (PlantingFamilies.FoliageTypeOf(element.FamilyName) is not { } family
+                || element.Comments is not { } comments
+                || !comments.StartsWith(thisBuild, StringComparison.Ordinal)
+                || !int.TryParse(comments.AsSpan(thisBuild.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int row)
+                || row < 1
+                || row > points.Count)
+            {
+                continue;
+            }
+
+            mismatches += points[row - 1].FoliageType == family ? 0 : 1;
+        }
+
+        return mismatches;
+    }
+
+    /// <summary>
+    /// The informational line for <see cref="FoliageMismatches"/>, or empty at zero. It names the
+    /// Comments prefix to delete and never asks for anything else.
+    /// </summary>
+    public static string FoliageMismatchNote(int mismatches, string cacheKeyStem, string? artifactSha256)
+    {
+        ArgumentNullException.ThrowIfNull(cacheKeyStem);
+        return mismatches <= 0
+            ? string.Empty
+            : string.Format(
+                CultureInfo.InvariantCulture,
+                "{0:N0} tree point(s) from an earlier import of this build stand as the family of a different "
+                    + "foliage type than the one now published — they were placed by a plugin that did not read "
+                    + "it, and were left as they are. To rebuild them, delete the elements whose Comments begin "
+                    + "\"{1}\" and import again.",
+                mismatches,
+                BuildPrefix(cacheKeyStem, artifactSha256));
+    }
+
+    private static string BuildPrefix(string cacheKeyStem, string? artifactSha256)
+        => Prefix + cacheKeyStem + "/" + TerrainIdentity.BuildToken(artifactSha256) + "/";
 }

@@ -163,7 +163,7 @@ internal static class StagedImportTests
             run.Equal(
                 import.Outcome,
                 "Cancelled after 3 of 4 steps. Completed: Terrain. Failed: Road Centrelines. "
-                    + "Stopped partway, keeping what was finished: Trees (250 of 600). Not run: Imagery Drape.",
+                    + "Stopped partway, keeping what was finished: Planting (250 of 600). Not run: Imagery Drape.",
                 "the log's closing line");
         });
 
@@ -182,7 +182,7 @@ internal static class StagedImportTests
         run.Case("a cancel after a step's last chunk lets the step finish rather than calling it cancelled", () =>
         {
             // The last chunk has committed and only the step's closing line is left. Stopping there
-            // would report "Trees (600 of 600)" as stopped partway and lose the summary.
+            // would report "Planting (600 of 600)" as stopped partway and lose the summary.
             FakeRunner runner = new();
             runner.Bodies[ImportStepKind.Vegetation] = () => ChunksThenSay(runner, "trees said", 250, 350);
             StagedImport import = new([Step(ImportStepKind.Vegetation), Step(ImportStepKind.ImageryDrape)], runner);
@@ -200,7 +200,7 @@ internal static class StagedImportTests
             run.True(import.Steps[1].State == ImportStepState.NotRun, "the drape still never started");
             run.Equal(
                 import.Outcome,
-                "Cancelled after 1 of 2 steps. Completed: Trees. Not run: Imagery Drape.",
+                "Cancelled after 1 of 2 steps. Completed: Planting. Not run: Imagery Drape.",
                 "the closing line");
         });
 
@@ -233,13 +233,13 @@ internal static class StagedImportTests
             import.Advance();
             import.Advance();
             import.Advance();
-            run.Equal(WindowLabels.StatusLine(import), "Trees: 250 of 600", "a chunked step counts its elements");
+            run.Equal(WindowLabels.StatusLine(import), "Planting: 250 of 600", "a chunked step counts its elements");
             run.Within(import.Current!.Progress!.Value.Fraction, 250.0 / 600.0, 1e-9, "and the bar's fraction");
 
             import.RequestCancel();
             run.Equal(
                 WindowLabels.StatusLine(import),
-                "Trees: 250 of 600. Cancelling at the next step or chunk.",
+                "Planting: 250 of 600. Cancelling at the next step or chunk.",
                 "a pending cancel is said until it lands");
         });
 

@@ -106,22 +106,29 @@ Revit licence.
 - draws the road centrelines from the `road_splines` vector layer as DirectShape linework, drapes
   the `land_use` boundaries onto the terrain as toposolid subdivisions, and places the trees from
   `Landcover/TreePoints.csv` at their published height and crown radius — the three rows that closed
-  the Forma Site Design Add-In parity gap. Each tree is an instance of one Planting family,
-  **`Mantle Place Tree`**, with the published numbers in its `Tree Height` and `Crown Radius`
-  instance parameters (not `Height`: every Planting family already has a built-in *type* parameter
-  of that name) and its row's stamp in Comments. The family ships inside the add-in; when it cannot
-  be loaded, the step builds the same trees as DirectShapes on the Planting category and the log
-  says why. A family already in the project is used as it stands and never reloaded over, so a
-  curator's edits to it survive a re-import — and a newer build's family reaches that project only
-  when the curator reloads it. One family only — a shrub or any other foliage type waits for the
-  platform to publish one, and the add-in never guesses a type from a height. **No render
-  substitution is set, and the add-in never sets one:** linking the family to a renderer's tree
-  asset is the curator's step, in that renderer's own tool — and in Twinmotion it costs the
-  published sizes. Checked in **Twinmotion 2026.2 from Revit 2027, September 2026**: with a tree
-  asset set on the type's *Twinmotion Substitution*, every tree in the forest renders at that
-  asset's own size, and raising the family's built-in type `Height` does not move it, so a published
-  5 m tree and a 30 m one come out identical. Without a substitution the family renders as modelled,
-  each tree at its own published height and crown. Two more things a curator meets there: Twinmotion
+  the Forma Site Design Add-In parity gap. Each tree point is an instance of the Planting family its
+  published foliage type names: **`Mantle Place Tree`**, a trunk and a crown, with the published
+  numbers in its `Tree Height` and `Crown Radius` instance parameters, or **`Mantle Place Shrub`**,
+  a dome with no trunk, with them in `Shrub Height` and `Crown Radius` (not `Height`: every Planting
+  family already has a built-in *type* parameter of that name). Its row's stamp is in Comments —
+  one stamp for every tree point, whichever family it is. A manifest that names no foliage-type
+  vocabulary, and a value this add-in does not know, make a tree; the add-in never guesses a type
+  from a height. Both families ship inside the add-in, and the shrub family is loaded only when a
+  shrub will be placed; when either cannot be loaded, the step builds that family's points as
+  DirectShapes on the Planting category, the same shape and size, and the log says why — the other
+  family is not affected. A family already in the project is used as it stands and never reloaded
+  over, so a curator's edits to it survive a re-import — and a newer build's family reaches that
+  project only when the curator reloads it. For the same reason a re-import never rebuilds a point
+  an earlier plugin placed as the other family (a shrub placed as a tree before the foliage type
+  was read): the log counts those and names the Comments prefix to delete to rebuild them. **No
+  render substitution is set, and the add-in never sets one:** linking a family type to a
+  renderer's asset is the curator's step, in that renderer's own tool — and in Twinmotion it costs
+  the published sizes. Checked on the tree family in **Twinmotion 2026.2 from Revit 2027, September
+  2026**: with an asset set on a type's *Twinmotion Substitution*, every instance of that type
+  renders at that asset's own size, and raising the family's built-in type `Height` does not move
+  it, so a published 5 m tree and a 30 m one come out identical. Without a substitution a type
+  renders as modelled, each instance at its own published height and crown. The substitution is
+  set per type, so the two families take one each. Two more things a curator meets there: Twinmotion
   applies a substitution only when **Enable Substitution** was ticked in the import that brought the
   model in — setting one afterwards and synchronising into a scene imported without it does nothing
   — and it goes on drawing the Revit geometry beside the substituted assets, which is a second
@@ -341,25 +348,30 @@ others: they are coincident, and the cut order does not decide what draws. So a 
 never a way to paint one published polygon over another — where the curator needs one surface to
 win, they choose it in the model.
 
-### Authoring the tree family
+### Authoring the Planting families
 
-`src/MantlePlace.Revit.Addin/Families/MantlePlaceTree.rfa` is authored by code, not by hand:
-`TreeFamilyAuthoring.cs` builds it from Revit's own `Metric Planting.rft` through the Family API —
-the two instance parameters, three formula parameters for the trunk and the crown's tip in the
-proportions `TreeFamily` owns, a trunk extrusion and a crown blend whose ends and radii are labelled
-to them — then flexes it three times, places one instance in a scratch project through the tree step's own
-placement code, and measures all three against the numbers that drove them. It is the one binary
-the tree step adds, and it is re-run, never edited, when the proportions change:
+`src/MantlePlace.Revit.Addin/Families/MantlePlaceTree.rfa` and `MantlePlaceShrub.rfa` are authored
+by code, not by hand: `PlantingFamilyAuthoring.cs` builds each from Revit's own `Metric Planting.rft`
+through the Family API. The tree gets its two instance parameters, three formula parameters for the
+trunk and the crown's tip in the proportions `TreeFamily` owns, and a trunk extrusion and a crown
+blend whose ends and radii are labelled to them. The shrub gets its two, three formula parameters
+for the dome's base, widest point and apex in the proportions `ShrubFamily` owns, and two stacked
+blends labelled the same way. Each is then flexed three times, one instance is placed in a scratch
+project through the planting step's own placement code, and all of it is measured against the
+numbers that drove it. They are the two binaries the planting step adds, and they are re-run, never
+edited, when the proportions change.
 
 It has no button. It runs at Revit's startup when an environment variable names a folder:
 
-1. Build the add-in, deploy it, and set `MANTLEPLACE_AUTHOR_TREE_FAMILY` to a **neutral folder** such
-   as `C:\MantlePlace` in the environment Revit is started from.
+1. Build the add-in, deploy it, and set `MANTLEPLACE_AUTHOR_PLANTING_FAMILIES` to a **neutral
+   folder** such as `C:\MantlePlace` in the environment Revit is started from.
 2. Start **Revit 2025** — a family saved by a Revit loads only in that Revit and later ones. Once
-   Revit has initialised, the folder holds `Mantle Place Tree.rfa` and
-   `Mantle Place Tree.authoring.log`; nothing else is touched, and there is no button.
-3. Commit the file as `Families/MantlePlaceTree.rfa` only if the log's last line says every
-   measurement agreed.
+   Revit has initialised, the folder holds `Mantle Place Tree.rfa`, `Mantle Place Shrub.rfa` and
+   one `.authoring.log` for each; nothing else is touched, and there is no button.
+3. Commit a file as `Families/MantlePlaceTree.rfa` or `Families/MantlePlaceShrub.rfa` only if the
+   last line of **both** logs says both families agreed. One run writes both, so a run where either
+   disagreed is not evidence for the other. A run that re-authors a family whose proportions did not
+   change produces a different binary for no reason; commit only the family that changed.
 
 ⛔ **Revit writes the folder a file was saved in, and the saving Revit's user name, into the file.**
 Neither shows in the Family Editor and both are public once pushed. The run refuses to call a

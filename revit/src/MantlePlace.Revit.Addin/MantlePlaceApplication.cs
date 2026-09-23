@@ -390,13 +390,13 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _uiDispatcher = Dispatcher.CurrentDispatcher;
         _uiDispatcher.UnhandledException += OnDispatcherUnhandledException;
 
-        // Developer-only, and invisible without the variable: authors the tree family once Revit can
-        // open a document. No button, because no curator should ever reach it. What happened is in
-        // the log it writes beside the family, so the result is not needed here.
-        if (Environment.GetEnvironmentVariable(TreeFamilyAuthoring.DirectoryVariable) is { Length: > 0 } familyDirectory)
+        // Developer-only, and invisible without the variable: authors both Planting families once
+        // Revit can open a document. No button, because no curator should ever reach it. What happened
+        // is in the logs it writes beside the families, so the result is not needed here.
+        if (Environment.GetEnvironmentVariable(PlantingFamilyAuthoring.DirectoryVariable) is { Length: > 0 } familyDirectory)
         {
             application.ControlledApplication.ApplicationInitialized += (sender, initialized) =>
-                _ = TreeFamilyAuthoring.Run((Autodesk.Revit.ApplicationServices.Application)sender!, familyDirectory);
+                _ = PlantingFamilyAuthoring.Run((Autodesk.Revit.ApplicationServices.Application)sender!, familyDirectory);
         }
 
         MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load();

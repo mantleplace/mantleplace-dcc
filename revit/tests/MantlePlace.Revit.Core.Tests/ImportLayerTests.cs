@@ -36,7 +36,7 @@ internal static class ImportLayerTests
             run.True(ImportLayers.Of(ImportStepKind.LandCover) == ImportLayer.LandCoverSubdivisions, "the land-cover polygons");
             run.True(ImportLayers.Of(ImportStepKind.Water) == ImportLayer.WaterSubdivisions, "the water bodies");
             run.True(ImportLayers.Of(ImportStepKind.RoadPolygons) == ImportLayer.RoadSubdivisions, "the road surfaces");
-            run.True(ImportLayers.Of(ImportStepKind.Vegetation) == ImportLayer.Trees, "the tree points");
+            run.True(ImportLayers.Of(ImportStepKind.Vegetation) == ImportLayer.Planting, "the tree points");
             run.True(ImportLayers.Of(ImportStepKind.ImageryDrape) == ImportLayer.ImageryDrape, "the drape");
 
             // Placing the project builds nothing, so there is nothing to leave out.
@@ -69,7 +69,7 @@ internal static class ImportLayerTests
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.SiteModel) is null, "the site model is linked on its own");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.ContextBuildings) is null, "context buildings carry their own Z");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.RoadCentrelines) is null, "roads carry their own Z");
-            run.True(ImportLayers.PrerequisiteOf(ImportLayer.Trees) is null, "trees carry their own Z");
+            run.True(ImportLayers.PrerequisiteOf(ImportLayer.Planting) is null, "trees carry their own Z");
         });
 
         run.Case("every layer but the site model's link is on by default", () =>
@@ -122,15 +122,15 @@ internal static class ImportLayerTests
             run.Equal(
                 string.Join(", ", checklist.Layers),
                 "Terrain, ContextBuildings, SiteModel, RoadCentrelines, LandUseSubdivisions, LandCoverSubdivisions, "
-                    + "WaterSubdivisions, RoadSubdivisions, Trees, ImageryDrape",
+                    + "WaterSubdivisions, RoadSubdivisions, Planting, ImageryDrape",
                 "every layer the plan has a step for, and no other");
         });
 
         run.Case("a layer the bundle does not carry is not offered", () =>
         {
-            ImportChecklist checklist = new([ImportLayer.Terrain, ImportLayer.Trees]);
+            ImportChecklist checklist = new([ImportLayer.Terrain, ImportLayer.Planting]);
 
-            run.Equal(string.Join(", ", checklist.Layers), "Terrain, Trees", "only what is there");
+            run.Equal(string.Join(", ", checklist.Layers), "Terrain, Planting", "only what is there");
             run.False(checklist.IsChecked(ImportLayer.SiteModel), "a layer that is not offered is never chosen");
         });
 
@@ -168,8 +168,8 @@ internal static class ImportLayerTests
                 run.False(checklist.Choice.Includes(dependent), $"{dependent} is not imported");
             }
 
-            run.True(checklist.IsEnabled(ImportLayer.Trees), "trees need no terrain");
-            run.True(checklist.Choice.Includes(ImportLayer.Trees), "and are still imported");
+            run.True(checklist.IsEnabled(ImportLayer.Planting), "trees need no terrain");
+            run.True(checklist.Choice.Includes(ImportLayer.Planting), "and are still imported");
         });
 
         run.Case("checking the terrain again gives back what the curator had chosen", () =>
@@ -218,9 +218,9 @@ internal static class ImportLayerTests
 
         run.Case("with nothing checked there is nothing to import", () =>
         {
-            ImportChecklist checklist = new([ImportLayer.Terrain, ImportLayer.Trees]);
+            ImportChecklist checklist = new([ImportLayer.Terrain, ImportLayer.Planting]);
             checklist.Set(ImportLayer.Terrain, false);
-            checklist.Set(ImportLayer.Trees, false);
+            checklist.Set(ImportLayer.Planting, false);
 
             run.False(checklist.CanImport, "Import goes dark");
         });
@@ -263,13 +263,13 @@ internal static class ImportLayerTests
 
         run.Case("a layer left out has no step, and the plan says it was a choice", () =>
         {
-            BundleImportPlan plan = PlanFor(Everything, EverythingBundle, AllBut(ImportLayer.Trees));
+            BundleImportPlan plan = PlanFor(Everything, EverythingBundle, AllBut(ImportLayer.Planting));
 
             run.False(plan.Steps.Any(step => step.Kind == ImportStepKind.Vegetation), "no trees are planned");
 
             SkippedImport? skip = plan.Skipped.SingleOrDefault(skip => skip.Kind == ImportStepKind.Vegetation);
             run.True(skip?.ReasonCode == SkipReasonCode.LeftOutByChoice, "the skip is a choice, not a defect");
-            run.Equal(skip?.Reason, "Left out of this import by choice: Trees.", "and says so in the checklist's word");
+            run.Equal(skip?.Reason, "Left out of this import by choice: Planting.", "and says so in the checklist's word");
         });
 
         run.Case("a drape left out builds the terrain on the project's own type", () =>
@@ -288,7 +288,7 @@ internal static class ImportLayerTests
             BundleImportPlan plan = PlanFor(
                 Everything,
                 EverythingBundle,
-                ImportLayerChoice.Only([ImportLayer.SiteModel, ImportLayer.Trees]));
+                ImportLayerChoice.Only([ImportLayer.SiteModel, ImportLayer.Planting]));
 
             run.False(plan.Steps.Any(step => ImportLayers.Of(step.Kind) == ImportLayer.Terrain), "no terrain step");
             run.Equal(
@@ -303,7 +303,7 @@ internal static class ImportLayerTests
         run.Case("a layer the bundle lacks keeps its own reason, left out or not", () =>
         {
             string[] withoutTrees = [.. EverythingBundle.Where(entry => !entry.EndsWith("TreePoints.csv", StringComparison.Ordinal))];
-            BundleImportPlan plan = PlanFor(Everything, withoutTrees, AllBut(ImportLayer.Trees));
+            BundleImportPlan plan = PlanFor(Everything, withoutTrees, AllBut(ImportLayer.Planting));
 
             run.True(
                 plan.Skipped.SingleOrDefault(skip => skip.Kind == ImportStepKind.Vegetation)?.ReasonCode
