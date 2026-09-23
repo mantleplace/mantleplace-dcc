@@ -243,7 +243,7 @@ internal static class ManifestConformanceTests
             // knows. `Str` records a null as read, so the row cannot be skipped for free.
             string? vocabulary = row.Str("foliageTypeVocabulary");
 
-            TreePointsParse parse = TreePointsReader.Parse(csv, FoliageFrame, vocabulary);
+            TreePointsParse parse = TreePointsReader.Parse(csv, FoliageFrame, vocabulary, groundUnit: LinearUnit.Metre);
             run.True(parse.Failure is null, $"row '{name}': parsed ({parse.Failure})");
             run.Equal(parse.Points.Count, expected.Count, $"row '{name}': a point per published row");
 

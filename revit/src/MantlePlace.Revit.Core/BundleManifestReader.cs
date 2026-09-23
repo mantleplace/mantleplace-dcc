@@ -710,6 +710,8 @@ public static class BundleManifestReader
             {
                 Path = string.Empty,
                 HorizontalFrame = detail?.OptionalStr("crs"),
+                Units = detail?.OptionalStr("units"),
+                HorizontalUnits = detail?.OptionalStr("horizontal_units"),
                 FootprintCount = detail?.OptionalInt("point_count"),
                 FoliageTypeVocabulary = detail?.OptionalStr("foliage_type_vocabulary"),
             });
@@ -855,6 +857,7 @@ public static class BundleManifestReader
             TriangleCount = template.TriangleCount,
             FootprintCount = template.FootprintCount,
             FoliageTypeVocabulary = template.FoliageTypeVocabulary,
+            HorizontalUnits = template.HorizontalUnits,
         };
     }
 
