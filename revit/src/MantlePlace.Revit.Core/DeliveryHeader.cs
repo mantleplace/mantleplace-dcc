@@ -16,10 +16,13 @@ namespace MantlePlace.Revit.Core;
 /// here is a second authority on something the format owns.
 /// </para>
 /// <para>
-/// <b>Unknown is shown, not guessed.</b> A unit system or tier this reader does not know is printed as
-/// published. An unknown linear unit never reaches here: it refuses the manifest (<c>HPS-35</c>),
-/// because scale depends on it. A bundle with no <c>delivery</c> block — built before the block
-/// existed — gets no line at all, which is not the same as a metric line.
+/// <b>Unknown is shown, not guessed.</b> A unit system this reader does not know is printed as
+/// published, and a required value the block leaves out reads <see cref="NotStated"/>. An unknown
+/// linear unit never reaches here: it refuses the manifest (<c>HPS-35</c>), because scale depends on
+/// it. A block that names neither a label nor an EPSG code reads <see cref="NoDeliveryCrs"/> — the
+/// <c>local_ft</c> tier before the label existed, where the site origin's UTM code is not the files'
+/// CRS. A bundle with no <c>delivery</c> block — built before the block existed — gets no line at
+/// all, which is not the same as a metric line.
 /// </para>
 /// <para>
 /// <b>The words are the standard's</b> (<c>HPS-51</c>): the reference host will say a bundle's unit
@@ -31,12 +34,11 @@ public static class DeliveryHeader
     /// <summary>Between the line's parts.</summary>
     public const string Separator = " · ";
 
-    /// <summary>
-    /// The delivery CRS on the <c>local_ft</c> tier of a bundle that publishes no label: the files sit
-    /// in a local frame about a georeferenced site origin, and that origin's UTM code is not the files'
-    /// CRS.
-    /// </summary>
-    public const string LocalGrid = "local grid";
+    /// <summary>The delivery CRS of a block that publishes neither a label nor an EPSG code.</summary>
+    public const string NoDeliveryCrs = "no delivery CRS";
+
+    /// <summary>A required value the block leaves out.</summary>
+    public const string NotStated = "not stated";
 
     /// <summary>A known unit system's word; an unknown one is shown as published instead.</summary>
     public static string? UnitSystemWord(UnitSystem system) => system switch
@@ -57,7 +59,7 @@ public static class DeliveryHeader
 
     /// <summary>
     /// The line — <c>Imperial · US survey feet · EPSG:6543</c> — or <c>null</c> when the bundle
-    /// publishes no <c>delivery</c> block.
+    /// publishes no <c>delivery</c> block. Always three parts, in that order.
     /// </summary>
     public static string? Describe(DeliveryFacts delivery)
     {
@@ -68,12 +70,10 @@ public static class DeliveryHeader
             return null;
         }
 
-        List<string> parts = [];
-        Add(parts, UnitSystemWord(delivery.UnitSystem) ?? delivery.UnitSystemValue);
-        Add(parts, LinearUnitWord(delivery.LinearUnit));
-        Add(parts, DeliveryCrs(delivery));
+        string unitSystem = UnitSystemWord(delivery.UnitSystem)
+            ?? (string.IsNullOrWhiteSpace(delivery.UnitSystemValue) ? NotStated : delivery.UnitSystemValue);
 
-        return parts.Count == 0 ? null : string.Join(Separator, parts);
+        return string.Join(Separator, unitSystem, LinearUnitWord(delivery.LinearUnit) ?? NotStated, DeliveryCrs(delivery));
     }
 
     /// <summary>
@@ -138,38 +138,18 @@ public static class DeliveryHeader
         };
     }
 
-    private static string? DeliveryCrs(DeliveryFacts delivery)
+    private static string DeliveryCrs(DeliveryFacts delivery)
     {
-        if (!string.IsNullOrWhiteSpace(delivery.Label))
+        if (delivery.Label is { } label)
         {
-            return delivery.Label;
+            return label;
         }
 
-        if (delivery.HorizontalEpsg is { } epsg)
-        {
-            return string.Create(CultureInfo.InvariantCulture, $"EPSG:{epsg}");
-        }
-
-        return delivery.Tier switch
-        {
-            "local_ft" => LocalGrid,
-
-            // A grid tier that names no EPSG is a malformed block, not a local frame: leave the CRS
-            // out rather than name one. A tier this reader does not know is shown as published, in
-            // the one place a tier naming no CRS would stand (HPS-51).
-            "metric" or "sp_ftus" or "sp_ft" or "" => null,
-            string unknown => unknown,
-        };
+        return delivery.HorizontalEpsg is { } epsg
+            ? string.Create(CultureInfo.InvariantCulture, $"EPSG:{epsg}")
+            : NoDeliveryCrs;
     }
 
     private static string Lower(UnitSystem system)
         => UnitSystemWord(system)?.ToLowerInvariant() ?? throw new ArgumentOutOfRangeException(nameof(system));
-
-    private static void Add(List<string> parts, string? part)
-    {
-        if (!string.IsNullOrWhiteSpace(part))
-        {
-            parts.Add(part);
-        }
-    }
 }

@@ -481,7 +481,7 @@ public static class BundleManifestReader
             Tier = delivery.Str("tier"),
             LinearUnit = linearUnit,
             HorizontalEpsg = delivery.OptionalInt("horizontal_epsg"),
-            Label = delivery.Str("label"),
+            Label = delivery.OptionalStr("label"),
             LocalOrigin = localOrigin,
         };
 

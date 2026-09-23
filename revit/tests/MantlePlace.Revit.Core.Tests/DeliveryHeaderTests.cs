@@ -39,7 +39,7 @@ internal static class DeliveryHeaderTests
             run.Equal(DeliveryHeader.Describe(delivery), "Imperial · international feet · EPSG:2223", "the sp_ft line");
         });
 
-        run.Case("the local-feet tier names no delivery CRS, and the line says it is a local grid", () =>
+        run.Case("the local-feet tier before the label names no delivery CRS, and the line says so", () =>
         {
             // The schema publishes horizontal_epsg as null here: the vectors live in a local frame.
             // local_origin carries a UTM EPSG, but that is the origin's CRS, not the delivery's, and
@@ -48,7 +48,7 @@ internal static class DeliveryHeaderTests
                 {"unit_system": "imperial", "tier": "local_ft", "linear_unit": "ft", "horizontal_epsg": null,
                  "local_origin": {"lon": -155.5, "lat": 19.6, "utm_epsg": 32605, "easting_m": 1, "northing_m": 2}}
                 """);
-            run.Equal(DeliveryHeader.Describe(delivery), "Imperial · international feet · local grid", "the local_ft line");
+            run.Equal(DeliveryHeader.Describe(delivery), "Imperial · international feet · no delivery CRS", "the local_ft line");
         });
 
         run.Case("a published delivery label is printed verbatim in place of the EPSG code (MPB 1.3.0)", () =>
@@ -63,7 +63,7 @@ internal static class DeliveryHeaderTests
                 "the label, as published");
         });
 
-        run.Case("on the local grid the published label wins over the host's own words", () =>
+        run.Case("on the local-feet tier the published label wins over the host's own words", () =>
         {
             DeliveryFacts delivery = Read("""
                 {"unit_system": "imperial", "tier": "local_ft", "linear_unit": "ft", "horizontal_epsg": null,
@@ -91,16 +91,30 @@ internal static class DeliveryHeaderTests
             run.Equal(DeliveryHeader.Describe(delivery), "nautical · metres · EPSG:32613", "the published value");
         });
 
-        run.Case("an unknown tier with no delivery CRS is shown as published", () =>
+        run.Case("a block naming neither a label nor an EPSG code says so rather than naming one", () =>
         {
+            // Not the tier, which is not a CRS, and never a name looked up from it.
             DeliveryFacts delivery = Read("""{"unit_system": "imperial", "tier": "county_ft", "linear_unit": "ft"}""");
-            run.Equal(DeliveryHeader.Describe(delivery), "Imperial · international feet · county_ft", "the published tier");
+            run.Equal(DeliveryHeader.Describe(delivery), "Imperial · international feet · no delivery CRS", "no CRS named");
         });
 
-        run.Case("a known grid tier with no EPSG leaves the CRS out rather than inventing one", () =>
+        run.Case("a required value the block leaves out reads not stated", () =>
         {
-            DeliveryFacts delivery = Read("""{"unit_system": "imperial", "tier": "sp_ftus", "linear_unit": "ftUS"}""");
-            run.Equal(DeliveryHeader.Describe(delivery), "Imperial · US survey feet", "no CRS segment");
+            run.Equal(
+                DeliveryHeader.Describe(Read("""{"tier": "metric", "linear_unit": "m", "horizontal_epsg": 32613}""")),
+                "not stated · metres · EPSG:32613",
+                "no unit_system");
+            run.Equal(
+                DeliveryHeader.Describe(Read("""{"unit_system": "metric", "tier": "metric", "horizontal_epsg": 32613}""")),
+                "Metric · not stated · EPSG:32613",
+                "no linear_unit");
+        });
+
+        run.Case("a 1.3.0 block without the label keeps the EPSG code", () =>
+        {
+            DeliveryFacts delivery = Read("""{"unit_system": "imperial", "tier": "sp_ft", "linear_unit": "ft", "horizontal_epsg": 2223}""");
+            run.True(delivery.Label is null, "no label read");
+            run.Equal(DeliveryHeader.Describe(delivery), "Imperial · international feet · EPSG:2223", "the fallback");
         });
 
         run.Case("an unknown linear unit still refuses the manifest, so no line can print it (HPS-35)", () =>
@@ -110,14 +124,15 @@ internal static class DeliveryHeaderTests
             run.False(manifest.IsValid, "refused, as before");
         });
 
-        run.Case("the words are the standard's HPS-51 row, and the separator is one", () =>
+        run.Case("the words are the standard's HPS-51 table", () =>
         {
             run.Equal(DeliveryHeader.UnitSystemWord(UnitSystem.Metric), "Metric", "metric");
             run.Equal(DeliveryHeader.UnitSystemWord(UnitSystem.Imperial), "Imperial", "imperial");
             run.Equal(DeliveryHeader.LinearUnitWord(LinearUnit.Metre), "metres", "m");
             run.Equal(DeliveryHeader.LinearUnitWord(LinearUnit.UsSurveyFoot), "US survey feet", "ftUS");
             run.Equal(DeliveryHeader.LinearUnitWord(LinearUnit.InternationalFoot), "international feet", "ft");
-            run.Equal(DeliveryHeader.LocalGrid, "local grid", "local_ft with no delivery CRS");
+            run.Equal(DeliveryHeader.NoDeliveryCrs, "no delivery CRS", "neither a label nor an EPSG code");
+            run.Equal(DeliveryHeader.NotStated, "not stated", "a required value absent");
         });
 
         run.Case("a metric-display project opening an imperial order says so", () =>

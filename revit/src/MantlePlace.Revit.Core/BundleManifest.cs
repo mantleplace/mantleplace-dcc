@@ -271,9 +271,9 @@ public sealed class DeliveryFacts
 
     /// <summary>
     /// <c>delivery.label</c> (MPB 1.3.0): the display words for the delivery CRS, the same words the
-    /// platform shows a person. Empty on every earlier bundle.
+    /// platform shows a person. <c>null</c> on every earlier bundle, and when blank.
     /// </summary>
-    public string Label { get; init; } = string.Empty;
+    public string? Label { get; init; }
 
     /// <summary><c>delivery.local_origin</c> — emitted only on the <c>local_ft</c> tier.</summary>
     public GeoOrigin? LocalOrigin { get; init; }
