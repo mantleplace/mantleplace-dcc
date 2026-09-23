@@ -89,28 +89,45 @@ public static class PrepareNotices
     }
 }
 
+/// <summary>One order's news, as the Vault badge counts it.</summary>
+public readonly record struct PendingNotice(string OrderId, string Text);
+
 /// <summary>
 /// The notices the curator has not yet seen in the vault: what the Vault button's badge counts.
 /// </summary>
 /// <remarks>
-/// One per bundle. A Prepare that ran out of budget and was later rejoined and finished is one
-/// bundle with news, not two, so a later notice for the same order replaces the earlier one.
+/// One per order. A Prepare that ran out of budget and was later rejoined and finished is one
+/// bundle with news, not two, so a later notice for the same order replaces the earlier one. A notice
+/// about several new orders is news of each of them, so it counts once per order.
 /// </remarks>
 public sealed class PendingNotices
 {
-    private readonly List<PrepareNotice> _notices = [];
+    private readonly List<PendingNotice> _notices = [];
 
-    /// <summary>How many bundles have news.</summary>
+    /// <summary>How many orders have news.</summary>
     public int Count => _notices.Count;
 
     /// <summary>The notices, oldest first.</summary>
-    public IReadOnlyList<PrepareNotice> All => _notices;
+    public IReadOnlyList<PendingNotice> All => _notices;
 
-    /// <summary>Adds a notice, replacing any earlier one for the same order.</summary>
-    public void Add(PrepareNotice notice)
+    /// <summary>Adds a Prepare's notice, replacing any earlier one for the same order.</summary>
+    public void Add(PrepareNotice notice) => Add(notice.OrderId, notice.Text);
+
+    /// <summary>Adds a new-order notice, once for each order it announces.</summary>
+    public void Add(NewsNotice notice)
     {
-        _notices.RemoveAll(held => string.Equals(held.OrderId, notice.OrderId, StringComparison.Ordinal));
-        _notices.Add(notice);
+        ArgumentNullException.ThrowIfNull(notice);
+
+        foreach (string orderId in notice.OrderIds)
+        {
+            Add(orderId, notice.Text);
+        }
+    }
+
+    private void Add(string orderId, string text)
+    {
+        _notices.RemoveAll(held => string.Equals(held.OrderId, orderId, StringComparison.Ordinal));
+        _notices.Add(new PendingNotice(orderId, text));
     }
 
     /// <summary>Forgets every notice. Opening the vault is seeing them.</summary>

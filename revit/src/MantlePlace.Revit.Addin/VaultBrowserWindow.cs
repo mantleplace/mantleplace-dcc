@@ -247,6 +247,14 @@ internal sealed class VaultBrowserWindow : Window
             _rows = [.. listing!.Bundles.Select(bundle => new VaultRow(bundle, Describe(bundle)))];
             _skippedRows = listing.Warnings.Count;
 
+            // The curator is looking at every order this listing holds, so none of them is news to
+            // the background listing any more (HPS-55). Off this thread: the record waits on a lock
+            // another Revit may hold, and a window that stutters for it would be the wrong trade.
+            // The store is read here, on this thread, while the add-in is certainly running.
+            AnnouncedOrderStore announced = MantlePlaceApplication.Announced;
+            string email = _session.UserEmail;
+            _ = Task.Run(() => announced.Seen(listing, email));
+
             // Selection survives a refresh, as long as the bundle still matches the filter. Losing it
             // is the other reason a curator clicks Refresh twice: they lose their place and go
             // looking for it.
