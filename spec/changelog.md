@@ -50,6 +50,10 @@ reads it.
   every delivery, so on a State Plane delivery a reader subtracting its metric origin put every tree
   a thousand kilometres off site. A foot delivery built before 1.3.0 carries no `foliage_points`
   until its next rebuild. No column is renamed ([format](format.md) §6.6).
+- **`delivery.label`** is new and optional: the display words for the delivery CRS — the EPSG
+  registry name of the projected zone, or a fixed phrase on a local grid — the same words the
+  platform shows a person. Every earlier bundle lacks it; there, the same words follow from `tier`
+  and `horizontal_epsg`, which have described the delivery frame since the block arrived.
 
 ### 1.2.0 — the foliage type (additive minor; published and frozen 2026-09-19)
 
