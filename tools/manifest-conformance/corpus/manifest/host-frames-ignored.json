@@ -1,0 +1,177 @@
+{
+  "version": "1.3.0",
+  "location": {
+    "time_zone": {
+      "iana": "America/Denver",
+      "utc_offset_standard_h": -7,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    }
+  },
+  "delivery": {
+    "unit_system": "metric",
+    "tier": "metric",
+    "horizontal_epsg": 32613,
+    "linear_unit": "m",
+    "label": "WGS 84 / UTM zone 13N"
+  },
+  "landcover": {
+    "tree_points": {
+      "path": "Landcover/TreePoints.csv",
+      "crs": "EPSG:32613",
+      "units": "m",
+      "horizontal_units": "m",
+      "point_count": 2,
+      "min_height_m": 3,
+      "columns": [
+        "x",
+        "y",
+        "ground_z",
+        "height_m",
+        "crown_radius_m",
+        "foliage_type"
+      ],
+      "foliage_type_vocabulary": "1"
+    }
+  },
+  "vector": {
+    "crs": "EPSG:4326",
+    "layers": [
+      {
+        "name": "road_splines",
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/RoadSplines.geojson",
+            "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          }
+        ]
+      }
+    ]
+  },
+  "job_id": "host-frames",
+  "order_id": "ord-host-frames-1",
+  "hosts": {
+    "unreal": {
+      "engine_min_version": "5.7",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "origin": {
+          "lon": -105.6462,
+          "lat": 36.2725,
+          "utm": {
+            "epsg": 32613,
+            "easting_m": 441959.5,
+            "northing_m": 4014372.5
+          },
+          "ground_orthometric_h_m": 2640.9
+        },
+        "planet_shape": "Flat",
+        "is_projected": true
+      },
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:32613",
+        "horizontal_unit": "m",
+        "vertical_unit": "m"
+      },
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb",
+        "up_axis": "y",
+        "nanite_recommended": true,
+        "note": "First-class terrain option; import via Interchange glTF (Y-up->Z-up auto).",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "foliage_points": {
+        "path": "Landcover/TreePoints.csv",
+        "crs": "EPSG:32613",
+        "units": "m",
+        "horizontal_units": "m",
+        "columns": [
+          "x",
+          "y",
+          "ground_z",
+          "height_m",
+          "crown_radius_m",
+          "foliage_type"
+        ],
+        "point_count": 2
+      }
+    },
+    "revit": {
+      "host_min_version": "2025",
+      "units_note": "Apply georeference.origin verbatim as the survey point; every artifact's Z is absolute orthometric height.",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "vertical_datum": "EGM2008-orthometric",
+        "grid_rotation_deg": 0.0,
+        "is_projected": true,
+        "origin": {
+          "lon": -105.6462,
+          "lat": 36.2725,
+          "projected": {
+            "epsg": 32613,
+            "easting": 441959.5,
+            "northing": 4014372.5,
+            "linear_unit": "m"
+          }
+        }
+      },
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:32613",
+        "horizontal_unit": "m",
+        "vertical_unit": "m"
+      },
+      "vectors": {
+        "format": "geojson",
+        "layers": [
+          {
+            "name": "road_splines",
+            "path": "Site/Vector/RoadSplines.geojson",
+            "horizontal_frame": "absolute_projected",
+            "units": "m",
+            "vertical_reference": "absolute",
+            "feature_count": 1,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      "drape": {
+        "path": "Imagery/Drape.png",
+        "format": "png-rgb-8bit",
+        "extent": [
+          441247.1,
+          4013672.8,
+          442671.9,
+          4015072.5
+        ],
+        "extent_crs": "EPSG:32613",
+        "units": "m",
+        "width": 2375,
+        "height": 2333,
+        "effective_gsd_m": 0.6,
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "readiness": {
+        "toposurface_points": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "ifc_site": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "surface_dxf": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "vectors": {
+          "present": true
+        }
+      }
+    }
+  }
+}
