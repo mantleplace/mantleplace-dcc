@@ -225,6 +225,15 @@ location and the attribution are not layers and are written whatever is ticked. 
 terrain on the project's own ground type rather than the imagery one. Closing the window before
 `Import` imports nothing and leaves the last run's log as it was.
 
+**What the bundle holds and cannot be imported is said before the import.** Below the checklist,
+under `Unavailable`, each row the bundle holds and this import cannot place is named with one plain
+sentence of what to do — for a State Plane bundle cut before Revit had its own copies, *This bundle
+was built before Revit could receive these. Download the bundle again from your vault to get them.*
+Nothing there can be ticked. The log keeps the planner's own sentence, EPSG codes included. A layer
+the bundle declares it has none of — no water in the area, no imagery for the site — is not listed;
+one it says nothing of is, with the vault's remedy. A bundle with nothing withheld shows nothing
+extra. The unattended path is unchanged: it imports everything it can and logs the rest.
+
 **An import is staged, and shows itself.** Once `Import` is pressed the window lists the chosen
 steps, marks each one `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts
 the context buildings and the trees in as they go. The import runs one step, or one chunk of 200

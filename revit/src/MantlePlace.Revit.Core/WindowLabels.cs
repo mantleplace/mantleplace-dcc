@@ -162,6 +162,73 @@ public static class WindowLabels
     /// </summary>
     public static string Needs(ImportLayer prerequisite) => $"Needs {LayerName(prerequisite)}";
 
+    /// <summary>
+    /// The heading below the checklist, over what the bundle holds and the import cannot offer
+    /// (<c>HPS-51</c>).
+    /// </summary>
+    public const string UnavailableHeading = "Unavailable";
+
+    /// <summary>
+    /// What the window says under the rows a bundle holds and cannot offer, for one reason — or
+    /// <c>null</c> for a reason the window says nothing about.
+    /// </summary>
+    /// <param name="code">Why the planner skipped the rows.</param>
+    /// <param name="count">How many rows the sentence is said under.</param>
+    /// <remarks>
+    /// <para>
+    /// The curator's register: what is missing and what to do, in the words <c>HPS-51</c> fixes. The
+    /// planner's own sentence, EPSG codes and file paths included, is the log's register and stays
+    /// there (<see cref="SkippedImport.Reason"/>). Decided per code, so every code has a decision a
+    /// test can read.
+    /// </para>
+    /// <para>
+    /// A bundle that <em>says</em> it holds nothing of a layer is silent here: a layer declared
+    /// absent had nothing in the area to give, and road surfaces never derived are not in the vault to
+    /// fetch. A bundle that says nothing of a layer is not — it may have been cut before the order
+    /// asked for it. Nor does a tier another tier replaced, a skip that is no row's, or a choice.
+    /// </para>
+    /// </remarks>
+    public static string? UnavailableReason(SkipReasonCode code, int count)
+    {
+        bool many = count > 1;
+        string these = many ? "these" : "this";
+        string them = many ? "them" : "it";
+
+        return code switch
+        {
+            // A bundle with no origin, or with copies only in a frame this host cannot place, was cut
+            // before the format carried what Revit needs; a re-download is cut again.
+            SkipReasonCode.NoSiteFrame or SkipReasonCode.CoordinateSystemNotSupported =>
+                $"This bundle was built before Revit could receive {these}. Download the bundle again from your vault to get {them}.",
+            // The bundle says nothing of it: cut before the order asked for it, or with nothing
+            // there to cut. The planner's own sentence sends the curator to the vault; so does this.
+            SkipReasonCode.ArtifactNotInManifest =>
+                $"This bundle does not carry {these}. Add {them} to the order in your vault, then download the bundle again.",
+            SkipReasonCode.EntryNotInArchive =>
+                $"This bundle is missing the {(many ? "files" : "file")} for {these}. Download the bundle again from your vault to get {them}.",
+            SkipReasonCode.UnitNotUnderstood =>
+                $"This bundle measures {these} in a unit this version of Mantle Place cannot read. Update Mantle Place to import {them}.",
+
+            // An extent nothing corroborates and an image nobody can decode are the same fact to the
+            // curator: the photograph cannot be put on the right ground.
+            SkipReasonCode.ExtentNotCorroborated =>
+                $"Mantle Place could not confirm which ground {these} {(many ? "cover" : "covers")}. Download the bundle again from your vault to get {them}.",
+
+            SkipReasonCode.DeclaredAbsent
+                or SkipReasonCode.DerivedLayerNotPublished
+                or SkipReasonCode.SupersededByFallback
+                or SkipReasonCode.FallbackSuppressed
+                or SkipReasonCode.NoSurveyPoint
+                or SkipReasonCode.NoGeographicOrigin
+                or SkipReasonCode.GeographicOriginOutOfRange
+                or SkipReasonCode.LeftOutByChoice => null,
+
+            // A code added to the planner and never decided here shows nothing rather than a guess;
+            // the test that walks the enum is what makes it get a decision.
+            _ => null,
+        };
+    }
+
     /// <summary>How far a chunked step has got, in the elements it creates: <c>250 of 600</c>.</summary>
     public static string ProgressText(StepProgress progress)
         => string.Format(CultureInfo.InvariantCulture, "{0:N0} of {1:N0}", progress.Done, progress.Total);

@@ -87,7 +87,12 @@ internal sealed class ImportWindow : Window
 
         Title = WindowLabels.ImportWindowTitle;
         Width = 520;
-        Height = 460 + BrandChrome.HeaderHeight;
+
+        // The height it always had, and taller when the unavailable list below the boxes needs it:
+        // at a fixed height that list pushed the buttons off the window. Fixed again once the run
+        // starts (ShowRun), so the report fills the window rather than growing it.
+        MinHeight = 460 + BrandChrome.HeaderHeight;
+        SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         // Owned by Revit's main window, for the vault window's reason: it stays in front of the model
@@ -110,6 +115,7 @@ internal sealed class ImportWindow : Window
     internal void ShowRun(StagedImport run)
     {
         _run = run;
+        SizeToContent = SizeToContent.Manual;
         _body.Child = BuildSteps(run);
         _import.Visibility = Visibility.Collapsed;
         _close.Visibility = Visibility.Visible;
@@ -231,6 +237,24 @@ internal sealed class ImportWindow : Window
         StackPanel panel = new();
         panel.Children.Add(new TextBlock { Text = WindowLabels.IncludeHeading, FontWeight = FontWeights.SemiBold });
         panel.Children.Add(rows);
+
+        // Below the boxes, and never a box itself: what the bundle holds and this import cannot
+        // offer, said before anything runs. Nothing at all for a bundle with nothing withheld.
+        if (_checklist.Unavailable.Count > 0)
+        {
+            panel.Children.Add(new TextBlock { Text = WindowLabels.UnavailableHeading, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 0) });
+            foreach (UnavailableLayers group in _checklist.Unavailable)
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = string.Join(", ", group.Layers.Select(WindowLabels.LayerName)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 4, 0, 0),
+                });
+                panel.Children.Add(new TextBlock { Text = group.Reason, TextWrapping = TextWrapping.Wrap, Opacity = 0.7 });
+            }
+        }
+
         return panel;
     }
 
