@@ -113,6 +113,15 @@ as "the georeference" will report a plausible CRS and place a site in the wrong 
 nothing failing. The corpus pins this with a case carrying two conflicting host georeferences on
 purpose.
 
+A host sub-block that places files states the frame they share, at `hosts.<hostId>.file_frame`: a
+CRS, a horizontal linear unit and a vertical linear unit, each declared. A frame is either
+**projected** — the files' coordinates are in the named `crs`, and any origin is placement carried
+elsewhere in the block — or **local** — the files are offsets about an `origin` that is part of the
+frame's identity, on the grid named by `base_crs`, and no `crs` is named because the files are in
+none. Every coordinate-carrying file a block points at is in that block's `file_frame`; the
+producer checks this before it publishes. `file_frame` describes the FILES. The origin keeps its
+own unit, and on a delivery with no projected foot zone the two differ (§6).
+
 A host sub-block always carries its **readiness** verdicts (§6.1). It does not always carry a
 payload: a bundle whose artifacts for that host have not been materialised yet is readiness-only,
 and that is a well-formed manifest, not an error.
@@ -283,8 +292,10 @@ the corpus case `manifest.vectorLayerVocabulary` carries every name in it:
 | `road_polygons` | Road surfaces: the `road` centrelines widened by the same estimated width, merged per class, and cut so no two overlap (the wider class keeps the ground where classes meet), carrying class and width | Polygons | Derived from `road`, and marked with `derived_from` |
 
 A layer's geometry can mix the families its row names, so a reader keys on each feature's own
-geometry type rather than on the layer. Every layer's coordinates are geographic, so §6's one
-projection exception applies to all of them.
+geometry type rather than on the layer. Every layer's coordinates are geographic, and the block
+says so: `vector.crs` is `EPSG:4326` whenever the set shipped. §6's one projection exception
+applies to all of them — and a host whose own block carries the layer in its own frame (§6.5)
+reads that copy instead.
 
 What presence and absence mean:
 
@@ -303,6 +314,82 @@ What presence and absence mean:
   A new name is a change to this table and to the corpus, not to the schema. A consumer that
   refuses a bundle for carrying an unfamiliar layer turns every new layer into a breaking release.
   The corpus case `manifest.vectorLayerUnknownName` pins this.
+
+### 6.4 The imagery drape, per host
+
+A drape is an image stretched over terrain, and its only coordinates are its extent. That extent is
+placement, stated in one projected CRS and one linear unit, and a consumer can use it only where
+that CRS is the one its own origin is in. A rectangle aligned to one grid is not a rectangle on
+another — a UTM-aligned image is rotated on a State Plane grid — so an extent in the wrong CRS
+cannot be made right by arithmetic on its four numbers.
+
+The bundle therefore carries the drape once per frame a host needs, never once for everyone:
+
+- **`imagery.drape` is the fixed-frame drape**, on the AOI's metric UTM grid whatever the delivery
+  CRS. It is the image `hosts.unreal.imagery_drape` points at.
+- **A host whose frame follows the delivery reads its own drape pointer in its own block.** Where the
+  delivery grid is already the metric UTM grid, that pointer names the same file as
+  `imagery.drape`; on a State Plane delivery it names a second image baked on the State Plane grid.
+  The producer publishes the pointer only after checking that its extent is in the host origin's
+  CRS and unit and agrees with the image's own pixel grid.
+
+What a host does with a drape it cannot show to be in its frame — refuse it, name why, and never
+reproject it — is the host standard's (`HPS-52`, `HPS-53`), not this document's.
+
+### 6.5 A host's own copy of the vector layers
+
+The shared vector set is geographic, which suits a GIS reader and no one else. §6 lets a consumer
+project lon/lat locally in one narrow case, and a host whose origin is not on a grid that case
+reaches cannot place the set at all. So the bundle hands such a host its own copy, already in its
+own frame, rather than asking it to convert.
+
+`hosts.revit.vectors` is that copy for the Revit host, on every delivery:
+
+- One GeoJSON file per layer, named by the §6.3 vocabulary, with its `path`, `feature_count` and
+  `sha256`. The Revit copy carries `road_splines`, `road_polygons`, `water`, `land_use` and
+  `land_cover`; `building` is the site model's, and raw `road` is carried as `road_splines`.
+- Each layer states its `horizontal_frame` and `units`, and they are the same for every layer on a
+  delivery: absolute coordinates in the delivery CRS wherever a projected CRS in the delivery unit
+  exists, and east/north offsets about the origin where none does. Either way the file is in
+  `hosts.revit.file_frame` (§4.2), and a reader places it by subtraction and offset alone.
+- A projected file carries a GeoJSON `crs` member naming `file_frame.crs`. An offset file carries
+  none, because its frame has no CRS; a reader that insists on one has misread the frame.
+- `road_splines` alone has heights, and says so with `vertical_reference: absolute`: real
+  orthometric height in the file's `units`, never an offset from the origin.
+- The set is all or nothing. A layer missing from it had no features in the AOI; a layer that could
+  not be converted withholds the whole copy, and `hosts.revit.readiness.vectors` says the copy is
+  absent and why.
+
+The shared set beside it is unchanged, and no host block points at it.
+
+### 6.6 Tree points, per host
+
+`Landcover/TreePoints.csv` follows the delivered elevation: `x` and `y` are in the delivery CRS and
+`ground_z` is in the delivered elevation's vertical unit, so on a State Plane delivery all three are
+feet, and on a delivery whose region has no projected foot zone the coordinates are metres beside
+foot heights. `height_m` and `crown_radius_m` are metres on every delivery, as their names say.
+From 1.3.0 `landcover.tree_points` states that frame beside the path — `crs`, `units` (the
+`ground_z` column) and `horizontal_units` (`x`, `y`) — so a reader can refuse a file it cannot show
+to be in its frame instead of assuming one. No column is renamed: `x`, `y` and `ground_z` assert no
+unit, and the two that do are honest.
+
+A fixed-frame host reads points in its own frame, and the delivered file is only in that frame on a
+metric delivery. So the bundle carries the trees once per frame a host needs:
+
+- **`hosts.unreal.foliage_points` names only a file in the Unreal frame** — its `crs` is
+  `georeference.crs_projected`, and its `units` and `horizontal_units` are `m`, by schema. On a
+  metric delivery that is `Landcover/TreePoints.csv`, and one file carries both pointers. On any
+  foot delivery it is `Landcover/TreePointsMetric.csv`: the same trees, `x` and `y` reprojected into
+  the metric UTM grid and `ground_z` re-sampled in metres, every other column carried verbatim.
+- The producer chooses between the two by comparing the frames the files state with the host's, and
+  never by the delivery tier. Where neither file is in the Unreal frame — a foot delivery built
+  before 1.3.0, until its next rebuild — the block carries no `foliage_points` at all, rather than a
+  pointer at a foot file.
+- `sha256` and `point_count` on the pointer are the named file's, not the delivered file's; the two
+  files hold the same trees, so `point_count` agrees, and the hashes differ.
+
+What a host does with a tree-point file it cannot show to be in its frame — refuse it, name why, and
+never convert it — is the host standard's (`HPS-52`, `HPS-53`), not this document's.
 
 ## 7. The sidecar manifest
 

@@ -19,6 +19,42 @@ history, not contract.
 
 ## Semver era
 
+### 1.3.0 — files state their frame, and a host is handed its own (additive minor; published and frozen 2026-09-23)
+
+One minor carries the whole change: every item below is additive, and nothing is removed or
+re-meant, so it is a MINOR under [compatibility](compatibility.md) §2 and every host floor at 1.0.0
+reads it.
+
+- **`hosts.revit.drape`** is new and optional: the satellite imagery drape in the Revit origin's
+  frame, with its `extent`, `extent_crs`, `units`, pixel `width` and `height`, and `sha256`. On a
+  State Plane delivery it names a drape baked from the delivered State Plane imagery,
+  `Imagery/Drape.StatePlane.png`; where the delivery grid is already the metric UTM grid it names
+  `Imagery/Drape.png`. Why a drape is carried per frame is [format](format.md) §6.4.
+- **`imagery.drape` is unchanged in shape and is now described as what it always was**: the
+  fixed-frame drape, on the AOI's metric UTM grid on every delivery. Before 1.3.0 a State Plane
+  bundle carried no drape on its delivery grid at all, so a Revit reader that placed
+  `imagery.drape` against a State Plane origin had nothing correct to place.
+- **`hosts.<hostId>.file_frame`** is new on `hosts.unreal` and `hosts.revit`, beside the
+  `georeference` it is read with: the CRS and the horizontal and vertical units every file the block
+  points at shares, as a projected or a local frame ([format](format.md) §4.2). Unreal's is the
+  AOI's metric UTM zone on every delivery; Revit's follows the delivery.
+- **`hosts.revit.vectors`** is new: the vector layers the Revit host places, as GeoJSON in its own
+  frame on every delivery, so a State Plane delivery no longer leaves Revit with only a geographic
+  set it may not project ([format](format.md) §6.5). `hosts.revit.readiness` gains `vectors`.
+- **`vector.crs`** is new: `EPSG:4326`, stating the frame the shared set has always been in.
+- **`landcover.tree_points` and `hosts.unreal.foliage_points` each state their file's frame** —
+  `crs`, `units` (the `ground_z` column) and `horizontal_units` (`x`, `y`) — and REQUIRE it. The
+  Unreal pointer's units are `m` by schema, and on a foot delivery it names a new file,
+  `Landcover/TreePointsMetric.csv`, the same trees restated in the metric UTM grid; on a metric
+  delivery it still names `Landcover/TreePoints.csv`. Before 1.3.0 it named the delivered file on
+  every delivery, so on a State Plane delivery a reader subtracting its metric origin put every tree
+  a thousand kilometres off site. A foot delivery built before 1.3.0 carries no `foliage_points`
+  until its next rebuild. No column is renamed ([format](format.md) §6.6).
+- **`delivery.label`** is new and optional: the display words for the delivery CRS — the EPSG
+  registry name of the projected zone, or a fixed phrase on a local grid — the same words the
+  platform shows a person. Every earlier bundle lacks it; there, the same words follow from `tier`
+  and `horizontal_epsg`, which have described the delivery frame since the block arrived.
+
 ### 1.2.0 — the foliage type (additive minor; published and frozen 2026-09-19)
 
 The tree-points CSV gains a sixth column, `foliage_type`, and `landcover.tree_points` gains an
