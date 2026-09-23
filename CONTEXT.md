@@ -293,6 +293,18 @@ The contour linework a bundle ships: one flat line per contour, at the elevation
 the interval the order was built with. It is fixed, and does not follow later edits to a terrain.
 _Avoid_: contours (unqualified), contour lines
 
+**Flood zone**:
+One published flood-hazard area from a public flood map, carrying that map's own zone and subtype
+exactly as the map states them. A host shows it as context; it is never a determination about a
+site, which only the authoritative map panel makes.
+_Avoid_: flood overlay, floodplain (for a zone), flood layer
+
+**Steep ground**:
+The published area steeper than a threshold the platform chose and states beside it. The threshold
+is the platform's policy, not a host's; a host shows the area and its stated threshold, and never
+draws its own from the slope raster.
+_Avoid_: steep slope, steep-slope overlay, slope polygons
+
 ### What a host builds from a bundle
 
 **Terrain**:
@@ -324,6 +336,17 @@ _Avoid_: contours (unqualified)
 One native element a host creates from the site model, per building in it. Selectable, renderable
 and stamped, where a linked site model is none of those.
 _Avoid_: building, massing, generic model, context geometry
+
+**Hazard plan**:
+Revit's flat plan of one bundle's build where its flood zones and steep ground are drawn, apart from
+the terrain and the model a visualiser renders. A later build gets its own; a plan a curator may
+have annotated is never redrawn.
+_Avoid_: hazard overlay, flood view, analysis view
+
+**Zone key**:
+The key drawn inside a hazard plan naming each flood zone and steep-ground threshold that plan shows,
+in the published wording. Distinct from the band legend, which orders paint layers.
+_Avoid_: legend, hazard legend
 
 **Stamp**:
 The identity a host writes onto something it created so its next import recognises it. It names the
