@@ -56,7 +56,7 @@ public static class Vignettes
     /// </summary>
     /// <remarks>
     /// Revit 2025, 2026 and 2027 all document the same number, so this is a property of the ribbon
-    /// rather than an artefact of compiling against the 2025 floor.
+    /// rather than an artefact of compiling against Revit 2025's API.
     /// </remarks>
     public const int MaxPixels = 355;
 

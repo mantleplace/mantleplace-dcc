@@ -149,7 +149,7 @@ Revit licence.
   the terrain as subdivisions as well, after the two land layers and stamped under kinds of their
   own. Polygons only: the streams in `water` stay out, because widening a centreline into an area is
   deriving what nobody published. A road surface comes in **flat**, at the terrain's own surface —
-  recessing it is issue 158. These two keep their **holes**: a water body's islands and a merged road
+  issue 158 records why it is not recessed. These two keep their **holes**: a water body's islands and a merged road
   network's city blocks are cut out of the subdivision rather than becoming subdivisions of their
   own, which is what the land layers do with an inner ring. Nothing is clipped against another layer
   and no layer wins where two meet — the published polygons overlap because the ground does, and
