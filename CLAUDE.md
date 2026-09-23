@@ -263,7 +263,9 @@ Most facts already have exactly one home. Find it before writing a fact down any
   note is **known by the text that record says was written**, for its own order only — so a re-import
   rewrites it in place, the one Revit element that is · **0012** Revit's context buildings are
   **the site model's own extrusions, copied** into Generic Model elements — not footprints extruded
-  here, not the glb, and no longer a link. Write one only for a decision hard to reverse,
+  here, not the glb, and no longer a link · **0013** Revit's **published contours** are one
+  DirectShape per contour — not model lines — placed only from Revit's own block, and a re-import
+  of an earlier build **refuses**. Write one only for a decision hard to reverse,
   surprising without the context, and the result of a real trade-off; an ADR is not a design
   document.
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
