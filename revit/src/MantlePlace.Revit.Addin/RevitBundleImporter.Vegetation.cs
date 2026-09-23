@@ -53,7 +53,7 @@ internal sealed partial class RevitBundleImporter
         // The vocabulary rides on the step because the manifest owns what the CSV's foliage values
         // mean. Nothing here reads a point's foliage type yet — one Planting family is what this
         // build ships — so every point is placed as a tree, exactly as it was before the column
-        // existed. The shrub family, and what the parse's notes and counts have to say, land with it.
+        // existed. The shrub family, and what the parse's foliage notes and counts have to say, land with it.
         TreePointsParse parse = TreePointsReader.Parse(
             File.ReadAllText(csvPath),
             frame,
@@ -105,6 +105,18 @@ internal sealed partial class RevitBundleImporter
         string summary = $"Imported {created:N0} tree(s) of {trees.Count:N0} from {step.EntryName}"
             + (created == 0 ? string.Empty
                 : geometry.IsFamily ? $" as \"{TreeFamily.FamilyName}\" instances" : " as DirectShapes");
+        // Rows the parse left out are said first: they never reached the "of" count, so without
+        // these clauses a half-blank ground_z column reads as a whole layer.
+        if (parse.RowsWithoutGround > 0)
+        {
+            summary += $"; {parse.RowsWithoutGround:N0} had no ground elevation in the file and were left out";
+        }
+
+        if (parse.UnreadableRows > 0)
+        {
+            summary += $"; {parse.UnreadableRows:N0} could not be read and were left out";
+        }
+
         if (decision.AlreadyPresent > 0)
         {
             summary += $"; {decision.AlreadyPresent:N0} from an earlier import of this build were already present and left alone";
