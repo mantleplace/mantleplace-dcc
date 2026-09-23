@@ -58,6 +58,8 @@ exitCode |= WindowLabelsTests.Run();
 exitCode |= DeliveryHeaderTests.Run();
 exitCode |= VaultConformanceTests.Run();
 exitCode |= MaterializeJobTests.Run();
+exitCode |= PrepareNoticeTests.Run();
+exitCode |= PrepareWatcherTests.Run();
 exitCode |= CacheConformanceTests.Run();
 exitCode |= BundleCacheTests.Run();
 

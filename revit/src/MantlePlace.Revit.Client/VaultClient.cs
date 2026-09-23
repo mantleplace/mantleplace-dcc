@@ -16,6 +16,14 @@ public readonly record struct VaultResult<T>(T? Value, string? Error)
     public bool Succeeded => Error is null;
 }
 
+/// <summary>How a bounded poll ended.</summary>
+/// <param name="Result">The terminal status, or the reason there is none.</param>
+/// <param name="OutOfPolls">
+/// Whether the poll stopped because its budget ran out (<c>HPS-25</c>) rather than because the job
+/// finished or failed. The job is still running; only the watching stopped.
+/// </param>
+public readonly record struct PollOutcome(VaultResult<MaterializeStatus> Result, bool OutOfPolls);
+
 /// <summary>
 /// The vault surface: list → materialize → poll → re-list → presign → download (<c>HPS-18</c>).
 /// </summary>
@@ -136,10 +144,11 @@ public sealed class VaultClient
     /// <remarks>
     /// The failure cap is CONSECUTIVE. A job that survives scattered transient errors over ten
     /// minutes is healthy, and abandoning it would discard an ETL run the curator paid for.
-    /// Abandoning the poll does not abandon the JOB either — reopening the panel rejoins it through
-    /// <c>HPS-24</c>.
+    /// Abandoning the poll does not abandon the JOB either — a second Prepare on the order rejoins it
+    /// through <c>HPS-24</c>. Running out of polls is reported as such, apart from a failure, because
+    /// the two tell a curator opposite things: wait, or stop waiting.
     /// </remarks>
-    public async Task<VaultResult<MaterializeStatus>> PollToCompletionAsync(
+    public async Task<PollOutcome> PollToCompletionAsync(
         string orderId,
         IReadOnlyCollection<string> requested,
         IProgress<MaterializeStatus>? progress,
@@ -158,7 +167,7 @@ public sealed class VaultClient
                 lastError = result.Error!;
                 if (++consecutiveFailures >= MaterializeJobs.MaxConsecutivePollFailures)
                 {
-                    return VaultResult<MaterializeStatus>.Failed(lastError);
+                    return new PollOutcome(VaultResult<MaterializeStatus>.Failed(lastError), OutOfPolls: false);
                 }
             }
             else
@@ -170,12 +179,14 @@ public sealed class VaultClient
                 switch (status.State)
                 {
                     case MaterializeState.Complete:
-                        return VaultResult<MaterializeStatus>.Ok(status);
+                        return new PollOutcome(VaultResult<MaterializeStatus>.Ok(status), OutOfPolls: false);
                     case MaterializeState.Failed:
-                        return VaultResult<MaterializeStatus>.Failed(
-                            status.Message.Length > 0
-                                ? status.Message
-                                : "The platform could not build this bundle.");
+                        return new PollOutcome(
+                            VaultResult<MaterializeStatus>.Failed(
+                                status.Message.Length > 0
+                                    ? status.Message
+                                    : "The platform could not build this bundle."),
+                            OutOfPolls: false);
                     default:
                         break;
                 }
@@ -185,9 +196,11 @@ public sealed class VaultClient
                 .ConfigureAwait(false);
         }
 
-        return VaultResult<MaterializeStatus>.Failed(
-            "This bundle is taking longer than expected to build. It is still running — reopen the vault "
-            + "in a few minutes and it will pick up where it left off.");
+        return new PollOutcome(
+            VaultResult<MaterializeStatus>.Failed(
+                "This bundle is taking longer than expected to build. It is still running — press "
+                + $"“{WindowLabels.PrepareForRevit}” again in a few minutes to pick up where it left off."),
+            OutOfPolls: true);
     }
 
     /// <summary>Mints a presigned URL. Per import, never cached (<c>HPS-29</c>).</summary>

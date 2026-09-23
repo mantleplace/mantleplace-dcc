@@ -140,7 +140,7 @@ internal static class BrandChrome
         return trigger;
     }
 
-    private static SolidColorBrush Frozen(BrandColour colour)
+    internal static SolidColorBrush Frozen(BrandColour colour)
     {
         SolidColorBrush brush = new(Color.FromRgb(colour.R, colour.G, colour.B));
         brush.Freeze();

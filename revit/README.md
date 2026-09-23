@@ -32,8 +32,16 @@ credential per Windows user.
 
 `Mantle Place ▸ Bundles ▸ Vault` lists the bundles you own, prepares their Revit deliverables,
 downloads them and imports. It is **modeless**: a build can take ten minutes and Revit stays usable
-throughout. Closing the window is not cancelling — only the Cancel button cancels; the ETL job keeps
-running and reopening the browser rejoins it rather than queueing a second (`HPS-24`).
+throughout. Closing the window is not cancelling — only the Cancel button cancels. The Prepare keeps
+going without the window: reopened, the browser shows it still running, and pressing
+`Prepare for Revit` again follows it rather than starting a second (`HPS-24`).
+
+When a Prepare ends while the browser is closed, a notice appears in the bottom-right corner of
+Revit's window without taking focus — the bundle is ready to import, it could not be prepared, or it
+is still building after the ten-minute poll budget (`HPS-25`). Clicking it opens the vault on that
+bundle. The Vault button carries a badge counting those notices until the vault is next opened, for a
+curator who was looking elsewhere. Nothing is announced while the vault is open (it already says),
+after a Cancel, or for a failure while signed out.
 
 Downloads are written to `bundle.zip.part`, hashed, and renamed over `bundle.zip` only once they
 verify (⛔`HPS-26`). Nothing is ever evicted automatically: a purchased bundle stays until you press

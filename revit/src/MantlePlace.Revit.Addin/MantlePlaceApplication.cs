@@ -17,6 +17,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
     private static MantlePlaceEndpoints? _endpoints;
     private static VaultClient? _vault;
     private static BundleCache? _cache;
+    private static PrepareWatcher? _watcher;
     private static ExternalEvent? _importEvent;
     private static BundleImportEventHandler? _importHandler;
 
@@ -56,6 +57,12 @@ public sealed class MantlePlaceApplication : IExternalApplication
     internal static VaultClient Vault => _vault ?? throw NotStarted();
 
     internal static BundleCache Cache => _cache ?? throw NotStarted();
+
+    /// <summary>
+    /// Every Prepare this session has running. Here rather than on the vault window because a
+    /// Prepare outlives the window (<see cref="PrepareWatcher"/>).
+    /// </summary>
+    internal static PrepareWatcher Watcher => _watcher ?? throw NotStarted();
 
     /// <summary>The only supported way onto Revit's document thread from a modeless window.</summary>
     internal static ExternalEvent ImportEvent => _importEvent ?? throw NotStarted();
@@ -371,6 +378,41 @@ public sealed class MantlePlaceApplication : IExternalApplication
     /// finished the work, which is why that one needs the hop and this one does not.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Marshals a Prepare's ending onto Revit's UI thread, then tells the curator if there is anything
+    /// to tell (<see cref="PrepareNotifier"/>).
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <see cref="PrepareWatcher.Ended"/> is raised on a thread-pool thread, and the notifier touches
+    /// the Vault button — the hop is <see cref="OnAuthStateChanged"/>'s, for its reason. Whether the
+    /// vault is open and the session signed in are read after the hop, at the moment the notice would
+    /// appear.
+    /// </remarks>
+    private static void OnPrepareEnded(object? sender, PrepareRun run)
+    {
+        Dispatcher? dispatcher = _uiDispatcher;
+        if (dispatcher is null)
+        {
+            return;
+        }
+
+        void Notify()
+        {
+            if (_session is { } session)
+            {
+                PrepareNotifier.OnEnded(run, VaultBrowserCommand.IsOpen, session.State == AuthState.Authenticated);
+            }
+        }
+
+        if (dispatcher.CheckAccess())
+        {
+            Notify();
+            return;
+        }
+
+        _ = dispatcher.BeginInvoke(new Action(Notify));
+    }
+
     private static void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
     {
         if (e is null || e.ThemeChangedType != ThemeType.UITheme)
@@ -404,6 +446,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
         _vault = new VaultClient(endpoints, _session);
         _cache = new BundleCache();
+        _watcher = new PrepareWatcher(new VaultPrepareSteps(_vault, _cache));
 
         // Created during OnStartup because ExternalEvent.Create must run on Revit's own thread, and
         // a modeless window has no other moment when that is guaranteed.
@@ -435,15 +478,19 @@ public sealed class MantlePlaceApplication : IExternalApplication
             assemblyPath,
             typeof(VaultBrowserCommand).FullName)
         {
-            ToolTip = "Browse the bundles in your vault and import one.",
+            ToolTip = VaultBadge.ToolTip,
             LongDescription =
                 "Open the vault browser: it lists the bundles you own, prepares their Revit deliverables, "
-                + "downloads them and imports them. It stays open while a bundle builds — closing it does "
-                + "not cancel the job, and reopening rejoins it. This is the one surface that needs you "
-                + "signed in.",
+                + "downloads them and imports them. Closing it while a bundle builds does not cancel the "
+                + "job: you are told when it is ready to import, and reopening shows it still going. This "
+                + "is the one surface that needs you signed in.",
         });
         RibbonImagery.Give(vault, RibbonGlyph.Vault);
         RibbonImagery.GiveVignette(vault, Vignette.Vault);
+
+        // Read when a notice is shown, not now: Revit's main window is not guaranteed to exist while
+        // OnStartup runs.
+        PrepareNotifier.Attach(vault, () => application.MainWindowHandle);
 
         PushButton importLocal = (PushButton)panel.AddItem(new PushButtonData(
             "MantlePlaceImportLocalBundle",
@@ -509,6 +556,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         // including before this line; reading the session here rather than trusting the event means
         // a transition that landed while the ribbon was still being built is not missed.
         _session.StateChanged += OnAuthStateChanged;
+        _watcher.Ended += OnPrepareEnded;
         BeginSessionRestore(_session);
         ApplyAccountState();
 
@@ -526,6 +574,15 @@ public sealed class MantlePlaceApplication : IExternalApplication
             application.ThemeChanged -= OnThemeChanged;
         }
 
+        // Before the ribbon goes: a Prepare ending during teardown would badge a button Revit has
+        // already taken apart. Cancelled, never announced.
+        if (_watcher is not null)
+        {
+            _watcher.Ended -= OnPrepareEnded;
+            _watcher.CancelAll();
+        }
+
+        PrepareNotifier.Forget();
         RibbonImagery.Forget();
 
         if (_uiDispatcher is not null)
@@ -549,6 +606,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _importEvent?.Dispose();
         _importEvent = null;
         _importHandler = null;
+        _watcher = null;
         _vault = null;
         _cache = null;
         _endpoints = null;

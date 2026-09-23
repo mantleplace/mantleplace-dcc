@@ -1,4 +1,8 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Autodesk.Revit.UI;
 using MantlePlace.Revit.Core;
 
@@ -58,6 +62,15 @@ internal static class RibbonImagery
     /// <see cref="Retheme"/>, not a shape.
     /// </remarks>
     private static readonly List<(RibbonButton Button, Vignette Vignette)> GivenVignettes = [];
+
+    /// <summary>
+    /// The badge each button carries over its picture, when it carries one (<see cref="VaultBadge"/>).
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="Given"/> and applied inside <see cref="Apply"/>, so a theme change
+    /// repaints the badge with the glyph instead of wiping it: the two are one picture on the button.
+    /// </remarks>
+    private static readonly Dictionary<RibbonButton, string> Badges = [];
 
     private static double? _displayScale;
 
@@ -121,11 +134,42 @@ internal static class RibbonImagery
         }
     }
 
+    /// <summary>
+    /// Draws <paramref name="text"/> in a badge over <paramref name="button"/>'s picture, or takes the
+    /// badge off when it is <c>null</c>. Revit's UI thread only.
+    /// </summary>
+    /// <remarks>
+    /// The button must have been given a glyph first. What the badge says is
+    /// <see cref="VaultBadge.CountText"/>; this only draws it.
+    /// </remarks>
+    internal static void SetBadge(RibbonButton button, string? text)
+    {
+        ArgumentNullException.ThrowIfNull(button);
+
+        if (text is null)
+        {
+            Badges.Remove(button);
+        }
+        else
+        {
+            Badges[button] = text;
+        }
+
+        foreach ((RibbonButton given, RibbonGlyph? glyph) in Given)
+        {
+            if (ReferenceEquals(given, button))
+            {
+                Apply(given, glyph, CurrentTheme(), DisplayScale());
+            }
+        }
+    }
+
     /// <summary>Drops every retained reference. Called from <c>OnShutdown</c> and nowhere else.</summary>
     internal static void Forget()
     {
         Given.Clear();
         GivenVignettes.Clear();
+        Badges.Clear();
         ResourceImages.Forget();
         _displayScale = null;
     }
@@ -152,10 +196,12 @@ internal static class RibbonImagery
             ? RibbonGlyphs.FileNameFor(command, theme, slot, scale)
             : MarkRenders.FileNameFor(slot, scale);
 
+        string? badge = Badges.TryGetValue(button, out string? held) ? held : null;
+
         try
         {
-            button.Image = ResourceImages.Decode(NameFor(SmallSlot));
-            button.LargeImage = ResourceImages.Decode(NameFor(LargeSlot));
+            button.Image = Badged(ResourceImages.Decode(NameFor(SmallSlot)), badge, SmallSlot);
+            button.LargeImage = Badged(ResourceImages.Decode(NameFor(LargeSlot)), badge, LargeSlot);
         }
         catch (Autodesk.Revit.Exceptions.ApplicationException)
         {
@@ -185,6 +231,59 @@ internal static class RibbonImagery
             // while Revit is tearing the ribbon down, and a fault dialog raised over a tooltip
             // picture would be worse than the stale picture it replaces.
         }
+    }
+
+    /// <summary>
+    /// <paramref name="image"/> with a brand-orange disc in its top-right corner, carrying
+    /// <paramref name="badge"/> where the slot is large enough to read it.
+    /// </summary>
+    /// <remarks>
+    /// Drawn at run time rather than committed, because the count is not known until run time and
+    /// every committed variant would be another binary in a repository that counts them. The decoded
+    /// source stays cached and untouched; the badged copy is rendered at its pixel size and frozen, as
+    /// the decoded ones are.
+    /// </remarks>
+    private static ImageSource? Badged(ImageSource? image, string? badge, int slot)
+    {
+        if (badge is null || image is not BitmapSource bitmap)
+        {
+            return image;
+        }
+
+        double width = bitmap.Width;
+        double height = bitmap.Height;
+        double diameter = width * VaultBadge.DiscFraction;
+        Point centre = new(width - (diameter / 2), diameter / 2);
+
+        DrawingVisual visual = new();
+        using (DrawingContext context = visual.RenderOpen())
+        {
+            context.DrawImage(bitmap, new Rect(0, 0, width, height));
+            context.DrawEllipse(BrandChrome.Frozen(BrandPalette.Mantle), null, centre, diameter / 2, diameter / 2);
+
+            if (VaultBadge.DrawsCount(slot))
+            {
+                FormattedText count = new(
+                    badge,
+                    CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight,
+                    new Typeface(SystemFonts.MessageFontFamily, FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
+                    diameter * (badge.Length > 1 ? 0.55 : 0.72),
+                    BrandChrome.Frozen(BrandPalette.OnMantle),
+                    bitmap.DpiX > 0 ? bitmap.DpiX / BaselineDpi : 1.0);
+                context.DrawText(count, new Point(centre.X - (count.Width / 2), centre.Y - (count.Height / 2)));
+            }
+        }
+
+        RenderTargetBitmap badged = new(
+            bitmap.PixelWidth,
+            bitmap.PixelHeight,
+            bitmap.DpiX > 0 ? bitmap.DpiX : BaselineDpi,
+            bitmap.DpiY > 0 ? bitmap.DpiY : BaselineDpi,
+            PixelFormats.Pbgra32);
+        badged.Render(visual);
+        badged.Freeze();
+        return badged;
     }
 
     /// <summary>
