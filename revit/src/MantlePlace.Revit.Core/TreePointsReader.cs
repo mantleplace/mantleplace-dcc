@@ -64,7 +64,7 @@ public sealed record TreePointsParse
 /// The file is absolute, in the delivery CRS its manifest entry states — so unlike the toposurface
 /// points it is not already local, and unlike the vector layers it is not geographic.
 /// <see cref="SiteFrame"/> owns both the subtraction and the refusal when that CRS is not the
-/// bundle's origin's.
+/// origin's.
 /// </para>
 /// <para>
 /// Columns are resolved from the HEADER, not by position. The manifest publishes

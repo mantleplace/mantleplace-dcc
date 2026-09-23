@@ -53,6 +53,12 @@ public static class BundleManifestReader
     internal const string LocalFrame = "local_enu";
 
     /// <summary>
+    /// The one <c>vertical_reference</c> the format declares: a Z that is real orthometric height, never
+    /// an offset from the origin.
+    /// </summary>
+    internal const string AbsoluteHeight = "absolute";
+
+    /// <summary>
     /// Deliverable sub-objects of the <c>hosts.revit</c> block — this host's OWN block (HPS-33). Each
     /// is optional, and each present one carries a <c>sha256</c> the schema makes required (HPS-34).
     /// </summary>
@@ -656,34 +662,38 @@ public static class BundleManifestReader
             Kind = kind,
             Epsg = GeoProjection.TryParseEpsg(frame.OptionalStr(kind == FileFrameKind.Local ? "base_crs" : "crs")),
             Origin = origin,
-            HorizontalUnit = frame.Str("horizontal_unit"),
+            HorizontalUnit = TryReadLinearUnit(frame.Str("horizontal_unit"), out LinearUnit horizontal)
+                && horizontal != LinearUnit.Unspecified
+                    ? horizontal
+                    : null,
         };
     }
 
     /// <summary>
-    /// Replaces the shared vector layers with this host's own copy, on a bundle that verdicts one.
+    /// Replaces the shared vector layers with this host's own copy, on a bundle that carries one.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The verdict decides, not the copy's presence: a bundle that says <c>vectors</c> is absent has
-    /// told this host there is nothing in its frame, and the shared lon/lat set beside it is the
-    /// fallback the format keeps for bundles cut before the verdict existed (<c>HPS-52</c>,
-    /// <c>spec/format.md</c> §6.5). So on such a bundle every layer the copy lacks is <c>null</c>,
-    /// never the shared one.
+    /// The copy is all or nothing (<c>spec/format.md</c> §6.5), so where it is present every layer
+    /// comes from it, and a layer it lacks is <c>null</c>: it had no features in the area, and the
+    /// shared set has none either. Where it is absent — a bundle cut before it existed, or one whose
+    /// <c>readiness.vectors</c> says it was withheld — the shared lon/lat set stays, as the fallback
+    /// for content the block does not carry (<c>HPS-52</c>); the <c>HPS-45</c> projection behind it
+    /// still reaches a UTM origin only.
     /// </para>
     /// <para>
-    /// Each layer's <c>horizontal_frame</c> and <c>units</c> are carried verbatim; the planner decides
-    /// whether this host can place them.
+    /// Each layer's <c>horizontal_frame</c>, <c>units</c> and <c>vertical_reference</c> are carried
+    /// verbatim; the planner decides whether this host can place them.
     /// </para>
     /// </remarks>
     private static void ReadOwnVectors(BundleManifest manifest, JsonElement root)
     {
-        if (!manifest.VectorsFromOwnBlock)
+        if (RevitHostBlock(root)?.Object("vectors")?.Array("layers") is not { } layers)
         {
             return;
         }
 
-        JsonElement? layers = RevitHostBlock(root)?.Object("vectors")?.Array("layers");
+        manifest.VectorsFromOwnBlock = true;
 
         manifest.RoadSplines = ReadOwnVectorLayer(layers, "road_splines");
         manifest.LandUse = ReadOwnVectorLayer(layers, "land_use");
@@ -692,14 +702,9 @@ public static class BundleManifestReader
         manifest.RoadPolygons = ReadOwnVectorLayer(layers, "road_polygons");
     }
 
-    private static BundleArtifact? ReadOwnVectorLayer(JsonElement? layers, string layerName)
+    private static BundleArtifact? ReadOwnVectorLayer(JsonElement layers, string layerName)
     {
-        if (layers is not { } array)
-        {
-            return null;
-        }
-
-        foreach (JsonElement layer in array.EnumerateArray())
+        foreach (JsonElement layer in layers.EnumerateArray())
         {
             if (layer.ValueKind != JsonValueKind.Object
                 || !string.Equals(layer.Str("name"), layerName, StringComparison.Ordinal))
@@ -717,6 +722,7 @@ public static class BundleManifestReader
                     Format = "geojson",
                     HorizontalFrame = layer.Str("horizontal_frame"),
                     Units = layer.Str("units"),
+                    VerticalReference = layer.OptionalStr("vertical_reference"),
                     FromOwnBlock = true,
                 };
         }

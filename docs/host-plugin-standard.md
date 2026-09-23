@@ -61,6 +61,7 @@ host met the contract for real:
 | **v1.10** | ⛔`HPS-52` and ⛔`HPS-53`, plus `HPS-54` — place from the host block first, place only what can be shown to be in the host frame, and declare which kind of frame the host has; `HPS-45` narrowed in the same pass to a fallback that reaches a UTM origin and nothing else. The suite had assumed every host frame was a UTM zone and never said so, and two hosts met a State Plane foot delivery and did opposite things: Revit refused each layer it could not place and named the reason, while Unreal's tree-point reader subtracted its metric UTM origin from foot State Plane coordinates and reported success with every tree a thousand kilometres off site. Both were defensible readings of `HPS-33`, `HPS-35` and `HPS-45` as written, which is what made this a hole in the standard rather than one host's bug |
 | **v1.11** | `HPS-51` gains the words for what a bundle is delivered in — unit system, linear unit, delivery CRS. Neither host said it anywhere: a curator learned an order was in feet by opening the zip, and an Unreal user on an imperial order met foot GIS and CAD files beside metric content with nothing on screen having said so. Both hosts were about to print the same three facts, so their words were fixed here before either did |
 | **v1.12** | ⛔`HPS-53` names the one statement that stands in for an unstated unit: `delivery.linear_unit`, for a file the format says follows the delivered unit. Revit stored the tree points' `ground_z` as metres, and on a State Plane delivery the column is feet, so every tree stood hundreds of metres above its terrain; bundles cut before MPB 1.3.0 state no unit beside that pointer, and read literally the rule left a host a choice between refusing every such tree file and keeping the bug. The terrain's points had always resolved their unit this way, so the precedent was written down rather than invented |
+| **v1.13** | ⛔`HPS-34`'s Revit row gains the MPB 1.3.0 own-copy pointers, `revit.drape` and each layer of `revit.vectors`, whose `sha256` the schema requires; the shared `vector` layers stay optional. The Revit reader began refusing a present own copy with no hash in the change that first placed from it, and the table still listed only the three v19 deliverables |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -616,7 +617,7 @@ _Enforcer:_ `automation-test` (corpus `manifest.full`) + `agent-review`.
 
 **`HPS-34` — Integrity fields fail closed where the contract requires them and skip where it does
 not.** Required hashes are **required** — a missing one is a refusal, because importing unverifiable
-bytes is worse than not importing. Optional hashes (mesh, buildings, vector layers) absent mean the
+bytes is worse than not importing. Optional hashes (mesh, buildings, the shared `vector` layers) absent mean the
 check is skipped and the artifact is still valid — the same _unknown ≠ absent_ rule as `HPS-27`.
 Where an artifact carries no hash of its own, the host resolves it by matching the path against the
 manifest's format table rather than assuming.
@@ -624,10 +625,11 @@ manifest's format table rather than assuming.
 WHICH hashes are required is **per host**, because each host's deliverables are published by a
 different part of the contract and arrived at different versions:
 
-| Host     | Required-hash artifacts                                           | From | Required                          |
-| -------- | ----------------------------------------------------------------- | ---- | --------------------------------- |
-| `unreal` | `unreal.heightmap`, `unreal.imagery_drape`                        | v17  | whenever the manifest is imported |
-| `revit`  | `revit.toposurface_points`, `revit.surface_dxf`, `revit.ifc_site` | v19  | when that sub-object is present   |
+| Host     | Required-hash artifacts                                           | From  | Required                          |
+| -------- | ----------------------------------------------------------------- | ----- | --------------------------------- |
+| `unreal` | `unreal.heightmap`, `unreal.imagery_drape`                        | v17   | whenever the manifest is imported |
+| `revit`  | `revit.toposurface_points`, `revit.surface_dxf`, `revit.ifc_site` | v19   | when that sub-object is present   |
+| `revit`  | `revit.drape`, each layer of `revit.vectors`                      | 1.3.0 | when that sub-object is present   |
 
 The Revit row is conditional because each sub-object is itself optional — a bundle with no Revit
 deliverables selected is a well-formed manifest — while the v19 schema lists `sha256` in the
@@ -1124,15 +1126,15 @@ block, are in its frame on every tier, and import on every tier. Its tree points
 order-frame host and the same family does not on the fixed-frame host, which is the coincidence this
 ordering exists to stop a host relying on. The imagery drape and the `vector` layers were the gap
 until MPB 1.3.0 gave Revit's block a copy of each in its own frame; Revit places those first on every
-tier, and the host-neutral drape and the `HPS-45` projection remain only for a bundle cut before its
-block carried them.
+tier, and the host-neutral drape and the `HPS-45` projection remain the fallback for a bundle whose
+block does not carry them.
 
 **A pointer sitting in the host block is not itself the showing `HPS-53` asks for.** A block that
 points at content in some other frame is a format defect, and the host still refuses the file by
 name rather than placing it on the strength of where the pointer was found.
 
 _Enforcer:_ `agent-review`, and for the Revit host the corpus case
-`manifest.revitOwnFramePointers`: a State Plane bundle whose block points at host-frame vector and
+`manifest.revitOwnFramePointers`: a bundle on a State Plane delivery whose block points at host-frame vector and
 drape copies beside host-neutral copies of the same content in another frame, with the pointers the
 host takes expected to be its own block's. It carries `appliesTo` for that host, because the pair it
 states is that block's; a case for the fixed-frame host's own pointers is that host's to add.
@@ -1171,10 +1173,11 @@ because a producer can state a frame wrongly. Comparing two published numbers de
 value, so the thin-client boundary is intact.
 
 _Enforcer:_ `automation-test` per host, wherever the host has moved the decision into a pure core —
-Revit's `SiteFrame` is the furthest any host has taken it: `CanPlaceGeographic` and
-`CanPlaceProjected` decide the CRS half, and `IsInOriginUnit` and `Holds` — whether the host block's
-declared `file_frame` is the origin's frame — decide the unit half for the files its own block points
-at — plus `agent-review` for the rest. Two corpus cases pin it, both carrying `appliesTo` for the
+Revit's `SiteFrame` is the furthest any host has taken it. `CanPlaceGeographic` and
+`CanPlaceProjected` decide the CRS half; `Holds` decides whether the host block's declared
+`file_frame` is the origin's frame; and `IsInOriginUnit` decides whether absolute coordinates are in
+the unit they are subtracted in. The planner compares each own-block file's `units` with that
+`file_frame`'s. `agent-review` covers the rest. Two corpus cases pin it, both carrying `appliesTo` for the
 fixed-frame host, because the pointer and the extent they read are that host's block's.
 `manifest.treePointsFrame` pins the **extent substitute**: a tree-point file in a foot frame beside a
 metric origin, under a pointer that states no frame, refused by name.

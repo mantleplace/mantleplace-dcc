@@ -88,11 +88,17 @@ public sealed class BundleArtifact
     public string? HorizontalUnits { get; init; }
 
     /// <summary>
-    /// True for a file this host's own block points at in this host's frame — <c>hosts.revit.vectors</c>
-    /// and <c>hosts.revit.drape</c> — whose <see cref="HorizontalFrame"/> is <c>absolute_projected</c>
-    /// or <c>local_enu</c> rather than a CRS.
+    /// True for a file this host's own block points at in this host's frame — a layer of
+    /// <c>hosts.revit.vectors</c>, whose <see cref="HorizontalFrame"/> is <c>absolute_projected</c> or
+    /// <c>local_enu</c> rather than a CRS, or <c>hosts.revit.drape</c>, whose is its extent's CRS.
     /// </summary>
     public bool FromOwnBlock { get; init; }
+
+    /// <summary>
+    /// Raw <c>vertical_reference</c>, own vector layers only — present on a layer whose geometry
+    /// carries Z, and <c>null</c> on a planar one.
+    /// </summary>
+    public string? VerticalReference { get; init; }
 }
 
 /// <summary>One <c>hosts.&lt;hostId&gt;.readiness.&lt;path&gt;</c> entry.</summary>
@@ -162,8 +168,8 @@ public sealed class FileFrame
     /// <summary>A local frame's <c>origin</c>, in the unit it states; <c>null</c> for a projected frame.</summary>
     public GeoOrigin? Origin { get; init; }
 
-    /// <summary>Raw <c>horizontal_unit</c>, as published.</summary>
-    public string HorizontalUnit { get; init; } = string.Empty;
+    /// <summary><c>horizontal_unit</c>, or <c>null</c> when unstated or not a unit this reader knows.</summary>
+    public LinearUnit? HorizontalUnit { get; init; }
 }
 
 /// <summary>A pre-derived geographic origin, applied verbatim and never re-derived (HPS-33).</summary>
@@ -423,10 +429,9 @@ public sealed class BundleManifest
     /// </para>
     /// <para>
     /// This one, and the four layers below, come from this host's own block first (<c>HPS-52</c>).
-    /// A bundle that verdicts <c>hosts.revit.readiness.vectors</c> — every MPB 1.3.0 bundle — is
-    /// placed from <c>hosts.revit.vectors</c> alone, in this host's own frame, on every delivery; a
-    /// layer that copy lacks had no features in the area (<c>spec/format.md</c> §6.5). Only a bundle
-    /// cut before the verdict existed falls back to the shared lon/lat set.
+    /// A bundle carrying <c>hosts.revit.vectors</c> is placed from that copy alone, in this host's
+    /// own frame, on every delivery; a layer the copy lacks had no features in the area
+    /// (<c>spec/format.md</c> §6.5). A bundle without the copy falls back to the shared lon/lat set.
     /// </para>
     /// </remarks>
     public BundleArtifact? RoadSplines { get; internal set; }
@@ -457,9 +462,9 @@ public sealed class BundleManifest
 
     /// <summary>
     /// True when the vector layers above come from <c>hosts.revit.vectors</c> rather than the
-    /// shared set — that is, when the bundle verdicts the copy at all, present or not.
+    /// shared set — that is, when the bundle carries the copy.
     /// </summary>
-    public bool VectorsFromOwnBlock => Readiness.Vectors.Declared;
+    public bool VectorsFromOwnBlock { get; internal set; }
 
     /// <summary><c>hosts.revit.file_frame</c>, or <c>null</c> on a bundle cut before MPB 1.3.0.</summary>
     public FileFrame? FileFrame { get; internal set; }

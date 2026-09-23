@@ -123,7 +123,7 @@ internal static class HostFramePlacementTests
 
     private static void RunVectorPlanCases(TestRun run)
     {
-        run.Case("a State Plane bundle places every vector layer from the Revit block's own copy", () =>
+        run.Case("a State Plane delivery places every vector layer from the Revit block's own copy", () =>
         {
             // The case issue 212 is about: before 1.3.0 this bundle's origin refused every one of
             // these layers, because the only copy it had was lon/lat.
@@ -178,22 +178,24 @@ internal static class HostFramePlacementTests
             }
         });
 
-        run.Case("a 1.3.0 bundle without the copy never falls back to the shared set", () =>
+        run.Case("a 1.3.0 bundle whose copy was withheld falls back to the shared set, as HPS-52 says", () =>
         {
-            // The key is how the format says "not for you": a bundle that verdicts `vectors` absent
-            // has told this host there is nothing in its frame, and projecting the shared set
-            // anyway is the fallback the schema keeps for older bundles only.
-            BundleImportPlan plan = Plan(Manifest(
-                MetricGeoreference,
-                MetricFileFrame,
-                vectors: null,
-                drape: null,
-                "{ \"present\": false, \"reason\": \"not_produced\" }"));
+            // The host-neutral pointer is the fallback for content the block does not carry. On a
+            // metric origin that places what it always placed; on a State Plane one it is refused
+            // for the reason it always was.
+            const string Withheld = "{ \"present\": false, \"reason\": \"not_produced\" }";
 
+            BundleImportPlan metric = Plan(Manifest(MetricGeoreference, MetricFileFrame, vectors: null, drape: null, Withheld));
+            ImportStep? roads = Find(metric, ImportStepKind.RoadCentrelines);
+            run.Equal(roads?.EntryName, SharedPath("RoadSplines"), "a metric origin places the shared set");
+            run.True(roads?.Layer == LayerFrame.Geographic, "through the HPS-45 projection");
+
+            BundleImportPlan foot = Plan(Manifest(FootGeoreference, FootFileFrame, vectors: null, drape: null, Withheld));
             foreach (ImportStepKind kind in VectorKinds)
             {
-                run.False(Has(plan, kind), $"{kind} is not planned from the shared set");
-                run.True(Skip(plan, kind)?.ReasonCode == SkipReasonCode.ArtifactNotInManifest, $"{kind} says there is no copy");
+                run.True(
+                    Skip(foot, kind)?.ReasonCode == SkipReasonCode.CoordinateSystemNotSupported,
+                    $"{kind} is refused on a State Plane origin, as before the copy existed");
             }
         });
 
@@ -237,15 +239,45 @@ internal static class HostFramePlacementTests
             }
         });
 
-        run.Case("with no file frame declared, an absolute layer still has to be in the origin's unit", () =>
+        run.Case("a copy whose block declares no file frame is refused, not placed on the pointer's word", () =>
         {
-            // The schema pairs file_frame with georeference, so this bundle is malformed; the unit
-            // check does not lean on the frame declaration being there to catch it.
-            BundleImportPlan plan = Plan(Manifest(FootGeoreference, fileFrame: null, AllLayers("absolute_projected", "m"), drape: null, VectorsPresent));
+            // The schema pairs file_frame with georeference, so this bundle is malformed, and where
+            // the pointer sits is not the showing HPS-53 asks for.
+            BundleImportPlan plan = Plan(Manifest(FootGeoreference, fileFrame: null, AllLayers("absolute_projected", "ftUS"), drape: null, VectorsPresent));
+
+            run.False(Has(plan, ImportStepKind.RoadCentrelines), "nothing is planned");
+            run.True(
+                Skip(plan, ImportStepKind.RoadCentrelines)?.ReasonCode == SkipReasonCode.CoordinateSystemNotSupported,
+                "the layer is refused as not shown to be in this frame");
+        });
+
+        run.Case("an absolute file has to be in the origin's unit even where the file frame agrees with it", () =>
+        {
+            // The frame's CRS is the origin's but its declared unit is not: a contradiction the
+            // subtraction would turn into a 3.28 times error.
+            string metreFrame = FootFileFrame.Replace("\"ftUS\"", "\"m\"", StringComparison.Ordinal);
+            BundleImportPlan plan = Plan(Manifest(FootGeoreference, metreFrame, AllLayers("absolute_projected", "m"), drape: null, VectorsPresent));
 
             run.True(
                 Skip(plan, ImportStepKind.RoadCentrelines)?.ReasonCode == SkipReasonCode.CoordinateSystemNotSupported,
                 "metres subtracted from a foot origin are refused");
+        });
+
+        run.Case("a height reference nobody emits is refused, not read as a height", () =>
+        {
+            string relative = AllLayers("absolute_projected", "ftUS")
+                .Replace("\"feature_count\": 1", "\"vertical_reference\": \"relative\", \"feature_count\": 1", StringComparison.Ordinal);
+            BundleImportPlan plan = Plan(Manifest(FootGeoreference, FootFileFrame, relative, drape: null, VectorsPresent));
+
+            run.True(
+                Skip(plan, ImportStepKind.RoadCentrelines)?.ReasonCode == SkipReasonCode.CoordinateSystemNotSupported,
+                "an offset read as an orthometric height would bury or float the road");
+
+            string absolute = AllLayers("absolute_projected", "ftUS")
+                .Replace("\"feature_count\": 1", "\"vertical_reference\": \"absolute\", \"feature_count\": 1", StringComparison.Ordinal);
+            run.True(
+                Has(Plan(Manifest(FootGeoreference, FootFileFrame, absolute, drape: null, VectorsPresent)), ImportStepKind.RoadCentrelines),
+                "the declared one is placed");
         });
 
         run.Case("a local file frame about another origin is not this host's frame", () =>
@@ -261,7 +293,7 @@ internal static class HostFramePlacementTests
 
     private static void RunDrapeCases(TestRun run)
     {
-        run.Case("a State Plane bundle drapes the Revit block's own image, on the origin's grid", () =>
+        run.Case("a State Plane delivery drapes the Revit block's own image, on the origin's grid", () =>
         {
             BundleImportPlan plan = Plan(Manifest(FootGeoreference, FootFileFrame, vectors: null, FootDrape, VectorsPresent));
 
@@ -295,7 +327,7 @@ internal static class HostFramePlacementTests
 
         run.Case("with no own drape the shared one is still refused on a State Plane origin", () =>
         {
-            // A State Plane bundle cut before 1.3.0 has no drape on Revit's grid at all.
+            // A State Plane delivery cut before 1.3.0 has no drape on Revit's grid at all.
             BundleImportPlan plan = Plan(Manifest(FootGeoreference, fileFrame: null, vectors: null, drape: null, vectorsReadiness: null, version: "1.2.0"));
 
             run.True(

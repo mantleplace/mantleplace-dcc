@@ -784,8 +784,8 @@ public static class BundleImportPlanner
     /// <remarks>
     /// <para>
     /// It reuses the whole placement path: the extent goes through <see cref="SiteFrame"/>, so a
-    /// bundle with no origin yields <see cref="SkipReasonCode.NoSiteFrame"/> and a State Plane bundle
-    /// whose only drape is on the metric UTM grid yields
+    /// bundle with no origin yields <see cref="SkipReasonCode.NoSiteFrame"/> and a bundle on a State
+    /// Plane delivery whose only drape is on the metric UTM grid yields
     /// <see cref="SkipReasonCode.CoordinateSystemNotSupported"/>, both without a line of arithmetic
     /// written for this row.
     /// </para>
@@ -1094,14 +1094,15 @@ public static class BundleImportPlanner
     /// <remarks>
     /// <para>
     /// A pointer sitting in this host's block is not itself the showing <c>HPS-53</c> asks for. The
-    /// block's <c>file_frame</c> has to be this host's frame (<see cref="SiteFrame.Holds"/>), the file
-    /// has to be in that frame, in its unit, and an absolute file has to be in the origin's unit,
-    /// since that is the unit it is subtracted in. Each failure is a producer defect, and each is
-    /// refused by name; none is converted.
+    /// block has to declare a <c>file_frame</c>, and it has to be this host's frame
+    /// (<see cref="SiteFrame.Holds"/>); the file has to be in that frame's unit; and an absolute file
+    /// has to be in the origin's unit (<see cref="SiteFrame.IsInOriginUnit"/>), since that is the unit
+    /// it is subtracted in. Each failure is a producer defect, and each is refused by name; none is
+    /// converted.
     /// </para>
     /// <para>
-    /// A <c>horizontal_frame</c> this plugin does not know fails closed, as the schema instructs: an
-    /// unknown frame cannot be placed.
+    /// A <c>horizontal_frame</c> or <c>vertical_reference</c> this plugin does not know fails closed,
+    /// as the schema instructs: a Z that might be an offset cannot be placed as a height.
     /// </para>
     /// </remarks>
     private static (SkipReasonCode Code, string Reason)? OwnFrameRefusal(
@@ -1135,21 +1136,33 @@ public static class BundleImportPlanner
                 $"The {label} are in a \"{artifact.HorizontalFrame}\" frame, which this plugin does not know." + LeftOut);
         }
 
-        if (manifest.FileFrame is { } declared)
+        if (artifact.VerticalReference is { } vertical
+            && !string.Equals(vertical, BundleManifestReader.AbsoluteHeight, StringComparison.Ordinal))
         {
-            if (!frame.Holds(declared))
-            {
-                return (SkipReasonCode.CoordinateSystemNotSupported,
-                    $"This bundle declares the Revit files' frame as one this project's origin (EPSG:{frame.Epsg}) "
-                    + $"is not, so the {label} cannot be shown to be in it." + LeftOut);
-            }
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"The {label} carry heights referenced as \"{vertical}\", which this plugin does not know." + LeftOut);
+        }
 
-            if (!string.Equals(declared.HorizontalUnit, artifact.Units, StringComparison.Ordinal))
-            {
-                return (SkipReasonCode.CoordinateSystemNotSupported,
-                    $"The {label} are in \"{artifact.Units}\", but this bundle declares the Revit files in "
-                    + $"\"{declared.HorizontalUnit}\"." + LeftOut);
-            }
+        if (manifest.FileFrame is not { } declared)
+        {
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"This bundle declares no frame for the Revit files, so the {label} cannot be shown to be in "
+                + "this project's." + LeftOut);
+        }
+
+        if (!frame.Holds(declared))
+        {
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"This bundle declares the Revit files' frame as one this project's origin (EPSG:{frame.Epsg}) "
+                + $"is not, so the {label} cannot be shown to be in it." + LeftOut);
+        }
+
+        if (declared.HorizontalUnit != units)
+        {
+            string declaredUnit = declared.HorizontalUnit is { } unit ? LinearUnits.ToManifestToken(unit) : "no unit this plugin knows";
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"The {label} are in \"{artifact.Units}\", but this bundle declares the Revit files in "
+                + $"\"{declaredUnit}\"." + LeftOut);
         }
 
         if (kind == LayerCoordinates.AbsoluteProjected && !frame.IsInOriginUnit(units))
@@ -1168,21 +1181,11 @@ public static class BundleImportPlanner
     /// </summary>
     /// <remarks>
     /// On a bundle that carries this host's own copy, a layer the copy lacks had no features in the
-    /// area, and the vault has nothing more to give (<c>spec/format.md</c> §6.5). A copy that is
-    /// absent altogether says why in its own readiness verdict. Only an older bundle keeps the
-    /// vault's remedy.
+    /// area, and the vault has nothing more to give (<c>spec/format.md</c> §6.5). Without the copy the
+    /// shared set is read, and its absence keeps the vault's remedy.
     /// </remarks>
     private static string? VectorAbsence(BundleManifest manifest, string label)
-    {
-        if (!manifest.VectorsFromOwnBlock)
-        {
-            return null;
-        }
-
-        return manifest.Readiness.Vectors.Present
-            ? $"No {label} in this bundle: there are none in this area."
-            : DescribeMissingArtifact(label, manifest.Readiness.Vectors);
-    }
+        => manifest.VectorsFromOwnBlock ? $"No {label} in this bundle: there are none in this area." : null;
 
     /// <summary>
     /// Why a projected artifact's units stop it being placed, or <c>null</c> with the resolved
