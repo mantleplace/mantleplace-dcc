@@ -209,7 +209,8 @@ Account button reaches the same place through the same function, so the two can 
 `Import` — open the modeless `Bundle Import` window on a checklist headed `Include`. Above it, under
 the bundle's name, one line says what the order's `delivery` block publishes — unit system, linear
 unit and delivery CRS, as in `Imperial · US survey feet · EPSG:6543` — read as published and never
-looked up; a bundle built before that block existed shows no line. A second line appears only when
+looked up. The CRS is the block's own `label` where it has one, and its EPSG code on a bundle built
+before the label existed; a bundle built before the block itself existed shows no line. A second line appears only when
 the project displays lengths in the other unit system, and it changes nothing: Project Units are
 yours. Then the checklist: one box for each
 layer the bundle carries (`Terrain`, `Context Buildings`, `Site Model`, `Road Centrelines`,

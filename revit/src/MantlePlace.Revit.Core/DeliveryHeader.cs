@@ -9,10 +9,11 @@ namespace MantlePlace.Revit.Core;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Read verbatim, never looked up.</b> The delivery CRS prints as its EPSG code, because that is
-/// what the format publishes; a CRS name would need a table in this repository, and a table here is a
-/// second authority on something the format owns. The format publishes no display label for the
-/// delivery CRS yet; when it does, the line is to print that label as it comes, still never a lookup.
+/// <b>Read verbatim, never looked up.</b> The delivery CRS prints as <c>delivery.label</c> where the
+/// bundle carries one (MPB 1.3.0), exactly as published. A bundle built before the label existed
+/// prints its EPSG code instead: the format says the same words follow from <c>tier</c> and
+/// <c>horizontal_epsg</c>, but deriving them would need a CRS table in this repository, and a table
+/// here is a second authority on something the format owns.
 /// </para>
 /// <para>
 /// <b>Unknown is shown, not guessed.</b> A unit system or tier this reader does not know is printed as
@@ -31,8 +32,9 @@ public static class DeliveryHeader
     public const string Separator = " · ";
 
     /// <summary>
-    /// The delivery CRS on the <c>local_ft</c> tier, which names none: the files sit in a local frame
-    /// about a georeferenced site origin, and that origin's UTM code is not the files' CRS.
+    /// The delivery CRS on the <c>local_ft</c> tier of a bundle that publishes no label: the files sit
+    /// in a local frame about a georeferenced site origin, and that origin's UTM code is not the files'
+    /// CRS.
     /// </summary>
     public const string LocalGrid = "local grid";
 
@@ -138,6 +140,11 @@ public static class DeliveryHeader
 
     private static string? DeliveryCrs(DeliveryFacts delivery)
     {
+        if (!string.IsNullOrWhiteSpace(delivery.Label))
+        {
+            return delivery.Label;
+        }
+
         if (delivery.HorizontalEpsg is { } epsg)
         {
             return string.Create(CultureInfo.InvariantCulture, $"EPSG:{epsg}");

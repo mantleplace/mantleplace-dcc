@@ -269,6 +269,12 @@ public sealed class DeliveryFacts
 
     public int? HorizontalEpsg { get; init; }
 
+    /// <summary>
+    /// <c>delivery.label</c> (MPB 1.3.0): the display words for the delivery CRS, the same words the
+    /// platform shows a person. Empty on every earlier bundle.
+    /// </summary>
+    public string Label { get; init; } = string.Empty;
+
     /// <summary><c>delivery.local_origin</c> — emitted only on the <c>local_ft</c> tier.</summary>
     public GeoOrigin? LocalOrigin { get; init; }
 

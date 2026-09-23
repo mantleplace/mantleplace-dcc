@@ -51,6 +51,33 @@ internal static class DeliveryHeaderTests
             run.Equal(DeliveryHeader.Describe(delivery), "Imperial · international feet · local grid", "the local_ft line");
         });
 
+        run.Case("a published delivery label is printed verbatim in place of the EPSG code (MPB 1.3.0)", () =>
+        {
+            DeliveryFacts delivery = Read("""
+                {"unit_system": "imperial", "tier": "sp_ftus", "linear_unit": "ftUS", "horizontal_epsg": 6543,
+                 "label": "NAD83(2011) / Colorado Central (ftUS)"}
+                """);
+            run.Equal(
+                DeliveryHeader.Describe(delivery),
+                "Imperial · US survey feet · NAD83(2011) / Colorado Central (ftUS)",
+                "the label, as published");
+        });
+
+        run.Case("on the local grid the published label wins over the host's own words", () =>
+        {
+            DeliveryFacts delivery = Read("""
+                {"unit_system": "imperial", "tier": "local_ft", "linear_unit": "ft", "horizontal_epsg": null,
+                 "label": "Local site grid (ft)"}
+                """);
+            run.Equal(DeliveryHeader.Describe(delivery), "Imperial · international feet · Local site grid (ft)", "the label, as published");
+        });
+
+        run.Case("a blank label is no label, and the EPSG code stands", () =>
+        {
+            DeliveryFacts delivery = Read("""{"unit_system": "metric", "tier": "metric", "linear_unit": "m", "horizontal_epsg": 32613, "label": "  "}""");
+            run.Equal(DeliveryHeader.Describe(delivery), "Metric · metres · EPSG:32613", "the fallback");
+        });
+
         run.Case("a bundle with no delivery block shows no line rather than a guess", () =>
         {
             BundleManifest manifest = BundleManifestReader.Parse("""{"version": "1.0.0", "hosts": {"unreal": {}}}""");
