@@ -110,20 +110,27 @@ internal static class InterruptedPreparesTests
             run.Equal(claim.Record.Count, 1, "one entry left in the record");
         });
 
-        run.Case("the row a claimed order is re-joined from", () =>
+        run.Case("what a claimed order's row in the listing says to do", () =>
         {
             VaultListing listing = new()
             {
                 Bundles =
                 [
-                    new VaultBundle { OrderId = "order-1", Status = BundleStatus.Available },
-                    new VaultBundle { OrderId = "order-2", Status = BundleStatus.Refunded },
+                    new VaultBundle { OrderId = "available", Status = BundleStatus.Available },
+                    new VaultBundle { OrderId = "refunded", Status = BundleStatus.Refunded },
+                    new VaultBundle { OrderId = "failed", Status = BundleStatus.Failed },
+                    new VaultBundle { OrderId = "pending", Status = BundleStatus.RefreshPending },
+                    new VaultBundle { OrderId = "unknown", Status = BundleStatus.Unknown },
                 ],
             };
 
-            run.True(InterruptedPrepares.RowFor(listing, "order-1") is not null, "available: re-joined");
-            run.True(InterruptedPrepares.RowFor(listing, "order-2") is null, "refunded: dropped");
-            run.True(InterruptedPrepares.RowFor(listing, "order-3") is null, "not in this account's vault: dropped");
+            run.Equal(InterruptedPrepares.Decide(listing, "available", out VaultBundle? row), RejoinDecision.Rejoin, "available: re-joined");
+            run.Equal(row?.OrderId, "available", "from its own row");
+            run.Equal(InterruptedPrepares.Decide(listing, "refunded", out _), RejoinDecision.Drop, "refunded: dropped");
+            run.Equal(InterruptedPrepares.Decide(listing, "failed", out _), RejoinDecision.Drop, "failed: dropped");
+            run.Equal(InterruptedPrepares.Decide(listing, "missing", out _), RejoinDecision.Drop, "not in this account's vault: dropped");
+            run.Equal(InterruptedPrepares.Decide(listing, "pending", out _), RejoinDecision.Wait, "a refresh pending is not a refusal: kept");
+            run.Equal(InterruptedPrepares.Decide(listing, "unknown", out _), RejoinDecision.Wait, "a status word this build has not met is not a refusal: kept");
         });
 
         return run.Report("InterruptedPrepares");

@@ -94,7 +94,7 @@ public sealed class InterruptedPrepareStore : IPrepareLedger
     public void Started(string orderId, DateTimeOffset startedAt)
     {
         InterruptedPrepare entry = new(orderId, startedAt, AnnouncedOrders.AccountKey(_email()), _self);
-        Change(record => (InterruptedPrepares.Started(record, entry), true), unreadable: false);
+        Change(record => InterruptedPrepares.Started(record, entry));
     }
 
     /// <inheritdoc/>
@@ -108,7 +108,7 @@ public sealed class InterruptedPrepareStore : IPrepareLedger
 
     /// <summary>Removes this process's entry for <paramref name="orderId"/>: the order is not one to re-join.</summary>
     public void Drop(string orderId)
-        => Change(record => (InterruptedPrepares.Ended(record, orderId, _self), true), unreadable: false);
+        => Change(record => InterruptedPrepares.Ended(record, orderId, _self));
 
     /// <summary>Takes the interrupted Prepares this process may re-join, and drops the stale ones.</summary>
     public IReadOnlyList<InterruptedPrepare> Claim(DateTimeOffset now)
@@ -122,6 +122,9 @@ public sealed class InterruptedPrepareStore : IPrepareLedger
             },
             unreadable: []);
     }
+
+    private void Change(Func<IReadOnlyList<InterruptedPrepare>, IReadOnlyList<InterruptedPrepare>> change)
+        => Change(record => (change(record), true), unreadable: false);
 
     private T Change<T>(Func<IReadOnlyList<InterruptedPrepare>, (IReadOnlyList<InterruptedPrepare> Record, T Result)> change, T unreadable)
     {

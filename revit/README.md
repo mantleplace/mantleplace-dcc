@@ -57,9 +57,11 @@ each account's address, never the address.
 A Prepare still running when Revit closes, or crashes, is not lost. The next Revit to sign in —
 2025, 2026 or 2027 — picks it back up, and tells you how it ended with the same notice, whether the
 bundle finished while Revit was closed or is still building. Nothing is shown when it is picked up,
-and no second build is started (`HPS-24`). A Prepare is picked back up for 7 days after you pressed
-it, only under the account that pressed it, and only by a Revit that is not already watching it; an
-order no longer in your vault, or no longer available, is dropped without a notice. The record is
+and no second build is started (`HPS-24`). It is picked up from the background listing that follows
+the sign-in, so it costs no request of its own and waits while the vault is open (`HPS-55`). A
+Prepare is picked back up for 7 days after you pressed it, only under the account that pressed it,
+and only by a Revit that is not already watching it; an order no longer in your vault, refunded or
+failed is dropped without a notice. The record is
 `%LOCALAPPDATA%\MantlePlace\interrupted-prepares.json`: order ids, when each was pressed, the
 watching process, and the same digest of the address.
 

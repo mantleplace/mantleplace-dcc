@@ -18,6 +18,19 @@ public readonly record struct PrepareOwner(int ProcessId, long StartedUtcTicks);
 /// <param name="Owner">The process watching it.</param>
 public sealed record InterruptedPrepare(string OrderId, DateTimeOffset StartedAt, string? Account, PrepareOwner Owner);
 
+/// <summary>What a re-join does with one claimed entry.</summary>
+public enum RejoinDecision
+{
+    /// <summary>The order is available: hand it to the watcher.</summary>
+    Rejoin,
+
+    /// <summary>The platform would refuse it: strike the entry off, without a notice.</summary>
+    Drop,
+
+    /// <summary>The listing cannot tell yet: keep the entry for the next sign-in.</summary>
+    Wait,
+}
+
 /// <summary>What a claim took, and the record once it has.</summary>
 /// <param name="Record">The record with the claimed entries owned by the claiming process and the stale ones gone.</param>
 /// <param name="Claimed">The entries to re-join, one per order.</param>
@@ -127,20 +140,33 @@ public static class InterruptedPrepares
         return new InterruptedPrepareClaim([.. kept, .. taken], taken);
     }
 
-    /// <summary>
-    /// The row a claimed entry is re-joined from, or <c>null</c> when the order is not one to re-join.
-    /// </summary>
+    /// <summary>What to do with a claimed entry, given this account's vault listing.</summary>
+    /// <param name="listing">The listing.</param>
+    /// <param name="orderId">The claimed entry's order.</param>
+    /// <param name="row">The row to re-join from, when the answer is <see cref="RejoinDecision.Rejoin"/>.</param>
     /// <remarks>
-    /// An order missing from this account's vault, or no longer available in it — refunded, failed —
-    /// is one the platform would refuse. Its entry is dropped without a notice: a refund reaches the
-    /// curator through the platform's own channels.
+    /// <para>
+    /// An order missing from this account's vault, refunded or failed is one the platform would
+    /// refuse: dropped without a notice, since a refund reaches the curator through the platform's own
+    /// channels. An available one is re-joined.
+    /// </para>
+    /// <para>
+    /// Any other status — a refresh pending, or a word this build has not met (<c>HPS-22</c>) — says
+    /// nothing about whether the platform would refuse, so the entry waits for the next sign-in.
+    /// Dropping it would lose the curator's Prepare over a status that was never a refusal.
+    /// </para>
     /// </remarks>
-    public static VaultBundle? RowFor(VaultListing listing, string orderId)
+    public static RejoinDecision Decide(VaultListing listing, string orderId, out VaultBundle? row)
     {
         ArgumentNullException.ThrowIfNull(listing);
 
-        return listing.Bundles.FirstOrDefault(row =>
-            row.IsDownloadable && string.Equals(row.OrderId, orderId, StringComparison.Ordinal));
+        row = listing.Bundles.FirstOrDefault(held => string.Equals(held.OrderId, orderId, StringComparison.Ordinal));
+        return row?.Status switch
+        {
+            null or BundleStatus.Refunded or BundleStatus.Failed => RejoinDecision.Drop,
+            BundleStatus.Available => RejoinDecision.Rejoin,
+            _ => RejoinDecision.Wait,
+        };
     }
 
     private static List<InterruptedPrepare> Without(IReadOnlyList<InterruptedPrepare> record, string orderId, PrepareOwner owner)

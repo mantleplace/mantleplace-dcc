@@ -8,111 +8,101 @@ namespace MantlePlace.Revit.Client;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>When.</b> At every sign-in — the startup restore of a stored session is one — and never while
-/// signed out, and it never asks for a sign-in: an entry waits in the record for the next one, and
-/// for at most <see cref="InterruptedPrepares.MaxAge"/>.
+/// ⛔ <b>It makes no request of its own to find out what is still worth re-joining</b>
+/// (<c>HPS-55</c>). A listing nobody asked for is bounded to one at start, one at each sign-in and
+/// one per interval, never while the vault browser is open — and <see cref="VaultNewsChecker"/>
+/// already makes exactly those. So a sign-in <see cref="Arm"/>s this, and the checker's next listing
+/// that succeeds is the one it re-joins from (<see cref="OnListed"/>). A sign-in with the vault open,
+/// or a listing that fails, leaves it armed for the next listing that happens.
 /// </para>
 /// <para>
-/// <b>What it costs.</b> Nothing unless the record holds an entry this process may take. Then one
-/// listing, which says which of those orders the platform would still build: one missing from this
-/// account's vault, or no longer available in it, is dropped without a notice. Each of the rest is
-/// handed to <see cref="PrepareWatcher.Rejoin"/>, one start request per order and never a second
-/// build (<c>HPS-24</c>).
+/// <b>Once per sign-in.</b> The startup restore of a stored session is one. An entry whose re-join
+/// start fails is kept and tried again at the next sign-in, not at every listing: a start is a
+/// request too, and nobody pressed anything. An entry waits in the record for at most
+/// <see cref="InterruptedPrepares.MaxAge"/>.
 /// </para>
 /// <para>
-/// <b>Silent</b>, like the background listing it shares a seam with: a listing that fails leaves the
-/// entries this process just took in the record, to be tried at the next sign-in. Nothing here shows
-/// the curator anything; a re-joined Prepare is announced by the watcher when it ends.
+/// <b>Silent.</b> Nothing here shows the curator anything; a re-joined Prepare is announced by the
+/// watcher when it ends, one start request per order and never a second build (<c>HPS-24</c>).
 /// </para>
 /// </remarks>
 public sealed class PrepareRejoiner
 {
-    private readonly IVaultNewsSource _source;
     private readonly InterruptedPrepareStore _store;
     private readonly PrepareWatcher _watcher;
     private readonly Func<DateTimeOffset> _now;
-    private readonly SemaphoreSlim _oneAtATime = new(1, 1);
-    private readonly CancellationTokenSource _stop = new();
+    private int _armed;
+    private volatile bool _stopped;
 
-    public PrepareRejoiner(IVaultNewsSource source, InterruptedPrepareStore store, PrepareWatcher watcher)
-        : this(source, store, watcher, () => DateTimeOffset.UtcNow)
+    public PrepareRejoiner(InterruptedPrepareStore store, PrepareWatcher watcher)
+        : this(store, watcher, () => DateTimeOffset.UtcNow)
     {
     }
 
-    public PrepareRejoiner(IVaultNewsSource source, InterruptedPrepareStore store, PrepareWatcher watcher, Func<DateTimeOffset> now)
+    public PrepareRejoiner(InterruptedPrepareStore store, PrepareWatcher watcher, Func<DateTimeOffset> now)
     {
-        _source = source;
         _store = store;
         _watcher = watcher;
         _now = now;
     }
 
-    /// <summary>Re-joins in the background — the session just signed in. Never faults.</summary>
-    public void Wake() => _ = Task.Run(() => RejoinAsync(_stop.Token), CancellationToken.None);
+    /// <summary>
+    /// The session just signed in: re-join from the next listing. Called before the listing is
+    /// woken, so that listing is the one it uses.
+    /// </summary>
+    public void Arm() => Volatile.Write(ref _armed, 1);
 
     /// <summary>Stops re-joining. Called from <c>OnShutdown</c>, before the watcher is interrupted.</summary>
-    public void Stop() => _stop.Cancel();
+    public void Stop() => _stopped = true;
 
     /// <summary>
-    /// Takes the interrupted Prepares this process may re-join and re-joins the ones still worth it.
-    /// Never faults.
+    /// A background listing succeeded. Re-joins from it if a sign-in armed this, and never faults:
+    /// it runs on the listing's thread-pool thread.
     /// </summary>
-    public async Task RejoinAsync(CancellationToken cancellationToken)
+    public void OnListed(VaultListing listing)
     {
-        if (!_source.SignedIn)
+        if (_stopped || Interlocked.Exchange(ref _armed, 0) == 0)
         {
             return;
         }
 
         try
         {
-            await _oneAtATime.WaitAsync(cancellationToken).ConfigureAwait(false);
+            Rejoin(listing);
         }
-        catch (OperationCanceledException)
+#pragma warning disable CA1031 // Nobody pressed anything, so a failure here is nobody's news.
+        catch (Exception)
+#pragma warning restore CA1031
         {
-            return;
         }
+    }
 
-        try
+    /// <summary>
+    /// Takes the interrupted Prepares this process may re-join and, against <paramref name="listing"/>,
+    /// re-joins the ones the platform would still build.
+    /// </summary>
+    public void Rejoin(VaultListing listing)
+    {
+        ArgumentNullException.ThrowIfNull(listing);
+
+        // An order this process is already watching is its own Prepare, not an interrupted one: the
+        // record holds it because it is running.
+        foreach (InterruptedPrepare entry in _store.Claim(_now()).Where(entry => _watcher.Watching(entry.OrderId) is null))
         {
-            // An order this process is already watching is its own Prepare, not an interrupted one:
-            // the record holds it because it is running.
-            List<InterruptedPrepare> claimed =
-                [.. _store.Claim(_now()).Where(entry => _watcher.Watching(entry.OrderId) is null)];
-            if (claimed.Count == 0)
+            if (_stopped)
             {
                 return;
             }
 
-            (VaultListing? listing, string? error) = await _source.ListAsync(cancellationToken).ConfigureAwait(false);
-            if (error is not null || listing is null || cancellationToken.IsCancellationRequested)
+            RejoinDecision decision = InterruptedPrepares.Decide(listing, entry.OrderId, out VaultBundle? row);
+            if (decision == RejoinDecision.Rejoin)
             {
-                return;
+                _watcher.Rejoin(row!, entry.StartedAt);
             }
-
-            foreach (InterruptedPrepare entry in claimed)
+            else if (decision == RejoinDecision.Drop)
             {
-                if (InterruptedPrepares.RowFor(listing, entry.OrderId) is { } row)
-                {
-                    _watcher.Rejoin(row, entry.StartedAt);
-                }
-                else
-                {
-                    _store.Drop(entry.OrderId);
-                }
+                _store.Drop(entry.OrderId);
             }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // Deliberately total: nobody pressed anything, so a failure here is nobody's news.
-        }
-        catch (OperationCanceledException)
-        {
-            // Stopped: Revit is shutting down, and the entries stay for the next one.
-        }
-        finally
-        {
-            _oneAtATime.Release();
         }
     }
 }

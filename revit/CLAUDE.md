@@ -56,7 +56,7 @@ The ones this tree already turns on:
 | `HPS-04` … `13`       | PKCE `S256` in the system browser, loopback on the literal `127.0.0.1`, five-state machine driven from the corpus table.                                      |
 | `HPS-14` … `17`       | refresh token via DPAPI, per-OS-user; access token memory-only; no store means memory-only auth, never a less-safe file.                                      |
 | `HPS-18` … `25`, `48` | list → materialize → poll → **re-list** → presign → download; explicit token list, never a scope keyword; one error-body precedence for auth and vault alike. |
-| `HPS-55`              | the background listing is `VaultNewsChecker`, its interval and floor `VaultNewsCadence`, and which auth transition is a sign-in `SignInEdge` — a startup restore is one, a token renewal is not. Which orders are news is `VaultNews`, over the one per-machine record `AnnouncedOrderStore` shares between every Revit on the machine. |
+| `HPS-55`              | the background listing is `VaultNewsChecker`, its interval and floor `VaultNewsCadence`, and which auth transition is a sign-in `SignInEdge` — a startup restore is one, a token renewal is not. Which orders are news is `VaultNews`, over the one per-machine record `AnnouncedOrderStore` shares between every Revit on the machine. It is the **only** background listing: `PrepareRejoiner` re-joins interrupted Prepares from the checker's first listing after a sign-in (`VaultNewsChecker.Listed`) and never lists for itself. |
 | `HPS-26` … `30`, `44` | write to `.part`, verify, rename; null sha is unknown not absent; eviction only on request.                                                                   |
 | `HPS-45`              | `projection` IS claimed, for one thing only: the lon/lat `vector` layers of a bundle whose block carries no `hosts.revit.vectors`. Nothing else here projects, and the projection reaches a UTM origin only — on a State Plane origin there is no projection to perform and the layer is skipped. |
 | `HPS-51`              | signing in and out, the vault, the local import, the import window with its checklist, its unavailable list (`WindowLabels.UnavailableReason`, decided per `SkipReasonCode`) and its unit-system line (`DeliveryHeader`), and the about surface take the standard's words. The casing is this host's; the words are not. |
@@ -342,7 +342,7 @@ follow.
   Re-joining an **interrupted Prepare** went further. The watcher writes each Prepare to
   `InterruptedPrepareStore` as it starts and strikes it off as it ends, unless Revit ended it
   (`PrepareEnding.Interrupted`), and `PrepareRejoiner` picks up what a closed or crashed Revit left,
-  at each sign-in. On 2026-09-23 the harness described under the tree family below killed a Revit
+  from the background checker's first listing after each sign-in. On 2026-09-23 the harness described under the tree family below killed a Revit
   2025, and then a 2027, while its watcher held a Prepare, and a fresh Revit of the same version
   re-joined it through the real record, liveness check, notifier and popup, on scripted steps and a
   scripted vault. It measured:
@@ -355,8 +355,8 @@ follow.
     window, focus and foreground were unchanged.
   - Both entries were struck off once the Prepares ended.
 
-  What it did not run is the add-in's own wiring: the startup restore's sign-in waking
-  `PrepareRejoiner.Wake`, and `OnShutdown` calling `InterruptAll`. Those are compiled and
+  What it did not run is the add-in's own wiring: the startup restore's sign-in arming
+  `PrepareRejoiner`, the checker's listing reaching it, and `OnShutdown` calling `InterruptAll`. Those are compiled and
   unexecuted, because the harness never signs in. Which entries a process may take is
   `InterruptedPrepares`, headless. Both records share one exclusive-open helper, `MachineRecordFile`.
 - **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
