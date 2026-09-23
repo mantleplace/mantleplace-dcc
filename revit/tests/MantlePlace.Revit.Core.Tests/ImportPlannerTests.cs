@@ -1031,6 +1031,30 @@ internal static class ImportPlannerTests
                 "a bundle stating neither is metric, which every pre-delivery bundle was");
         });
 
+        run.Case("on a local grid the plan is metres and ground_z is feet, and each is read as stated", () =>
+        {
+            // local_ft: no projected foot zone exists, so x and y are metric UTM, beside the metric
+            // origin they are subtracted from, while ground_z is international feet (spec/format.md
+            // §6.6). The one tier where the two units differ.
+            BundleImportPlan plan = PlanFor(
+                $$"""
+                {
+                  "version": "1.3.0",
+                  "layout": { "tree_points": "Landcover/TreePoints.csv" },
+                  {{MetricGeoreference}},
+                  "delivery": { "unit_system": "imperial", "tier": "local_ft", "linear_unit": "ft" },
+                  "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv", "crs": "EPSG:32613",
+                                                  "units": "ft", "horizontal_units": "m" } }
+                }
+                """,
+                FootTreeBundle);
+
+            run.True(HasStep(plan, ImportStepKind.Vegetation), "metre coordinates beside a metre origin are placed");
+            run.True(
+                FindStep(plan, ImportStepKind.Vegetation)?.Units == LinearUnit.InternationalFoot,
+                "and ground_z is read as the feet it is stated in");
+        });
+
         run.Case("a tree file whose units this host cannot use is refused, not scaled by a guess", () =>
         {
             BundleImportPlan unknownGround = PlanFor(

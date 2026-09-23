@@ -1089,9 +1089,9 @@ public static class BundleImportPlanner
         return plan == origin
             ? null
             : (SkipReasonCode.CoordinateSystemNotSupported,
-                $"The {label} are in \"{stated}\", but this bundle's origin is in "
+                $"The {label} are in \"{stated}\", but this project's origin is in "
                 + $"\"{LinearUnits.ToManifestToken(origin)}\". A file that disagrees with the origin it is "
-                + "placed against is not in this bundle's frame, so they were left out.");
+                + "placed against is not in this host's frame, so they were left out.");
     }
 
     /// <summary>
