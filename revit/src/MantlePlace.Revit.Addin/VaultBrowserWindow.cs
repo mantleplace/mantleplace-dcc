@@ -17,10 +17,11 @@ namespace MantlePlace.Revit.Addin;
 /// message loop for all of it. The curator keeps working; the window updates when the job does.
 /// </para>
 /// <para>
-/// <b>Closing this window is not cancelling.</b> Only the Cancel button cancels. Closing detaches
-/// the view: the ETL job keeps running server-side, and reopening the browser rejoins it through
-/// <c>HPS-24</c>'s single-flight response rather than queueing a second job. A window's close box is
-/// "I am done looking", not "throw away the thing I paid for".
+/// <b>Closing this window is not cancelling.</b> Only the Cancel button cancels. A Prepare belongs to
+/// the session's <see cref="PrepareWatcher"/>, not to this window: closed, the Prepare runs on and the
+/// curator is told when it ends (<see cref="PrepareNotifier"/>); reopened, the window shows it still
+/// running, and pressing Prepare again follows it rather than polling the order twice. A window's
+/// close box is "I am done looking", not "throw away the thing I paid for".
 /// </para>
 /// <para>
 /// Built in code rather than XAML: it is a header, a search field, one list and five buttons, and a
@@ -33,6 +34,7 @@ internal sealed class VaultBrowserWindow : Window
     private readonly AuthSession _session;
     private readonly VaultClient _vault;
     private readonly BundleCache _cache;
+    private readonly PrepareWatcher _watcher;
     private readonly ExternalEvent _importEvent;
     private readonly BundleImportEventHandler _importHandler;
 
@@ -62,6 +64,9 @@ internal sealed class VaultBrowserWindow : Window
     private int _skippedRows;
     private CancellationTokenSource? _work;
 
+    /// <summary>A row to select once the list has loaded — the bundle a notice was clicked for.</summary>
+    private string? _selectOnLoad;
+
     /// <summary>
     /// One list row. It exists so a row can be found and rewritten after a download, a removal or an
     /// import — the ListBox held bare strings, so the only way to update one was to rebuild all of
@@ -83,13 +88,17 @@ internal sealed class VaultBrowserWindow : Window
         AuthSession session,
         VaultClient vault,
         BundleCache cache,
+        PrepareWatcher watcher,
         ExternalEvent importEvent,
         BundleImportEventHandler importHandler,
-        IntPtr revitWindow)
+        IntPtr revitWindow,
+        string? selectOrderId)
     {
         _session = session;
         _vault = vault;
         _cache = cache;
+        _watcher = watcher;
+        _selectOnLoad = selectOrderId;
         _importEvent = importEvent;
         _importHandler = importHandler;
 
@@ -108,16 +117,71 @@ internal sealed class VaultBrowserWindow : Window
         Content = BuildLayout();
 
         _refresh.Click += (_, _) => _ = RefreshAsync();
-        _prepare.Click += (_, _) => _ = PrepareAsync();
+        _prepare.Click += (_, _) => Prepare();
         _import.Click += (_, _) => _ = ImportAsync();
         _remove.Click += (_, _) => RemoveSelected();
-        _cancel.Click += (_, _) => _work?.Cancel();
+        _cancel.Click += (_, _) => CancelWork();
         _search.TextChanged += (_, _) => OnSearchChanged();
 
         _importHandler.Completed += OnImportCompleted;
-        Closed += (_, _) => _importHandler.Completed -= OnImportCompleted;
 
-        Loaded += (_, _) => _ = RefreshAsync();
+        // ⛔ Both raised on a thread-pool thread (PrepareWatcher's remarks). Every handler hops.
+        _watcher.Said += OnPrepareSaid;
+        _watcher.Ended += OnPrepareEnded;
+
+        Closed += (_, _) =>
+        {
+            _importHandler.Completed -= OnImportCompleted;
+            _watcher.Said -= OnPrepareSaid;
+            _watcher.Ended -= OnPrepareEnded;
+        };
+
+        Loaded += (_, _) => _ = LoadAsync();
+    }
+
+    /// <summary>Selects <paramref name="orderId"/>'s row, now or once the list has loaded.</summary>
+    /// <remarks>
+    /// A row the search is hiding is let back in by clearing the search: the curator clicked a notice
+    /// for that bundle, and selecting a row they cannot see would be selecting nothing.
+    /// </remarks>
+    internal void Select(string orderId)
+    {
+        VaultRow? row = _rows.Find(held => string.Equals(held.Bundle.OrderId, orderId, StringComparison.Ordinal));
+        if (row is null)
+        {
+            _selectOnLoad = orderId;
+            return;
+        }
+
+        if (!_list.Items.Contains(row))
+        {
+            _search.Text = string.Empty;
+        }
+
+        _list.SelectedItem = row;
+        _list.ScrollIntoView(row);
+    }
+
+    /// <summary>
+    /// The first list, then whatever a Prepare still running has to say — a window reopened onto a
+    /// Prepare shows it, rather than a bundle count that reads as if nothing were happening.
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        await RefreshAsync().ConfigureAwait(true);
+
+        if (_selectOnLoad is { } orderId)
+        {
+            _selectOnLoad = null;
+            Select(orderId);
+        }
+
+        if (_watcher.Runs is { Count: > 0 } running)
+        {
+            Report(running[^1].LastMessage);
+        }
+
+        UpdateCancel();
     }
 
     private UIElement BuildLayout()
@@ -199,14 +263,15 @@ internal sealed class VaultBrowserWindow : Window
     }
 
     /// <summary>
-    /// Materialize → poll → <b>re-list</b> → download.
+    /// Materialize → poll → <b>re-list</b> → download, handed to the session's watcher.
     /// </summary>
     /// <remarks>
-    /// The re-list is not optional (<c>HPS-18</c>): it is where the integrity facts for the
-    /// freshly built bundle come from. Downloading against the pre-materialize row would mean
-    /// checking the new zip against a size and digest nobody had yet.
+    /// The watcher owns it from here (<see cref="PrepareWatcher"/>), so it outlives this window. A
+    /// Prepare on an order already being watched follows that one: pressing it again after a reopen
+    /// is how a curator asks "where is it?", and answering with a second poll loop spends the rate
+    /// budget twice on one order.
     /// </remarks>
-    private async Task PrepareAsync()
+    private void Prepare()
     {
         if (Selected is not { } bundle)
         {
@@ -214,152 +279,63 @@ internal sealed class VaultBrowserWindow : Window
             return;
         }
 
-        if (!await BeginAsync($"Preparing {bundle.AoiLabel}…").ConfigureAwait(true))
+        if (!SignedIn())
         {
             return;
         }
 
-        try
+        PrepareRun run = _watcher.Prepare(bundle, out bool joined);
+        if (joined)
         {
-            CancellationToken token = _work!.Token;
-
-            VaultResult<MaterializeStart> start = await _vault
-                .StartMaterializeAsync(bundle.OrderId, MaterializeJobs.HostScope, token)
-                .ConfigureAwait(true);
-
-            if (!start.Succeeded)
-            {
-                Report(start.Error!);
-                return;
-            }
-
-            MaterializeStart begun = start.Value!.Value;
-
-            // ⛔ Nothing to build means there is NO JOB, so there is nothing to poll. Polling anyway
-            // would sit on "waiting for the platform to pick this up" for the whole budget and end in
-            // a timeout, for a bundle that was ready before the request was made. This is also the
-            // ONLY route from the vault to an import for an already-complete bundle: Import refuses
-            // unless the cache holds the zip, and nothing but this method fills the cache.
-            if (begun.Outcome == MaterializeStartOutcome.NothingToDo)
-            {
-                Report(DescribeNothingToDo(begun));
-                await DownloadPreparedAsync(bundle, token).ConfigureAwait(true);
-                return;
-            }
-
-            switch (begun.Outcome)
-            {
-                case MaterializeStartOutcome.Joined:
-                    Report("This bundle was already being prepared — following that job rather than starting a second.");
-                    break;
-
-                case MaterializeStartOutcome.Queued:
-                    Report("Your order is still being built. Your Revit deliverables are queued and "
-                        + "start on their own as soon as it finishes.");
-                    break;
-
-                default:
-                    Report("Preparing your Revit deliverables…");
-                    break;
-            }
-
-            IReadOnlyList<string> requested = MaterializeJobs.RequestedForPolling(begun);
-
-            Progress<MaterializeStatus> progress = new(status => Report(Describe(status, bundle)));
-            VaultResult<MaterializeStatus> finished = await _vault
-                .PollToCompletionAsync(bundle.OrderId, requested, progress, token)
-                .ConfigureAwait(true);
-
-            if (!finished.Succeeded)
-            {
-                Report(finished.Error!);
-                return;
-            }
-
-            // A deliverable the platform will never produce for this area is a GAP, not a failure.
-            // Say so and carry on: waiting for one is waiting forever.
-            if (finished.Value!.Value.Unproducible is { Count: > 0 } gaps)
-            {
-                Report(DescribeGaps(gaps));
-            }
-
-            await DownloadPreparedAsync(bundle, token).ConfigureAwait(true);
+            Report(PrepareMessages.AlreadyPreparing(run.Label));
         }
-        catch (OperationCanceledException)
-        {
-            Report("Cancelled. Nothing was left half-downloaded.");
-        }
-        finally
-        {
-            EndWork();
-        }
+
+        UpdateRow(bundle, QuickEntry(bundle));
+        UpdateCancel();
     }
 
     /// <summary>
-    /// Re-list, then download (<c>HPS-18</c>).
+    /// Cancels the refresh in flight, and the Prepare of the selected row — or, with no row selected,
+    /// the one Prepare there is when there is exactly one.
     /// </summary>
     /// <remarks>
-    /// Shared by the polled path and the nothing-to-build path so there is one copy of the re-list.
-    /// It is not optional on either: it is where the integrity facts for the bundle as it stands
-    /// come from, and checking a download against a pre-materialize size and digest is checking it
-    /// against numbers that describe a different file.
+    /// Never a guess among several: cancelling a bundle the curator is not looking at throws away a
+    /// wait they chose. With two running and none selected, Cancel stops only the refresh.
     /// </remarks>
-    private async Task DownloadPreparedAsync(VaultBundle bundle, CancellationToken token)
+    private void CancelWork()
     {
-        Report("Fetching the integrity details…");
-        (VaultListing? relisted, string? listError) = await _vault.ListAsync(token).ConfigureAwait(true);
-        if (listError is not null)
+        _work?.Cancel();
+
+        PrepareRun? run = Selected is { } bundle
+            ? _watcher.Watching(bundle.OrderId)
+            : _watcher.Runs is { Count: 1 } running ? running[0] : null;
+        run?.Cancel();
+    }
+
+    private void OnPrepareSaid(object? sender, PrepareRun run) => OnUiThread(() => Report(run.LastMessage));
+
+    /// <summary>
+    /// A Prepare ended while this window was open. The window is the notice
+    /// (<see cref="PrepareNotices"/>), so the row and the status line say it.
+    /// </summary>
+    private void OnPrepareEnded(object? sender, PrepareRun run) => OnUiThread(() =>
+    {
+        // The row is rewritten from the re-listed bundle, so it stops saying "Not downloaded." about
+        // a bundle that is sitting on disk — and stops saying it is being prepared.
+        UpdateRow(run.Bundle, QuickEntry(run.Bundle));
+        Report(run.LastMessage);
+        UpdateCancel();
+    });
+
+    private void OnUiThread(Action action)
+    {
+        if (Dispatcher.CheckAccess())
         {
-            Report(listError);
+            action();
             return;
         }
 
-        VaultBundle refreshed = relisted!.Bundles
-            .FirstOrDefault(row => string.Equals(row.OrderId, bundle.OrderId, StringComparison.Ordinal))
-            ?? bundle;
-
-        Report("Downloading…");
-        string? downloadError = await _vault.DownloadAsync(refreshed, _cache, token).ConfigureAwait(true);
-
-        // The row is rewritten from the same verdict the status line reports, so the list stops
-        // saying "Not downloaded." about a bundle that is sitting on disk. It used to keep saying
-        // that until the curator clicked Refresh — the download had worked, and only the row was
-        // stale.
-        CacheEntry entry = _cache.InspectQuick(
-            refreshed.OrderId, refreshed.SizeBytes, refreshed.Sha256, refreshed.ManifestVersion);
-        UpdateRow(refreshed, entry);
-
-        Report(downloadError ?? entry.Describe());
-    }
-
-    /// <summary>
-    /// What to say when the platform had nothing to build.
-    /// </summary>
-    /// <remarks>
-    /// The response names what IS delivered and gives no reasons for the rest, so this states the
-    /// shortfall without inventing a cause for it. The per-artifact reason arrives at import time
-    /// from <c>hosts.revit.readiness</c>, which is the field that actually knows.
-    /// </remarks>
-    private static string DescribeNothingToDo(MaterializeStart start)
-    {
-        HashSet<string> delivered = new(start.Tokens, StringComparer.Ordinal);
-        int absent = MaterializeJobs.RevitTokens.Count(token => !delivered.Contains(token));
-
-        return absent == 0
-            ? "Everything Revit needs is already built. Fetching it…"
-            : $"Everything available for this area is already built. {absent} of the Revit "
-                + "deliverables aren't in this bundle; the import will say why. Fetching it…";
-    }
-
-    /// <summary>The platform's own reason for each deliverable it will never produce here.</summary>
-    private static string DescribeGaps(IReadOnlyList<MissingDeliverable> gaps)
-    {
-        IEnumerable<string> clauses = gaps.Select(gap =>
-            ReadinessReasons.ClauseFor(gap.Reason) is { } clause
-                ? $"{gap.Token} ({clause})"
-                : gap.Token);
-
-        return $"Not available for this area: {string.Join("; ", clauses)}.";
+        _ = Dispatcher.BeginInvoke(action);
     }
 
     private async Task ImportAsync()
@@ -419,7 +395,7 @@ internal sealed class VaultBrowserWindow : Window
 
         // The count only while nothing is in flight: a download's progress is the line the curator
         // is waiting on, and typing must not overwrite it.
-        if (_work is null)
+        if (_work is null && _watcher.Runs.Count == 0)
         {
             ReportCount();
         }
@@ -457,12 +433,8 @@ internal sealed class VaultBrowserWindow : Window
             return false;
         }
 
-        if (_session.State != AuthState.Authenticated)
+        if (!SignedIn())
         {
-            // The path is the ribbon's own words. It was "Account ▸ Sign in" against a button that
-            // no longer exists under that name, and a status line that names a control the curator
-            // cannot find is worse than one that says nothing.
-            Report($"Sign in first: Mantle Place ▸ Account ▸ {AccountRibbon.SignInFace}.");
             return false;
         }
 
@@ -472,17 +444,34 @@ internal sealed class VaultBrowserWindow : Window
         // a long poll cross the expiry boundary mid-flight; and this is the Addin, the one layer CI
         // never builds, which is the last place the most important auth decision should live.
         _work = new CancellationTokenSource();
-        _cancel.IsEnabled = true;
+        UpdateCancel();
         Report(message);
         return true;
+    }
+
+    private bool SignedIn()
+    {
+        if (_session.State == AuthState.Authenticated)
+        {
+            return true;
+        }
+
+        // The path is the ribbon's own words. It was "Account ▸ Sign in" against a button that no
+        // longer exists under that name, and a status line that names a control the curator cannot
+        // find is worse than one that says nothing.
+        Report($"Sign in first: Mantle Place ▸ Account ▸ {AccountRibbon.SignInFace}.");
+        return false;
     }
 
     private void EndWork()
     {
         _work?.Dispose();
         _work = null;
-        _cancel.IsEnabled = false;
+        UpdateCancel();
     }
+
+    /// <summary>Cancel is live while there is anything to cancel: a refresh, or any Prepare.</summary>
+    private void UpdateCancel() => _cancel.IsEnabled = _work is not null || _watcher.Runs.Count > 0;
 
     private void Report(string message) => _status.Text = message;
 
@@ -528,26 +517,16 @@ internal sealed class VaultBrowserWindow : Window
         }
     }
 
-    private string Describe(VaultBundle bundle)
-        => Describe(
-            bundle,
-            _cache.InspectQuick(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion));
+    private CacheEntry QuickEntry(VaultBundle bundle)
+        => _cache.InspectQuick(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion);
 
-    private static string Describe(VaultBundle bundle, CacheEntry entry)
-        => VaultRows.Describe(bundle, entry.Describe());
+    private string Describe(VaultBundle bundle) => Describe(bundle, QuickEntry(bundle));
 
-    private static string Describe(MaterializeStatus status, VaultBundle bundle)
+    private string Describe(VaultBundle bundle, CacheEntry entry)
     {
-        // Indeterminate is NOT zero. A progress bar sitting at 0% and a spinner say different
-        // things to a curator deciding whether to wait.
-        string progress = status.Fraction < 0
-            ? "working"
-            : (status.Fraction * 100).ToString("0", CultureInfo.InvariantCulture) + "%";
+        string row = VaultRows.Describe(bundle, entry.Describe());
 
-        // The platform's own sentence when it gave one — "Building 3 deliverable(s)…" beats the bare
-        // state name, and on Unknown it is the difference between a spinner and an explanation.
-        return status.Message.Length > 0
-            ? $"Preparing {bundle.AoiLabel}: {status.Message} ({progress})."
-            : $"Preparing {bundle.AoiLabel}: {status.State} ({progress}).";
+        // A row being prepared says so, so a window reopened onto a Prepare shows which one.
+        return _watcher.Watching(bundle.OrderId) is null ? row : $"{row} — {PrepareMessages.RowPreparing}";
     }
 }

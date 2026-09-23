@@ -22,6 +22,11 @@ The Mantle Place plugin for one DCC host. Each is written natively for its host 
 same behaviour; they share no code, only a contract and a conformance corpus.
 _Avoid_: client, connector, adapter
 
+**Curator**:
+The person working in a DCC host who brings bundles into their project through a host plugin. Not
+necessarily the customer who placed the order.
+_Avoid_: user
+
 ### Brand and marks
 
 **Mark**:
@@ -126,6 +131,11 @@ _Avoid_: library, catalogue, cloud
 The in-host surface that lists the vault and starts an import. The only surface that requires an auth
 session.
 _Avoid_: panel, browser, window
+
+**Prepare**:
+Asking the platform to build an order's bundle for this host, and fetching the bundle once it is
+built. The platform's API calls the same request a materialize.
+_Avoid_: materialize, build
 
 **Bundle**:
 A published unit of real-world site data a host plugin imports. What one is, and what it contains, is
