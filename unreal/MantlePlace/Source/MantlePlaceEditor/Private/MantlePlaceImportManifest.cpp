@@ -407,6 +407,7 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		M.Delivery.bDeclared = true;
 		M.Delivery.UnitSystem = GetString(*DeliveryPtr, TEXT("unit_system"));
 		M.Delivery.LinearUnit = GetString(*DeliveryPtr, TEXT("linear_unit"));
+		M.Delivery.Label = GetString(*DeliveryPtr, TEXT("label"));
 		double HorizontalEpsg = 0.0;
 		// A JSON null reads as no number, which is what the `local_ft` tier means by it.
 		M.Delivery.bHasHorizontalEpsg = (*DeliveryPtr)->TryGetNumberField(TEXT("horizontal_epsg"), HorizontalEpsg);

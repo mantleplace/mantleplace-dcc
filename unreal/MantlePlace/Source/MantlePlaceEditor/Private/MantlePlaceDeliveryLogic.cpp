@@ -43,8 +43,10 @@ TArray<FString> FMantlePlaceDeliveryLogic::DescribeDelivery(const FMantlePlaceDe
 		return Lines;
 	}
 
-	const FString Crs = Delivery.bHasHorizontalEpsg
-		? FString::Printf(TEXT("EPSG:%d"), Delivery.HorizontalEpsg)
+	// The published label wins; before 1.3.0 there is none, and the code stands in for it rather
+	// than a name looked up here.
+	const FString Crs = !Delivery.Label.IsEmpty() ? Delivery.Label
+		: Delivery.bHasHorizontalEpsg ? FString::Printf(TEXT("EPSG:%d"), Delivery.HorizontalEpsg)
 		: FString(TEXT("no delivery CRS"));
 	Lines.Add(FString::Printf(TEXT("Bundle delivery: %s · %s · %s"),
 		*InStandardWords(Delivery.UnitSystem, UnitSystemWords, UE_ARRAY_COUNT(UnitSystemWords)),

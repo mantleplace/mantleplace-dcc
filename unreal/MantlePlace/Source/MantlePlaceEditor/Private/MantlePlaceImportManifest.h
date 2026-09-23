@@ -67,8 +67,10 @@ struct FMantlePlaceLandscapeLayer
  * rather than enums, and why an unknown one is not a refusal: nothing here acts on them, so there is
  * nothing to fail closed (HPS-35) -- a value this host has no word for is shown as published.
  *
- * The format publishes no display label for the delivery CRS, so there is no field for one; the line
- * prints the EPSG code, and this plugin looks up no CRS names.
+ * The CRS is named by `delivery.label` where the manifest carries one (MPB 1.3.0 onwards), verbatim.
+ * An earlier bundle has none, and the line prints the EPSG code instead: the schema says the same words
+ * follow from `tier` and `horizontal_epsg`, but reaching them is a CRS-name lookup, and this plugin
+ * keeps no table of CRS names.
  */
 struct FMantlePlaceDeliveryFacts
 {
@@ -79,6 +81,8 @@ struct FMantlePlaceDeliveryFacts
 	bool bHasHorizontalEpsg = false; // false when delivery.horizontal_epsg is absent or null -- null is
 	                                  // what the `local_ft` tier publishes, whose files have no named CRS
 	int32 HorizontalEpsg = 0;        // delivery.horizontal_epsg, e.g. 6543
+	FString Label;                   // delivery.label verbatim, e.g. "WGS 84 / UTM zone 13N"; empty on
+	                                  // bundles built before 1.3.0 published it
 };
 
 /**

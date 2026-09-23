@@ -111,6 +111,28 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
+	// --- From 1.3.0 the CRS is the published label, verbatim, over the code beside it ---
+	{
+		FMantlePlaceDeliveryFacts Facts = Declared(TEXT("imperial"), TEXT("ftUS"), 6543);
+		Facts.Label = TEXT("NAD83(2011) / Colorado Central (ftUS)");
+		const TArray<FString> Lines = FMantlePlaceDeliveryLogic::DescribeDelivery(Facts);
+		TestEqual(TEXT("label: two lines"), Lines.Num(), 2);
+		if (Lines.Num() == 2)
+		{
+			TestEqual(TEXT("label: printed verbatim"), Lines[0], FString(TEXT("Bundle delivery: Imperial · US survey feet · NAD83(2011) / Colorado Central (ftUS)")));
+		}
+
+		// The `local_ft` tier's label is a fixed phrase, and it names the grid the code cannot.
+		FMantlePlaceDeliveryFacts Local = Declared(TEXT("imperial"), TEXT("ft"), 0);
+		Local.Label = TEXT("Local grid (feet)");
+		const TArray<FString> LocalLines = FMantlePlaceDeliveryLogic::DescribeDelivery(Local);
+		TestEqual(TEXT("local label: two lines"), LocalLines.Num(), 2);
+		if (LocalLines.Num() == 2)
+		{
+			TestEqual(TEXT("local label: printed verbatim"), LocalLines[0], FString(TEXT("Bundle delivery: Imperial · international feet · Local grid (feet)")));
+		}
+	}
+
 	// --- A bundle built before the block existed says nothing, rather than guessing metric ---
 	{
 		TestEqual(TEXT("no delivery block: no lines"), FMantlePlaceDeliveryLogic::DescribeDelivery(FMantlePlaceDeliveryFacts()).Num(), 0);
@@ -156,6 +178,11 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("parse: has a CRS"), Imperial.Delivery.bHasHorizontalEpsg);
 		TestEqual(TEXT("parse: the CRS"), Imperial.Delivery.HorizontalEpsg, 6543);
 		TestEqual(TEXT("parse: the georeference is still this block's own"), Imperial.Epsg, 32613);
+		TestEqual(TEXT("parse: no label before 1.3.0"), Imperial.Delivery.Label, FString());
+
+		const FMantlePlaceVaultManifest Labelled = ParseReferenceWith(*this,
+		    TEXT("{\"unit_system\":\"metric\",\"tier\":\"metric\",\"linear_unit\":\"m\",\"horizontal_epsg\":32613,\"label\":\"WGS 84 / UTM zone 13N\"}"));
+		TestEqual(TEXT("parse: the label verbatim"), Labelled.Delivery.Label, FString(TEXT("WGS 84 / UTM zone 13N")));
 
 		const FMantlePlaceVaultManifest Local = ParseReferenceWith(*this,
 		    TEXT("{\"unit_system\":\"imperial\",\"tier\":\"local_ft\",\"linear_unit\":\"ft\",\"horizontal_epsg\":null}"));

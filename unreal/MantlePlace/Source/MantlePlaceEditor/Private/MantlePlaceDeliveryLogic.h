@@ -23,7 +23,8 @@ struct FMantlePlaceDeliveryLogic
 	 * The lines to show, in order:
 	 *   - none, when the manifest carried no `delivery` block -- a bundle from before the block
 	 *     existed, which is not assumed to be metric;
-	 *   - "Bundle delivery: <unit system> · <linear unit> · <delivery CRS>", whenever it did;
+	 *   - "Bundle delivery: <unit system> · <linear unit> · <delivery CRS>", whenever it did, the CRS
+	 *     being `delivery.label` verbatim where the bundle publishes one and the EPSG code otherwise;
 	 *   - the fixed-frame line, only when the linear unit is a foot (`ftUS`, `ft`). It is keyed on the
 	 *     files' unit rather than the unit system, which is the customer's choice and does not by itself
 	 *     say what a file is in; a unit this host has no word for is shown as published and earns no
