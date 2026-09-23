@@ -49,6 +49,20 @@ public sealed record TreePointsParse
     public int EmptyFoliageCells { get; init; }
 
     /// <summary>
+    /// Rows left out because their <c>ground_z</c> cell was empty: an ordinary DEM gap. A tree with no
+    /// ground elevation belongs nowhere rather than at zero (<c>HPS-20</c>), so it is dropped — and
+    /// counted, so a half-blank column is not reported as a whole layer.
+    /// </summary>
+    public int RowsWithoutGround { get; init; }
+
+    /// <summary>
+    /// Rows left out for any other reason: a geometry cell that is missing or not a number, or a
+    /// position the frame cannot place. Unlike <see cref="RowsWithoutGround"/> this is the file
+    /// drifting from its contract. A row that is both counts here only.
+    /// </summary>
+    public int UnreadableRows { get; init; }
+
+    /// <summary>
     /// What the log says once about the file as a whole — never once per row.
     /// </summary>
     public IReadOnlyList<string> Notes { get; init; } = [];
@@ -99,7 +113,9 @@ public static class TreePointsReader
     /// the read. The difference is what a bad row costs: a hole in the terrain is invisible and
     /// wrong, one missing tree out of forty-four is neither. The ETL leaves <c>ground_z</c> empty
     /// where the DEM had no data, and that row is dropped rather than placed at elevation zero —
-    /// unknown is not zero (<c>HPS-20</c>), and zero here is two kilometres below the site.
+    /// unknown is not zero (<c>HPS-20</c>), and zero here is two kilometres below the site. Every
+    /// dropped row is counted, as <see cref="TreePointsParse.RowsWithoutGround"/> or
+    /// <see cref="TreePointsParse.UnreadableRows"/>, so the drop is never silent.
     /// </remarks>
     /// <param name="foliageVocabulary">
     /// <c>landcover.tree_points.foliage_type_vocabulary</c> as published, or <c>null</c> where the
@@ -131,6 +147,8 @@ public static class TreePointsReader
         bool readFoliage = false;
         int unknownValues = 0;
         int emptyCells = 0;
+        int withoutGround = 0;
+        int unreadable = 0;
 
         foreach (string rawLine in lines)
         {
@@ -159,9 +177,15 @@ public static class TreePointsReader
                 continue;
             }
 
-            if (!TryReadRow(fields, columns, frame, groundUnit, out SiteTreePoint point))
+            RowReading row = ReadRow(fields, columns, frame, groundUnit, out SiteTreePoint point);
+            switch (row)
             {
-                continue;
+                case RowReading.NoGround:
+                    withoutGround++;
+                    continue;
+                case RowReading.Unreadable:
+                    unreadable++;
+                    continue;
             }
 
             if (readFoliage)
@@ -182,6 +206,8 @@ public static class TreePointsReader
                 Points = parsed,
                 UnknownFoliageValues = unknownValues,
                 EmptyFoliageCells = emptyCells,
+                RowsWithoutGround = withoutGround,
+                UnreadableRows = unreadable,
                 Notes = notes,
             };
     }
@@ -245,7 +271,20 @@ public static class TreePointsReader
         return columns;
     }
 
-    private static bool TryReadRow(
+    /// <summary>How one data row was read — the three outcomes the log distinguishes.</summary>
+    private enum RowReading
+    {
+        Read,
+        NoGround,
+        Unreadable,
+    }
+
+    /// <summary>Reads one data row into a point, or says why it could not.</summary>
+    /// <remarks>
+    /// Everything but <c>ground_z</c> is checked first, so a row that is both a DEM gap and
+    /// unreadable is counted as unreadable: the contract drifting is the finding worth reporting.
+    /// </remarks>
+    private static RowReading ReadRow(
         string[] fields,
         Dictionary<string, int> columns,
         SiteFrame frame,
@@ -256,29 +295,42 @@ public static class TreePointsReader
 
         if (!TryNumber(fields, columns, EastingColumn, out double easting)
             || !TryNumber(fields, columns, NorthingColumn, out double northing)
-            || !TryNumber(fields, columns, GroundColumn, out double ground)
             || !TryNumber(fields, columns, HeightColumn, out double height)
             || !TryNumber(fields, columns, CrownColumn, out double crown)
             || !frame.TryToLocalMetres(easting, northing, out double east, out double north))
         {
-            return false;
+            return RowReading.Unreadable;
+        }
+
+        if (!TryNumber(fields, columns, GroundColumn, out double ground))
+        {
+            // Present and blank is the DEM gap. A cell the row is too short to reach is not.
+            return Cell(fields, columns, GroundColumn) is { } cell && string.IsNullOrWhiteSpace(cell)
+                ? RowReading.NoGround
+                : RowReading.Unreadable;
         }
 
         // Only ground_z has a unit to read. height_m and crown_radius_m say theirs in their names.
         double groundM = ground * LinearUnits.MetresPerUnit(groundUnit);
         point = new SiteTreePoint(east, north, groundM, height, crown, FoliageType.Tree);
-        return true;
+        return RowReading.Read;
     }
 
     private static bool TryNumber(string[] fields, Dictionary<string, int> columns, string column, out double value)
     {
         value = 0.0;
-        int index = columns[column];
-        return index < fields.Length
+        return Cell(fields, columns, column) is { } cell
             && double.TryParse(
-                fields[index].Trim(),
+                cell.Trim(),
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
                 out value);
+    }
+
+    /// <summary>The row's cell in that column, or <c>null</c> when the row is too short to have one.</summary>
+    private static string? Cell(string[] fields, Dictionary<string, int> columns, string column)
+    {
+        int index = columns[column];
+        return index < fields.Length ? fields[index] : null;
     }
 }

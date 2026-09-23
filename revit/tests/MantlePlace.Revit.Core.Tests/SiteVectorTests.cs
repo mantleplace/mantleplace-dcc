@@ -385,6 +385,112 @@ internal static class SiteVectorTests
             run.True(parse.Failure is null, $"parsed: {parse.Failure}");
             run.Equal(parse.Points.Count, 1, "the row with no ground elevation is dropped");
             run.Within(parse.Points[0].GroundElevationM, 1985.45, 1e-9, "the row that did have one survives");
+            run.Equal(parse.RowsWithoutGround, 1, "and counted, so the log can say so");
+            run.Equal(parse.UnreadableRows, 0, "a DEM gap is not an unreadable row");
+        });
+
+        run.Case("a dropped row is counted as a DEM gap or as unreadable, never silently", () =>
+        {
+            // Without the tally the step reports "Imported 1 tree(s) of 1" and the other two rows
+            // vanish. The split matters to whoever reads the log: an empty ground_z is an ordinary
+            // DEM gap, anything else that will not read is the contract drifting.
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m
+                472195.00,4257585.00,  ,3.38,1.18
+                471835.00,4257485.00,1985.45,tall,1.08
+                471835.00,4257485.00,1985.45,3.10,1.08
+                """,
+                MetricFrame,
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
+
+            run.True(parse.Failure is null, $"parsed: {parse.Failure}");
+            run.Equal(parse.Points.Count, 1, "only the whole row survives");
+            run.Equal(parse.RowsWithoutGround, 1, "a whitespace ground_z is no ground elevation");
+            run.Equal(parse.UnreadableRows, 1, "a non-numeric height is unreadable");
+        });
+
+        run.Case("a ground_z that is present but not a number is unreadable, not a DEM gap", () =>
+        {
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m
+                472195.00,4257585.00,nodata,3.38,1.18
+                """,
+                MetricFrame,
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
+
+            run.Equal(parse.RowsWithoutGround, 0, "the cell has a value; it is the wrong kind");
+            run.Equal(parse.UnreadableRows, 1, "contract drift");
+        });
+
+        run.Case("a row that is both a DEM gap and unreadable is counted once, as unreadable", () =>
+        {
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m
+                472195.00,4257585.00,,tall,1.18
+                """,
+                MetricFrame,
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
+
+            run.Equal(parse.UnreadableRows, 1, "the contract drifting is the finding worth reporting");
+            run.Equal(parse.RowsWithoutGround, 0, "and the row is not counted twice");
+        });
+
+        run.Case("a row short of a geometry column is unreadable", () =>
+        {
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m
+                472195.00,4257585.00,2006.71
+                """,
+                MetricFrame,
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
+
+            run.Equal(parse.Points.Count, 0, "dropped");
+            run.Equal(parse.RowsWithoutGround, 0, "its ground_z was there");
+            run.Equal(parse.UnreadableRows, 1, "counted");
+        });
+
+        run.Case("a row the frame cannot place is unreadable", () =>
+        {
+            // An origin with no plan position places nothing. Every cell of this row reads; what
+            // failed is the placement, which is not a DEM gap.
+            SiteFrame unplaceable = new() { Origin = new GeoOrigin { Epsg = 32613, LinearUnit = LinearUnit.Metre } };
+
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m
+                472195.00,4257585.00,2006.71,3.38,1.18
+                """,
+                unplaceable,
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
+
+            run.Equal(parse.Points.Count, 0, "nothing placed");
+            run.Equal(parse.UnreadableRows, 1, "a row the frame refuses is counted as unreadable");
+            run.Equal(parse.RowsWithoutGround, 0, "not a DEM gap");
+        });
+
+        run.Case("blank lines and a header-only file drop nothing", () =>
+        {
+            TreePointsParse headerOnly = TreePointsReader.Parse(
+                "x,y,ground_z,height_m,crown_radius_m\n",
+                MetricFrame,
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
+
+            run.True(headerOnly.Failure is null, $"a header-only file parses: {headerOnly.Failure}");
+            run.Equal(headerOnly.Points.Count, 0, "no points");
+            run.Equal(headerOnly.RowsWithoutGround + headerOnly.UnreadableRows, 0, "and nothing dropped");
+
+            TreePointsParse spaced = TreePointsReader.Parse(
+                "x,y,ground_z,height_m,crown_radius_m\r\n\r\n472195.00,4257585.00,2006.71,3.38,1.18\r\n\r\n   \r\n"
+                    + "471835.00,4257485.00,1985.45,3.10,1.08\r\n\r\n",
+                MetricFrame,
+                foliageVocabulary: null, groundUnit: LinearUnit.Metre);
+
+            run.Equal(spaced.Points.Count, 2, "the two real rows, either side of the blank ones");
+            run.Equal(spaced.RowsWithoutGround + spaced.UnreadableRows, 0, "a blank line is not a row");
         });
 
         run.Case("a missing or unrecognised header is a read failure, not an empty layer", () =>
