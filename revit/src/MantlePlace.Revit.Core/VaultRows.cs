@@ -142,14 +142,15 @@ public static class VaultRows
     /// <param name="shown">Rows the filter keeps.</param>
     /// <param name="total">Rows the listing gave.</param>
     /// <param name="skipped">Rows the listing reader skipped as unreadable.</param>
-    /// <param name="filtering">Whether the search field holds a query.</param>
+    /// <param name="query">The search field's text. A filter is active exactly when
+    /// <see cref="Matches"/> would not keep every row: when it holds more than whitespace.</param>
     /// <remarks>
     /// ⛔<c>HPS-21</c>: the skipped rows are said whatever the filter shows. A filter narrows what the
     /// curator is looking at; it does not make platform corruption stop being true.
     /// </remarks>
-    public static string CountLine(int shown, int total, int skipped, bool filtering)
+    public static string CountLine(int shown, int total, int skipped, string? query)
     {
-        string count = filtering ? $"{shown} of {total} bundle(s)." : $"{total} bundle(s).";
+        string count = string.IsNullOrWhiteSpace(query) ? $"{total} bundle(s)." : $"{shown} of {total} bundle(s).";
         return skipped == 0 ? count : $"{count} {skipped} row(s) were unreadable and skipped.";
     }
 }

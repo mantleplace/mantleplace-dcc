@@ -215,6 +215,12 @@ internal static class WindowLabelsTests
             }
 
             run.Equal(WindowLabels.Search, "Search", "the search field's label");
+
+            // A tooltip is a sentence, like every button's ToolTip, not a face, so it is not Title
+            // Case. What it must do is say the label is what is searched, so an order id typed
+            // into the field and matching nothing is not a surprise.
+            run.Contains(WindowLabels.SearchToolTip, "area label", "the tooltip names what is matched");
+            run.True(WindowLabels.SearchToolTip.EndsWith('.'), "and is one sentence");
             run.Equal(WindowLabels.AreaUnknown, "Area Unknown", "an area the listing did not give");
             run.Equal(WindowLabels.SizeUnknown, "Size Unknown", "a size the listing did not give");
             run.Equal(WindowLabels.ManifestVersionUnknown, "Manifest Version Unknown", "a version the listing did not give");

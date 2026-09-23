@@ -161,19 +161,19 @@ internal static class VaultRowsTests
 
         run.Case("the status line counts every bundle when no filter is active", () =>
         {
-            run.Equal(VaultRows.CountLine(12, 12, 0, filtering: false), "12 bundle(s).", "no filter, nothing skipped");
+            run.Equal(VaultRows.CountLine(12, 12, 0, query: null), "12 bundle(s).", "no filter, nothing skipped");
             run.Equal(
-                VaultRows.CountLine(12, 12, 2, filtering: false),
+                VaultRows.CountLine(12, 12, 2, query: null),
                 "12 bundle(s). 2 row(s) were unreadable and skipped.",
                 "⛔HPS-21: the skipped rows are said");
         });
 
         run.Case("the status line says N of M while a filter is active, and keeps the skipped rows", () =>
         {
-            run.Equal(VaultRows.CountLine(3, 12, 0, filtering: true), "3 of 12 bundle(s).", "a narrowing filter");
-            run.Equal(VaultRows.CountLine(12, 12, 0, filtering: true), "12 of 12 bundle(s).", "a filter that keeps all is still a filter");
+            run.Equal(VaultRows.CountLine(3, 12, 0, query: "harbour"), "3 of 12 bundle(s).", "a narrowing filter");
+            run.Equal(VaultRows.CountLine(12, 12, 0, query: "harbour"), "12 of 12 bundle(s).", "a filter that keeps all is still a filter");
             run.Equal(
-                VaultRows.CountLine(0, 12, 1, filtering: true),
+                VaultRows.CountLine(0, 12, 1, query: "harbour"),
                 "0 of 12 bundle(s). 1 row(s) were unreadable and skipped.",
                 "⛔HPS-21 survives the filter");
         });

@@ -36,7 +36,15 @@ internal sealed class VaultBrowserWindow : Window
     private readonly ExternalEvent _importEvent;
     private readonly BundleImportEventHandler _importHandler;
 
+    /// <summary>
+    /// Roughly what the search row takes: a one-line text box and the 8 px margin under it. The
+    /// window grows by this so the list does not shrink to make room. An estimate, not a measurement.
+    /// </summary>
+    private const double SearchRowHeight = 32;
+
     private readonly ListBox _list = new() { Margin = new Thickness(0, 0, 0, 8), MinHeight = 220 };
+
+    // Qualified because Autodesk.Revit.UI has a TextBox of its own, a ribbon control: CS0104 otherwise.
     private readonly System.Windows.Controls.TextBox _search = new() { ToolTip = WindowLabels.SearchToolTip, VerticalContentAlignment = VerticalAlignment.Center };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, MinHeight = 40 };
     private readonly Button _refresh = new() { Content = WindowLabels.Refresh, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
@@ -90,7 +98,7 @@ internal sealed class VaultBrowserWindow : Window
 
         // The header and the search row taller than it was, so the list keeps about the rows it
         // showed before either.
-        Height = 460 + BrandChrome.HeaderHeight + 32;
+        Height = 460 + BrandChrome.HeaderHeight + SearchRowHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         // Owned by Revit's main window so it stays in front of it and minimises with it, rather
@@ -154,8 +162,6 @@ internal sealed class VaultBrowserWindow : Window
     /// a different bundle as soon as the filter hid a row above it.
     /// </summary>
     private VaultBundle? Selected => (_list.SelectedItem as VaultRow)?.Bundle;
-
-    private bool Filtering => !string.IsNullOrWhiteSpace(_search.Text);
 
     private async Task RefreshAsync()
     {
@@ -441,7 +447,7 @@ internal sealed class VaultBrowserWindow : Window
     }
 
     private void ReportCount()
-        => Report(VaultRows.CountLine(_list.Items.Count, _rows.Count, _skippedRows, Filtering));
+        => Report(VaultRows.CountLine(_list.Items.Count, _rows.Count, _skippedRows, _search.Text));
 
     private async Task<bool> BeginAsync(string message)
     {
