@@ -80,6 +80,14 @@ top-level folder appears only with real content is untouched by this.
 The bug-report template asks for the host as a required dropdown, but an issue form cannot turn that
 answer into a label. Applying it is a triage step.
 
+## Deferred
+
+`deferred` marks an issue parked until a trigger its own body names — an observation, a platform
+change, a real bundle to design against. It is not a state role and does not replace one. Un-defer by
+removing the label, dropping "deferred" from the title, and saying in a comment whether the trigger
+fired or the maintainer chose to bring the item forward. It is **not** exempt from the stale job; a
+deferred issue whose trigger is long-lived wants `pinned` as well.
+
 ## Deleting a label
 
 Don't, if anything has ever carried it. Removing a label strips it from every issue that used it,
