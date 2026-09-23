@@ -9,9 +9,9 @@ namespace MantlePlace.Revit.Core;
 /// It exists because the bundle's artifacts do not agree about frames and are not meant to.
 /// <c>Surface/SurfacePoints.csv</c> is already local — east/north offsets from the AOI centroid —
 /// which is what lets the toposolid land near the project origin. <c>Landcover/TreePoints.csv</c> is
-/// absolute AOI-UTM. The <c>vector</c> GeoJSON layers are lon/lat. All three describe the same
-/// ground, and the origin that reconciles them is the one this host already applies verbatim as its
-/// survey point (<c>revit.georeference.origin.projected</c>).
+/// absolute, in the delivery CRS. The <c>vector</c> GeoJSON layers are lon/lat. All three describe
+/// the same ground, and the origin that reconciles them is the one this host already applies
+/// verbatim as its survey point (<c>revit.georeference.origin.projected</c>).
 /// </para>
 /// <para>
 /// So this re-derives nothing (<c>HPS-33</c>): it subtracts a published origin and, for the
@@ -46,9 +46,11 @@ public sealed class SiteFrame
     /// only when it is in the origin's OWN CRS.
     /// </summary>
     /// <remarks>
-    /// An unknown layer CRS (<c>0</c>) is never assumed to match. The tree-points CSV is AOI-UTM
-    /// whatever the delivery tier, so on a foot tier this is genuinely false and the layer is
-    /// skipped with a stated reason.
+    /// An unknown layer CRS (<c>0</c>) is never assumed to match. The tree-points CSV is published
+    /// in the delivery CRS, so this is normally true for it — by coincidence rather than by
+    /// contract (<c>HPS-52</c>), which is why the CRS it states is still checked. The imagery drape
+    /// is built in the AOI's metric UTM zone for the fixed-frame host, so on a State Plane tier this
+    /// is genuinely false for it and the layer is skipped with a stated reason.
     /// </remarks>
     public bool CanPlaceProjected(int layerEpsg) => layerEpsg != 0 && layerEpsg == Epsg;
 

@@ -542,11 +542,12 @@ public static class BundleImportPlanner
     /// </summary>
     /// <remarks>
     /// <para>
-    /// All three carry coordinates that are absolute — lon/lat for the vector layers, AOI-UTM for the
-    /// tree points — where every artifact this host imported before them was either already local
-    /// (the toposurface points) or placed by Revit's own link machinery (the DXF, the IFC). So they
-    /// share a gate the older kinds do not have: without the manifest's pre-derived origin there is
-    /// no frame to place them in, and this host does not work one out for itself (<c>HPS-33</c>).
+    /// All three carry coordinates that are absolute — lon/lat for the vector layers, the delivery
+    /// CRS for the tree points — where every artifact this host imported before them was either
+    /// already local (the toposurface points) or placed by Revit's own link machinery (the DXF, the
+    /// IFC). So they share a gate the older kinds do not have: without the manifest's pre-derived
+    /// origin there is no frame to place them in, and this host does not work one out for itself
+    /// (<c>HPS-33</c>).
     /// </para>
     /// <para>
     /// They are planned independently of the terrain. A road centreline carries its own draped Z, so
@@ -664,8 +665,9 @@ public static class BundleImportPlanner
     /// </summary>
     /// <remarks>
     /// The CRS check is the point of this method. A bundle cut on a State-Plane foot tier publishes
-    /// its origin in that CRS, while the tree points stay AOI-UTM and the GeoJSON stays lon/lat —
-    /// so the frame genuinely cannot place them, and subtracting one CRS's easting from another's
+    /// its origin in that CRS, while the GeoJSON stays lon/lat — so the frame genuinely cannot place
+    /// it. The tree points pass because they follow the delivery CRS, and the check reads the CRS
+    /// they state rather than trusting that they do: subtracting one CRS's easting from another's
     /// yields a number that looks like a coordinate and is ~2000 km wrong. Failing closed here is
     /// the same rule <c>HPS-35</c> applies to an unreadable unit one level up.
     /// </remarks>

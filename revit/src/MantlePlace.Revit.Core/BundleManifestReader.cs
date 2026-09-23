@@ -698,10 +698,11 @@ public static class BundleManifestReader
                 VerticalDatum = detail?.OptionalStr("vertical_datum"),
             });
 
-        // Host-neutral, like the vector layers and unlike the `revit.*` deliverables: the tree
-        // points are the DEM's own raster-aligned product, published in the AOI's projected CRS
-        // whatever the delivery tier asks the Revit artifacts to be cut in. That mismatch is real
-        // and the planner fails closed on it rather than reconciling it here.
+        // Host-neutral, like the vector layers and unlike the `revit.*` deliverables. The tree
+        // points are published in the delivery CRS, which is this host's frame, but a host-neutral
+        // pointer is in that frame by coincidence rather than by contract (HPS-52), so the CRS its
+        // manifest entry states is read here and the planner fails closed on a mismatch rather
+        // than reconciling it (HPS-53).
         manifest.TreePoints = BuildArtifact(
             manifest,
             LayoutTreePoints,

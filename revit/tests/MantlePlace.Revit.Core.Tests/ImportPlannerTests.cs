@@ -1128,10 +1128,12 @@ internal static class ImportPlannerTests
 
         run.Case("a foot-tier origin refuses BOTH the geographic layers and the metric UTM one", () =>
         {
-            // The origin is State Plane feet; the GeoJSON layers are lon/lat and the tree CSV is
-            // AOI-UTM metres whatever the tier. Neither can be brought into that frame by the one
-            // forward projection HPS-45 permits, and subtracting a UTM easting from a State Plane
-            // one yields a number that looks like a coordinate and is ~2000 km wrong.
+            // The origin is State Plane feet; the GeoJSON layers are lon/lat and this fixture's tree
+            // CSV states metric UTM. Neither can be brought into that frame by the one forward
+            // projection HPS-45 permits, and subtracting a UTM easting from a State Plane one yields
+            // a number that looks like a coordinate and is ~2000 km wrong. A real bundle publishes
+            // its tree points in the delivery CRS (the next case); the refusal is what guards a
+            // host-neutral file that is not.
             BundleImportPlan plan = PlanFor(ParityManifest(FootGeoreference), ParityBundle);
 
             foreach (ImportStepKind kind in ParityKinds)
@@ -1146,6 +1148,25 @@ internal static class ImportPlannerTests
                 FindSkip(plan, ImportStepKind.Vegetation)?.Reason,
                 "EPSG:2231",
                 "the skip names the CRS it could not place into");
+        });
+
+        run.Case("a foot-tier origin places tree points published in the delivery CRS", () =>
+        {
+            // What a State Plane order ships: the tree CSV is published in the delivery CRS, which
+            // is this host's frame, so the trees import while every lon/lat layer is still refused.
+            // Nothing is projected — the CSV's stated CRS matches the origin's.
+            BundleImportPlan plan = PlanFor(ParityManifest(FootGeoreference, treePointsCrs: "EPSG:2231"), ParityBundle);
+
+            run.True(HasStep(plan, ImportStepKind.Vegetation), "the trees are planned");
+            run.True(FindSkip(plan, ImportStepKind.Vegetation) is null, "and not skipped");
+
+            foreach (ImportStepKind kind in ParityKinds.Where(kind => kind != ImportStepKind.Vegetation))
+            {
+                run.Equal(
+                    FindSkip(plan, kind)?.ReasonCode == SkipReasonCode.CoordinateSystemNotSupported,
+                    true,
+                    $"{kind} is still lon/lat and still refused");
+            }
         });
 
         run.Case("a pointer naming an entry the archive lacks is classified as such", () =>
@@ -1606,13 +1627,13 @@ internal static class ImportPlannerTests
                 observesDst is null ? string.Empty : ", \"observes_dst\": " + observesDst),
             StringComparison.Ordinal);
 
-    private static string ParityManifest(string georeference) =>
+    private static string ParityManifest(string georeference, string treePointsCrs = "EPSG:32613") =>
         $$"""
         {
           "version": "1.0.0",
           "layout": { "tree_points": "Landcover/TreePoints.csv" },
           {{georeference}},
-          "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv", "crs": "EPSG:32613" } },
+          "landcover": { "tree_points": { "path": "Landcover/TreePoints.csv", "crs": "{{treePointsCrs}}" } },
           "vector": {
             "layers": [
               {

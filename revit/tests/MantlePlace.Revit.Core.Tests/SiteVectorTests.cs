@@ -56,9 +56,10 @@ internal static class SiteVectorTests
         {
             run.True(MetricFrame.CanPlaceProjected(32613), "UTM 13N against a UTM 13N origin");
 
-            // Not a rounding question. The tree-points CSV is always AOI-UTM whatever the delivery
-            // tier, so on a State Plane foot tier the two are different coordinate systems and
-            // subtracting one from the other yields a plausible-looking number ~2000 km out.
+            // Not a rounding question. A layer built in the AOI's metric UTM zone — the imagery drape
+            // is the one that ships that way — is a different coordinate system from a State Plane
+            // foot origin, and subtracting one from the other yields a plausible-looking number
+            // ~2000 km out.
             run.False(FootFrame.CanPlaceProjected(32613), "UTM 13N against a State Plane foot origin");
             run.False(MetricFrame.CanPlaceProjected(0), "an unstated layer CRS is not assumed to match");
         });
