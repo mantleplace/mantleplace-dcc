@@ -294,6 +294,16 @@ holes in it — a water body's islands, a road network's city blocks. Say subdiv
 cut from — where it came from is the polygon's business, not the element's.
 _Avoid_: district, region, site-boundary polygon, sub-toposolid
 
+**Published contours**:
+The contour linework a bundle ships, drawn by a host as lines at the elevations the file states. It
+is fixed at the interval the order was built with and does not follow later edits to the terrain.
+_Avoid_: contours (unqualified), contour lines
+
+**Toposolid contours**:
+The contour lines Revit draws on a toposolid from its own surface, at the interval the project sets.
+They follow the surface as it is edited; published contours do not.
+_Avoid_: contours (unqualified)
+
 **Context building**:
 One native element a host creates from the site model, per building in it. Selectable, renderable
 and stamped, where a linked site model is none of those.
