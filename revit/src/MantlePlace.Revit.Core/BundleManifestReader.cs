@@ -691,6 +691,12 @@ public static class BundleManifestReader
     /// still reaches a UTM origin only.
     /// </para>
     /// <para>
+    /// Since MPB 1.4.0 the block can be present with <c>readiness.vectors</c> false: a layer from
+    /// another source (<c>steep_slope</c>, <c>flood_zones</c>) is converted on its own, and its verdict
+    /// is its own. The copy of the shared layers was then not produced, so they keep the shared set,
+    /// and only the layers of another source are read from the block (<see cref="ReadHazards"/>).
+    /// </para>
+    /// <para>
     /// Each layer's <c>horizontal_frame</c>, <c>units</c> and <c>vertical_reference</c> are carried
     /// verbatim; the planner decides whether this host can place them.
     /// </para>
@@ -698,6 +704,12 @@ public static class BundleManifestReader
     private static void ReadOwnVectors(BundleManifest manifest, JsonElement root)
     {
         if (RevitHostBlock(root)?.Object("vectors")?.Array("layers") is not { } layers)
+        {
+            return;
+        }
+
+        ReadinessPath shared = manifest.Readiness.Vectors;
+        if (shared.Declared && !shared.Present)
         {
             return;
         }

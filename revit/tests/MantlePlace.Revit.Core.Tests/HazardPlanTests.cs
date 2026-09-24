@@ -46,6 +46,21 @@ internal static class HazardPlanTests
             run.Equal(manifest.LandUse?.Path, OwnPath("land_use"), "the other layers are unaffected");
         });
 
+        run.Case("a copy carrying only the hazards, with the shared layers withheld, keeps the shared set", () =>
+        {
+            // MPB 1.4.0: a layer from another source is converted on its own, so the block can be
+            // present while readiness.vectors says the shared set's copies were not produced. Those
+            // layers then fall back to the shared lon/lat set rather than reading "none in this area".
+            BundleManifest withheld = Parse(Manifest(
+                ownLayers: ["flood_zones", "steep_slope"],
+                vectorsReadiness: "{ \"present\": false, \"reason\": \"not_produced\" }"));
+            run.False(withheld.VectorsFromOwnBlock, "the shared layers keep the lon/lat set");
+            run.Equal(withheld.SteepGround?.Path, OwnPath("steep_slope"), "steep ground is still the own copy");
+            run.Equal(withheld.FloodZones?.Path, OwnPath("flood_zones"), "flood zones are still the own copy");
+
+            run.True(Parse(Manifest()).VectorsFromOwnBlock, "a produced copy replaces the shared set, as before");
+        });
+
         run.Case("a shared layer of the same name is never read as a hazard layer", () =>
         {
             // The shared set is lon/lat, and flood zones are not in it by the schema's own words; a
@@ -556,7 +571,8 @@ internal static class HazardPlanTests
         string? steepReadiness = "{ \"present\": true }",
         bool hazardReadiness = true,
         bool floodBlock = true,
-        bool steepBlock = true)
+        bool steepBlock = true,
+        string vectorsReadiness = "{ \"present\": true }")
     {
         ownLayers ??= ["land_use", "flood_zones", "steep_slope"];
         IEnumerable<string> layers = ownLayers.Select(name =>
@@ -565,7 +581,7 @@ internal static class HazardPlanTests
               "units": "{{(name == "flood_zones" ? floodUnits : "m")}}", "feature_count": 1, "sha256": "{{OwnSha}}" }
             """);
 
-        string readiness = "\"toposurface_points\": { \"present\": false, \"reason\": \"not_produced\" }, \"vectors\": { \"present\": true }";
+        string readiness = "\"toposurface_points\": { \"present\": false, \"reason\": \"not_produced\" }, \"vectors\": " + vectorsReadiness;
         if (hazardReadiness)
         {
             readiness += $", \"flood_zones\": {floodReadiness}, \"steep_slope\": {steepReadiness}";
