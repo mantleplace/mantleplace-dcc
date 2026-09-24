@@ -42,9 +42,6 @@ internal sealed partial class RevitBundleImporter
         }
 
         GroundCutPlan regions = HazardPlan.Regions(rings);
-        IReadOnlyList<ZoneKeyRow> rows = flood
-            ? [.. ZoneKey.FloodHeading(facts.FloodMap).Select(line => new ZoneKeyRow(line, null)), .. ZoneKey.FloodRows(rings, facts.FloodMap)]
-            : ZoneKey.SteepRows(rings, facts.Threshold);
         if (regions.Cuts.Count == 0)
         {
             Say($"The {label} layer ({step.EntryName}) carries no polygon this plugin could draw, so no hazard "
@@ -91,15 +88,19 @@ internal sealed partial class RevitBundleImporter
         int drawn = 0;
         int declined = 0;
         int unstamped = 0;
+        List<SiteFeature> drawnOuters = [];
         foreach (GroundCut cut in regions.Cuts)
         {
-            if (Loop(cut.Outer, z) is not { } outer)
+            // Every ring or none: a hole that cannot close would leave the region covering ground the
+            // zone does not, which is a repair by another name. The polygon is refused whole instead.
+            List<CurveLoop?> built = [Loop(cut.Outer, z), .. cut.Holes.Select(hole => Loop(hole, z))];
+            if (built.Contains(null))
             {
                 declined++;
                 continue;
             }
 
-            List<CurveLoop> loops = [outer, .. cut.Holes.Select(hole => Loop(hole, z)).OfType<CurveLoop>()];
+            List<CurveLoop> loops = [.. built.OfType<CurveLoop>()];
             HazardStyle style = flood
                 ? HazardStyles.ForFloodZone(cut.Outer.FloodZone, cut.Outer.FloodZoneSubtype)
                 : HazardStyles.SteepGround;
@@ -108,6 +109,7 @@ internal sealed partial class RevitBundleImporter
             {
                 FilledRegion region = FilledRegion.Create(_document, RegionType(style, types), plan.Id, loops);
                 drawn++;
+                drawnOuters.Add(cut.Outer);
                 if (!TryStamp(region, stamp))
                 {
                     unstamped++;
@@ -121,6 +123,12 @@ internal sealed partial class RevitBundleImporter
             }
         }
 
+        // The key names only what is on the plan: a zone whose every polygon was refused gets no row.
+        IReadOnlyList<ZoneKeyRow> rows = drawnOuters.Count == 0
+            ? []
+            : flood
+                ? [.. ZoneKey.FloodHeading(facts.FloodMap).Select(line => new ZoneKeyRow(line, null)), .. ZoneKey.FloodRows(drawnOuters, facts.FloodMap)]
+                : ZoneKey.SteepRows(drawnOuters, facts.Threshold);
         int keyRows = DrawKeyRows(plan, rows, stem, facts, drawnExtent, z, types);
 
         if (!CommitAndReport(transaction, swallower))

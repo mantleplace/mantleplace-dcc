@@ -335,6 +335,7 @@ internal static class HazardPlanTests
             run.Equal(floodway.Fill?.ToString(), ae.Fill?.ToString(), "the floodway keeps AE's colour");
             run.True(floodway.Hatch is not null, "and is hatched over it");
             run.True(floodway.TypeName != ae.TypeName, "its own type");
+            run.True(HazardStyles.ForFloodZone("AE", "ADMINISTRATIVE FLOODWAY").Hatch is not null, "every floodway subtype is hatched");
         });
 
         run.Case("shaded X and minimal-hazard X are told apart; an unknown subtype takes its zone's colour", () =>

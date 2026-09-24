@@ -110,7 +110,8 @@ public static class HazardStyles
             : ByZone.TryGetValue(zone, out RgbColour byZone) ? byZone
             : Neutral;
 
-        bool floodway = string.Equals(subtype, FloodwaySubtype, StringComparison.Ordinal);
+        // Every floodway FEMA names — FLOODWAY, ADMINISTRATIVE FLOODWAY and their like — is hatched.
+        bool floodway = subtype.Contains(FloodwaySubtype, StringComparison.Ordinal);
         return new HazardStyle(
             LegalName(TypePrefix + "Flood Zone " + ZoneKey.FloodRowText(zone, subtype)),
             fill,
