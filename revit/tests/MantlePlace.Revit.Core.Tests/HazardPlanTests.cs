@@ -431,17 +431,17 @@ internal static class HazardPlanTests
             run.False(heading.Contains("effective", StringComparison.Ordinal), "no guessed panel");
         });
 
-        run.Case("steep ground's row is its published threshold, in degrees, claiming no comparison", () =>
+        run.Case("steep ground's row is its published threshold, in degrees, in the schema's comparison", () =>
         {
             IReadOnlyList<ZoneKeyRow> rows = ZoneKey.SteepRows([RingWithThreshold("35.0"), RingWithThreshold("35.0")], "35.0");
             run.Equal(rows.Count, 1, "one row");
-            run.Equal(rows[0].Text, "Steep ground — threshold 35.0°", "the published number, verbatim");
+            run.Equal(rows[0].Text, "Steep ground — at or above 35.0°", "the published number, verbatim");
         });
 
         run.Case("features stating different thresholds get a row each; one stating none takes the manifest's", () =>
         {
             IReadOnlyList<ZoneKeyRow> rows = ZoneKey.SteepRows([RingWithThreshold("35.0"), RingWithThreshold("30"), RingWithThreshold(string.Empty)], "35.0");
-            run.Equal(string.Join(" | ", rows.Select(row => row.Text)), "Steep ground — threshold 35.0° | Steep ground — threshold 30°", "each as written");
+            run.Equal(string.Join(" | ", rows.Select(row => row.Text)), "Steep ground — at or above 35.0° | Steep ground — at or above 30°", "each as written");
         });
 
         run.Case("an empty layer has no rows", () =>

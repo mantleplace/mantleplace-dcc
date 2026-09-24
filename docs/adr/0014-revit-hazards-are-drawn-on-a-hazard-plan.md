@@ -42,8 +42,8 @@ zone key drawn in the same plan.**
   Steep ground is a hatch with no fill, drawn after the flood zones.
 - **The zone key quotes the bundle.** Only what the plan shows, in the published wording; a heading
   saying it is context and not a flood determination; the FIRM panels to verify against where the
-  bundle names them. The steep-ground threshold is the manifest's number, in degrees, with no
-  comparison word the bundle did not state.
+  bundle names them. The steep-ground threshold is the manifest's number, in degrees, after the
+  schema's own comparison: "at or above", as MPB 1.4.0 describes `threshold_deg`.
 - **A polygon Revit refuses is skipped and counted, never repaired.** Repairing a published polygon
   is derivation.
 - **Both rows start unticked**, and neither needs the terrain.

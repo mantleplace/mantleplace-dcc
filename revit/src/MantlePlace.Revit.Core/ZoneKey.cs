@@ -14,8 +14,9 @@ public sealed record ZoneKeyRow(string Text, HazardStyle? Style);
 /// </para>
 /// <para>
 /// Every row is the manifest's own text. A zone is its <c>fld_zone</c> and <c>zone_subty</c> as
-/// published; a threshold is the number as written, in degrees, with no comparison word: the bundle
-/// does not say whether steep means above or at-or-above, so the key claims neither.
+/// published; a threshold is the number as written, in degrees, after the comparison MPB 1.4.0
+/// states for <c>elevation.steep_slope.threshold_deg</c>: the slope "at or above which ground is
+/// steep". The words are the schema's; the number is the bundle's.
 /// </para>
 /// </remarks>
 public static class ZoneKey
@@ -36,7 +37,7 @@ public static class ZoneKey
     public static string SteepRowText(string threshold)
         => string.IsNullOrEmpty(threshold)
             ? "Steep ground" + Separator + "threshold not stated"
-            : "Steep ground" + Separator + "threshold " + threshold + "°";
+            : "Steep ground" + Separator + "at or above " + threshold + "°";
 
     /// <summary>
     /// The rows for the flood zones drawn: each (zone, subtype) once, in the order the flood map lists
