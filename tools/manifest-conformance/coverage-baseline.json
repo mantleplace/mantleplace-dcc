@@ -88,6 +88,10 @@
     "manifest.full": [
       "unreal"
     ],
+    "manifest.hazardsAndContoursIgnored": [
+      "revit",
+      "unreal"
+    ],
     "manifest.heightmapMissingSha": [
       "unreal"
     ],

@@ -809,6 +809,20 @@
       }
     },
     {
+      "id": "manifest.hazardsAndContoursIgnored",
+      "group": "manifest",
+      "file": "manifest/hazards-and-contours-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 1.4.0 adds keys and removes none: a declared `elevation.steep_slope` pointer (`path`, `sha256`, `crs`, `horizontal_units`, `threshold_deg`, `layer`, `feature_count`), `dfirm_ids` and `panels` on `flood.nfhl`, `hosts.revit.contours`, and `steep_slope`, `flood_zones` and `contours` in `hosts.revit.readiness`, which the schema now REQUIRES there. `hosts.revit.vectors` may also carry two new layer names, `steep_slope` and `flood_zones`, whose `name` the schema says to echo opaquely. No registered host reads any of the new members yet. The fixture is versioned 1.4.0 and carries every one of them, each in the shape the 1.4.0 schema gives it: `elevation.steep_slope` with all seven members, `flood.nfhl` with `dfirm_ids` and two `panels` (one with every member null but the panel number and study id, as FEMA may publish), the Revit block with `contours` stated in its own `file_frame`, a `vectors` array carrying the `steep_slope` and `flood_zones` layers after `road_splines`, and a `readiness` that verdicts all seven paths -- plus everything a 1.3.0-or-later manifest must have, carried over from manifest.hostFramesIgnored. A reader MUST accept it and still read everything around the new keys. Three readers fail here while every earlier case stays green: one that gates the version on equality with its floor or with the last minor it saw; one that refuses a member it does not recognise inside a block it does read -- `contours` sits inside the Revit block and `steep_slope` inside its `readiness`; and one that refuses, or mistakes for a layer it knows, a `hosts.revit.vectors` layer whose name it has not been taught. Any of them turns an additive minor into a breaking release (compatibility.md). What a host does WITH steep ground, flood zones or its own contours is a later case's business, not this one's. Host-invariant on purpose: ignoring a key nobody has taught you is every reader's obligation, not one host's.",
+      "manifestVersion": "1.4.0",
+      "expectations": {
+        "jobId": "hazards-and-contours",
+        "orderId": "ord-hazards-and-contours-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a"
+      }
+    },
+    {
       "id": "manifest.revitOwnFramePointers",
       "group": "manifest",
       "file": "manifest/revit-own-frame-pointers.json",
