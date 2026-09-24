@@ -10,8 +10,9 @@ Date: 2026-09-22
 
 ## Status
 
-Accepted. Nothing implements it yet: the placement path waits on a format version whose Revit host
-block points at the contours.
+Accepted. Implemented from MPB 1.4.0, whose Revit host block points at the contours. Revit 2025,
+2026 and 2027 all accept a `DirectShape` in the Topography category, so the Generic Models
+fallback below has not been needed.
 
 ## Context
 

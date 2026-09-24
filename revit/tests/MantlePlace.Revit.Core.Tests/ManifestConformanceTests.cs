@@ -35,6 +35,8 @@ internal static class ManifestConformanceTests
         "hasRoadSplines",
         "revitRoadSplinesPath",
         "revitDrapePath",
+        "revitContoursPath",
+        "revitContoursVerticalUnits",
         "toposurfacePointsSha256",
         "surfaceDxfSha256",
         "ifcSiteSha256",
@@ -326,6 +328,18 @@ internal static class ManifestConformanceTests
         if (ConformanceCorpus.WantsString(corpusCase, "revitDrapePath", out string revitDrapePath))
         {
             run.Equal(manifest.RevitDrape?.Path ?? string.Empty, revitDrapePath, "revitDrapePath");
+        }
+
+        // The published contours are placed from this pointer alone (ADR 0013), and their heights'
+        // unit is read from it, never from the drawing's one $INSUNITS.
+        if (ConformanceCorpus.WantsString(corpusCase, "revitContoursPath", out string revitContoursPath))
+        {
+            run.Equal(manifest.RevitContours?.Path ?? string.Empty, revitContoursPath, "revitContoursPath");
+        }
+
+        if (ConformanceCorpus.WantsString(corpusCase, "revitContoursVerticalUnits", out string revitContoursVerticalUnits))
+        {
+            run.Equal(manifest.RevitContours?.VerticalUnits ?? string.Empty, revitContoursVerticalUnits, "revitContoursVerticalUnits");
         }
 
         // The three v19 `revit.*` hashes. Asserting the VALUE rather than a has-hash flag is what

@@ -391,6 +391,31 @@ metric delivery. So the bundle carries the trees once per frame a host needs:
 What a host does with a tree-point file it cannot show to be in its frame — refuse it, name why, and
 never convert it — is the host standard's (`HPS-52`, `HPS-53`), not this document's.
 
+### 6.7 Published contours, per host
+
+`Surface/Contours.dxf` is the contour linework the order was built with: one flat polyline per
+contour, each at its elevation. `elevation.contours` points at it for any reader and states its
+vertical unit and interval, but no horizontal frame, so a host that must show a file is in its frame
+before placing it (§6) cannot place it from that pointer.
+
+From 1.4.0 the Revit host has its own:
+
+- **`hosts.revit.contours` names the same file**, one file under two pointers, and is present only
+  when the file is in `hosts.revit.file_frame` (§4.2): absolute in the delivery CRS wherever a
+  projected CRS in the delivery unit exists, and east/north offsets about the origin where none does.
+  It states its `horizontal_frame`, its X/Y unit and its heights' unit, and the two units are stated
+  apart.
+- **A reader takes both units from the pointer, never from the drawing.** A DXF states one unit for
+  the whole drawing, and a file whose X/Y and heights are in different units cannot state itself
+  truthfully there.
+- The heights are real orthometric heights, as `vertical_reference: absolute` says: never an offset
+  from the origin. The contour interval stays on `elevation.contours`.
+- A bundle whose contours were built before 1.4.0 carries no pointer, and
+  `hosts.revit.readiness.contours` says so.
+
+What a host does with contours it cannot show to be in its frame is the host standard's
+(`HPS-52`, `HPS-53`), not this document's.
+
 ## 7. The sidecar manifest
 
 The vault publishes a versioned copy of the manifest beside the zip, so that a listing can show a

@@ -77,6 +77,7 @@ public static class BundleImportPlanner
             steps,
             skipped,
             drapeRuns ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
+        PlanPublishedContours(manifest, entries, steps, skipped);
         PlanSiteIfc(manifest, entries, steps, skipped);
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteLocation(manifest, steps, skipped);
@@ -689,7 +690,9 @@ public static class BundleImportPlanner
         string label,
         List<ImportStep> steps,
         List<SkippedImport> skipped,
-        string? absence = null)
+        string? absence = null,
+        SurfaceCropWindow? crop = null,
+        LinearUnit verticalUnits = LinearUnit.Unspecified)
     {
         if (artifact is null)
         {
@@ -771,6 +774,8 @@ public static class BundleImportPlanner
             Layer = layer,
             ExpectedSha256 = artifact.Sha256,
             Frame = frame,
+            Crop = crop,
+            VerticalUnits = verticalUnits,
 
             // Carried for every placed artifact rather than branched on the one kind that has it:
             // only `landcover.tree_points` publishes a foliage vocabulary, so this is null for the
@@ -1003,11 +1008,150 @@ public static class BundleImportPlanner
                 $"{manifest.LandXml.Path} — a LandXML TIN surface; the Civil 3D path (Insert ▸ LandXML), not imported here.");
         }
 
-        if (manifest.ContoursDxf is not null && entries.Resolve(manifest.ContoursDxf.Path) is not null)
+        // Only where this host has no pointer of its own to draw them from: a bundle that has one
+        // plans them, or says in its skips why it could not (ADR 0013).
+        if (manifest.RevitContours is null
+            && manifest.ContoursDxf is not null
+            && entries.Resolve(manifest.ContoursDxf.Path) is not null)
         {
             notImported.Add(
-                $"{manifest.ContoursDxf.Path} — 2-D contour linework; link it with Insert ▸ Link CAD if you want it alongside.");
+                $"{manifest.ContoursDxf.Path} — 2-D contour linework; link it with Insert ▸ Link CAD if you want it "
+                + "alongside. " + WhyContoursAreNotDrawn(manifest.Readiness.Contours));
         }
+    }
+
+    /// <summary>
+    /// Why a bundle's contours are not drawn as published contours, when its block has no pointer.
+    /// </summary>
+    /// <remarks>
+    /// No verdict at all is a bundle cut before MPB 1.4.0 gave this host a pointer. <c>not_produced</c>
+    /// is the platform's word for that case AND for a bundle with no site origin to be local to, so its
+    /// sentence names both rather than asserting the one it cannot tell apart. Any other reason is the
+    /// bundle's, in the readiness wording the rest of the plan uses.
+    /// </remarks>
+    private static string WhyContoursAreNotDrawn(ReadinessPath readiness)
+    {
+        const string Predates = "This bundle predates Revit's own contour support, so they are not drawn here.";
+
+        if (readiness is not { Declared: true, Present: false })
+        {
+            return Predates;
+        }
+
+        if (readiness.Reason == NotProducedReason)
+        {
+            return "This bundle gives Revit no pointer to draw them from: it predates Revit's own contour "
+                + "support, or has no site origin to place them against.";
+        }
+
+        return ReadinessReasons.ClauseFor(readiness.Reason) is { } clause
+            ? $"Revit does not draw them from this bundle: {clause}."
+            : Predates;
+    }
+
+    private const string NotProducedReason = "not_produced";
+
+    /// <summary>
+    /// The published contours, from this host's own pointer only (<c>HPS-52</c>, <c>HPS-53</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A bundle without the pointer plans nothing and lists nothing as unavailable: its contours are
+    /// still in the bundle, and the "Also in this bundle" line says where and why
+    /// (<see cref="NoteAvailableButNotImported"/>). The host-neutral <c>elevation.contours</c> states no
+    /// frame, and is never placed.
+    /// </para>
+    /// <para>
+    /// The pointer states its X/Y and Z units apart, because on a local grid they have differed. Each
+    /// is checked against the block's <c>file_frame</c>, and a disagreement is refused, never resolved
+    /// in either's favour. The crop window is the terrain's, so the contours end where it ends.
+    /// </para>
+    /// </remarks>
+    private static void PlanPublishedContours(
+        BundleManifest manifest,
+        BundleEntryIndex entries,
+        List<ImportStep> steps,
+        List<SkippedImport> skipped)
+    {
+        if (manifest.RevitContours is not { } contours)
+        {
+            return;
+        }
+
+        if (ContourUnitRefusal(contours, manifest, out LinearUnit verticalUnits) is { } refused)
+        {
+            skipped.Add(new SkippedImport
+            {
+                Kind = ImportStepKind.PublishedContours,
+                ReasonCode = refused.Code,
+                Reason = refused.Reason,
+            });
+            return;
+        }
+
+        SiteFrame? frame = SiteFrame.For(manifest);
+        PlanPlacedArtifact(
+            manifest,
+            contours,
+            frame,
+            entries,
+            ImportStepKind.PublishedContours,
+            "published contours",
+            steps,
+            skipped,
+            crop: SurfaceCrop.For(manifest, frame),
+            verticalUnits: verticalUnits);
+    }
+
+    /// <summary>
+    /// Why the contours pointer's own unit statements stop it being placed, or <c>null</c> with the
+    /// vertical unit resolved.
+    /// </summary>
+    /// <remarks>
+    /// Only what <see cref="OwnFrameRefusal"/> does not already ask: that the X/Y unit agrees with the
+    /// file's, and that the Z unit is one this plugin knows and the one the block declares.
+    /// </remarks>
+    private static (SkipReasonCode Code, string Reason)? ContourUnitRefusal(
+        BundleArtifact contours,
+        BundleManifest manifest,
+        out LinearUnit verticalUnits)
+    {
+        const string LeftOut = " Drawing them anyway could put them at the wrong height or scale, so they were left out.";
+
+        if (!TryReadUnitToken(contours.VerticalUnits ?? string.Empty, out verticalUnits)
+            || verticalUnits == LinearUnit.Unspecified)
+        {
+            return (SkipReasonCode.UnitNotUnderstood,
+                $"The published contours declare their heights in \"{contours.VerticalUnits}\", which this "
+                + "plugin does not understand." + LeftOut);
+        }
+
+        if (contours.HorizontalUnits is { } horizontal
+            && !string.Equals(horizontal, contours.Units, StringComparison.Ordinal))
+        {
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"The published contours state their X/Y in \"{horizontal}\" and their file in "
+                + $"\"{contours.Units}\"." + LeftOut);
+        }
+
+        // Fails closed like the X/Y check: a block with a frame that states no height unit this plugin
+        // knows cannot show the contours' heights are in its frame. A block with no frame at all is
+        // OwnFrameRefusal's to refuse, in its own words.
+        if (manifest.FileFrame is { } frame && frame.VerticalUnit is null)
+        {
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                "This bundle declares the Revit files' frame without a height unit this plugin knows, so the "
+                + "published contours' heights cannot be shown to be in it." + LeftOut);
+        }
+
+        if (manifest.FileFrame?.VerticalUnit is { } declared && declared != verticalUnits)
+        {
+            return (SkipReasonCode.CoordinateSystemNotSupported,
+                $"The published contours state their heights in \"{contours.VerticalUnits}\", but this bundle "
+                + $"declares the Revit files' heights in \"{LinearUnits.ToManifestToken(declared)}\"." + LeftOut);
+        }
+
+        return null;
     }
 
     /// <summary>

@@ -20,6 +20,9 @@ namespace MantlePlace.Revit.Core;
 public enum ImportLayer
 {
     Terrain,
+
+    /// <summary>The contour linework the order was built with — not the toposolid's own contours.</summary>
+    PublishedContours,
     ContextBuildings,
 
     /// <summary>The site model as a link — the same buildings as <see cref="ContextBuildings"/>, unselectable.</summary>
@@ -44,6 +47,7 @@ public static class ImportLayers
         ImportStepKind.ToposurfaceFromPointsFile => ImportLayer.Terrain,
         ImportStepKind.ToposurfaceFromSurfaceTin => ImportLayer.Terrain,
         ImportStepKind.ToposurfaceFromSurfaceDxf => ImportLayer.Terrain,
+        ImportStepKind.PublishedContours => ImportLayer.PublishedContours,
         ImportStepKind.ContextBuildings => ImportLayer.ContextBuildings,
         ImportStepKind.LinkSiteIfc => ImportLayer.SiteModel,
         ImportStepKind.RoadCentrelines => ImportLayer.RoadCentrelines,
@@ -77,10 +81,13 @@ public static class ImportLayers
     /// <summary>Whether a layer's box starts checked.</summary>
     /// <remarks>
     /// <para>
-    /// Every layer but the site model's link. Its buildings are copied into the project as
+    /// Every layer but two, each with the stated reason <c>HPS-51</c> asks for before a row starts
+    /// unchecked. The site model's link: its buildings are copied into the project as
     /// <see cref="ImportLayer.ContextBuildings"/>, and a link as well shows each one twice, once
-    /// selectable and once not — the stated reason <c>HPS-51</c> asks for before a row starts
-    /// unchecked (<c>docs/adr/0012-context-buildings-come-from-the-site-model.md</c>).
+    /// selectable and once not (<c>docs/adr/0012-context-buildings-come-from-the-site-model.md</c>).
+    /// The published contours: the toposolid already draws contours of its own, so the published
+    /// ones are for a curator who wants the order's linework beside them
+    /// (<c>docs/adr/0013-revit-published-contours-are-directshapes.md</c>).
     /// </para>
     /// <para>
     /// The unattended path does not read it: it imports everything
@@ -88,7 +95,7 @@ public static class ImportLayers
     /// nobody is there to choose for brings in everything.
     /// </para>
     /// </remarks>
-    public static bool OnByDefault(ImportLayer layer) => layer != ImportLayer.SiteModel;
+    public static bool OnByDefault(ImportLayer layer) => layer is not (ImportLayer.SiteModel or ImportLayer.PublishedContours);
 }
 
 /// <summary>Which layers an import brings in. Immutable.</summary>

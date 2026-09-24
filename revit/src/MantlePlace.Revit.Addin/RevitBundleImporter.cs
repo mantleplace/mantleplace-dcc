@@ -198,6 +198,8 @@ internal sealed partial class RevitBundleImporter(
                 return Once(() => ImportToposurfaceFromTin(step));
             case ImportStepKind.ToposurfaceFromSurfaceDxf:
                 return Once(() => LinkCadSurface(step));
+            case ImportStepKind.PublishedContours:
+                return Once(() => ImportPublishedContours(step));
             case ImportStepKind.LinkSiteIfc:
                 return Once(() => LinkSiteIfc(step));
             case ImportStepKind.ContextBuildings:

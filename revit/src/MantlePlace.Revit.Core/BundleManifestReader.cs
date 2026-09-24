@@ -67,9 +67,10 @@ public static class BundleManifestReader
     private const string RevitIfcSite = "ifc_site";
 
     private const string RevitDrape = "drape";
+    private const string RevitContours = "contours";
 
     private static readonly string[] RevitDeliverableKeys =
-        [RevitToposurfacePoints, RevitSurfaceDxf, RevitIfcSite, RevitDrape];
+        [RevitToposurfacePoints, RevitSurfaceDxf, RevitIfcSite, RevitDrape, RevitContours];
 
     /// <summary>
     /// The envelope every host block lives under at MPB 1.0.0. One key replaces the roster: a host
@@ -622,6 +623,7 @@ public static class BundleManifestReader
             IfcSite = ReadReadinessPath(revit, "ifc_site"),
             SurfaceDxf = ReadReadinessPath(revit, "surface_dxf"),
             Vectors = ReadReadinessPath(revit, "vectors"),
+            Contours = ReadReadinessPath(revit, "contours"),
         };
     }
 
@@ -665,6 +667,10 @@ public static class BundleManifestReader
             HorizontalUnit = TryReadLinearUnit(frame.Str("horizontal_unit"), out LinearUnit horizontal)
                 && horizontal != LinearUnit.Unspecified
                     ? horizontal
+                    : null,
+            VerticalUnit = TryReadLinearUnit(frame.Str("vertical_unit"), out LinearUnit vertical)
+                && vertical != LinearUnit.Unspecified
+                    ? vertical
                     : null,
         };
     }
@@ -903,6 +909,26 @@ public static class BundleManifestReader
                 FromOwnBlock = true,
             };
             manifest.RevitDrapeExtent = ReadGroundExtent(own, "extent", "extent_crs");
+        }
+
+        // The published contours (MPB 1.4.0): the same file `elevation.contours` names, under a
+        // pointer that states its frame. Every unit is carried raw; the planner checks each against
+        // the block's file_frame and refuses a disagreement rather than choosing between them.
+        if (RevitHostBlock(root)?.Object(RevitContours) is { } contours
+            && contours.Str("path") is { Length: > 0 } contoursPath)
+        {
+            manifest.RevitContours = new BundleArtifact
+            {
+                Path = contoursPath,
+                Sha256 = contours.OptionalStr("sha256"),
+                Units = contours.Str("units"),
+                HorizontalUnits = contours.OptionalStr("horizontal_units"),
+                VerticalUnits = contours.OptionalStr("vertical_units"),
+                HorizontalFrame = contours.Str("horizontal_frame"),
+                VerticalReference = contours.OptionalStr("vertical_reference"),
+                VerticalDatum = contours.OptionalStr("vertical_datum"),
+                FromOwnBlock = true,
+            };
         }
     }
 

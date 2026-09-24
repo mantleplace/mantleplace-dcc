@@ -152,6 +152,7 @@ public static class WindowLabels
     public static string LayerName(ImportLayer layer) => layer switch
     {
         ImportLayer.Terrain => "Terrain",
+        ImportLayer.PublishedContours => "Published Contours",
         ImportLayer.ContextBuildings => "Context Buildings",
         ImportLayer.SiteModel => "Site Model",
         ImportLayer.RoadCentrelines => "Road Centrelines",

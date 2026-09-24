@@ -23,6 +23,12 @@ public enum ImportStepKind
     /// <summary>Insert ▸ Link CAD, then Create from Import ▸ Select Import Instance.</summary>
     ToposurfaceFromSurfaceDxf,
 
+    /// <summary>
+    /// The bundle's published contours, one <c>DirectShape</c> per contour on a "Published Contours"
+    /// subcategory — see <c>docs/adr/0013-revit-published-contours-are-directshapes.md</c>.
+    /// </summary>
+    PublishedContours,
+
     /// <summary>Insert ▸ Link IFC — kept as a coordinated reference, not opened as a model.</summary>
     /// <remarks>
     /// Its checklist row starts unchecked (<see cref="ImportLayers.OnByDefault"/>):
@@ -515,6 +521,12 @@ public sealed class ImportStep
 
     /// <summary>The unit the artifact's coordinates are in — what Revit's import dialog needs.</summary>
     public LinearUnit Units { get; init; } = LinearUnit.Unspecified;
+
+    /// <summary>
+    /// The unit of the file's heights where the pointer states it apart from <see cref="Units"/> —
+    /// the published contours only. <see cref="LinearUnit.Unspecified"/> everywhere else.
+    /// </summary>
+    public LinearUnit VerticalUnits { get; init; } = LinearUnit.Unspecified;
 
     /// <summary>
     /// How a vector layer's coordinates reach <see cref="Frame"/>: lon/lat, absolute in the origin's
