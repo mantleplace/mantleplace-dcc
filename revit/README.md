@@ -261,15 +261,33 @@ the project displays lengths in the other unit system, and it changes nothing: P
 yours. Then the checklist: one box for each
 layer the bundle carries (`Terrain`, `Published Contours`, `Context Buildings`, `Site Model`,
 `Road Centrelines`, `Land Use Subdivisions`, `Land Cover Subdivisions`, `Water Subdivisions`,
-`Road Subdivisions`, `Planting`, `Imagery Drape`), all ticked but two. `Site Model` links the site
-model, whose buildings `Context Buildings` has already copied in, and ticking both shows every
-building twice. `Published Contours` is for a curator who wants the order's own linework: the
-toposolid already draws contours of its own. Nothing runs until `Import` is pressed. Every kind of subdivision and the drape need the terrain, so unticking `Terrain` disables
+`Road Subdivisions`, `Planting`, `Flood Zones`, `Steep Ground`, `Imagery Drape`), all ticked but
+four. `Site Model` links the site model, whose buildings `Context Buildings` has already copied in,
+and ticking both shows every building twice. `Published Contours` is for a curator who wants the
+order's own linework: the toposolid already draws contours of its own. `Flood Zones` and
+`Steep Ground` draw a hazard plan, which is for planning the site rather than rendering it, so they
+wait to be asked for. Nothing runs until `Import` is pressed. Every kind of subdivision and the drape need the terrain, so unticking `Terrain` disables
 them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
 out creates nothing, and the log says it was left out by choice. The shared coordinates, the site
 location and the attribution are not layers and are written whatever is ticked. Leaving out the drape also builds the
 terrain on the project's own ground type rather than the imagery one. Closing the window before
 `Import` imports nothing and leaves the last run's log as it was.
+
+**Flood zones and steep ground go on a hazard plan, never on the terrain.** Ticking either makes a
+floor plan on the project's lowest level named `Mantle Place Hazard Plan` and the build's token,
+cropped to the imagery's published rectangle and scaled to fit a sheet, and draws the layer there
+as filled regions: the flood map's zones filled in the colour a planner expects of them, a floodway
+hatched over its zone's colour, and steep ground hatched with no fill so a flood zone shows through
+it. A zone key beside the site names each zone and threshold the plan shows in the bundle's own
+words, says the plan is context and not a flood determination, and lists the FIRM panels to verify a
+zone against where the bundle names them. Nothing on the terrain, and nothing a render sees, changes.
+A polygon Revit refuses as a filled region is skipped and counted in the log, never repaired. The
+filled region types are found by name on a later import, so a colour you change is kept. Importing
+the same build again adds a layer the plan does not have yet, with its rows appended to the key, and
+leaves one it already holds alone; a later build gets a plan of its own, and the old one is not
+touched. A bundle that has no flood zones for the area says so in the log and draws no plan: an
+absent layer says nothing about the site. [ADR 0014](../docs/adr/0014-revit-hazards-are-drawn-on-a-hazard-plan.md)
+is why.
 
 **What the bundle holds and cannot be imported is said before the import.** Below the checklist,
 under `Unavailable`, each row the bundle holds and this import cannot place is named with one plain

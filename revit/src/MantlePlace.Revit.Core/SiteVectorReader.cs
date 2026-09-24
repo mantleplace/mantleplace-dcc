@@ -72,6 +72,20 @@ public sealed class SiteFeature
     /// themselves to the previous one.
     /// </remarks>
     public int PolygonOrdinal { get; init; }
+
+    /// <summary>
+    /// <c>properties.fld_zone</c> verbatim — the flood map's zone, such as <c>AE</c> — or empty.
+    /// Flood zones only.
+    /// </summary>
+    public string FloodZone { get; init; } = string.Empty;
+
+    /// <summary><c>properties.zone_subty</c> verbatim, such as <c>FLOODWAY</c>, or empty. Flood zones only.</summary>
+    public string FloodZoneSubtype { get; init; } = string.Empty;
+
+    /// <summary>
+    /// <c>properties.threshold_deg</c> exactly as the file wrote the number, or empty. Steep ground only.
+    /// </summary>
+    public string Threshold { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -180,7 +194,10 @@ public static class SiteVectorReader
             properties?.Str("name") ?? string.Empty,
             properties?.Str("class") ?? string.Empty,
             properties?.OptionalDouble("width_m_estimated"),
-            properties?.Str("subtype") ?? string.Empty);
+            properties?.Str("subtype") ?? string.Empty,
+            properties?.Str("fld_zone") ?? string.Empty,
+            properties?.Str("zone_subty") ?? string.Empty,
+            properties?.RawNumber("threshold_deg") ?? string.Empty);
 
         if (feature.Object("geometry") is not { } geometry)
         {
@@ -312,6 +329,9 @@ public static class SiteVectorReader
             Classification = carried.Classification,
             WidthM = carried.WidthM,
             Subtype = carried.Subtype,
+            FloodZone = carried.FloodZone,
+            FloodZoneSubtype = carried.FloodZoneSubtype,
+            Threshold = carried.Threshold,
             IsHole = isHole,
             PolygonOrdinal = polygon,
         });
@@ -322,7 +342,10 @@ public static class SiteVectorReader
         string Name,
         string Classification,
         double? WidthM,
-        string Subtype);
+        string Subtype,
+        string FloodZone,
+        string FloodZoneSubtype,
+        string Threshold);
 
     private static bool TryReadPosition(JsonElement position, Placement placement, out SiteVertex vertex)
     {

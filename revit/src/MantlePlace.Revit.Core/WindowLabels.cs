@@ -161,6 +161,8 @@ public static class WindowLabels
         ImportLayer.WaterSubdivisions => "Water Subdivisions",
         ImportLayer.RoadSubdivisions => "Road Subdivisions",
         ImportLayer.Planting => "Planting",
+        ImportLayer.FloodZones => "Flood Zones",
+        ImportLayer.SteepGround => "Steep Ground",
         ImportLayer.ImageryDrape => "Imagery Drape",
         _ => layer.ToString(),
     };
@@ -217,7 +219,7 @@ public static class WindowLabels
         {
             // A bundle with no origin, or with copies only in a frame this host cannot place, was cut
             // before the format carried what Revit needs; a re-download is cut again.
-            SkipReasonCode.NoSiteFrame or SkipReasonCode.CoordinateSystemNotSupported =>
+            SkipReasonCode.NoSiteFrame or SkipReasonCode.CoordinateSystemNotSupported or SkipReasonCode.PredatesHostCopy =>
                 $"This bundle was built before Revit could receive {these}. Download the bundle again from your vault to get {them}.",
             // The bundle says nothing of it: cut before the order asked for it, or with nothing
             // there to cut. The planner's own sentence sends the curator to the vault; so does this.

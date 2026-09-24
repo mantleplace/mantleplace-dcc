@@ -14,6 +14,7 @@ exitCode |= PublishedContourTests.Run();
 exitCode |= PublishedContourPlanTests.Run();
 exitCode |= SiteVectorTests.Run();
 exitCode |= HostFramePlacementTests.Run();
+exitCode |= HazardPlanTests.Run();
 exitCode |= ProjectionConformanceTests.Run();
 exitCode |= CacheKeySanitiserTests.Run();
 exitCode |= ImportStepLifetimeTests.Run();

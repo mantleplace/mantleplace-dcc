@@ -59,6 +59,10 @@ public static class ImportStepKinds
         ImportStepKind.RoadPolygons => ExtractionLifetime.Transient,
         ImportStepKind.Vegetation => ExtractionLifetime.Transient,
 
+        // The hazard layers become filled regions in a plan view; Revit keeps no path to the file.
+        ImportStepKind.FloodZones => ExtractionLifetime.Transient,
+        ImportStepKind.SteepGround => ExtractionLifetime.Transient,
+
         // The same file as LinkSiteIfc, and the opposite answer: the buildings are copied out of the
         // site model into elements of the project's own, and nothing links to the IFC afterwards.
         ImportStepKind.ContextBuildings => ExtractionLifetime.Transient,

@@ -220,9 +220,10 @@ internal sealed partial class RevitBundleImporter
     /// </summary>
     /// <remarks>
     /// Flat by construction: a subdivision profile is projected onto the toposolid, so the loop's own
-    /// elevation is irrelevant and zero keeps it well inside Revit's tolerance.
+    /// elevation is irrelevant and zero keeps it well inside Revit's tolerance. A filled region's loop
+    /// is drawn at its plan's level instead (<paramref name="z"/>), in the view's own plane.
     /// </remarks>
-    private CurveLoop? Loop(SiteFeature ring)
+    private CurveLoop? Loop(SiteFeature ring, double z = 0.0)
     {
         List<Curve> edges = [];
         for (int index = 0; index < ring.Vertices.Count; index++)
@@ -230,8 +231,8 @@ internal sealed partial class RevitBundleImporter
             SiteVertex from = ring.Vertices[index];
             SiteVertex to = ring.Vertices[(index + 1) % ring.Vertices.Count];
 
-            XYZ start = new(MetresToInternal(from.EastM), MetresToInternal(from.NorthM), 0.0);
-            XYZ end = new(MetresToInternal(to.EastM), MetresToInternal(to.NorthM), 0.0);
+            XYZ start = new(MetresToInternal(from.EastM), MetresToInternal(from.NorthM), z);
+            XYZ end = new(MetresToInternal(to.EastM), MetresToInternal(to.NorthM), z);
             if (start.DistanceTo(end) > _document.Application.ShortCurveTolerance)
             {
                 edges.Add(Line.CreateBound(start, end));

@@ -21,11 +21,9 @@ namespace MantlePlace.Revit.Core;
 /// dropped entirely when it is not.
 /// </para>
 /// <para>
-/// Manifest v19 closes this vocabulary (the platform shipped <c>canonicalize_dcc_reason</c> as an
-/// identity function; v19 flips it, collapses the six <c>*_not_produced</c> literals to
-/// <c>not_produced</c> and adds <c>not_selected</c>). Those two tokens are deliberately NOT mapped
-/// yet: the clean break (<c>HPS-31</c>) refuses a v19 bundle outright while the floor is 18, so an
-/// alias for them would be unreachable code. Add them in the same change that raises the floor.
+/// Manifest v19 closed this vocabulary: it collapsed the six <c>*_not_produced</c> literals to
+/// <c>not_produced</c> and added <c>not_selected</c>. Both are mapped, and so are the six literals,
+/// which a bundle still in a curator's cache may carry.
 /// </para>
 /// </remarks>
 public static class ReadinessReasons
@@ -57,6 +55,10 @@ public static class ReadinessReasons
         ["heightmap_not_produced"] = NotProduced,
         ["mesh_not_produced"] = NotProduced,
         ["cesium_terrain_not_produced"] = NotProduced,
+
+        // The closed forms since v19, and what the hazard layers' verdicts say (MPB 1.4.0).
+        ["not_produced"] = NotProduced,
+        ["not_selected"] = "it was not part of what was ordered",
     };
 
     private const string NotProduced = "the platform did not produce it for this order";

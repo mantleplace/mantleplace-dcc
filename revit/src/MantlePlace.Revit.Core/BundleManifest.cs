@@ -148,6 +148,16 @@ public sealed class RevitReadiness
     /// </summary>
     public ReadinessPath Contours { get; init; } = new();
 
+    /// <summary>
+    /// Whether <c>hosts.revit.vectors</c> carries the <c>flood_zones</c> layer (MPB 1.4.0). Its reason
+    /// says why a layer is absent, and an absent layer is never a statement that the site has no flood
+    /// hazard.
+    /// </summary>
+    public ReadinessPath FloodZones { get; init; } = new();
+
+    /// <summary>Whether <c>hosts.revit.vectors</c> carries the <c>steep_slope</c> layer (MPB 1.4.0).</summary>
+    public ReadinessPath SteepGround { get; init; } = new();
+
     /// <summary>True when <c>hosts.revit.readiness</c> was present at all.</summary>
     public bool Declared { get; init; }
 }
@@ -313,6 +323,34 @@ public sealed record AttributionSource(
     string? AttributionText,
     string? License,
     string? LicenseUrl);
+
+/// <summary>One FIRM panel the flood zones were clipped against, verbatim.</summary>
+/// <param name="Panel"><c>firm_pan</c>, the panel number.</param>
+/// <param name="EffectiveDate"><c>effective_date</c> as published, or <c>null</c> where FEMA publishes none.</param>
+public sealed record FloodPanel(string Panel, string? EffectiveDate);
+
+/// <summary>
+/// <c>flood.nfhl</c>, verbatim: which flood map the zones came from, for the zone key to name.
+/// </summary>
+/// <remarks>
+/// Pass-through, for the reason <see cref="AttributionSource"/> is. A zone in a bundle is context and
+/// never a flood determination; what this host can honestly add is where to verify it — the panels —
+/// and a panel the platform could not name is not guessed at here.
+/// </remarks>
+public sealed class FloodMap
+{
+    /// <summary><c>zones</c>, in the published order.</summary>
+    public IReadOnlyList<string> Zones { get; init; } = [];
+
+    /// <summary><c>dfirm_ids</c>, the flood studies the zones were published in.</summary>
+    public IReadOnlyList<string> DfirmIds { get; init; } = [];
+
+    /// <summary><c>panels</c>, or empty when the platform's panel query failed or predates 1.4.0.</summary>
+    public IReadOnlyList<FloodPanel> Panels { get; init; } = [];
+
+    /// <summary><c>source</c>, verbatim, or empty.</summary>
+    public string Source { get; init; } = string.Empty;
+}
 
 /// <summary>
 /// <c>location.time_zone</c>, verbatim — a fact about the place, published for
@@ -484,6 +522,40 @@ public sealed class BundleManifest
     /// shared set — that is, when the bundle carries the copy.
     /// </summary>
     public bool VectorsFromOwnBlock { get; internal set; }
+
+    /// <summary>
+    /// The <c>flood_zones</c> layer of <c>hosts.revit.vectors</c>: the flood map's zones, in this host's
+    /// frame (MPB 1.4.0). Read from this host's own block and nowhere else — the shared set does not
+    /// carry them, and the GeoPackage every bundle has shipped is a format this host cannot read.
+    /// </summary>
+    public BundleArtifact? FloodZones { get; internal set; }
+
+    /// <summary>
+    /// The <c>steep_slope</c> layer of <c>hosts.revit.vectors</c>: steep ground at the platform's
+    /// stated threshold, in this host's frame (MPB 1.4.0). Own block only, as <see cref="FloodZones"/>.
+    /// </summary>
+    public BundleArtifact? SteepGround { get; internal set; }
+
+    /// <summary>
+    /// <c>flood.nfhl</c>'s published facts, or <c>null</c> when the bundle carries no flood block —
+    /// which the schema says it does not outside the flood map's coverage.
+    /// </summary>
+    public FloodMap? FloodMap { get; internal set; }
+
+    /// <summary>
+    /// <c>elevation.steep_slope.threshold_deg</c> exactly as the manifest wrote the number —
+    /// <c>35.0</c>, not <c>35</c> — or <c>null</c> when the block is absent.
+    /// </summary>
+    /// <remarks>
+    /// Kept as text because the zone key shows the manifest's own number and nothing this host
+    /// formatted: a threshold is policy, and a policy is quoted rather than restated. Its presence also
+    /// says the bundle carries steep ground in a GeoPackage, which is how a bundle from before 1.4.0 is
+    /// told apart from one with no steep ground.
+    /// </remarks>
+    public string? SteepGroundThreshold { get; internal set; }
+
+    /// <summary>Whether <c>elevation.steep_slope</c> is present at all, with or without a threshold.</summary>
+    public bool HasSteepGroundBlock { get; internal set; }
 
     /// <summary><c>hosts.revit.file_frame</c>, or <c>null</c> on a bundle cut before MPB 1.3.0.</summary>
     public FileFrame? FileFrame { get; internal set; }

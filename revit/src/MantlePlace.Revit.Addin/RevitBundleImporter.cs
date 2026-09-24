@@ -218,6 +218,10 @@ internal sealed partial class RevitBundleImporter(
                 return Once(() => ApplyImageryDrape(step));
             case ImportStepKind.AttributionAndProvenance:
                 return Once(() => WriteAttributionAndProvenance(step));
+            case ImportStepKind.FloodZones:
+                return Once(() => ImportHazardLayer(step, HazardLayer.FloodZones));
+            case ImportStepKind.SteepGround:
+                return Once(() => ImportHazardLayer(step, HazardLayer.SteepGround));
             default:
                 // Fail, do not log-and-continue. A step kind added to the pure core and never
                 // dispatched here would otherwise import silently-incomplete: the plan says the bundle

@@ -91,6 +91,21 @@ internal static class JsonReading
         return values;
     }
 
+    /// <summary>
+    /// A number field exactly as the document wrote it — <c>35.0</c> stays <c>35.0</c> — or
+    /// <c>null</c> when the field is absent or not a number.
+    /// </summary>
+    /// <remarks>
+    /// For a value this host quotes rather than computes with: printing a parsed double would turn
+    /// the manifest's <c>35.0</c> into <c>35</c>, which is a restatement, not the published words.
+    /// </remarks>
+    internal static string? RawNumber(this JsonElement parent, string field)
+        => parent.ValueKind == JsonValueKind.Object
+           && parent.TryGetProperty(field, out JsonElement value)
+           && value.ValueKind == JsonValueKind.Number
+            ? value.GetRawText()
+            : null;
+
     internal static bool Bool(this JsonElement parent, string field, bool fallback = false)
         => parent.OptionalBool(field) ?? fallback;
 

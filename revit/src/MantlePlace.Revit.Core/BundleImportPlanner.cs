@@ -83,6 +83,16 @@ public static class BundleImportPlanner
         PlanSiteLocation(manifest, steps, skipped);
         PlanSiteContext(manifest, entries, steps, skipped);
 
+        // After every layer that builds the model, and flood before steep: steep ground is a hatch
+        // drawn over the flood zones' fill. The crop is the drape's, planned above whether or not
+        // the curator keeps the drape, because the plan is cropped to the published rectangle rather
+        // than to whatever this import happened to texture.
+        FootprintExtent? crop = drapeSteps.FirstOrDefault()?.Drape is { } placed
+            ? new FootprintExtent(placed.LeftM, placed.BottomM, placed.RightM, placed.TopM)
+            : null;
+        PlanHazard(manifest, entries, steps, skipped, HazardLayer.FloodZones, crop);
+        PlanHazard(manifest, entries, steps, skipped, HazardLayer.SteepGround, crop);
+
         // Every import, whatever else it carries: the order and the build are worth recording even
         // when the manifest names no sources, and a record is how the next import finds the note
         // this one wrote. After the layers it credits, and before the drape, which stays last.
@@ -666,6 +676,86 @@ public static class BundleImportPlanner
     }
 
     /// <summary>
+    /// One hazard layer on the hazard plan, or why it is not in this bundle in a form this host can
+    /// draw.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Placed exactly as every own-block layer is, refusals and all (<see cref="PlanPlacedArtifact"/>):
+    /// a hazard layer is only ever read from this host's own copy.
+    /// </para>
+    /// <para>
+    /// An absent layer is explained by its own readiness verdict (MPB 1.4.0), and never read as a
+    /// statement about the site. The area being outside the flood map's coverage, or having no such
+    /// ground, is the bundle saying there is none — said in the log and not listed as unavailable,
+    /// since no vault can change it. Not yet picked in the vault keeps the vault's remedy. A bundle from
+    /// before 1.4.0 has no verdict: one that carries the layer's GeoPackage was cut before this host
+    /// had a copy and is listed for a re-download, and one that carries nothing of it is silent,
+    /// because a bundle that old carried a flood block wherever the flood map had one.
+    /// </para>
+    /// </remarks>
+    private static void PlanHazard(
+        BundleManifest manifest,
+        BundleEntryIndex entries,
+        List<ImportStep> steps,
+        List<SkippedImport> skipped,
+        HazardLayer layer,
+        FootprintExtent? crop)
+    {
+        bool flood = layer == HazardLayer.FloodZones;
+        ImportStepKind kind = flood ? ImportStepKind.FloodZones : ImportStepKind.SteepGround;
+        string label = flood ? "flood zones" : "steep ground";
+        BundleArtifact? artifact = flood ? manifest.FloodZones : manifest.SteepGround;
+
+        if (artifact is null)
+        {
+            ReadinessPath readiness = flood ? manifest.Readiness.FloodZones : manifest.Readiness.SteepGround;
+            bool carriesGeoPackage = flood ? manifest.FloodMap is not null : manifest.HasSteepGroundBlock;
+            (SkipReasonCode code, string reason) = HazardAbsence(label, readiness, carriesGeoPackage);
+            skipped.Add(new SkippedImport { Kind = kind, ReasonCode = code, Reason = reason });
+            return;
+        }
+
+        PlanPlacedArtifact(
+            manifest,
+            artifact,
+            SiteFrame.For(manifest),
+            entries,
+            kind,
+            label,
+            steps,
+            skipped,
+            hazard: new HazardPlanFacts
+            {
+                Build = HazardPlan.BuildToken(manifest.JobId),
+                Crop = crop,
+                FloodMap = flood ? manifest.FloodMap : null,
+                Threshold = flood ? null : manifest.SteepGroundThreshold,
+            });
+    }
+
+    private static (SkipReasonCode Code, string Reason) HazardAbsence(string label, ReadinessPath readiness, bool carriesGeoPackage)
+    {
+        if (readiness.Declared)
+        {
+            string clause = ReadinessReasons.ClauseFor(readiness.Reason)
+                ?? "the bundle does not say why";
+            SkipReasonCode code = readiness.Reason.Trim() is "outside_coverage" or "no_features_in_aoi"
+                ? SkipReasonCode.DeclaredAbsent
+                : SkipReasonCode.ArtifactNotInManifest;
+            return (code, $"No {label} in this bundle: {clause}. An absent layer says nothing about the "
+                + "site itself.");
+        }
+
+        return carriesGeoPackage
+            ? (SkipReasonCode.PredatesHostCopy,
+                $"This bundle carries its {label} only as a GeoPackage, from before they were published for "
+                + "Revit, so none were drawn. Download the bundle again from your vault at mantle.place/vault "
+                + "to get them.")
+            : (SkipReasonCode.DeclaredAbsent, $"No {label} in this bundle.");
+    }
+
+    /// <summary>
     /// Resolves one artifact whose coordinates have to be brought into the bundle's frame, or
     /// explains why they cannot be.
     /// </summary>
@@ -681,6 +771,7 @@ public static class BundleImportPlanner
     /// What to say when <paramref name="artifact"/> is <c>null</c> because the bundle declares the
     /// layer absent (<see cref="SkipReasonCode.DeclaredAbsent"/>), or <c>null</c> for the vault's remedy.
     /// </param>
+    /// <param name="hazard">What a hazard step carries beyond its file; <c>null</c> for every other kind.</param>
     private static void PlanPlacedArtifact(
         BundleManifest manifest,
         BundleArtifact? artifact,
@@ -692,7 +783,8 @@ public static class BundleImportPlanner
         List<SkippedImport> skipped,
         string? absence = null,
         SurfaceCropWindow? crop = null,
-        LinearUnit verticalUnits = LinearUnit.Unspecified)
+        LinearUnit verticalUnits = LinearUnit.Unspecified,
+        HazardPlanFacts? hazard = null)
     {
         if (artifact is null)
         {
@@ -782,6 +874,7 @@ public static class BundleImportPlanner
             // rest by the manifest's own shape, and a branch here would be a second place to keep
             // in step with it.
             FoliageTypeVocabulary = artifact.FoliageTypeVocabulary,
+            Hazard = hazard,
         });
     }
 

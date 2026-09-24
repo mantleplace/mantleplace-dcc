@@ -35,6 +35,12 @@ public enum ImportLayer
 
     /// <summary>The tree points, of every foliage type: Revit's Planting category, and the host's own noun.</summary>
     Planting,
+
+    /// <summary>The flood map's zones, on the hazard plan.</summary>
+    FloodZones,
+
+    /// <summary>Steep ground at the published threshold, on the hazard plan.</summary>
+    SteepGround,
     ImageryDrape,
 }
 
@@ -56,6 +62,8 @@ public static class ImportLayers
         ImportStepKind.Water => ImportLayer.WaterSubdivisions,
         ImportStepKind.RoadPolygons => ImportLayer.RoadSubdivisions,
         ImportStepKind.Vegetation => ImportLayer.Planting,
+        ImportStepKind.FloodZones => ImportLayer.FloodZones,
+        ImportStepKind.SteepGround => ImportLayer.SteepGround,
         ImportStepKind.ImageryDrape => ImportLayer.ImageryDrape,
         _ => null,
     };
@@ -66,7 +74,8 @@ public static class ImportLayers
     /// <remarks>
     /// Every kind of subdivision is cut into the ground and the drape is a material the ground
     /// wears, so all of them need the terrain. Road centrelines, trees and context buildings carry
-    /// their own Z and do not; the site model is a link.
+    /// their own Z and do not; the site model is a link. Neither hazard layer does either: both are
+    /// drawn flat in a plan view, which needs a level and no toposolid.
     /// </remarks>
     public static ImportLayer? PrerequisiteOf(ImportLayer layer) => layer switch
     {
@@ -81,8 +90,13 @@ public static class ImportLayers
     /// <summary>Whether a layer's box starts checked.</summary>
     /// <remarks>
     /// <para>
-    /// Every layer but two, each with the stated reason <c>HPS-51</c> asks for before a row starts
-    /// unchecked. The site model's link: its buildings are copied into the project as
+    /// Every layer but four, each with the stated reason <c>HPS-51</c> asks for before a row starts
+    /// unchecked. The two hazard layers: the curator this import is made for is the visualiser
+    /// presenting a render, and a hazard plan is for someone planning the site; both are one tick
+    /// away, and neither touches the model a render is made from.
+    /// </para>
+    /// <para>
+    /// The site model's link: its buildings are copied into the project as
     /// <see cref="ImportLayer.ContextBuildings"/>, and a link as well shows each one twice, once
     /// selectable and once not (<c>docs/adr/0012-context-buildings-come-from-the-site-model.md</c>).
     /// The published contours: the toposolid already draws contours of its own, so the published
@@ -95,7 +109,9 @@ public static class ImportLayers
     /// nobody is there to choose for brings in everything.
     /// </para>
     /// </remarks>
-    public static bool OnByDefault(ImportLayer layer) => layer is not (ImportLayer.SiteModel or ImportLayer.PublishedContours);
+    public static bool OnByDefault(ImportLayer layer)
+        => layer is not (ImportLayer.SiteModel or ImportLayer.PublishedContours
+            or ImportLayer.FloodZones or ImportLayer.SteepGround);
 }
 
 /// <summary>Which layers an import brings in. Immutable.</summary>

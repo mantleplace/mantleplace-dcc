@@ -184,6 +184,7 @@ public static class BundleManifestReader
         ReadReadiness(manifest, root);
         ReadFileFrame(manifest, root);
         ReadOwnVectors(manifest, root);
+        ReadHazards(manifest, root);
         ReadArtifacts(manifest, root);
         refusal ??= ReadGeoreference(manifest, root);
 
@@ -624,6 +625,8 @@ public static class BundleManifestReader
             SurfaceDxf = ReadReadinessPath(revit, "surface_dxf"),
             Vectors = ReadReadinessPath(revit, "vectors"),
             Contours = ReadReadinessPath(revit, "contours"),
+            FloodZones = ReadReadinessPath(revit, "flood_zones"),
+            SteepGround = ReadReadinessPath(revit, "steep_slope"),
         };
     }
 
@@ -706,6 +709,61 @@ public static class BundleManifestReader
         manifest.LandCover = ReadOwnVectorLayer(layers, "land_cover");
         manifest.Water = ReadOwnVectorLayer(layers, "water");
         manifest.RoadPolygons = ReadOwnVectorLayer(layers, "road_polygons");
+    }
+
+    /// <summary>
+    /// The two hazard layers of this host's own copy, and what the manifest publishes about each:
+    /// the flood map the zones came from, and the steep-ground threshold as written.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Own block only (MPB 1.4.0). The shared set carries neither layer, and the GeoPackages that
+    /// every bundle before 1.4.0 carried are in a format this host does not read — and flood's is in
+    /// lon/lat, which would need projecting (<c>HPS-45</c> permits that only onto a UTM origin).
+    /// Taking the own copy alone keeps both layers on the one route that places anything by
+    /// subtraction.
+    /// </para>
+    /// <para>
+    /// Never a refusal: every fact here is shown to a curator, not acted on, so a malformed flood
+    /// block costs its provenance lines and nothing else.
+    /// </para>
+    /// </remarks>
+    private static void ReadHazards(BundleManifest manifest, JsonElement root)
+    {
+        if (RevitHostBlock(root)?.Object("vectors")?.Array("layers") is { } layers)
+        {
+            manifest.FloodZones = ReadOwnVectorLayer(layers, "flood_zones");
+            manifest.SteepGround = ReadOwnVectorLayer(layers, "steep_slope");
+        }
+
+        if (root.Object("flood")?.Object("nfhl") is { } nfhl)
+        {
+            List<FloodPanel> panels = [];
+            if (nfhl.Array("panels") is { } published)
+            {
+                foreach (JsonElement panel in published.EnumerateArray())
+                {
+                    if (panel.ValueKind == JsonValueKind.Object && panel.OptionalStr("firm_pan") is { } number)
+                    {
+                        panels.Add(new FloodPanel(number, panel.OptionalStr("effective_date")));
+                    }
+                }
+            }
+
+            manifest.FloodMap = new FloodMap
+            {
+                Zones = nfhl.StringArray("zones"),
+                DfirmIds = nfhl.StringArray("dfirm_ids"),
+                Panels = panels,
+                Source = nfhl.Str("source"),
+            };
+        }
+
+        if (root.Object("elevation")?.Object("steep_slope") is { } steep)
+        {
+            manifest.HasSteepGroundBlock = true;
+            manifest.SteepGroundThreshold = steep.RawNumber("threshold_deg");
+        }
     }
 
     private static BundleArtifact? ReadOwnVectorLayer(JsonElement layers, string layerName)

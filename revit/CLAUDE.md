@@ -289,6 +289,18 @@ follow.
   subdivision per ring, because their stamps are positions in the layer and grouping the rings now
   would move every stamp after the first polygon with a hole.
 
+- **The hazard plan's calls have left that set**, in all three versions. `ViewPlan.Create` on the
+  lowest level, a plan's `CropBox` set in model coordinates with its annotation crop off,
+  `FilledRegionType.Duplicate` with a solid fill, a hatch over a fill and a hatch alone,
+  `FillPatternElement.Create` for a drafting hatch, `FilledRegion.Create` with an outer loop and its
+  inner loops at the level's elevation, a Comments write on a filled region, and `TextNote.Create`
+  in the plan all ran on 2026-09-24 through the harness described under the tree family below, on a
+  hand-made 1.4.0 copy of a cached order: 65 flood zones and 32 steep-ground polygons drawn, a
+  re-import adding steep ground to a plan that already held the flood zones, and a third import
+  drawing nothing. The regions and the key's swatches are clipped by the crop and the key's text is
+  not, which is why the crop is widened to take the swatches in ([ADR 0014](../docs/adr/0014-revit-hazards-are-drawn-on-a-hazard-plan.md)).
+  Which regions, colours, key rows and names is `HazardPlan`, `HazardStyles` and `ZoneKey`, headless.
+
 - **A toposolid subdivision is a different element in 2025 than in 2026 and 2027**, and one build has
   to drape both. In 2025 it is typeless and takes its material as an instance parameter. From 2026
   it is a `Toposolid` on the document's default toposolid type, the instance parameter is absent,

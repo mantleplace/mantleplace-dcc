@@ -122,6 +122,21 @@ public enum ImportStepKind
     /// Declared last so every kind before it keeps its number; its place in a plan is the planner's.
     /// </remarks>
     AttributionAndProvenance,
+
+    /// <summary>
+    /// The flood map's zones, drawn as filled regions on the hazard plan (<see cref="HazardPlan"/>).
+    /// </summary>
+    /// <remarks>
+    /// Context, never a flood determination, and never on the terrain: flood zones overlap the land
+    /// cover and the roads, and a coincident subdivision does not draw in cut order. Declared after
+    /// every older kind so each keeps its number.
+    /// </remarks>
+    FloodZones,
+
+    /// <summary>
+    /// Steep ground at the platform's stated threshold, hatched over the flood zones on the same plan.
+    /// </summary>
+    SteepGround,
 }
 
 /// <summary>Which toposolid type the terrain step builds the ground on.</summary>
@@ -243,6 +258,16 @@ public enum SkipReasonCode
     /// Declared last so every code before it keeps its number.
     /// </remarks>
     DeclaredAbsent,
+
+    /// <summary>
+    /// The bundle carries this layer only in a form from before this host had a copy of its own —
+    /// a GeoPackage, from before MPB 1.4.0 — and a re-download is cut again with the copy.
+    /// </summary>
+    /// <remarks>
+    /// Split from <see cref="ArtifactNotInManifest"/>, whose remedy is adding the layer to the order:
+    /// this one is already on the order. Declared last so every code before it keeps its number.
+    /// </remarks>
+    PredatesHostCopy,
 }
 
 /// <summary>
@@ -615,6 +640,38 @@ public sealed class ImportStep
     /// and what the provenance record stores, both copied from the manifest.
     /// </summary>
     public ProjectProvenance? Provenance { get; init; }
+
+    /// <summary>
+    /// Populated only for <see cref="ImportStepKind.FloodZones"/> and <see cref="ImportStepKind.SteepGround"/>:
+    /// which plan the layer is drawn on, and what its zone key quotes.
+    /// </summary>
+    public HazardPlanFacts? Hazard { get; init; }
+}
+
+/// <summary>
+/// What a hazard step needs beyond its file: the build whose plan it draws on, the rectangle that
+/// plan is cropped to, and the published words its zone key quotes.
+/// </summary>
+/// <remarks>
+/// Decided by the planner, where a test reaches it, and carried on the step for the reason
+/// <see cref="ImportStep.Frame"/> is: the shim draws, and does not go looking in the manifest.
+/// </remarks>
+public sealed class HazardPlanFacts
+{
+    /// <summary>The build token the plan is named and stamped with (<see cref="HazardPlan.BuildToken"/>).</summary>
+    public required string Build { get; init; }
+
+    /// <summary>
+    /// The drape's rectangle as published, in frame-local metres, or <c>null</c> when this import has
+    /// no drape to crop to — the plan is then drawn uncropped, and the log says so.
+    /// </summary>
+    public FootprintExtent? Crop { get; init; }
+
+    /// <summary><c>flood.nfhl</c>'s facts, for the key's heading. Read for flood zones only.</summary>
+    public FloodMap? FloodMap { get; init; }
+
+    /// <summary>The manifest's steep-ground threshold as written. Read for steep ground only.</summary>
+    public string? Threshold { get; init; }
 }
 
 /// <summary>
