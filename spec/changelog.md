@@ -19,6 +19,34 @@ history, not contract.
 
 ## Semver era
 
+### 1.4.0 — steep ground, flood provenance, and Revit's own contours (additive minor; published and frozen 2026-09-24)
+
+Every item below is additive, and nothing is removed or re-meant, so it is a MINOR under
+[compatibility](compatibility.md) §2 and every host floor at 1.0.0 reads it. The new
+requirements bind a producer writing 1.4.0, not a reader.
+
+- **`elevation.steep_slope` is declared.** Through 1.3.0 the block was emitted without a schema
+  entry, with a path, a threshold and a feature count only. It is now a pointer to the steep-ground
+  polygons, `Elevation/SteepSlope.gpkg`: every region of the delivered DEM at or above a slope the
+  platform states, in the delivered DEM's own grid rather than degrees, with that grid, its unit and
+  the threshold stated beside the path. The threshold is the platform's policy, carried on every
+  feature too; a reader shows it as published and never derives steep ground from the slope
+  raster. A flat area of interest ships no file and no pointer.
+- **`flood.nfhl` names the maps its zones came from**: the flood-study ids the delivered zones were
+  published in, and, when the panel query answered, the map panels over the area with their
+  effective dates — the authoritative maps a zone is to be checked against. The regulatory caveat
+  stands: a zone in the bundle is context, never a determination.
+- **`hosts.revit.contours`** is new: a second pointer to the published contours,
+  `Surface/Contours.dxf`, present only when the file states its own frame and that frame is the
+  block's `file_frame`, with its horizontal and vertical units stated apart because the file has one
+  unit for the whole drawing. A bundle whose contours predate 1.4.0 carries no pointer.
+- **`hosts.revit.vectors` may carry two more layers**, `steep_slope` and `flood_zones`: this host's
+  copies of the steep ground and the flood zones in its own frame, each feature carrying its
+  published attributes verbatim.
+- **`hosts.revit.readiness` gains `steep_slope`, `flood_zones` and `contours`**, and a 1.4.0 block
+  states all three: whether each shipped, and if not, why. An absent flood layer is not a statement
+  that the site has no flood hazard.
+
 ### 1.3.0 — files state their frame, and a host is handed its own (additive minor; published and frozen 2026-09-23)
 
 One minor carries the whole change: every item below is additive, and nothing is removed or
