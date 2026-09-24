@@ -249,6 +249,10 @@
       "revit",
       "unreal"
     ],
+    "vault.list.thumbnailNeverBreaksARow": [
+      "revit",
+      "unreal"
+    ],
     "vault.list.tierLabel": [
       "unreal"
     ],

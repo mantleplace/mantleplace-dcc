@@ -358,32 +358,38 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestEqual(Case->What(TEXT("itemCount")), Items.Num(), ExpectedCount);
 	}
 
-	if (const FCase* Case = Take(TEXT("vault.list.skipsMalformedRows")))
+	// The thumbnail case (web #897) asserts the same three things: every row in its three
+	// thumbnail shapes survives, in order, with no warning.
+	for (const TCHAR* ListCaseId :
+		{TEXT("vault.list.skipsMalformedRows"), TEXT("vault.list.thumbnailNeverBreaksARow")})
 	{
-		TArray<FMantlePlaceVaultItem> Items;
-		TArray<FString> Warnings;
-		FString Error;
-		TestTrue(Case->What(TEXT("accepted")),
-			FLogic::ParseListResponse(Case->Payload, Items, Error, &Warnings));
-
-		int32 ExpectedCount = -1;
-		WantsInt(*Case, TEXT("itemCount"), ExpectedCount);
-		TestEqual(Case->What(TEXT("itemCount")), Items.Num(), ExpectedCount);
-
-		int32 ExpectedWarnings = -1;
-		WantsInt(*Case, TEXT("warningCount"), ExpectedWarnings);
-		TestEqual(Case->What(TEXT("warningCount")), Warnings.Num(), ExpectedWarnings);
-
-		TArray<FString> ExpectedIds;
-		if (WantsStringArray(*Case, TEXT("orderIds"), ExpectedIds))
+		if (const FCase* Case = Take(ListCaseId))
 		{
-			TArray<FString> Actual;
-			for (const FMantlePlaceVaultItem& Item : Items)
+			TArray<FMantlePlaceVaultItem> Items;
+			TArray<FString> Warnings;
+			FString Error;
+			TestTrue(Case->What(TEXT("accepted")),
+				FLogic::ParseListResponse(Case->Payload, Items, Error, &Warnings));
+
+			int32 ExpectedCount = -1;
+			WantsInt(*Case, TEXT("itemCount"), ExpectedCount);
+			TestEqual(Case->What(TEXT("itemCount")), Items.Num(), ExpectedCount);
+
+			int32 ExpectedWarnings = -1;
+			WantsInt(*Case, TEXT("warningCount"), ExpectedWarnings);
+			TestEqual(Case->What(TEXT("warningCount")), Warnings.Num(), ExpectedWarnings);
+
+			TArray<FString> ExpectedIds;
+			if (WantsStringArray(*Case, TEXT("orderIds"), ExpectedIds))
 			{
-				Actual.Add(Item.OrderId);
+				TArray<FString> Actual;
+				for (const FMantlePlaceVaultItem& Item : Items)
+				{
+					Actual.Add(Item.OrderId);
+				}
+				TestEqual(Case->What(TEXT("orderIds")), FString::Join(Actual, TEXT(",")),
+					FString::Join(ExpectedIds, TEXT(",")));
 			}
-			TestEqual(Case->What(TEXT("orderIds")), FString::Join(Actual, TEXT(",")),
-				FString::Join(ExpectedIds, TEXT(",")));
 		}
 	}
 
