@@ -969,6 +969,22 @@
       }
     },
     {
+      "id": "vault.list.thumbnailNeverBreaksARow",
+      "group": "vault",
+      "file": "vault/list-thumbnail-shapes.json",
+      "expect": "accept",
+      "reason": "The Vault thumbnail (web #897) is an optional listing field in three shapes: an object ({url, width, height, expiresAt}), null, and absent (a server older than the field). All three are the same well-formed row: none may be skipped, warned about, or blank the vault. The image's own assertion (object = image, null and absent = no image) is not declared here, because an expectations key a host does not read fails that host's suite (HPS-46); it arrives with each host's adoption of the field (#160 Revit, #241 Unreal).",
+      "expectations": {
+        "itemCount": 3,
+        "orderIds": [
+          "th1",
+          "th2",
+          "th3"
+        ],
+        "warningCount": 0
+      }
+    },
+    {
       "id": "vault.list.tierLabel",
       "group": "vault",
       "file": "vault/tier-label.json",

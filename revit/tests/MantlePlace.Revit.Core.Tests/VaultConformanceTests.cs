@@ -73,6 +73,7 @@ internal static class VaultConformanceTests
             case "vault.list.empty":
             case "vault.list.fullAndLegacy":
             case "vault.list.skipsMalformedRows":
+            case "vault.list.thumbnailNeverBreaksARow":
             case "vault.list.wrongTopLevelKey":
             case "vault.reject.notJson":
                 DriveListing(run, corpusCase);

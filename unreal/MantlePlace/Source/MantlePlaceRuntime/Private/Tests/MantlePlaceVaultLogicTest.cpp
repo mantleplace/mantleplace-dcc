@@ -358,7 +358,11 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestEqual(Case->What(TEXT("itemCount")), Items.Num(), ExpectedCount);
 	}
 
-	if (const FCase* Case = Take(TEXT("vault.list.skipsMalformedRows")))
+	// The thumbnail case (web #897) asserts the same three things: every row in its three
+	// thumbnail shapes survives, in order, with no warning.
+	for (const TCHAR* ListCaseId :
+		{TEXT("vault.list.skipsMalformedRows"), TEXT("vault.list.thumbnailNeverBreaksARow")})
+	if (const FCase* Case = Take(ListCaseId))
 	{
 		TArray<FMantlePlaceVaultItem> Items;
 		TArray<FString> Warnings;
