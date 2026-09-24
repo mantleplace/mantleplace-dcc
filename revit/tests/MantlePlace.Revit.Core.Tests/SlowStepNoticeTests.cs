@@ -24,6 +24,10 @@ internal static class SlowStepNoticeTests
         ImportStepKind.Vegetation,
         ImportStepKind.SiteContextView,
         ImportStepKind.AttributionAndProvenance,
+
+        // Filled regions in a plan view: flat, with no toposolid to rebuild.
+        ImportStepKind.FloodZones,
+        ImportStepKind.SteepGround,
     ];
 
     private static readonly ImportStepKind[] SlowKinds =

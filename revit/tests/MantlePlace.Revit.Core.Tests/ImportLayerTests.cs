@@ -73,11 +73,12 @@ internal static class ImportLayerTests
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.Planting) is null, "trees carry their own Z");
         });
 
-        run.Case("every layer but the site model's link and the published contours is on by default", () =>
+        run.Case("every layer but the site model's link, the published contours and the two hazard layers is on by default", () =>
         {
-            // The reason HPS-51 asks for before a row starts unchecked: the site model's buildings are
+            // The reasons HPS-51 asks for before a row starts unchecked: the site model's buildings are
             // already copied in, and a link as well shows each one twice; the toposolid already draws
-            // contours of its own (ADR 0013).
+            // contours of its own (ADR 0013); and the hazard plan is for the curator planning the site,
+            // not the visualiser this import is made for.
             foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
             {
                 run.Equal(ImportLayers.OnByDefault(layer), !StartsUnchecked(layer), $"{layer}'s box");
@@ -136,7 +137,7 @@ internal static class ImportLayerTests
             run.False(checklist.IsChecked(ImportLayer.SiteModel), "a layer that is not offered is never chosen");
         });
 
-        run.Case("everything but the link and the contours starts checked, all of it enabled, and can be imported", () =>
+        run.Case("everything but the link, the contours and the hazard layers starts checked, all of it enabled, and can be imported", () =>
         {
             ImportChecklist checklist = new(Enum.GetValues<ImportLayer>());
 
@@ -333,6 +334,7 @@ internal static class ImportLayerTests
             {
                 [SkipReasonCode.NoSiteFrame] = BuiltBefore,
                 [SkipReasonCode.CoordinateSystemNotSupported] = BuiltBefore,
+                [SkipReasonCode.PredatesHostCopy] = BuiltBefore,
                 [SkipReasonCode.EntryNotInArchive] = "This bundle is missing the file for this. Download the bundle again from your vault to get it.",
                 [SkipReasonCode.UnitNotUnderstood] = "This bundle measures this in a unit this version of Mantle Place cannot read. Update Mantle Place to import it.",
                 [SkipReasonCode.ExtentNotCorroborated] = "Mantle Place could not confirm which ground this covers. Download the bundle again from your vault to get it.",
@@ -559,6 +561,11 @@ internal static class ImportLayerTests
     private static ImportLayerChoice AllBut(ImportLayer layer)
         => ImportLayerChoice.Only(Enum.GetValues<ImportLayer>().Where(candidate => candidate != layer));
 
+    /// <summary>The rows a host has stated a reason to start unchecked (<c>HPS-51</c>).</summary>
+    private static bool StartsUnchecked(ImportLayer layer)
+        => layer is ImportLayer.SiteModel or ImportLayer.PublishedContours or ImportLayer.FloodZones
+            or ImportLayer.SteepGround;
+
     private static readonly string[] EverythingBundle =
     [
         "Metadata/manifest.json",
@@ -623,7 +630,4 @@ internal static class ImportLayerTests
 
     private static BundleImportPlan PlanFor(string manifestJson, IReadOnlyList<string> entries, ImportLayerChoice choice)
         => BundleImportPlanner.Plan(BundleManifestReader.Parse(manifestJson), entries, _ => DrapePixels, choice);
-
-    private static bool StartsUnchecked(ImportLayer layer)
-        => layer is ImportLayer.SiteModel or ImportLayer.PublishedContours;
 }
