@@ -359,6 +359,16 @@ follow.
   `PrepareRejoiner`, the checker's listing reaching it, and `OnShutdown` calling `InterruptAll`. Those are compiled and
   unexecuted, because the harness never signs in. Which entries a process may take is
   `InterruptedPrepares`, headless. Both records share one exclusive-open helper, `MachineRecordFile`.
+- **The published contours' calls have left that set.** `DirectShape.IsValidCategoryId` accepts
+  Topography, `Categories.NewSubcategory` makes `Published Contours` under it, and
+  `Curve.SetGraphicsStyleId` on a DirectShape's lines holds: on 2026-09-24 the harness described
+  under the tree family below imported hand-made 1.4.0-shaped copies of two cached bundles in Revit
+  2025, 2026 and 2027, contours only. A State Plane bundle drew 945 contours in about 5 s, one
+  commit of about 2 s, every line on the subcategory's projection style and at the published
+  elevation; the same build again drew nothing, and a rebuild refused naming the prefix. A metric
+  bundle was clipped to its crop window. The hand-made half is the manifest's pointer and
+  `file_frame`; the contour files are the bundles' own. What is settled headlessly is everything
+  else — `PublishedContourReader`, `PublishedContours` and `ContourIdentity`.
 - **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
   issue and reaches for their storage.** It writes Revit elements sized as published, with names a
   renderer recognises (`RendererKeywords`), and leaves a renderer's own storage to the curator —

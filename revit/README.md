@@ -133,6 +133,15 @@ Revit licence.
   across every model category that has Comments. The filter goes on the new view with no override,
   ready to hide, halftone or recolour the site context in any view it is added to. A second import
   finds both by name and leaves them as they are;
+- draws the bundle's published contours, when its Revit block points at them (MPB 1.4.0 and
+  later), as one DirectShape per contour on a `Published Contours` subcategory of Topography, at the
+  published elevation and clipped to the terrain's crop window. They are fixed linework, not model
+  lines: a contour is selected, scheduled and hidden as one element, and its name carries its
+  elevation as published. The toposolid's own contours are left as they are; its type's Contour
+  Display is where to hide them. A re-import of the same build draws nothing, and a later build
+  refuses and names the Comments prefix to delete
+  ([ADR 0013](../docs/adr/0013-revit-published-contours-are-directshapes.md)). A bundle from before
+  1.4.0 keeps its contours file in the bundle and says so under *Also in this bundle*;
 - draws the road centrelines from the `road_splines` vector layer as DirectShape linework, drapes
   the `land_use` boundaries onto the terrain as toposolid subdivisions, and places the trees from
   `Landcover/TreePoints.csv` at their published height and crown radius — the three rows that closed
@@ -250,11 +259,12 @@ before the label existed, and `no delivery CRS` where the block names neither; a
 the block itself existed shows no line. The words are `HPS-51`'s. A second line appears only when
 the project displays lengths in the other unit system, and it changes nothing: Project Units are
 yours. Then the checklist: one box for each
-layer the bundle carries (`Terrain`, `Context Buildings`, `Site Model`, `Road Centrelines`,
-`Land Use Subdivisions`, `Land Cover Subdivisions`, `Water Subdivisions`, `Road Subdivisions`,
-`Planting`, `Imagery Drape`), all ticked but
-`Site Model`: that row links the site model, whose buildings `Context Buildings` has already copied
-in, and ticking both shows every building twice. Nothing runs until `Import` is pressed. Every kind of subdivision and the drape need the terrain, so unticking `Terrain` disables
+layer the bundle carries (`Terrain`, `Published Contours`, `Context Buildings`, `Site Model`,
+`Road Centrelines`, `Land Use Subdivisions`, `Land Cover Subdivisions`, `Water Subdivisions`,
+`Road Subdivisions`, `Planting`, `Imagery Drape`), all ticked but two. `Site Model` links the site
+model, whose buildings `Context Buildings` has already copied in, and ticking both shows every
+building twice. `Published Contours` is for a curator who wants the order's own linework: the
+toposolid already draws contours of its own. Nothing runs until `Import` is pressed. Every kind of subdivision and the drape need the terrain, so unticking `Terrain` disables
 them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
 out creates nothing, and the log says it was left out by choice. The shared coordinates, the site
 location and the attribution are not layers and are written whatever is ticked. Leaving out the drape also builds the

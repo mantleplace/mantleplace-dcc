@@ -88,6 +88,16 @@ public sealed class BundleArtifact
     public string? HorizontalUnits { get; init; }
 
     /// <summary>
+    /// Raw <c>vertical_units</c>, the published contours only — the unit of each contour's
+    /// elevation, stated apart from the X/Y's — or <c>null</c> where the manifest stated none.
+    /// </summary>
+    /// <remarks>
+    /// Added by MPB 1.4.0. A DXF has one <c>$INSUNITS</c> for the whole drawing, so the file cannot
+    /// say this about itself; the pointer can, and is the only place it is read from.
+    /// </remarks>
+    public string? VerticalUnits { get; init; }
+
+    /// <summary>
     /// True for a file this host's own block points at in this host's frame — a layer of
     /// <c>hosts.revit.vectors</c>, whose <see cref="HorizontalFrame"/> is <c>absolute_projected</c> or
     /// <c>local_enu</c> rather than a CRS, or <c>hosts.revit.drape</c>, whose is its extent's CRS.
@@ -132,6 +142,12 @@ public sealed class RevitReadiness
     /// </summary>
     public ReadinessPath Vectors { get; init; } = new();
 
+    /// <summary>
+    /// Whether <c>hosts.revit.contours</c> shipped (MPB 1.4.0). <c>not_produced</c>, or no entry at
+    /// all, is a bundle whose contours predate this host's own pointer.
+    /// </summary>
+    public ReadinessPath Contours { get; init; } = new();
+
     /// <summary>True when <c>hosts.revit.readiness</c> was present at all.</summary>
     public bool Declared { get; init; }
 }
@@ -170,6 +186,9 @@ public sealed class FileFrame
 
     /// <summary><c>horizontal_unit</c>, or <c>null</c> when unstated or not a unit this reader knows.</summary>
     public LinearUnit? HorizontalUnit { get; init; }
+
+    /// <summary><c>vertical_unit</c>, or <c>null</c> when unstated or not a unit this reader knows.</summary>
+    public LinearUnit? VerticalUnit { get; init; }
 }
 
 /// <summary>A pre-derived geographic origin, applied verbatim and never re-derived (HPS-33).</summary>
@@ -566,6 +585,13 @@ public sealed class BundleManifest
 
     /// <summary><c>hosts.revit.drape.extent</c> in its <c>extent_crs</c>, or <c>null</c> when unreadable.</summary>
     public GroundExtent? RevitDrapeExtent { get; internal set; }
+
+    /// <summary>
+    /// <c>hosts.revit.contours</c> (MPB 1.4.0) — the published contours in this host's own frame, and
+    /// the only pointer they are drawn from. <see cref="ContoursDxf"/> names the same file and states
+    /// no frame, so it is never placed (<c>HPS-53</c>, ADR 0013).
+    /// </summary>
+    public BundleArtifact? RevitContours { get; internal set; }
 
     /// <summary>
     /// <c>imagery.gsd_m</c> — the imagery's ground sample distance in METRES, or <c>null</c> when

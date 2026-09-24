@@ -15,6 +15,7 @@ internal static class SlowStepNoticeTests
         ImportStepKind.ToposurfaceFromPointsFile,
         ImportStepKind.ToposurfaceFromSurfaceTin,
         ImportStepKind.ToposurfaceFromSurfaceDxf,
+        ImportStepKind.PublishedContours,
         ImportStepKind.LinkSiteIfc,
         ImportStepKind.ContextBuildings,
         ImportStepKind.SetSharedCoordinates,

@@ -840,6 +840,21 @@
       }
     },
     {
+      "id": "manifest.revitContoursPointer",
+      "group": "manifest",
+      "file": "manifest/revit-contours-pointer.json",
+      "expect": "accept",
+      "manifestVersion": "1.4.0",
+      "appliesTo": "revit",
+      "reason": "HPS-52 and HPS-53 for the Revit host's published contours (MPB 1.4.0). The fixture names the same file under two pointers, as the format does: the host-neutral `elevation.contours`, which states no horizontal frame, and `hosts.revit.contours`, which states the frame and the X/Y and height units apart. The reader asserts the pointer is its own block's and that its height unit is read from it: a reader that falls back to `elevation.contours` has no `vertical_units` to report, and one that takes the drawing's `$INSUNITS` has nothing in the manifest to check it against. Revit-scoped because the pointer is: the Unreal host has no contours pointer. What the planner does with a pointer whose units disagree with the block's `file_frame` -- refuse it by name -- is host-local and asserted in the Revit suite, not here.",
+      "expectations": {
+        "jobId": "revit-contours",
+        "orderId": "ord-revit-contours-1",
+        "revitContoursPath": "Surface/Contours.dxf",
+        "revitContoursVerticalUnits": "m"
+      }
+    },
+    {
       "id": "manifest.foliageTypeUnknownValue",
       "group": "manifest",
       "file": "manifest/foliage-type-unknown-value.json",
