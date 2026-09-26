@@ -39,6 +39,13 @@ internal static class SlowStepNoticeTests
         ImportStepKind.ImageryDrape,
     ];
 
+    /// <summary>
+    /// The point count a slow kind's notice quotes: the site boundaries and the drape share one
+    /// measurement, and a polygon layer cut after the boundaries has its own.
+    /// </summary>
+    private static string MeasuredTerrainOf(ImportStepKind kind)
+        => GroundCuts.LayerOf(kind) is null || kind == ImportStepKind.SiteBoundaries ? "80,372" : "74,855";
+
     internal static int Run()
     {
         TestRun run = new();
@@ -65,15 +72,18 @@ internal static class SlowStepNoticeTests
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
         });
 
-        run.Case("the land-cover step announces itself — it is the same commit as the boundaries'", () =>
+        run.Case("the land-cover step announces itself, against its own measurement", () =>
         {
-            // Cutting a subdivision costs the same whichever layer published its polygon: the commit
-            // rebuilds the whole terrain's element relations either way.
-            string? notice = SlowStepNotice.For(ImportStepKind.LandCover, 80_372, 10);
+            // ⛔ Not the boundaries': a layer cut onto ground already carrying subdivisions also pays
+            // for them, and Revit 2025 took 30 minutes of land cover after 36 s of boundaries.
+            string? notice = SlowStepNotice.For(ImportStepKind.LandCover, 74_855, 18);
             run.True(notice is not null, "announced");
             run.Contains(notice, "land cover", "it names the land cover, not the boundaries");
-            run.Contains(notice, "10", "it names how many subdivisions are coming");
+            run.Contains(notice, "18", "it names how many subdivisions are coming");
+            run.Contains(notice, "already on the terrain", "it says what makes a later layer slower");
+            run.Contains(notice, "30 minutes in Revit 2025", "it quotes the worst case it was measured at");
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
+            run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
         });
 
         run.Case("the two notices are not the same sentence", () =>
@@ -114,7 +124,7 @@ internal static class SlowStepNoticeTests
                 run.Contains(notice, "not known to this run", "it says the count is unknown");
                 run.Contains(
                     notice,
-                    "80,372",
+                    MeasuredTerrainOf(kind),
                     "the measured reference is still quoted — it is what makes the wait legible");
                 run.False(
                     notice is not null && notice.Contains(" 0 points", StringComparison.Ordinal),
@@ -122,17 +132,18 @@ internal static class SlowStepNoticeTests
             }
         });
 
-        run.Case("the measured reference is quoted on both slow steps", () =>
+        run.Case("the measured reference is quoted on every slow step", () =>
         {
             foreach (ImportStepKind kind in SlowKinds)
             {
                 run.Contains(
                     SlowStepNotice.For(kind, 1_000, 1),
-                    "80,372",
-                    $"{kind} quotes the one terrain this was measured on");
+                    MeasuredTerrainOf(kind),
+                    $"{kind} quotes the terrain it was measured on");
             }
 
             run.Equal(SlowStepNotice.MeasuredPointCount, 80_372, "the measured reference count");
+            run.Equal(SlowStepNotice.MeasuredLaterLayerPointCount, 74_855, "the later layers' measured count");
         });
 
         run.Case("it says what cannot be shown and why, not that nothing can", () =>
@@ -206,13 +217,29 @@ internal static class SlowStepNoticeTests
             run.Contains(SlowStepNotice.For(ImportStepKind.Water, 80_372, 2), "Next: the water bodies — 2", "water");
             run.Contains(SlowStepNotice.For(ImportStepKind.RoadPolygons, 80_372, 4), "Next: the road surfaces — 4", "road surfaces");
             run.Contains(
-                SlowStepNotice.For(ImportStepKind.Water, 80_372, 2),
-                "as slow as the site boundaries were",
-                "the cost is the terrain's relation rebuild, so it is the boundaries' measurement");
-            run.Contains(
                 SlowStepNotice.For(ImportStepKind.SiteBoundaries, 80_372, 10),
-                "This is the slowest step of the import.",
-                "the site boundaries keep the line they have always had");
+                "Cutting subdivisions is the slowest work in an import.",
+                "the site boundaries no longer claim to be the slowest step — a later layer can be");
+        });
+
+        run.Case("a later polygon layer never promises the site boundaries' speed", () =>
+        {
+            foreach (ImportStepKind kind in new[] { ImportStepKind.LandCover, ImportStepKind.Water, ImportStepKind.RoadPolygons })
+            {
+                string? notice = SlowStepNotice.For(kind, 80_372, 2);
+                run.False(
+                    notice is not null && notice.Contains("as slow as", StringComparison.Ordinal),
+                    $"{kind} does not promise another step's speed");
+                run.False(
+                    notice is not null && notice.Contains("site boundaries", StringComparison.Ordinal),
+                    $"{kind} does not name the site boundaries, which a bundle may not have");
+                run.Contains(notice, "far longer than the layer before it", $"{kind} says it can be slower");
+                run.Contains(notice, "74,855", $"{kind} quotes its own measured terrain");
+                run.Contains(notice, "80,372", $"{kind} still names this terrain");
+                run.False(
+                    notice is not null && notice.Contains("10 minutes", StringComparison.Ordinal),
+                    $"{kind} does not quote the boundaries' measurement");
+            }
         });
 
         run.Case("every kind is classified — a new one cannot be forgotten silently", () =>

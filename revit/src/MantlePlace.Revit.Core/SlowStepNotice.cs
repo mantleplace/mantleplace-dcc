@@ -12,6 +12,8 @@ namespace MantlePlace.Revit.Core;
 /// subdivisions and the imagery drape's retype of the terrain. Measured on one order — an
 /// 80,372-point toposolid with 17 land-use rings — that is 610.6 s and 409.1 s on a first import,
 /// 247.1 s and 249.6 s on a re-import, with Revit reporting "not responding" for the whole of each.
+/// A polygon layer cut after the boundaries can cost far more than they did, and is announced against
+/// its own measurement (<see cref="DescribeLaterLayer"/>).
 /// </para>
 /// <para>
 /// The drape's half is now paid only on ground that is not already on the imagery type — an
@@ -85,18 +87,17 @@ public static class SlowStepNotice
             ImportStepKind.SiteBoundaries => Describe(
                 "Next: the site boundaries — "
                     + plannedWorkItems.ToString("N0", CultureInfo.InvariantCulture)
-                    + " subdivision(s) to cut into the terrain. This is the slowest step of the import.",
+                    + " subdivision(s) to cut into the terrain. Cutting subdivisions is the slowest "
+                    + "work in an import.",
                 MeasuredSiteBoundariesMinutes,
                 terrainPointCount),
 
-            // Every other polygon layer, in its own words: a subdivision costs the terrain's relation
-            // rebuild whichever layer published the polygon, so all of them are announced against the
-            // one measurement, and against the site boundaries the curator has just watched.
-            _ when GroundCuts.LayerOf(kind) is { } layer => Describe(
+            // Every other polygon layer, in its own words, and against its own measurement rather
+            // than the boundaries': see DescribeLaterLayer for why the boundaries' speed is no guide.
+            _ when GroundCuts.LayerOf(kind) is { } layer => DescribeLaterLayer(
                 "Next: the " + GroundLayerWords.For(layer).Label + " — "
                     + plannedWorkItems.ToString("N0", CultureInfo.InvariantCulture)
-                    + " subdivision(s) to cut into the terrain, as slow as the site boundaries were.",
-                MeasuredSiteBoundariesMinutes,
+                    + " subdivision(s) to cut into the terrain.",
                 terrainPointCount),
 
             ImportStepKind.ImageryDrape => Describe(
@@ -139,6 +140,65 @@ public static class SlowStepNotice
             measuredMinutes,
             thisTerrain);
     }
+
+    /// <summary>The point count of the terrain <see cref="DescribeLaterLayer"/> was measured on.</summary>
+    public const int MeasuredLaterLayerPointCount = 74_855;
+
+    /// <summary>How many land-cover subdivisions that measurement cut.</summary>
+    public const int MeasuredLaterLayerSubDivisions = 18;
+
+    /// <summary>How many site-boundary subdivisions were already on that terrain when it did.</summary>
+    public const int MeasuredLaterLayerSubDivisionsPresent = 40;
+
+    /// <summary>Rounded minutes that land-cover commit took in Revit 2025.</summary>
+    /// <remarks>
+    /// 2026-09-25, a 1.99 km² metric order: 1,782.5 s, after a site-boundary commit of 35.8 s on the
+    /// same terrain. The same layers committed in 150.1 s in Revit 2026 and 177.5 s in Revit 2027
+    /// (<see cref="MeasuredLaterLayerMinutesLaterRevit"/>).
+    /// </remarks>
+    public const int MeasuredLaterLayerMinutes2025 = 30;
+
+    /// <summary>Rounded minutes the same land-cover commit took in Revit 2026 and 2027.</summary>
+    public const int MeasuredLaterLayerMinutesLaterRevit = 3;
+
+    /// <summary>
+    /// The body for a polygon layer cut after another: where the time goes, its own measurement,
+    /// this terrain, and the reassurance.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>This used to promise the site boundaries' speed, and that was wrong by fifty times.</b>
+    /// The reasoning was that every subdivision costs the terrain's relation rebuild, whichever layer
+    /// published it. The rebuild is real, but a layer cut onto ground that already carries
+    /// subdivisions pays for them too, most of all where its polygons overlap them — and they do,
+    /// because the ground they describe does and nothing is clipped (<c>GroundCuts</c>). Revit 2025
+    /// pays several times more for that than 2026 or 2027. Measured once: 36 s of site boundaries,
+    /// then 30 minutes of land cover on the same terrain.
+    /// </para>
+    /// <para>
+    /// The same rule as <see cref="Describe"/>: the measurement and this terrain are stated side by
+    /// side, and no duration is predicted from them. It does not name the site boundaries either: a
+    /// bundle with no <c>land_use</c> has no boundaries for this layer to be compared with.
+    /// </para>
+    /// </remarks>
+    private static string DescribeLaterLayer(string opening, int? terrainPointCount)
+        => string.Format(
+            CultureInfo.InvariantCulture,
+            "{0} It can take far longer than the layer before it: Revit rebuilds the whole terrain's "
+            + "element relations when the transaction commits, and that cost also grows with the "
+            + "subdivisions already on the terrain, most of all where the new ones overlap them. On "
+            + "the one import this has been measured on ({1:N0} points, {2:N0} subdivisions cut onto "
+            + "a terrain already carrying {3:N0}) it took about {4} minutes in Revit 2025 and about "
+            + "{5} in Revit 2026 and 2027. {6}. That cost is inside one commit, and a commit cannot "
+            + "report part of itself or be interrupted, so Revit will report \"not responding\" until "
+            + "it finishes, and Cancel takes effect when it finishes. It has not crashed; leave it alone.",
+            opening,
+            MeasuredLaterLayerPointCount,
+            MeasuredLaterLayerSubDivisions,
+            MeasuredLaterLayerSubDivisionsPresent,
+            MeasuredLaterLayerMinutes2025,
+            MeasuredLaterLayerMinutesLaterRevit,
+            ThisTerrain(terrainPointCount));
 
     /// <summary>The point count of the terrain <see cref="ForSubDivisionRetypes"/> was measured on.</summary>
     public const int MeasuredRetypePointCount = 74_852;
