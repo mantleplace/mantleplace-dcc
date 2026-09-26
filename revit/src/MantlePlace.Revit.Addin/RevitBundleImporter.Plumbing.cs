@@ -47,6 +47,9 @@ internal sealed partial class RevitBundleImporter
     private static double InternalToMetres(double internalUnits)
         => UnitUtils.ConvertFromInternalUnits(internalUnits, UnitTypeId.Meters);
 
+    /// <summary>Revit's short-curve tolerance in metres: Revit states it in its internal unit, Core works in metres.</summary>
+    private double ShortCurveToleranceM => InternalToMetres(_document.Application.ShortCurveTolerance);
+
     /// <summary>
     /// Opens a transaction that will not stop for a dialog.
     /// </summary>

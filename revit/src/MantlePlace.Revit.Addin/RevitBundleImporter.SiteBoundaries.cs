@@ -308,9 +308,7 @@ internal sealed partial class RevitBundleImporter
     /// </remarks>
     private CurveLoop? Loop(SiteFeature ring, double z = 0.0)
     {
-        // Revit states its tolerance in its internal unit; Core works in metres.
-        double toleranceM = InternalToMetres(_document.Application.ShortCurveTolerance);
-        if (SiteRings.Thin(ring.Vertices, toleranceM) is not { } vertices)
+        if (SiteRings.Thin(ring.Vertices, ShortCurveToleranceM) is not { } vertices)
         {
             return null;
         }
