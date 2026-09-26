@@ -59,9 +59,7 @@ internal sealed partial class RevitBundleImporter
             }
         }
 
-        // Revit states its tolerance in its internal unit; Core works in metres.
-        double toleranceM = InternalToMetres(_document.Application.ShortCurveTolerance);
-        if (PublishedContours.TryPlace(contours!, frame, layer, step.VerticalUnits, step.Crop, toleranceM, out string? placeError)
+        if (PublishedContours.TryPlace(contours!, frame, layer, step.VerticalUnits, step.Crop, ShortCurveToleranceM, out string? placeError)
             is not { } placement)
         {
             Say(placeError ?? "The published contours could not be placed.");

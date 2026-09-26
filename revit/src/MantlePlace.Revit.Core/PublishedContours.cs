@@ -48,11 +48,12 @@ public sealed class ContourPlacement
 /// ends. The crossing point is interpolated in plan only; a contour's Z is one value.
 /// </para>
 /// <para>
-/// <b>Short segments.</b> Revit refuses a line shorter than its short-curve tolerance. The roads
-/// drop such a segment and leave a gap; a contour is far denser, so here a vertex within tolerance
-/// of the last one <em>kept</em> is skipped instead, and the line stays continuous. That drops a
-/// vertex and derives none. The last vertex of a piece is always kept, so a clipped end stays on the
-/// edge.
+/// <b>Short segments.</b> Revit refuses a line shorter than its short-curve tolerance. The road
+/// centrelines drop such a segment and leave a gap, which a run of separate lines tolerates; a
+/// contour is far denser, so here a vertex within tolerance of the last one <em>kept</em> is skipped
+/// instead, and the line stays continuous. That drops a vertex and derives none. The last vertex of
+/// a piece is always kept, so a clipped end stays on the edge. A polygon ring takes the same rule,
+/// closed (<see cref="SiteRings"/>).
 /// </para>
 /// </remarks>
 public static class PublishedContours

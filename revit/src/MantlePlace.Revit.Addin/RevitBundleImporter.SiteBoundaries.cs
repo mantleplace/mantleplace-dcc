@@ -79,6 +79,7 @@ internal sealed partial class RevitBundleImporter
 
         int created = 0;
         int declined = 0;
+        int unclosed = 0;
         int unstamped = 0;
 
         // A hole that is not cut is ground the subdivision covers and the bundle says it does not,
@@ -92,8 +93,8 @@ internal sealed partial class RevitBundleImporter
         Dictionary<ElementId, (int HolesUncut, bool Unstamped)> countedFor = [];
 
         // Which cuts end up with a subdivision on the terrain: everything already present, plus
-        // whatever this run manages to cut. A ring Revit declines, or one with too few edges to
-        // close, leaves nothing behind — and a report naming a subdivision that does not exist is
+        // whatever this run manages to cut. A ring Revit declines, or one that cannot be closed
+        // into a loop, leaves nothing behind — and a report naming a subdivision that does not exist is
         // the same lie as a summary counting one.
         bool[] onTerrain = new bool[cuts.Count];
         Array.Fill(onTerrain, true);
@@ -126,6 +127,8 @@ internal sealed partial class RevitBundleImporter
             GroundCut cut = cuts[boundary.Ordinal - 1];
             if (Loop(cut.Outer) is not { } outer)
             {
+                // One polygon lost, and said: its holes go with it, as with a ring Revit declines.
+                unclosed++;
                 continue;
             }
 
@@ -234,6 +237,11 @@ internal sealed partial class RevitBundleImporter
             summary += $"; Revit declined {declined:N0} that did not lie cleanly on the terrain";
         }
 
+        if (unclosed > 0)
+        {
+            summary += $"; {unclosed:N0} could not be closed into a loop and were left out";
+        }
+
         if (unstamped > 0)
         {
             summary += $"; {unstamped:N0} could not be stamped and will not be recognised by a re-import";
@@ -241,7 +249,7 @@ internal sealed partial class RevitBundleImporter
 
         if (holesUncut > 0)
         {
-            summary += $"; {holesUncut:N0} hole(s) had too few edges to cut, so that much ground is covered";
+            summary += $"; {holesUncut:N0} hole(s) could not be closed into a loop, so that much ground is covered";
         }
 
         if (strandedHoles > 0)
@@ -278,31 +286,52 @@ internal sealed partial class RevitBundleImporter
     }
 
     /// <summary>
-    /// One published ring as a closed Revit loop, or <c>null</c> when too few of its edges survive
-    /// the short-curve tolerance to close one.
+    /// One published ring as a closed Revit loop, or <c>null</c> when it cannot be closed: too few of
+    /// its vertices lie further apart than the short-curve tolerance, or Revit refused the loop.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Which vertices survive the tolerance is <see cref="SiteRings.Thin"/>'s: a vertex too close to
+    /// the last one kept is skipped, so the edges meet end to end and the loop closes by
+    /// construction. Dropping the short edge instead left a gap Revit refused as not contiguous.
+    /// </para>
+    /// <para>
+    /// ⛔ This never throws. Every caller builds its loops outside the one polygon's failure handling,
+    /// so a refusal here would cost the whole layer rather than the ring; it comes back as
+    /// <c>null</c>, and each caller counts that as it counts a ring too short to close.
+    /// </para>
+    /// <para>
     /// Flat by construction: a subdivision profile is projected onto the toposolid, so the loop's own
     /// elevation is irrelevant and zero keeps it well inside Revit's tolerance. A filled region's loop
     /// is drawn at its plan's level instead (<paramref name="z"/>), in the view's own plane.
+    /// </para>
     /// </remarks>
     private CurveLoop? Loop(SiteFeature ring, double z = 0.0)
     {
-        List<Curve> edges = [];
-        for (int index = 0; index < ring.Vertices.Count; index++)
+        if (SiteRings.Thin(ring.Vertices, ShortCurveToleranceM) is not { } vertices)
         {
-            SiteVertex from = ring.Vertices[index];
-            SiteVertex to = ring.Vertices[(index + 1) % ring.Vertices.Count];
-
-            XYZ start = new(MetresToInternal(from.EastM), MetresToInternal(from.NorthM), z);
-            XYZ end = new(MetresToInternal(to.EastM), MetresToInternal(to.NorthM), z);
-            if (start.DistanceTo(end) > _document.Application.ShortCurveTolerance)
-            {
-                edges.Add(Line.CreateBound(start, end));
-            }
+            return null;
         }
 
-        return edges.Count < 3 ? null : CurveLoop.Create(edges);
+        try
+        {
+            List<Curve> edges = [];
+            for (int index = 0; index < vertices.Count; index++)
+            {
+                SiteVertex from = vertices[index];
+                SiteVertex to = vertices[(index + 1) % vertices.Count];
+                edges.Add(Line.CreateBound(
+                    new XYZ(MetresToInternal(from.EastM), MetresToInternal(from.NorthM), z),
+                    new XYZ(MetresToInternal(to.EastM), MetresToInternal(to.NorthM), z)));
+            }
+
+            return CurveLoop.Create(edges);
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or ArgumentException)
+        {
+            Trace($"  a ring of {ring.Vertices.Count:N0} vertices could not be closed: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -340,7 +369,7 @@ internal sealed partial class RevitBundleImporter
     /// <para>
     /// Every feature that ENDED UP on the terrain is measured, not just the ones this run created:
     /// a re-import creates nothing and the reading is just as true the second time. A feature with
-    /// no subdivision behind it — declined by Revit, or too few edges to close — is passed over,
+    /// no subdivision behind it — declined by Revit, or a ring that cannot close — is passed over,
     /// because a line naming a subdivision that is not in the model is the same lie as a count of
     /// one that was never cut. The verdict is <see cref="SiteBoundaryCoextension"/>'s
     /// (<c>HPS-02</c>); this reads the two footprints and says whatever comes back.
