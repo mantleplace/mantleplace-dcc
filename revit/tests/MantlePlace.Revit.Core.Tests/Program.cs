@@ -13,6 +13,7 @@ exitCode |= SurfaceTinTests.Run();
 exitCode |= PublishedContourTests.Run();
 exitCode |= PublishedContourPlanTests.Run();
 exitCode |= SiteVectorTests.Run();
+exitCode |= SiteRingTests.Run();
 exitCode |= HostFramePlacementTests.Run();
 exitCode |= HazardPlanTests.Run();
 exitCode |= ProjectionConformanceTests.Run();
