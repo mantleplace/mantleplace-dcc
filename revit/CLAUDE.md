@@ -289,6 +289,17 @@ follow.
   subdivision per ring, because their stamps are positions in the layer and grouping the rings now
   would move every stamp after the first polygon with a hole.
 
+- **Revit can refuse a subdivision at commit, after `CreateSubDivision` returned for it**, and no
+  `try` around the cut sees that. A platform-built 1.4.0 bundle's land use did exactly this in 2027:
+  forty cuts returned, then the commit posted *"An error occurred during the sub-divide action. The
+  sub-divide can not be completed."* (failure id `07338aaa-c5fe-4aa0-91e1-fa0569a8fe76`, no
+  `BuiltInFailures` member in 2025's API) naming one subdivision, and the rollback took the whole
+  layer. The published ring was valid, simple and inside the terrain, so nothing upstream could
+  have caught it, and Revit 2025 and 2026 cut the same forty without complaint. A polygon step now declares its new cuts to its `ImportFailureSwallower`
+  (`OwnNewElements`), and `ImportFailurePolicy` lets that one error, and only when every element it
+  names is one of them, be answered with `FailuresAccessor.DeleteElements` instead of a rollback:
+  the feature is counted as declined and named in the log, in the same single commit.
+
 - **The hazard plan's calls have left that set**, in all three versions. `ViewPlan.Create` on the
   lowest level, a plan's `CropBox` set in model coordinates with its annotation crop off,
   `FilledRegionType.Duplicate` with a solid fill, a hatch over a fill and a hatch alone,

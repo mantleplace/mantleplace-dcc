@@ -45,6 +45,12 @@ public enum ImportFailureKind
 
     /// <summary>Revit's own IFC importer saying IFC4 is only partially supported.</summary>
     IfcPartiallySupported,
+
+    /// <summary>
+    /// Revit could not make one toposolid subdivision it had already accepted the call for, and says
+    /// so at commit: "An error occurred during the sub-divide action." It names that subdivision.
+    /// </summary>
+    SubDivisionRefused,
 }
 
 /// <summary>What to do with one failure Revit posted.</summary>
@@ -58,6 +64,12 @@ public enum ImportFailureAction
 
     /// <summary>Roll the transaction back, with a stated reason. The default answer to an error.</summary>
     RollBack,
+
+    /// <summary>
+    /// Delete the elements the error names — every one of them new in this step — and let the rest
+    /// of the step commit. Reserved for an allowlist, and the step accounts for each deletion.
+    /// </summary>
+    DeleteNamedElements,
 }
 
 /// <summary>
@@ -88,6 +100,11 @@ public static class ImportFailurePolicy
     /// <param name="kind">The failure's id, mapped by the shim.</param>
     /// <param name="isError">Whether Revit posted it at error severity or worse.</param>
     /// <param name="hasResolutions">Whether Revit itself offers a way out of it.</param>
+    /// <param name="namesOnlyOwnNewElements">
+    /// Whether the failure names at least one element, and every element it names is one the step
+    /// that posted it created in this transaction. The shim decides it; only a step that declares
+    /// its new elements can ever answer yes.
+    /// </param>
     /// <remarks>
     /// <para>
     /// ⛔ <b>Severity decides first and the id can only ever soften an error, never harden a
@@ -104,17 +121,35 @@ public static class ImportFailurePolicy
     /// to be reasoned about individually before it goes in.
     /// </para>
     /// <para>
+    /// A second, narrower allowlist deletes instead. A polygon layer is cut as many subdivisions in
+    /// one transaction, and Revit refuses a subdivision it cannot make only at commit, after every
+    /// cut has returned — where no <c>try</c> around the cut can see it. Rolling back then loses the
+    /// whole layer for one polygon. Deleting the one subdivision the error names loses that polygon
+    /// alone, as a refusal thrown by the cut itself already does. It is safe only because the
+    /// deleted element is one this step just made: an error that names the terrain, a curator's
+    /// element, an earlier import's subdivision, or nothing at all still rolls back.
+    /// </para>
+    /// <para>
     /// An unrecognised WARNING is swallowed, not escalated. An unattended run — the one
     /// <c>MANTLEPLACE_BUNDLE_ZIP</c> exists for — must never leave a modal dialog for nobody to
     /// dismiss, and a warning by definition did not stop Revit doing the work. It is reported
     /// verbatim instead, which is where <c>HPS-21</c>'s "a skip is said, not swallowed" lands here.
     /// </para>
     /// </remarks>
-    public static ImportFailureAction Decide(ImportFailureKind kind, bool isError, bool hasResolutions)
+    public static ImportFailureAction Decide(
+        ImportFailureKind kind,
+        bool isError,
+        bool hasResolutions,
+        bool namesOnlyOwnNewElements = false)
     {
         if (!isError)
         {
             return ImportFailureAction.Swallow;
+        }
+
+        if (namesOnlyOwnNewElements && IsDeletable(kind))
+        {
+            return ImportFailureAction.DeleteNamedElements;
         }
 
         return hasResolutions && IsResolvable(kind)
@@ -133,6 +168,16 @@ public static class ImportFailurePolicy
     /// </remarks>
     private static bool IsResolvable(ImportFailureKind kind)
         => kind == ImportFailureKind.CannotKeepElementsJoined;
+
+    /// <summary>
+    /// The errors whose named elements this import may delete to let the rest of a step commit.
+    /// </summary>
+    /// <remarks>
+    /// Currently one: the subdivision Revit could not make. What it loses is exactly what a refusal
+    /// thrown by the cut itself loses, and the step says which published feature it was.
+    /// </remarks>
+    private static bool IsDeletable(ImportFailureKind kind)
+        => kind == ImportFailureKind.SubDivisionRefused;
 
     /// <summary>
     /// One sentence for <paramref name="count"/> swallowed warnings of one kind.
@@ -193,14 +238,56 @@ public static class ImportFailurePolicy
     /// </summary>
     /// <remarks>
     /// Revit's own text is quoted rather than paraphrased. It is the only thing a curator can search
-    /// for, and paraphrasing it would strand them between our wording and Autodesk's.
+    /// for, and paraphrasing it would strand them between our wording and Autodesk's. The failure id
+    /// follows it for the same reason <see cref="ExplainUnknownWarning"/> carries one: the text of an
+    /// error Revit has no named constant for is not enough to map it, and without the id the next
+    /// session needs a second Revit run to learn it.
     /// </remarks>
-    public static string ExplainRollBack(string stepLabel, string revitText)
-    {
-        string quoted = string.IsNullOrWhiteSpace(revitText) ? "no reason given" : revitText.Trim();
-        return $"{stepLabel} was rolled back: Revit refused it with \"{quoted}\". Nothing from this "
-            + "step was left in the project.";
-    }
+    public static string ExplainRollBack(string stepLabel, string revitText, string failureId)
+        => $"{stepLabel} was rolled back: Revit refused it with \"{Quoted(revitText)}\" (id {failureId}). "
+            + "Nothing from this step was left in the project.";
+
+    /// <summary>
+    /// Under a rollback's line, one element the error named that was one of the step's own cuts:
+    /// which published feature Revit refused.
+    /// </summary>
+    /// <param name="failureId">Revit's id for the failure.</param>
+    /// <param name="position">The feature's 1-based position in its layer.</param>
+    /// <param name="name">The feature's published name, or the step's stand-in for none.</param>
+    /// <param name="elementId">The element Revit named.</param>
+    public static string ExplainRefusalNamedFeature(string failureId, int position, string name, string elementId)
+        => string.Create(
+            CultureInfo.InvariantCulture,
+            $"  Revit's error {failureId} named element {elementId}, the subdivision cut from feature {position:N0} "
+            + $"(\"{name}\") in the layer.");
+
+    /// <summary>Under a rollback's line, one element the error named that the step did not create.</summary>
+    public static string ExplainRefusalNamedOther(string failureId, string elementId)
+        => $"  Revit's error {failureId} named element {elementId}, which is not one of this step's cuts.";
+
+    /// <summary>Under a rollback's line, an error that named no element at all.</summary>
+    public static string ExplainRefusalNamedNothing(string failureId)
+        => $"  Revit's error {failureId} named no element.";
+
+    /// <summary>
+    /// What to say about one subdivision Revit refused at commit, which was deleted so the rest of
+    /// its layer could stand.
+    /// </summary>
+    /// <param name="position">The feature's 1-based position in its layer — an unnamed feature's only identity.</param>
+    /// <param name="name">The feature's published name, or the step's stand-in for none.</param>
+    /// <param name="revitText">Revit's own text for the error, quoted verbatim.</param>
+    /// <param name="failureId">Revit's id for the failure.</param>
+    /// <param name="elementId">The subdivision Revit named, which was deleted.</param>
+    public static string ExplainRefusedSubDivision(int position, string name, string revitText, string failureId, string elementId)
+        => string.Create(
+            CultureInfo.InvariantCulture,
+            $"Revit refused the subdivision for feature {position:N0} (\"{name}\") when the step committed, with "
+            + $"\"{Quoted(revitText)}\" (id {failureId}, element {elementId}). That feature was left out as published; "
+            + $"the rest of the layer was kept.");
+
+    /// <summary>Revit's own text, trimmed, or a statement that it gave none.</summary>
+    private static string Quoted(string revitText)
+        => string.IsNullOrWhiteSpace(revitText) ? "no reason given" : revitText.Trim();
 
     /// <summary>
     /// What to say when Revit resolved an error its own way instead of refusing.
