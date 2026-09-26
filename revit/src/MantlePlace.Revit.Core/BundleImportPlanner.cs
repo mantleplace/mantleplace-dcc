@@ -585,17 +585,11 @@ public static class BundleImportPlanner
             skipped,
             VectorAbsence(manifest, "road centrelines"));
 
-        PlanPlacedArtifact(
-            manifest,
-            manifest.LandUse,
-            frame,
-            entries,
-            ImportStepKind.SiteBoundaries,
-            "site boundaries",
-            steps,
-            skipped,
-            VectorAbsence(manifest, "site boundaries"));
-
+        // The land cover before the site boundaries: in Revit 2025, on one order whose land cover
+        // carries a ring as large as the order, this way round committed the two layers in 873 s
+        // against 999 s the other way. One run each, and two runs of the other order differed by
+        // more than that, so it is a measured preference and not a proven speed-up. What draws is
+        // not decided by cut order (revit/README.md, "Where two subdivisions cover the same ground").
         PlanPlacedArtifact(
             manifest,
             manifest.LandCover,
@@ -606,6 +600,17 @@ public static class BundleImportPlanner
             steps,
             skipped,
             VectorAbsence(manifest, "land cover"));
+
+        PlanPlacedArtifact(
+            manifest,
+            manifest.LandUse,
+            frame,
+            entries,
+            ImportStepKind.SiteBoundaries,
+            "site boundaries",
+            steps,
+            skipped,
+            VectorAbsence(manifest, "site boundaries"));
 
         PlanPlacedArtifact(
             manifest,

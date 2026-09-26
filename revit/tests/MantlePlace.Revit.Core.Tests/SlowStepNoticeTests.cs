@@ -40,11 +40,11 @@ internal static class SlowStepNoticeTests
     ];
 
     /// <summary>
-    /// The point count a slow kind's notice quotes: the site boundaries and the drape share one
-    /// measurement, and a polygon layer cut after the boundaries has its own.
+    /// The point count a slow kind's notice quotes: every polygon layer shares one measurement, and
+    /// the drape has its own.
     /// </summary>
     private static string MeasuredTerrainOf(ImportStepKind kind)
-        => GroundCuts.LayerOf(kind) is null || kind == ImportStepKind.SiteBoundaries ? "80,372" : "74,855";
+        => GroundCuts.LayerOf(kind) is null ? "80,372" : "74,855";
 
     internal static int Run()
     {
@@ -54,7 +54,7 @@ internal static class SlowStepNoticeTests
         {
             // The measured order: an 80,372-point toposolid and 17 land-use rings.
             string? notice = SlowStepNotice.For(ImportStepKind.SiteBoundaries, 80_372, 17);
-            run.True(notice is not null, "the slowest step is announced");
+            run.True(notice is not null, "the site boundaries are announced");
             run.Contains(notice, "80,372", "it names the terrain's point count");
             run.Contains(notice, "17", "it names how many subdivisions are coming");
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
@@ -72,21 +72,26 @@ internal static class SlowStepNoticeTests
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
         });
 
-        run.Case("the land-cover step announces itself, against its own measurement", () =>
+        run.Case("the land-cover step announces itself, against what was measured", () =>
         {
-            // ⛔ Not the boundaries': on one order Revit 2025 took 16 and 30 minutes of land cover
-            // after about half a minute of boundaries on the same terrain.
+            // ⛔ What was measured, in Revit 2025 on one order: a land-cover subdivision covering the
+            // whole order took nine minutes alone on a bare terrain, and twenty when cut after 57
+            // others.
             string? notice = SlowStepNotice.For(ImportStepKind.LandCover, 74_855, 18);
             run.True(notice is not null, "announced");
-            run.Contains(notice, "land cover", "it names the land cover, not the boundaries");
-            run.Contains(notice, "18", "it names how many subdivisions are coming");
-            run.Contains(notice, "already on the terrain", "it says what makes a later layer slower");
-            run.Contains(notice, "land-cover subdivisions", "it names the layer its measurement came from");
+            run.Contains(notice, "Next: the land cover — 18", "it names the layer and how many are coming");
+            run.Contains(notice, "how much of the terrain", "it names what the cost appears to follow");
+            run.Contains(notice, "other subdivisions already cover", "and that ground already covered costs more");
+            run.Contains(notice, "In Revit 2025", "a 2025-only observation is scoped to 2025");
+            run.Contains(notice, "appears to", "a cause measured on one order is not stated as settled");
             run.Contains(
                 notice,
-                $"{SlowStepNotice.MeasuredLaterLayerMinutes2025Fastest} and {SlowStepNotice.MeasuredLaterLayerMinutes2025Slowest} minutes",
-                "it quotes both Revit 2025 runs rather than one");
-            run.Contains(notice, "appears to grow", "a cause measured on one order is not stated as settled");
+                $"about {SlowStepNotice.MeasuredWholeOrderSubDivisionAloneMinutes2025} minutes on its own",
+                "it quotes the one subdivision that was measured alone");
+            run.Contains(
+                notice,
+                $"about {SlowStepNotice.MeasuredWholeOrderSubDivisionLastMinutes2025} minutes when cut after 57 others",
+                "and the same subdivision cut last");
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
             run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
         });
@@ -148,7 +153,7 @@ internal static class SlowStepNoticeTests
             }
 
             run.Equal(SlowStepNotice.MeasuredPointCount, 80_372, "the measured reference count");
-            run.Equal(SlowStepNotice.MeasuredLaterLayerPointCount, 74_855, "the later layers' measured count");
+            run.Equal(SlowStepNotice.MeasuredSubDivisionTerrainPointCount, 74_855, "the polygon layers' measured count");
         });
 
         run.Case("every slow notice ends on the same reassurance", () =>
@@ -231,36 +236,29 @@ internal static class SlowStepNoticeTests
 
         run.Case("each polygon layer's notice is in that layer's own words", () =>
         {
+            run.Contains(SlowStepNotice.For(ImportStepKind.SiteBoundaries, 80_372, 10), "Next: the site boundaries — 10", "site boundaries");
             run.Contains(SlowStepNotice.For(ImportStepKind.LandCover, 80_372, 10), "Next: the land cover — 10", "land cover");
             run.Contains(SlowStepNotice.For(ImportStepKind.Water, 80_372, 2), "Next: the water bodies — 2", "water");
             run.Contains(SlowStepNotice.For(ImportStepKind.RoadPolygons, 80_372, 4), "Next: the road surfaces — 4", "road surfaces");
-            run.Contains(
-                SlowStepNotice.For(ImportStepKind.SiteBoundaries, 80_372, 10),
-                "Cutting subdivisions is the slowest work in an import.",
-                "the site boundaries no longer claim to be the slowest step — a later layer can be");
         });
 
-        run.Case("a later polygon layer never promises the site boundaries' speed", () =>
+        run.Case("no polygon layer promises another step's speed or its place in the order", () =>
         {
-            foreach (ImportStepKind kind in (ImportStepKind[])[ImportStepKind.LandCover, ImportStepKind.Water, ImportStepKind.RoadPolygons])
+            // The order is the planner's to change, and it has changed once. A notice that ranked the
+            // steps, or compared one with another, went stale when it did.
+            foreach (ImportStepKind kind in (ImportStepKind[])
+                [ImportStepKind.SiteBoundaries, ImportStepKind.LandCover, ImportStepKind.Water, ImportStepKind.RoadPolygons])
             {
                 string? notice = SlowStepNotice.For(kind, 80_372, 2);
-                run.False(
-                    notice is not null && notice.Contains("as slow as", StringComparison.Ordinal),
-                    $"{kind} does not promise another step's speed");
-                run.False(
-                    notice is not null && notice.Contains("site boundaries", StringComparison.Ordinal),
-                    $"{kind} does not name the site boundaries, which a bundle may not have");
-                run.Contains(notice, "far longer than the first layer cut did", $"{kind} says it can be slower");
-                run.Contains(
-                    notice,
-                    "On ground that already carries subdivisions",
-                    $"{kind} says when, because in a bundle with no land use it is cut first");
-                run.Contains(notice, "74,855", $"{kind} quotes its own measured terrain");
+                foreach (string claim in (string[])["as slow as", "slowest", "the layer before", "the first layer", "site boundaries were"])
+                {
+                    run.False(
+                        notice is not null && notice.Contains(claim, StringComparison.Ordinal),
+                        $"{kind} does not say \"{claim}\"");
+                }
+
+                run.Contains(notice, "74,855", $"{kind} quotes the polygon layers' measured terrain");
                 run.Contains(notice, "80,372", $"{kind} still names this terrain");
-                run.False(
-                    notice is not null && notice.Contains($"{SlowStepNotice.MeasuredSiteBoundariesMinutes} minutes", StringComparison.Ordinal),
-                    $"{kind} does not quote the boundaries' measurement");
             }
         });
 
