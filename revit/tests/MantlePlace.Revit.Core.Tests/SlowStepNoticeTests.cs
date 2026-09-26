@@ -74,14 +74,19 @@ internal static class SlowStepNoticeTests
 
         run.Case("the land-cover step announces itself, against its own measurement", () =>
         {
-            // ⛔ Not the boundaries': a layer cut onto ground already carrying subdivisions also pays
-            // for them, and Revit 2025 took 30 minutes of land cover after 36 s of boundaries.
+            // ⛔ Not the boundaries': on one order Revit 2025 took 16 and 30 minutes of land cover
+            // after about half a minute of boundaries on the same terrain.
             string? notice = SlowStepNotice.For(ImportStepKind.LandCover, 74_855, 18);
             run.True(notice is not null, "announced");
             run.Contains(notice, "land cover", "it names the land cover, not the boundaries");
             run.Contains(notice, "18", "it names how many subdivisions are coming");
             run.Contains(notice, "already on the terrain", "it says what makes a later layer slower");
-            run.Contains(notice, "30 minutes in Revit 2025", "it quotes the worst case it was measured at");
+            run.Contains(notice, "land-cover subdivisions", "it names the layer its measurement came from");
+            run.Contains(
+                notice,
+                $"{SlowStepNotice.MeasuredLaterLayerMinutes2025Fastest} and {SlowStepNotice.MeasuredLaterLayerMinutes2025Slowest} minutes",
+                "it quotes both Revit 2025 runs rather than one");
+            run.Contains(notice, "appears to grow", "a cause measured on one order is not stated as settled");
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
             run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
         });
@@ -144,6 +149,19 @@ internal static class SlowStepNoticeTests
 
             run.Equal(SlowStepNotice.MeasuredPointCount, 80_372, "the measured reference count");
             run.Equal(SlowStepNotice.MeasuredLaterLayerPointCount, 74_855, "the later layers' measured count");
+        });
+
+        run.Case("every slow notice ends on the same reassurance", () =>
+        {
+            // One sentence, said once: a copy per notice is how the later layers' version lost the
+            // line about the import window.
+            foreach (ImportStepKind kind in SlowKinds)
+            {
+                run.Contains(
+                    SlowStepNotice.For(kind, 80_372, 1),
+                    "the import window shows every step and every chunk of trees, but not this",
+                    $"{kind} says what the window cannot show");
+            }
         });
 
         run.Case("it says what cannot be shown and why, not that nothing can", () =>
@@ -224,7 +242,7 @@ internal static class SlowStepNoticeTests
 
         run.Case("a later polygon layer never promises the site boundaries' speed", () =>
         {
-            foreach (ImportStepKind kind in new[] { ImportStepKind.LandCover, ImportStepKind.Water, ImportStepKind.RoadPolygons })
+            foreach (ImportStepKind kind in (ImportStepKind[])[ImportStepKind.LandCover, ImportStepKind.Water, ImportStepKind.RoadPolygons])
             {
                 string? notice = SlowStepNotice.For(kind, 80_372, 2);
                 run.False(
@@ -233,11 +251,15 @@ internal static class SlowStepNoticeTests
                 run.False(
                     notice is not null && notice.Contains("site boundaries", StringComparison.Ordinal),
                     $"{kind} does not name the site boundaries, which a bundle may not have");
-                run.Contains(notice, "far longer than the layer before it", $"{kind} says it can be slower");
+                run.Contains(notice, "far longer than the first layer cut did", $"{kind} says it can be slower");
+                run.Contains(
+                    notice,
+                    "On ground that already carries subdivisions",
+                    $"{kind} says when, because in a bundle with no land use it is cut first");
                 run.Contains(notice, "74,855", $"{kind} quotes its own measured terrain");
                 run.Contains(notice, "80,372", $"{kind} still names this terrain");
                 run.False(
-                    notice is not null && notice.Contains("10 minutes", StringComparison.Ordinal),
+                    notice is not null && notice.Contains($"{SlowStepNotice.MeasuredSiteBoundariesMinutes} minutes", StringComparison.Ordinal),
                     $"{kind} does not quote the boundaries' measurement");
             }
         });
