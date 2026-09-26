@@ -103,13 +103,13 @@ internal sealed partial class RevitBundleImporter
             onTerrain[boundary.Ordinal - 1] = false;
         }
 
-        // ⛔ Before the transaction, and before this run cuts anything: whether a parent toposolid's
-        // bounding box absorbs its subdivisions is unexecuted Revit behaviour, so the ground is
-        // measured while the only subdivisions on it are ones an earlier import left. A re-import
-        // still measures it with those present — if Revit does absorb them, and one reaches past the
-        // ground it was cut from, this footprint is that much too large and the comparison below
-        // under-reports. It never over-reports, which is the direction that matters for a line
-        // asserting a subdivision is redundant.
+        // ⛔ Before the transaction, and before this step cuts anything: whether a parent toposolid's
+        // bounding box absorbs its subdivisions is unexecuted Revit behaviour, and the ground can
+        // already carry subdivisions — an earlier import's, or an earlier polygon step's in this
+        // run. If Revit does absorb them, and one
+        // reaches past the ground it was cut from, this footprint is that much too large and the
+        // comparison below under-reports. It never over-reports, which is the direction that matters
+        // for a line asserting a subdivision is redundant.
         FootprintExtent? ground = GroundFootprint(terrain);
 
         // ⛔ Before the transaction, because the whole cost is inside its commit and nothing can be

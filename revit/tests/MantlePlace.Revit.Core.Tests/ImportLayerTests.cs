@@ -247,9 +247,21 @@ internal static class ImportLayerTests
             run.Equal(
                 string.Join(", ", plan.Steps.Select(step => step.Kind)),
                 "ToposurfaceFromPointsFile, ContextBuildings, LinkSiteIfc, SetSharedCoordinates, SetSiteLocation, "
-                    + "RoadCentrelines, SiteBoundaries, LandCover, Water, RoadPolygons, Vegetation, "
+                    + "RoadCentrelines, LandCover, SiteBoundaries, Water, RoadPolygons, Vegetation, "
                     + "AttributionAndProvenance, SiteContextView, ImageryDrape",
                 "every step");
+        });
+
+        run.Case("the land cover is cut before the site boundaries", () =>
+        {
+            // The planner's measured preference: see the comment where it plans the two.
+            List<ImportStepKind> kinds = [.. PlanFor(Everything, EverythingBundle).Steps.Select(step => step.Kind)];
+            run.True(
+                kinds.IndexOf(ImportStepKind.LandCover) < kinds.IndexOf(ImportStepKind.SiteBoundaries),
+                "land cover first");
+            run.True(
+                kinds.IndexOf(ImportStepKind.SiteBoundaries) < kinds.IndexOf(ImportStepKind.Water),
+                "the water still follows both");
         });
 
         run.Case("choosing everything plans what no choice plans", () =>

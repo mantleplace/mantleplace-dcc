@@ -7,13 +7,14 @@ namespace MantlePlace.Revit.Core;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Two steps dominate a site import, and both pay their cost inside a single
-/// <c>Transaction.Commit()</c>, in Revit's own <c>updateElementRelations</c>: the site-boundary
+/// Two kinds of step dominate a site import, and both pay their cost inside a single
+/// <c>Transaction.Commit()</c>, in Revit's own <c>updateElementRelations</c>: the polygon layers'
 /// subdivisions and the imagery drape's retype of the terrain. Measured on one order — an
-/// 80,372-point toposolid with 17 land-use rings — that is 610.6 s and 409.1 s on a first import,
-/// 247.1 s and 249.6 s on a re-import, with Revit reporting "not responding" for the whole of each.
-/// A polygon layer cut after the boundaries can cost far more than they did, and is announced against
-/// its own measurement (<see cref="DescribeLaterLayer"/>).
+/// 80,372-point toposolid with 17 land-use rings — the site boundaries and the drape took 610.6 s
+/// and 409.1 s on a first import, 247.1 s and 249.6 s on a re-import, with Revit reporting "not
+/// responding" for the whole of each. The polygon layers are now announced against a later
+/// measurement that isolates one subdivision (<see cref="DescribePolygonLayer"/>); the drape is
+/// still announced against this one.
 /// </para>
 /// <para>
 /// The drape's half is now paid only on ground that is not already on the imagery type — an
@@ -48,16 +49,13 @@ namespace MantlePlace.Revit.Core;
 /// </remarks>
 public static class SlowStepNotice
 {
-    /// <summary>The point count of the terrain the site boundaries and the drape were measured on.</summary>
+    /// <summary>The point count of the terrain the drape's retype was measured on.</summary>
     /// <remarks>
     /// A reference, not a model. One measurement fixes a point; it does not establish how cost grows
     /// with vertex count, and this class deliberately publishes no formula — see
     /// <see cref="Describe"/>.
     /// </remarks>
     public const int MeasuredPointCount = 80_372;
-
-    /// <summary>Rounded minutes the site-boundary commit took on <see cref="MeasuredPointCount"/>.</summary>
-    public const int MeasuredSiteBoundariesMinutes = 10;
 
     /// <summary>Rounded minutes the drape's retype took on <see cref="MeasuredPointCount"/>.</summary>
     public const int MeasuredImageryDrapeMinutes = 7;
@@ -84,17 +82,9 @@ public static class SlowStepNotice
 
         return kind switch
         {
-            ImportStepKind.SiteBoundaries => Describe(
-                "Next: the site boundaries — "
-                    + plannedWorkItems.ToString("N0", CultureInfo.InvariantCulture)
-                    + " subdivision(s) to cut into the terrain. Cutting subdivisions is the slowest "
-                    + "work in an import.",
-                MeasuredSiteBoundariesMinutes,
-                terrainPointCount),
-
-            // Every other polygon layer, in its own words, and against its own measurement rather
-            // than the boundaries': see DescribeLaterLayer for why the boundaries' speed is no guide.
-            _ when GroundCuts.LayerOf(kind) is { } layer => DescribeLaterLayer(
+            // Every polygon layer, in its own words, against one measurement. None of them names
+            // another step or its place in the order: the planner has reordered them once already.
+            _ when GroundCuts.LayerOf(kind) is { } layer => DescribePolygonLayer(
                 "Next: the " + GroundLayerWords.For(layer).Label + " — "
                     + plannedWorkItems.ToString("N0", CultureInfo.InvariantCulture)
                     + " subdivision(s) to cut into the terrain.",
@@ -102,7 +92,7 @@ public static class SlowStepNotice
 
             ImportStepKind.ImageryDrape => Describe(
                 "Next: the imagery drape. Retyping the terrain so it can wear the photograph costs "
-                    + "almost as much as cutting the boundaries did, and for the same reason.",
+                    + "minutes, and for the same reason the subdivisions do.",
                 MeasuredImageryDrapeMinutes,
                 terrainPointCount),
 
@@ -146,70 +136,70 @@ public static class SlowStepNotice
         + "report \"not responding\" until it finishes, and Cancel takes effect when it finishes. It "
         + "has not crashed; leave it alone.";
 
-    /// <summary>The point count of the terrain <see cref="DescribeLaterLayer"/> was measured on.</summary>
-    public const int MeasuredLaterLayerPointCount = 74_855;
-
-    /// <summary>How many land-cover subdivisions that measurement cut.</summary>
-    public const int MeasuredLaterLayerSubDivisions = 18;
-
-    /// <summary>How many site-boundary subdivisions were already on that terrain when it did.</summary>
-    /// <remarks>40 in Revit 2025 and 2026; 39 in 2027, which refused one at commit.</remarks>
-    public const int MeasuredLaterLayerSubDivisionsAlreadyCut = 40;
-
-    /// <summary>Rounded minutes of the faster of the two Revit 2025 land-cover commits.</summary>
-    /// <remarks>
-    /// Two runs of the same order in Revit 2025.4, 2026-09-25: 969.7 s from the code before a
-    /// refused cut stopped costing the whole layer, and 1,782.5 s from the code after it. Two runs
-    /// do not say whether that gap is the change or the variation between runs, so both ends are
-    /// quoted. The site boundaries on the same terrain committed in 28.9 s and 35.8 s.
-    /// </remarks>
-    public const int MeasuredLaterLayerMinutes2025Fastest = 16;
-
-    /// <summary>Rounded minutes of the slower of the two Revit 2025 land-cover commits.</summary>
-    public const int MeasuredLaterLayerMinutes2025Slowest = 30;
-
-    /// <summary>Rounded minutes the same land-cover commit took in Revit 2026 and 2027.</summary>
-    /// <remarks>150.1 s in 2026 and 177.5 s in 2027, one run each.</remarks>
-    public const int MeasuredLaterLayerMinutes2026And2027 = 3;
+    /// <summary>The point count of the terrain the subdivision measurements were taken on.</summary>
+    public const int MeasuredSubDivisionTerrainPointCount = 74_855;
 
     /// <summary>
-    /// The body for a polygon layer other than the site boundaries: why it may be slower than the
-    /// first layer cut, its own measurement, this terrain, and the reassurance.
+    /// Rounded minutes one land-cover subdivision covering the whole order took to commit on its own
+    /// in Revit 2025, cut first, onto a terrain with nothing else cut into it.
+    /// </summary>
+    /// <remarks>
+    /// 526.5 s, 2026-09-25, Revit 2025.4: a five-vertex grass ring of 199.7 ha, in its own
+    /// transaction. One run.
+    /// </remarks>
+    public const int MeasuredWholeOrderSubDivisionAloneMinutes2025 = 9;
+
+    /// <summary>
+    /// Rounded minutes the same subdivision took to commit on its own in Revit 2025, cut last, onto a
+    /// terrain already carrying 57 subdivisions.
+    /// </summary>
+    /// <remarks>1,210.4 s, 2026-09-25, Revit 2025.4. One run.</remarks>
+    public const int MeasuredWholeOrderSubDivisionLastMinutes2025 = 20;
+
+    /// <summary>
+    /// Rounded minutes the whole land-cover layer took as one commit in Revit 2026 and 2027, cut after
+    /// the site boundaries.
+    /// </summary>
+    /// <remarks>150.1 s in 2026 and 177.5 s in 2027, 2026-09-25, one run each.</remarks>
+    public const int MeasuredLandCoverLayerMinutes2026And2027 = 3;
+
+    /// <summary>
+    /// The body for a polygon layer: what the cost appears to follow in Revit 2025, the one
+    /// subdivision measured on its own, this terrain, and the reassurance.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ⛔ <b>This used to promise the site boundaries' speed, and that was wrong by fifty times.</b>
-    /// The reasoning was that every subdivision costs the terrain's relation rebuild, whichever layer
-    /// published it. On one order in Revit 2025 the land cover then took 16 and 30 minutes in two
-    /// runs, after about half a minute of site boundaries on the same terrain; 2026 and 2027 took
-    /// about three. The likeliest reading is that a layer cut onto ground that already carries
-    /// subdivisions pays for them too, and the notice says that much as what it <em>appears</em> to
-    /// be: it is one order, and why the cost grows has not been measured.
+    /// ⛔ <b>This has been wrong twice, both times by explaining one run.</b> It first promised every
+    /// later layer the site boundaries' speed, and the land cover then took fifty times as long. It
+    /// then said the cost grows with the subdivisions already on the terrain, and a probe cut the
+    /// order's whole-order grass ring first, alone, onto a bare terrain: nine minutes. Cut last, onto
+    /// 57 other subdivisions, the same ring took twenty. So in Revit 2025 on this order both matter:
+    /// how much of the terrain a subdivision covers, and how much of that ground other subdivisions
+    /// already cover. Neither has been measured anywhere else, and 2026 and 2027 have only one
+    /// whole-layer number each, so the sentence is scoped to 2025 and says "appears".
     /// </para>
     /// <para>
-    /// The same rule as <see cref="Describe"/>: the measurement and this terrain are stated side by
-    /// side, and no duration is predicted from them. It names the layer that was measured, because a
-    /// water or road notice quoting a land-cover number must say so. It does not name the site
-    /// boundaries, and its comparison is conditional on ground that already carries subdivisions: a
-    /// bundle with no <c>land_use</c> cuts this layer first.
+    /// The same rule as <see cref="Describe"/>: the measurements and this terrain are stated side by
+    /// side, and no duration is predicted from them. It names no other step and no place in the
+    /// order, because the order is the planner's and has changed once already.
     /// </para>
     /// </remarks>
-    private static string DescribeLaterLayer(string opening, int? terrainPointCount)
+    private static string DescribePolygonLayer(string opening, int? terrainPointCount)
         => string.Format(
             CultureInfo.InvariantCulture,
-            "{0} On ground that already carries subdivisions this can take far longer than the first "
-            + "layer cut did: Revit rebuilds the whole terrain's element relations when the transaction "
-            + "commits, and that cost appears to grow with the subdivisions already on the terrain. It "
-            + "has been measured on one order ({1:N0} points), cutting {2:N0} land-cover subdivisions "
-            + "onto a terrain already carrying {3:N0}: {4} and {5} minutes in two runs in Revit 2025, "
-            + "and about {6} in Revit 2026 and 2027. {7}. {8}",
+            "{0} Revit rebuilds the terrain's element relations when the transaction commits. In Revit "
+            + "2025 that cost appears to follow how much of the terrain a new subdivision covers, and "
+            + "to grow when it lands on ground other subdivisions already cover. On the one order this "
+            + "has been measured on ({1:N0} points), a single land-cover subdivision covering the whole "
+            + "order took about {2} minutes on its own in Revit 2025 when nothing else was cut into the "
+            + "terrain, and about {3} minutes when cut after 57 others; in Revit 2026 and 2027 the whole "
+            + "land-cover layer took about {4} minutes. How long this layer takes depends on the "
+            + "polygons it carries, and no duration is predicted here. {5}. {6}",
             opening,
-            MeasuredLaterLayerPointCount,
-            MeasuredLaterLayerSubDivisions,
-            MeasuredLaterLayerSubDivisionsAlreadyCut,
-            MeasuredLaterLayerMinutes2025Fastest,
-            MeasuredLaterLayerMinutes2025Slowest,
-            MeasuredLaterLayerMinutes2026And2027,
+            MeasuredSubDivisionTerrainPointCount,
+            MeasuredWholeOrderSubDivisionAloneMinutes2025,
+            MeasuredWholeOrderSubDivisionLastMinutes2025,
+            MeasuredLandCoverLayerMinutes2026And2027,
             ThisTerrain(terrainPointCount),
             InsideOneCommit);
 

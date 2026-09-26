@@ -17,9 +17,11 @@ public readonly record struct ImportChunk(int Start, int Count);
 /// moves, and a Cancel is honoured at the next boundary with every committed chunk kept.
 /// </para>
 /// <para>
-/// The subdivisions and the terrain are not chunked, and cannot usefully be: their cost is Revit
-/// rebuilding the ground's element relations at commit, which is paid once per commit whatever it
-/// holds, so splitting them multiplies the cost rather than dividing it.
+/// The subdivisions and the terrain are not chunked. Their cost is Revit rebuilding the ground's
+/// element relations at commit, and in Revit 2025, on the one order it was probed on, chunking the
+/// subdivisions did not lower it: the land cover committed one cut at a time took 1,491 s, against
+/// 970 s and 1,783 s as one commit, and nearly all of it was one subdivision covering the whole
+/// order. No chunk can be smaller than one subdivision (<see cref="SlowStepNotice"/>).
 /// </para>
 /// </remarks>
 public static class ImportChunking
