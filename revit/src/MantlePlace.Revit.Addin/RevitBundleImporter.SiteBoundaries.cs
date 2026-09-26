@@ -85,6 +85,12 @@ internal sealed partial class RevitBundleImporter
         // so both ways of losing one are counted and said.
         int holesUncut = 0;
 
+        // Which cut each new subdivision came from, so an error Revit posts at commit — which names
+        // elements, not rings — can be traced back to the published feature it refused. With it,
+        // what that cut had added to the counts above, which a refusal at commit takes back.
+        Dictionary<ElementId, int> cutIndexOf = [];
+        Dictionary<ElementId, (int HolesUncut, bool Unstamped)> countedFor = [];
+
         // Which cuts end up with a subdivision on the terrain: everything already present, plus
         // whatever this run manages to cut. A ring Revit declines, or one with too few edges to
         // close, leaves nothing behind — and a report naming a subdivision that does not exist is
@@ -144,6 +150,7 @@ internal sealed partial class RevitBundleImporter
             {
                 Toposolid subdivision = terrain.CreateSubDivision(_document, loops);
                 created++;
+                cutIndexOf[subdivision.Id] = boundary.Ordinal - 1;
 
                 // Counted only now: there is no subdivision for a hole to be missing from until
                 // this call returns.
@@ -162,10 +169,13 @@ internal sealed partial class RevitBundleImporter
                 // NEXT import — a subdivision it could not stamp is kept (the boundary is real), it
                 // just cannot be recognised later, and that is said in the log rather than hidden.
                 Parameter? comments = subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS);
-                if (comments is null || comments.IsReadOnly || !comments.Set(boundary.Stamp))
+                bool stampRefused = comments is null || comments.IsReadOnly || !comments.Set(boundary.Stamp);
+                if (stampRefused)
                 {
                     unstamped++;
                 }
+
+                countedFor[subdivision.Id] = (uncut, stampRefused);
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
@@ -176,11 +186,41 @@ internal sealed partial class RevitBundleImporter
             }
         }
 
+        // A subdivision Revit cannot make is refused only at commit, where the catch above never
+        // sees it. Declaring this run's cuts lets the swallower delete the one it names instead of
+        // rolling the whole layer back (ImportFailurePolicy).
+        swallower.OwnNewElements.UnionWith(cutIndexOf.Keys);
+
         if (!CommitAndReport(transaction, swallower))
         {
             // The swallower already said why. Reporting the work below as done would be a lie:
             // the rollback took all of it.
+            ReportRefusedCuts(swallower, cuts, cutIndexOf);
             return;
+        }
+
+        // Each refused cut is undone in every count it joined, then said by name: it is one
+        // published feature lost, the same as a cut the catch above declined.
+        foreach (PostedError refusal in swallower.Deleted)
+        {
+            foreach (ElementId id in refusal.FailingElementIds)
+            {
+                int index = cutIndexOf[id];
+                (int uncut, bool stampRefused) = countedFor[id];
+                created--;
+                declined++;
+                holesUncut -= uncut;
+                unstamped -= stampRefused ? 1 : 0;
+                onTerrain[index] = false;
+                _createdSubDivisionIds.Remove(id);
+                _subDivisionKeywords.Remove(id);
+                Say(ImportFailurePolicy.ExplainRefusedSubDivision(
+                    index + 1,
+                    FeatureName(cuts[index].Outer, "(unnamed)"),
+                    refusal.Text,
+                    refusal.Id,
+                    id.ToString()));
+            }
         }
 
         string summary = $"Imported {created:N0} {words.Noun} subdivision(s) from {step.EntryName}";
@@ -212,6 +252,29 @@ internal sealed partial class RevitBundleImporter
 
         Say(summary + ".");
         ReportCoextensiveBoundaries(ground, cuts, onTerrain);
+    }
+
+    /// <summary>
+    /// Names the published features an error posted at commit was about, and the elements it named
+    /// that are not one of this run's cuts.
+    /// </summary>
+    private void ReportRefusedCuts(ImportFailureSwallower swallower, IReadOnlyList<GroundCut> cuts, Dictionary<ElementId, int> cutIndexOf)
+    {
+        foreach (PostedError error in swallower.Errors)
+        {
+            foreach (ElementId id in error.FailingElementIds)
+            {
+                Say(cutIndexOf.TryGetValue(id, out int index)
+                    ? ImportFailurePolicy.ExplainRefusalNamedFeature(
+                        error.Id, index + 1, FeatureName(cuts[index].Outer, "(unnamed)"), id.ToString())
+                    : ImportFailurePolicy.ExplainRefusalNamedOther(error.Id, id.ToString()));
+            }
+
+            if (error.FailingElementIds.Count == 0)
+            {
+                Say(ImportFailurePolicy.ExplainRefusalNamedNothing(error.Id));
+            }
+        }
     }
 
     /// <summary>

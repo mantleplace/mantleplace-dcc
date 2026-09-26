@@ -30,7 +30,8 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
     private readonly Dictionary<ImportFailureKind, int> _swallowed = [];
     private readonly Dictionary<ImportFailureKind, (string Caption, int Count)> _resolved = [];
     private readonly Dictionary<string, (string Text, int Count)> _unknown = new(StringComparer.Ordinal);
-    private readonly List<string> _errors = [];
+    private readonly List<PostedError> _errors = [];
+    private readonly List<PostedError> _deleted = [];
     private readonly string _stepLabel;
 
     internal ImportFailureSwallower(string stepLabel) => _stepLabel = stepLabel;
@@ -39,7 +40,29 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
     internal bool SawError => _errors.Count > 0;
 
     /// <summary>Revit's own text for the first error, verbatim — the only string a curator can search for.</summary>
-    internal string FirstErrorText => _errors.Count > 0 ? _errors[0] : string.Empty;
+    internal string FirstErrorText => _errors.Count > 0 ? _errors[0].Text : string.Empty;
+
+    /// <summary>
+    /// Every error this transaction saw, with Revit's id for it and the elements Revit said it was
+    /// about — the only way a rolled-back step can say which of its elements was refused.
+    /// </summary>
+    internal IReadOnlyList<PostedError> Errors => _errors;
+
+    /// <summary>
+    /// The elements the step that owns this transaction created in it, which an allowlisted error may
+    /// have deleted rather than roll the step back (<see cref="ImportFailureAction.DeleteNamedElements"/>).
+    /// </summary>
+    /// <remarks>
+    /// Empty unless a step declares them, so no other step, and never the session-wide handler, can
+    /// have anything deleted on its behalf.
+    /// </remarks>
+    internal HashSet<ElementId> OwnNewElements { get; } = [];
+
+    /// <summary>
+    /// The errors that were answered by deleting the elements they named, for the step to account
+    /// for element by element. Only elements from <see cref="OwnNewElements"/> are ever in here.
+    /// </summary>
+    internal IReadOnlyList<PostedError> Deleted => _deleted;
 
     /// <summary>
     /// Whether the error that rolled this back was the too-thin one, which the caller can retry
@@ -70,7 +93,7 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
 
             if (SawError)
             {
-                lines.Add(ImportFailurePolicy.ExplainRollBack(_stepLabel, FirstErrorText));
+                lines.Add(ImportFailurePolicy.ExplainRollBack(_stepLabel, FirstErrorText, _errors[0].Id));
             }
 
             return lines;
@@ -84,6 +107,7 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
         _resolved.Clear();
         _unknown.Clear();
         _errors.Clear();
+        _deleted.Clear();
         SawTooThin = false;
     }
 
@@ -108,7 +132,7 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
     {
         ArgumentNullException.ThrowIfNull(failuresAccessor);
 
-        List<(FailureMessageAccessor Message, ImportFailureKind Kind, string Id, string Text, ImportFailureAction Action, string Caption)> read = [];
+        List<(FailureMessageAccessor Message, ImportFailureKind Kind, string Id, string Text, ImportFailureAction Action, string Caption, IReadOnlyCollection<ElementId> Failing)> read = [];
 
         foreach (FailureMessageAccessor message in failuresAccessor.GetFailureMessages())
         {
@@ -116,17 +140,21 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
             ImportFailureKind kind = Classify(id);
             bool isError = message.GetSeverity() != FailureSeverity.Warning;
             bool hasResolutions = message.HasResolutions();
+            IReadOnlyCollection<ElementId> failing = [.. message.GetFailingElementIds()];
+            bool namesOnlyOwnNewElements = failing.Count > 0 && failing.All(OwnNewElements.Contains);
 
             read.Add((
                 message,
                 kind,
                 id.Guid.ToString(),
                 message.GetDescriptionText(),
-                ImportFailurePolicy.Decide(kind, isError, hasResolutions),
-                hasResolutions ? message.GetDefaultResolutionCaption() : string.Empty));
+                ImportFailurePolicy.Decide(kind, isError, hasResolutions, namesOnlyOwnNewElements),
+                hasResolutions ? message.GetDefaultResolutionCaption() : string.Empty,
+                failing));
         }
 
-        foreach ((FailureMessageAccessor message, ImportFailureKind kind, string id, string text, ImportFailureAction action, string caption) in read)
+        bool deletedNow = false;
+        foreach ((FailureMessageAccessor message, ImportFailureKind kind, string id, string text, ImportFailureAction action, string caption, IReadOnlyCollection<ElementId> failing) in read)
         {
             switch (action)
             {
@@ -145,9 +173,18 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
                         : (caption, 1);
                     break;
 
+                case ImportFailureAction.DeleteNamedElements:
+                    // Deleting the named elements is itself the resolution: Revit drops the failure
+                    // with them and regenerates, and calls this again with whatever is still posted.
+                    failuresAccessor.DeleteElements([.. failing]);
+                    OwnNewElements.ExceptWith(failing);
+                    _deleted.Add(new PostedError(id, text, failing));
+                    deletedNow = true;
+                    break;
+
                 default:
                     SawTooThin |= kind is ImportFailureKind.SlabShapeTooThin or ImportFailureKind.SlabShapeEditFailed;
-                    _errors.Add(text);
+                    _errors.Add(new PostedError(id, text, failing));
                     break;
             }
         }
@@ -160,7 +197,9 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
             return FailureProcessingResult.ProceedWithRollBack;
         }
 
-        return _resolved.Count > 0
+        // A deletion is answered on the call that made it only: the call Revit makes after
+        // regenerating sees what is left, and has nothing of its own to hand back for it.
+        return _resolved.Count > 0 || deletedNow
             ? FailureProcessingResult.ProceedWithCommit
             : FailureProcessingResult.Continue;
     }
@@ -202,6 +241,17 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
 
         _swallowed[kind] = _swallowed.TryGetValue(kind, out int count) ? count + 1 : 1;
     }
+
+    /// <summary>
+    /// "An error occurred during the sub-divide action. The sub-divide can not be completed."
+    /// </summary>
+    /// <remarks>
+    /// By its id rather than a <c>BuiltInFailures</c> member, because Revit 2025's API names none for
+    /// it. The id was read from the rollback line of a real import in Revit 2027, which is what
+    /// <see cref="ImportFailurePolicy.ExplainRollBack"/> carries it for. The same bundle raised no
+    /// such error in 2025 or 2026, so whether they post it under the same id is unobserved.
+    /// </remarks>
+    private static readonly FailureDefinitionId SubDivisionRefused = new(new Guid("07338aaa-c5fe-4aa0-91e1-fa0569a8fe76"));
 
     /// <summary>
     /// Maps a Revit failure id to the pure core's vocabulary.
@@ -266,6 +316,14 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
             return ImportFailureKind.InaccurateSketchLine;
         }
 
+        if (id == SubDivisionRefused)
+        {
+            return ImportFailureKind.SubDivisionRefused;
+        }
+
         return ImportFailureKind.Unknown;
     }
 }
+
+/// <summary>One error Revit posted: its failure id, its own text, and the elements it names.</summary>
+internal sealed record PostedError(string Id, string Text, IReadOnlyCollection<ElementId> FailingElementIds);
