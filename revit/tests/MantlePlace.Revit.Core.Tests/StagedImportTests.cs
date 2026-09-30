@@ -219,28 +219,146 @@ internal static class StagedImportTests
             run.True(import.Outcome is null, "and the log says nothing about a cancel");
         });
 
-        run.Case("the window's status line names the step in flight and how far it has got", () =>
+        run.Case("the window's status line names the step in flight, how far it has got and how long it has run", () =>
         {
             FakeRunner runner = new();
             runner.Bodies[ImportStepKind.Vegetation] = () => Chunks(runner, 250, 350);
             StagedImport import = new([Step(ImportStepKind.ToposurfaceFromSurfaceTin), Step(ImportStepKind.Vegetation)], runner);
 
-            run.Equal(WindowLabels.StatusLine(import), string.Empty, "nothing before the first slice");
+            run.Equal(Status(import, 0), string.Empty, "nothing before the first slice");
 
             import.Advance();
-            run.Equal(WindowLabels.StatusLine(import), "Terrain…", "a one-commit step has no count to show");
+            run.Equal(Status(import, 12), "Terrain: 12 s", "a one-commit step has no count to show, only its clock");
 
             import.Advance();
             import.Advance();
             import.Advance();
-            run.Equal(WindowLabels.StatusLine(import), "Planting: 250 of 600", "a chunked step counts its elements");
-            run.Within(import.Current!.Progress!.Value.Fraction, 250.0 / 600.0, 1e-9, "and the bar's fraction");
+            run.Equal(Status(import, 65), "Planting: 250 of 600, 1 min 5 s", "a chunked step counts its elements");
+            run.Within(ImportRunView.Of(import).Progress!.Value.Fraction, 250.0 / 600.0, 1e-9, "and the bar's fraction");
 
             import.RequestCancel();
             run.Equal(
-                WindowLabels.StatusLine(import),
-                "Planting: 250 of 600. Cancelling at the next step or chunk.",
+                Status(import, 65),
+                "Planting: 250 of 600, 1 min 5 s. Cancelling at the next step or chunk.",
                 "a pending cancel is said until it lands");
+        });
+
+        run.Case("inside a step's commit the status line says Revit is committing, and only there", () =>
+        {
+            // The commit is where Revit stops answering for minutes: a road layer's single commit, the
+            // drape's. The window cannot count inside it, but it can say that is where Revit is.
+            FakeRunner runner = new();
+            StagedImport import = null!;
+            string? during = null;
+            string? chunkDuring = null;
+            runner.Bodies[ImportStepKind.RoadPolygons] = () => InsideCommit(() => import, () => during = Status(import, 250));
+            runner.Bodies[ImportStepKind.Vegetation] = () => ChunkInsideCommit(() => import, 600, () => chunkDuring = Status(import, 65));
+            import = new([Step(ImportStepKind.RoadPolygons), Step(ImportStepKind.Vegetation)], runner);
+
+            import.Advance();
+            run.Equal(Status(import, 5), "Road Subdivisions: 5 s", "before its commit, the step and its clock");
+
+            import.Advance();
+            run.Equal(during, "Road Subdivisions: Revit is committing, 4 min 10 s", "inside it, where Revit is");
+
+            import.Advance();
+            import.Advance();
+            run.Equal(chunkDuring, "Planting: Revit is committing, 1 min 5 s", "a chunk's commit, before any chunk has counted");
+            run.Equal(Status(import, 66), "Planting: 600 of 600, 1 min 6 s", "and once the chunk is in, the count and no commit");
+        });
+
+        run.Case("what a step says about its wait is shown while it runs, and goes when it ends", () =>
+        {
+            // The slow steps say, before their commit, what the wait has measured at
+            // (SlowStepNotice). The log has always had it; the window shows it beside the clock that
+            // is counting that very wait, and not over the step after.
+            FakeRunner runner = new();
+            StagedImport import = null!;
+            ImportRunView? during = null;
+            runner.Bodies[ImportStepKind.RoadPolygons] = () => Announcing(
+                () => import,
+                ["Next: the road surfaces.", "Each is typed as it is cut."],
+                () => during = ImportRunView.Of(import));
+            import = new([Step(ImportStepKind.RoadPolygons), Step(ImportStepKind.LinkSiteIfc)], runner);
+
+            import.Announce("said between steps, so it is no step's");
+            import.Advance();
+            run.Equal(ImportRunView.Of(import).Notices.Count, 0, "nothing is said before the step has run");
+
+            import.Advance();
+            run.Equal(
+                string.Join("|", during!.Notices),
+                "Next: the road surfaces.|Each is typed as it is cut.",
+                "what the step said, in the order it said it");
+
+            import.Advance();
+            run.Equal(ImportRunView.Of(import).CurrentIndex, 1, "the next step is in flight");
+            run.Equal(ImportRunView.Of(import).Notices.Count, 0, "and it starts with nothing said");
+        });
+
+        run.Case("a cancel pressed during a commit is said at once, before Revit's thread has heard it", () =>
+        {
+            // Cancel is posted to Revit's thread, which is inside the commit and hears nothing until it
+            // returns. The window says the cancel is waiting from the moment it is pressed, on the
+            // view it already holds, rather than looking as though the click did nothing.
+            FakeRunner runner = new();
+            StagedImport import = null!;
+            ImportRunView? during = null;
+            runner.Bodies[ImportStepKind.ImageryDrape] = () => InsideCommit(() => import, () => during = ImportRunView.Of(import));
+            import = new([Step(ImportStepKind.ImageryDrape)], runner);
+
+            import.Advance();
+            import.Advance();
+
+            ImportRunView pressed = during!.WithCancelRequested();
+            run.Equal(
+                WindowLabels.StatusLine(pressed, TimeSpan.FromSeconds(900)),
+                "Imagery Drape: Revit is committing, 15 min 0 s. Cancelling at the next step or chunk.",
+                "the pending cancel, over the commit it waits for");
+            run.False(during!.CancelRequested, "the view the window was handed is left as it was");
+            run.False(import.CancelRequested, "and the run itself has not heard of it");
+        });
+
+        run.Case("a step that fails inside its commit leaves no commit behind for the next step", () =>
+        {
+            // The host says a commit has ended in a finally, but a throw from the commit itself is
+            // the case that finally exists for, and the run must not depend on the host getting it
+            // right: a stale "committing" would be said over the next step's whole run.
+            FakeRunner runner = new();
+            StagedImport import = null!;
+            runner.Bodies[ImportStepKind.RoadPolygons] = () => ThrowsInsideCommit(() => import);
+            import = new([Step(ImportStepKind.RoadPolygons), Step(ImportStepKind.LinkSiteIfc)], runner);
+
+            import.Advance();
+            import.Advance();
+            run.True(import.Steps[0].State == ImportStepState.Failed, "the road step failed");
+            run.False(import.Steps[0].Committing, "and is not left inside a commit it will never finish");
+
+            import.Advance();
+            run.Equal(Status(import, 1), "Site Model: 1 s", "and the next step is not said to be committing");
+        });
+
+        run.Case("the window reads a copy of the run, which the run's next slice does not change", () =>
+        {
+            // The window lives on a thread of its own, so it may still be reading a view while Revit's
+            // thread runs the next slice. What it holds has to stay what it was.
+            FakeRunner runner = new();
+            StagedImport import = new([Step(ImportStepKind.LinkSiteIfc), Step(ImportStepKind.RoadCentrelines)], runner);
+
+            import.Advance();
+            ImportRunView view = ImportRunView.Of(import);
+
+            import.Advance();
+            import.Advance();
+
+            run.Equal(view.CurrentIndex, 0, "the view still has the first step in flight");
+            run.True(view.Rows[0].State == ImportStepState.Importing, "and still reads it as importing");
+            run.True(view.Rows[1].State == ImportStepState.Waiting, "with the second still waiting");
+            run.Equal(WindowLabels.StatusLine(view, TimeSpan.FromSeconds(3)), "Site Model: 3 s", "and its status line is the first step's");
+
+            ImportRunView now = ImportRunView.Of(import);
+            run.Equal(now.CurrentIndex, 1, "a new view has moved on");
+            run.True(now.Rows[0].State == ImportStepState.Done, "with the first step done");
         });
 
         return run.Report("staged import");
@@ -249,6 +367,10 @@ internal static class StagedImportTests
     private static ImportStep Step(ImportStepKind kind) => new() { Kind = kind };
 
     private static string Joined(IEnumerable<string> events) => string.Join("|", events);
+
+    /// <summary>The status line the window would show for <paramref name="import"/> now, its clock at <paramref name="seconds"/>.</summary>
+    private static string Status(StagedImport import, double seconds)
+        => WindowLabels.StatusLine(ImportRunView.Of(import), TimeSpan.FromSeconds(seconds));
 
     /// <summary>A step that commits one chunk per size given, the way the tree step does.</summary>
     private static IEnumerable<StepProgress> Chunks(FakeRunner runner, params int[] sizes)
@@ -268,6 +390,46 @@ internal static class StagedImportTests
         {
             runner.Disposed = true;
         }
+    }
+
+    /// <summary>A step that is one commit, the way the polygon steps are: <paramref name="during"/> runs inside it.</summary>
+    private static IEnumerable<StepProgress> InsideCommit(Func<StagedImport> import, Action during)
+    {
+        import().CommitStarted();
+        during();
+        import().CommitFinished();
+        yield break;
+    }
+
+    /// <summary>One chunk of <paramref name="total"/> elements, with <paramref name="during"/> run inside its commit.</summary>
+    private static IEnumerable<StepProgress> ChunkInsideCommit(Func<StagedImport> import, int total, Action during)
+    {
+        import().CommitStarted();
+        during();
+        import().CommitFinished();
+        yield return new StepProgress(total, total);
+    }
+
+    /// <summary>A step that is one commit and says <paramref name="notices"/> before it, then runs <paramref name="during"/>.</summary>
+    private static IEnumerable<StepProgress> Announcing(Func<StagedImport> import, string[] notices, Action during)
+    {
+        foreach (string notice in notices)
+        {
+            import().Announce(notice);
+        }
+
+        during();
+        yield break;
+    }
+
+    /// <summary>A step whose commit throws, before the host can say it has ended.</summary>
+    private static IEnumerable<StepProgress> ThrowsInsideCommit(Func<StagedImport> import)
+    {
+        import().CommitStarted();
+        throw new IOException("the commit threw");
+#pragma warning disable CS0162 // An iterator needs a yield to be one.
+        yield break;
+#pragma warning restore CS0162
     }
 
     /// <summary>As <see cref="Chunks"/>, with the closing line a real step writes after its last chunk.</summary>

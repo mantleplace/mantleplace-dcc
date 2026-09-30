@@ -15,14 +15,21 @@ namespace MantlePlace.Revit.Addin;
 /// <see cref="ExternalEvent"/>. This used to run the whole import inside one <see cref="Execute"/>,
 /// so Revit reported "not responding" for as long as the import took and nothing could be cancelled.
 /// Now each <see cref="Execute"/> does one slice of an <see cref="ActiveImport"/> — start a step,
-/// run a step, commit one chunk — refreshes the import window, and raises the event again. Revit
-/// repaints and processes input between the two.
+/// run a step, commit one chunk — posts the import window what it did, and raises the event again.
+/// Revit repaints and processes input between the two.
+/// </para>
+/// <para>
+/// The window is on a thread of its own (<see cref="ImportWindowHost"/>), so it does not wait for a
+/// slice to end to be told anything: it is posted a view of the run after every slice, and from
+/// inside one whenever a commit starts or ends or a step says what its wait has measured at
+/// (<see cref="ActiveImport.Changed"/>). That is what keeps it naming the step Revit is committing.
 /// </para>
 /// <para>
 /// ⛔ <b>The next raise is posted at <see cref="DispatcherPriority.Background"/>, not made inline.</b>
-/// Background sits below input and render, so the window draws the slice that just finished and a
-/// click on Cancel is handled before the next slice can start. Raising inline would leave both to
-/// whichever Revit happened to service first.
+/// Background sits below input, so Revit's own window catches up with the slice that just finished
+/// and a Cancel the window posted — at normal priority, from its own thread, possibly minutes ago
+/// while Revit sat in a commit — is handled before the next slice can start. Raising inline would
+/// leave both to whichever Revit happened to service first.
 /// </para>
 /// <para>
 /// Two ways in, one driver. The vault window is on its own and queues a zip path (<see cref="QueueImport"/>),
@@ -41,7 +48,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     private string? _zipPath;
     private ExternalEvent? _event;
     private ActiveImport? _import;
-    private ImportWindow? _window;
+    private ImportWindowHost? _window;
 
     /// <summary>Whether the running import came from the vault window, which is who hears about it.</summary>
     private bool _fromVault;
@@ -92,7 +99,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     }
 
     /// <summary>Brings the running import's window forward, for a second click on Import.</summary>
-    internal void ShowRunning() => _window?.Activate();
+    internal void ShowRunning() => _window?.BringForward();
 
     public void Execute(UIApplication application)
     {
@@ -130,7 +137,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             more = false;
         }
 
-        _window?.Refresh();
+        Refresh(import);
 
         if (more)
         {
@@ -147,7 +154,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     {
         if (_import is not null)
         {
-            _window?.Activate();
+            _window?.BringForward();
             Completed?.Invoke(this, BusyReason);
             return;
         }
@@ -171,21 +178,31 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     {
         _import = import;
         _fromVault = fromVault;
-        _window = new ImportWindow(
+        import.Changed += () => Refresh(import);
+        _window = ImportWindowHost.Open(
             Path.GetFileName(import.ZipPath),
             import.DeliveryLine,
             import.UnitsDisagreement,
             import.Checklist,
             revitWindow,
             BeginChosen,
+            CancelRun,
             DismissBeforeStart);
-        _window.Show();
+    }
+
+    /// <summary>Posts the window the run as it stands. Never waits on the window's thread.</summary>
+    private void Refresh(ActiveImport import)
+    {
+        if (import.Staged is { } staged)
+        {
+            _window?.Refresh(ImportRunView.Of(staged));
+        }
     }
 
     /// <summary>The curator pressed Import: plan what they ticked, show its steps, run the first slice.</summary>
     /// <remarks>
-    /// On the window's click, which is Revit's thread but outside any API context — so this plans and
-    /// touches no document. The document work starts at the raise.
+    /// Posted here from the window's click, so it runs on Revit's thread but outside any API context —
+    /// so this plans and touches no document. The document work starts at the raise.
     /// </remarks>
     private void BeginChosen(ImportLayerChoice choice)
     {
@@ -207,14 +224,32 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             return;
         }
 
-        _window?.ShowRun(import.Staged!);
+        _window?.ShowRun(ImportRunView.Of(import.Staged!));
         RaiseNextSlice();
+    }
+
+    /// <summary>The curator pressed Cancel, or closed the window, while the import ran.</summary>
+    /// <remarks>
+    /// Posted here from the window's thread, so it lands when Revit's thread is next free — after the
+    /// commit it may be sitting in — and ahead of the next slice, which it stops.
+    /// </remarks>
+    private void CancelRun()
+    {
+        if (_import is not { Staged: { } staged } import)
+        {
+            return;
+        }
+
+        staged.RequestCancel();
+        Refresh(import);
     }
 
     /// <summary>The window went before Import was pressed: nothing ran, and the import is dropped.</summary>
     private void DismissBeforeStart()
     {
-        if (_import is not { } import)
+        // Only an import that never began: the window treats a close after Import as a cancel, so a
+        // dismissal that reaches a begun import is a stale one and has nothing to drop.
+        if (_import is not { Staged: null } import)
         {
             return;
         }
@@ -250,7 +285,10 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
 
     private void End(ActiveImport import)
     {
-        _window?.ShowFinished(import.Summary ?? string.Empty);
+        _window?.ShowFinished(
+            import.Staged is { } staged ? ImportRunView.Of(staged) : null,
+            import.Staged?.Outcome,
+            import.Summary ?? string.Empty);
         import.Dispose();
 
         bool fromVault = _fromVault;

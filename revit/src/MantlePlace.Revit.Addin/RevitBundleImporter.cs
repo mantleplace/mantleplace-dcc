@@ -136,6 +136,20 @@ internal sealed partial class RevitBundleImporter(
     internal IReadOnlyList<string> Log => _log;
 
     /// <summary>
+    /// Raised on Revit's thread with <c>true</c> just before a transaction commits and <c>false</c>
+    /// once the call has returned or thrown — the span in which Revit answers nothing.
+    /// </summary>
+    /// <remarks>
+    /// Every commit in the import goes through <c>CommitAndReport</c>, so this is every commit. A
+    /// handler must not call back into the document: the transaction is still open when it is
+    /// raised with <c>true</c>.
+    /// </remarks>
+    internal event Action<bool>? CommitChanged;
+
+    /// <summary>Raised on Revit's thread with each <see cref="SlowStepNotice"/> line as it is said.</summary>
+    internal event Action<string>? Announced;
+
+    /// <summary>
     /// Runs <paramref name="slice"/> — one <see cref="StagedImport.Advance"/> — with the import's
     /// failure hook attached for exactly as long as it runs.
     /// </summary>

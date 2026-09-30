@@ -34,13 +34,16 @@ internal static class BrandChrome
     private const string FillName = "MantlePlaceFill";
 
     /// <summary>
-    /// The primary action's look, built once and shared.
+    /// The primary action's look, built once per thread and shared by that thread's windows.
     /// </summary>
     /// <remarks>
-    /// Built on first use, which is on Revit's UI thread because only a window reaches for it — a
-    /// <see cref="Style"/> has thread affinity and could not be shared otherwise.
+    /// ⛔ Per thread, because a <see cref="Style"/> has thread affinity until it is sealed, and there
+    /// are two UI threads now: Revit's, for the vault and sign-in windows, and the import window's own
+    /// (<see cref="ImportWindowHost"/>). One shared instance was built by whichever thread reached it
+    /// first and would have been refused by the other.
     /// </remarks>
-    private static readonly Style PrimaryStyle = BuildPrimaryStyle();
+    [ThreadStatic]
+    private static Style? _primaryStyle;
 
     /// <summary>The gap between the header and the content beneath it.</summary>
     private const double HeaderGap = 12;
@@ -88,7 +91,7 @@ internal static class BrandChrome
     internal static void MakePrimary(Button button)
     {
         ArgumentNullException.ThrowIfNull(button);
-        button.Style = PrimaryStyle;
+        button.Style = _primaryStyle ??= BuildPrimaryStyle();
     }
 
     private static Style BuildPrimaryStyle()

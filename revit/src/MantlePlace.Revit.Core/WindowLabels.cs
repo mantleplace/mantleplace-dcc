@@ -255,27 +255,66 @@ public static class WindowLabels
         => string.Format(CultureInfo.InvariantCulture, "{0:N0} of {1:N0}", progress.Done, progress.Total);
 
     /// <summary>
-    /// The import window's status line: the step in flight, how far a chunked one has got, and a
-    /// cancel that is waiting for its boundary. Empty between steps.
+    /// What the status line says while Revit is inside the step's commit.
     /// </summary>
     /// <remarks>
-    /// A step that is one commit shows its name and nothing else, because there is no part of a
-    /// commit to count; <see cref="SlowStepNotice"/> is where the log says so.
+    /// Prose, not one of <c>HPS-51</c>'s labels: a status line is bound by the glossary. It names
+    /// Revit as the one working, because that is the truth of it — the plugin has handed Revit the
+    /// transaction and is waiting like the curator is — and it is the same fact the log's notice
+    /// explains at length before the step (<see cref="SlowStepNotice"/>).
     /// </remarks>
-    public static string StatusLine(StagedImport run)
-    {
-        ArgumentNullException.ThrowIfNull(run);
+    public const string Committing = "Revit is committing";
 
-        if (run.Current is not { } step)
+    /// <summary>How long the step in flight has run, as the window's clock says it: <c>4 min 10 s</c>.</summary>
+    /// <remarks>
+    /// Whole seconds, truncated, so the clock never claims a minute it has not reached. Past an hour
+    /// the seconds are dropped: a step that long is read in minutes. A negative span — a clock read
+    /// across the moment it was reset — reads as nothing elapsed rather than as a minus sign.
+    /// </remarks>
+    public static string Elapsed(TimeSpan elapsed)
+    {
+        long seconds = Math.Max(0L, (long)elapsed.TotalSeconds);
+        return seconds switch
+        {
+            < 60 => string.Format(CultureInfo.InvariantCulture, "{0} s", seconds),
+            < 3_600 => string.Format(CultureInfo.InvariantCulture, "{0} min {1} s", seconds / 60, seconds % 60),
+            _ => string.Format(CultureInfo.InvariantCulture, "{0} h {1} min", seconds / 3_600, seconds % 3_600 / 60),
+        };
+    }
+
+    /// <summary>
+    /// The import window's status line: the step in flight, how far a chunked one has got, how long
+    /// it has run, and a cancel that is waiting for its boundary. Empty between steps.
+    /// </summary>
+    /// <param name="view">The run, as Revit's thread last posted it.</param>
+    /// <param name="elapsed">How long the step in flight has run, by the window's own clock.</param>
+    /// <remarks>
+    /// A step that is one commit has no count to show, because there is no part of a commit to count;
+    /// its clock is what says it is still going. <see cref="SlowStepNotice"/> is where the log says so.
+    /// </remarks>
+    public static string StatusLine(ImportRunView view, TimeSpan elapsed)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        if (view.Current is not { } kind)
         {
             return string.Empty;
         }
 
-        string name = StepName(step.Step.Kind);
-        string line = step.Progress is { Total: > 0 } progress
-            ? $"{name}: {ProgressText(progress)}"
-            : $"{name}…";
+        List<string> parts = [];
+        if (view.Progress is { Total: > 0 } progress)
+        {
+            parts.Add(ProgressText(progress));
+        }
 
-        return run.CancelRequested ? line + ". Cancelling at the next step or chunk." : line;
+        if (view.Committing)
+        {
+            parts.Add(Committing);
+        }
+
+        parts.Add(Elapsed(elapsed));
+        string line = $"{StepName(kind)}: {string.Join(", ", parts)}";
+
+        return view.CancelRequested ? line + ". Cancelling at the next step or chunk." : line;
     }
 }

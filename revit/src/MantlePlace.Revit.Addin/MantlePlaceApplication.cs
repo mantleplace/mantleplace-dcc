@@ -154,13 +154,27 @@ public sealed class MantlePlaceApplication : IExternalApplication
         }
 
         e.Handled = true;
+        SayFault(e.Exception);
+    }
+
+    /// <summary>
+    /// Tells the curator a fault of this add-in's was caught and Revit is still running. On Revit's
+    /// thread only: it is a <see cref="TaskDialog"/>.
+    /// </summary>
+    /// <remarks>
+    /// The dispatcher net above says it for a fault on Revit's thread; the import window's thread,
+    /// whose dispatcher is this add-in's own, posts its faults here to be said the same way.
+    /// </remarks>
+    internal static void SayFault(Exception fault)
+    {
+        ArgumentNullException.ThrowIfNull(fault);
 
         // Said out loud rather than swallowed. A curator who sees this once has a bug to report; one
         // who sees nothing has a plugin that quietly does not work.
         new TaskDialog("Mantle Place")
         {
             MainInstruction = "Something in Mantle Place went wrong.",
-            MainContent = $"{e.Exception.Message}\n\nRevit is still running and your model is "
+            MainContent = $"{fault.Message}\n\nRevit is still running and your model is "
                 + "untouched. If this keeps happening, please report it.",
         }.Show();
     }

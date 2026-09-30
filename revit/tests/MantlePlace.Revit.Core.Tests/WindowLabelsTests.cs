@@ -198,6 +198,19 @@ internal static class WindowLabelsTests
             run.Equal(WindowLabels.ProgressText(new StepProgress(1_250, 4_532)), "1,250 of 4,532", "chunk progress");
         });
 
+        run.Case("the step's clock reads in the units a wait of that length is read in", () =>
+        {
+            // The longest step measured so far is the 2027 drape at 2,759 s, so minutes carry most
+            // of the reading; the seconds stay so the clock visibly moves while Revit does not.
+            run.Equal(WindowLabels.Elapsed(TimeSpan.Zero), "0 s", "the step has just started");
+            run.Equal(WindowLabels.Elapsed(TimeSpan.FromSeconds(59.9)), "59 s", "whole seconds, never rounded up to a minute");
+            run.Equal(WindowLabels.Elapsed(TimeSpan.FromSeconds(60)), "1 min 0 s", "the first minute");
+            run.Equal(WindowLabels.Elapsed(TimeSpan.FromSeconds(250)), "4 min 10 s", "a road commit, some way in");
+            run.Equal(WindowLabels.Elapsed(TimeSpan.FromSeconds(2_759)), "45 min 59 s", "the longest step measured");
+            run.Equal(WindowLabels.Elapsed(TimeSpan.FromSeconds(3_725)), "1 h 2 min", "past an hour the seconds stop mattering");
+            run.Equal(WindowLabels.Elapsed(TimeSpan.FromSeconds(-3)), "0 s", "a clock read across a reset never goes negative");
+        });
+
         run.Case("the search label and the unknown words are Title Case", () =>
         {
             foreach (string label in new[]

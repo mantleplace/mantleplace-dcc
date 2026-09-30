@@ -42,6 +42,15 @@ namespace MantlePlace.Revit.Core;
 /// still the only line there will be <em>for that step</em>, and it says exactly that much.
 /// </para>
 /// <para>
+/// The window no longer goes dark with the commit. It has a thread of its own, so through the commit
+/// it names the step, says Revit is committing and keeps the step's clock running
+/// (<see cref="ImportRunView"/>), and it shows this line beside that clock
+/// (<see cref="StagedImport.Announce"/>). Revit's own window still does not answer until the commit
+/// returns, and neither does Cancel. Revit's <c>ControlledApplication.ProgressChanged</c> was
+/// measured as a feed for a bar and is not one: it is silent through most of the road commit and
+/// nearly all of the drape's.
+/// </para>
+/// <para>
 /// This is text, so it lives where text can be asserted. The shim decides nothing: it hands over the
 /// kind, the terrain's point count and how much work the step actually has, and says whatever comes
 /// back (<c>HPS-02</c>).
@@ -132,9 +141,9 @@ public static class SlowStepNotice
     /// <summary>The reassurance every whole-commit notice ends on: what cannot be shown, and why.</summary>
     private const string InsideOneCommit =
         "That cost is inside one commit, and a commit cannot report part of itself or be interrupted: "
-        + "the import window shows every step and every chunk of trees, but not this, so Revit will "
-        + "report \"not responding\" until it finishes, and Cancel takes effect when it finishes. It "
-        + "has not crashed; leave it alone.";
+        + "the import window names this step and keeps its clock running, but cannot show how far the "
+        + "commit has got. Revit will report \"not responding\" until it finishes, and Cancel takes "
+        + "effect when it finishes. It has not crashed; leave it alone.";
 
     /// <summary>The point count of the terrain the subdivision measurements were taken on.</summary>
     public const int MeasuredSubDivisionTerrainPointCount = 74_855;

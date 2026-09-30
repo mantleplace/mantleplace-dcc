@@ -1,22 +1,34 @@
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
 /// <summary>
 /// The modeless import window: first the checklist of what the bundle carries, then every chosen
-/// step and where it stands, the current step's progress in elements, Cancel, and the report when
-/// the run is over.
+/// step and where it stands, the step in flight with its clock, Cancel, and the report when the run
+/// is over.
 /// </summary>
 /// <remarks>
 /// <para>
-/// It shows an <see cref="ImportChecklist"/> and then a <see cref="StagedImport"/>, and decides
-/// nothing about either. It repaints because the import hands Revit its message loop back between
-/// slices; inside one slice — one commit — it cannot, and the step's own line in the log says so
-/// (<see cref="SlowStepNotice"/>).
+/// It shows an <see cref="ImportChecklist"/> and then <see cref="ImportRunView"/>s, and decides
+/// nothing about either.
+/// </para>
+/// <para>
+/// ⛔ <b>It lives on a thread of its own, and nothing here may touch the import.</b> It used to share
+/// Revit's thread and be owned by Revit's main window, so it repainted only between slices and froze
+/// with Revit through every commit — twenty minutes of road surfaces, forty of drape, with no step
+/// named and no reading answered. Now <see cref="ImportWindowHost"/> runs it on its own dispatcher,
+/// unowned, and it hears about the run only through the views Revit's thread posts to it. What the
+/// curator does here goes back the same way: Import, Cancel and a dismissal are callbacks the host
+/// has already marshalled onto Revit's thread. Its clock is its own, so it keeps moving while Revit
+/// posts nothing at all. How it stays in front of Revit without an owner is
+/// <see cref="ForegroundWatch"/>.
 /// </para>
 /// <para>
 /// <b>Closing it while the import runs is a cancel.</b> The vault window's close box only detaches a
@@ -32,8 +44,14 @@ namespace MantlePlace.Revit.Addin;
 /// </remarks>
 internal sealed class ImportWindow : Window
 {
+    /// <summary>How often the step's clock is repainted.</summary>
+    private static readonly TimeSpan ClockTick = TimeSpan.FromSeconds(1);
+
+    private const double BaselineDpi = 96.0;
+
     private readonly ImportChecklist _checklist;
     private readonly Action<ImportLayerChoice> _begin;
+    private readonly Action _cancelRun;
     private readonly Action _dismiss;
 
     private readonly Dictionary<ImportLayer, CheckBox> _boxes = [];
@@ -62,15 +80,26 @@ internal sealed class ImportWindow : Window
     private readonly Button _cancel = new() { Content = WindowLabels.Cancel, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
     private readonly Button _close = new() { Content = WindowLabels.Close, Padding = new Thickness(12, 4, 12, 4), Visibility = Visibility.Collapsed };
 
-    private StagedImport? _run;
+    /// <summary>Repaints the status line once a second, so the clock moves while Revit posts nothing.</summary>
+    private readonly DispatcherTimer _tick;
+
+    /// <summary>How long the step in flight has run, from the moment a view naming it arrived here.</summary>
+    private readonly Stopwatch _stepClock = new();
+
+    private ImportRunView? _view;
     private TextBlock[] _states = [];
+    private ForegroundWatch? _foreground;
+    private bool _begun;
+    private bool _cancelAsked;
     private bool _finished;
     private bool _closeWhenFinished;
     private bool _refreshing;
 
     /// <param name="deliveryLine">The order's unit system, linear unit and delivery CRS; <c>null</c> shows no line.</param>
     /// <param name="unitsDisagreement">Shown only when set: the project displays the other unit system.</param>
+    /// <param name="revitWindow">Revit's main window: where the window opens. It is not the owner.</param>
     /// <param name="begin">Called once, with the curator's choice, when Import is pressed.</param>
+    /// <param name="cancelRun">Called once, when the curator asks a running import to stop.</param>
     /// <param name="dismiss">Called once when the window goes before Import was pressed.</param>
     internal ImportWindow(
         string bundleName,
@@ -79,10 +108,12 @@ internal sealed class ImportWindow : Window
         ImportChecklist checklist,
         IntPtr revitWindow,
         Action<ImportLayerChoice> begin,
+        Action cancelRun,
         Action dismiss)
     {
         _checklist = checklist;
         _begin = begin;
+        _cancelRun = cancelRun;
         _dismiss = dismiss;
 
         Title = WindowLabels.ImportWindowTitle;
@@ -93,11 +124,17 @@ internal sealed class ImportWindow : Window
         // starts (ShowRun), so the report fills the window rather than growing it.
         MinHeight = 460 + BrandChrome.HeaderHeight;
         SizeToContent = SizeToContent.Height;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        // Owned by Revit's main window, for the vault window's reason: it stays in front of the model
-        // it is changing and minimises with it.
-        new WindowInteropHelper(this) { Owner = revitWindow };
+        // ⛔ No owner. An owned window shares its owner's input queue, and Revit's is stuck for the
+        // whole of every long commit. ForegroundWatch keeps it in front of Revit instead, and without
+        // an owner it needs a taskbar button of its own to be found again behind something else.
+        ShowInTaskbar = true;
+        ShowActivated = ImportWindowStacking.ShowsActivated(ForegroundWatch.Holder());
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        CentreOver(revitWindow);
+
+        _tick = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = ClockTick };
+        _tick.Tick += (_, _) => PaintRun();
 
         Content = BuildLayout(bundleName, deliveryLine, unitsDisagreement);
         _body.Child = BuildChecklist();
@@ -107,45 +144,77 @@ internal sealed class ImportWindow : Window
         _cancel.Click += (_, _) => Cancel();
         _close.Click += (_, _) => Close();
         Closing += OnClosing;
+        Loaded += (_, _) => _foreground ??= new ForegroundWatch(new WindowInteropHelper(this).Handle);
+        Closed += (_, _) =>
+        {
+            _tick.Stop();
+            _foreground?.Dispose();
+        };
 
         RefreshChecklist();
     }
 
     /// <summary>Swaps the checklist for the chosen steps. Called once the import has its plan.</summary>
-    internal void ShowRun(StagedImport run)
+    internal void ShowRun(ImportRunView view)
     {
-        _run = run;
-        SizeToContent = SizeToContent.Manual;
-        _body.Child = BuildSteps(run);
-        _import.Visibility = Visibility.Collapsed;
-        _close.Visibility = Visibility.Visible;
-        _close.IsEnabled = false;
-        _progress.Visibility = Visibility.Visible;
-        Refresh();
-    }
-
-    /// <summary>Re-reads the run. Called after every slice.</summary>
-    internal void Refresh()
-    {
-        if (_run is not { } run)
+        if (_finished)
         {
             return;
         }
 
-        for (int index = 0; index < run.Steps.Count; index++)
+        SizeToContent = SizeToContent.Manual;
+        _body.Child = BuildSteps(view);
+        _import.Visibility = Visibility.Collapsed;
+        _close.Visibility = Visibility.Visible;
+        _close.IsEnabled = false;
+        _progress.Visibility = Visibility.Visible;
+        _tick.Start();
+        Refresh(view);
+    }
+
+    /// <summary>Takes the run as Revit's thread last saw it: after a slice, and as a commit starts or ends.</summary>
+    internal void Refresh(ImportRunView view)
+    {
+        if (_finished || _states.Length != view.Rows.Count)
         {
-            _states[index].Text = WindowLabels.StateWord(run.Steps[index].State);
+            return;
         }
 
-        _status.Text = WindowLabels.StatusLine(run);
+        // The clock is this window's own, and restarts when a view names a new step, so it keeps
+        // counting through a commit that lets Revit's thread post nothing.
+        if (view.CurrentIndex != (_view?.CurrentIndex ?? -1))
+        {
+            _stepClock.Restart();
+
+            // Ticking from the step's own start, so the clock turns over on its whole seconds
+            // rather than up to a second late.
+            _tick.Stop();
+            _tick.Start();
+        }
+
+        _view = view;
+        for (int index = 0; index < view.Rows.Count; index++)
+        {
+            _states[index].Text = WindowLabels.StateWord(view.Rows[index].State);
+        }
+
+        // What the step said about its wait, beside the clock that counts it. The report box is
+        // otherwise empty until the run is over.
+        _report.Text = string.Join(Environment.NewLine + Environment.NewLine, view.Notices);
+        _report.Visibility = view.Notices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         // A step that is one commit has no part to show, so the bar says "working" rather than 0%.
-        _progress.IsIndeterminate = run.Current is { Progress: null };
-        _progress.Value = run.Current?.Progress?.Fraction ?? (_finished ? 1 : 0);
+        _progress.IsIndeterminate = view.Current is not null && view.Progress is null;
+        _progress.Value = view.Progress?.Fraction ?? 0;
+
+        PaintRun();
     }
 
     /// <summary>Shows the report and hands the window back to the curator.</summary>
-    internal void ShowFinished(string report)
+    /// <param name="view">The run as it ended, or <c>null</c> for one that never began.</param>
+    /// <param name="outcome">How a cancelled run ended, in one line; <c>null</c> otherwise.</param>
+    /// <param name="report">The closing report.</param>
+    internal void ShowFinished(ImportRunView? view, string? outcome, string report)
     {
         if (_finished)
         {
@@ -153,10 +222,18 @@ internal sealed class ImportWindow : Window
             return;
         }
 
-        _finished = true;
-        Refresh();
+        if (view is not null)
+        {
+            Refresh(view);
+        }
 
-        _status.Text = _run?.Outcome ?? string.Empty;
+        _finished = true;
+        _tick.Stop();
+        _stepClock.Stop();
+
+        _status.Text = outcome ?? string.Empty;
+        _progress.IsIndeterminate = false;
+        _progress.Value = 1;
         _report.Text = report;
         _report.Visibility = Visibility.Visible;
         _import.Visibility = Visibility.Collapsed;
@@ -168,6 +245,70 @@ internal sealed class ImportWindow : Window
         {
             Close();
         }
+    }
+
+    /// <summary>Brings the window forward, for a second click on Import Bundle.</summary>
+    internal void BringForward()
+    {
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+
+        Activate();
+    }
+
+    /// <summary>Repaints the status line from the last view and the window's own clock.</summary>
+    private void PaintRun()
+    {
+        if (_view is not { } view || _finished)
+        {
+            return;
+        }
+
+        // A cancel pressed here reaches Revit's thread only when its commit returns; it is said from
+        // the moment it is pressed.
+        _status.Text = WindowLabels.StatusLine(_cancelAsked ? view.WithCancelRequested() : view, _stepClock.Elapsed);
+    }
+
+    /// <summary>
+    /// Opens the window centred over Revit's, in device-independent pixels, the way
+    /// <see cref="PrepareNotifier"/> places its notices.
+    /// </summary>
+    /// <remarks>
+    /// Centred on its smallest height: the unavailable list can make it taller once laid out, which
+    /// leaves it a little low rather than off the monitor. A minimised Revit is centred on by where it
+    /// would restore to. Nothing here sends Revit's window a message.
+    /// </remarks>
+    private void CentreOver(IntPtr revitWindow)
+    {
+        if (revitWindow == IntPtr.Zero || !RevitRectangle(revitWindow, out NativeRect rect))
+        {
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            return;
+        }
+
+        double scale = GetDpiForWindow(revitWindow) is var dpi and > 0 ? dpi / BaselineDpi : 1.0;
+        double left = rect.Left / scale;
+        double top = rect.Top / scale;
+        double width = (rect.Right - rect.Left) / scale;
+        double height = (rect.Bottom - rect.Top) / scale;
+
+        Left = left + Math.Max(0, (width - Width) / 2);
+        Top = top + Math.Max(0, (height - MinHeight) / 2);
+    }
+
+    private static bool RevitRectangle(IntPtr revitWindow, out NativeRect rect)
+    {
+        if (!IsIconic(revitWindow))
+        {
+            return GetWindowRect(revitWindow, out rect);
+        }
+
+        WindowPlacement placement = new() { Length = Marshal.SizeOf<WindowPlacement>() };
+        bool read = GetWindowPlacement(revitWindow, ref placement);
+        rect = placement.NormalPosition;
+        return read;
     }
 
     private UIElement BuildLayout(string bundleName, string? deliveryLine, string? unitsDisagreement)
@@ -286,7 +427,7 @@ internal sealed class ImportWindow : Window
                     : string.Empty;
             }
 
-            _import.IsEnabled = _checklist.CanImport;
+            _import.IsEnabled = !_begun && _checklist.CanImport;
         }
         finally
         {
@@ -294,18 +435,18 @@ internal sealed class ImportWindow : Window
         }
     }
 
-    private Grid BuildSteps(StagedImport run)
+    private Grid BuildSteps(ImportRunView view)
     {
-        _states = new TextBlock[run.Steps.Count];
+        _states = new TextBlock[view.Rows.Count];
 
         Grid steps = new();
         steps.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         steps.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        for (int index = 0; index < run.Steps.Count; index++)
+        for (int index = 0; index < view.Rows.Count; index++)
         {
             steps.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            TextBlock name = new() { Text = WindowLabels.StepName(run.Steps[index].Step.Kind), Margin = new Thickness(0, 2, 12, 2) };
+            TextBlock name = new() { Text = WindowLabels.StepName(view.Rows[index].Kind), Margin = new Thickness(0, 2, 12, 2) };
             Grid.SetRow(name, index);
             steps.Children.Add(name);
 
@@ -320,28 +461,36 @@ internal sealed class ImportWindow : Window
 
     private void Begin()
     {
-        if (_run is not null || !_checklist.CanImport)
+        if (_begun || !_checklist.CanImport)
         {
             return;
         }
 
         // Dark before the call rather than after it: a second click queued behind a slow re-plan
-        // would otherwise begin the same import twice.
+        // would otherwise begin the same import twice. And from here a close is a cancel, even
+        // before the plan's steps arrive: the import is already Revit's thread's to run.
+        _begun = true;
         _import.IsEnabled = false;
         _begin(_checklist.Choice);
     }
 
     private void Cancel()
     {
-        if (_run is null)
+        if (!_begun)
         {
             Close();
             return;
         }
 
-        _run.RequestCancel();
+        if (_cancelAsked)
+        {
+            return;
+        }
+
+        _cancelAsked = true;
         _cancel.IsEnabled = false;
-        Refresh();
+        _cancelRun();
+        PaintRun();
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
@@ -351,7 +500,7 @@ internal sealed class ImportWindow : Window
             return;
         }
 
-        if (_run is null)
+        if (!_begun)
         {
             // Nothing has run and nothing will: the window goes now, and the import is dropped.
             _finished = true;
@@ -363,4 +512,46 @@ internal sealed class ImportWindow : Window
         _closeWhenFinished = true;
         Cancel();
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowPlacement
+    {
+        public int Length;
+        public int Flags;
+        public int ShowCommand;
+        public NativePoint MinPosition;
+        public NativePoint MaxPosition;
+        public NativeRect NormalPosition;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowPlacement(IntPtr hWnd, ref WindowPlacement placement);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
 }

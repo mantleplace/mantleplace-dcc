@@ -69,6 +69,8 @@ internal sealed class ActiveImport : IDisposable
         _log = log;
         ZipPath = zipPath;
         _importer = new RevitBundleImporter(application, document, archive, log.Append);
+        _importer.CommitChanged += OnCommitChanged;
+        _importer.Announced += OnAnnounced;
         Checklist = ImportChecklist.For(plan);
         DeliveryLine = DeliveryHeader.Describe(manifest.Delivery);
         UnitsDisagreement = DeliveryHeader.DisplayDisagreement(manifest.Delivery, LengthUnitTypeId(document));
@@ -96,6 +98,18 @@ internal sealed class ActiveImport : IDisposable
     /// <c>null</c> until <see cref="Begin"/>.
     /// </summary>
     internal StagedImport? Staged { get; private set; }
+
+    /// <summary>
+    /// Raised on Revit's thread, from inside a slice, when the run has something new to show before
+    /// the slice is over: a commit starting or ending, or a step saying what its wait has measured at.
+    /// </summary>
+    /// <remarks>
+    /// The window is refreshed after every slice anyway. This is for the part of a slice the window
+    /// could not otherwise hear about — above all the moment before a commit, after which Revit's
+    /// thread says nothing until the commit returns. A handler posts and returns: it runs with the
+    /// step's transaction open.
+    /// </remarks>
+    internal event Action? Changed;
 
     /// <summary>The end-of-run report, or <c>null</c> while the run is still going.</summary>
     internal string? Summary => _summary;
@@ -328,6 +342,36 @@ internal sealed class ActiveImport : IDisposable
     }
 
     public void Dispose() => _archive.Dispose();
+
+    private void OnCommitChanged(bool committing)
+    {
+        if (Staged is not { } staged)
+        {
+            return;
+        }
+
+        if (committing)
+        {
+            staged.CommitStarted();
+        }
+        else
+        {
+            staged.CommitFinished();
+        }
+
+        Changed?.Invoke();
+    }
+
+    private void OnAnnounced(string notice)
+    {
+        if (Staged is not { } staged)
+        {
+            return;
+        }
+
+        staged.Announce(notice);
+        Changed?.Invoke();
+    }
 
     private void Close(string summary)
     {

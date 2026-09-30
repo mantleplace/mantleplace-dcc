@@ -308,11 +308,16 @@ road centrelines, the trees and the site context view and filter it finds and cr
 missing. Opening the site model to copy from is one call and is not counted: the window shows the
 building count once it is open. Road centrelines drawn by a build that predates their stamp carry none, so the first import
 after upgrading draws them once more; delete the older set by hand. The log's last line names the
-steps that completed and those that never ran. What no window can show is the inside of one
-commit: the terrain and the
+steps that completed and those that never ran. What no window can show is how far one commit has
+got: the terrain and the
 subdivisions are one commit each — and so is the drape's retype, which only a ground built before the
 terrain took the imagery type still needs — Revit reports "not responding" while one runs, and a
-Cancel pressed then takes effect when it finishes. Closing the window while it runs is a cancel.
+Cancel pressed then takes effect when it finishes. The window does not stop with it: it runs on a
+thread of its own, so through a commit it names the step, says Revit is committing, keeps the step's
+clock running and shows what the step said beforehand about how long that has taken, and a Cancel
+pressed then is shown at once. Because Revit's window no longer owns it, it floats over Revit only
+while Revit is the application in front, has a taskbar button of its own, and does not minimise with
+Revit. Closing the window while it runs is a cancel.
 
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
 runs unattended from a Revit journal or a tester script. An unattended run raises no dialog and opens

@@ -159,13 +159,18 @@ internal static class SlowStepNoticeTests
         run.Case("every slow notice ends on the same reassurance", () =>
         {
             // One sentence, said once: a copy per notice is how the later layers' version lost the
-            // line about the import window.
+            // line about the import window. The window now has a thread of its own and stays live
+            // through the commit, so the line says what it shows there and what it still cannot.
             foreach (ImportStepKind kind in SlowKinds)
             {
+                string? notice = SlowStepNotice.For(kind, 80_372, 1);
                 run.Contains(
-                    SlowStepNotice.For(kind, 80_372, 1),
-                    "the import window shows every step and every chunk of trees, but not this",
-                    $"{kind} says what the window cannot show");
+                    notice,
+                    "the import window names this step and keeps its clock running, but cannot show how far the commit has got",
+                    $"{kind} says what the window shows through the commit, and what it cannot");
+                run.False(
+                    notice is not null && notice.Contains("but not this", StringComparison.Ordinal),
+                    $"{kind} no longer says the window goes dark for it");
             }
         });
 

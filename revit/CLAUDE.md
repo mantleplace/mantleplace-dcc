@@ -210,13 +210,12 @@ follow.
 
 - **The staged import joined that set.** One step, or one chunk of trees, runs per
   `ExternalEvent` raise, and the handler posts the next raise at `DispatcherPriority.Background` so
-  the window repaints and a Cancel click lands first. Revit does service a raise posted from inside
+  a Cancel the window posted lands first. Revit does service a raise posted from inside
   its own handler promptly: the harness below pressed Import in the real window in 2025, 2026 and
   2027 and every slice ran with no mouse or keyboard input, the trees' ~47 chunks in under a minute
   each time, and in 2026 with Revit minimized for the whole tree step. A Comments write on a
   `DirectShape` holds: the re-imports in a fresh Revit process found all 290 road centrelines by the
-  stamp in their Comments, in each of the three. Whether the modeless window actually repaints
-  between slices is compiled and unexecuted. What is settled
+  stamp in their Comments, in each of the three. What is settled
   headlessly is everything about *when*: `StagedImport` decides the slice order, where a cancel lands
   and what a failure costs, and `ImportChunking`/`TreeIdentity` decide the chunks and the resume.
   Never `yield` inside an open transaction — a chunked step commits, then yields — and never leave
@@ -224,6 +223,31 @@ follow.
   curator is editing their own model (`RevitBundleImporter.InSlice`). The window opens on a
   checklist and raises nothing until Import is pressed; what each box shows, and what a plan
   without a layer looks like, is `ImportChecklist` and the planner's choice argument, both headless.
+
+- **⛔ The import window has a thread of its own, and Revit's window does not own it.** Slicing the
+  import was not enough: most of a full import is spent inside single commits (road surfaces, the
+  drape), a commit cannot yield, and a window owned by Revit's main window shares Revit's input
+  queue, so it froze with Revit. Measured on the full plan before this changed, Revit was hung in 61
+  to 74% of 5-second samples, the window never once showed road surfaces, water or the drape as the
+  step in flight, and in 2027 no UI Automation read of it completed for the drape's 2,759 s. Now
+  `ImportWindowHost` runs it on an STA thread with its own `Dispatcher`, unowned, and only posts
+  cross: views of the run (`ImportRunView`) one way; Import, Cancel and a dismissal the other, onto
+  Revit's dispatcher, where they run as the click handlers they used to be. Every commit goes through
+  `CommitAndReport`, which says either side of `Transaction.Commit` that Revit is committing, and the
+  slow steps hand the window their `SlowStepNotice` lines, so through a commit the window names the
+  step, says Revit is committing, keeps the step's clock and shows the notice beside it; a Cancel
+  pressed then is said at once and lands when the commit returns. What it says is `WindowLabels`,
+  and when it may float or take the focus is `ImportWindowStacking`, both headless; `ForegroundWatch`
+  applies the second without ever sending Revit's thread a message. Two statics went thread-aware
+  with it: `BrandChrome`'s primary style is built per thread, and `ResourceImages`' table is locked.
+  Two alternatives were measured or weighed and not taken: `ControlledApplication.ProgressChanged` is
+  silent through 57% of the road commit and 99.6% of the drape's, so it cannot feed a bar, and
+  `DisableProcessWindowsGhosting` is process-wide with no undo. Proven offscreen, without Revit: the
+  built add-in's host driven from a scratch exe whose own UI thread hung in 20 s "commits", read from
+  another process every second, answered every read in about 25 ms while that thread was hung,
+  with its clock moving and a Cancel said at once and landing after the commit. Whether Revit's own
+  hooks leave the thread that alone, the foreground hook's floating, and the placement over a
+  minimised Revit are compiled and unexecuted inside Revit.
 - **The site location and the context view have left that set.** `SiteLocation.Latitude`/`Longitude`,
   `View3D.CreateIsometric`, `ParameterFilterElement.Create` over every model category that
   `ParameterFilterUtilities.GetFilterableParametersInCommon` says has Comments, the 2023+

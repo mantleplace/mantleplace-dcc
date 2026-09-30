@@ -84,7 +84,7 @@ internal sealed partial class RevitBundleImporter
         // curator to ignore the line.
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, wearsImageryType ? 0 : 1) is { } notice)
         {
-            Say(notice);
+            Announce(notice);
         }
 
         // Revit 2026 and later: every typed subdivision not already on its material's type is one
@@ -94,13 +94,13 @@ internal sealed partial class RevitBundleImporter
         (int onTheirTypes, int toRetype) = CountTypedSubDivisions(terrain, name, smoothed);
         if (SlowStepNotice.ForSubDivisionRetypes(toRetype, _terrainVertexCount) is { } retypes)
         {
-            Say(retypes);
+            Announce(retypes);
         }
 
         // With nothing to retype, the one commit below is still the longest wait in this step.
         if (SlowStepNotice.ForDrapeCommit(onTheirTypes, toRetype, wearsImageryType ? 0 : 1, _terrainVertexCount) is { } commit)
         {
-            Say(commit);
+            Announce(commit);
         }
 
         ImportFailureSwallower swallower = new("Applying the aerial photograph");

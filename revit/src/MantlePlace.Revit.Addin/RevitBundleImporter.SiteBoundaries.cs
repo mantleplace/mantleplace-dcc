@@ -122,7 +122,7 @@ internal sealed partial class RevitBundleImporter
         // announced at the first cut that takes a type (SlowStepNotice.ForTypesAtCut).
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, newBoundaries.Count) is { } notice)
         {
-            Say(notice);
+            Announce(notice);
         }
 
         // ⛔ Settled before the first cut when Core says so (TerrainSmoothing.SettleBeforeCuts), so a
@@ -225,7 +225,7 @@ internal sealed partial class RevitBundleImporter
                 && SlowStepNotice.ForTypesAtCut(layer, route, step.DrapePlanned, newBoundaries.Count, _terrainVertexCount) is { } typing)
             {
                 typingAnnounced = true;
-                Say(typing);
+                Announce(typing);
             }
 
             if (SubDivisionMaterial.TakesTypeAtCut(route, step.DrapePlanned)
