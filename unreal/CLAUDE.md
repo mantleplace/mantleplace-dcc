@@ -240,4 +240,8 @@ top of the first.
   same rejection codes from the same routes, and both hosts share one stored credential.
 - Shared domain vocabulary → [`CONTEXT.md`](../CONTEXT.md).
 - Why a decision was taken → [`docs/adr/`](../docs/adr/).
-- What this plugin does and how to build it → [`README.md`](../README.md).
+- How this plugin behaves and how to build it → [`README.md`](../README.md).
+- Whether this plugin supports a feature at all, and why not → the
+  [host support matrix](../docs/host-support.md). A change that adds, narrows or drops a feature
+  here edits the **Unreal** column in the same pull request, and only that column; a gap it opens or
+  leaves links its issue or ADR. Never state a per-host status anywhere else.

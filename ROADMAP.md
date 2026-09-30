@@ -2,9 +2,11 @@
 
 Where these plugins are going, a quarter at a time. The near-term arc is the **Unreal plugin from
 pre-1.0 to 1.0 on Fab**, and the headline item on the way there is **World Partition import**:
-real-world sites brought in as streaming World Partition worlds. Today an imported bundle becomes a
-single `ALandscape`, which is the honest ceiling on how much ground one order can practically bring
-in.
+real-world sites brought in as streaming World Partition worlds, lifting the ceiling on how much
+ground one order can practically bring in.
+
+This page says **when**. What each host does today, and why a host leaves something out, is the
+[host support matrix](docs/host-support.md); an item leaves this page once it ships there.
 
 Three threads run through every quarter, and each bullet below belongs to one of them:
 **import capability** (the code), **documentation and onboarding** (the tutorial, the media, the
@@ -32,12 +34,6 @@ planned it.
   public CI — both need a licensed install this repository must not put on a runner.
 - **Unreal quickstart tutorial** — the missing walk-through from empty project to imported site,
   plus the README's screenshot and GIF slots filled with real captures.
-- **Revit site-context completeness** — the first users work in Revit, so the Revit plugin takes
-  headline features now: a staged import that stays responsive and can be cancelled, context
-  buildings as native elements copied from the bundle's site model, trees as Planting families,
-  renderer-ready material names on the ground, site location and a context view, attribution
-  written into the model, and a per-layer picker. The plan and its build order are tracked as
-  issues on this repository.
 
 ## Q1 2027
 
@@ -47,8 +43,8 @@ planned it.
   Partition. Single-Landscape import remains the default for small sites, and Mesh Terrain
   continues to be tracked as the Experimental feature matures.
 - **Import-surface completion** — a per-layer import picker so a bundle can be brought in
-  selectively, a shipped landscape material that samples the coverage rasters the importer already
-  lands, and the remaining imagery-drape work.
+  selectively, a shipped landscape material that renders the painted weight layers and samples the
+  coverage rasters, and the Stylized map drape.
 - **The spec earns its second implementer** — [`spec/`](spec/) shipped early, so what this quarter
   owes it is use rather than prose: a worked third-party read of a real bundle against the spec and
   the [conformance corpus](tools/manifest-conformance/) alone, and whatever that exercise proves is

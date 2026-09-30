@@ -24,7 +24,8 @@ A **Mantle Place Bundle (MPB)** is a zip of pre-derived, host-ready geospatial a
 heightmap or terrain mesh, an imagery drape, building geometry, road centrelines, site boundaries,
 tree points — plus a `Metadata/manifest.json` that describes them. The plugins read that manifest
 and place the artifacts correctly in the host's own coordinate system. The format is specified in
-public, in [`spec/`](spec/).
+public, in [`spec/`](spec/). Which host does what with each of them — and, where one does not, why —
+is the [host support matrix](docs/host-support.md).
 
 **The client is deliberately thin.** It applies numbers the platform already derived; it does not
 re-derive them. The plugin never computes a survey point, a UTM zone, a landscape scale or a drape
@@ -223,9 +224,9 @@ accepted lag rather than a gap we would rather you not notice.
 
 ## Roadmap
 
-Quarter-by-quarter, in [ROADMAP.md](ROADMAP.md). The headline: **World Partition large-AOI import**
-— today an import produces a single `ALandscape`, and lifting that ceiling is the main course of the
-plugin's path from pre-1.0 to 1.0 on Fab.
+Quarter-by-quarter, in [ROADMAP.md](ROADMAP.md). The headline: **World Partition large-AOI import**,
+the main course of the Unreal plugin's path from pre-1.0 to 1.0 on Fab. What each host does today is
+the [host support matrix](docs/host-support.md).
 
 ## Contributing
 
