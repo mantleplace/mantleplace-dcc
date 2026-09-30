@@ -352,7 +352,10 @@ internal sealed partial class RevitBundleImporter
         // Measured in Revit 2026 and 2027 (bundle 9d2dfdbf, 2026-09-19, 33 of 33 each): a subdivision
         // is a Toposolid on the document's default toposolid type, the instance parameter is ABSENT,
         // and a retype onto a duplicated type holds. So a typed subdivision wears the photograph
-        // through a type of its own, built the way the terrain's is (SubDivisionTypeFor).
+        // through a type of its own, built the way the terrain's is (SubDivisionTypeFor). One this
+        // import cut was put on that type in the transaction that cut it (TypeForDrapeAtCut), so here
+        // it is found on it and only its material's photograph and offset are written: 61 of them
+        // in about 2 s and a 2 s commit, where retyping them here took minutes (revit/CLAUDE.md).
         foreach (ElementId subdivisionId in DrapeableSubDivisionIds(terrain))
         {
             if (_document.GetElement(subdivisionId) is not Element subdivision)
@@ -448,6 +451,84 @@ internal sealed partial class RevitBundleImporter
         return onType && wearsIt
             ? null
             : $"the drape type did not hold on a subdivision (on the type: {onType}, its top layer wears the photograph: {wearsIt})";
+    }
+
+    /// <summary>
+    /// Gives a subdivision the polygon step has just cut the type the drape would otherwise retype it
+    /// onto, in the transaction that cut it — when the element takes a type at all
+    /// (<see cref="SubDivisionMaterial.TypeAtCut"/>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ The element is asked, never the version. A 2025 subdivision reports no type and keeps its
+    /// instance material, so nothing is made for it here and the drape writes that material as
+    /// before. A 2026 or 2027 one is on the document's default type; the type and its bare material
+    /// are built here, by the drape's own builders and under the names the drape looks for, and the
+    /// drape then finds the subdivision already on it and writes only the photograph and its
+    /// offset, which needs the element's own corner and so cannot be known before the cut exists
+    /// (ADR 0008).
+    /// </para>
+    /// <para>
+    /// Named for smooth shading, which the drape turns on. If Revit refuses smoothing, the drape
+    /// names the shared material instead and retypes, as it always did.
+    /// </para>
+    /// <para>
+    /// ⛔ Contained, like <see cref="ImageryToposolidType"/>: a type that cannot be prepared is rolled
+    /// back and costs this subdivision its fast path and nothing else. The cut stays, on the type
+    /// Revit gave it, and the drape retypes it later. A cut Revit refuses at commit is deleted
+    /// (<see cref="ImportFailurePolicy"/>) and leaves its unused type and material behind; a
+    /// re-import that cuts the same feature finds both by name.
+    /// </para>
+    /// </remarks>
+    /// <returns>Whether the subdivision is now on its type.</returns>
+    private bool TypeForDrapeAtCut(Toposolid subdivision)
+    {
+        if (!SubDivisionMaterial.TypeAtCut(RouteFor(subdivision, out _, out ToposolidType? own), drapePlanned: true)
+            || own is null)
+        {
+            return false;
+        }
+
+        string materialName = SubDivisionMaterialName(
+            subdivision,
+            DrapeLayering.ImageryName(_archive.Layout.Key.Stem),
+            smoothed: true);
+
+        using SubTransaction typing = new(_document);
+        typing.Start();
+
+        try
+        {
+            if (DrapeMaterial(materialName) is not { } material)
+            {
+                Trace($"  cut: subdivision {subdivision.Id.Value} left for the drape to type — this Revit "
+                    + "would not create an appearance asset for its material.");
+            }
+            else if (SubDivisionTypeFor(own, material, out string layering) is not { } type)
+            {
+                Trace($"  cut: subdivision {subdivision.Id.Value} left for the drape to type — {layering}.");
+            }
+            else
+            {
+                // Unless it is already on it, which a cut is only when the document's default type
+                // is this very one.
+                if (subdivision.GetTypeId() != type.Id)
+                {
+                    subdivision.ChangeTypeId(type.Id);
+                }
+
+                typing.Commit();
+                return true;
+            }
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
+        {
+            Trace($"  cut: subdivision {subdivision.Id.Value} left for the drape to type — Revit refused "
+                + $"its type: {ex.Message}");
+        }
+
+        typing.RollBack();
+        return false;
     }
 
     /// <summary>

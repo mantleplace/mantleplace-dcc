@@ -88,7 +88,10 @@ internal sealed partial class RevitBundleImporter
         }
 
         // Revit 2026 and later: every typed subdivision not already on its material's type is one
-        // ChangeTypeId, seconds each. Counted before anything is written, like the notice above.
+        // ChangeTypeId, seconds each. Counted before anything is written, like the notice above. A
+        // subdivision this import cut is already on it (TypeForDrapeAtCut), so what is left is an
+        // earlier import's cut, a keyword changed since, a type Revit refused at the cut, or every
+        // one when smoothing was refused and the shared names apply.
         if (SlowStepNotice.ForSubDivisionRetypes(SubDivisionsToRetype(terrain, name, smoothed), _terrainVertexCount) is { } retypes)
         {
             Say(retypes);

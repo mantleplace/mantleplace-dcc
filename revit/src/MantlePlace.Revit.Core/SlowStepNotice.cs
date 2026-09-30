@@ -257,6 +257,55 @@ public static class SlowStepNotice
             ThisTerrain(terrainPointCount));
     }
 
+    /// <summary>How many subdivisions <see cref="MeasuredTypeAtCutSeconds"/> was measured on.</summary>
+    public const int MeasuredTypeAtCutSubDivisions = 40;
+
+    /// <summary>
+    /// Rounded seconds those subdivisions took to be given their drape types as they were cut, in a
+    /// real Revit 2027 import, outside the commit.
+    /// </summary>
+    /// <remarks>
+    /// 2026-09-30, order <c>4276ef78</c>, the site boundaries cut after the land cover on a
+    /// 74,855-point terrain: 62.2 s for 40, which is 1.6 s apiece. The land cover's 19 before them
+    /// took 73.2 s, 3.9 s apiece, so the per-cut cost is not a constant and none is quoted.
+    /// </remarks>
+    public const int MeasuredTypeAtCutSeconds = 62;
+
+    /// <summary>
+    /// The line to say before a polygon step whose new subdivisions are given their drape types as
+    /// they are cut (<see cref="SubDivisionMaterial.TypeAtCut"/>), or <c>null</c> when it cuts nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The wait the drape used to announce (<see cref="ForSubDivisionRetypes"/>) moved here with the
+    /// work: one <c>ChangeTypeId</c> per subdivision, seconds each, now inside the slice that cuts it.
+    /// Said whenever the drape is planned, because whether this Revit gives a subdivision a type is
+    /// only known once the first one exists, so the sentence names the versions instead.
+    /// </para>
+    /// <para>
+    /// The same rule as <see cref="Describe"/>: the measurement is stated, and no duration is
+    /// predicted from it.
+    /// </para>
+    /// </remarks>
+    public static string? ForTypesAtCut(int newSubDivisions)
+    {
+        if (newSubDivisions <= 0)
+        {
+            return null;
+        }
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "The imagery drape is planned, so in Revit 2026 and later, where a subdivision has a type of "
+            + "its own, each of these {0:N0} subdivision(s) is also moved onto the type that will wear the "
+            + "photograph as it is cut, one at a time, before the commit; Revit 2025 has nothing to do "
+            + "here. On the one order this has been measured on, {1:N0} subdivisions took about {2:N0} "
+            + "seconds in Revit 2027. It is the retype the drape would otherwise do after them.",
+            newSubDivisions,
+            MeasuredTypeAtCutSubDivisions,
+            MeasuredTypeAtCutSeconds);
+    }
+
     /// <summary>This terrain's point count as a sentence, or the admission that it is not known.</summary>
     private static string ThisTerrain(int? terrainPointCount)
         => terrainPointCount is { } count

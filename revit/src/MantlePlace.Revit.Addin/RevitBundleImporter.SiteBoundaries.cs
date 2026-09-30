@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Autodesk.Revit.DB;
 using MantlePlace.Revit.Core;
 
@@ -92,6 +93,10 @@ internal sealed partial class RevitBundleImporter
         Dictionary<ElementId, int> cutIndexOf = [];
         Dictionary<ElementId, (int HolesUncut, bool Unstamped)> countedFor = [];
 
+        // How many cuts took the drape's type as they were cut, and what that cost, for the log.
+        int typedForDrape = 0;
+        TimeSpan typingTime = TimeSpan.Zero;
+
         // Which cuts end up with a subdivision on the terrain: everything already present, plus
         // whatever this run manages to cut. A ring Revit declines, or one that cannot be closed
         // into a loop, leaves nothing behind — and a report naming a subdivision that does not exist is
@@ -117,6 +122,11 @@ internal sealed partial class RevitBundleImporter
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, newBoundaries.Count) is { } notice)
         {
             Say(notice);
+        }
+
+        if (step.DrapePlanned && SlowStepNotice.ForTypesAtCut(newBoundaries.Count) is { } typing)
+        {
+            Say(typing);
         }
 
         ImportFailureSwallower swallower = new($"Importing the {label}");
@@ -179,6 +189,15 @@ internal sealed partial class RevitBundleImporter
                 }
 
                 countedFor[subdivision.Id] = (uncut, stampRefused);
+
+                // After the stamp, which names the type. In the cut's own transaction, so the drape
+                // has no retype left to do (SubDivisionMaterial.TypeAtCut).
+                if (step.DrapePlanned)
+                {
+                    long before = Stopwatch.GetTimestamp();
+                    typedForDrape += TypeForDrapeAtCut(subdivision) ? 1 : 0;
+                    typingTime += Stopwatch.GetElapsedTime(before);
+                }
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
@@ -193,6 +212,12 @@ internal sealed partial class RevitBundleImporter
         // sees it. Declaring this run's cuts lets the swallower delete the one it names instead of
         // rolling the whole layer back (ImportFailurePolicy).
         swallower.OwnNewElements.UnionWith(cutIndexOf.Keys);
+
+        if (typedForDrape > 0)
+        {
+            Trace($"  cut: {typedForDrape:N0} of {cutIndexOf.Count:N0} subdivision(s) given their drape type "
+                + $"as they were cut, in {typingTime.TotalSeconds:N1} s.");
+        }
 
         if (!CommitAndReport(transaction, swallower))
         {

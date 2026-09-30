@@ -26,7 +26,8 @@ public enum SubDivisionMaterialRoute
 /// (2026-09-19): a subdivision is a <c>Toposolid</c> typed with the document's default toposolid type,
 /// the instance parameter is absent, and a retype onto a duplicated type holds. 2026 added a
 /// <c>CreateSubDivision</c> overload that takes the type. The plugin compiles against 2025's API, so
-/// it calls the overload that takes the default and retypes afterwards.
+/// it calls the overload that takes the default and retypes afterwards: in the transaction that cut
+/// the subdivision when the drape is planned (<see cref="TypeAtCut"/>), and in the drape otherwise.
 /// </para>
 /// <para>
 /// The instance write is asked first because it is free, and a retype is not: 33 of them took about
@@ -75,6 +76,22 @@ public static class SubDivisionMaterial
     public static bool NeedsRetype(SubDivisionMaterialRoute route, string? currentTypeName, string materialName)
         => route == SubDivisionMaterialRoute.Type
             && !string.Equals(currentTypeName, TypeName(materialName), StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether a subdivision just cut is given its own imagery type in the transaction that cut it,
+    /// rather than retyped by the drape afterwards.
+    /// </summary>
+    /// <param name="route">What the new element was found to accept, asked after the cut returned.</param>
+    /// <param name="drapePlanned">Whether the plan's drape will run (<see cref="ImportStep.DrapePlanned"/>).</param>
+    /// <remarks>
+    /// Only a typed element, and only when a drape will fill the type's photograph layer. The type is
+    /// the one the drape would have retyped it onto, named for smooth shading because the drape turns
+    /// smoothing on (ADR 0008); a drape that finds smoothing refused retypes it as before
+    /// (<see cref="NeedsRetype"/>). A typeless element keeps its instance material, which the drape
+    /// writes.
+    /// </remarks>
+    public static bool TypeAtCut(SubDivisionMaterialRoute route, bool drapePlanned)
+        => drapePlanned && route == SubDivisionMaterialRoute.Type;
 
     /// <summary>
     /// Whether <paramref name="typeName"/>'s top layer is already this plugin's thin photograph layer:

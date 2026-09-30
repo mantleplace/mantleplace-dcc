@@ -636,6 +636,18 @@ public sealed class ImportStep
     public TerrainToposolidType ToposolidType { get; init; } = TerrainToposolidType.Project;
 
     /// <summary>
+    /// Whether this plan's drape will run after this step and drape what it cuts. Read only for the
+    /// four kinds that cut subdivisions (<see cref="GroundCuts.LayerOf"/>).
+    /// </summary>
+    /// <remarks>
+    /// ⛔ The same decision as <see cref="ToposolidType"/>, one step later, and for the same reason: a
+    /// type given after the fact is a retype, and a retype is what costs. Only a drape that will run
+    /// earns it, since a type whose photograph layer nothing fills is a blank layer over the ground.
+    /// What the polygon step does with it is <see cref="SubDivisionMaterial.TypeAtCut"/>.
+    /// </remarks>
+    public bool DrapePlanned { get; init; }
+
+    /// <summary>
     /// Populated only for <see cref="ImportStepKind.AttributionAndProvenance"/>: what the attribution view says
     /// and what the provenance record stores, both copied from the manifest.
     /// </summary>

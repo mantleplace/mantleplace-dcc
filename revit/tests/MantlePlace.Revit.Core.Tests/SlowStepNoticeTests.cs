@@ -224,6 +224,35 @@ internal static class SlowStepNoticeTests
                 "an unknown count is said, never invented");
         });
 
+        run.Case("a polygon step that types its cuts for the drape says so, and for which Revit", () =>
+        {
+            // The retype the drape used to announce now happens as each subdivision is cut, so the
+            // wait moved into the polygon step and the sentence moved with it.
+            string? notice = SlowStepNotice.ForTypesAtCut(40);
+            run.True(notice is not null, "announced");
+            run.Contains(notice, "40 subdivision(s)", "it names how many are coming");
+            run.Contains(notice, "as it is cut", "it says when the type is given");
+            run.Contains(notice, "Revit 2026 and later", "it names the Revit that does this");
+            run.Contains(notice, "Revit 2025", "and says 2025 has none of it, so a 2025 curator is not promised a wait");
+            run.Contains(
+                notice,
+                SlowStepNotice.MeasuredTypeAtCutSubDivisions.ToString("N0", CultureInfo.InvariantCulture) + " subdivisions",
+                "the measured count");
+            run.Contains(
+                notice,
+                SlowStepNotice.MeasuredTypeAtCutSeconds.ToString("N0", CultureInfo.InvariantCulture) + " seconds",
+                "the measured duration");
+            run.False(
+                notice is not null && notice.Contains("minutes", StringComparison.Ordinal),
+                "no duration is predicted for this layer");
+        });
+
+        run.Case("no new cut types nothing and says nothing", () =>
+        {
+            run.True(SlowStepNotice.ForTypesAtCut(0) is null, "a re-import that cuts nothing is silent");
+            run.True(SlowStepNotice.ForTypesAtCut(-1) is null, "a negative count is silent");
+        });
+
         run.Case("every other step stays quiet", () =>
         {
             foreach (ImportStepKind kind in FastKinds)
