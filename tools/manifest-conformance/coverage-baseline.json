@@ -117,6 +117,10 @@
     "manifest.meshUpAxisZ": [
       "unreal"
     ],
+    "manifest.partialDeliveryIgnored": [
+      "revit",
+      "unreal"
+    ],
     "manifest.planetShapeAbsent": [
       "unreal"
     ],
