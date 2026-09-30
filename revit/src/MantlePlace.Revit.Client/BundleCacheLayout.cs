@@ -50,16 +50,19 @@ public sealed class BundleCacheLayout
 
     public string ExtractedRoot => Path.Combine(Root, ExtractedDirectoryName);
 
-    /// <summary>The layout for a real order — the normal case, and the one both sources converge on.</summary>
-    public static BundleCacheLayout ForOrder(string orderId) => ForOrder(orderId, CacheRoot());
+    /// <summary>
+    /// The layout for a bundle's filing key (<c>BundleManifest.FilingKey</c>): its order id, the normal
+    /// case and the one both sources converge on, or the id an older bundle's attribution carries.
+    /// </summary>
+    public static BundleCacheLayout ForOrder(string filingKey) => ForOrder(filingKey, CacheRoot());
 
     /// <summary>As <see cref="ForOrder(string)"/>, with an explicit cache root. For tests.</summary>
-    public static BundleCacheLayout ForOrder(string orderId, string cacheRoot)
+    public static BundleCacheLayout ForOrder(string filingKey, string cacheRoot)
     {
-        ArgumentException.ThrowIfNullOrEmpty(orderId);
+        ArgumentException.ThrowIfNullOrEmpty(filingKey);
         ArgumentException.ThrowIfNullOrEmpty(cacheRoot);
 
-        SanitisedCacheKey key = CacheKeySanitiser.Sanitise(orderId);
+        SanitisedCacheKey key = CacheKeySanitiser.Sanitise(filingKey);
         return new BundleCacheLayout(Path.Combine(cacheRoot, key.DirectoryName), key);
     }
 

@@ -56,8 +56,9 @@ public sealed class TerrainDecision
 /// </para>
 /// <para>
 /// <b>The stamp has two halves and they answer different questions.</b> It is
-/// <c>Mantle Place Terrain {stem}/{build}</c>: the stem is the cache key — the sanitised order id,
-/// or the zip's path for a bundle that declares no order — and says <em>whose ground this is</em>;
+/// <c>Mantle Place Terrain {stem}/{build}</c>: the stem is the cache key — the sanitised
+/// <see cref="BundleManifest.FilingKey"/>, or the zip's path for a bundle that gives none — and says
+/// <em>whose ground this is</em>;
 /// the build token is the first twelve hex characters of the surface artifact's declared sha256 and
 /// says <em>which build of it</em>. That is the distinction
 /// <c>docs/adr/0002-import-identity.md</c> drew for the other host, and the one

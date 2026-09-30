@@ -39,6 +39,7 @@ internal static class HostFramePlacementTests
         RunReaderCases(run);
         RunVectorPlanCases(run);
         RunVectorRefusalCases(run);
+        RunSplitLayerCases(run);
         RunDrapeCases(run);
 
         return run.Report("host-frame placement");
@@ -291,6 +292,89 @@ internal static class HostFramePlacementTests
         });
     }
 
+    /// <summary>
+    /// MPB 1.7.0 splits a shared layer that mixes geometry families one file per family, and a
+    /// consumer reads every row. Reached wherever the shared set is: a bundle whose copy was withheld,
+    /// with or without a block carrying the hazard layers, on a metric origin.
+    /// </summary>
+    private static void RunSplitLayerCases(TestRun run)
+    {
+        const string Withheld = "{ \"present\": false, \"reason\": \"emit_failed\" }";
+
+        run.Case("a withheld copy beside a split shared water layer places the water bodies from its polygon file", () =>
+        {
+            // The water bodies are cut from areas. The line file is listed first, and taking it would
+            // draw every stream and drop every lake without a word.
+            foreach ((string? vectors, string shape) in new[]
+            {
+                ((string?)null, "no copy at all"),
+                (Layers("absolute_projected", "m", "flood_zones"), "a copy carrying only the hazards"),
+            })
+            {
+                BundleImportPlan plan = Plan(Manifest(
+                    MetricGeoreference, MetricFileFrame, vectors, drape: null, Withheld, version: "1.7.0",
+                    splitFormats: new Dictionary<string, string> { ["water"] = Split("Water") }));
+
+                ImportStep? water = Find(plan, ImportStepKind.Water);
+                run.Equal(water?.EntryName, SharedPath("Water_polygon"), $"{shape}: the polygon file is planned");
+                run.True(water?.Layer == LayerFrame.Geographic, $"{shape}: through the HPS-45 projection");
+                run.Equal(water?.ExpectedSha256, SplitPolygonSha, $"{shape}: and verified against its own hash");
+            }
+        });
+
+        run.Case("a split layer with no file of the family its consumer places is declared absent, not sent to the vault", () =>
+        {
+            BundleImportPlan plan = Plan(Manifest(
+                MetricGeoreference, MetricFileFrame, vectors: null, drape: null, Withheld, version: "1.7.0",
+                splitFormats: new Dictionary<string, string> { ["water"] = LinesAndPoints("Water"), ["land_use"] = LinesAndPoints("LandUse") }));
+
+            run.False(Has(plan, ImportStepKind.Water), "nothing is planned from the line or the point file");
+            SkippedImport? water = Skip(plan, ImportStepKind.Water);
+            run.True(water?.ReasonCode == SkipReasonCode.DeclaredAbsent, "the bundle has said there are none");
+            run.Contains(water?.Reason, "no areas", "and the reason says what the layer lacks");
+            run.False(water?.Reason?.Contains("mantle.place/vault", StringComparison.Ordinal) ?? true, "with no re-download a vault cannot answer");
+
+            // The curator reads the step's own words, never the manifest's key for the layer.
+            SkippedImport? boundaries = Skip(plan, ImportStepKind.SiteBoundaries);
+            run.Contains(boundaries?.Reason, "No site boundaries", "the step is named in words");
+            run.False(boundaries?.Reason?.Contains("land_use", StringComparison.Ordinal) ?? true, "not by the layer's key");
+        });
+
+        run.Case("one table names each vector step's layer and the geometry it draws from", () =>
+        {
+            Dictionary<ImportStepKind, string> names = VectorKinds.Zip(VectorNames).ToDictionary(pair => pair.First, pair => pair.Second);
+            names[ImportStepKind.FloodZones] = "flood_zones";
+            names[ImportStepKind.SteepGround] = "steep_slope";
+
+            foreach (ImportStepKind kind in Enum.GetValues<ImportStepKind>())
+            {
+                SiteVectorLayer? layer = SiteVectorLayers.Of(kind);
+                if (!names.TryGetValue(kind, out string? name))
+                {
+                    run.True(layer is null, $"{kind} places no vector layer");
+                    continue;
+                }
+
+                run.Equal(layer?.Name, name, $"{kind} places {name}");
+                run.True(
+                    layer?.DrawnFrom == (kind == ImportStepKind.RoadCentrelines ? SiteGeometryKinds.Lines : SiteGeometryKinds.Areas),
+                    $"{kind}: centrelines from lines, everything else from areas");
+            }
+
+            bool refused = false;
+            try
+            {
+                _ = SiteVectorLayers.For(ImportStepKind.ImageryDrape);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                refused = true;
+            }
+
+            run.True(refused, "and asking such a step for its geometry is refused, not answered with a guess");
+        });
+    }
+
     private static void RunDrapeCases(TestRun run)
     {
         run.Case("a State Plane delivery drapes the Revit block's own image, on the origin's grid", () =>
@@ -353,6 +437,26 @@ internal static class HostFramePlacementTests
     private const string DrapeSha = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 
     private const string VectorsPresent = "{ \"present\": true }";
+
+    // One digest per split file, none shared with any other file here, so a plan that picked the
+    // wrong file is caught by its hash as well as by its path.
+    private const string SplitLineSha = "1111111111111111111111111111111111111111111111111111111111111111";
+    private const string SplitPolygonSha = "2222222222222222222222222222222222222222222222222222222222222222";
+    private const string SplitPointSha = "3333333333333333333333333333333333333333333333333333333333333333";
+    private const string SplitGpkgSha = "4444444444444444444444444444444444444444444444444444444444444444";
+
+    /// <summary>A layer split by geometry family, the line file first (MPB 1.7.0).</summary>
+    private static string Split(string stem) => $$"""
+        { "format": "geojson", "path": "{{SharedPath(stem + "_line")}}", "sha256": "{{SplitLineSha}}", "geometry_family": "line" },
+        { "format": "geojson", "path": "{{SharedPath(stem + "_polygon")}}", "sha256": "{{SplitPolygonSha}}", "geometry_family": "polygon" },
+        { "format": "gpkg", "path": "Vector/{{stem}}.gpkg", "sha256": "{{SplitGpkgSha}}", "tables": ["{{stem}}_line", "{{stem}}_polygon"] }
+        """;
+
+    /// <summary>A layer split into lines and points, with no area in it.</summary>
+    private static string LinesAndPoints(string stem) => $$"""
+        { "format": "geojson", "path": "{{SharedPath(stem + "_line")}}", "sha256": "{{SplitLineSha}}", "geometry_family": "line" },
+        { "format": "geojson", "path": "{{SharedPath(stem + "_point")}}", "sha256": "{{SplitPointSha}}", "geometry_family": "point" }
+        """;
 
     private const string FootGeoreference = """
         "georeference": {
@@ -424,7 +528,8 @@ internal static class HostFramePlacementTests
     /// <summary>
     /// A bundle carrying the shared lon/lat set and the shared UTM drape beside whichever parts of
     /// the Revit block the case is about. <paramref name="vectorsReadiness"/> <c>null</c> is a
-    /// bundle from before <c>hosts.revit.readiness.vectors</c> existed.
+    /// bundle from before <c>hosts.revit.readiness.vectors</c> existed. <paramref name="splitFormats"/>
+    /// replaces a shared layer's format rows, by layer name.
     /// </summary>
     private static string Manifest(
         string georeference,
@@ -432,7 +537,8 @@ internal static class HostFramePlacementTests
         string? vectors,
         string? drape,
         string? vectorsReadiness,
-        string version = "1.3.0")
+        string version = "1.3.0",
+        IReadOnlyDictionary<string, string>? splitFormats = null)
     {
         string revit = string.Join(
             ",\n",
@@ -450,7 +556,9 @@ internal static class HostFramePlacementTests
         string shared = string.Join(
             ", ",
             new[] { ("road_splines", "RoadSplines"), ("land_use", "LandUse"), ("land_cover", "LandCover"), ("water", "Water"), ("road_polygons", "RoadPolygons") }
-                .Select(layer => $$"""{ "name": "{{layer.Item1}}", "formats": [{ "format": "geojson", "path": "{{SharedPath(layer.Item2)}}", "sha256": "{{SharedSha}}" }] }"""));
+                .Select(layer => splitFormats?.GetValueOrDefault(layer.Item1) is { } formats
+                    ? $$"""{ "name": "{{layer.Item1}}", "formats": [ {{formats}} ] }"""
+                    : $$"""{ "name": "{{layer.Item1}}", "formats": [{ "format": "geojson", "path": "{{SharedPath(layer.Item2)}}", "sha256": "{{SharedSha}}" }] }"""));
 
         return $$"""
             {
@@ -471,6 +579,8 @@ internal static class HostFramePlacementTests
         "Imagery/Drape.StatePlane.png",
         .. VectorNames.Select(OwnPath),
         .. new[] { "RoadSplines", "LandUse", "LandCover", "Water", "RoadPolygons" }.Select(SharedPath),
+        .. new[] { "Water_line", "Water_polygon", "Water_point", "LandUse_line", "LandUse_point" }.Select(SharedPath),
+        "Vector/Water.gpkg",
     ];
 
     private static string LineString(string coordinates) =>

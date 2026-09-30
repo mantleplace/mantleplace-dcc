@@ -1,0 +1,158 @@
+{
+  "version": "1.7.0",
+  "job_id": "revit-split-layer",
+  "order_id": "ord-revit-split-layer-1",
+  "delivery": {
+    "unit_system": "metric",
+    "tier": "metric",
+    "horizontal_epsg": 32613,
+    "linear_unit": "m",
+    "label": "WGS 84 / UTM zone 13N"
+  },
+  "vector": {
+    "crs": "EPSG:4326",
+    "layers": [
+      {
+        "name": "water",
+        "feature_count": 7,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/Water_line.geojson",
+            "sha256": "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+            "geometry_family": "line"
+          },
+          {
+            "format": "geojson",
+            "path": "Vector/Water_polygon.geojson",
+            "sha256": "2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+            "geometry_family": "polygon"
+          },
+          {
+            "format": "gpkg",
+            "path": "Vector/Water.gpkg",
+            "sha256": "3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
+            "tables": [
+              "Water_line",
+              "Water_polygon"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "road_splines",
+        "derived_from": "road",
+        "feature_count": 1,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/RoadSplines.geojson",
+            "sha256": "4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d"
+          }
+        ]
+      }
+    ]
+  },
+  "flood": {
+    "nfhl": {
+      "path": "Flood/FloodZones.gpkg",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "source": "FEMA NFHL",
+      "license": "public-domain",
+      "feature_count": 2,
+      "zones": [
+        "AE",
+        "X"
+      ],
+      "dfirm_ids": [
+        "35055C"
+      ],
+      "panels": [
+        {
+          "firm_pan": "35055C0275D",
+          "dfirm_id": "35055C",
+          "effective_date": "2011-08-16",
+          "panel_type": "Countywide, Panel Printed"
+        },
+        {
+          "firm_pan": "35055C0300D",
+          "dfirm_id": "35055C",
+          "effective_date": null,
+          "panel_type": null
+        }
+      ]
+    }
+  },
+  "hosts": {
+    "revit": {
+      "host_min_version": "2025",
+      "units_note": "Apply georeference.origin verbatim as the survey point; every artifact's Z is absolute orthometric height.",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "vertical_datum": "EGM2008-orthometric",
+        "grid_rotation_deg": 0.0,
+        "is_projected": true,
+        "origin": {
+          "lon": -105.6462,
+          "lat": 36.2725,
+          "projected": {
+            "epsg": 32613,
+            "easting": 441959.5,
+            "northing": 4014372.5,
+            "linear_unit": "m"
+          }
+        }
+      },
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:32613",
+        "horizontal_unit": "m",
+        "vertical_unit": "m"
+      },
+      "vectors": {
+        "format": "geojson",
+        "layers": [
+          {
+            "name": "flood_zones",
+            "path": "Site/Vector/FloodZones.geojson",
+            "horizontal_frame": "absolute_projected",
+            "units": "m",
+            "vertical_reference": "absolute",
+            "feature_count": 2,
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ]
+      },
+      "readiness": {
+        "toposurface_points": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "ifc_site": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "surface_dxf": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "vectors": {
+          "present": false,
+          "reason": "emit_failed"
+        },
+        "steep_slope": {
+          "present": false,
+          "reason": "not_selected"
+        },
+        "flood_zones": {
+          "present": true
+        },
+        "contours": {
+          "present": false,
+          "reason": "not_selected"
+        }
+      }
+    }
+  }
+}

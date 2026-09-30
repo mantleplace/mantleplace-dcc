@@ -47,14 +47,17 @@ internal static class AttributionTests
 
     private const string OrderA = "order-a";
 
-    /// <summary><see cref="AttributionView.Decide"/> for order A unless a case says otherwise.</summary>
+    private const string JobA = "job-a";
+
+    /// <summary><see cref="AttributionView.Decide"/> for order A's build A unless a case says otherwise.</summary>
     private static AttributionNotePlan Decide(
         AttributionViewFound view,
         IReadOnlyList<string> notes,
         RecordedAttribution? recorded,
         string wanted,
-        string orderId = OrderA)
-        => AttributionView.Decide(view, notes, recorded, orderId, wanted);
+        string orderId = OrderA,
+        string jobId = JobA)
+        => AttributionView.Decide(view, notes, recorded, orderId, jobId, wanted);
 
     internal static int Run()
     {
@@ -238,6 +241,80 @@ internal static class AttributionTests
 
             run.True(plan.Action == AttributionNoteAction.Add, "added beside, not written over");
             run.Equal(plan.TextToRecord, "New — licence", "the record is now B's");
+        });
+
+        run.Case("a bundle that names no order rewrites its own note, found by its build", () =>
+        {
+            // ADR 0011: a re-import rewrites the note in place. A bundle from before MPB 1.7.0 names no
+            // order, so its own record is known by the job id it stored; the empty order id matches
+            // nothing on its own.
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.DraftingView,
+                ["Old — licence"],
+                new RecordedAttribution(string.Empty, "Old — licence") { JobId = "job-7" },
+                "New — licence",
+                orderId: string.Empty,
+                jobId: "job-7");
+
+            run.True(plan.Action == AttributionNoteAction.Rewrite, "the same bundle rewrites its note");
+            run.Equal(plan.NoteIndex, 0, "in place");
+        });
+
+        run.Case("and so does a project whose record an earlier build left, with the job id as its order", () =>
+        {
+            // An earlier build read attribution.order_id -- the job id -- as the order, and stored it so.
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.DraftingView,
+                ["Old — licence"],
+                new RecordedAttribution("job-7", "Old — licence") { JobId = "job-7" },
+                "New — licence",
+                orderId: string.Empty,
+                jobId: "job-7");
+
+            run.True(plan.Action == AttributionNoteAction.Rewrite, "the upgraded project's note is rewritten, not doubled");
+        });
+
+        run.Case("two bundles that name no order never touch each other's note", () =>
+        {
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.DraftingView,
+                ["Old — licence"],
+                new RecordedAttribution(string.Empty, "Old — licence") { JobId = "job-7" },
+                "New — licence",
+                orderId: string.Empty,
+                jobId: "job-9");
+
+            run.True(plan.Action == AttributionNoteAction.Add, "a second note, beside the first");
+
+            AttributionNotePlan anonymous = Decide(
+                AttributionViewFound.DraftingView,
+                ["Old — licence"],
+                new RecordedAttribution(string.Empty, "Old — licence"),
+                "New — licence",
+                orderId: string.Empty,
+                jobId: string.Empty);
+
+            run.True(anonymous.Action == AttributionNoteAction.Add, "and a bundle naming neither an order nor a build claims nothing");
+        });
+
+        run.Case("a bundle that names its order is still matched by its order, not its build", () =>
+        {
+            AttributionNotePlan rebuilt = Decide(
+                AttributionViewFound.DraftingView,
+                ["Old — licence"],
+                new RecordedAttribution(OrderA, "Old — licence") { JobId = JobA },
+                "New — licence",
+                jobId: "job-b");
+
+            run.True(rebuilt.Action == AttributionNoteAction.Rewrite, "a rebuild of the order rewrites its note");
+
+            AttributionNotePlan sameBuild = Decide(
+                AttributionViewFound.DraftingView,
+                ["Old — licence"],
+                new RecordedAttribution("order-b", "Old — licence") { JobId = JobA },
+                "New — licence");
+
+            run.True(sameBuild.Action == AttributionNoteAction.Add, "another order's note is not claimed by a build id");
         });
 
         run.Case("a note a curator edited is not ours any more, so a fresh one is added beside it", () =>

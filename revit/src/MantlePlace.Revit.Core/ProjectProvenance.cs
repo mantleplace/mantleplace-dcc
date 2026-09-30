@@ -13,7 +13,11 @@ namespace MantlePlace.Revit.Core;
 /// </remarks>
 public sealed class ProjectProvenance
 {
-    /// <summary>The vault order id — top-level <c>order_id</c>, never <c>attribution.order_id</c>.</summary>
+    /// <summary>
+    /// The vault order id (<see cref="BundleManifest.OrderId"/>): top-level <c>order_id</c>, or
+    /// <c>attribution.order_id</c> only where <c>attribution.job_id</c> stands beside it. Empty for a
+    /// bundle that names no order.
+    /// </summary>
     public required string OrderId { get; init; }
 
     /// <summary>The ETL job id, which changes on every rebuild of the order.</summary>
