@@ -36,7 +36,7 @@ internal sealed partial class RevitBundleImporter
         bool flood = layer == HazardLayer.FloodZones;
         string label = flood ? "flood zones" : "steep ground";
 
-        if (ReadVectorLayer(step, SiteGeometryKinds.Areas, label) is not { } rings)
+        if (ReadVectorLayer(step, SiteVectorLayers.For(step.Kind).DrawnFrom, label) is not { } rings)
         {
             return;
         }

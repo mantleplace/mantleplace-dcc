@@ -155,8 +155,12 @@ public static class AttributionView
         ArgumentNullException.ThrowIfNull(wantedText);
 
         // Only this order's record identifies a note as ours. Another order's note is that order's
-        // credits, for ground that is still in the project.
-        string previous = recorded is not null && string.Equals(recorded.OrderId, orderId, StringComparison.Ordinal)
+        // credits, for ground that is still in the project. A bundle that names no order identifies
+        // nothing: two such bundles in one project would otherwise match on the empty id, and one
+        // would write its credits over the other's.
+        string previous = recorded is not null
+                && orderId.Length > 0
+                && string.Equals(recorded.OrderId, orderId, StringComparison.Ordinal)
             ? Normalise(recorded.NoteText)
             : string.Empty;
         string wanted = Normalise(wantedText);

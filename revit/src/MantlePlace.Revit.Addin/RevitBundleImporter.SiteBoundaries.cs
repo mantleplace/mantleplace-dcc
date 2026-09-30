@@ -40,7 +40,7 @@ internal sealed partial class RevitBundleImporter
         GroundLayerWords words = GroundLayerWords.For(layer);
         string label = words.Label;
 
-        if (ReadVectorLayer(step, SiteGeometryKinds.Areas, label) is not { } rings)
+        if (ReadVectorLayer(step, SiteVectorLayers.For(step.Kind).DrawnFrom, label) is not { } rings)
         {
             return;
         }

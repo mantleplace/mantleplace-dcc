@@ -675,6 +675,15 @@ internal static class ManifestReaderTests
             run.Equal(OrderIdOf("1.7.0", NewUnknown), string.Empty, "a null order is no order");
             run.Equal(OrderIdOf("1.6.0", TopLevel + Old), "ord-1", "the top-level order_id wins over an old bundle's key");
             run.Equal(OrderIdOf("1.7.0", TopLevel + New), "ord-1", "and over a new one's");
+
+            // Filing is not joining. Every earlier import filed an old bundle -- its cache folder and
+            // the stem its elements are stamped with -- under the id attribution.order_id carries, so
+            // that stays its identity key: filed anywhere else, a re-import would be a stranger to
+            // the ground it already placed.
+            run.Equal(IdentityKeyOf("1.6.0", Old), "job-7", "an old bundle is still filed under the id it always was");
+            run.Equal(IdentityKeyOf("1.7.0", New), "ord-3", "a new one under its order");
+            run.Equal(IdentityKeyOf("1.7.0", NewUnknown), string.Empty, "a null order files nothing");
+            run.Equal(IdentityKeyOf("1.6.0", TopLevel + Old), "ord-1", "and the top-level order_id wins here too");
         });
 
         run.Case("a shared layer split by geometry family gives each consumer the family it places (MPB 1.7.0)", () =>
@@ -732,14 +741,48 @@ internal static class ManifestReaderTests
 
             run.True(manifest.Water is null, "no polygon file, so no water bodies");
             run.True(manifest.LandCover is null, "a point file is no land cover");
-            run.True(manifest.SharedLayersWithNothingToPlace.GetValueOrDefault("water") == SiteGeometryKinds.Areas, "and the reader says why, for the planner");
-            run.True(manifest.SharedLayersWithNothingToPlace.ContainsKey("land_cover"), "for each such layer");
+            run.True(manifest.SharedLayersWithNothingToPlace.Contains("water"), "and the reader says why, for the planner");
+            run.True(manifest.SharedLayersWithNothingToPlace.Contains("land_cover"), "for each such layer");
+        });
+
+        run.Case("a family this build does not know, or one written wrongly, is read as the whole layer", () =>
+        {
+            // compatibility.md section 3: a value nobody taught this reader is not a statement that the
+            // file holds nothing it places. The file is read like one naming no family, and each
+            // feature is kept or passed over by its own geometry, as in an unsplit file. A file naming
+            // the wanted family exactly still wins wherever it sits.
+            BundleManifest manifest = BundleManifestReader.Parse(
+                """
+                  {
+                    "version": "1.7.0",
+                    "hosts": {"unreal": {}},
+                    "vector": {"layers": [
+                      {"name": "water", "formats": [
+                        {"format": "geojson", "path": "Vector/Water_line.geojson", "geometry_family": "line"},
+                        {"format": "geojson", "path": "Vector/Water_surface.geojson", "geometry_family": "surface"}]},
+                      {"name": "land_cover", "formats": [
+                        {"format": "geojson", "path": "Vector/LandCover_7.geojson", "geometry_family": 7}]},
+                      {"name": "land_use", "formats": [
+                        {"format": "geojson", "path": "Vector/LandUse_surface.geojson", "geometry_family": "surface"},
+                        {"format": "geojson", "path": "Vector/LandUse_polygon.geojson", "geometry_family": "polygon"}]}
+                    ]}
+                  }
+                """);
+
+            run.Equal(manifest.Water?.Path, "Vector/Water_surface.geojson", "an unknown family is read, not reported as no areas");
+            run.Equal(manifest.LandCover?.Path, "Vector/LandCover_7.geojson", "and so is a family that is not a string");
+            run.Equal(manifest.LandUse?.Path, "Vector/LandUse_polygon.geojson", "the file naming the wanted family wins");
+            run.Equal(manifest.SharedLayersWithNothingToPlace.Count, 0, "none of them is said to hold nothing");
         });
 
         return run.Report("manifest reader");
     }
 
-    private static string OrderIdOf(string version, string members)
+    private static string OrderIdOf(string version, string members) => ParseWith(version, members).OrderId;
+
+    private static string IdentityKeyOf(string version, string members) => ParseWith(version, members).IdentityKey;
+
+    private static BundleManifest ParseWith(string version, string members)
         => BundleManifestReader.Parse(
-            "{\"version\": \"" + version + "\", \"hosts\": {\"unreal\": {}}" + members + "}").OrderId;
+            "{\"version\": \"" + version + "\", \"hosts\": {\"unreal\": {}}" + members + "}");
 }

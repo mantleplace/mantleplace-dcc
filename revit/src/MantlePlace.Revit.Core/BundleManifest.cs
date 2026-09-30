@@ -435,6 +435,20 @@ public sealed class BundleManifest
     public string OrderId { get; internal set; } = string.Empty;
 
     /// <summary>
+    /// What this host files the bundle under: the name of its cache folder, and so the stem every
+    /// element it places is stamped with. Never the vault join key — that is <see cref="OrderId"/>.
+    /// </summary>
+    /// <remarks>
+    /// The order id where the manifest names one. Otherwise the id <c>attribution.order_id</c>
+    /// carries, whatever it means: before MPB 1.7.0 that is the packaging job's id, which is not the
+    /// order and so is not <see cref="OrderId"/>, but every earlier import of such a bundle filed it,
+    /// and stamped its ground, roads, boundaries and contours, under that id. Filed anywhere else, a
+    /// re-import would be a stranger to the elements it already placed and place them a second time.
+    /// Empty when the manifest carries neither, and the zip's path files it instead.
+    /// </remarks>
+    public string IdentityKey { get; internal set; } = string.Empty;
+
+    /// <summary>
     /// The manifest's <c>version</c> verbatim, e.g. <c>"1.0.0"</c>; empty when absent.
     /// </summary>
     /// <remarks>
@@ -524,13 +538,12 @@ public sealed class BundleManifest
     public bool VectorsFromOwnBlock { get; internal set; }
 
     /// <summary>
-    /// The shared layers this bundle splits by geometry family (MPB 1.7.0) without a file of the
-    /// family this host draws them from — a water layer of streams and springs and no water body —
-    /// each with the geometry it is drawn from. The layer is listed; there is simply nothing in it to
+    /// The shared layers, by <see cref="SiteVectorLayer.Name"/>, that this bundle splits by geometry
+    /// family (MPB 1.7.0) without a file of the family this host draws them from — a water layer of
+    /// streams and springs and no water body. The layer is listed; there is simply nothing in it to
     /// place, which is not the vault's to fix.
     /// </summary>
-    public IReadOnlyDictionary<string, SiteGeometryKinds> SharedLayersWithNothingToPlace { get; internal set; }
-        = new Dictionary<string, SiteGeometryKinds>(StringComparer.Ordinal);
+    public IReadOnlySet<string> SharedLayersWithNothingToPlace { get; internal set; } = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// The <c>flood_zones</c> layer of <c>hosts.revit.vectors</c>: the flood map's zones, in this host's

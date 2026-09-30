@@ -240,6 +240,21 @@ internal static class AttributionTests
             run.Equal(plan.TextToRecord, "New — licence", "the record is now B's");
         });
 
+        run.Case("a bundle that names no order claims no note, even beside a record that names none", () =>
+        {
+            // Two bundles with no order id in one project: an empty id is no order, so the record
+            // an earlier one left cannot say that note is this bundle's. Treating "" as matching ""
+            // would write one bundle's credits over another's, for ground still in the project.
+            AttributionNotePlan plan = Decide(
+                AttributionViewFound.DraftingView,
+                ["Old — licence"],
+                new RecordedAttribution(string.Empty, "Old — licence"),
+                "New — licence",
+                orderId: string.Empty);
+
+            run.True(plan.Action == AttributionNoteAction.Add, "added beside, not written over");
+        });
+
         run.Case("a note a curator edited is not ours any more, so a fresh one is added beside it", () =>
         {
             AttributionNotePlan plan = Decide(

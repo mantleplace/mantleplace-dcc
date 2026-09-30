@@ -22,24 +22,24 @@ public enum SiteGeometryKinds
 
 /// <summary>What a shared vector file holds, read from its format row's <c>geometry_family</c>.</summary>
 /// <remarks>
-/// MPB 1.7.0 splits a layer that mixes geometry families one file per family, and each row then names
-/// its family; a consumer reads every row, and takes the file of the family it draws from. A row that
-/// names no family is the whole layer, as every row was before 1.7.0.
+/// A layer that mixes geometry families may be split one file per family (MPB 1.7.0), each row then
+/// naming its family; a consumer reads the rows and takes the file of the family it draws from. A row
+/// that names no family is the whole layer.
 /// </remarks>
 public static class SiteGeometryFamilies
 {
     /// <summary>
     /// The geometries a file of <paramref name="geometryFamily"/> holds: lines for <c>line</c>, areas for
-    /// <c>polygon</c>, both for a file that names no family, and none for <c>point</c> or a family this
-    /// build has not been taught — points are drawn by nothing here, and an unknown family is not read
-    /// as one this host places.
+    /// <c>polygon</c>, and none this host draws for <c>point</c>. <c>null</c> for a file that names no
+    /// family, or one this build has not been taught: nothing is known of it, so it is read as the
+    /// whole layer and each feature kept or passed over by its own geometry.
     /// </summary>
-    public static SiteGeometryKinds Holds(string? geometryFamily) => geometryFamily switch
+    public static SiteGeometryKinds? Holds(string? geometryFamily) => geometryFamily switch
     {
-        null => SiteGeometryKinds.Lines | SiteGeometryKinds.Areas,
         "line" => SiteGeometryKinds.Lines,
         "polygon" => SiteGeometryKinds.Areas,
-        _ => SiteGeometryKinds.None,
+        "point" => SiteGeometryKinds.None,
+        _ => null,
     };
 }
 

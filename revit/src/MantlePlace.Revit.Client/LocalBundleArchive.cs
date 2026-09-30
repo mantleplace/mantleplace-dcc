@@ -274,11 +274,21 @@ public sealed class LocalBundleArchive : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// Where the bundle is filed: under its <see cref="BundleManifest.IdentityKey"/>, and under the
+    /// zip's path when it has none.
+    /// </summary>
+    /// <remarks>
+    /// The identity key, not the order id: a bundle from before MPB 1.7.0 names its packaging job
+    /// where a later one names the order, and every earlier import filed such a bundle — and stamped
+    /// its elements — under that id. Filing it under its path instead would make a re-import a
+    /// stranger to its own ground.
+    /// </remarks>
     private static BundleCacheLayout ResolveLayout(BundleManifest? manifest, string zipPath, string? cacheRoot)
     {
-        string? orderId = manifest?.OrderId;
+        string? identityKey = manifest?.IdentityKey;
 
-        if (string.IsNullOrWhiteSpace(orderId))
+        if (string.IsNullOrWhiteSpace(identityKey))
         {
             return cacheRoot is null
                 ? BundleCacheLayout.ForLooseZip(zipPath)
@@ -286,8 +296,8 @@ public sealed class LocalBundleArchive : IDisposable
         }
 
         return cacheRoot is null
-            ? BundleCacheLayout.ForOrder(orderId)
-            : BundleCacheLayout.ForOrder(orderId, cacheRoot);
+            ? BundleCacheLayout.ForOrder(identityKey)
+            : BundleCacheLayout.ForOrder(identityKey, cacheRoot);
     }
 
     private static string? ReadManifestText(ZipArchive archive)
