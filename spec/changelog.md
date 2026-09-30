@@ -19,6 +19,42 @@ history, not contract.
 
 ## Semver era
 
+### 1.6.0 — the Site Brief, and what the DEM's surface is (additive minor; published and frozen 2026-09-26)
+
+Every item below is additive, and nothing is removed or re-meant, so it is a MINOR under
+[compatibility](compatibility.md) §2 and every host floor at 1.0.0 reads it.
+
+- **`site_brief`** is new and optional: a pointer to the Site Brief, `Brief/SiteBrief.pdf`, a PDF
+  about the site made from the order's own data, with its digest and size. It is built once, with
+  the order's first bundle, and carried forward unchanged by a rebuild. Its absence is not a defect
+  of the bundle: an order built before the brief existed carries none, and the brief never blocks
+  an order.
+- **`elevation.dem` declares two members it was already emitting.** `surface_model` says what the
+  delivered DEM's surface is — `dsm` only where it is known to be a surface model, canopy and
+  structures included, and `unspecified` wherever the source does not say; a reader treats an
+  unknown value as `unspecified`. `void_fraction_in_aoi` is the share of the ordered area the DEM
+  had no data for, from 0 to 1; above 0, the surfaces derived from the DEM carry filled values
+  there.
+
+### 1.5.0 — the Stylized map's picked files (additive minor; published and frozen 2026-09-26)
+
+Every item below is additive, and nothing is removed or re-meant, so it is a MINOR under
+[compatibility](compatibility.md) §2 and every host floor at 1.0.0 reads it.
+
+- **`basemap` names what painted it**: `flavor`, the map style that painted its tiles, and
+  `basemap_vintage`, the date of the map data it was painted from. A bundle made before 1.5.0 names
+  no flavor, and none is inferred. `flavor` is an open vocabulary: styles are added over time, and
+  a reader never refuses one it does not know.
+- **`basemap.cog`** is new and optional, present only when the curator picked it: the Stylized map
+  as an RGB GeoTIFF, `Basemap/Basemap.tif`, with no labels and no relief, on the same grid, CRS and
+  extent as the delivered imagery GeoTIFF, so the two overlay exactly.
+- **`basemap.drape`** is new and optional, present only when the curator picked it: the Stylized
+  map as a PNG drape, `Basemap/Drape.png`, baked in the same **fixed** frame as `imagery.drape` and
+  under the same size cap. The same frame rule applies: a host whose origin is not the drape's
+  `extent_crs` does not drape it ([format](format.md) §6.4).
+- **`layout.basemap_cog`** and **`layout.basemap_drape`** point at the two files, each present only
+  when its file is.
+
 ### 1.4.0 — steep ground, flood provenance, and Revit's own contours (additive minor; published and frozen 2026-09-24)
 
 Every item below is additive, and nothing is removed or re-meant, so it is a MINOR under

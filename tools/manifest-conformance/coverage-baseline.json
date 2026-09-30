@@ -48,6 +48,10 @@
       "revit",
       "unreal"
     ],
+    "manifest.basemapFilesIgnored": [
+      "revit",
+      "unreal"
+    ],
     "manifest.buildingsShaInFormats": [
       "unreal"
     ],
@@ -204,6 +208,10 @@
       "unreal"
     ],
     "manifest.roadSplinesGpkgOnly": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.siteBriefIgnored": [
       "revit",
       "unreal"
     ],
