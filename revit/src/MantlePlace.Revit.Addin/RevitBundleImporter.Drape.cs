@@ -91,14 +91,14 @@ internal sealed partial class RevitBundleImporter
         // ChangeTypeId (revit/CLAUDE.md). Counted before anything is written, like the notice above. A
         // subdivision this import cut is already on it (TypeForDrapeAtCut), so what is left is an
         // earlier import's cut, a keyword changed since, or a type Revit refused at the cut.
-        (int onTheirTypes, int toRetype) = TypedSubDivisions(terrain, name, smoothed);
+        (int onTheirTypes, int toRetype) = CountTypedSubDivisions(terrain, name, smoothed);
         if (SlowStepNotice.ForSubDivisionRetypes(toRetype, _terrainVertexCount) is { } retypes)
         {
             Say(retypes);
         }
 
         // With nothing to retype, the one commit below is still the longest wait in this step.
-        if (SlowStepNotice.ForDrapeCommit(onTheirTypes, toRetype, !wearsImageryType, _terrainVertexCount) is { } commit)
+        if (SlowStepNotice.ForDrapeCommit(onTheirTypes, toRetype, wearsImageryType ? 0 : 1, _terrainVertexCount) is { } commit)
         {
             Say(commit);
         }
@@ -333,7 +333,7 @@ internal sealed partial class RevitBundleImporter
     /// count is zero there, which is what keeps the drape from announcing a wait it will not have.
     /// Typeless subdivisions count in neither.
     /// </remarks>
-    private (int OnTheirTypes, int ToRetype) TypedSubDivisions(Toposolid terrain, string imageryName, bool smoothed)
+    private (int OnTheirTypes, int ToRetype) CountTypedSubDivisions(Toposolid terrain, string imageryName, bool smoothed)
     {
         int onTheirTypes = 0;
         int toRetype = 0;

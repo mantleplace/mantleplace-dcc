@@ -451,7 +451,7 @@ internal sealed partial class RevitBundleImporter
     /// retype it onto, in the transaction that cut it.
     /// </summary>
     /// <param name="subdivision">The new cut, already stamped.</param>
-    /// <param name="own">The type Revit gave it.</param>
+    /// <param name="typeAsCut">The type Revit gave it.</param>
     /// <param name="smoothed">Whether smooth shading is on, as the polygon step settled it.</param>
     /// <returns>Whether the subdivision is now on its type.</returns>
     /// <remarks>
@@ -479,7 +479,7 @@ internal sealed partial class RevitBundleImporter
     /// reuse.
     /// </para>
     /// </remarks>
-    private bool TypeForDrapeAtCut(Toposolid subdivision, ToposolidType own, bool smoothed)
+    private bool TypeForDrapeAtCut(Toposolid subdivision, ToposolidType typeAsCut, bool smoothed)
     {
         SubTransaction? typing = null;
         try
@@ -497,7 +497,7 @@ internal sealed partial class RevitBundleImporter
                 Trace($"  cut: subdivision {subdivision.Id.Value} left for the drape to type — this Revit "
                     + "would not create an appearance asset for its material.");
             }
-            else if (MoveOntoOwnType(subdivision, own, material, out string layering) is null)
+            else if (MoveOntoOwnType(subdivision, typeAsCut, material, out string layering) is null)
             {
                 Trace($"  cut: subdivision {subdivision.Id.Value} left for the drape to type — {layering}.");
             }
@@ -507,9 +507,7 @@ internal sealed partial class RevitBundleImporter
                 return true;
             }
         }
-        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
-                                       or ArgumentException
-                                       or InvalidOperationException)
+        catch (Exception ex) when (IsRevitRefusal(ex))
         {
             Trace($"  cut: subdivision {subdivision.Id.Value} left for the drape to type — Revit refused "
                 + $"its type: {ex.Message}");
@@ -537,8 +535,7 @@ internal sealed partial class RevitBundleImporter
                 typing.RollBack();
             }
         }
-        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
-                                       or InvalidOperationException)
+        catch (Exception ex) when (IsRevitRefusal(ex))
         {
             Trace($"  cut: a drape type's rollback was refused — {ex.Message}");
         }
@@ -558,8 +555,7 @@ internal sealed partial class RevitBundleImporter
         {
             return RouteFor(subdivision, out _, out own);
         }
-        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException
-                                       or InvalidOperationException)
+        catch (Exception ex) when (IsRevitRefusal(ex))
         {
             Trace($"  cut: subdivision {subdivision.Id.Value} would not say what it accepts — {ex.Message}");
             own = null;
@@ -568,13 +564,24 @@ internal sealed partial class RevitBundleImporter
     }
 
     /// <summary>
+    /// What typing a cut for the drape treats as Revit declining, rather than as a defect: one
+    /// predicate for every catch the typing has, so they cannot drift apart.
+    /// </summary>
+    private static bool IsRevitRefusal(Exception ex)
+        => ex is Autodesk.Revit.Exceptions.ApplicationException or ArgumentException or InvalidOperationException;
+
+    /// <summary>
     /// Moves a typed subdivision onto the type that wears <paramref name="drape"/>, unless it is on
     /// it already: the one retype both the cut and the drape make.
     /// </summary>
+    /// <param name="subdivision">The subdivision to move.</param>
+    /// <param name="currentType">The type it is on now, which the type it moves to is duplicated from.</param>
+    /// <param name="drape">The material the type's photograph layer wears.</param>
+    /// <param name="layering">What became of the type's layers, or why there is no type.</param>
     /// <returns>The type, or <c>null</c> with the reason in <paramref name="layering"/>.</returns>
-    private ToposolidType? MoveOntoOwnType(Element subdivision, ToposolidType own, Material drape, out string layering)
+    private ToposolidType? MoveOntoOwnType(Element subdivision, ToposolidType currentType, Material drape, out string layering)
     {
-        if (SubDivisionTypeFor(own, drape, out layering) is not { } type)
+        if (SubDivisionTypeFor(currentType, drape, out layering) is not { } type)
         {
             return null;
         }

@@ -224,51 +224,71 @@ internal static class SlowStepNoticeTests
                 "an unknown count is said, never invented");
         });
 
-        run.Case("a cut that takes a type says the typing is coming, against what was measured", () =>
+        run.Case("a cut that takes a type says the typing is coming, in its own layer's figure", () =>
         {
             // The retype the drape used to announce now happens as each subdivision is cut, so the
-            // wait moved into the polygon step and the sentence moved with it. Said once the first
-            // cut has shown this Revit gives a subdivision a type, so it names no version.
-            string? notice = SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Type, drapePlanned: true, 40, 12_000);
-            run.True(notice is not null, "announced");
-            run.Contains(notice, "40 subdivision(s)", "it names how many are coming");
-            run.Contains(notice, "as it is cut", "it says when the type is given");
-            run.Contains(notice, "74,855", "the terrain it was measured on");
-            run.Contains(notice, "This terrain has 12,000 points", "this terrain, beside it");
-            foreach (double seconds in (double[])[
-                SlowStepNotice.MeasuredTypeAtCutSecondsLandCover,
-                SlowStepNotice.MeasuredTypeAtCutSecondsSiteBoundaries,
-                SlowStepNotice.MeasuredTypeAtCutSecondsRoadSurfaces])
+            // wait moved into the polygon step and the sentence moved with it. Said at the first cut
+            // that shows it takes a type, so it names no version.
+            foreach (GroundLayer layer in Enum.GetValues<GroundLayer>())
             {
+                string? notice = SlowStepNotice.ForTypesAtCut(layer, SubDivisionMaterialRoute.Type, drapePlanned: true, 40, 12_000);
+                SlowStepNotice.TypeAtCutMeasurement measured = SlowStepNotice.MeasuredTypeAtCut(layer);
+
+                run.True(notice is not null, $"{layer}: announced");
+                run.Contains(notice, "40 subdivision(s)", $"{layer}: it names how many are coming");
+                run.Contains(notice, "as it is cut", $"{layer}: it says when the type is given");
+                run.Contains(notice, GroundLayerWords.For(layer).Label, $"{layer}: it names its own layer");
+                run.Contains(notice, "74,855", $"{layer}: the terrain it was measured on");
+                run.Contains(notice, "This terrain has 12,000 points", $"{layer}: this terrain, beside it");
                 run.Contains(
                     notice,
-                    seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s",
-                    "each layer's measured seconds a subdivision, since they differ threefold");
+                    measured.LowSeconds.ToString("0.0", CultureInfo.InvariantCulture),
+                    $"{layer}: its own measured seconds a subdivision");
+                run.Contains(
+                    notice,
+                    measured.SubDivisions.ToString("N0", CultureInfo.InvariantCulture) + " subdivision",
+                    $"{layer}: how many that was measured on, since two water bodies are not 344 roads");
+                run.False(
+                    notice is not null && notice.Contains("minutes", StringComparison.Ordinal),
+                    $"{layer}: no duration is predicted");
+
+                foreach (GroundLayer other in Enum.GetValues<GroundLayer>().Where(other => other != layer))
+                {
+                    run.False(
+                        notice is not null && notice.Contains(GroundLayerWords.For(other).Label, StringComparison.Ordinal),
+                        $"{layer}: no other layer's figure is borrowed ({other})");
+                }
             }
 
-            run.False(
-                notice is not null && notice.Contains("minutes", StringComparison.Ordinal),
-                "no duration is predicted for this layer");
+            // Land cover's cuts varied most, and the notice gives the range, not the fastest run.
             run.Contains(
-                SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Type, drapePlanned: true, 5, null),
+                SlowStepNotice.ForTypesAtCut(GroundLayer.LandCover, SubDivisionMaterialRoute.Type, true, 19, 74_855),
+                "3.3 to 5.0 s",
+                "land cover's range over four imports");
+            run.Contains(
+                SlowStepNotice.ForTypesAtCut(GroundLayer.RoadSurface, SubDivisionMaterialRoute.Type, true, 344, 74_855),
+                "about 1.2 s",
+                "one import gives one figure, not a range");
+            run.Contains(
+                SlowStepNotice.ForTypesAtCut(GroundLayer.Water, SubDivisionMaterialRoute.Type, true, 5, null),
                 "not known to this run",
                 "an unknown count is said, never invented");
         });
 
         run.Case("nothing to type says nothing", () =>
         {
-            // Revit 2025: the first cut reports no type and keeps its instance material.
+            // Revit 2025: a cut reports no type and keeps its instance material.
             run.True(
-                SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Instance, drapePlanned: true, 40, 74_855) is null,
+                SlowStepNotice.ForTypesAtCut(GroundLayer.LandCover, SubDivisionMaterialRoute.Instance, drapePlanned: true, 40, 74_855) is null,
                 "a typeless cut is not typed, so nothing is announced");
             run.True(
-                SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Type, drapePlanned: false, 40, 74_855) is null,
+                SlowStepNotice.ForTypesAtCut(GroundLayer.LandCover, SubDivisionMaterialRoute.Type, drapePlanned: false, 40, 74_855) is null,
                 "no drape, no typing");
             run.True(
-                SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Refused, drapePlanned: true, 40, 74_855) is null,
-                "an element with neither route");
+                SlowStepNotice.ForTypesAtCut(GroundLayer.LandCover, SubDivisionMaterialRoute.Refused, drapePlanned: true, 40, 74_855) is null,
+                "a cut whose route could not be read, so the next one that can announces it");
             run.True(
-                SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Type, drapePlanned: true, 0, 74_855) is null,
+                SlowStepNotice.ForTypesAtCut(GroundLayer.LandCover, SubDivisionMaterialRoute.Type, drapePlanned: true, 0, 74_855) is null,
                 "a re-import that cuts nothing");
         });
 
@@ -276,7 +296,7 @@ internal static class SlowStepNoticeTests
         {
             // With every cut typed as it was cut, the drape has no retype to announce, and its one
             // commit is still the longest wait left in the step.
-            string? notice = SlowStepNotice.ForDrapeCommit(405, subDivisionsToRetype: 0, terrainRetype: false, 12_000);
+            string? notice = SlowStepNotice.ForDrapeCommit(405, subDivisionsToRetype: 0, terrainRetypes: 0, 12_000);
             run.True(notice is not null, "announced");
             run.Contains(notice, "405 subdivision(s)", "it names how many");
             run.Contains(notice, "74,855", "the terrain it was measured on");
@@ -292,15 +312,22 @@ internal static class SlowStepNoticeTests
                 "no duration is predicted for this terrain");
         });
 
-        run.Case("the drape's commit is announced once, and not where nothing new waits", () =>
+        run.Case("the drape's commit is announced exactly when neither retype notice is", () =>
         {
             // Revit 2025: every subdivision takes the photograph on the instance, the commit is
             // seconds, and nothing about it changed.
-            run.True(SlowStepNotice.ForDrapeCommit(0, 0, false, 74_855) is null, "no typed subdivision, no notice");
-            run.True(SlowStepNotice.ForDrapeCommit(10, 5, false, 74_855) is null,
-                "the retype notice already describes this commit");
-            run.True(SlowStepNotice.ForDrapeCommit(10, 0, true, 74_855) is null,
-                "and so does the terrain's retype notice");
+            run.True(SlowStepNotice.ForDrapeCommit(0, 0, 0, 74_855) is null, "no typed subdivision, no notice");
+
+            // The guard is the other two notices themselves, so the three cannot drift apart.
+            foreach ((int toRetype, int terrainRetypes) in (ValueTuple<int, int>[])[(0, 0), (5, 0), (0, 1), (5, 1)])
+            {
+                bool retypeSaid = SlowStepNotice.ForSubDivisionRetypes(toRetype, 74_855) is not null
+                    || SlowStepNotice.For(ImportStepKind.ImageryDrape, 74_855, terrainRetypes) is not null;
+                run.Equal(
+                    SlowStepNotice.ForDrapeCommit(10, toRetype, terrainRetypes, 74_855) is not null,
+                    !retypeSaid,
+                    $"retypes {toRetype}, terrain retypes {terrainRetypes}");
+            }
         });
 
         run.Case("every other step stays quiet", () =>

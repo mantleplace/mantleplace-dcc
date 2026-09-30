@@ -117,21 +117,22 @@ internal sealed partial class RevitBundleImporter
         // for a line asserting a subdivision is redundant.
         FootprintExtent? ground = GroundFootprint(terrain);
 
-        // ⛔ Before the transaction, because the whole cost is inside its commit and nothing can be
-        // written while that runs. This line is the only warning there will ever be.
+        // ⛔ Before the transaction, because the commit's whole cost is inside it and nothing can be
+        // written while that runs. This line is the commit's only warning; the typing before it is
+        // announced at the first cut that takes a type (SlowStepNotice.ForTypesAtCut).
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, newBoundaries.Count) is { } notice)
         {
             Say(notice);
         }
 
-        // ⛔ Settled before the first cut when the drape is planned, so a cut's type is named for the
-        // shading the drape will actually write for (ADR 0008) rather than for a guess. It is the
-        // decision the drape, or Finish, makes later in this same import anyway; made before any
-        // subdivision exists, its commit is about a second rather than minutes (revit/CLAUDE.md).
-        bool smoothed = step.DrapePlanned && newBoundaries.Count > 0 && EnsureSmoothedSurface();
+        // ⛔ Settled before the first cut when Core says so (TerrainSmoothing.SettleBeforeCuts), so a
+        // cut's type is named for the shading the drape will actually write for (ADR 0008).
+        bool smoothed = TerrainSmoothing.SettleBeforeCuts(step.DrapePlanned, newBoundaries.Count)
+            && EnsureSmoothedSurface();
 
-        // Said once the first cut has shown whether this Revit gives a subdivision a type, which
-        // nothing can say before one exists: Revit 2025's typeless cuts hear nothing.
+        // Said at the first cut that shows it takes a type, which nothing can say before one exists:
+        // Revit 2025's typeless cuts hear nothing, and a cut whose route could not be read leaves it
+        // to the next.
         bool typingAnnounced = false;
 
         ImportFailureSwallower swallower = new($"Importing the {label}");
@@ -219,19 +220,17 @@ internal sealed partial class RevitBundleImporter
             // and Core decides with the plan's own answer (SubDivisionMaterial.TakesTypeAtCut), in the
             // cut's own transaction, so the drape has no retype left to do.
             long before = Stopwatch.GetTimestamp();
-            SubDivisionMaterialRoute route = RouteAtCut(made, out ToposolidType? own);
-            if (!typingAnnounced)
+            SubDivisionMaterialRoute route = RouteAtCut(made, out ToposolidType? typeAsCut);
+            if (!typingAnnounced
+                && SlowStepNotice.ForTypesAtCut(layer, route, step.DrapePlanned, newBoundaries.Count, _terrainVertexCount) is { } typing)
             {
                 typingAnnounced = true;
-                if (SlowStepNotice.ForTypesAtCut(route, step.DrapePlanned, newBoundaries.Count, _terrainVertexCount) is { } typing)
-                {
-                    Say(typing);
-                }
+                Say(typing);
             }
 
             if (SubDivisionMaterial.TakesTypeAtCut(route, step.DrapePlanned)
-                && own is not null
-                && TypeForDrapeAtCut(made, own, smoothed))
+                && typeAsCut is not null
+                && TypeForDrapeAtCut(made, typeAsCut, smoothed))
             {
                 typedForDrape++;
             }
