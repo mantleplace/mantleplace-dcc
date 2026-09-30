@@ -33,6 +33,7 @@ tools/local-install/           the session-start check that a host's local insta
 docs/adr/                      architecture decision records, numbered and cross-host
 docs/agents/                   how the engineering skills read this repo — tracker, labels, domain
 docs/platform-auth-contract.md sign-in and tokens — the one contract both hosts implement
+docs/host-support.md           which host does what with each feature, and why a gap exists
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
 .github/workflows/             the five public CI gates, plus the stale and tracker-hygiene jobs
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
@@ -241,6 +242,10 @@ Most facts already have exactly one home. Find it before writing a fact down any
   The test is mechanical: **work belongs to the repository whose tracked files its merge commit
   touches**, and **the project you open to do the work is never the tracker for it**. Read it before
   filing an issue or deciding that something you hit while working here is this repository's problem.
+- **Which host does what with each feature, and why a gap exists** →
+  [`docs/host-support.md`](docs/host-support.md), the one place a per-host feature status is
+  stated. Its opening says what it owns, what it leaves to a README, the roadmap and an ADR, and who
+  edits which column.
 - **Writing anything public** — a file, a commit message, a PR title or body, a branch name →
   [`docs/agents/public-surface.md`](docs/agents/public-surface.md).
 - **What a word means** → [`CONTEXT.md`](CONTEXT.md) — the glossary, and only that; no rule, no

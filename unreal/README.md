@@ -14,9 +14,11 @@ One import produces **one `ALandscape`** with the bundle's imagery draped onto i
 footprint, plus whatever else the bundle ships: the buildings as a static mesh, the road centrelines
 as one spline actor per road, the coverage rasters (water, land cover and their like) as data
 textures with their value mappings attached, and the landcover material weights painted as landscape
-layers. Two honest gaps: the weight layers are painted but the shipped drape material does not
-render them yet, and the tree points land as a data table (PCG-ready scatter input) with no foliage
-placed. Importing a local bundle needs no account and no sign-in.
+layers. The tree points land as a data table, PCG-ready scatter input. Importing a local bundle
+needs no account and no sign-in.
+
+What this plugin does not do yet, and what it leaves out on purpose, is the
+[host support matrix](../docs/host-support.md) — one row per feature, beside every other host.
 
 ## Install
 

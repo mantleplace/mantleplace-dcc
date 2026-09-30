@@ -411,4 +411,8 @@ follow.
 - Signing in, tokens, refresh, sign-out — what the platform must serve →
   [`docs/platform-auth-contract.md`](../docs/platform-auth-contract.md). Cross-host: `TokenGrant.cs`
   and `PlatformError.cs` implement it, and both hosts share one stored credential.
-- What this plugin does and how to build it → [`README.md`](./README.md).
+- How this plugin behaves and how to build it → [`README.md`](./README.md).
+- Whether this plugin supports a feature at all, and why not → the
+  [host support matrix](../docs/host-support.md). A change that adds, narrows or drops a feature
+  here edits the **Revit** column in the same pull request, and only that column; a gap it opens or
+  leaves links its issue or ADR. Never state a per-host status anywhere else.
