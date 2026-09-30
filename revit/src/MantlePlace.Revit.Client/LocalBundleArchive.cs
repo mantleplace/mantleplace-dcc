@@ -50,7 +50,10 @@ public sealed class LocalBundleArchive : IDisposable
     /// </summary>
     public BundleManifest? Manifest { get; }
 
-    /// <summary>Where this bundle's files live, keyed by order id where the manifest names one.</summary>
+    /// <summary>
+    /// Where this bundle's files live, keyed by its <see cref="BundleManifest.FilingKey"/> where the
+    /// manifest gives one.
+    /// </summary>
     public BundleCacheLayout Layout { get; }
 
     public IReadOnlyList<string> EntryNames { get; }
@@ -69,9 +72,10 @@ public sealed class LocalBundleArchive : IDisposable
         string? manifestText = ReadManifestText(archive);
         BundleManifest? manifest = manifestText is null ? null : BundleManifestReader.Parse(manifestText);
 
-        // An order id is what makes the hand-downloaded zip and the vault download the same cache
-        // entry. A bundle too old to parse still yields one where the reader could recover it
-        // (HPS-37, accumulate-then-refuse); only a zip that names no order at all falls back.
+        // The filing key -- the order id, or the id an older bundle's attribution carries -- is
+        // what makes the hand-downloaded zip and the vault download the same cache entry. A bundle
+        // too old to parse still yields one where the reader could recover it (HPS-37,
+        // accumulate-then-refuse); only a zip that names neither falls back to its path.
         BundleCacheLayout layout = ResolveLayout(manifest, zipPath, cacheRoot);
 
         string scratch = Path.Combine(
@@ -275,20 +279,20 @@ public sealed class LocalBundleArchive : IDisposable
     }
 
     /// <summary>
-    /// Where the bundle is filed: under its <see cref="BundleManifest.IdentityKey"/>, and under the
+    /// Where the bundle is filed: under its <see cref="BundleManifest.FilingKey"/>, and under the
     /// zip's path when it has none.
     /// </summary>
     /// <remarks>
-    /// The identity key, not the order id: a bundle from before MPB 1.7.0 names its packaging job
+    /// The filing key, not the order id: a bundle from before MPB 1.7.0 names its packaging job
     /// where a later one names the order, and every earlier import filed such a bundle — and stamped
     /// its elements — under that id. Filing it under its path instead would make a re-import a
     /// stranger to its own ground.
     /// </remarks>
     private static BundleCacheLayout ResolveLayout(BundleManifest? manifest, string zipPath, string? cacheRoot)
     {
-        string? identityKey = manifest?.IdentityKey;
+        string? filingKey = manifest?.FilingKey;
 
-        if (string.IsNullOrWhiteSpace(identityKey))
+        if (string.IsNullOrWhiteSpace(filingKey))
         {
             return cacheRoot is null
                 ? BundleCacheLayout.ForLooseZip(zipPath)
@@ -296,8 +300,8 @@ public sealed class LocalBundleArchive : IDisposable
         }
 
         return cacheRoot is null
-            ? BundleCacheLayout.ForOrder(identityKey)
-            : BundleCacheLayout.ForOrder(identityKey, cacheRoot);
+            ? BundleCacheLayout.ForOrder(filingKey)
+            : BundleCacheLayout.ForOrder(filingKey, cacheRoot);
     }
 
     private static string? ReadManifestText(ZipArchive archive)

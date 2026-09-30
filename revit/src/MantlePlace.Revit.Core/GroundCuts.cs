@@ -59,7 +59,8 @@ public static class GroundCuts
     /// <remarks>
     /// The one place a step kind becomes a layer: the shim dispatches through it rather than
     /// carrying a case per layer, and <see cref="SlowStepNotice"/> takes the layer's own words from
-    /// it. A fifth polygon layer is a row here and nowhere else in either.
+    /// it. A fifth polygon layer is a row here, and a row in <see cref="SiteVectorLayers"/> naming the
+    /// manifest layer it is cut from and what the step is called; a test holds the two to each other.
     /// </remarks>
     public static GroundLayer? LayerOf(ImportStepKind kind) => kind switch
     {

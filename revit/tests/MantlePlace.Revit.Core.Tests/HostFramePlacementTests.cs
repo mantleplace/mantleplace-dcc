@@ -334,26 +334,32 @@ internal static class HostFramePlacementTests
             run.Contains(water?.Reason, "no areas", "and the reason says what the layer lacks");
             run.False(water?.Reason?.Contains("mantle.place/vault", StringComparison.Ordinal) ?? true, "with no re-download a vault cannot answer");
 
-            // The curator reads the layer's words, never the manifest's key for it.
+            // The curator reads the step's own words, never the manifest's key for the layer.
             SkippedImport? boundaries = Skip(plan, ImportStepKind.SiteBoundaries);
-            run.Contains(boundaries?.Reason, "its land-use layer", "the layer is named in words");
-            run.False(boundaries?.Reason?.Contains("land_use", StringComparison.Ordinal) ?? true, "not by its key");
+            run.Contains(boundaries?.Reason, "No site boundaries", "the step is named in words");
+            run.False(boundaries?.Reason?.Contains("land_use", StringComparison.Ordinal) ?? true, "not by the layer's key");
         });
 
         run.Case("one table names each vector step's layer and the geometry it draws from", () =>
         {
-            for (int index = 0; index < VectorKinds.Length; index++)
-            {
-                SiteVectorLayer? layer = SiteVectorLayers.Of(VectorKinds[index]);
-                run.Equal(layer?.Name, VectorNames[index], $"{VectorKinds[index]} places {VectorNames[index]}");
-                run.True(
-                    layer?.DrawnFrom == (VectorKinds[index] == ImportStepKind.RoadCentrelines ? SiteGeometryKinds.Lines : SiteGeometryKinds.Areas),
-                    $"{VectorKinds[index]}: centrelines from lines, the ground cut from areas");
-            }
+            Dictionary<ImportStepKind, string> names = VectorKinds.Zip(VectorNames).ToDictionary(pair => pair.First, pair => pair.Second);
+            names[ImportStepKind.FloodZones] = "flood_zones";
+            names[ImportStepKind.SteepGround] = "steep_slope";
 
-            run.Equal(SiteVectorLayers.Of(ImportStepKind.FloodZones)?.Name, "flood_zones", "the flood zones");
-            run.Equal(SiteVectorLayers.Of(ImportStepKind.SteepGround)?.Name, "steep_slope", "the steep ground");
-            run.True(SiteVectorLayers.Of(ImportStepKind.ImageryDrape) is null, "a step that places no vector layer has none");
+            foreach (ImportStepKind kind in Enum.GetValues<ImportStepKind>())
+            {
+                SiteVectorLayer? layer = SiteVectorLayers.Of(kind);
+                if (!names.TryGetValue(kind, out string? name))
+                {
+                    run.True(layer is null, $"{kind} places no vector layer");
+                    continue;
+                }
+
+                run.Equal(layer?.Name, name, $"{kind} places {name}");
+                run.True(
+                    layer?.DrawnFrom == (kind == ImportStepKind.RoadCentrelines ? SiteGeometryKinds.Lines : SiteGeometryKinds.Areas),
+                    $"{kind}: centrelines from lines, everything else from areas");
+            }
 
             bool refused = false;
             try

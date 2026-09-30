@@ -446,7 +446,7 @@ public sealed class BundleManifest
     /// re-import would be a stranger to the elements it already placed and place them a second time.
     /// Empty when the manifest carries neither, and the zip's path files it instead.
     /// </remarks>
-    public string IdentityKey { get; internal set; } = string.Empty;
+    public string FilingKey { get; internal set; } = string.Empty;
 
     /// <summary>
     /// The manifest's <c>version</c> verbatim, e.g. <c>"1.0.0"</c>; empty when absent.

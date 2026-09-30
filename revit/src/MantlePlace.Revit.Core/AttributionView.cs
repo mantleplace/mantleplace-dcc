@@ -41,7 +41,11 @@ public enum AttributionNoteAction
 /// <summary>What the project's stored record says the plugin last wrote into the view.</summary>
 /// <param name="OrderId">The order the record belongs to.</param>
 /// <param name="NoteText">The note's text exactly as it was written, or empty when none was.</param>
-public sealed record RecordedAttribution(string OrderId, string NoteText);
+public sealed record RecordedAttribution(string OrderId, string NoteText)
+{
+    /// <summary>The build the stored record names, from its <c>JobId</c> field; empty when it names none.</summary>
+    public string JobId { get; init; } = string.Empty;
+}
 
 /// <summary>The whole decision, for the shim to carry out.</summary>
 /// <param name="Action">What to do.</param>
@@ -141,27 +145,30 @@ public static class AttributionView
     /// The project's stored record, or <c>null</c> when it holds none — a first import, or one whose
     /// record could not be read.
     /// </param>
-    /// <param name="orderId">The order being imported.</param>
+    /// <param name="orderId">The order being imported; empty when the bundle names none.</param>
+    /// <param name="jobId">The build being imported, which identifies a bundle that names no order.</param>
     /// <param name="wantedText">This import's <see cref="NoteText"/>.</param>
     public static AttributionNotePlan Decide(
         AttributionViewFound found,
         IReadOnlyList<string> existingNoteTexts,
         RecordedAttribution? recorded,
         string orderId,
+        string jobId,
         string wantedText)
     {
         ArgumentNullException.ThrowIfNull(existingNoteTexts);
         ArgumentNullException.ThrowIfNull(orderId);
+        ArgumentNullException.ThrowIfNull(jobId);
         ArgumentNullException.ThrowIfNull(wantedText);
 
-        // Only this order's record identifies a note as ours. Another order's note is that order's
-        // credits, for ground that is still in the project. A bundle that names no order identifies
-        // nothing: two such bundles in one project would otherwise match on the empty id, and one
-        // would write its credits over the other's.
-        string previous = recorded is not null
-                && orderId.Length > 0
-                && string.Equals(recorded.OrderId, orderId, StringComparison.Ordinal)
-            ? Normalise(recorded.NoteText)
+        // Only this bundle's record identifies a note as ours. Another bundle's note is its credits,
+        // for ground that is still in the project. A bundle is known by its order where it names one,
+        // and otherwise by its build: one from before MPB 1.7.0 names no order, and the record any
+        // import of it left -- this build's or an earlier one's -- names the build in its JobId. So
+        // the same bundle rewrites its own note in place (ADR 0011), and two such bundles, whose
+        // builds differ, never touch each other's; a bundle naming neither claims nothing.
+        string previous = recorded is { } record && RecordsThisBundle(record, orderId, jobId)
+            ? Normalise(record.NoteText)
             : string.Empty;
         string wanted = Normalise(wantedText);
 
@@ -190,6 +197,12 @@ public static class AttributionView
             ? new AttributionNotePlan(AttributionNoteAction.Rewrite, ours, false, wanted)
             : new AttributionNotePlan(AttributionNoteAction.Add, -1, found == AttributionViewFound.None, wanted);
     }
+
+    /// <summary>Whether <paramref name="record"/> is this bundle's: by its order, or by its build when it names none.</summary>
+    private static bool RecordsThisBundle(RecordedAttribution record, string orderId, string jobId)
+        => orderId.Length > 0
+            ? string.Equals(record.OrderId, orderId, StringComparison.Ordinal)
+            : jobId.Length > 0 && string.Equals(record.JobId, jobId, StringComparison.Ordinal);
 
     private static int IndexOf(IReadOnlyList<string> texts, string normalised)
     {

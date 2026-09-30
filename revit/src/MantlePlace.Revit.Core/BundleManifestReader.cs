@@ -128,7 +128,7 @@ public static class BundleManifestReader
         // an integer-era value this reader does not speak.
         manifest.Version = root.Str("version");
         manifest.OrderId = ReadOrderId(root);
-        manifest.IdentityKey = ReadIdentityKey(root);
+        manifest.FilingKey = ReadFilingKey(root);
 
         // Clean break (HPS-31). Anything that fails to parse as semver — an absent version, an
         // integer from the pre-history, a partial "1.0" — is refused. Deliberately NOT coerced
@@ -237,7 +237,7 @@ public static class BundleManifestReader
     }
 
     /// <summary>
-    /// What this host files the bundle under (<see cref="BundleManifest.IdentityKey"/>): the top-level
+    /// What this host files the bundle under (<see cref="BundleManifest.FilingKey"/>): the top-level
     /// <c>order_id</c>, and otherwise <c>attribution.order_id</c> whatever it means.
     /// </summary>
     /// <remarks>
@@ -245,7 +245,7 @@ public static class BundleManifestReader
     /// second meaning, kept so that a bundle is filed where every earlier import filed it. It is a
     /// filing key and nothing else: the vault is joined on <see cref="ReadOrderId"/> alone.
     /// </remarks>
-    private static string ReadIdentityKey(JsonElement root)
+    private static string ReadFilingKey(JsonElement root)
     {
         string orderId = root.Str("order_id");
         return !string.IsNullOrEmpty(orderId)
@@ -375,9 +375,8 @@ public static class BundleManifestReader
     /// cannot parse.
     /// </summary>
     /// <remarks>
-    /// Each layer is read for the geometry its import step draws from, as <see cref="SiteVectorLayers"/>
-    /// states it: the road centrelines from lines, and the four layers cut as subdivisions from areas.
-    /// On a layer split by geometry family, that is which of its files each step takes.
+    /// Each layer is read for the geometry its import step draws from (<see cref="SiteVectorLayers"/>);
+    /// on a layer split by geometry family, that is which of its files each step takes.
     /// </remarks>
     private static void ReadSharedVectorLayers(BundleManifest manifest, JsonElement root)
     {
@@ -462,7 +461,8 @@ public static class BundleManifestReader
             }
 
             bool listedGeojson = false;
-            JsonElement? wholeLayer = null;
+            bool wantedWithoutPath = false;
+            BundleArtifact? wholeLayer = null;
             if (layer.Array("formats") is { } formats)
             {
                 foreach (JsonElement format in formats.EnumerateArray())
@@ -475,23 +475,36 @@ public static class BundleManifestReader
 
                     listedGeojson = true;
                     SiteGeometryKinds? holds = SiteGeometryFamilies.Holds(GeometryFamily(format));
-                    if (holds is null)
+                    if (holds is { } known && (known & wanted.DrawnFrom) == 0)
                     {
-                        wholeLayer ??= format;
+                        continue;
                     }
-                    else if ((holds.Value & wanted.DrawnFrom) != 0)
+
+                    // A row with no path points at nothing: it neither ends the search nor stands in
+                    // for a later row as the whole layer.
+                    if (SharedLayerFile(format) is not { } file)
                     {
-                        return SharedLayerFile(format);
+                        wantedWithoutPath = true;
+                        continue;
                     }
+
+                    if (holds is not null)
+                    {
+                        return file;
+                    }
+
+                    wholeLayer ??= file;
                 }
             }
 
-            if (wholeLayer is { } whole)
+            if (wholeLayer is not null)
             {
-                return SharedLayerFile(whole);
+                return wholeLayer;
             }
 
-            if (listedGeojson)
+            // A wanted file that names no path is a broken pointer, which keeps the vault's remedy;
+            // only a layer with no file of the wanted family at all has nothing to place.
+            if (listedGeojson && !wantedWithoutPath)
             {
                 nothingToPlace.Add(wanted.Name);
             }

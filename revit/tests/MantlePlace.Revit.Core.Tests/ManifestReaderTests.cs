@@ -680,10 +680,10 @@ internal static class ManifestReaderTests
             // the stem its elements are stamped with -- under the id attribution.order_id carries, so
             // that stays its identity key: filed anywhere else, a re-import would be a stranger to
             // the ground it already placed.
-            run.Equal(IdentityKeyOf("1.6.0", Old), "job-7", "an old bundle is still filed under the id it always was");
-            run.Equal(IdentityKeyOf("1.7.0", New), "ord-3", "a new one under its order");
-            run.Equal(IdentityKeyOf("1.7.0", NewUnknown), string.Empty, "a null order files nothing");
-            run.Equal(IdentityKeyOf("1.6.0", TopLevel + Old), "ord-1", "and the top-level order_id wins here too");
+            run.Equal(FilingKeyOf("1.6.0", Old), "job-7", "an old bundle is still filed under the id it always was");
+            run.Equal(FilingKeyOf("1.7.0", New), "ord-3", "a new one under its order");
+            run.Equal(FilingKeyOf("1.7.0", NewUnknown), string.Empty, "a null order files nothing");
+            run.Equal(FilingKeyOf("1.6.0", TopLevel + Old), "ord-1", "and the top-level order_id wins here too");
         });
 
         run.Case("a shared layer split by geometry family gives each consumer the family it places (MPB 1.7.0)", () =>
@@ -775,12 +775,46 @@ internal static class ManifestReaderTests
             run.Equal(manifest.SharedLayersWithNothingToPlace.Count, 0, "none of them is said to hold nothing");
         });
 
+        run.Case("a row with no path is passed over when a layer's file is chosen", () =>
+        {
+            // A row with no path points at nothing. It neither ends the search for a later row that
+            // does, nor stands in for one as the whole layer. A layer whose only file of the wanted
+            // family has no path is a broken pointer, not a layer with nothing to place, so it keeps
+            // the vault's remedy.
+            BundleManifest manifest = BundleManifestReader.Parse(
+                """
+                  {
+                    "version": "1.7.0",
+                    "hosts": {"unreal": {}},
+                    "vector": {"layers": [
+                      {"name": "water", "formats": [
+                        {"format": "geojson", "geometry_family": "polygon"},
+                        {"format": "geojson", "path": "Vector/Water_polygon.geojson", "geometry_family": "polygon"}]},
+                      {"name": "land_use", "formats": [
+                        {"format": "geojson", "path": ""},
+                        {"format": "geojson", "path": "Vector/LandUse.geojson"}]},
+                      {"name": "land_cover", "formats": [
+                        {"format": "geojson", "path": "Vector/LandCover.geojson", "geometry_family": ""}]},
+                      {"name": "road_polygons", "formats": [
+                        {"format": "geojson", "geometry_family": "polygon"},
+                        {"format": "geojson", "path": "Vector/RoadPolygons_line.geojson", "geometry_family": "line"}]}
+                    ]}
+                  }
+                """);
+
+            run.Equal(manifest.Water?.Path, "Vector/Water_polygon.geojson", "a pathless file of the wanted family does not end the search");
+            run.Equal(manifest.LandUse?.Path, "Vector/LandUse.geojson", "nor does a pathless whole-layer row stand in for a later one");
+            run.Equal(manifest.LandCover?.Path, "Vector/LandCover.geojson", "an empty family names none this build knows: the whole layer");
+            run.True(manifest.RoadPolygons is null, "a wanted file with no path gives nothing");
+            run.False(manifest.SharedLayersWithNothingToPlace.Contains("road_polygons"), "and is a broken pointer, not a layer with nothing to place");
+        });
+
         return run.Report("manifest reader");
     }
 
     private static string OrderIdOf(string version, string members) => ParseWith(version, members).OrderId;
 
-    private static string IdentityKeyOf(string version, string members) => ParseWith(version, members).IdentityKey;
+    private static string FilingKeyOf(string version, string members) => ParseWith(version, members).FilingKey;
 
     private static BundleManifest ParseWith(string version, string members)
         => BundleManifestReader.Parse(

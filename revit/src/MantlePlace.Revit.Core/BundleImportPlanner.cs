@@ -580,10 +580,10 @@ public static class BundleImportPlanner
             frame,
             entries,
             ImportStepKind.RoadCentrelines,
-            "road centrelines",
+            SiteVectorLayers.RoadSplines.Label,
             steps,
             skipped,
-            VectorAbsence(manifest, ImportStepKind.RoadCentrelines, "road centrelines"));
+            VectorAbsence(manifest, ImportStepKind.RoadCentrelines));
 
         // The land cover before the site boundaries: in Revit 2025, on one order whose land cover
         // carries a ring as large as the order, this way round committed the two layers in 873 s
@@ -596,10 +596,10 @@ public static class BundleImportPlanner
             frame,
             entries,
             ImportStepKind.LandCover,
-            "land cover",
+            SiteVectorLayers.LandCover.Label,
             steps,
             skipped,
-            VectorAbsence(manifest, ImportStepKind.LandCover, "land cover"));
+            VectorAbsence(manifest, ImportStepKind.LandCover));
 
         PlanPlacedArtifact(
             manifest,
@@ -607,10 +607,10 @@ public static class BundleImportPlanner
             frame,
             entries,
             ImportStepKind.SiteBoundaries,
-            "site boundaries",
+            SiteVectorLayers.LandUse.Label,
             steps,
             skipped,
-            VectorAbsence(manifest, ImportStepKind.SiteBoundaries, "site boundaries"));
+            VectorAbsence(manifest, ImportStepKind.SiteBoundaries));
 
         PlanPlacedArtifact(
             manifest,
@@ -618,10 +618,10 @@ public static class BundleImportPlanner
             frame,
             entries,
             ImportStepKind.Water,
-            "water bodies",
+            SiteVectorLayers.Water.Label,
             steps,
             skipped,
-            VectorAbsence(manifest, ImportStepKind.Water, "water bodies"));
+            VectorAbsence(manifest, ImportStepKind.Water));
 
         PlanRoadPolygons(manifest, frame, entries, steps, skipped);
 
@@ -674,10 +674,10 @@ public static class BundleImportPlanner
             frame,
             entries,
             ImportStepKind.RoadPolygons,
-            "road surfaces",
+            SiteVectorLayers.RoadPolygons.Label,
             steps,
             skipped,
-            VectorAbsence(manifest, ImportStepKind.RoadPolygons, "road surfaces"));
+            VectorAbsence(manifest, ImportStepKind.RoadPolygons));
     }
 
     /// <summary>
@@ -709,7 +709,7 @@ public static class BundleImportPlanner
     {
         bool flood = layer == HazardLayer.FloodZones;
         ImportStepKind kind = flood ? ImportStepKind.FloodZones : ImportStepKind.SteepGround;
-        string label = flood ? "flood zones" : "steep ground";
+        string label = SiteVectorLayers.For(kind).Label;
         BundleArtifact? artifact = flood ? manifest.FloodZones : manifest.SteepGround;
 
         if (artifact is null)
@@ -1430,20 +1430,21 @@ public static class BundleImportPlanner
     /// shared set is read, and its absence keeps the vault's remedy — except where the shared layer
     /// is listed, split by geometry family (MPB 1.7.0), with no file of the geometry this step draws
     /// from (<see cref="SiteVectorLayers"/>): the bundle has said what it holds, and the vault has
-    /// nothing more to give either. The curator reads the layer's words, never its manifest key.
+    /// nothing more to give either. The curator reads the step's words, never the layer's manifest key.
     /// </remarks>
-    private static string? VectorAbsence(BundleManifest manifest, ImportStepKind kind, string label)
+    private static string? VectorAbsence(BundleManifest manifest, ImportStepKind kind)
     {
+        SiteVectorLayer layer = SiteVectorLayers.For(kind);
         if (manifest.VectorsFromOwnBlock)
         {
-            return $"No {label} in this bundle: there are none in this area.";
+            return $"No {layer.Label} in this bundle: there are none in this area.";
         }
 
-        if (SiteVectorLayers.Of(kind) is { } layer && manifest.SharedLayersWithNothingToPlace.Contains(layer.Name))
+        if (manifest.SharedLayersWithNothingToPlace.Contains(layer.Name))
         {
             string geometry = layer.DrawnFrom == SiteGeometryKinds.Lines ? "lines" : "areas";
-            return $"No {label} in this bundle: its {layer.Words} layer is split by geometry and carries no "
-                + $"{geometry}, which is what the {label} are drawn from.";
+            return $"No {layer.Label} in this bundle: the layer they come from is split by geometry and "
+                + $"carries no {geometry}, which is what they are drawn from.";
         }
 
         return null;
