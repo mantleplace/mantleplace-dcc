@@ -272,10 +272,11 @@ and the order identity. Only the order identity joins a bundle to its vault entr
 ### 6.3 Vector layers, by name
 
 The `vector` block describes the vector set: one entry in `vector.layers` per layer, each carrying a
-`name` and one row per delivered format. From MPB 1.7.0 a layer that mixes geometry families may be
-split by family: it then carries one row per family in a format, each naming its
+`name` and one row per delivered format. A layer that mixes geometry families may instead be
+**split** by family: it then carries one row per family in a format, each naming its
 `geometry_family` and pointing at a file that holds that family alone, or one GeoPackage row that
-names a table per family in `tables`. A consumer finds a layer by its `name` and then its files by
+names a table per family in `tables`. The [changelog](changelog.md) records when splitting
+arrived. A consumer finds a layer by its `name` and then its files by
 their format rows, and it reads every row of the format it takes: a row naming no family is the
 whole layer, and of a split layer it takes the file of each family it uses. It MUST NOT guess a
 layer from a file name (§3). It also MUST NOT fall back to a format it cannot read when the one it

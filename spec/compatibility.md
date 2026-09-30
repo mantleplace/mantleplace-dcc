@@ -37,7 +37,8 @@ directory. Everything in `spec/` describes the semver era.
 
 ⛔ **A field is never reused with a changed meaning.** A key that meant one thing keeps meaning it,
 for as long as it exists. Repurposing a key is the one change that no version number can warn a
-consumer about, because the document still validates and the values still parse.
+consumer about, because the document still validates and the values still parse. One exception has
+been published; the [changelog](changelog.md) records it, and what a reader must do about it.
 
 ## 3. What a consumer must do
 

@@ -310,6 +310,14 @@
             "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
           },
           {
+            "name": "water",
+            "path": "Site/Vector/Water.geojson",
+            "horizontal_frame": "absolute_projected",
+            "units": "m",
+            "feature_count": 7,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000007"
+          },
+          {
             "name": "steep_slope",
             "path": "Site/Vector/SteepSlope.geojson",
             "horizontal_frame": "absolute_projected",
@@ -332,6 +340,8 @@
           "path": "Site/Vector/SiteVectors.gpkg",
           "tables": [
             "RoadSplines",
+            "Water_line",
+            "Water_polygon",
             "SteepSlope",
             "FloodZones"
           ],

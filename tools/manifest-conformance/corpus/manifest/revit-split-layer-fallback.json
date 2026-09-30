@@ -19,19 +19,19 @@
           {
             "format": "geojson",
             "path": "Vector/Water_line.geojson",
-            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "sha256": "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
             "geometry_family": "line"
           },
           {
             "format": "geojson",
             "path": "Vector/Water_polygon.geojson",
-            "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "sha256": "2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
             "geometry_family": "polygon"
           },
           {
             "format": "gpkg",
             "path": "Vector/Water.gpkg",
-            "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+            "sha256": "3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
             "tables": [
               "Water_line",
               "Water_polygon"
@@ -47,7 +47,7 @@
           {
             "format": "geojson",
             "path": "Vector/RoadSplines.geojson",
-            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+            "sha256": "4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d"
           }
         ]
       }
