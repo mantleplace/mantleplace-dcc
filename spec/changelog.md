@@ -19,12 +19,17 @@ history, not contract.
 
 ## Semver era
 
-### 1.7.0 — an honest delivery verdict, and the unit of every value (additive minor; published and frozen 2026-09-30)
+### 1.7.0 — an honest delivery verdict, and the unit of every value (minor, with one exception to compatibility §2; published and frozen 2026-09-30)
 
-Every item below is additive, and no declared member is removed, re-typed or re-meant, so it is a
-MINOR under [compatibility](compatibility.md) §2 and every host floor at 1.0.0 reads it. The new
-requirements bind a producer writing 1.7.0, not a reader. One key that no earlier schema declared
-changes what it carries, and is recorded here for that reason.
+Every item below but one is additive, and no member is removed or re-typed, so every host floor at
+1.0.0 reads it. The new requirements bind a producer writing 1.7.0, not a reader.
+
+**The one exception is an exception to [compatibility](compatibility.md) §2**, which says a field is
+never reused with a changed meaning: `attribution.order_id` held the packaging job's id before 1.7.0
+and holds the order from 1.7.0 on. No earlier schema declared the key, so nothing that validates
+against a schema breaks, but the version number cannot warn a reader that took the key for either
+meaning. What a reader must do is the item below: read `attribution.order_id` as the order only
+where `attribution.job_id` stands beside it.
 
 - **`completeness` states its verdict in one word.** `state` is `incomplete` when a must-ship
   artifact is missing, `partial` when every must-ship artifact shipped but a token the build set
@@ -34,11 +39,14 @@ changes what it carries, and is recorded here for that reason.
   `packaging.delivered` and is counted a failure. A token the build never attempted is still an
   offer rather than a failure — and from 1.7.0 the first build of a base-on-demand bundle attempts
   `flood.nfhl_gpkg`, so a flood GeoPackage missing there is a failure.
-- **`attribution` names the job and the order apart.** `attribution.job_id` is new: the packaging
-  job that wrote the bundle. `attribution.order_id` is declared for the first time, as the
-  curator's order — the top-level `order_id` again, or null when the packaging run did not know it.
-  Before 1.7.0 the same key was emitted undeclared and carried the *job* id. `attribution.job_id`
-  beside it marks the new meaning, and its absence marks the old one.
+- **`attribution` names the job and the order apart — the exception to §2.** `attribution.job_id`
+  is new: the packaging job that wrote the bundle. `attribution.order_id` is declared for the first
+  time, as the curator's order — the top-level `order_id` again, or null when the packaging run did
+  not know it. Before 1.7.0 the same key was emitted undeclared and carried the *job* id. So a
+  reader must take `attribution.order_id` as the order only when `attribution.job_id` is present
+  beside it; without `job_id` the key is a job id, which changes on every rebuild and joins no
+  order, and a null is no order either. The top-level `order_id` means the order wherever it
+  appears, in every version.
 - **`elevation.dem` names its sources.** `sources` is new and optional: the upstream elevation
   source or sources the DEM was built from, each with its native resolution and surface model and,
   where its producer states them, its acquisition dates, method, quality levels and stated vertical
@@ -57,7 +65,8 @@ changes what it carries, and is recorded here for that reason.
 - **A mixed-geometry vector layer may be split by geometry family.** In the shared `vector` set, a
   layer that mixes points, lines and polygons can ship one file per family, each format row naming
   its `geometry_family`, or one GeoPackage whose row names a table per family in `tables`. One layer
-  can then carry several rows of one format, and a consumer reads all of them.
+  can then carry several rows of one format, and a consumer reads all of them, taking the file of
+  each family it uses ([format](format.md) §6.3).
 - **`hosts.revit.vectors.gpkg`** is new: the Revit host's vector layers again, in the same frame,
   as one GeoPackage whose CRS is part of the file, for GIS and CAD tools. It sits beside `layers`,
   and the Revit host reads the GeoJSON files, never this.

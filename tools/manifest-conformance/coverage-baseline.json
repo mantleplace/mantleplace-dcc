@@ -207,6 +207,9 @@
     "manifest.revitOwnGeoreference": [
       "revit"
     ],
+    "manifest.revitSplitLayerFallback": [
+      "revit"
+    ],
     "manifest.roadSplinesGeojsonWins": [
       "revit",
       "unreal"

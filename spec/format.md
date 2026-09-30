@@ -272,11 +272,18 @@ and the order identity. Only the order identity joins a bundle to its vault entr
 ### 6.3 Vector layers, by name
 
 The `vector` block describes the vector set: one entry in `vector.layers` per layer, each carrying a
-`name` and one row per delivered format. A consumer finds a layer by its `name` and then a file by
-its format row. It MUST NOT guess a layer from a file name (§3). It also MUST NOT fall back to a
-format it cannot read when the one it wants is missing. The corpus pins both:
+`name` and one row per delivered format. From MPB 1.7.0 a layer that mixes geometry families may be
+split by family: it then carries one row per family in a format, each naming its
+`geometry_family` and pointing at a file that holds that family alone, or one GeoPackage row that
+names a table per family in `tables`. A consumer finds a layer by its `name` and then its files by
+their format rows, and it reads every row of the format it takes: a row naming no family is the
+whole layer, and of a split layer it takes the file of each family it uses. It MUST NOT guess a
+layer from a file name (§3). It also MUST NOT fall back to a format it cannot read when the one it
+wants is missing, nor take one family's file for another's. The corpus pins the first two:
 `manifest.roadSplinesGeojsonWins` puts a decoy layer beside the one being selected, and
-`manifest.roadSplinesGpkgOnly` offers only a format the reader does not take.
+`manifest.roadSplinesGpkgOnly` offers only a format the reader does not take. The Revit host's
+`manifest.revitSplitLayerFallback` lists a split layer's line file before the polygon file that host
+cuts water bodies from.
 
 The schema types `name` as a plain string on purpose. **This table states the vocabulary**, and
 the corpus case `manifest.vectorLayerVocabulary` carries every name in it:
@@ -292,7 +299,8 @@ the corpus case `manifest.vectorLayerVocabulary` carries every name in it:
 | `road_polygons` | Road surfaces: the `road` centrelines widened by the same estimated width, merged per class, and cut so no two overlap (the wider class keeps the ground where classes meet), carrying class and width | Polygons | Derived from `road`, and marked with `derived_from` |
 
 A layer's geometry can mix the families its row names, so a reader keys on each feature's own
-geometry type rather than on the layer. Every layer's coordinates are geographic, and the block
+geometry type rather than on the layer; each file of a split layer holds one family, and its format
+row names it. Every layer's coordinates are geographic, and the block
 says so: `vector.crs` is `EPSG:4326` whenever the set shipped. §6's one projection exception
 applies to all of them — and a host whose own block carries the layer in its own frame (§6.5)
 reads that copy instead.

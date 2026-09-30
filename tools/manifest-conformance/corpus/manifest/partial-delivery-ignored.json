@@ -449,6 +449,7 @@
   "packaging": {
     "selected": [
       "buildings.ifc",
+      "elevation.landxml",
       "flood.nfhl_gpkg",
       "imagery.drape_png",
       "landcover.tree_points_csv",
@@ -468,6 +469,10 @@
       {
         "token": "buildings.ifc",
         "reason": "emit_failed"
+      },
+      {
+        "token": "elevation.landxml",
+        "reason": "not_produced"
       }
     ]
   },
@@ -476,7 +481,8 @@
     "state": "partial",
     "satisfied": true,
     "failed": [
-      "buildings.ifc"
+      "buildings.ifc",
+      "elevation.landxml"
     ],
     "expected": [
       "imagery.drape_png",
@@ -484,7 +490,12 @@
     ],
     "missing": [],
     "produced_but_not_packaged": [],
-    "delivered_checked": 5,
-    "delivered_missing": []
+    "delivered_checked": 6,
+    "delivered_missing": [
+      {
+        "token": "elevation.landxml",
+        "path": "Surface/Surface.landxml"
+      }
+    ]
   }
 }
