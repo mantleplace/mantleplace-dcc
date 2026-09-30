@@ -583,7 +583,7 @@ public static class BundleImportPlanner
             "road centrelines",
             steps,
             skipped,
-            VectorAbsence(manifest, "road centrelines"));
+            VectorAbsence(manifest, "road_splines", "road centrelines"));
 
         // The land cover before the site boundaries: in Revit 2025, on one order whose land cover
         // carries a ring as large as the order, this way round committed the two layers in 873 s
@@ -599,7 +599,7 @@ public static class BundleImportPlanner
             "land cover",
             steps,
             skipped,
-            VectorAbsence(manifest, "land cover"));
+            VectorAbsence(manifest, "land_cover", "land cover"));
 
         PlanPlacedArtifact(
             manifest,
@@ -610,7 +610,7 @@ public static class BundleImportPlanner
             "site boundaries",
             steps,
             skipped,
-            VectorAbsence(manifest, "site boundaries"));
+            VectorAbsence(manifest, "land_use", "site boundaries"));
 
         PlanPlacedArtifact(
             manifest,
@@ -621,7 +621,7 @@ public static class BundleImportPlanner
             "water bodies",
             steps,
             skipped,
-            VectorAbsence(manifest, "water bodies"));
+            VectorAbsence(manifest, "water", "water bodies"));
 
         PlanRoadPolygons(manifest, frame, entries, steps, skipped);
 
@@ -677,7 +677,7 @@ public static class BundleImportPlanner
             "road surfaces",
             steps,
             skipped,
-            VectorAbsence(manifest, "road surfaces"));
+            VectorAbsence(manifest, "road_polygons", "road surfaces"));
     }
 
     /// <summary>
@@ -1427,10 +1427,26 @@ public static class BundleImportPlanner
     /// <remarks>
     /// On a bundle that carries this host's own copy, a layer the copy lacks had no features in the
     /// area, and the vault has nothing more to give (<c>spec/format.md</c> §6.5). Without the copy the
-    /// shared set is read, and its absence keeps the vault's remedy.
+    /// shared set is read, and its absence keeps the vault's remedy — except where the shared layer
+    /// is listed, split by geometry family (MPB 1.7.0), with no file of the geometry this layer is
+    /// drawn from: the bundle has said what it holds, and the vault has nothing more to give either.
     /// </remarks>
-    private static string? VectorAbsence(BundleManifest manifest, string label)
-        => manifest.VectorsFromOwnBlock ? $"No {label} in this bundle: there are none in this area." : null;
+    private static string? VectorAbsence(BundleManifest manifest, string layer, string label)
+    {
+        if (manifest.VectorsFromOwnBlock)
+        {
+            return $"No {label} in this bundle: there are none in this area.";
+        }
+
+        if (manifest.SharedLayersWithNothingToPlace.TryGetValue(layer, out SiteGeometryKinds drawnFrom))
+        {
+            string geometry = drawnFrom == SiteGeometryKinds.Lines ? "lines" : "areas";
+            return $"No {label} in this bundle: its {layer} layer is split by geometry and carries no {geometry}, "
+                + $"which is what the {label} are drawn from.";
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Why a projected artifact's units stop it being placed, or <c>null</c> with the resolved

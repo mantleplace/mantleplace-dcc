@@ -211,10 +211,17 @@ public static class BundleManifestReader
 
     /// <summary>
     /// The vault join key. Top-level <c>order_id</c> is authoritative; <c>attribution.order_id</c> is
-    /// the fallback the packager actually emits today. The ETL <c>jobId</c> is deliberately NOT a
-    /// fallback — it changes on every rebuild and joining on it would silently address the wrong
-    /// row (HPS-37).
+    /// the fallback, and only on a bundle whose <c>attribution</c> also carries a <c>job_id</c>. The
+    /// ETL job id is deliberately never a fallback — it changes on every rebuild and joining on it
+    /// would silently address the wrong row (HPS-37).
     /// </summary>
+    /// <remarks>
+    /// Before MPB 1.7.0 <c>attribution.order_id</c> was emitted undeclared and held the packaging JOB
+    /// id; 1.7.0 declares it the curator's order, or null, and adds <c>attribution.job_id</c> beside
+    /// it, whose absence marks the old meaning. So the key is read as the order only where
+    /// <c>job_id</c> stands beside it, and an older bundle with no top-level <c>order_id</c> has no
+    /// order from here. A null order reads as none.
+    /// </remarks>
     private static string ReadOrderId(JsonElement root)
     {
         string orderId = root.Str("order_id");
@@ -223,7 +230,9 @@ public static class BundleManifestReader
             return orderId;
         }
 
-        return root.Object("attribution")?.Str("order_id") ?? string.Empty;
+        return root.Object("attribution") is { } attribution && attribution.OptionalStr("job_id") is not null
+            ? attribution.Str("order_id")
+            : string.Empty;
     }
 
     /// <summary>
@@ -341,22 +350,32 @@ public static class BundleManifestReader
     }
 
     /// <summary>
-    /// Selects by layer name AND format: the first <c>road_splines</c> layer, then the first
-    /// <c>geojson</c> entry inside it. A layer that ships only formats this host cannot read yields
-    /// no splines — there is no fallback to gpkg, because "wrong format" and "absent" have the same
-    /// correct outcome here and a fallback would hand the importer bytes it cannot parse.
+    /// Selects by layer name, format AND geometry family: the first <c>road_splines</c> layer, then
+    /// the first <c>geojson</c> entry inside it holding lines. A layer that ships only formats this
+    /// host cannot read yields no splines — there is no fallback to gpkg, because "wrong format" and
+    /// "absent" have the same correct outcome here and a fallback would hand the importer bytes it
+    /// cannot parse.
     /// </summary>
+    /// <remarks>
+    /// Each layer is read for the geometry its import step draws from: the road centrelines from
+    /// lines, and the four layers cut as subdivisions from areas (<c>RevitBundleImporter.Roads</c> and
+    /// <c>RevitBundleImporter.SiteBoundaries</c> ask <see cref="SiteVectorReader"/> for the same).
+    /// On a layer MPB 1.7.0 splits by geometry family, that is which of its files each step takes.
+    /// </remarks>
     private static void ReadRoadSplines(BundleManifest manifest, JsonElement root)
     {
-        manifest.RoadSplines = ReadVectorLayer(root, "road_splines");
+        Dictionary<string, SiteGeometryKinds> nothingToPlace = new(StringComparer.Ordinal);
+
+        manifest.RoadSplines = ReadVectorLayer(root, "road_splines", SiteGeometryKinds.Lines, nothingToPlace);
         manifest.RoadSplinesPath = manifest.RoadSplines?.Path ?? string.Empty;
         manifest.RoadSplinesSha256 = manifest.RoadSplines?.Sha256 ?? string.Empty;
         manifest.HasRoadSplines = !string.IsNullOrEmpty(manifest.RoadSplinesPath);
 
-        manifest.LandUse = ReadVectorLayer(root, "land_use");
-        manifest.LandCover = ReadVectorLayer(root, "land_cover");
-        manifest.Water = ReadVectorLayer(root, "water");
-        manifest.RoadPolygons = ReadVectorLayer(root, "road_polygons");
+        manifest.LandUse = ReadVectorLayer(root, "land_use", SiteGeometryKinds.Areas, nothingToPlace);
+        manifest.LandCover = ReadVectorLayer(root, "land_cover", SiteGeometryKinds.Areas, nothingToPlace);
+        manifest.Water = ReadVectorLayer(root, "water", SiteGeometryKinds.Areas, nothingToPlace);
+        manifest.RoadPolygons = ReadVectorLayer(root, "road_polygons", SiteGeometryKinds.Areas, nothingToPlace);
+        manifest.SharedLayersWithNothingToPlace = nothingToPlace;
 
         // Not an artifact: this host reads no road centreline out of the base layer (it takes the
         // draped road_splines instead). All it is asked is whether the layer is there, because that
@@ -385,17 +404,34 @@ public static class BundleManifestReader
     }
 
     /// <summary>
-    /// Selects one <c>vector</c> layer by layer name AND format: the first layer of that name, then
-    /// the first <c>geojson</c> entry inside it. A layer that ships only formats this host cannot
-    /// read yields nothing — there is no fallback to gpkg, because "wrong format" and "absent" have
-    /// the same correct outcome here and a fallback would hand the importer bytes it cannot parse.
+    /// Selects one <c>vector</c> layer by layer name, format AND geometry family: the first layer of
+    /// that name, then the first <c>geojson</c> entry inside it holding the geometry its consumer
+    /// draws from. A layer that ships only formats this host cannot read yields nothing — there is no
+    /// fallback to gpkg, because "wrong format" and "absent" have the same correct outcome here and a
+    /// fallback would hand the importer bytes it cannot parse.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The format table's <c>path</c> IS the manifest pointer for these layers (<c>HPS-32</c>) — the
     /// top-level <c>layout.vector</c> names the directory, not the file, so there is no layout key
     /// to prefer over it.
+    /// </para>
+    /// <para>
+    /// Every row is read (MPB 1.7.0). A layer that mixes geometry families may ship one file per
+    /// family, each row naming its <c>geometry_family</c>, and the first <c>geojson</c> row is then
+    /// one family of several: taking it for the water bodies would take the streams and drop every
+    /// lake. So the row taken is the one holding <paramref name="drawnFrom"/>; a row naming no family
+    /// is the whole layer. There is no fallback to another family's file either — a line file is not
+    /// a water body — and a split layer with no file of the wanted family is added to
+    /// <paramref name="nothingToPlace"/>, so the planner can say the bundle has none rather than
+    /// send the curator to a vault that cannot supply one.
+    /// </para>
     /// </remarks>
-    private static BundleArtifact? ReadVectorLayer(JsonElement root, string layerName)
+    private static BundleArtifact? ReadVectorLayer(
+        JsonElement root,
+        string layerName,
+        SiteGeometryKinds drawnFrom,
+        Dictionary<string, SiteGeometryKinds> nothingToPlace)
     {
         if (root.Object("vector")?.Array("layers") is not { } layers)
         {
@@ -410,12 +446,19 @@ public static class BundleManifestReader
                 continue;
             }
 
+            bool listedGeojson = false;
             if (layer.Array("formats") is { } formats)
             {
                 foreach (JsonElement format in formats.EnumerateArray())
                 {
                     if (format.ValueKind != JsonValueKind.Object
                         || !string.Equals(format.Str("format"), "geojson", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    listedGeojson = true;
+                    if ((SiteGeometryFamilies.Holds(GeometryFamily(format)) & drawnFrom) == 0)
                     {
                         continue;
                     }
@@ -437,11 +480,31 @@ public static class BundleManifestReader
                 }
             }
 
+            if (listedGeojson)
+            {
+                nothingToPlace[layerName] = drawnFrom;
+            }
+
             // Only the first layer of that name is ever considered, with or without a geojson.
             break;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// A format row's <c>geometry_family</c>: <c>null</c> when the row names none (absent, or a JSON
+    /// null), the value when it is a string, and an empty string — a family nothing here holds — for
+    /// any other JSON kind, so a malformed row is not read as the whole layer.
+    /// </summary>
+    private static string? GeometryFamily(JsonElement format)
+    {
+        if (!format.TryGetProperty("geometry_family", out JsonElement family) || family.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        return family.ValueKind == JsonValueKind.String ? family.GetString() ?? string.Empty : string.Empty;
     }
 
     /// <summary>

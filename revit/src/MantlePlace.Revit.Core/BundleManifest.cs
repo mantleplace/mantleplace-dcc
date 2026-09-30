@@ -524,6 +524,15 @@ public sealed class BundleManifest
     public bool VectorsFromOwnBlock { get; internal set; }
 
     /// <summary>
+    /// The shared layers this bundle splits by geometry family (MPB 1.7.0) without a file of the
+    /// family this host draws them from — a water layer of streams and springs and no water body —
+    /// each with the geometry it is drawn from. The layer is listed; there is simply nothing in it to
+    /// place, which is not the vault's to fix.
+    /// </summary>
+    public IReadOnlyDictionary<string, SiteGeometryKinds> SharedLayersWithNothingToPlace { get; internal set; }
+        = new Dictionary<string, SiteGeometryKinds>(StringComparer.Ordinal);
+
+    /// <summary>
     /// The <c>flood_zones</c> layer of <c>hosts.revit.vectors</c>: the flood map's zones, in this host's
     /// frame (MPB 1.4.0). Read from this host's own block and nowhere else — the shared set does not
     /// carry them, and the GeoPackage every bundle has shipped is a format this host cannot read.
