@@ -823,6 +823,34 @@
       }
     },
     {
+      "id": "manifest.basemapFilesIgnored",
+      "group": "manifest",
+      "file": "manifest/basemap-files-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 1.5.0 adds keys and removes none, all of them about the Stylized map, the platform's own map style: `basemap` gains `flavor` and `basemap_vintage`, naming the style and the map-data vintage that painted its tiles, and two optional picked files beside them -- `basemap.cog`, the Stylized map as a GeoTIFF on the delivered imagery's grid, and `basemap.drape`, the same picture as a PNG drape in the same fixed frame as `imagery.drape`, each REQUIRING its path, digest, extent, extent CRS, pixel size and flavor -- and `layout` gains `basemap_cog` and `basemap_drape`, the pointers to them. `flavor` is an open vocabulary: a reader must not refuse an id it does not know. What any host does with the files is other cases' business -- importing the drape is a feature, not a re-pin. The fixture is versioned 1.5.0 and carries every new member in the shape the 1.5.0 schema gives it, both picked files present, the drape's flavor an id no reader has been taught, and a `layout` carrying both pointers beside the two it requires -- plus everything the 1.4.0 case carries, so that every block the fixture carries validates against the published 1.5.0 schema. A reader MUST accept it and still read everything around the new keys. Two readers fail here while every earlier case stays green: one that gates the version on equality with its floor or with the last minor it saw, and one that refuses a member it does not recognise inside a block it does read -- `layout` is a block both readers read, the Revit reader walking every entry in it. Either turns an additive minor into a breaking release (compatibility.md). Host-invariant on purpose: ignoring a key nobody has taught you is every reader's obligation, not one host's.",
+      "manifestVersion": "1.5.0",
+      "expectations": {
+        "jobId": "basemap-files",
+        "orderId": "ord-basemap-files-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "9999999999999999999999999999999999999999999999999999999999999999"
+      }
+    },
+    {
+      "id": "manifest.siteBriefIgnored",
+      "group": "manifest",
+      "file": "manifest/site-brief-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 1.6.0 adds keys and removes none: `site_brief` is new, an optional pointer to the Site Brief, a PDF about the site made from the order's own data, REQUIRING its `path` (`Brief/SiteBrief.pdf`) beside an optional digest and size; and `elevation.dem` declares two members it was already emitting, `surface_model` (`dsm` where the delivered DEM is known to be a surface model, `unspecified` otherwise, an unknown value read as `unspecified`) and `void_fraction_in_aoi`, the share of the ordered area the DEM had no data for. What any host does with the members is other cases' business. The fixture is versioned 1.6.0 and carries every new member in the shape the 1.6.0 schema gives it: a `site_brief` with its path, digest and size, and an `elevation.dem` with both new members beside the units it already had -- plus everything the 1.5.0 case carries, so that every block the fixture carries validates against the published 1.6.0 schema. A reader MUST accept it and still read everything around the new keys. Two readers fail here while every earlier case stays green: one that gates the version on equality with its floor or with the last minor it saw, and one that refuses a member it does not recognise inside a block it does read -- `dem` sits inside `elevation`, which the Revit reader walks for the DEM's extent. Either turns an additive minor into a breaking release (compatibility.md). Host-invariant on purpose: ignoring a key nobody has taught you is every reader's obligation, not one host's.",
+      "manifestVersion": "1.6.0",
+      "expectations": {
+        "jobId": "site-brief",
+        "orderId": "ord-site-brief-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "6666666666666666666666666666666666666666666666666666666666666666"
+      }
+    },
+    {
       "id": "manifest.revitOwnFramePointers",
       "group": "manifest",
       "file": "manifest/revit-own-frame-pointers.json",
