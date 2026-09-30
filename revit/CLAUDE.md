@@ -315,10 +315,22 @@ follow.
 - **A toposolid subdivision is a different element in 2025 than in 2026 and 2027**, and one build has
   to drape both. In 2025 it is typeless and takes its material as an instance parameter. From 2026
   it is a `Toposolid` on the document's default toposolid type, the instance parameter is absent,
-  and the material is its type's. The drape asks each element which shape it has and retypes a
-  typed one onto a type of its own (`SubDivisionMaterial`): 33 of them cost about 190 s of a real
-  2027 import on a 74,852-point terrain, 71 s of calls and a 121 s commit — a probe on a reopened
-  project committed the same retypes in a second, so time a retype in an import, not a probe. Never branch on the version number, and never "fix" a 2025-only
+  and the material is its type's. Each element is asked which shape it has (`SubDivisionMaterial`),
+  and a typed one is moved onto a type of its own with `ChangeTypeId`, which is the whole cost of it:
+  1.2 to 3.8 s per subdivision in 2027, every other call around it milliseconds. When the drape is
+  planned that move is made in the polygon step's own transaction, as each subdivision is cut
+  (`SubDivisionMaterial.TypeAtCut`), and the drape finds it already typed and writes only the
+  photograph and its offset. On a 74,855-point terrain in 2027, 61 subdivisions took the drape step
+  from about 310 s to about 24 s, its commit from about 145 s to 3 s, and added about 100 s to the
+  polygon steps: 364 to 413 s an import against 541 to 578 s. With the road surfaces too, 405
+  subdivisions, the drape step went from 1,868 s to 182 s and the polygon steps from 1,135 s to
+  1,467 s: 1,744 s against 3,104 s, one run each. Where the move is made does
+  not change what it costs. Revit 2026's typed `CreateSubDivision` overload, probed by reflection
+  outside this tree, cut straight onto the type and paid the same time in the commit instead; and
+  the default type the two-argument overload uses cannot be set through 2025's API
+  (`IsDefaultFamilyTypeIdValid` refuses every toposolid type for the Toposolid category). Time a
+  retype in an import, not a probe: a probe on a reopened project committed 33 retypes in a second
+  that took 190 s in an import. Never branch on the version number, and never "fix" a 2025-only
   observation into a universal comment: that is how this one shipped.
 
 - **The tree family's calls left that set in Revit 2025 before they merged**, through a harness that

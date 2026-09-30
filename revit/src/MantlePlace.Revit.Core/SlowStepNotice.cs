@@ -266,8 +266,9 @@ public static class SlowStepNotice
     /// </summary>
     /// <remarks>
     /// 2026-09-30, order <c>4276ef78</c>, the site boundaries cut after the land cover on a
-    /// 74,855-point terrain: 62.2 s for 40, which is 1.6 s apiece. The land cover's 19 before them
-    /// took 73.2 s, 3.9 s apiece, so the per-cut cost is not a constant and none is quoted.
+    /// 74,855-point terrain: 59.6 to 63.3 s for 40 over three runs, about 1.5 s apiece. The land
+    /// cover's 19 before them took 66.7 to 73.2 s, about 3.7 s apiece, so the per-cut cost is not a
+    /// constant and none is quoted.
     /// </remarks>
     public const int MeasuredTypeAtCutSeconds = 62;
 

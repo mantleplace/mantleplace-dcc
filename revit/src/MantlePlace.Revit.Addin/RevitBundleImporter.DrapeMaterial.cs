@@ -355,7 +355,7 @@ internal sealed partial class RevitBundleImporter
         // through a type of its own, built the way the terrain's is (SubDivisionTypeFor). One this
         // import cut was put on that type in the transaction that cut it (TypeForDrapeAtCut), so here
         // it is found on it and only its material's photograph and offset are written: 61 of them
-        // in about 2 s and a 2 s commit, where retyping them here took minutes (revit/CLAUDE.md).
+        // in about 3 s and a 3 s commit, where retyping them here took five minutes (revit/CLAUDE.md).
         foreach (ElementId subdivisionId in DrapeableSubDivisionIds(terrain))
         {
             if (_document.GetElement(subdivisionId) is not Element subdivision)
@@ -470,7 +470,10 @@ internal sealed partial class RevitBundleImporter
     /// </para>
     /// <para>
     /// Named for smooth shading, which the drape turns on. If Revit refuses smoothing, the drape
-    /// names the shared material instead and retypes, as it always did.
+    /// names the shared material instead and retypes, as it always did. An import cancelled before
+    /// the drape leaves the subdivision on this type with its material still bare, the state the
+    /// terrain step leaves the terrain in (<see cref="ImageryToposolidType"/>); importing again drapes
+    /// both.
     /// </para>
     /// <para>
     /// ⛔ Contained, like <see cref="ImageryToposolidType"/>: a type that cannot be prepared is rolled
