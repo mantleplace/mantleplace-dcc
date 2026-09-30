@@ -63,10 +63,13 @@ internal sealed partial class RevitBundleImporter
         }
 
         string orderId = entity.Get<string>(ProvenanceStorage.OrderIdField) ?? string.Empty;
-        Say($"This project already records an import of order {OrNone(orderId)}, "
-            + $"build {OrNone(entity.Get<string>(ProvenanceStorage.JobIdField))}.");
+        string jobId = entity.Get<string>(ProvenanceStorage.JobIdField) ?? string.Empty;
+        Say($"This project already records an import of order {OrNone(orderId)}, build {OrNone(jobId)}.");
 
-        return new RecordedAttribution(orderId, entity.Get<string>(ProvenanceStorage.NoteTextField) ?? string.Empty);
+        return new RecordedAttribution(orderId, entity.Get<string>(ProvenanceStorage.NoteTextField) ?? string.Empty)
+        {
+            JobId = jobId,
+        };
     }
 
     /// <summary>Carries out <see cref="AttributionView.Decide"/>.</summary>
@@ -100,6 +103,7 @@ internal sealed partial class RevitBundleImporter
             [.. notes.Select(note => note.Text)],
             recorded,
             provenance.OrderId,
+            provenance.JobId,
             AttributionView.NoteText(provenance.Sources));
 
         switch (plan.Action)

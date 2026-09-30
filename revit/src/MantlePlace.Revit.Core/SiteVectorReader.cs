@@ -20,6 +20,29 @@ public enum SiteGeometryKinds
     Areas = 2,
 }
 
+/// <summary>What a shared vector file holds, read from its format row's <c>geometry_family</c>.</summary>
+/// <remarks>
+/// A layer that mixes geometry families may be split one file per family (MPB 1.7.0), each row then
+/// naming its family; a consumer reads the rows and takes the file of the family it draws from. A row
+/// that names no family is the whole layer.
+/// </remarks>
+public static class SiteGeometryFamilies
+{
+    /// <summary>
+    /// The geometries a file of <paramref name="geometryFamily"/> holds: lines for <c>line</c>, areas for
+    /// <c>polygon</c>, and none this host draws for <c>point</c>. <c>null</c> for a file that names no
+    /// family, or one this build has not been taught: nothing is known of it, so it is read as the
+    /// whole layer and each feature kept or passed over by its own geometry.
+    /// </summary>
+    public static SiteGeometryKinds? Holds(string? geometryFamily) => geometryFamily switch
+    {
+        "line" => SiteGeometryKinds.Lines,
+        "polygon" => SiteGeometryKinds.Areas,
+        "point" => SiteGeometryKinds.None,
+        _ => null,
+    };
+}
+
 /// <summary>One vertex in the bundle's local frame — east/north metres, Z absolute orthometric.</summary>
 /// <param name="ElevationM">
 /// <c>null</c> when the position carried no third ordinate. Unknown, not zero (<c>HPS-20</c>): the

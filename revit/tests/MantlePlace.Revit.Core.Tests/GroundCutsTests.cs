@@ -32,6 +32,24 @@ internal static class GroundCutsTests
             run.True(GroundCuts.LayerOf(ImportStepKind.ImageryDrape) is null, "nor does the drape");
         });
 
+        run.Case("every step kind agrees between the ground cuts and the vector-layer table", () =>
+        {
+            // Two maps from a step kind: the ground layer it cuts, and the vector layer it places. A
+            // kind in the first and not the second would cut a layer the reader never picked a file
+            // for; the words are one spelling, read from the table.
+            foreach (ImportStepKind kind in Enum.GetValues<ImportStepKind>())
+            {
+                SiteVectorLayer? layer = SiteVectorLayers.Of(kind);
+                if (GroundCuts.LayerOf(kind) is not { } ground)
+                {
+                    continue;
+                }
+
+                run.True(layer?.DrawnFrom == SiteGeometryKinds.Areas, $"{kind}: a ground cut is drawn from areas");
+                run.Equal(GroundLayerWords.For(ground).Label, layer?.Label, $"{kind}: one spelling of its words");
+            }
+        });
+
         run.Case("which layers cut a polygon whole, and which cut every ring", () =>
         {
             run.True(GroundCuts.CutsWholePolygons(GroundLayer.Water), "a water body's holes are islands");

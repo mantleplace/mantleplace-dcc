@@ -128,6 +128,7 @@ public static class BundleManifestReader
         // an integer-era value this reader does not speak.
         manifest.Version = root.Str("version");
         manifest.OrderId = ReadOrderId(root);
+        manifest.FilingKey = ReadFilingKey(root);
 
         // Clean break (HPS-31). Anything that fails to parse as semver — an absent version, an
         // integer from the pre-history, a partial "1.0" — is refused. Deliberately NOT coerced
@@ -177,7 +178,7 @@ public static class BundleManifestReader
 
         ReadBbox(manifest, root);
         ReadLayout(manifest, root);
-        ReadRoadSplines(manifest, root);
+        ReadSharedVectorLayers(manifest, root);
         ReadAttribution(manifest, root);
         ReadTimeZone(manifest, root);
         refusal ??= ReadDelivery(manifest, root);
@@ -211,10 +212,17 @@ public static class BundleManifestReader
 
     /// <summary>
     /// The vault join key. Top-level <c>order_id</c> is authoritative; <c>attribution.order_id</c> is
-    /// the fallback the packager actually emits today. The ETL <c>jobId</c> is deliberately NOT a
-    /// fallback — it changes on every rebuild and joining on it would silently address the wrong
-    /// row (HPS-37).
+    /// the fallback, and only on a bundle whose <c>attribution</c> also carries a <c>job_id</c>. The
+    /// ETL job id is deliberately never a fallback — it changes on every rebuild and joining on it
+    /// would silently address the wrong row (HPS-37).
     /// </summary>
+    /// <remarks>
+    /// Before MPB 1.7.0 <c>attribution.order_id</c> was emitted undeclared and held the packaging JOB
+    /// id; 1.7.0 declares it the curator's order, or null, and adds <c>attribution.job_id</c> beside
+    /// it, whose absence marks the old meaning. So the key is read as the order only where
+    /// <c>job_id</c> stands beside it, and an older bundle with no top-level <c>order_id</c> has no
+    /// order from here. A null order reads as none.
+    /// </remarks>
     private static string ReadOrderId(JsonElement root)
     {
         string orderId = root.Str("order_id");
@@ -223,7 +231,26 @@ public static class BundleManifestReader
             return orderId;
         }
 
-        return root.Object("attribution")?.Str("order_id") ?? string.Empty;
+        return root.Object("attribution") is { } attribution && attribution.OptionalStr("job_id") is not null
+            ? attribution.Str("order_id")
+            : string.Empty;
+    }
+
+    /// <summary>
+    /// What this host files the bundle under (<see cref="BundleManifest.FilingKey"/>): the top-level
+    /// <c>order_id</c>, and otherwise <c>attribution.order_id</c> whatever it means.
+    /// </summary>
+    /// <remarks>
+    /// Exactly what <see cref="ReadOrderId"/> returned before MPB 1.7.0 gave the attribution key a
+    /// second meaning, kept so that a bundle is filed where every earlier import filed it. It is a
+    /// filing key and nothing else: the vault is joined on <see cref="ReadOrderId"/> alone.
+    /// </remarks>
+    private static string ReadFilingKey(JsonElement root)
+    {
+        string orderId = root.Str("order_id");
+        return !string.IsNullOrEmpty(orderId)
+            ? orderId
+            : root.Object("attribution")?.Str("order_id") ?? string.Empty;
     }
 
     /// <summary>
@@ -341,22 +368,30 @@ public static class BundleManifestReader
     }
 
     /// <summary>
-    /// Selects by layer name AND format: the first <c>road_splines</c> layer, then the first
-    /// <c>geojson</c> entry inside it. A layer that ships only formats this host cannot read yields
-    /// no splines — there is no fallback to gpkg, because "wrong format" and "absent" have the same
-    /// correct outcome here and a fallback would hand the importer bytes it cannot parse.
+    /// The shared <c>vector</c> layers this host places, each selected by name, format AND geometry
+    /// family, and whether the base <c>road</c> layer is there. A layer that ships only formats this
+    /// host cannot read yields nothing — there is no fallback to gpkg, because "wrong format" and
+    /// "absent" have the same correct outcome here and a fallback would hand the importer bytes it
+    /// cannot parse.
     /// </summary>
-    private static void ReadRoadSplines(BundleManifest manifest, JsonElement root)
+    /// <remarks>
+    /// Each layer is read for the geometry its import step draws from (<see cref="SiteVectorLayers"/>);
+    /// on a layer split by geometry family, that is which of its files each step takes.
+    /// </remarks>
+    private static void ReadSharedVectorLayers(BundleManifest manifest, JsonElement root)
     {
-        manifest.RoadSplines = ReadVectorLayer(root, "road_splines");
+        HashSet<string> nothingToPlace = new(StringComparer.Ordinal);
+
+        manifest.RoadSplines = ReadVectorLayer(root, SiteVectorLayers.RoadSplines, nothingToPlace);
         manifest.RoadSplinesPath = manifest.RoadSplines?.Path ?? string.Empty;
         manifest.RoadSplinesSha256 = manifest.RoadSplines?.Sha256 ?? string.Empty;
         manifest.HasRoadSplines = !string.IsNullOrEmpty(manifest.RoadSplinesPath);
 
-        manifest.LandUse = ReadVectorLayer(root, "land_use");
-        manifest.LandCover = ReadVectorLayer(root, "land_cover");
-        manifest.Water = ReadVectorLayer(root, "water");
-        manifest.RoadPolygons = ReadVectorLayer(root, "road_polygons");
+        manifest.LandUse = ReadVectorLayer(root, SiteVectorLayers.LandUse, nothingToPlace);
+        manifest.LandCover = ReadVectorLayer(root, SiteVectorLayers.LandCover, nothingToPlace);
+        manifest.Water = ReadVectorLayer(root, SiteVectorLayers.Water, nothingToPlace);
+        manifest.RoadPolygons = ReadVectorLayer(root, SiteVectorLayers.RoadPolygons, nothingToPlace);
+        manifest.SharedLayersWithNothingToPlace = nothingToPlace;
 
         // Not an artifact: this host reads no road centreline out of the base layer (it takes the
         // draped road_splines instead). All it is asked is whether the layer is there, because that
@@ -385,17 +420,32 @@ public static class BundleManifestReader
     }
 
     /// <summary>
-    /// Selects one <c>vector</c> layer by layer name AND format: the first layer of that name, then
-    /// the first <c>geojson</c> entry inside it. A layer that ships only formats this host cannot
-    /// read yields nothing — there is no fallback to gpkg, because "wrong format" and "absent" have
-    /// the same correct outcome here and a fallback would hand the importer bytes it cannot parse.
+    /// Selects one <c>vector</c> layer by layer name, format AND geometry family: the first layer of
+    /// that name, then the <c>geojson</c> file inside it holding the geometry its step draws from.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The format table's <c>path</c> IS the manifest pointer for these layers (<c>HPS-32</c>) — the
     /// top-level <c>layout.vector</c> names the directory, not the file, so there is no layout key
     /// to prefer over it.
+    /// </para>
+    /// <para>
+    /// A layer that mixes geometry families may ship one file per family, each row naming its
+    /// <c>geometry_family</c>, and a consumer reads all of the rows: the first <c>geojson</c> row is
+    /// then one family of several, and taking it for the water bodies would take the streams and drop
+    /// every lake. So the rows are looked through for the one naming the wanted family. Failing that,
+    /// a row naming no family is the whole layer, and so is a row naming a family this build does not
+    /// know or one written as something other than a string (<c>spec/compatibility.md</c> §3): the file
+    /// is read, and each feature kept or passed over by its own geometry, as in an unsplit file. A row
+    /// naming another family this build knows is never taken — a line file is not a water body — and a
+    /// layer whose rows all do is added to <paramref name="nothingToPlace"/>, so the planner can say
+    /// the bundle has none rather than send the curator to a vault that cannot supply one.
+    /// </para>
     /// </remarks>
-    private static BundleArtifact? ReadVectorLayer(JsonElement root, string layerName)
+    private static BundleArtifact? ReadVectorLayer(
+        JsonElement root,
+        SiteVectorLayer wanted,
+        HashSet<string> nothingToPlace)
     {
         if (root.Object("vector")?.Array("layers") is not { } layers)
         {
@@ -405,11 +455,14 @@ public static class BundleManifestReader
         foreach (JsonElement layer in layers.EnumerateArray())
         {
             if (layer.ValueKind != JsonValueKind.Object
-                || !string.Equals(layer.Str("name"), layerName, StringComparison.Ordinal))
+                || !string.Equals(layer.Str("name"), wanted.Name, StringComparison.Ordinal))
             {
                 continue;
             }
 
+            bool listedGeojson = false;
+            bool wantedWithoutPath = false;
+            BundleArtifact? wholeLayer = null;
             if (layer.Array("formats") is { } formats)
             {
                 foreach (JsonElement format in formats.EnumerateArray())
@@ -420,21 +473,40 @@ public static class BundleManifestReader
                         continue;
                     }
 
-                    string path = format.Str("path");
-                    return string.IsNullOrWhiteSpace(path)
-                        ? null
-                        : new BundleArtifact
-                        {
-                            Path = path,
-                            Sha256 = format.OptionalStr("sha256"),
-                            Format = "geojson",
+                    listedGeojson = true;
+                    SiteGeometryKinds? holds = SiteGeometryFamilies.Holds(GeometryFamily(format));
+                    if (holds is { } known && (known & wanted.DrawnFrom) == 0)
+                    {
+                        continue;
+                    }
 
-                            // RFC 7946 fixes the CRS at WGS84 lon/lat and the bundle's layers say so
-                            // in their own `crs` member. Stated rather than left blank so the
-                            // planner branches on a value instead of on the layer's name.
-                            HorizontalFrame = GeographicFrame,
-                        };
+                    // A row with no path points at nothing: it neither ends the search nor stands in
+                    // for a later row as the whole layer.
+                    if (SharedLayerFile(format) is not { } file)
+                    {
+                        wantedWithoutPath = true;
+                        continue;
+                    }
+
+                    if (holds is not null)
+                    {
+                        return file;
+                    }
+
+                    wholeLayer ??= file;
                 }
+            }
+
+            if (wholeLayer is not null)
+            {
+                return wholeLayer;
+            }
+
+            // A wanted file that names no path is a broken pointer, which keeps the vault's remedy;
+            // only a layer with no file of the wanted family at all has nothing to place.
+            if (listedGeojson && !wantedWithoutPath)
+            {
+                nothingToPlace.Add(wanted.Name);
             }
 
             // Only the first layer of that name is ever considered, with or without a geojson.
@@ -443,6 +515,34 @@ public static class BundleManifestReader
 
         return null;
     }
+
+    /// <summary>One file of the shared set, or <c>null</c> when its row names no path.</summary>
+    private static BundleArtifact? SharedLayerFile(JsonElement format)
+    {
+        string path = format.Str("path");
+        return string.IsNullOrWhiteSpace(path)
+            ? null
+            : new BundleArtifact
+            {
+                Path = path,
+                Sha256 = format.OptionalStr("sha256"),
+                Format = "geojson",
+
+                // RFC 7946 fixes the CRS at WGS84 lon/lat and the bundle's layers say so in their own
+                // `crs` member. Stated rather than left blank so the planner branches on a value
+                // instead of on the layer's name.
+                HorizontalFrame = GeographicFrame,
+            };
+    }
+
+    /// <summary>
+    /// A format row's <c>geometry_family</c> when it is a string, and <c>null</c> otherwise — absent,
+    /// a JSON null, or a value of another kind, each of which leaves the file read as the whole layer.
+    /// </summary>
+    private static string? GeometryFamily(JsonElement format)
+        => format.TryGetProperty("geometry_family", out JsonElement family) && family.ValueKind == JsonValueKind.String
+            ? family.GetString()
+            : null;
 
     /// <summary>
     /// Reads <c>delivery</c>. An unsupported enum value fails closed and names the offending value
@@ -716,11 +816,11 @@ public static class BundleManifestReader
 
         manifest.VectorsFromOwnBlock = true;
 
-        manifest.RoadSplines = ReadOwnVectorLayer(layers, "road_splines");
-        manifest.LandUse = ReadOwnVectorLayer(layers, "land_use");
-        manifest.LandCover = ReadOwnVectorLayer(layers, "land_cover");
-        manifest.Water = ReadOwnVectorLayer(layers, "water");
-        manifest.RoadPolygons = ReadOwnVectorLayer(layers, "road_polygons");
+        manifest.RoadSplines = ReadOwnVectorLayer(layers, SiteVectorLayers.RoadSplines.Name);
+        manifest.LandUse = ReadOwnVectorLayer(layers, SiteVectorLayers.LandUse.Name);
+        manifest.LandCover = ReadOwnVectorLayer(layers, SiteVectorLayers.LandCover.Name);
+        manifest.Water = ReadOwnVectorLayer(layers, SiteVectorLayers.Water.Name);
+        manifest.RoadPolygons = ReadOwnVectorLayer(layers, SiteVectorLayers.RoadPolygons.Name);
     }
 
     /// <summary>
@@ -744,8 +844,8 @@ public static class BundleManifestReader
     {
         if (RevitHostBlock(root)?.Object("vectors")?.Array("layers") is { } layers)
         {
-            manifest.FloodZones = ReadOwnVectorLayer(layers, "flood_zones");
-            manifest.SteepGround = ReadOwnVectorLayer(layers, "steep_slope");
+            manifest.FloodZones = ReadOwnVectorLayer(layers, SiteVectorLayers.FloodZones.Name);
+            manifest.SteepGround = ReadOwnVectorLayer(layers, SiteVectorLayers.SteepGround.Name);
         }
 
         if (root.Object("flood")?.Object("nfhl") is { } nfhl)

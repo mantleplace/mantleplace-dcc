@@ -659,6 +659,164 @@ internal static class ManifestReaderTests
             run.True(manifest.TimeZone is null, "only location.time_zone is read");
         });
 
+        run.Case("attribution.order_id is the order only when attribution.job_id stands beside it (MPB 1.7.0)", () =>
+        {
+            // Before 1.7.0 the key was emitted undeclared and held the packaging JOB id; 1.7.0 declares
+            // it the order and adds attribution.job_id, whose absence marks the old meaning. A job id
+            // changes on every rebuild, so joining a vault row on it would address the wrong one: an
+            // old bundle with no top-level order_id gives no order at all.
+            const string Old = """, "attribution": {"order_id": "job-7", "sources": []}""";
+            const string New = """, "attribution": {"job_id": "job-7", "order_id": "ord-3", "sources": []}""";
+            const string NewUnknown = """, "attribution": {"job_id": "job-7", "order_id": null, "sources": []}""";
+            const string TopLevel = """, "order_id": "ord-1" """;
+
+            run.Equal(OrderIdOf("1.6.0", Old), string.Empty, "an old bundle's key is the job id, and is not read as the order");
+            run.Equal(OrderIdOf("1.7.0", New), "ord-3", "beside job_id it is the order");
+            run.Equal(OrderIdOf("1.7.0", NewUnknown), string.Empty, "a null order is no order");
+            run.Equal(OrderIdOf("1.6.0", TopLevel + Old), "ord-1", "the top-level order_id wins over an old bundle's key");
+            run.Equal(OrderIdOf("1.7.0", TopLevel + New), "ord-1", "and over a new one's");
+
+            // Filing is not joining. Every earlier import filed an old bundle -- its cache folder and
+            // the stem its elements are stamped with -- under the id attribution.order_id carries, so
+            // that stays its identity key: filed anywhere else, a re-import would be a stranger to
+            // the ground it already placed.
+            run.Equal(FilingKeyOf("1.6.0", Old), "job-7", "an old bundle is still filed under the id it always was");
+            run.Equal(FilingKeyOf("1.7.0", New), "ord-3", "a new one under its order");
+            run.Equal(FilingKeyOf("1.7.0", NewUnknown), string.Empty, "a null order files nothing");
+            run.Equal(FilingKeyOf("1.6.0", TopLevel + Old), "ord-1", "and the top-level order_id wins here too");
+        });
+
+        run.Case("a shared layer split by geometry family gives each consumer the family it places (MPB 1.7.0)", () =>
+        {
+            // One file per family, and every row read. The four layers cut as subdivisions are drawn
+            // from areas and take the polygon file; the road centrelines are drawn from lines and take
+            // the line file; wherever in the rows each sits. A row naming no family is the whole layer.
+            BundleManifest manifest = BundleManifestReader.Parse(
+                """
+                  {
+                    "version": "1.7.0",
+                    "hosts": {"unreal": {}},
+                    "vector": {"layers": [
+                      {"name": "water", "formats": [
+                        {"format": "geojson", "path": "Vector/Water_line.geojson", "geometry_family": "line"},
+                        {"format": "geojson", "path": "Vector/Water_polygon.geojson", "geometry_family": "polygon"},
+                        {"format": "gpkg", "path": "Vector/Water.gpkg", "tables": ["Water_line", "Water_polygon"]}]},
+                      {"name": "land_use", "formats": [
+                        {"format": "geojson", "path": "Vector/LandUse_polygon.geojson", "geometry_family": "polygon"},
+                        {"format": "geojson", "path": "Vector/LandUse_line.geojson", "geometry_family": "line"},
+                        {"format": "geojson", "path": "Vector/LandUse_point.geojson", "geometry_family": "point"}]},
+                      {"name": "road_splines", "formats": [
+                        {"format": "geojson", "path": "Vector/RoadSplines_polygon.geojson", "geometry_family": "polygon"},
+                        {"format": "geojson", "path": "Vector/RoadSplines_line.geojson", "geometry_family": "line"}]},
+                      {"name": "road_polygons", "formats": [
+                        {"format": "geojson", "path": "Vector/RoadPolygons.geojson"}]}
+                    ]}
+                  }
+                """);
+
+            run.Equal(manifest.Water?.Path, "Vector/Water_polygon.geojson", "water bodies take the polygon file, listed second");
+            run.Equal(manifest.LandUse?.Path, "Vector/LandUse_polygon.geojson", "site boundaries take the polygon file, listed first");
+            run.Equal(manifest.RoadSplines?.Path, "Vector/RoadSplines_line.geojson", "road centrelines take the line file");
+            run.Equal(manifest.RoadPolygons?.Path, "Vector/RoadPolygons.geojson", "a row naming no family is the whole layer");
+        });
+
+        run.Case("a split layer with no file of the family its consumer places gives that consumer nothing", () =>
+        {
+            // A line file is not a water body and points are drawn by nothing here: a consumer never
+            // takes another family's file, as it never takes another format.
+            BundleManifest manifest = BundleManifestReader.Parse(
+                """
+                  {
+                    "version": "1.7.0",
+                    "hosts": {"unreal": {}},
+                    "vector": {"layers": [
+                      {"name": "water", "formats": [
+                        {"format": "geojson", "path": "Vector/Water_line.geojson", "geometry_family": "line"},
+                        {"format": "geojson", "path": "Vector/Water_point.geojson", "geometry_family": "point"}]},
+                      {"name": "land_cover", "formats": [
+                        {"format": "geojson", "path": "Vector/LandCover_point.geojson", "geometry_family": "point"}]}
+                    ]}
+                  }
+                """);
+
+            run.True(manifest.Water is null, "no polygon file, so no water bodies");
+            run.True(manifest.LandCover is null, "a point file is no land cover");
+            run.True(manifest.SharedLayersWithNothingToPlace.Contains("water"), "and the reader says why, for the planner");
+            run.True(manifest.SharedLayersWithNothingToPlace.Contains("land_cover"), "for each such layer");
+        });
+
+        run.Case("a family this build does not know, or one written wrongly, is read as the whole layer", () =>
+        {
+            // compatibility.md section 3: a value nobody taught this reader is not a statement that the
+            // file holds nothing it places. The file is read like one naming no family, and each
+            // feature is kept or passed over by its own geometry, as in an unsplit file. A file naming
+            // the wanted family exactly still wins wherever it sits.
+            BundleManifest manifest = BundleManifestReader.Parse(
+                """
+                  {
+                    "version": "1.7.0",
+                    "hosts": {"unreal": {}},
+                    "vector": {"layers": [
+                      {"name": "water", "formats": [
+                        {"format": "geojson", "path": "Vector/Water_line.geojson", "geometry_family": "line"},
+                        {"format": "geojson", "path": "Vector/Water_surface.geojson", "geometry_family": "surface"}]},
+                      {"name": "land_cover", "formats": [
+                        {"format": "geojson", "path": "Vector/LandCover_7.geojson", "geometry_family": 7}]},
+                      {"name": "land_use", "formats": [
+                        {"format": "geojson", "path": "Vector/LandUse_surface.geojson", "geometry_family": "surface"},
+                        {"format": "geojson", "path": "Vector/LandUse_polygon.geojson", "geometry_family": "polygon"}]}
+                    ]}
+                  }
+                """);
+
+            run.Equal(manifest.Water?.Path, "Vector/Water_surface.geojson", "an unknown family is read, not reported as no areas");
+            run.Equal(manifest.LandCover?.Path, "Vector/LandCover_7.geojson", "and so is a family that is not a string");
+            run.Equal(manifest.LandUse?.Path, "Vector/LandUse_polygon.geojson", "the file naming the wanted family wins");
+            run.Equal(manifest.SharedLayersWithNothingToPlace.Count, 0, "none of them is said to hold nothing");
+        });
+
+        run.Case("a row with no path is passed over when a layer's file is chosen", () =>
+        {
+            // A row with no path points at nothing. It neither ends the search for a later row that
+            // does, nor stands in for one as the whole layer. A layer whose only file of the wanted
+            // family has no path is a broken pointer, not a layer with nothing to place, so it keeps
+            // the vault's remedy.
+            BundleManifest manifest = BundleManifestReader.Parse(
+                """
+                  {
+                    "version": "1.7.0",
+                    "hosts": {"unreal": {}},
+                    "vector": {"layers": [
+                      {"name": "water", "formats": [
+                        {"format": "geojson", "geometry_family": "polygon"},
+                        {"format": "geojson", "path": "Vector/Water_polygon.geojson", "geometry_family": "polygon"}]},
+                      {"name": "land_use", "formats": [
+                        {"format": "geojson", "path": ""},
+                        {"format": "geojson", "path": "Vector/LandUse.geojson"}]},
+                      {"name": "land_cover", "formats": [
+                        {"format": "geojson", "path": "Vector/LandCover.geojson", "geometry_family": ""}]},
+                      {"name": "road_polygons", "formats": [
+                        {"format": "geojson", "geometry_family": "polygon"},
+                        {"format": "geojson", "path": "Vector/RoadPolygons_line.geojson", "geometry_family": "line"}]}
+                    ]}
+                  }
+                """);
+
+            run.Equal(manifest.Water?.Path, "Vector/Water_polygon.geojson", "a pathless file of the wanted family does not end the search");
+            run.Equal(manifest.LandUse?.Path, "Vector/LandUse.geojson", "nor does a pathless whole-layer row stand in for a later one");
+            run.Equal(manifest.LandCover?.Path, "Vector/LandCover.geojson", "an empty family names none this build knows: the whole layer");
+            run.True(manifest.RoadPolygons is null, "a wanted file with no path gives nothing");
+            run.False(manifest.SharedLayersWithNothingToPlace.Contains("road_polygons"), "and is a broken pointer, not a layer with nothing to place");
+        });
+
         return run.Report("manifest reader");
     }
+
+    private static string OrderIdOf(string version, string members) => ParseWith(version, members).OrderId;
+
+    private static string FilingKeyOf(string version, string members) => ParseWith(version, members).FilingKey;
+
+    private static BundleManifest ParseWith(string version, string members)
+        => BundleManifestReader.Parse(
+            "{\"version\": \"" + version + "\", \"hosts\": {\"unreal\": {}}" + members + "}");
 }

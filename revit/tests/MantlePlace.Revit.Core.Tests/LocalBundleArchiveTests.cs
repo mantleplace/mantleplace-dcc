@@ -83,6 +83,30 @@ internal static class LocalBundleArchiveTests
                 "different orders, different roots");
         });
 
+        run.Case("a bundle from before MPB 1.7.0 keeps the folder and stem every earlier import gave it", () =>
+        {
+            // Its attribution.order_id is the packaging job's id, so it is no longer the order -- but
+            // every earlier import filed the bundle, and stamped its ground, roads and boundaries,
+            // under it. Filing it under the zip's path instead would make a re-import a stranger to
+            // its own elements, and place them all a second time.
+            const string Legacy = "job-legacy-7";
+            string zip = WriteBundle(
+                Path.Combine(sandbox, "legacy", "download.zip"),
+                orderId: null,
+                manifestJson: $$"""
+                    {
+                      "version": "1.6.0",
+                      "attribution": { "order_id": "{{Legacy}}", "sources": [] },
+                      "packaging": { "delivery_model": "base_on_demand" }
+                    }
+                    """);
+
+            using LocalBundleArchive archive = LocalBundleArchive.Open(zip, cacheRoot);
+
+            run.Equal(archive.Layout.Root, BundleCacheLayout.ForOrder(Legacy, cacheRoot).Root, "the same folder, and so the same stem");
+            run.Equal(archive.Manifest?.OrderId, string.Empty, "while the job id is not taken for the order");
+        });
+
         run.Case("a zip with no manifest falls back to its full path, not its stem", () =>
         {
             string first = WriteBundle(Path.Combine(sandbox, "e", "download.zip"), orderId: null, withManifest: false);
@@ -374,7 +398,7 @@ internal static class LocalBundleArchiveTests
     }
 
     /// <summary>Writes a bundle zip with the entries the import path actually reaches for.</summary>
-    private static string WriteBundle(string zipPath, string? orderId, bool withManifest = true)
+    private static string WriteBundle(string zipPath, string? orderId, bool withManifest = true, string? manifestJson = null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(zipPath)!);
 
@@ -383,7 +407,7 @@ internal static class LocalBundleArchiveTests
 
         if (withManifest)
         {
-            WriteEntry(builder, "Metadata/manifest.json", ManifestJson(orderId));
+            WriteEntry(builder, "Metadata/manifest.json", manifestJson ?? ManifestJson(orderId));
         }
 
         WriteEntry(builder, "Surface/SurfacePoints.csv", PointsCsv);

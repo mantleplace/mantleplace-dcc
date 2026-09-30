@@ -34,6 +34,7 @@ internal static class ManifestConformanceTests
         "roadSplinesSha256",
         "hasRoadSplines",
         "revitRoadSplinesPath",
+        "revitWaterPath",
         "revitDrapePath",
         "revitContoursPath",
         "revitContoursVerticalUnits",
@@ -323,6 +324,13 @@ internal static class ManifestConformanceTests
         if (ConformanceCorpus.WantsString(corpusCase, "revitRoadSplinesPath", out string revitRoadSplinesPath))
         {
             run.Equal(manifest.RoadSplines?.Path ?? string.Empty, revitRoadSplinesPath, "revitRoadSplinesPath");
+        }
+
+        // The file the water bodies are cut from: the polygon file of a layer split by geometry
+        // family (MPB 1.7.0), wherever in the layer's rows it sits.
+        if (ConformanceCorpus.WantsString(corpusCase, "revitWaterPath", out string revitWaterPath))
+        {
+            run.Equal(manifest.Water?.Path ?? string.Empty, revitWaterPath, "revitWaterPath");
         }
 
         if (ConformanceCorpus.WantsString(corpusCase, "revitDrapePath", out string revitDrapePath))

@@ -63,10 +63,10 @@ public sealed record GroundLayerWords(string StampKind, string MaterialKind, str
     /// </remarks>
     public static GroundLayerWords For(GroundLayer layer) => layer switch
     {
-        GroundLayer.LandUse => new("Site Boundary", "boundary", "site boundaries", "site boundary"),
-        GroundLayer.LandCover => new("Land Cover", "land cover", "land cover", "land cover"),
-        GroundLayer.Water => new("Water", "water body", "water bodies", "water"),
-        GroundLayer.RoadSurface => new("Road Surface", "road surface", "road surfaces", "road"),
+        GroundLayer.LandUse => new("Site Boundary", "boundary", SiteVectorLayers.LandUse.Label, "site boundary"),
+        GroundLayer.LandCover => new("Land Cover", "land cover", SiteVectorLayers.LandCover.Label, "land cover"),
+        GroundLayer.Water => new("Water", "water body", SiteVectorLayers.Water.Label, "water"),
+        GroundLayer.RoadSurface => new("Road Surface", "road surface", SiteVectorLayers.RoadPolygons.Label, "road"),
         _ => throw new ArgumentOutOfRangeException(
             nameof(layer),
             layer,
