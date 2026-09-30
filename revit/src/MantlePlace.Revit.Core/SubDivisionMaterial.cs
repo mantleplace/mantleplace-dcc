@@ -27,12 +27,11 @@ public enum SubDivisionMaterialRoute
 /// the instance parameter is absent, and a retype onto a duplicated type holds. 2026 added a
 /// <c>CreateSubDivision</c> overload that takes the type. The plugin compiles against 2025's API, so
 /// it calls the overload that takes the default and retypes afterwards: in the transaction that cut
-/// the subdivision when the drape is planned (<see cref="TypeAtCut"/>), and in the drape otherwise.
+/// the subdivision when the drape is planned (<see cref="TakesTypeAtCut"/>), and in the drape otherwise.
 /// </para>
 /// <para>
-/// The instance write is asked first because it is free, and a retype is not: 33 of them took about
-/// 190 s of a real 2027 import on a 74,852-point terrain, most of it in the commit
-/// (<see cref="SlowStepNotice.ForSubDivisionRetypes"/>).
+/// The instance write is asked first because it is free, and a retype is not: what a retype costs,
+/// and where, is measured in revit/CLAUDE.md.
 /// </para>
 /// </remarks>
 public static class SubDivisionMaterial
@@ -85,12 +84,12 @@ public static class SubDivisionMaterial
     /// <param name="drapePlanned">Whether the plan's drape will run (<see cref="ImportStep.DrapePlanned"/>).</param>
     /// <remarks>
     /// Only a typed element, and only when a drape will fill the type's photograph layer. The type is
-    /// the one the drape would have retyped it onto, named for smooth shading because the drape turns
-    /// smoothing on (ADR 0008); a drape that finds smoothing refused retypes it as before
+    /// the one the drape would have retyped it onto, named for the shading settled before the first
+    /// cut, so the drape's own name for it matches and it has nothing to retype
     /// (<see cref="NeedsRetype"/>). A typeless element keeps its instance material, which the drape
     /// writes.
     /// </remarks>
-    public static bool TypeAtCut(SubDivisionMaterialRoute route, bool drapePlanned)
+    public static bool TakesTypeAtCut(SubDivisionMaterialRoute route, bool drapePlanned)
         => drapePlanned && route == SubDivisionMaterialRoute.Type;
 
     /// <summary>

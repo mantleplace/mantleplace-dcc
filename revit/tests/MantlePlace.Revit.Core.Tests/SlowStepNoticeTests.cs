@@ -224,33 +224,83 @@ internal static class SlowStepNoticeTests
                 "an unknown count is said, never invented");
         });
 
-        run.Case("a polygon step that types its cuts for the drape says so, and for which Revit", () =>
+        run.Case("a cut that takes a type says the typing is coming, against what was measured", () =>
         {
             // The retype the drape used to announce now happens as each subdivision is cut, so the
-            // wait moved into the polygon step and the sentence moved with it.
-            string? notice = SlowStepNotice.ForTypesAtCut(40);
+            // wait moved into the polygon step and the sentence moved with it. Said once the first
+            // cut has shown this Revit gives a subdivision a type, so it names no version.
+            string? notice = SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Type, drapePlanned: true, 40, 12_000);
             run.True(notice is not null, "announced");
             run.Contains(notice, "40 subdivision(s)", "it names how many are coming");
             run.Contains(notice, "as it is cut", "it says when the type is given");
-            run.Contains(notice, "Revit 2026 and later", "it names the Revit that does this");
-            run.Contains(notice, "Revit 2025", "and says 2025 has none of it, so a 2025 curator is not promised a wait");
-            run.Contains(
-                notice,
-                SlowStepNotice.MeasuredTypeAtCutSubDivisions.ToString("N0", CultureInfo.InvariantCulture) + " subdivisions",
-                "the measured count");
-            run.Contains(
-                notice,
-                SlowStepNotice.MeasuredTypeAtCutSeconds.ToString("N0", CultureInfo.InvariantCulture) + " seconds",
-                "the measured duration");
+            run.Contains(notice, "74,855", "the terrain it was measured on");
+            run.Contains(notice, "This terrain has 12,000 points", "this terrain, beside it");
+            foreach (double seconds in (double[])[
+                SlowStepNotice.MeasuredTypeAtCutSecondsLandCover,
+                SlowStepNotice.MeasuredTypeAtCutSecondsSiteBoundaries,
+                SlowStepNotice.MeasuredTypeAtCutSecondsRoadSurfaces])
+            {
+                run.Contains(
+                    notice,
+                    seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s",
+                    "each layer's measured seconds a subdivision, since they differ threefold");
+            }
+
             run.False(
                 notice is not null && notice.Contains("minutes", StringComparison.Ordinal),
                 "no duration is predicted for this layer");
+            run.Contains(
+                SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Type, drapePlanned: true, 5, null),
+                "not known to this run",
+                "an unknown count is said, never invented");
         });
 
-        run.Case("no new cut types nothing and says nothing", () =>
+        run.Case("nothing to type says nothing", () =>
         {
-            run.True(SlowStepNotice.ForTypesAtCut(0) is null, "a re-import that cuts nothing is silent");
-            run.True(SlowStepNotice.ForTypesAtCut(-1) is null, "a negative count is silent");
+            // Revit 2025: the first cut reports no type and keeps its instance material.
+            run.True(
+                SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Instance, drapePlanned: true, 40, 74_855) is null,
+                "a typeless cut is not typed, so nothing is announced");
+            run.True(
+                SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Type, drapePlanned: false, 40, 74_855) is null,
+                "no drape, no typing");
+            run.True(
+                SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Refused, drapePlanned: true, 40, 74_855) is null,
+                "an element with neither route");
+            run.True(
+                SlowStepNotice.ForTypesAtCut(SubDivisionMaterialRoute.Type, drapePlanned: true, 0, 74_855) is null,
+                "a re-import that cuts nothing");
+        });
+
+        run.Case("a drape over subdivisions already on their types announces its commit", () =>
+        {
+            // With every cut typed as it was cut, the drape has no retype to announce, and its one
+            // commit is still the longest wait left in the step.
+            string? notice = SlowStepNotice.ForDrapeCommit(405, subDivisionsToRetype: 0, terrainRetype: false, 12_000);
+            run.True(notice is not null, "announced");
+            run.Contains(notice, "405 subdivision(s)", "it names how many");
+            run.Contains(notice, "74,855", "the terrain it was measured on");
+            run.Contains(notice, "This terrain has 12,000 points", "this terrain, beside it");
+            run.Contains(
+                notice,
+                SlowStepNotice.MeasuredDrapeCommitSeconds.ToString("N0", CultureInfo.InvariantCulture) + " seconds",
+                "the measured commit");
+            run.Contains(notice, "not responding", "it says what Revit is about to look like");
+            run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
+            run.False(
+                notice is not null && notice.Contains("minutes", StringComparison.Ordinal),
+                "no duration is predicted for this terrain");
+        });
+
+        run.Case("the drape's commit is announced once, and not where nothing new waits", () =>
+        {
+            // Revit 2025: every subdivision takes the photograph on the instance, the commit is
+            // seconds, and nothing about it changed.
+            run.True(SlowStepNotice.ForDrapeCommit(0, 0, false, 74_855) is null, "no typed subdivision, no notice");
+            run.True(SlowStepNotice.ForDrapeCommit(10, 5, false, 74_855) is null,
+                "the retype notice already describes this commit");
+            run.True(SlowStepNotice.ForDrapeCommit(10, 0, true, 74_855) is null,
+                "and so does the terrain's retype notice");
         });
 
         run.Case("every other step stays quiet", () =>

@@ -81,35 +81,37 @@ internal static class SubDivisionMaterialTests
 
         run.Case("a typed cut takes its imagery type as it is cut, and only when the drape will fill it", () =>
         {
-            run.True(SubDivisionMaterial.TypeAtCut(SubDivisionMaterialRoute.Type, drapePlanned: true),
+            run.True(SubDivisionMaterial.TakesTypeAtCut(SubDivisionMaterialRoute.Type, drapePlanned: true),
                 "2026 and later: given its type in the transaction that cut it, not retyped by the drape");
 
             // 2025's subdivision is typeless and wears the photograph on the instance, which the
             // drape writes. Nothing is made for it at the cut, so 2025 imports exactly as before.
-            run.False(SubDivisionMaterial.TypeAtCut(SubDivisionMaterialRoute.Instance, drapePlanned: true),
+            run.False(SubDivisionMaterial.TakesTypeAtCut(SubDivisionMaterialRoute.Instance, drapePlanned: true),
                 "a typeless cut keeps its instance material");
-            run.False(SubDivisionMaterial.TypeAtCut(SubDivisionMaterialRoute.Type, drapePlanned: false),
+            run.False(SubDivisionMaterial.TakesTypeAtCut(SubDivisionMaterialRoute.Type, drapePlanned: false),
                 "no drape, no type: its photograph layer would stay blank");
-            run.False(SubDivisionMaterial.TypeAtCut(SubDivisionMaterialRoute.Refused, drapePlanned: true),
+            run.False(SubDivisionMaterial.TakesTypeAtCut(SubDivisionMaterialRoute.Refused, drapePlanned: true),
                 "an element with neither route gets nothing");
         });
 
-        run.Case("a cut typed for smooth shading leaves the drape nothing to retype, unless smoothing was refused", () =>
+        run.Case("a cut typed for the shading settled before it leaves the drape nothing to retype", () =>
         {
-            // The cut is typed before the drape settles smoothing, and for the smoothed name: the
-            // drape turns smoothing on (ADR 0008). If Revit refuses it, the drape names the shared
-            // material instead and retypes, which is slow and still correct.
-            string atCut = GroundMaterialNames.PerSubDivision(Imagery, GroundLayer.LandCover, "7", "grass");
+            // Smooth shading is settled before the first cut, so the cut and the drape name the same
+            // material whichever way it went, and the drape finds every cut already on its type.
+            string smooth = GroundMaterialNames.PerSubDivision(Imagery, GroundLayer.LandCover, "7", "grass");
+            string flat = GroundMaterialNames.Shared(Imagery, "grass");
 
             run.False(
-                SubDivisionMaterial.NeedsRetype(SubDivisionMaterialRoute.Type, SubDivisionMaterial.TypeName(atCut), atCut),
+                SubDivisionMaterial.NeedsRetype(SubDivisionMaterialRoute.Type, SubDivisionMaterial.TypeName(smooth), smooth),
                 "smooth shading: the drape writes the photograph and nothing else");
+            run.False(
+                SubDivisionMaterial.NeedsRetype(SubDivisionMaterialRoute.Type, SubDivisionMaterial.TypeName(flat), flat),
+                "flat shading, where Revit refused smoothing: the same");
+
+            // Why it is settled first: a cut named for the other shading would be retyped.
             run.True(
-                SubDivisionMaterial.NeedsRetype(
-                    SubDivisionMaterialRoute.Type,
-                    SubDivisionMaterial.TypeName(atCut),
-                    GroundMaterialNames.Shared(Imagery, "grass")),
-                "flat shading: the drape still moves it onto the shared material's type");
+                SubDivisionMaterial.NeedsRetype(SubDivisionMaterialRoute.Type, SubDivisionMaterial.TypeName(smooth), flat),
+                "a cut named for smoothing that the drape finds flat is moved again");
         });
 
         run.Case("a type whose top layer is already a photograph is recognised, whichever bundle made it", () =>

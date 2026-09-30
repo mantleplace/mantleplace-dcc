@@ -69,19 +69,19 @@ public static class BundleImportPlanner
         List<ImportStep> drapeSteps = [];
         List<SkippedImport> drapeSkipped = [];
         PlanImageryDrape(manifest, entries, drapeSteps, drapeSkipped, probeImageSize);
-        bool drapeRuns = drapeSteps.Count > 0 && choice.Includes(ImportLayer.ImageryDrape);
+        bool drapePlanned = drapeSteps.Count > 0 && choice.Includes(ImportLayer.ImageryDrape);
 
         PlanToposurface(
             manifest,
             entries,
             steps,
             skipped,
-            drapeRuns ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
+            drapePlanned ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
         PlanPublishedContours(manifest, entries, steps, skipped);
         PlanSiteIfc(manifest, entries, steps, skipped);
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteLocation(manifest, steps, skipped);
-        PlanSiteContext(manifest, entries, steps, skipped, drapeRuns);
+        PlanSiteContext(manifest, entries, steps, skipped, drapePlanned);
 
         // After every layer that builds the model, and flood before steep: steep ground is a hatch
         // drawn over the flood zones' fill. The crop is the drape's, planned above whether or not
@@ -566,7 +566,7 @@ public static class BundleImportPlanner
     /// whose points file was superseded silently lost its roads as well.
     /// </para>
     /// </remarks>
-    /// <param name="drapeRuns">
+    /// <param name="drapePlanned">
     /// Whether the plan's drape will run, handed to the four polygon steps
     /// (<see cref="ImportStep.DrapePlanned"/>).
     /// </param>
@@ -575,7 +575,7 @@ public static class BundleImportPlanner
         BundleEntryIndex entries,
         List<ImportStep> steps,
         List<SkippedImport> skipped,
-        bool drapeRuns)
+        bool drapePlanned)
     {
         SiteFrame? frame = SiteFrame.For(manifest);
 
@@ -605,7 +605,7 @@ public static class BundleImportPlanner
             steps,
             skipped,
             VectorAbsence(manifest, "land cover"),
-            drapePlanned: drapeRuns);
+            drapePlanned: drapePlanned);
 
         PlanPlacedArtifact(
             manifest,
@@ -617,7 +617,7 @@ public static class BundleImportPlanner
             steps,
             skipped,
             VectorAbsence(manifest, "site boundaries"),
-            drapePlanned: drapeRuns);
+            drapePlanned: drapePlanned);
 
         PlanPlacedArtifact(
             manifest,
@@ -629,9 +629,9 @@ public static class BundleImportPlanner
             steps,
             skipped,
             VectorAbsence(manifest, "water bodies"),
-            drapePlanned: drapeRuns);
+            drapePlanned: drapePlanned);
 
-        PlanRoadPolygons(manifest, frame, entries, steps, skipped, drapeRuns);
+        PlanRoadPolygons(manifest, frame, entries, steps, skipped, drapePlanned);
 
         PlanPlacedArtifact(
             manifest,
@@ -661,7 +661,7 @@ public static class BundleImportPlanner
         BundleEntryIndex entries,
         List<ImportStep> steps,
         List<SkippedImport> skipped,
-        bool drapeRuns)
+        bool drapePlanned)
     {
         if (manifest.RoadPolygons is null && manifest.HasRoadLayer)
         {
@@ -687,7 +687,7 @@ public static class BundleImportPlanner
             steps,
             skipped,
             VectorAbsence(manifest, "road surfaces"),
-            drapePlanned: drapeRuns);
+            drapePlanned: drapePlanned);
     }
 
     /// <summary>

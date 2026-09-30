@@ -124,10 +124,15 @@ internal sealed partial class RevitBundleImporter
             Say(notice);
         }
 
-        if (step.DrapePlanned && SlowStepNotice.ForTypesAtCut(newBoundaries.Count) is { } typing)
-        {
-            Say(typing);
-        }
+        // ⛔ Settled before the first cut when the drape is planned, so a cut's type is named for the
+        // shading the drape will actually write for (ADR 0008) rather than for a guess. It is the
+        // decision the drape, or Finish, makes later in this same import anyway; made before any
+        // subdivision exists, its commit is about a second rather than minutes (revit/CLAUDE.md).
+        bool smoothed = step.DrapePlanned && newBoundaries.Count > 0 && EnsureSmoothedSurface();
+
+        // Said once the first cut has shown whether this Revit gives a subdivision a type, which
+        // nothing can say before one exists: Revit 2025's typeless cuts hear nothing.
+        bool typingAnnounced = false;
 
         ImportFailureSwallower swallower = new($"Importing the {label}");
         using Transaction transaction = BeginTransaction($"Mantle Place: {label}", swallower);
@@ -159,6 +164,7 @@ internal sealed partial class RevitBundleImporter
                 }
             }
 
+            Toposolid? made = null;
             try
             {
                 Toposolid subdivision = terrain.CreateSubDivision(_document, loops);
@@ -190,14 +196,10 @@ internal sealed partial class RevitBundleImporter
 
                 countedFor[subdivision.Id] = (uncut, stampRefused);
 
-                // After the stamp, which names the type. In the cut's own transaction, so the drape
-                // has no retype left to do (SubDivisionMaterial.TypeAtCut).
-                if (step.DrapePlanned)
-                {
-                    long before = Stopwatch.GetTimestamp();
-                    typedForDrape += TypeForDrapeAtCut(subdivision) ? 1 : 0;
-                    typingTime += Stopwatch.GetElapsedTime(before);
-                }
+                // What names its type and material even if Comments refused the stamp, so a later
+                // import that cuts this feature again reuses them (SiteBoundaryIdentity.NamingStamp).
+                _stampsCutWith[subdivision.Id] = boundary.Stamp;
+                made = subdivision;
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
@@ -206,6 +208,35 @@ internal sealed partial class RevitBundleImporter
                 // above: there is no subdivision left for them to be holes in.
                 declined++;
             }
+
+            if (made is null)
+            {
+                continue;
+            }
+
+            // ⛔ Outside the cut's try, and contained in itself: whatever typing the cut for the drape
+            // does, it never turns a created cut into a declined one. The element is asked what it is,
+            // and Core decides with the plan's own answer (SubDivisionMaterial.TakesTypeAtCut), in the
+            // cut's own transaction, so the drape has no retype left to do.
+            long before = Stopwatch.GetTimestamp();
+            SubDivisionMaterialRoute route = RouteAtCut(made, out ToposolidType? own);
+            if (!typingAnnounced)
+            {
+                typingAnnounced = true;
+                if (SlowStepNotice.ForTypesAtCut(route, step.DrapePlanned, newBoundaries.Count, _terrainVertexCount) is { } typing)
+                {
+                    Say(typing);
+                }
+            }
+
+            if (SubDivisionMaterial.TakesTypeAtCut(route, step.DrapePlanned)
+                && own is not null
+                && TypeForDrapeAtCut(made, own, smoothed))
+            {
+                typedForDrape++;
+            }
+
+            typingTime += Stopwatch.GetElapsedTime(before);
         }
 
         // A subdivision Revit cannot make is refused only at commit, where the catch above never
@@ -242,6 +273,7 @@ internal sealed partial class RevitBundleImporter
                 onTerrain[index] = false;
                 _createdSubDivisionIds.Remove(id);
                 _subDivisionKeywords.Remove(id);
+                _stampsCutWith.Remove(id);
                 Say(ImportFailurePolicy.ExplainRefusedSubDivision(
                     index + 1,
                     FeatureName(cuts[index].Outer, "(unnamed)"),

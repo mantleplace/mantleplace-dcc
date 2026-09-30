@@ -316,22 +316,33 @@ follow.
   to drape both. In 2025 it is typeless and takes its material as an instance parameter. From 2026
   it is a `Toposolid` on the document's default toposolid type, the instance parameter is absent,
   and the material is its type's. Each element is asked which shape it has (`SubDivisionMaterial`),
-  and a typed one is moved onto a type of its own with `ChangeTypeId`, which is the whole cost of it:
-  1.2 to 3.8 s per subdivision in 2027, every other call around it milliseconds. When the drape is
-  planned that move is made in the polygon step's own transaction, as each subdivision is cut
-  (`SubDivisionMaterial.TypeAtCut`), and the drape finds it already typed and writes only the
-  photograph and its offset. On a 74,855-point terrain in 2027, 61 subdivisions took the drape step
-  from about 310 s to about 24 s, its commit from about 145 s to 3 s, and added about 100 s to the
-  polygon steps: 364 to 413 s an import against 541 to 578 s. With the road surfaces too, 405
-  subdivisions, the drape step went from 1,868 s to 182 s and the polygon steps from 1,135 s to
-  1,467 s: 1,744 s against 3,104 s, one run each. Where the move is made does
-  not change what it costs. Revit 2026's typed `CreateSubDivision` overload, probed by reflection
-  outside this tree, cut straight onto the type and paid the same time in the commit instead; and
-  the default type the two-argument overload uses cannot be set through 2025's API
-  (`IsDefaultFamilyTypeIdValid` refuses every toposolid type for the Toposolid category). Time a
-  retype in an import, not a probe: a probe on a reopened project committed 33 retypes in a second
-  that took 190 s in an import. Never branch on the version number, and never "fix" a 2025-only
-  observation into a universal comment: that is how this one shipped.
+  and a typed one is moved onto a type of its own with `ChangeTypeId`. This bullet is where what
+  that costs is recorded; the code's comments point here, and the import's notices quote it.
+  - **The call is the whole cost of a retype.** Profiled in the drape on a 74,855-point terrain in
+    2027, it was 96% of the retype loop, a median of 1.74 s a subdivision over 405; every other call
+    around it took milliseconds.
+  - **Where it runs decides what the commit after it costs.** When the drape is planned, the move is
+    made in the polygon step's own transaction as each subdivision is cut
+    (`SubDivisionMaterial.TakesTypeAtCut`), and the drape finds each one already typed and writes
+    only the photograph and its offset. The call costs about the same there: in 2027 about 3.5 s a
+    land-cover subdivision, 1.5 s a site boundary and 1.2 s a road surface. But the drape's commit
+    no longer rebuilds the subdivisions. On that terrain in 2027, with 61 subdivisions the drape's
+    commit fell from about 145 s to 3 s, and the import from 541 to 578 s to 364 to 413 s; with the
+    road surfaces too, 405 subdivisions, from 1,024 s to 65 s, and the import from 3,104 s to 1,744 s,
+    one run each. Revit 2026 behaved the same: 566 s to 422 s with 61.
+  - **Smooth shading is settled before the first cut** when the drape is planned, so a cut is named
+    for the shading the drape will write for. On a bare terrain that commit took about 1 s in 2027
+    and 0.5 s in 2025, against 96 s after 405 subdivisions. The import times above predate the move,
+    which has not been timed in an import yet.
+  - **Two alternatives were measured and not taken.** Revit 2026's typed `CreateSubDivision`
+    overload, probed by reflection outside this tree, cut straight onto the type with no call, and
+    the polygon commits absorbed the cost: 1,850 s against 1,744 s with 405. And the default type
+    the two-argument overload uses cannot be set through 2025's API: `IsDefaultFamilyTypeIdValid`
+    refuses every toposolid type for the Toposolid category.
+
+  Time a retype in an import, not a probe: a probe on a reopened project committed 33 retypes in a
+  second that took 190 s in an import. Never branch on the version number, and never "fix" a
+  2025-only observation into a universal comment: that is how this one shipped.
 
 - **The tree family's calls left that set in Revit 2025 before they merged**, through a harness that
   compiles this tree's sources into one differently named assembly and loads it into a Revit of its

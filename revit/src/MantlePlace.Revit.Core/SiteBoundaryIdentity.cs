@@ -218,6 +218,25 @@ public static class SiteBoundaryIdentity
         return null;
     }
 
+    /// <summary>
+    /// The stamp a subdivision's drape material and type are named by: the one it carries, else the
+    /// one it was cut with, else its element id under the land-use spelling this plugin has always
+    /// used for an unstamped cut.
+    /// </summary>
+    /// <param name="comments">What its Comments parameter holds.</param>
+    /// <param name="stampCutWith">The stamp this import tried to write on it, or <c>null</c> for one this import did not cut.</param>
+    /// <param name="elementId">Revit's <c>ElementId</c> value.</param>
+    /// <param name="cacheKeyStem">The bundle's cache-key stem.</param>
+    /// <remarks>
+    /// A cut whose Comments refused the stamp used to be named by its id alone. The pair made for it
+    /// as it was cut then outlived a refusal at commit under a name no later import computes; named
+    /// by the feature instead, the next import that cuts that feature finds and reuses it.
+    /// </remarks>
+    public static GroundStamp NamingStamp(string? comments, string? stampCutWith, long elementId, string cacheKeyStem)
+        => Parse(comments, cacheKeyStem)
+            ?? Parse(stampCutWith, cacheKeyStem)
+            ?? new GroundStamp(GroundLayer.LandUse, elementId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
     /// <summary>Every layer whose stamps this reads, so a new one is recognised the day it is added.</summary>
     private static readonly GroundLayer[] Layers = Enum.GetValues<GroundLayer>();
 

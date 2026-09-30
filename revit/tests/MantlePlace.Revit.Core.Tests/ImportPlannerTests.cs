@@ -938,8 +938,8 @@ internal static class ImportPlannerTests
             run.True(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is planned");
             foreach (ImportStepKind kind in PolygonKinds)
             {
-                // Retyped by the drape instead, each of 405 subdivisions cost about 2 to 3.4 s in
-                // Revit 2026 and 2027, and the drape's commit then rebuilt every one of them.
+                // Retyped by the drape instead, each cost a ChangeTypeId and the drape's commit then
+                // rebuilt every one of them (revit/CLAUDE.md).
                 run.True(FindStep(plan, kind)?.DrapePlanned == true, $"{kind} knows the drape follows");
             }
         });

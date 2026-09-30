@@ -643,7 +643,7 @@ public sealed class ImportStep
     /// ⛔ The same decision as <see cref="ToposolidType"/>, one step later, and for the same reason: a
     /// type given after the fact is a retype, and a retype is what costs. Only a drape that will run
     /// earns it, since a type whose photograph layer nothing fills is a blank layer over the ground.
-    /// What the polygon step does with it is <see cref="SubDivisionMaterial.TypeAtCut"/>.
+    /// What the polygon step does with it is <see cref="SubDivisionMaterial.TakesTypeAtCut"/>.
     /// </remarks>
     public bool DrapePlanned { get; init; }
 

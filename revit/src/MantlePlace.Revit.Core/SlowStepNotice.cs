@@ -257,54 +257,112 @@ public static class SlowStepNotice
             ThisTerrain(terrainPointCount));
     }
 
-    /// <summary>How many subdivisions <see cref="MeasuredTypeAtCutSeconds"/> was measured on.</summary>
-    public const int MeasuredTypeAtCutSubDivisions = 40;
+    /// <summary>Seconds a land-cover subdivision took to take its drape type as it was cut, in Revit 2027.</summary>
+    /// <remarks>Measured on <see cref="MeasuredSubDivisionTerrainPointCount"/> points; revit/CLAUDE.md records the runs.</remarks>
+    public const double MeasuredTypeAtCutSecondsLandCover = 3.5;
+
+    /// <summary>The same for a site boundary, cut after the land cover.</summary>
+    public const double MeasuredTypeAtCutSecondsSiteBoundaries = 1.5;
+
+    /// <summary>The same for a road surface, cut last.</summary>
+    public const double MeasuredTypeAtCutSecondsRoadSurfaces = 1.2;
 
     /// <summary>
-    /// Rounded seconds those subdivisions took to be given their drape types as they were cut, in a
-    /// real Revit 2027 import, outside the commit.
+    /// The line to say once a polygon step's first cut has shown it takes a type, when its
+    /// subdivisions are to be given their drape types as they are cut
+    /// (<see cref="SubDivisionMaterial.TakesTypeAtCut"/>); <c>null</c> when there is nothing to type.
     /// </summary>
-    /// <remarks>
-    /// 2026-09-30, order <c>4276ef78</c>, the site boundaries cut after the land cover on a
-    /// 74,855-point terrain: 59.6 to 63.3 s for 40 over three runs, about 1.5 s apiece. The land
-    /// cover's 19 before them took 66.7 to 73.2 s, about 3.7 s apiece, so the per-cut cost is not a
-    /// constant and none is quoted.
-    /// </remarks>
-    public const int MeasuredTypeAtCutSeconds = 62;
-
-    /// <summary>
-    /// The line to say before a polygon step whose new subdivisions are given their drape types as
-    /// they are cut (<see cref="SubDivisionMaterial.TypeAtCut"/>), or <c>null</c> when it cuts nothing.
-    /// </summary>
+    /// <param name="firstCut">What the step's first new subdivision was found to accept.</param>
+    /// <param name="drapePlanned">Whether the plan's drape will run (<see cref="ImportStep.DrapePlanned"/>).</param>
+    /// <param name="newSubDivisions">How many subdivisions the step is cutting.</param>
+    /// <param name="terrainPointCount">The host toposolid's point count, or <c>null</c> when this run did not build it.</param>
     /// <remarks>
     /// <para>
     /// The wait the drape used to announce (<see cref="ForSubDivisionRetypes"/>) moved here with the
-    /// work: one <c>ChangeTypeId</c> per subdivision, seconds each, now inside the slice that cuts it.
-    /// Said whenever the drape is planned, because whether this Revit gives a subdivision a type is
-    /// only known once the first one exists, so the sentence names the versions instead.
+    /// work: one <c>ChangeTypeId</c> per subdivision, seconds each, inside the slice that cuts them.
+    /// Whether this Revit gives a subdivision a type is only known once the first one exists, so the
+    /// line is said then, into the log a curator can read beside a frozen Revit, and never where there
+    /// is nothing to type: Revit 2025's typeless subdivisions hear nothing.
     /// </para>
     /// <para>
-    /// The same rule as <see cref="Describe"/>: the measurement is stated, and no duration is
-    /// predicted from it.
+    /// The same rule as <see cref="Describe"/>: the measurements and this terrain are stated side by
+    /// side, and no duration is predicted from them. Each layer's figure is given because they differ
+    /// threefold.
     /// </para>
     /// </remarks>
-    public static string? ForTypesAtCut(int newSubDivisions)
+    public static string? ForTypesAtCut(
+        SubDivisionMaterialRoute firstCut,
+        bool drapePlanned,
+        int newSubDivisions,
+        int? terrainPointCount)
     {
-        if (newSubDivisions <= 0)
+        if (newSubDivisions <= 0 || !SubDivisionMaterial.TakesTypeAtCut(firstCut, drapePlanned))
         {
             return null;
         }
 
         return string.Format(
             CultureInfo.InvariantCulture,
-            "The imagery drape is planned, so in Revit 2026 and later, where a subdivision has a type of "
-            + "its own, each of these {0:N0} subdivision(s) is also moved onto the type that will wear the "
-            + "photograph as it is cut, one at a time, before the commit; Revit 2025 has nothing to do "
-            + "here. On the one order this has been measured on, {1:N0} subdivisions took about {2:N0} "
-            + "seconds in Revit 2027. It is the retype the drape would otherwise do after them.",
+            "This Revit gives a subdivision a type of its own, so each of these {0:N0} subdivision(s) is "
+            + "also moved onto the type that will wear the photograph as it is cut, one at a time, before "
+            + "the commit; the imagery drape would otherwise do it after them. On the one terrain this has "
+            + "been measured on ({1:N0} points), in Revit 2027, that took about {2:0.0} s a subdivision for "
+            + "the land cover, {3:0.0} s for the site boundaries and {4:0.0} s for the road surfaces. {5}.",
             newSubDivisions,
-            MeasuredTypeAtCutSubDivisions,
-            MeasuredTypeAtCutSeconds);
+            MeasuredSubDivisionTerrainPointCount,
+            MeasuredTypeAtCutSecondsLandCover,
+            MeasuredTypeAtCutSecondsSiteBoundaries,
+            MeasuredTypeAtCutSecondsRoadSurfaces,
+            ThisTerrain(terrainPointCount));
+    }
+
+    /// <summary>How many subdivisions <see cref="MeasuredDrapeCommitSeconds"/> was measured with.</summary>
+    public const int MeasuredDrapeCommitSubDivisions = 405;
+
+    /// <summary>
+    /// Rounded seconds the drape's commit took in Revit 2027 with that many subdivisions already on
+    /// their types, on <see cref="MeasuredSubDivisionTerrainPointCount"/> points.
+    /// </summary>
+    /// <remarks>revit/CLAUDE.md records the run.</remarks>
+    public const int MeasuredDrapeCommitSeconds = 65;
+
+    /// <summary>
+    /// The line to say before the drape writes the photograph for subdivisions already on their own
+    /// types, or <c>null</c> when there are none or another notice already describes the commit.
+    /// </summary>
+    /// <param name="subDivisionsOnTheirTypes">Typed subdivisions the drape will write for without a retype.</param>
+    /// <param name="subDivisionsToRetype">Typed subdivisions it will retype first (<see cref="ForSubDivisionRetypes"/>).</param>
+    /// <param name="terrainRetype">Whether it retypes the terrain first (<see cref="For"/>).</param>
+    /// <param name="terrainPointCount">The host toposolid's point count, or <c>null</c> when this run did not build it.</param>
+    /// <remarks>
+    /// Once every cut takes its type as it is cut, the drape has no retype to announce, and its one
+    /// commit is still the longest wait left in it. Revit 2025's subdivisions are typeless, so none
+    /// counts here and its drape, whose commit is seconds, stays quiet as it always has.
+    /// </remarks>
+    public static string? ForDrapeCommit(
+        int subDivisionsOnTheirTypes,
+        int subDivisionsToRetype,
+        bool terrainRetype,
+        int? terrainPointCount)
+    {
+        if (subDivisionsOnTheirTypes <= 0 || subDivisionsToRetype > 0 || terrainRetype)
+        {
+            return null;
+        }
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "Next: the imagery drape. The photograph is written into the materials of the terrain and of "
+            + "{0:N0} subdivision(s) already on their own types, and committed in one transaction. On the "
+            + "one terrain this has been measured on ({1:N0} points), in Revit 2027, that commit took about "
+            + "{2:N0} seconds with {3:N0} subdivisions. {4}. A commit cannot report part of itself, so "
+            + "Revit will report \"not responding\" until it finishes, and Cancel takes effect when it "
+            + "finishes. It has not crashed; leave it alone.",
+            subDivisionsOnTheirTypes,
+            MeasuredSubDivisionTerrainPointCount,
+            MeasuredDrapeCommitSeconds,
+            MeasuredDrapeCommitSubDivisions,
+            ThisTerrain(terrainPointCount));
     }
 
     /// <summary>This terrain's point count as a sentence, or the admission that it is not known.</summary>
