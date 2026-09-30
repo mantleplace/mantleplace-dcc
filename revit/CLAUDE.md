@@ -332,16 +332,23 @@ follow.
     only the photograph and its offset. The call costs about the same there; per subdivision in
     2027 it took 3.3 to 5.0 s for land cover and 1.2 to 1.6 s for site boundaries over four imports,
     1.0 to 1.3 s for water over the same four (two water bodies each), and 1.2 s for road surfaces
-    over one. But the drape's commit no longer rebuilds the subdivisions. In 2027, with 61 subdivisions
-    the drape's imagery commit fell from about 145 s to 3 s and the import from 541 to 578 s to 364
-    to 413 s; with the road surfaces too, 405 subdivisions, the imagery commit fell from 1,024 s to
-    65 s and the import from 3,104 s to 1,744 s, one run each. Revit 2026 did the same: 566 s to
-    422 s with 61.
+    over one. But the drape's commit no longer rebuilds the subdivisions. In 2027, at `50c8c31`
+    against `9e44ab3`, with 61 subdivisions the drape's imagery commit fell from about 145 s to 3 s
+    and the import from 541 to 578 s to 364 to 413 s; with the road surfaces too, 405 subdivisions,
+    the imagery commit fell from 1,024 s to 65 s and the import from 3,104 s to 1,744 s, one run
+    each. Revit 2026 did the same at that
+    commit: 566 s to 422 s with 61.
   - **Smooth shading is settled before the first cut** when the drape is planned
     (`TerrainSmoothing.SettleBeforeCuts`), so a cut is named for the shading the drape will write
     for. In terrain-only imports its commit took 1.0 to 1.1 s in 2027 and 0.5 s in 2025, against
-    96 s after 405 subdivisions. The import times above predate the move, which has not been timed
-    in an import yet, in any of the three versions. Smoothing is the curator's project-wide setting
+    96 s after 405 subdivisions. The import times above predate the move. Timed with it, at
+    `c21d15a` against `9e44ab3` on the 61-subdivision plan, two imports each: in 2027 the smoothing
+    commit moved to before the first cut at 1.9 s from 16 to 18 s in the drape, the drape step fell
+    to 5 to 9 s from 306 to 334 s, the polygon commits were no slower (land cover 40 to 42 s against
+    74 to 80 s), and the import took 391 and 424 s against 570 and 630 s. In 2025 the commit moved
+    likewise at 0.7 to 0.8 s from 1.9 s, the polygon commits were no slower, and the import took
+    617 and 643 s against 641 and 753 s, inside 2025's own spread. 2026 has not been timed with it.
+    Smoothing is the curator's project-wide setting
     (ADR 0008): a cancelled import already turned it on as it ended, and an import that fails after
     its first polygon step, which ends without that last step, now leaves it on where it used to
     leave it untouched.
