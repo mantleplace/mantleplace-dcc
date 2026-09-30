@@ -296,6 +296,30 @@ internal static class SiteBoundaryIdentityTests
             run.False(SiteBoundaryIdentity.IsStampFor(RoadIdentity.Stamp(Stem, 1), Stem), "a road is not a subdivision");
         });
 
+        run.Case("a subdivision's drape names come from its stamp, else the stamp it was cut with, else its id", () =>
+        {
+            string cover = SiteBoundaryIdentity.Stamp(GroundLayer.LandCover, Stem, null, 7);
+            string other = SiteBoundaryIdentity.Stamp(GroundLayer.LandUse, Stem, "Zone A", 1);
+
+            run.True(
+                SiteBoundaryIdentity.NamingStamp(cover, other, 4242, Stem) == new GroundStamp(GroundLayer.LandCover, "7"),
+                "the stamp it carries wins, as it always has");
+
+            // A cut whose Comments refused the stamp is still named by the feature it was cut from,
+            // so a later import that cuts the same feature again finds the type and material this
+            // one made rather than leaving them behind, named by an element id nobody reuses.
+            run.True(
+                SiteBoundaryIdentity.NamingStamp(null, cover, 4242, Stem) == new GroundStamp(GroundLayer.LandCover, "7"),
+                "an unstamped cut takes the stamp it was cut with");
+            run.True(
+                SiteBoundaryIdentity.NamingStamp("a curator's note", cover, 4242, Stem) == new GroundStamp(GroundLayer.LandCover, "7"),
+                "Comments that are not a stamp are not one here either");
+
+            run.True(
+                SiteBoundaryIdentity.NamingStamp(null, null, 4242, Stem) == new GroundStamp(GroundLayer.LandUse, "4242"),
+                "with neither, the element id under the land-use spelling, as before");
+        });
+
         return run.Report("site boundary identity");
     }
 }

@@ -917,7 +917,67 @@ internal static class ImportPlannerTests
                 FindStep(plan, ImportStepKind.ToposurfaceFromPointsFile)?.ToposolidType == TerrainToposolidType.Project,
                 "only a drape that will run earns the imagery type");
         });
+
+        // The parity bundle with a drape beside it, so the polygon steps and the drape are planned
+        // together and the cases below differ in whether the drape runs and nothing else.
+        string parityAndDrape = ParityManifest(MetricGeoreference)
+            .Replace(
+                "\"layout\": { \"tree_points\": \"Landcover/TreePoints.csv\" },",
+                $$"""
+                "layout": { "tree_points": "Landcover/TreePoints.csv", "imagery_drape": "Imagery/Drape.png" },
+                {{ImageryWithGsd}},
+                {{DemBounds}},
+                """,
+                StringComparison.Ordinal);
+        string[] parityAndDrapeBundle = [.. ParityBundle, "Imagery/Drape.png"];
+
+        run.Case("a planned drape tells every polygon step, so a typed cut can take its imagery type as it is cut", () =>
+        {
+            BundleImportPlan plan = PlanFor(parityAndDrape, parityAndDrapeBundle);
+
+            run.True(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is planned");
+            foreach (ImportStepKind kind in PolygonKinds)
+            {
+                // Retyped by the drape instead, each cost a ChangeTypeId and the drape's commit then
+                // rebuilt every one of them (revit/CLAUDE.md).
+                run.True(FindStep(plan, kind)?.DrapePlanned == true, $"{kind} knows the drape follows");
+            }
+        });
+
+        run.Case("a drape left off the checklist leaves every cut on the type Revit gives it", () =>
+        {
+            ImportLayerChoice noDrape = ImportLayerChoice.Only(
+                Enum.GetValues<ImportLayer>().Where(layer => layer != ImportLayer.ImageryDrape));
+            BundleImportPlan plan = PlanFor(parityAndDrape, parityAndDrapeBundle, noDrape);
+
+            run.False(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is not planned");
+            foreach (ImportStepKind kind in PolygonKinds)
+            {
+                // A type whose photograph layer nothing will fill would be a blank layer over the
+                // ground, the same reason the terrain keeps the project's type.
+                run.True(FindStep(plan, kind) is { DrapePlanned: false }, $"{kind} is cut as it always was");
+            }
+        });
+
+        run.Case("a bundle with no drape plans no imagery type for any cut", () =>
+        {
+            BundleImportPlan plan = PlanFor(ParityManifest(MetricGeoreference), ParityBundle);
+
+            foreach (ImportStepKind kind in PolygonKinds)
+            {
+                run.True(FindStep(plan, kind) is { DrapePlanned: false }, $"{kind} is cut as it always was");
+            }
+        });
     }
+
+    /// <summary>The four kinds that cut subdivisions into the terrain.</summary>
+    private static readonly ImportStepKind[] PolygonKinds =
+    [
+        ImportStepKind.LandCover,
+        ImportStepKind.SiteBoundaries,
+        ImportStepKind.Water,
+        ImportStepKind.RoadPolygons,
+    ];
 
     /// <summary>
     /// The three Forma-parity layers: roads, site boundaries and vegetation. Each is

@@ -99,14 +99,23 @@ internal sealed partial class RevitBundleImporter(
     /// </remarks>
     private readonly Dictionary<ElementId, string> _subDivisionKeywords = [];
 
+    /// <summary>The stamp each subdivision this run cut was cut with, whether or not Comments took it.</summary>
+    /// <remarks>
+    /// Filled by the subdivision steps and read wherever a subdivision's drape material is named
+    /// (<see cref="SiteBoundaryIdentity.NamingStamp"/>), so a cut whose Comments refused the stamp is
+    /// named by its feature rather than its element id, by the cut and the drape alike.
+    /// </remarks>
+    private readonly Dictionary<ElementId, string> _stampsCutWith = [];
+
     /// <summary>
     /// Whether the smooth-shading decision has been made, and said, for this import.
     /// </summary>
     /// <remarks>
-    /// <see cref="EnsureSmoothedSurface"/> runs twice: inside the drape step, before the photograph
-    /// is written, so it is anchored for the renderer that will actually draw it; and after every
-    /// step, for a bundle with no photograph at all. The second call must neither retry a refusal
-    /// nor repeat the sentence.
+    /// <see cref="EnsureSmoothedSurface"/> runs up to three times: before the first cut of a polygon
+    /// step when the drape is planned, so a cut is typed for the shading the drape will write for;
+    /// inside the drape step, before the photograph is written, so it is anchored for the renderer
+    /// that will actually draw it; and after every step, for a bundle with no photograph at all.
+    /// Only the first call decides; later ones must neither retry a refusal nor repeat the sentence.
     /// </remarks>
     private bool _smoothingSettled;
 

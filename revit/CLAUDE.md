@@ -315,11 +315,51 @@ follow.
 - **A toposolid subdivision is a different element in 2025 than in 2026 and 2027**, and one build has
   to drape both. In 2025 it is typeless and takes its material as an instance parameter. From 2026
   it is a `Toposolid` on the document's default toposolid type, the instance parameter is absent,
-  and the material is its type's. The drape asks each element which shape it has and retypes a
-  typed one onto a type of its own (`SubDivisionMaterial`): 33 of them cost about 190 s of a real
-  2027 import on a 74,852-point terrain, 71 s of calls and a 121 s commit — a probe on a reopened
-  project committed the same retypes in a second, so time a retype in an import, not a probe. Never branch on the version number, and never "fix" a 2025-only
-  observation into a universal comment: that is how this one shipped.
+  and the material is its type's. Each element is asked which shape it has (`SubDivisionMaterial`),
+  and a typed one is moved onto a type of its own with `ChangeTypeId`. This bullet is where what
+  that costs is recorded; the code's comments point here, and the import's notices quote it. Every
+  figure below is order `4276ef78` on a 74,855-point terrain unless it says otherwise, and the
+  timing tables are in the pull request that added the move to the cut.
+  - **The call is the whole cost of a retype.** Profiled in the drape in 2027, it was 96% of the
+    retype loop, a median of 1.74 s a subdivision over 405; every other call around it took
+    milliseconds. The first measurement, 2026-09-19 on another order's 74,852-point terrain in
+    2027, had 33 retypes take 190 s of an import, 71 s of calls then a 121 s commit, where a probe
+    on the saved and reopened project committed the same retypes in about a second: time a retype
+    in an import, not a probe.
+  - **Where it runs decides what the commit after it costs.** When the drape is planned, the move is
+    made in the polygon step's own transaction as each subdivision is cut
+    (`SubDivisionMaterial.TakesTypeAtCut`), and the drape finds each one already typed and writes
+    only the photograph and its offset. The call costs about the same there; per subdivision in
+    2027 it took 3.3 to 5.0 s for land cover and 1.2 to 1.6 s for site boundaries over four imports,
+    1.0 to 1.3 s for water over the same four (two water bodies each), and 1.2 s for road surfaces
+    over one. But the drape's commit no longer rebuilds the subdivisions. In 2027, at `50c8c31`
+    against `9e44ab3`, with 61 subdivisions the drape's imagery commit fell from about 145 s to 3 s
+    and the import from 541 to 578 s to 364 to 413 s; with the road surfaces too, 405 subdivisions,
+    the imagery commit fell from 1,024 s to 65 s and the import from 3,104 s to 1,744 s, one run
+    each. Revit 2026 did the same at that
+    commit: 566 s to 422 s with 61.
+  - **Smooth shading is settled before the first cut** when the drape is planned
+    (`TerrainSmoothing.SettleBeforeCuts`), so a cut is named for the shading the drape will write
+    for. In terrain-only imports its commit took 1.0 to 1.1 s in 2027 and 0.5 s in 2025, against
+    96 s after 405 subdivisions. The import times above predate the move. Timed with it, at
+    `c21d15a` against `9e44ab3` on the 61-subdivision plan, two imports each: in 2027 the smoothing
+    commit moved to before the first cut at 1.9 s from 16 to 18 s in the drape, the drape step fell
+    to 5 to 9 s from 306 to 334 s, the polygon commits were no slower (land cover 40 to 42 s against
+    74 to 80 s), and the import took 391 and 424 s against 570 and 630 s. In 2025 the commit moved
+    likewise at 0.7 to 0.8 s from 1.9 s, the polygon commits were no slower, and the import took
+    617 and 643 s against 641 and 753 s, inside 2025's own spread. 2026 has not been timed with it.
+    Smoothing is the curator's project-wide setting
+    (ADR 0008): a cancelled import already turned it on as it ended, and an import that fails after
+    its first polygon step, which ends without that last step, now leaves it on where it used to
+    leave it untouched.
+  - **Two alternatives were measured and not taken.** Revit 2026's typed `CreateSubDivision`
+    overload, probed by reflection outside this tree, cut every subdivision but the first straight
+    onto its type, and the polygon commits absorbed what the calls had cost: 1,850 s against 1,744 s
+    with 405. And the default type the two-argument overload uses cannot be set through 2025's API:
+    `IsDefaultFamilyTypeIdValid` refuses every toposolid type for the Toposolid category.
+
+  Never branch on the version number, and never "fix" a 2025-only observation into a universal
+  comment: that is how this one shipped.
 
 - **The tree family's calls left that set in Revit 2025 before they merged**, through a harness that
   compiles this tree's sources into one differently named assembly and loads it into a Revit of its

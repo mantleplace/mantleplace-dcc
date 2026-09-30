@@ -124,6 +124,20 @@ public static class TerrainSmoothing
     /// silently reversing someone's display setting is the same trespass as silently setting it.
     /// Naming exactly what the switch does to the photograph leaves the decision where it belongs.
     /// </remarks>
+    /// <summary>
+    /// Whether a polygon step settles smooth shading before its first cut: exactly when the drape will
+    /// write for what it cuts, and there is something to cut.
+    /// </summary>
+    /// <remarks>
+    /// A cut is given the type the drape would otherwise move it onto, named for the shading the drape
+    /// will write for (ADR 0008), so that shading has to be known before the cut exists. It is the
+    /// decision the drape, or the end of the import, would make anyway; made before any subdivision
+    /// exists it costs a commit of about a second rather than minutes (revit/CLAUDE.md). With no drape
+    /// the project-wide setting is left where it always was, to the end of the import.
+    /// </remarks>
+    public static bool SettleBeforeCuts(bool drapePlanned, int newSubDivisions)
+        => drapePlanned && newSubDivisions > 0;
+
     public static string DrapeNotice(bool isEnabled)
         => isEnabled
             ? "The aerial photograph is placed for Revit's toposolid smooth shading, which is on. "

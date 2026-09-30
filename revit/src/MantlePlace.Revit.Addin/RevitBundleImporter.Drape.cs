@@ -88,10 +88,19 @@ internal sealed partial class RevitBundleImporter
         }
 
         // Revit 2026 and later: every typed subdivision not already on its material's type is one
-        // ChangeTypeId, seconds each. Counted before anything is written, like the notice above.
-        if (SlowStepNotice.ForSubDivisionRetypes(SubDivisionsToRetype(terrain, name, smoothed), _terrainVertexCount) is { } retypes)
+        // ChangeTypeId (revit/CLAUDE.md). Counted before anything is written, like the notice above. A
+        // subdivision this import cut is already on it (TypeForDrapeAtCut), so what is left is an
+        // earlier import's cut, a keyword changed since, or a type Revit refused at the cut.
+        (int onTheirTypes, int toRetype) = CountTypedSubDivisions(terrain, name, smoothed);
+        if (SlowStepNotice.ForSubDivisionRetypes(toRetype, _terrainVertexCount) is { } retypes)
         {
             Say(retypes);
+        }
+
+        // With nothing to retype, the one commit below is still the longest wait in this step.
+        if (SlowStepNotice.ForDrapeCommit(onTheirTypes, toRetype, wearsImageryType ? 0 : 1, _terrainVertexCount) is { } commit)
+        {
+            Say(commit);
         }
 
         ImportFailureSwallower swallower = new("Applying the aerial photograph");
@@ -315,21 +324,40 @@ internal sealed partial class RevitBundleImporter
     }
 
     /// <summary>
-    /// How many of the subdivisions this drape may touch it will retype to wear the photograph
-    /// (<see cref="SubDivisionMaterial.NeedsRetype"/>), counted before anything is written.
+    /// Of the typed subdivisions this drape may touch, how many are already on their material's type
+    /// and how many it will retype (<see cref="SubDivisionMaterial.NeedsRetype"/>), counted before
+    /// anything is written.
     /// </summary>
     /// <remarks>
-    /// A re-import's subdivisions are already on their types, so this is zero there, which is what
-    /// keeps a re-import from announcing a wait it will not have.
+    /// A re-import's subdivisions, and this import's cuts, are already on their types, so the retype
+    /// count is zero there, which is what keeps the drape from announcing a wait it will not have.
+    /// Typeless subdivisions count in neither.
     /// </remarks>
-    private int SubDivisionsToRetype(Toposolid terrain, string imageryName, bool smoothed)
-        => DrapeableSubDivisionIds(terrain)
-            .Select(_document.GetElement)
-            .Count(subdivision => subdivision is not null
-                && SubDivisionMaterial.NeedsRetype(
-                    RouteFor(subdivision, out _, out ToposolidType? own),
-                    own?.Name,
-                    SubDivisionMaterialName(subdivision, imageryName, smoothed)));
+    private (int OnTheirTypes, int ToRetype) CountTypedSubDivisions(Toposolid terrain, string imageryName, bool smoothed)
+    {
+        int onTheirTypes = 0;
+        int toRetype = 0;
+        foreach (ElementId id in DrapeableSubDivisionIds(terrain))
+        {
+            if (_document.GetElement(id) is not Element subdivision
+                || RouteFor(subdivision, out _, out ToposolidType? own) != SubDivisionMaterialRoute.Type)
+            {
+                continue;
+            }
+
+            if (SubDivisionMaterial.NeedsRetype(
+                SubDivisionMaterialRoute.Type, own?.Name, SubDivisionMaterialName(subdivision, imageryName, smoothed)))
+            {
+                toRetype++;
+            }
+            else
+            {
+                onTheirTypes++;
+            }
+        }
+
+        return (onTheirTypes, toRetype);
+    }
 
     /// <summary>
     /// Which way <paramref name="subdivision"/> can wear a material (<see cref="SubDivisionMaterial.Route"/>),
@@ -355,12 +383,13 @@ internal sealed partial class RevitBundleImporter
             return GroundMaterialNames.Shared(imageryName, keyword);
         }
 
-        // A subdivision this run cut and could not stamp is named by its id, under the land-use
-        // spelling this plugin has always used for it.
-        GroundStamp stamp = SiteBoundaryIdentity.Parse(
+        // A subdivision this run cut and could not stamp is named by the stamp it was cut with, so
+        // the cut and the drape, and a later import, all compute the same name.
+        GroundStamp stamp = SiteBoundaryIdentity.NamingStamp(
             subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString(),
-            _archive.Layout.Key.Stem)
-            ?? new GroundStamp(GroundLayer.LandUse, subdivision.Id.Value.ToString(CultureInfo.InvariantCulture));
+            _stampsCutWith.GetValueOrDefault(subdivision.Id),
+            subdivision.Id.Value,
+            _archive.Layout.Key.Stem);
 
         return GroundMaterialNames.PerSubDivision(imageryName, stamp.Layer, stamp.Token, keyword);
     }

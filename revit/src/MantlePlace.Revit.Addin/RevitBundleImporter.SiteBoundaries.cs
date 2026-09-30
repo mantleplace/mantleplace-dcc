@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Autodesk.Revit.DB;
 using MantlePlace.Revit.Core;
 
@@ -92,6 +93,10 @@ internal sealed partial class RevitBundleImporter
         Dictionary<ElementId, int> cutIndexOf = [];
         Dictionary<ElementId, (int HolesUncut, bool Unstamped)> countedFor = [];
 
+        // How many cuts took the drape's type as they were cut, and what that cost, for the log.
+        int typedForDrape = 0;
+        TimeSpan typingTime = TimeSpan.Zero;
+
         // Which cuts end up with a subdivision on the terrain: everything already present, plus
         // whatever this run manages to cut. A ring Revit declines, or one that cannot be closed
         // into a loop, leaves nothing behind — and a report naming a subdivision that does not exist is
@@ -112,12 +117,23 @@ internal sealed partial class RevitBundleImporter
         // for a line asserting a subdivision is redundant.
         FootprintExtent? ground = GroundFootprint(terrain);
 
-        // ⛔ Before the transaction, because the whole cost is inside its commit and nothing can be
-        // written while that runs. This line is the only warning there will ever be.
+        // ⛔ Before the transaction, because the commit's whole cost is inside it and nothing can be
+        // written while that runs. This line is the commit's only warning; the typing before it is
+        // announced at the first cut that takes a type (SlowStepNotice.ForTypesAtCut).
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, newBoundaries.Count) is { } notice)
         {
             Say(notice);
         }
+
+        // ⛔ Settled before the first cut when Core says so (TerrainSmoothing.SettleBeforeCuts), so a
+        // cut's type is named for the shading the drape will actually write for (ADR 0008).
+        bool smoothed = TerrainSmoothing.SettleBeforeCuts(step.DrapePlanned, newBoundaries.Count)
+            && EnsureSmoothedSurface();
+
+        // Said at the first cut that shows it takes a type, which nothing can say before one exists:
+        // Revit 2025's typeless cuts hear nothing, and a cut whose route could not be read leaves it
+        // to the next.
+        bool typingAnnounced = false;
 
         ImportFailureSwallower swallower = new($"Importing the {label}");
         using Transaction transaction = BeginTransaction($"Mantle Place: {label}", swallower);
@@ -149,6 +165,7 @@ internal sealed partial class RevitBundleImporter
                 }
             }
 
+            Toposolid? made = null;
             try
             {
                 Toposolid subdivision = terrain.CreateSubDivision(_document, loops);
@@ -179,6 +196,11 @@ internal sealed partial class RevitBundleImporter
                 }
 
                 countedFor[subdivision.Id] = (uncut, stampRefused);
+
+                // What names its type and material even if Comments refused the stamp, so a later
+                // import that cuts this feature again reuses them (SiteBoundaryIdentity.NamingStamp).
+                _stampsCutWith[subdivision.Id] = boundary.Stamp;
+                made = subdivision;
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
@@ -187,12 +209,45 @@ internal sealed partial class RevitBundleImporter
                 // above: there is no subdivision left for them to be holes in.
                 declined++;
             }
+
+            if (made is null)
+            {
+                continue;
+            }
+
+            // ⛔ Outside the cut's try, and contained in itself: whatever typing the cut for the drape
+            // does, it never turns a created cut into a declined one. The element is asked what it is,
+            // and Core decides with the plan's own answer (SubDivisionMaterial.TakesTypeAtCut), in the
+            // cut's own transaction, so the drape has no retype left to do.
+            long before = Stopwatch.GetTimestamp();
+            SubDivisionMaterialRoute route = RouteAtCut(made, out ToposolidType? typeAsCut);
+            if (!typingAnnounced
+                && SlowStepNotice.ForTypesAtCut(layer, route, step.DrapePlanned, newBoundaries.Count, _terrainVertexCount) is { } typing)
+            {
+                typingAnnounced = true;
+                Say(typing);
+            }
+
+            if (SubDivisionMaterial.TakesTypeAtCut(route, step.DrapePlanned)
+                && typeAsCut is not null
+                && TypeForDrapeAtCut(made, typeAsCut, smoothed))
+            {
+                typedForDrape++;
+            }
+
+            typingTime += Stopwatch.GetElapsedTime(before);
         }
 
         // A subdivision Revit cannot make is refused only at commit, where the catch above never
         // sees it. Declaring this run's cuts lets the swallower delete the one it names instead of
         // rolling the whole layer back (ImportFailurePolicy).
         swallower.OwnNewElements.UnionWith(cutIndexOf.Keys);
+
+        if (typedForDrape > 0)
+        {
+            Trace($"  cut: {typedForDrape:N0} of {cutIndexOf.Count:N0} subdivision(s) given their drape type "
+                + $"as they were cut, in {typingTime.TotalSeconds:N1} s.");
+        }
 
         if (!CommitAndReport(transaction, swallower))
         {
@@ -217,6 +272,7 @@ internal sealed partial class RevitBundleImporter
                 onTerrain[index] = false;
                 _createdSubDivisionIds.Remove(id);
                 _subDivisionKeywords.Remove(id);
+                _stampsCutWith.Remove(id);
                 Say(ImportFailurePolicy.ExplainRefusedSubDivision(
                     index + 1,
                     FeatureName(cuts[index].Outer, "(unnamed)"),

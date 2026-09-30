@@ -174,6 +174,18 @@ internal static class TerrainSmoothingTests
                 "the ordinary case is not dressed up as a warning");
         });
 
+        run.Case("smoothing is settled before a polygon step's cuts exactly when the drape will write for them", () =>
+        {
+            // A cut is typed for the shading the drape will write for, which has to be known before
+            // the cut exists. On a bare terrain that commit is about a second; after 405 subdivisions
+            // it was 96 s (revit/CLAUDE.md).
+            run.True(TerrainSmoothing.SettleBeforeCuts(drapePlanned: true, newSubDivisions: 19), "the drape will write for them");
+            run.False(TerrainSmoothing.SettleBeforeCuts(drapePlanned: false, newSubDivisions: 19),
+                "no drape: the project-wide setting is left to Finish, as before");
+            run.False(TerrainSmoothing.SettleBeforeCuts(drapePlanned: true, newSubDivisions: 0),
+                "nothing to cut, nothing to name");
+        });
+
         return run.Report("terrain smooth shading reporting");
     }
 }

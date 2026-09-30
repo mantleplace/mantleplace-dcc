@@ -69,19 +69,19 @@ public static class BundleImportPlanner
         List<ImportStep> drapeSteps = [];
         List<SkippedImport> drapeSkipped = [];
         PlanImageryDrape(manifest, entries, drapeSteps, drapeSkipped, probeImageSize);
-        bool drapeRuns = drapeSteps.Count > 0 && choice.Includes(ImportLayer.ImageryDrape);
+        bool drapePlanned = drapeSteps.Count > 0 && choice.Includes(ImportLayer.ImageryDrape);
 
         PlanToposurface(
             manifest,
             entries,
             steps,
             skipped,
-            drapeRuns ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
+            drapePlanned ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
         PlanPublishedContours(manifest, entries, steps, skipped);
         PlanSiteIfc(manifest, entries, steps, skipped);
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteLocation(manifest, steps, skipped);
-        PlanSiteContext(manifest, entries, steps, skipped);
+        PlanSiteContext(manifest, entries, steps, skipped, drapePlanned);
 
         // After every layer that builds the model, and flood before steep: steep ground is a hatch
         // drawn over the flood zones' fill. The crop is the drape's, planned above whether or not
@@ -566,11 +566,16 @@ public static class BundleImportPlanner
     /// whose points file was superseded silently lost its roads as well.
     /// </para>
     /// </remarks>
+    /// <param name="drapePlanned">
+    /// Whether the plan's drape will run, handed to the four polygon steps
+    /// (<see cref="ImportStep.DrapePlanned"/>).
+    /// </param>
     private static void PlanSiteContext(
         BundleManifest manifest,
         BundleEntryIndex entries,
         List<ImportStep> steps,
-        List<SkippedImport> skipped)
+        List<SkippedImport> skipped,
+        bool drapePlanned)
     {
         SiteFrame? frame = SiteFrame.For(manifest);
 
@@ -599,7 +604,8 @@ public static class BundleImportPlanner
             SiteVectorLayers.LandCover.Label,
             steps,
             skipped,
-            VectorAbsence(manifest, ImportStepKind.LandCover));
+            VectorAbsence(manifest, ImportStepKind.LandCover),
+            drapePlanned: drapePlanned);
 
         PlanPlacedArtifact(
             manifest,
@@ -610,7 +616,8 @@ public static class BundleImportPlanner
             SiteVectorLayers.LandUse.Label,
             steps,
             skipped,
-            VectorAbsence(manifest, ImportStepKind.SiteBoundaries));
+            VectorAbsence(manifest, ImportStepKind.SiteBoundaries),
+            drapePlanned: drapePlanned);
 
         PlanPlacedArtifact(
             manifest,
@@ -621,9 +628,10 @@ public static class BundleImportPlanner
             SiteVectorLayers.Water.Label,
             steps,
             skipped,
-            VectorAbsence(manifest, ImportStepKind.Water));
+            VectorAbsence(manifest, ImportStepKind.Water),
+            drapePlanned: drapePlanned);
 
-        PlanRoadPolygons(manifest, frame, entries, steps, skipped);
+        PlanRoadPolygons(manifest, frame, entries, steps, skipped, drapePlanned);
 
         PlanPlacedArtifact(
             manifest,
@@ -652,7 +660,8 @@ public static class BundleImportPlanner
         SiteFrame? frame,
         BundleEntryIndex entries,
         List<ImportStep> steps,
-        List<SkippedImport> skipped)
+        List<SkippedImport> skipped,
+        bool drapePlanned)
     {
         if (manifest.RoadPolygons is null && manifest.HasRoadLayer)
         {
@@ -677,7 +686,8 @@ public static class BundleImportPlanner
             SiteVectorLayers.RoadPolygons.Label,
             steps,
             skipped,
-            VectorAbsence(manifest, ImportStepKind.RoadPolygons));
+            VectorAbsence(manifest, ImportStepKind.RoadPolygons),
+            drapePlanned: drapePlanned);
     }
 
     /// <summary>
@@ -789,7 +799,8 @@ public static class BundleImportPlanner
         string? absence = null,
         SurfaceCropWindow? crop = null,
         LinearUnit verticalUnits = LinearUnit.Unspecified,
-        HazardPlanFacts? hazard = null)
+        HazardPlanFacts? hazard = null,
+        bool drapePlanned = false)
     {
         if (artifact is null)
         {
@@ -873,6 +884,7 @@ public static class BundleImportPlanner
             Frame = frame,
             Crop = crop,
             VerticalUnits = verticalUnits,
+            DrapePlanned = drapePlanned,
 
             // Carried for every placed artifact rather than branched on the one kind that has it:
             // only `landcover.tree_points` publishes a foliage vocabulary, so this is null for the
