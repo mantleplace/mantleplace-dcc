@@ -69,6 +69,9 @@ internal sealed partial class RevitBundleImporter
 
         FootprintExtent? drawnExtent = HazardPlan.Around(regions.Cuts.Select(cut => FootprintExtent.Around(cut.Outer.Vertices)));
 
+        // What was measured is the flood zones making a new plan; the core decides from that fact.
+        Announce(SlowStepNotice.ForHazardLayer(step.Kind, decision.CreateView, regions.Cuts.Count));
+
         ImportFailureSwallower swallower = new($"Drawing the {label}");
         using Transaction transaction = BeginTransaction($"Mantle Place: {label}", swallower);
 

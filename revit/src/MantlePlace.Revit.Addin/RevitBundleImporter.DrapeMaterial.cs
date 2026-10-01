@@ -356,8 +356,13 @@ internal sealed partial class RevitBundleImporter
         // import cut was put on that type in the transaction that cut it (TypeForDrapeAtCut), so here
         // it is found on it and only its material's photograph and offset are written; what that
         // saves is measured in revit/CLAUDE.md.
-        foreach (ElementId subdivisionId in DrapeableSubDivisionIds(terrain))
+        // Counted as it goes, for the window: this loop is inside the step's one transaction, which
+        // cannot yield, and on ground an earlier build typed it still retypes, seconds a subdivision.
+        List<ElementId> drapeable = DrapeableSubDivisionIds(terrain);
+        int handled = 0;
+        foreach (ElementId subdivisionId in drapeable)
         {
+            Count(handled++, drapeable.Count);
             if (_document.GetElement(subdivisionId) is not Element subdivision)
             {
                 refusedSubDivisions++;
@@ -396,6 +401,7 @@ internal sealed partial class RevitBundleImporter
             }
         }
 
+        Count(drapeable.Count, drapeable.Count);
         refusalReason = refusals.Count == 0 ? null : string.Join(" / ", refusals);
         return true;
     }

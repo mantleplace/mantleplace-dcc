@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Autodesk.Revit.UI;
 using MantlePlace.Revit.Client;
 using MantlePlace.Revit.Core;
@@ -27,8 +26,6 @@ namespace MantlePlace.Revit.Addin;
 /// </remarks>
 internal static class PrepareNotifier
 {
-    private const double BaselineDpi = 96.0;
-
     private static readonly PendingNotices Pending = new();
 
     /// <summary>The notices on screen, newest first — index 0 is the bottom of the stack.</summary>
@@ -114,7 +111,7 @@ internal static class PrepareNotifier
 
         // Minimised, or not up yet: nowhere to put a notice that belongs to Revit's window. The
         // badge is still there when the curator comes back, which is what it is for.
-        if (revitWindow == IntPtr.Zero || IsIconic(revitWindow))
+        if (revitWindow == IntPtr.Zero || RevitWindowGeometry.IsMinimised(revitWindow))
         {
             return;
         }
@@ -148,20 +145,11 @@ internal static class PrepareNotifier
 
     private static void Restack()
     {
-        IntPtr revitWindow = _revitWindow?.Invoke() ?? IntPtr.Zero;
-        if (revitWindow == IntPtr.Zero || !GetWindowRect(revitWindow, out NativeRect rect))
+        // In Revit's window, on the monitor it is on (RevitWindowGeometry).
+        if (RevitWindowGeometry.Bounds(_revitWindow?.Invoke() ?? IntPtr.Zero) is not { } owner)
         {
             return;
         }
-
-        // GetWindowRect answers in device pixels, WPF places in device-independent ones. Revit's
-        // window's own DPI is the divisor, so the stack lands inside it on the monitor it is on.
-        double scale = GetDpiForWindow(revitWindow) is var dpi and > 0 ? dpi / BaselineDpi : 1.0;
-        NoticeRect owner = new(
-            rect.Left / scale,
-            rect.Top / scale,
-            (rect.Right - rect.Left) / scale,
-            (rect.Bottom - rect.Top) / scale);
 
         for (int index = 0; index < Shown.Count; index++)
         {
@@ -187,24 +175,4 @@ internal static class PrepareNotifier
             // assignment, and a fault dialog over a badge would be worse than a stale one.
         }
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativeRect
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsIconic(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern uint GetDpiForWindow(IntPtr hwnd);
 }

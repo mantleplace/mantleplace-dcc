@@ -210,14 +210,13 @@ follow.
 
 - **The staged import joined that set.** One step, or one chunk of trees, runs per
   `ExternalEvent` raise, and the handler posts the next raise at `DispatcherPriority.Background` so
-  the window repaints and a Cancel click lands first. Revit does service a raise posted from inside
+  a Cancel the window posted lands first. Revit does service a raise posted from inside
   its own handler promptly: the harness below pressed Import in the real window in 2025, 2026 and
   2027 and every slice ran with no mouse or keyboard input, the ~47 chunks of a 9,293-tree order in
   under a minute each time, and in 2026 with Revit minimized for the whole tree step (what a tree
   costs at the commit has one home, `ImportChunking.ElementsPerTransaction`). A Comments write on a
   `DirectShape` holds: the re-imports in a fresh Revit process found all 290 road centrelines by the
-  stamp in their Comments, in each of the three. Whether the modeless window actually repaints
-  between slices is compiled and unexecuted. What is settled
+  stamp in their Comments, in each of the three. What is settled
   headlessly is everything about *when*: `StagedImport` decides the slice order, where a cancel lands
   and what a failure costs, and `ImportChunking`/`TreeIdentity` decide the chunks and the resume.
   Never `yield` inside an open transaction — a chunked step commits, then yields — and never leave
@@ -225,6 +224,57 @@ follow.
   curator is editing their own model (`RevitBundleImporter.InSlice`). The window opens on a
   checklist and raises nothing until Import is pressed; what each box shows, and what a plan
   without a layer looks like, is `ImportChecklist` and the planner's choice argument, both headless.
+
+- **⛔ The import window has a thread of its own, and Revit's window does not own it.** This bullet
+  is the one home of why; the code points here.
+  - **Why.** Slicing the import was not enough: most of a full import is spent inside single
+    commits (road surfaces, the drape), a commit cannot yield, and a window owned by Revit's main
+    window shares Revit's input queue, so it froze with Revit. Measured on the full plan before this
+    changed, Revit was hung in 61 to 74% of 5-second samples, the window never once showed road
+    surfaces, water or the drape as the step in flight, and in 2027 no UI Automation read of it
+    completed for the drape's 2,759 s.
+  - **How.** `ImportWindowHost` runs it on an STA thread with its own `Dispatcher`, unowned, and
+    only posts cross: views of the run (`ImportRunView`) one way; Import, Cancel, a dismissal, a log
+    line and a fault the other, onto Revit's dispatcher, where they run as the click handlers they
+    used to be. Every `Transaction` commit goes through `CommitAndReport`, which says on both sides
+    that Revit is committing (the drape's `SubTransaction` commits do not, and regenerate nothing).
+    What the window then shows a curator is [`README.md`](./README.md)'s, and told only there.
+  - **⛔ Which steps are announced: any measured at 30 s or more in any version.** Each such step
+    says, before its wait, what it was measured at, per version, and the window shows that beside
+    the step's clock; no other step says anything, so the line is worth reading when it appears. The
+    threshold is `SlowStepNotice.AnnouncedFromSeconds`, the figures `SlowStepNotice.Measured`, and
+    which steps are quiet follows from them rather than from a list kept by hand. A step is announced
+    only when it has the work that was measured, and the shim hands the core facts, never a decision.
+  - **Not sliced for Cancel.** The drape and the polygon layers count their subdivisions inside
+    their one slice, but Cancel still lands only between slices: a slice never yields inside an open
+    transaction, and slicing them means splitting the transaction, which would change what a
+    rollback undoes.
+  - **What is headless.** What the window says (`WindowLabels`, `ImportRunView`), when it floats,
+    takes the focus or comes forward, where it opens (`ImportWindowStacking`,
+    `ImportWindowPlacement`), and what each notice says (`SlowStepNotice`). It never floats over a
+    Revit modal. `ForegroundWatch` carries the stacking out without ever sending Revit's thread a
+    message.
+  - **Its edges.** An exception leaving the window's thread would end Revit, so the thread body is
+    inside a net; a fault lowers the window, the first is said in the add-in's fault dialog and the
+    rest go to the log. A window's callback that arrives while a slice runs — should Revit pump
+    messages inside a commit — is held until the slice ends, and the log counts it. Nothing closes an
+    unowned window with Revit, so every window still up, a finished one showing its report included,
+    is tracked until its thread ends and closed at `OnShutdown`; a checklist whose project has closed
+    goes with it. Two statics went thread-aware: `BrandChrome`'s primary style is built per thread,
+    and `ResourceImages`' table is locked.
+  - **Not taken.** `ControlledApplication.ProgressChanged` is silent through 57% of the road commit
+    and 99.6% of the drape's, so it cannot feed a bar. `DisableProcessWindowsGhosting` is
+    process-wide with no undo.
+  - **Proven offscreen, without Revit.** A scratch exe drove the built add-in's host while its own
+    UI thread hung in "commits" of up to 20 s. Read by UI Automation from another process every
+    second, the window answered every read, each in under a quarter of a second, with its clock and
+    the drape's count moving, `Finishing` named, and a Cancel pressed mid-commit said at once and
+    landing after the commit. Opened while another application was in front, it was behind that
+    application from its first visible moment: WPF's `Show` raises a window as it shows it, so
+    `ForegroundWatch` rewrites that one `WM_WINDOWPOSCHANGING` rather than moving the window first.
+  - **Unexecuted inside Revit.** Whether Revit's own hooks leave the window's thread alone, the
+    foreground hook against a real Revit and its modals, and the placement over a minimised Revit.
+    What it gives a curator, and gives up, is [`README.md`](./README.md)'s.
 - **The site location and the context view have left that set.** `SiteLocation.Latitude`/`Longitude`,
   `View3D.CreateIsometric`, `ParameterFilterElement.Create` over every model category that
   `ParameterFilterUtilities.GetFilterableParametersInCommon` says has Comments, the 2023+
@@ -319,7 +369,7 @@ follow.
   and the material is its type's. Each element is asked which shape it has (`SubDivisionMaterial`),
   and a typed one is moved onto a type of its own with `ChangeTypeId`. This bullet is where what
   that costs is recorded; the code's comments point here, and the import's notices quote it. Every
-  figure below is order `4276ef78` on a 74,855-point terrain unless it says otherwise, and the
+  figure below is order `4276ef78` on a 75,314-point terrain unless it says otherwise, and the
   timing tables are in the pull request that added the move to the cut.
   - **The call is the whole cost of a retype.** Profiled in the drape in 2027, it was 96% of the
     retype loop, a median of 1.74 s a subdivision over 405; every other call around it took

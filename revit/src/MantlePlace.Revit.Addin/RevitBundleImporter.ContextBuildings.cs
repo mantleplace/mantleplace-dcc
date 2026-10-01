@@ -81,6 +81,10 @@ internal sealed partial class RevitBundleImporter
             yield break;
         }
 
+        // Before the site model is opened: that one call is most of the step, and the window can only
+        // time it. Nothing to copy means it is never opened, and nothing is announced above.
+        Announce(SlowStepNotice.For(step.Kind, _terrainVertexCount, globalIds.Count));
+
         if (ReadBuildingSolids(step, ifcPath, globalIds) is not { } solids)
         {
             yield break;

@@ -2,7 +2,10 @@ using System.Globalization;
 
 namespace MantlePlace.Revit.Core;
 
-/// <summary>How far through its work a chunked step is, in the elements it creates.</summary>
+/// <summary>
+/// How far through its work a step is, in the elements it handles: counted at each chunk's commit, or
+/// by the step itself inside its one slice (<see cref="StagedImport.ReportProgress"/>).
+/// </summary>
 /// <param name="Done">Elements handled so far, counting the chunk that has just committed.</param>
 /// <param name="Total">Elements the step has to handle in all.</param>
 public readonly record struct StepProgress(int Done, int Total)
@@ -39,12 +42,25 @@ public enum ImportStepState
 /// <summary>One row of a staged import: the step, and where it stands.</summary>
 public sealed class StagedStep(ImportStep step)
 {
+    private readonly List<string> _notices = [];
+
     public ImportStep Step { get; } = step;
 
     public ImportStepState State { get; internal set; } = ImportStepState.Waiting;
 
-    /// <summary>The last chunk's progress, or <c>null</c> for a step that has reported none.</summary>
+    /// <summary>The last count of how far it has got, or <c>null</c> for a step that has reported none.</summary>
     public StepProgress? Progress { get; internal set; }
+
+    /// <summary>
+    /// Whether Revit is inside one of this step's commits — where it answers nothing until the commit
+    /// is over. Never true once the step has ended, however it ended.
+    /// </summary>
+    public bool Committing { get; internal set; }
+
+    /// <summary>What this step said about its own wait before it, in the order it said it (<see cref="SlowStepNotice"/>).</summary>
+    public IReadOnlyList<string> Notices => _notices;
+
+    internal void Announce(string notice) => _notices.Add(notice);
 }
 
 /// <summary>
@@ -126,6 +142,20 @@ public sealed class StagedImport
     public bool CancelRequested { get; private set; }
 
     /// <summary>
+    /// Whether the host is doing the work that follows the last step — smooth shading the terrain when
+    /// the drape did not settle it. No row is in flight, and Revit can still be busy for minutes.
+    /// </summary>
+    public bool Finishing { get; private set; }
+
+    /// <summary>Whether Revit is inside a commit of that work.</summary>
+    internal bool FinishCommitting { get; private set; }
+
+    private readonly List<string> _finishNotices = [];
+
+    /// <summary>What the work after the last step has said about its wait, while it is under way.</summary>
+    internal IReadOnlyList<string> FinishNotices => _finishNotices;
+
+    /// <summary>
     /// Whether a cancel actually stopped something. A cancel that arrives once every step has ended
     /// has nothing to stop, and the run is reported as the finished run it is.
     /// </summary>
@@ -151,6 +181,85 @@ public sealed class StagedImport
     /// work, and a re-import of the same build reuses them.
     /// </summary>
     public void RequestCancel() => CancelRequested = true;
+
+    /// <summary>
+    /// The host is about to commit a transaction for the step in flight, or for the work after the last
+    /// step (<see cref="Finishing"/>). Nothing otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Said from inside the step's own slice, so the window can be told before Revit stops answering
+    /// rather than after. A commit cannot yield (<see cref="IImportStepRunner.Run"/>), so this is the
+    /// last word the window gets until it returns.
+    /// </remarks>
+    public void CommitStarted() => SetCommitting(true);
+
+    /// <summary>The commit <see cref="CommitStarted"/> announced has returned, whether or not it stood.</summary>
+    public void CommitEnded() => SetCommitting(false);
+
+    /// <summary>
+    /// How far the step in flight has got inside its one slice, counted by the step itself: the drape
+    /// giving the photograph to each subdivision in turn, a polygon layer cutting each of its
+    /// subdivisions. Nothing when no step is in flight.
+    /// </summary>
+    /// <remarks>
+    /// A slice cannot yield inside an open transaction (<see cref="IImportStepRunner.Run"/>), so a step
+    /// that does all its work in one cannot be sliced for Cancel. It can still say how far it has got,
+    /// and the window shows the count beside the step's clock.
+    /// </remarks>
+    public void ReportProgress(StepProgress progress)
+    {
+        if (Current is { } staged)
+        {
+            staged.Progress = progress;
+        }
+    }
+
+    /// <summary>The host starts the work after the last step. Nothing while a step is still to run.</summary>
+    public void FinishStarted()
+    {
+        if (IsFinished)
+        {
+            Finishing = true;
+        }
+    }
+
+    /// <summary>The work after the last step is over, however it ended.</summary>
+    public void FinishEnded()
+    {
+        Finishing = false;
+        FinishCommitting = false;
+        _finishNotices.Clear();
+    }
+
+    /// <summary>
+    /// Keeps what the step in flight — or the work after the last step — has just told the curator
+    /// about its wait, for the window to show beside its clock. Nothing between steps.
+    /// </summary>
+    public void Announce(string notice)
+    {
+        ArgumentNullException.ThrowIfNull(notice);
+        if (Current is { } staged)
+        {
+            staged.Announce(notice);
+        }
+        else if (Finishing)
+        {
+            _finishNotices.Add(notice);
+        }
+    }
+
+    /// <summary>Marks a commit on the step in flight or, after the last step, on the finishing work.</summary>
+    private void SetCommitting(bool committing)
+    {
+        if (Current is { } staged)
+        {
+            staged.Committing = committing;
+        }
+        else if (Finishing)
+        {
+            FinishCommitting = committing;
+        }
+    }
 
     /// <summary>Runs every remaining slice now, for a caller with no message loop to give back.</summary>
     public void RunToEnd()
@@ -316,6 +425,10 @@ public sealed class StagedImport
     {
         _work?.Dispose();
         _work = null;
+
+        // A commit that threw can end the step before the host has said the commit is over. An
+        // ended step is never left reading as inside one, whatever the host managed to say.
+        staged.Committing = false;
         staged.State = state;
         _runner.StepEnded(staged.Step, state, failure);
     }

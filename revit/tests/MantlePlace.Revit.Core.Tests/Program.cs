@@ -59,6 +59,7 @@ exitCode |= AuthClientTests.Run();
 exitCode |= AccountRibbonTests.Run();
 exitCode |= RibbonImageryTests.Run();
 exitCode |= WindowLabelsTests.Run();
+exitCode |= ImportWindowStackingTests.Run();
 exitCode |= VaultRowsTests.Run();
 exitCode |= DeliveryHeaderTests.Run();
 exitCode |= VaultConformanceTests.Run();

@@ -36,7 +36,7 @@ internal sealed partial class RevitBundleImporter
             Say(cleaned.Explanation);
         }
 
-        BuildTerrain(points, LinearUnits.MetresPerUnit(step.Units), step.EntryName, "points", stamp, step.ToposolidType);
+        BuildTerrain(step.Kind, points, LinearUnits.MetresPerUnit(step.Units), step.EntryName, "points", stamp, step.ToposolidType);
     }
 
     /// <summary>
@@ -97,7 +97,7 @@ internal sealed partial class RevitBundleImporter
 
         // 1.0, not step.Units: SurfaceTinFrame consumed the artifact's unit when it subtracted the
         // origin, exactly as TreePointsReader does, so these coordinates are already metres.
-        BuildTerrain(vertices, 1.0, step.EntryName, "TIN vertices", stamp, step.ToposolidType);
+        BuildTerrain(step.Kind, vertices, 1.0, step.EntryName, "TIN vertices", stamp, step.ToposolidType);
     }
 
     /// <summary>
@@ -165,6 +165,7 @@ internal sealed partial class RevitBundleImporter
     /// what the imagery type is duplicated from, and its thickness is what the base plane clears.
     /// </param>
     private void BuildTerrain(
+        ImportStepKind kind,
         IReadOnlyList<SurfacePoint> points,
         double metresPerUnit,
         string entryName,
@@ -208,7 +209,7 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        if (!TryBuildTerrain(plan, chosenType, toposolidType, revitPoints, relief, stamp))
+        if (!TryBuildTerrain(kind, plan, chosenType, toposolidType, revitPoints, relief, stamp, announce: true))
         {
             // ⛔ The retry is not defensive coding. Toposolid.Create takes no offset argument, so the
             // height offset can only be written after the element exists — and whether Revit
@@ -219,7 +220,7 @@ internal sealed partial class RevitBundleImporter
             TerrainBasePlan escalated = TerrainBasePlanner.Escalate(plan, relief);
             Say(escalated.Explanation);
 
-            if (!TryBuildTerrain(escalated, chosenType, toposolidType, revitPoints, relief, stamp))
+            if (!TryBuildTerrain(kind, escalated, chosenType, toposolidType, revitPoints, relief, stamp, announce: false))
             {
                 Say("The terrain could not be built on either base plane, so this project has no "
                     + "ground. The rest of the bundle was still imported.");
@@ -239,13 +240,19 @@ internal sealed partial class RevitBundleImporter
     /// attempt rolls the duplicate back with the terrain and the retry finds the document as the
     /// first attempt did.
     /// </remarks>
+    /// <param name="announce">
+    /// Whether to say the step's notice: on the first attempt only, once the type is decided, so it
+    /// names the work this terrain actually has — the imagery type, or the default it fell back to.
+    /// </param>
     private bool TryBuildTerrain(
+        ImportStepKind kind,
         TerrainBasePlan plan,
         CandidateToposolidType type,
         TerrainToposolidType toposolidType,
         IList<XYZ> revitPoints,
         TerrainRelief relief,
-        string stamp)
+        string stamp,
+        bool announce)
     {
         ImportFailureSwallower swallower = new("Building the terrain");
         using Transaction transaction = BeginTransaction("Mantle Place: terrain from points file", swallower);
@@ -264,6 +271,12 @@ internal sealed partial class RevitBundleImporter
                 typeId = imagery.Id;
                 typeName = imagery.Name;
             }
+        }
+
+        // Before the commit, where the time goes: tens of seconds on the imagery type, a few on the default.
+        if (announce)
+        {
+            Announce(SlowStepNotice.ForTerrain(kind, onImageryType: typeId != new ElementId(type.Id), relief.PointCount));
         }
 
         Toposolid terrain = Toposolid.Create(_document, revitPoints, typeId, levelId);
@@ -427,6 +440,11 @@ internal sealed partial class RevitBundleImporter
 
         _smoothingSettled = true;
 
+        // Before the commit, which is shaded across every subdivision on the terrain: seconds on a
+        // bare terrain, up to two minutes after every polygon layer in Revit 2026 and 2027. After the
+        // last step this is the finishing work, and the window shows it there.
+        Announce(SlowStepNotice.ForSmoothShading(SubDivisionsOnTerrain(), _terrainVertexCount));
+
         ImportFailureSwallower swallower = new("Smoothing the terrain surface");
         using Transaction transaction = BeginTransaction("Mantle Place: terrain smooth shading", swallower);
 
@@ -487,6 +505,12 @@ internal sealed partial class RevitBundleImporter
     private bool HasTerrain()
         => _document.GetElement(
             _terrainId != ElementId.InvalidElementId ? _terrainId : TerrainToposolidId()) is Toposolid;
+
+    /// <summary>How many subdivisions the terrain this import works on carries now; 0 when there is none.</summary>
+    private int SubDivisionsOnTerrain()
+        => _document.GetElement(_terrainId != ElementId.InvalidElementId ? _terrainId : TerrainToposolidId()) is Toposolid terrain
+            ? terrain.GetSubDivisionIds().Count
+            : 0;
 
     /// <summary>Every level in the project, as the pure planner needs to see it.</summary>
     private List<CandidateLevel> CollectLevels()

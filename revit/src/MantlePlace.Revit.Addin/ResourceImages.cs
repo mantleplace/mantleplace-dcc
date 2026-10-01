@@ -35,6 +35,13 @@ internal static class ResourceImages
     private static readonly Dictionary<string, ImageSource?> Decoded = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Guards <see cref="Decoded"/>: the ribbon decodes on Revit's thread and the import window's
+    /// header on its own (<see cref="ImportWindowHost"/>). What it hands out is frozen, so the images
+    /// themselves cross threads freely; only the table needs the lock.
+    /// </summary>
+    private static readonly object DecodedLock = new();
+
+    /// <summary>
     /// The render called <paramref name="fileName"/>, frozen, or null if it will not decode.
     /// </summary>
     /// <remarks>
@@ -50,6 +57,14 @@ internal static class ResourceImages
     /// </para>
     /// </remarks>
     internal static ImageSource? Decode(string fileName)
+    {
+        lock (DecodedLock)
+        {
+            return DecodeLocked(fileName);
+        }
+    }
+
+    private static ImageSource? DecodeLocked(string fileName)
     {
         if (Decoded.TryGetValue(fileName, out ImageSource? cached))
         {
@@ -90,5 +105,11 @@ internal static class ResourceImages
     }
 
     /// <summary>Drops every decoded image. Called from <c>OnShutdown</c> and nowhere else.</summary>
-    internal static void Forget() => Decoded.Clear();
+    internal static void Forget()
+    {
+        lock (DecodedLock)
+        {
+            Decoded.Clear();
+        }
+    }
 }
