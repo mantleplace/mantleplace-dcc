@@ -64,6 +64,7 @@ host met the contract for real:
 | **v1.13** | ⛔`HPS-34`'s Revit row gains the MPB 1.3.0 own-copy pointers, `revit.drape` and each layer of `revit.vectors`, whose `sha256` the schema requires; the shared `vector` layers stay optional. The Revit reader began refusing a present own copy with no hash in the change that first placed from it, and the table still listed only the three v19 deliverables |
 | **v1.14** | `HPS-51` gains a tenth action, saying before a bundle import runs what the bundle holds and the import cannot offer. Revit's checklist was built from the plan, so a layer the planner skipped never became a row: the curator saw a shorter list and no reason, and read the reason only in the closing report, in the planner's words, EPSG codes included. The list that fixed it speaks to the user and leaves the technical sentence to the log, and the reference host's roadmapped picker will meet the same bundles, so its words were fixed here first |
 | **v1.15** | `HPS-55` — a vault listing nobody asked for is bounded. Revit began telling the curator about orders they never prepared from it, which means listing the vault in the background on every signed-in session; nothing in the standard bounded a request the curator did not make, and the only polling rule, `HPS-25`, is about a job someone is waiting on |
+| **v1.16** | ⛔`HPS-53` — a frame names its **vertical datum** as well as its CRS and its unit, and a height whose datum is not the one the host's ground is in is refused by name, never converted. MPB 1.8.0 moved a US order's heights in the delivery CRS from EGM2008 to NAVD88 (GEOID18) and stated the datum beside each of them. The fixed-frame host's road layer already refused by datum. The order-frame host read the strings and acted on none, which is right within one bundle and wrong across two: a re-import of the 1.8.0 rebuild over a ground from an earlier build put roads, trees, contours and buildings up to a metre off that ground, and the import reported success |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -1193,9 +1194,21 @@ states is that block's; a case for the fixed-frame host's own pointers is that h
 ⛔ **`HPS-53` — A host places a file only where it can show the file's frame is its host frame, and
 otherwise refuses that file by name.** Read the frame from the thing you are placing — never from the
 bundle, never from the delivery tier, and never from the last file that worked. A host about to place
-projected coordinates reads **both halves** of the frame the format states for them, the CRS and the
-linear unit, and where it cannot read both, or reads a CRS that is not its own, the file is
-**unplaceable**. An unstated CRS is never assumed to match, and neither is an unstated unit.
+projected coordinates reads the frame the format states for them, the CRS and the linear unit, and
+where it cannot read both, or reads a CRS that is not its own, the file is **unplaceable**. An
+unstated CRS is never assumed to match, and neither is an unstated unit.
+
+**A frame names its vertical datum too.** Heights are coordinates, and the datum is what they are
+stated in: a height in another datum than the ground it stands on is a number that looks exactly like
+an elevation and is wrong by however far apart the two datums are at that site. So a host about to
+place a height reads the datum the format states for it and places it only where that datum is the
+one its ground is in — a fixed-frame host's own datum, an order-frame host's ground as it was built.
+A height in another datum is **unplaceable**, and so is one in a datum the host does not know, named,
+even against the same string. Where the format version predates the datum being stated, the version
+stands in: every bundle before MPB 1.8.0 was EGM2008, so content from before it stating none reads as
+EGM2008, and so does a ground that records none. A stated datum always outranks the version, and a
+height that states none in a version that owes a statement is never assumed to match. Datums are
+compared verbatim.
 
 **One statement stands in for an unstated unit, and only where the format makes it.** Where the format
 says a file's values follow the delivered linear unit — the terrain points, and the tree points'
@@ -1208,7 +1221,8 @@ unit the file does state always wins.
 ⛔ **The refusal is a named skip, and it is never a conversion.** The host reports which content it
 did not place and why, in the words the user is already reading the import in (`HPS-51`), and the
 import brings in everything else. It does not reproject, does not scale a unit to reconcile a
-mismatch, and does not fall back to a default frame: this is `HPS-35`'s fail-closed rule applied to
+mismatch, does not shift a height from one datum to another, and does not fall back to a default
+frame: this is `HPS-35`'s fail-closed rule applied to
 frames, and `HPS-33`'s apply-verbatim boundary is what forbids the arithmetic that would "fix" it.
 The failure being guarded is arithmetic that succeeds — foot coordinates minus a metre origin is a
 number that looks exactly like a position, and every test that does not check where content landed
@@ -1228,13 +1242,22 @@ Revit's `SiteFrame` is the furthest any host has taken it. `CanPlaceGeographic` 
 `CanPlaceProjected` decide the CRS half; `Holds` decides whether the host block's declared
 `file_frame` is the origin's frame; and `IsInOriginUnit` decides whether absolute coordinates are in
 the unit they are subtracted in. The planner compares each own-block file's `units` with that
-`file_frame`'s. `agent-review` covers the rest. Two corpus cases pin it, both carrying `appliesTo` for the
-fixed-frame host, because the pointer and the extent they read are that host's block's.
+`file_frame`'s. Revit's `HeightDatums` decides the datum: the planner hands each height step the
+datum its content states, the ground's stamp records the datum it was built in (`TerrainIdentity`),
+and `Refusal` compares the two. `agent-review` covers the rest. Four corpus cases pin it. Three carry
+`appliesTo` for the fixed-frame host, because the pointer, the extent and the ground they read are
+that host's block's.
 `manifest.treePointsFrame` pins the **extent substitute**: a tree-point file in a foot frame beside a
 metric origin, under a pointer that states no frame, refused by name.
 `manifest.treePointsStatedFrame` pins the **stated** frame: a CRS and both units read beside the
 pointer, a file refused because they are not the host's or are not all there, and the extent still
 refusing rows that contradict a frame stated as the host's.
+`manifest.roadSplinesStatedDatum` pins the **datum** against the fixed-frame host's EGM2008 ground: a
+road layer stating another datum, a datum no reader knows, or none on a manifest that owes one,
+refused by name. The fourth, `manifest.revitHeightDatum`, carries `appliesTo` for the order-frame
+host and pins the datum against a ground that records its own: the content's statement, read through
+the parser and the planner, compared with what the ground records, unstated against unstated, and a
+stated datum outranking the version.
 
 **`HPS-54` — A host is a fixed-frame host or an order-frame host, and says which in its own
 `CLAUDE.md`.** Both kinds are the glossary's, and so is which of the two hosts is which; what this
@@ -1281,7 +1304,7 @@ records that eviction is deliberately explicit-only.
 | The .NET SDK trigger (`HPS-43`)                                                                                                                                                                                           | `doc-only`                                             |
 | The local install slot and its check script (`HPS-50`)                                                                                                                                                                    | `agent-review`, proven by running the scripts          |
 | The shared user-facing vocabulary (`HPS-51`)                                                                                                                                                              | `agent-review`; a pure-core test where a host has one  |
-| Placing from the host block, and refusing a file whose frame the host cannot match (`HPS-52`, `HPS-53`)                                                                                                    | `agent-review`, plus a pure-core test where a host has moved the decision out of its shim; **no corpus case yet** for `HPS-52`; both halves of `HPS-53` have one, for the fixed-frame host |
+| Placing from the host block, and refusing a file whose frame the host cannot match (`HPS-52`, `HPS-53`)                                                                                                    | `agent-review`, plus a pure-core test where a host has moved the decision out of its shim; **no corpus case yet** for `HPS-52`; both halves of `HPS-53` have one for the fixed-frame host, and its datum has one for each host |
 | The host's frame kind, declared in its own `CLAUDE.md` (`HPS-54`)                                                                                                                                          | `agent-review`                                         |
 | The bounds on a vault listing nobody asked for (`HPS-55`)                                                                                                                                                  | `agent-review`; a pure-core test where a host has one  |
 
@@ -1289,8 +1312,9 @@ Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS
 the corpus proves the behaviour, review catches the shape a vector cannot see. `HPS-53` appears twice
 as well — in the corpus row and in its own — for a narrower reason than the rest: the corpus proves
 it for the fixed-frame host's tree points, the extent substitute (`manifest.treePointsFrame`) and the
-stated frame (`manifest.treePointsStatedFrame`), while every other file a host places is still that
-host's own pure-core test and review.
+stated frame (`manifest.treePointsStatedFrame`), and for the datum in each host
+(`manifest.roadSplinesStatedDatum`, `manifest.revitHeightDatum`), while every other file a host
+places is still that host's own pure-core test and review.
 
 The rules that **cannot fail loudly** are `HPS-07`, `HPS-10`, `HPS-20`, `HPS-21`, `HPS-23`,
 `HPS-24`, `HPS-25a`, `HPS-26`, `HPS-27`, `HPS-30`, `HPS-31`, `HPS-32`, `HPS-33`, `HPS-49`, `HPS-52` and `HPS-53`. Each one produces a plugin that

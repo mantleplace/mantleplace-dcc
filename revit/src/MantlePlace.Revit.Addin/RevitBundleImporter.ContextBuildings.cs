@@ -46,6 +46,11 @@ internal sealed partial class RevitBundleImporter
     /// </remarks>
     private IEnumerable<StepProgress> ImportContextBuildings(ImportStep step)
     {
+        if (HeightsRefused(step))
+        {
+            yield break;
+        }
+
         string ifcPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
         if (SiteModelReader.TryRead(File.ReadAllText(ifcPath), out SiteModelContents contents) is { } readError)
         {

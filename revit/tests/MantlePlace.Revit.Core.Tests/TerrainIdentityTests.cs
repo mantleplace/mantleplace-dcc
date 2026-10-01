@@ -41,6 +41,46 @@ internal static class TerrainIdentityTests
             run.Equal(TerrainIdentity.Stamp(Stem, Sha.ToUpperInvariant()), StampFor(Stem, ShaToken), "upper-case sha");
         });
 
+        run.Case("the stamp records the ground's vertical datum after the build token, and only when there is one", () =>
+        {
+            run.Equal(
+                TerrainIdentity.Stamp(Stem, Sha, "NAVD88 (GEOID18)"),
+                StampFor(Stem, ShaToken) + "; heights in NAVD88 (GEOID18)",
+                "recorded");
+            run.Equal(TerrainIdentity.Stamp(Stem, Sha, null), StampFor(Stem, ShaToken), "none to record");
+            run.Equal(
+                TerrainIdentity.Decide([], Stem, Sha, "EGM2008-orthometric").Stamp,
+                StampFor(Stem, ShaToken) + "; heights in EGM2008-orthometric",
+                "a created ground carries it");
+        });
+
+        run.Case("a stamp's datum is read back verbatim, and a stamp from before the record has none", () =>
+        {
+            string recorded = TerrainIdentity.Stamp(Stem, Sha, "NAVD88 (GEOID18)");
+            run.Equal(TerrainIdentity.DatumOf(recorded, Stem), "NAVD88 (GEOID18)", "recorded");
+            run.Equal(TerrainIdentity.BuildTokenOf(recorded, Stem), ShaToken, "the build half is unchanged");
+            run.Equal(TerrainIdentity.DatumOf(StampFor(Stem, ShaToken), Stem), null, "the stamp before the record");
+            run.Equal(TerrainIdentity.DatumOf(recorded, OtherStem), null, "another order's stamp");
+            run.Equal(TerrainIdentity.DatumOf(StampFor(Stem, ShaToken) + "; heights in ", Stem), null, "an empty record");
+        });
+
+        run.Case("the datum record changes no arm: same build reuses, a rebuild refuses", () =>
+        {
+            ExistingTerrain recorded = new(1721188, TerrainIdentity.Stamp(Stem, Sha, "EGM2008-orthometric"));
+            run.Equal(
+                (int)TerrainIdentity.Decide([recorded], Stem, Sha, "NAVD88 (GEOID18)").Disposition,
+                (int)TerrainDisposition.Reuse,
+                "same surface, whichever datum this bundle states");
+            run.Equal(
+                (int)TerrainIdentity.Decide([recorded], Stem, RebuiltSha, "NAVD88 (GEOID18)").Disposition,
+                (int)TerrainDisposition.RefuseStale,
+                "a rebuild");
+            run.Equal(
+                (int)TerrainIdentity.Decide([new ExistingTerrain(5, StampFor(Stem, ShaToken))], Stem, Sha, "NAVD88 (GEOID18)").Disposition,
+                (int)TerrainDisposition.Reuse,
+                "a ground from before the record is still this bundle's");
+        });
+
         run.Case("a first import into a project with no ground builds and says nothing", () =>
         {
             TerrainDecision decision = TerrainIdentity.Decide([], Stem, Sha);

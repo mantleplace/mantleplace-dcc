@@ -203,9 +203,9 @@ _Avoid_: bundle CRS, project CRS, the EPSG
 
 **Frame**:
 What one file's coordinates are stated in — a coordinate reference system, or an offset from a stated
-origin, and a linear unit. A frame belongs to a file, never to a bundle and never to a host block.
-The word has also been used for the delivery CRS and for whether a file's coordinates are absolute
-or offsets; each of those is one part of a frame.
+origin, a linear unit, and the vertical datum its heights are in. A frame belongs to a file, never to
+a bundle and never to a host block. The word has also been used for the delivery CRS and for whether
+a file's coordinates are absolute or offsets; each of those is one part of a frame.
 _Avoid_: bundle units, coordinate system (for a whole bundle), delivery frame
 
 **Host frame**:

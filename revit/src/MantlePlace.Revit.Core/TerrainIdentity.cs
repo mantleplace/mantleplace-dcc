@@ -74,6 +74,15 @@ public sealed class TerrainDecision
 /// so its terrain is built.
 /// </para>
 /// <para>
+/// <b>The stamp also records the ground's vertical datum</b>, after the build token:
+/// <c>Mantle Place Terrain {stem}/{build}; heights in NAVD88 (GEOID18)</c>. A frame names its datum as
+/// well as its CRS and its unit (<c>HPS-53</c>), and every later step that places a height compares
+/// its own with this record (<see cref="HeightDatums"/>). It is a suffix so the stamp written before it
+/// stays readable as it is: a stamp with none records no datum, which is exactly what a ground built
+/// before the record, or from a manifest before MPB 1.8.0, has to say. A ground that is reused keeps
+/// the stamp it has, record or none — rewriting it would claim a datum nobody can show.
+/// </para>
+/// <para>
 /// ⛔ <b>Nothing here deletes.</b> The other host answers this same bug by replacing prior content,
 /// which is right where the imported content is generated and disposable. In Revit it is not: a
 /// curator hosts buildings on the ground, draws their own subdivisions on it and sets up views
@@ -99,6 +108,10 @@ public static class TerrainIdentity
 {
     private const string Prefix = "Mantle Place Terrain ";
 
+    /// <summary>What separates the build token from the ground's recorded vertical datum.</summary>
+    /// <remarks>A build token is hex or <see cref="UnknownBuild"/>, so it never holds this.</remarks>
+    private const string DatumSeparator = "; heights in ";
+
     /// <summary>
     /// The build token for a bundle that declares no sha256 for its surface.
     /// </summary>
@@ -120,10 +133,15 @@ public static class TerrainIdentity
     private const int BuildTokenLength = 12;
 
     /// <summary>The stamp a terrain built from <paramref name="artifactSha256"/> carries.</summary>
-    public static string Stamp(string cacheKeyStem, string? artifactSha256)
+    /// <param name="verticalDatum">
+    /// The datum the ground's heights are in, as <see cref="HeightDatums.GroundStatement"/> read it, or
+    /// <c>null</c> to record none.
+    /// </param>
+    public static string Stamp(string cacheKeyStem, string? artifactSha256, string? verticalDatum = null)
     {
         ArgumentNullException.ThrowIfNull(cacheKeyStem);
-        return Prefix + cacheKeyStem + "/" + BuildToken(artifactSha256);
+        return Prefix + cacheKeyStem + "/" + BuildToken(artifactSha256)
+            + (string.IsNullOrEmpty(verticalDatum) ? string.Empty : DatumSeparator + verticalDatum);
     }
 
     /// <summary>Whether a Comments string is a terrain stamp THIS plugin wrote for THIS bundle.</summary>
@@ -162,7 +180,32 @@ public static class TerrainIdentity
     /// other Comments.
     /// </summary>
     public static string? BuildTokenOf(string? comments, string cacheKeyStem)
-        => IsStampFor(comments, cacheKeyStem) ? comments![(Prefix + cacheKeyStem + "/").Length..] : null;
+        => Halves(comments, cacheKeyStem)?.Build;
+
+    /// <summary>
+    /// The vertical datum a stamp this bundle owns records, verbatim, or <c>null</c> where it records
+    /// none — including every stamp written before the record existed.
+    /// </summary>
+    public static string? DatumOf(string? comments, string cacheKeyStem)
+        => Halves(comments, cacheKeyStem)?.Datum;
+
+    private static (string Build, string? Datum)? Halves(string? comments, string cacheKeyStem)
+    {
+        if (!IsStampFor(comments, cacheKeyStem))
+        {
+            return null;
+        }
+
+        string rest = comments![(Prefix + cacheKeyStem + "/").Length..];
+        int separator = rest.IndexOf(DatumSeparator, StringComparison.Ordinal);
+        if (separator < 0)
+        {
+            return (rest, null);
+        }
+
+        string datum = rest[(separator + DatumSeparator.Length)..];
+        return (rest[..separator], datum.Length == 0 ? null : datum);
+    }
 
     /// <summary>
     /// What the terrain step does, given every ground toposolid the project holds.
@@ -172,16 +215,18 @@ public static class TerrainIdentity
     /// subdivision ids is not a candidate. Order is the caller's; the first ground stamped for this
     /// bundle wins.
     /// </param>
+    /// <param name="verticalDatum">The datum a created ground records; see <see cref="Stamp"/>.</param>
     public static TerrainDecision Decide(
         IReadOnlyList<ExistingTerrain> grounds,
         string cacheKeyStem,
-        string? artifactSha256)
+        string? artifactSha256,
+        string? verticalDatum = null)
     {
         ArgumentNullException.ThrowIfNull(grounds);
         ArgumentNullException.ThrowIfNull(cacheKeyStem);
 
         string wanted = BuildToken(artifactSha256);
-        string stamp = Prefix + cacheKeyStem + "/" + wanted;
+        string stamp = Stamp(cacheKeyStem, artifactSha256, verticalDatum);
 
         int ours = 0;
         ExistingTerrain? first = null;

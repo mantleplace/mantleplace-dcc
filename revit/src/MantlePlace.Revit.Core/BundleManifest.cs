@@ -47,6 +47,11 @@ public sealed class BundleArtifact
     public string? Units { get; init; }
 
     /// <summary>Raw <c>vertical_datum</c>, e.g. <c>"EGM2008-orthometric"</c>.</summary>
+    /// <remarks>
+    /// On a shared <c>vector</c> layer it is the layer's, stated beside its formats rather than on a
+    /// file. This host's own vector layers state none of their own: they are in the block's
+    /// (<see cref="RevitGeoreference.VerticalDatum"/>).
+    /// </remarks>
     public string? VerticalDatum { get; init; }
 
     /// <summary>
@@ -103,6 +108,15 @@ public sealed class BundleArtifact
     /// <c>local_enu</c> rather than a CRS, or <c>hosts.revit.drape</c>, whose is its extent's CRS.
     /// </summary>
     public bool FromOwnBlock { get; init; }
+
+    /// <summary>
+    /// True for a host-neutral pointer whose file this host's own block also names — the v19
+    /// deliverables (<c>toposurface_points</c>, <c>surface_dxf</c>, <c>ifc_site</c>). The block's
+    /// statements cover a file it names, its <c>vertical_datum</c> included
+    /// (<see cref="HeightDatums.For"/>); unlike <see cref="FromOwnBlock"/> it says nothing about the
+    /// file's horizontal frame.
+    /// </summary>
+    public bool NamedByOwnBlock { get; init; }
 
     /// <summary>
     /// Raw <c>vertical_reference</c>, own vector layers only — present on a layer whose geometry

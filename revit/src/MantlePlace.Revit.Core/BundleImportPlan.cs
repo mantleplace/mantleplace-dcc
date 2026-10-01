@@ -658,6 +658,19 @@ public sealed class ImportStep
     /// which plan the layer is drawn on, and what its zone key quotes.
     /// </summary>
     public HazardPlanFacts? Hazard { get; init; }
+
+    /// <summary>
+    /// The vertical datum this step's heights are stated in, for the kinds that place a height on the
+    /// ground (<see cref="HeightDatums.PlacesHeights"/>), and for the two that build the ground, where
+    /// it is the datum the ground records. <c>null</c> for every other kind.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the step for the reason <see cref="Frame"/> is: which statement covers which file —
+    /// a layer's own, a host-neutral pointer's, or this host's block's for the files it points at — is
+    /// the decision, and it belongs where a headless test reaches it. The shim only compares it with
+    /// the ground it finds (<see cref="HeightDatums.Refusal"/>).
+    /// </remarks>
+    public StatedDatum? HeightDatum { get; init; }
 }
 
 /// <summary>

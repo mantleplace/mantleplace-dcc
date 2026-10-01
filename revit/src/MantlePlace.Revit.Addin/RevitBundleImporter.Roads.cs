@@ -27,6 +27,11 @@ internal sealed partial class RevitBundleImporter
     /// </remarks>
     private void ImportRoadCentrelines(ImportStep step)
     {
+        if (HeightsRefused(step))
+        {
+            return;
+        }
+
         if (ReadVectorLayer(step, SiteVectorLayers.For(step.Kind).DrawnFrom, SiteVectorLayers.For(step.Kind).Label) is not { } features)
         {
             return;

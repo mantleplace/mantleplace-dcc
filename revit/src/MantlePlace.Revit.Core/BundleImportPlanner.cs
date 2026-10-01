@@ -436,6 +436,7 @@ public static class BundleImportPlanner
             EntryName = copy!.EntryName,
             Units = copy.Units,
             ExpectedSha256 = copy.ExpectedSha256,
+            HeightDatum = HeightDatums.For(ImportStepKind.LinkSiteIfc, manifest.SiteIfc, manifest),
         });
     }
 
@@ -892,6 +893,7 @@ public static class BundleImportPlanner
             // in step with it.
             FoliageTypeVocabulary = artifact.FoliageTypeVocabulary,
             Hazard = hazard,
+            HeightDatum = HeightDatums.For(kind, artifact, manifest),
         });
     }
 
@@ -1334,6 +1336,7 @@ public static class BundleImportPlanner
             Crop = crop,
             Frame = frame,
             ToposolidType = toposolidType,
+            HeightDatum = HeightDatums.For(kind, artifact, manifest),
         };
         return true;
     }
