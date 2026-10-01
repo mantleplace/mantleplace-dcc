@@ -48,11 +48,12 @@ internal static class ImportChunkingTests
             run.Equal(next, count, "the chunks cover the whole set");
         });
 
-        run.Case("the chunk size is a batch, not a transaction per element nor the whole set", () =>
+        run.Case("the chunk size keeps Cancel prompt without cutting a step into a slice per element", () =>
         {
-            // One element per commit pays Revit's per-transaction overhead tens of thousands of times;
-            // thousands per commit is a freeze long enough that Cancel waits visibly for it.
-            run.True(ImportChunking.ElementsPerTransaction >= 50, "large enough to amortise a commit");
+            // The size is for Cancel: a commit is what Cancel and the import window wait on, so a chunk
+            // must stay a moment. A few elements per chunk would turn a large layer into tens of
+            // thousands of transactions, raises and log lines for no gain in how soon Cancel lands.
+            run.True(ImportChunking.ElementsPerTransaction >= 50, "not a slice per handful of elements");
             run.True(ImportChunking.ElementsPerTransaction <= 1_000, "small enough that a chunk is a moment");
         });
 

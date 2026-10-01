@@ -29,26 +29,28 @@ public static class ImportChunking
     /// <summary>How many elements one transaction creates.</summary>
     /// <remarks>
     /// <para>
-    /// <b>The chunk is there for Cancel, not for speed.</b> A tree is a Planting family instance, and
-    /// Revit charges for it at the commit: 7 to 11 ms per new tree in Revit 2025 and 2027 on a
-    /// 19,755-tree order, depending on what else the machine was running. That cost is per tree, not
-    /// per commit. In Revit 2027 the same trees committed 1,000 at a time took what they took 200 at a
-    /// time (156 s of commits, against 165 s and 167 s), so a larger chunk saves nothing and only
-    /// lengthens the wait below.
+    /// <b>The chunk is there for Cancel, not for speed.</b> A tree is normally a Planting family
+    /// instance (a DirectShape on the Planting category only when its family cannot be had,
+    /// <see cref="TreeFamilyChoice"/>), and Revit charges for it at the commit: about 8 to 11 ms per
+    /// new tree in Revit 2025 and 2027 on a 19,755-tree order, the spread being run to run. That cost
+    /// is per tree, not per commit. In Revit 2027 two runs of one instrumented build placed the same
+    /// trees 1,000 to a commit and 200 to a commit at 7.9 and 7.7 ms per tree, so a larger chunk saves
+    /// nothing and only lengthens the wait below.
     /// </para>
     /// <para>
-    /// Nor is the creation call a lever. A chunk created by one <c>NewFamilyInstances2</c> call, timed
-    /// against one <c>NewFamilyInstance</c> per tree in alternating runs, moved the commit's cost per
-    /// tree by less than the spread between repeat runs of either, in Revit 2025 and 2027. A
-    /// batch-created instance also has no location until the commit regenerates it, so nothing tells
-    /// its instances apart before the commit but the order the call returns them in.
+    /// Nor was the creation call shown to be a lever. A chunk created by one
+    /// <c>NewFamilyInstances2</c> call, timed against one <c>NewFamilyInstance</c> per tree in
+    /// alternating runs, lowered the commit's cost per tree by 7% on average in Revit 2027 and not
+    /// at all in 2025, inside the spread between repeat runs of either. A batch-created instance
+    /// has no location until the commit regenerates it, so nothing tells its instances apart before
+    /// the commit but the order the call returns them in.
     /// </para>
     /// <para>
-    /// What the size does decide is how long Cancel and the import window wait on a commit: 200 trees
-    /// commit in under a second at the start of the step and in several seconds near its end, as the
-    /// project fills. The context buildings share the size; their commits were not timed apart. The
-    /// import log times every commit (<c>[Mantle Place: vegetation] commit took …</c>), which is where
-    /// a retune reads its numbers.
+    /// What the size does decide is how long Cancel and the import window wait on a commit: a
+    /// 200-tree commit averages about 2 s, and single commits in one step range from under half a
+    /// second to several seconds. The context buildings share the size; their commits were not timed
+    /// apart. The import log times every commit (<c>[Mantle Place: vegetation] commit took …</c>),
+    /// which is where a retune reads its numbers.
     /// </para>
     /// </remarks>
     public const int ElementsPerTransaction = 200;
