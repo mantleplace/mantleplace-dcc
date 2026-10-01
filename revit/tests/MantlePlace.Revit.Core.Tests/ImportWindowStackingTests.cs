@@ -17,7 +17,7 @@ internal static class ImportWindowStackingTests
         IsImportWindow: false,
         InThisProcess: false,
         IsRevitMainWindow: false,
-        RevitShowsModal: false,
+        RevitMainWindowEnabled: true,
         ForegroundFloats: false,
         ClassName: string.Empty,
         HungWindowOfThisProcess: false);
@@ -59,7 +59,7 @@ internal static class ImportWindowStackingTests
             foreach (ForegroundFacts facts in new[] { RevitMain, ImportWindow, RevitDialog, RevitGhost })
             {
                 run.Equal(
-                    ImportWindowStacking.Classify(facts with { RevitShowsModal = true }),
+                    ImportWindowStacking.Classify(facts with { RevitMainWindowEnabled = false }),
                     ForegroundHolder.RevitModal,
                     $"{facts.ClassName} while a modal is up");
             }
@@ -81,16 +81,16 @@ internal static class ImportWindowStackingTests
             // The window is centred over Revit, which is where Revit centres its dialogs: floating
             // there would hide a dialog Revit is blocked on.
             run.True(
-                ImportWindowStacking.Next(RevitDialog with { RevitShowsModal = true }, floating: true) == new Stacking(false, StackingMove.SinkBehindForeground),
+                ImportWindowStacking.Next(RevitDialog with { RevitMainWindowEnabled = false }, floating: true) == new Stacking(false, StackingMove.SinkBehindForeground),
                 "under the modal that came forward");
             run.True(
                 ImportWindowStacking.Next(RevitDialog, floating: true) == new Stacking(false, StackingMove.SinkBehindForeground),
                 "under the vault, or a Revit dialog, the curator turned to");
             run.True(
-                ImportWindowStacking.Next(ImportWindow with { RevitShowsModal = true }, floating: true) == new Stacking(false, StackingMove.SinkBelowFloating),
+                ImportWindowStacking.Next(ImportWindow with { RevitMainWindowEnabled = false }, floating: true) == new Stacking(false, StackingMove.SinkBelowFloating),
                 "in front itself while a modal is up: it stops floating, and cannot go behind itself");
             run.True(
-                ImportWindowStacking.Next(RevitMain with { RevitShowsModal = true }, floating: false) == new Stacking(false, StackingMove.None),
+                ImportWindowStacking.Next(RevitMain with { RevitMainWindowEnabled = false }, floating: false) == new Stacking(false, StackingMove.None),
                 "a modal is up and it is not floating: nothing to undo");
         });
 
@@ -119,9 +119,12 @@ internal static class ImportWindowStackingTests
             // A window starts on top of the ordinary windows, so one that should not float has to be
             // put behind what is in front before it appears, or it flashes over another application.
             run.True(ImportWindowStacking.First(RevitMain) == new Stacking(true, StackingMove.Float), "Revit in front: it floats");
+            run.True(
+                ImportWindowStacking.First(RevitDialog) == new Stacking(true, StackingMove.Float),
+                "opened from the vault it takes the focus, so it floats from the start, as it would the moment it had the focus");
             run.True(ImportWindowStacking.First(OtherApp) == new Stacking(false, StackingMove.SinkBehindForeground), "another application: behind it");
             run.True(ImportWindowStacking.First(FloatingOtherApp) == new Stacking(false, StackingMove.SinkBelowFloating), "one that floats: below the floating ones");
-            run.True(ImportWindowStacking.First(RevitDialog with { RevitShowsModal = true }) == new Stacking(false, StackingMove.SinkBehindForeground), "a Revit modal: behind it");
+            run.True(ImportWindowStacking.First(RevitDialog with { RevitMainWindowEnabled = false }) == new Stacking(false, StackingMove.SinkBehindForeground), "a Revit modal: behind it");
             run.True(ImportWindowStacking.First(Desktop) == new Stacking(false, StackingMove.None), "the desktop: where it is");
             run.True(ImportWindowStacking.First(Nothing) == new Stacking(false, StackingMove.None), "nothing: where it is");
         });
@@ -132,26 +135,53 @@ internal static class ImportWindowStackingTests
             // keyboard. An import opened while the curator is elsewhere, or by a harness, does not.
             run.True(ImportWindowStacking.ShowsActivated(RevitMain), "from Revit's main window");
             run.True(ImportWindowStacking.ShowsActivated(RevitDialog), "from the vault window");
-            run.False(ImportWindowStacking.ShowsActivated(RevitDialog with { RevitShowsModal = true }), "not over a modal");
+            run.False(ImportWindowStacking.ShowsActivated(RevitDialog with { RevitMainWindowEnabled = false }), "not over a modal");
             run.False(ImportWindowStacking.ShowsActivated(OtherApp), "not from another application");
             run.False(ImportWindowStacking.ShowsActivated(RevitGhost), "not from a hung Revit");
             run.False(ImportWindowStacking.ShowsActivated(Desktop), "not from the desktop");
             run.False(ImportWindowStacking.ShowsActivated(Nothing), "not from nothing");
         });
 
+        run.Case("lowered for a Revit dialog, it stops floating and sits below the floating windows", () =>
+        {
+            // Revit is about to show a dialog, which opens on top of the ordinary windows: the import
+            // window has to be among them, not above them, before it does.
+            run.True(ImportWindowStacking.Lowered(floating: true) == new Stacking(false, StackingMove.SinkBelowFloating), "floating: lowered");
+            run.True(ImportWindowStacking.Lowered(floating: false) == new Stacking(false, StackingMove.None), "not floating: nothing to do");
+        });
+
         run.Case("a second Import Bundle brings it forward, but never over a modal", () =>
         {
             run.True(ImportWindowStacking.BringsForward(RevitMain), "Revit in front");
-            run.False(ImportWindowStacking.BringsForward(RevitMain with { RevitShowsModal = true }), "the busy dialog, or any modal, is up");
+            run.False(ImportWindowStacking.BringsForward(RevitMain with { RevitMainWindowEnabled = false }), "the busy dialog, or any modal, is up");
         });
 
         run.Case("it opens centred over Revit, and never hangs off Revit's left or top edge", () =>
         {
-            NoticeRect revit = new(100, 50, 1600, 900);
-            run.True(ImportWindowPlacement.CentreOver(revit, 520, 548) == new NoticeRect(640, 226, 520, 548), "centred");
+            ScreenRect revit = new(100, 50, 1600, 900);
+            run.True(ImportWindowPlacement.CentreOver(revit, 520, 548) == new ScreenRect(640, 226, 520, 548), "centred");
 
-            NoticeRect small = new(-1900, 200, 400, 300);
-            run.True(ImportWindowPlacement.CentreOver(small, 520, 548) == new NoticeRect(-1900, 200, 520, 548), "a Revit smaller than the window: its top-left corner");
+            ScreenRect small = new(-1900, 200, 400, 300);
+            run.True(ImportWindowPlacement.CentreOver(small, 520, 548) == new ScreenRect(-1900, 200, 520, 548), "a Revit smaller than the window: its top-left corner");
+        });
+
+        run.Case("a minimised Revit is placed where it will restore to, on the screen", () =>
+        {
+            // Windows keeps a minimised window's restored place in workspace coordinates: from the top
+            // left of its monitor's work area, which a taskbar on the left or the top moves.
+            ScreenRect normal = new(100, 50, 800, 600);
+            ScreenRect workArea = new(60, 0, 1860, 1080);
+            run.True(
+                ImportWindowPlacement.Restored(normal, workArea, restoresMaximised: false) == new ScreenRect(160, 50, 800, 600),
+                "offset by the work area's corner");
+            run.True(
+                ImportWindowPlacement.Restored(normal, workArea, restoresMaximised: true) == workArea,
+                "one that restores maximised fills the work area");
+
+            ScreenRect secondMonitor = new(1920, -1080, 1920, 1040);
+            run.True(
+                ImportWindowPlacement.Restored(new ScreenRect(10, 20, 400, 300), secondMonitor, restoresMaximised: false) == new ScreenRect(1930, -1060, 400, 300),
+                "on a monitor above and to the right of the first");
         });
 
         return run.Report("import window stacking");

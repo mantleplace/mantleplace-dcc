@@ -313,10 +313,12 @@ got: the terrain and the
 subdivisions are one commit each — and so is the drape's retype, which only a ground built before the
 terrain took the imagery type still needs — Revit reports "not responding" while one runs, and a
 Cancel pressed then takes effect when it finishes. The window does not stop with it: it runs on a
-thread of its own, so through a commit it names the step, says Revit is committing, keeps the step's
-clock running and shows what the step said beforehand about how long that has taken, and a Cancel
-pressed then is shown at once. The drape and the polygon layers count their subdivisions as they go
-(`Imagery Drape: 120 of 405`), and smooth shading committed after the last step reads `Finishing`.
+thread of its own, so through a commit it names the step, says Revit is committing and keeps the
+step's clock running (`Road Subdivisions: Revit is committing, 4 min 10 s`), and a Cancel pressed then
+is shown at once. Every step measured at 30 s or more says first what it took on the order it was
+measured on, per Revit version, and the window shows that beside the clock. The drape and the polygon
+layers count their subdivisions as they go (`Imagery Drape: 120 of 405`), though Cancel still waits
+for the step to finish, and smooth shading committed after the last step reads `Finishing`.
 
 Revit's window no longer owns the import window (why is in [`CLAUDE.md`](./CLAUDE.md)), and that is a
 trade:
@@ -325,10 +327,10 @@ trade:
   is stuck in a commit;
 - it goes behind any other application, and behind Revit's own dialogs: it never covers a Revit modal;
 - it has a taskbar button of its own, which is how to find it when it is behind something;
-- it no longer minimises with Revit;
-- while Revit is in front it floats over Revit's other windows too, such as a floating palette.
+- it does not minimise with Revit;
+- while Revit is in front it floats over Revit's palettes too.
 
-It closes with Revit, and a checklist whose project you close goes with the project. Closing the
+It closes with Revit, and the checklist window closes when the project it was opened for closes. Closing the
 window while it runs is a cancel.
 
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import

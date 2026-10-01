@@ -35,10 +35,9 @@ internal sealed partial class RevitBundleImporter
         // leave that link permanently unresolvable, which is the failure this whole step is about.
         if (!File.Exists(companionRvt))
         {
-            if (SlowStepNotice.ForSiteModel(converts: true) is { } notice)
-            {
-                Announce(notice);
-            }
+            // One unit of the work that was measured: converting the IFC. Linking a file an earlier
+            // import converted takes seconds and is not announced.
+            Announce(SlowStepNotice.For(step.Kind, null, 1));
 
             Document? converted = null;
             try

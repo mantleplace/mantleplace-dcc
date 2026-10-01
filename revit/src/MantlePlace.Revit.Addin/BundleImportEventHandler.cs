@@ -48,7 +48,21 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     private string? _zipPath;
     private ExternalEvent? _event;
     private ActiveImport? _import;
+
+    /// <summary>The open import's window. Cleared when the import ends; its host stays in <see cref="_hosts"/>.</summary>
     private ImportWindowHost? _window;
+
+    /// <summary>
+    /// Every import window still on screen, the finished ones showing their report included, until its
+    /// thread ends — so a fault dialog can lower them all and shutdown can close them all.
+    /// </summary>
+    private readonly List<ImportWindowHost> _hosts = [];
+
+    /// <summary>Whether a slice is running, inside which a window's callback must not.</summary>
+    private bool _inSlice;
+
+    /// <summary>The window callbacks that arrived while a slice ran, to run once it has ended.</summary>
+    private readonly List<Action> _heldUntilSliceEnds = [];
 
     /// <summary>Whether the running import came from the vault window, which is who hears about it.</summary>
     private bool _fromVault;
@@ -101,6 +115,15 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// <summary>Brings the running import's window forward, for a second click on Import.</summary>
     internal void ShowRunning() => _window?.BringForward();
 
+    /// <summary>Lowers every import window before Revit shows a dialog, so the dialog does not open under one.</summary>
+    internal void LowerWindow()
+    {
+        foreach (ImportWindowHost host in _hosts)
+        {
+            host.Lower();
+        }
+    }
+
     public void Execute(UIApplication application)
     {
         ArgumentNullException.ThrowIfNull(application);
@@ -125,6 +148,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         }
 
         bool more;
+        _inSlice = true;
         try
         {
             more = import.Advance();
@@ -136,7 +160,12 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             import.Abandon(ex);
             more = false;
         }
+        finally
+        {
+            _inSlice = false;
+        }
 
+        RunHeld(import);
         Refresh(import);
 
         if (more)
@@ -174,36 +203,98 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         Show(import, application.MainWindowHandle, fromVault: true);
     }
 
+    /// <remarks>
+    /// The import becomes this handler's only once its window is open. A window that could not open
+    /// leaves no Import to press and no close box, so nothing could ever end that import: it is
+    /// dropped, and the curator is told why. Every callback is bound to this import, so one arriving
+    /// late from an earlier import's window acts on nothing it does not own.
+    /// </remarks>
     private void Show(ActiveImport import, IntPtr revitWindow, bool fromVault)
     {
-        _import = import;
-        _fromVault = fromVault;
-        import.Changed += () => Refresh(import);
-        _window = ImportWindowHost.Open(
+        ImportWindowRequest request = new(
             Path.GetFileName(import.ZipPath),
             import.DeliveryLine,
             import.UnitsDisagreement,
             import.Checklist,
             revitWindow,
-            BeginChosen,
-            CancelRun,
-            DismissBeforeStart,
-            NoteFromWindow,
-            out Exception? failure);
+            choice => OutsideSlice(() => BeginChosen(import, choice)),
+            () => OutsideSlice(() => CancelRun(import)),
+            () => OutsideSlice(() => DismissBeforeStart(import)),
+            line => OutsideSlice(() => import.Note(line)),
+            fault => OutsideSlice(() => MantlePlaceApplication.SayFault(fault)));
 
-        if (_window is null)
+        ImportWindowHost? host;
+        Exception? failure;
+        try
         {
-            // No window means no Import to press and no close box, so nothing could ever end this
-            // import: it is dropped, and the curator is told why.
-            import.Note($"The import window could not be opened: {failure?.Message}");
-            import.CancelBeforeStart();
-            End(import);
-            MantlePlaceApplication.SayFault(failure ?? new InvalidOperationException("The import window could not be opened."));
+            host = ImportWindowHost.Open(request, out failure);
         }
+        catch (Exception ex) when (ex is InvalidOperationException or OutOfMemoryException)
+        {
+            host = null;
+            failure = ex;
+        }
+
+        if (host is null)
+        {
+            import.Note($"The import window could not be opened, so the import was dropped: {failure?.Message}");
+            import.CancelBeforeStart();
+            import.Dispose();
+            if (fromVault)
+            {
+                Completed?.Invoke(this, "The import window could not be opened, so the import was dropped.");
+            }
+
+            MantlePlaceApplication.SayFault(failure ?? new InvalidOperationException("The import window could not be opened."));
+            return;
+        }
+
+        _import = import;
+        _fromVault = fromVault;
+        _window = host;
+        _hosts.Add(host);
+        host.Ended += () => _hosts.Remove(host);
+        import.Changed += () => Refresh(import);
     }
 
-    /// <summary>Lowers the import window before Revit shows a dialog, so the dialog does not open under it.</summary>
-    internal void LowerWindow() => _window?.Lower();
+    /// <summary>
+    /// Runs a window's callback now, or — when it arrives while a slice is running — once the slice has
+    /// ended.
+    /// </summary>
+    /// <remarks>
+    /// A callback is posted to Revit's dispatcher and runs wherever Revit next pumps messages. Whether
+    /// Revit pumps inside a commit is not known; if it does, a Cancel, a log line or a fault dialog
+    /// could otherwise run in the middle of a slice, with its transaction open. Held, each runs after
+    /// the slice, before the next one is raised, and the log says how many were held, which is how a
+    /// Revit run shows whether it ever happens.
+    /// </remarks>
+    private void OutsideSlice(Action callback)
+    {
+        if (_inSlice)
+        {
+            _heldUntilSliceEnds.Add(callback);
+            return;
+        }
+
+        callback();
+    }
+
+    /// <summary>Runs what arrived during the slice that has just ended, and says that it was held.</summary>
+    private void RunHeld(ActiveImport import)
+    {
+        if (_heldUntilSliceEnds.Count == 0)
+        {
+            return;
+        }
+
+        Action[] held = [.. _heldUntilSliceEnds];
+        _heldUntilSliceEnds.Clear();
+        import.Note($"{held.Length:N0} call(s) from the import window arrived while a slice was running, and were held until it ended.");
+        foreach (Action callback in held)
+        {
+            callback();
+        }
+    }
 
     /// <summary>
     /// A project has closed. If it was the one an import is still choosing for, the checklist goes
@@ -237,7 +328,12 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// </remarks>
     internal void Shutdown()
     {
-        _window?.CloseNow();
+        foreach (ImportWindowHost host in _hosts)
+        {
+            host.CloseNow();
+        }
+
+        _hosts.Clear();
         _window = null;
 
         if (_import is { } import)
@@ -247,9 +343,6 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             _import = null;
         }
     }
-
-    /// <summary>Writes a line from the import window into the open import's log, if there still is one.</summary>
-    private void NoteFromWindow(string line) => _import?.Note(line);
 
     /// <summary>Posts the window the run as it stands. Never waits on the window's thread.</summary>
     private void Refresh(ActiveImport import)
@@ -265,9 +358,9 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// Posted here from the window's click, so it runs on Revit's thread but outside any API context —
     /// so this plans and touches no document. The document work starts at the raise.
     /// </remarks>
-    private void BeginChosen(ImportLayerChoice choice)
+    private void BeginChosen(ActiveImport import, ImportLayerChoice choice)
     {
-        if (_import is not { } import)
+        if (!ReferenceEquals(import, _import) || import.Staged is not null)
         {
             return;
         }
@@ -292,11 +385,12 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// <summary>The curator pressed Cancel, or closed the window, while the import ran.</summary>
     /// <remarks>
     /// Posted here from the window's thread, so it lands when Revit's thread is next free — after the
-    /// commit it may be sitting in — and ahead of the next slice, which it stops.
+    /// commit it may be sitting in, or held until that slice ends should Revit pump inside it
+    /// (<see cref="OutsideSlice"/>) — and ahead of the next slice, which it stops.
     /// </remarks>
-    private void CancelRun()
+    private void CancelRun(ActiveImport import)
     {
-        if (_import is not { Staged: { } staged } import)
+        if (!ReferenceEquals(import, _import) || import.Staged is not { } staged)
         {
             return;
         }
@@ -306,11 +400,11 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     }
 
     /// <summary>The window went before Import was pressed: nothing ran, and the import is dropped.</summary>
-    private void DismissBeforeStart()
+    private void DismissBeforeStart(ActiveImport import)
     {
-        // Only an import that never began: the window treats a close after Import as a cancel, so a
-        // dismissal that reaches a begun import is a stale one and has nothing to drop.
-        if (_import is not { Staged: null } import)
+        // Only this window's import, and only one that never began: the window treats a close after
+        // Import as a cancel, so a dismissal that reaches a begun import is a stale one.
+        if (!ReferenceEquals(import, _import) || import.Staged is not null)
         {
             return;
         }

@@ -150,6 +150,11 @@ public sealed class StagedImport
     /// <summary>Whether Revit is inside a commit of that work.</summary>
     internal bool FinishCommitting { get; private set; }
 
+    private readonly List<string> _finishNotices = [];
+
+    /// <summary>What the work after the last step has said about its wait, while it is under way.</summary>
+    internal IReadOnlyList<string> FinishNotices => _finishNotices;
+
     /// <summary>
     /// Whether a cancel actually stopped something. A cancel that arrives once every step has ended
     /// has nothing to stop, and the run is reported as the finished run it is.
@@ -189,7 +194,7 @@ public sealed class StagedImport
     public void CommitStarted() => SetCommitting(true);
 
     /// <summary>The commit <see cref="CommitStarted"/> announced has returned, whether or not it stood.</summary>
-    public void CommitFinished() => SetCommitting(false);
+    public void CommitEnded() => SetCommitting(false);
 
     /// <summary>
     /// How far the step in flight has got inside its one slice, counted by the step itself: the drape
@@ -223,16 +228,24 @@ public sealed class StagedImport
     {
         Finishing = false;
         FinishCommitting = false;
+        _finishNotices.Clear();
     }
 
     /// <summary>
-    /// Keeps what the step in flight has just told the curator about its wait, for the window to show
-    /// beside the step's clock. Nothing when no step is in flight.
+    /// Keeps what the step in flight — or the work after the last step — has just told the curator
+    /// about its wait, for the window to show beside its clock. Nothing between steps.
     /// </summary>
     public void Announce(string notice)
     {
         ArgumentNullException.ThrowIfNull(notice);
-        Current?.Announce(notice);
+        if (Current is { } staged)
+        {
+            staged.Announce(notice);
+        }
+        else if (Finishing)
+        {
+            _finishNotices.Add(notice);
+        }
     }
 
     /// <summary>Marks a commit on the step in flight or, after the last step, on the finishing work.</summary>

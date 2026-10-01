@@ -389,10 +389,26 @@ internal static class StagedImportTests
                 "Finishing: Revit is committing, 1 min 20 s",
                 "a cancel has nothing left to stop here");
 
-            import.CommitFinished();
+            import.CommitEnded();
             import.FinishEnded();
             run.Equal(Status(import, 81), string.Empty, "and nothing once it is over");
             run.False(ImportRunView.Of(import).Indeterminate, "with the bar at rest");
+        });
+
+        run.Case("what the finishing work says about its wait is shown beside its clock, and goes with it", () =>
+        {
+            // Smooth shading committed after the last step can take minutes in Revit 2026 and 2027,
+            // and it is said before the commit the way a step's wait is.
+            FakeRunner runner = new();
+            StagedImport import = new([Step(ImportStepKind.LinkSiteIfc)], runner);
+            import.RunToEnd();
+
+            import.FinishStarted();
+            import.Announce("Next: smooth shading.");
+            run.Equal(string.Join("|", ImportRunView.Of(import).Notices), "Next: smooth shading.", "shown while finishing");
+
+            import.FinishEnded();
+            run.Equal(ImportRunView.Of(import).Notices.Count, 0, "and gone once it is over");
         });
 
         run.Case("a run still in its steps cannot start finishing", () =>
@@ -539,7 +555,7 @@ internal static class StagedImportTests
     {
         import().CommitStarted();
         during();
-        import().CommitFinished();
+        import().CommitEnded();
         yield break;
     }
 
@@ -548,7 +564,7 @@ internal static class StagedImportTests
     {
         import().CommitStarted();
         during();
-        import().CommitFinished();
+        import().CommitEnded();
         yield return new StepProgress(total, total);
     }
 
@@ -582,7 +598,7 @@ internal static class StagedImportTests
 
         import().CommitStarted();
         inCommit();
-        import().CommitFinished();
+        import().CommitEnded();
         yield break;
     }
 
@@ -603,7 +619,7 @@ internal static class StagedImportTests
         {
             import().CommitStarted();
             inCommit();
-            import().CommitFinished();
+            import().CommitEnded();
             done += size;
             yield return new StepProgress(done, total);
         }

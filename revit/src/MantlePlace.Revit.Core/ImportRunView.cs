@@ -56,7 +56,10 @@ public sealed class ImportRunView
     /// </summary>
     public bool Committing { get; }
 
-    /// <summary>What the step in flight has said about its wait (<see cref="StagedStep.Notices"/>); empty when none is in flight.</summary>
+    /// <summary>
+    /// What the step in flight, or the work after the last step, has said about its wait
+    /// (<see cref="StagedStep.Notices"/>); empty between steps.
+    /// </summary>
     public IReadOnlyList<string> Notices { get; }
 
     /// <summary>Whether a cancel is waiting for its boundary.</summary>
@@ -99,7 +102,7 @@ public sealed class ImportRunView
             currentIndex,
             current?.Progress,
             current?.Committing ?? (run.Finishing && run.FinishCommitting),
-            current is null ? [] : [.. current.Notices],
+            current is not null ? [.. current.Notices] : run.Finishing ? [.. run.FinishNotices] : [],
             run.CancelRequested,
             current is null && run.Finishing);
     }

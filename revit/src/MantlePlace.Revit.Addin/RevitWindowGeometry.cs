@@ -16,6 +16,8 @@ namespace MantlePlace.Revit.Addin;
 internal static class RevitWindowGeometry
 {
     private const double BaselineDpi = 96.0;
+    private const int RestoreToMaximized = 0x0002;
+    private const uint MonitorDefaultToNearest = 0x00000002;
 
     /// <summary>Whether <paramref name="window"/> is minimised.</summary>
     internal static bool IsMinimised(IntPtr window) => window != IntPtr.Zero && IsIconic(window);
@@ -26,42 +28,52 @@ internal static class RevitWindowGeometry
     /// <param name="window">Revit's main window.</param>
     /// <param name="whereRestored">
     /// For a minimised window, where it would be restored to rather than the parking place Windows
-    /// moves it to.
+    /// moves it to: its restored rectangle, kept by Windows from the corner of its monitor's work area,
+    /// or that work area when it restores maximised (<see cref="ImportWindowPlacement.Restored"/>).
     /// </param>
     /// <remarks>
     /// GetWindowRect answers in device pixels and WPF places in device-independent ones, so Revit's
     /// window's own DPI is the divisor: what is placed against it lands on the monitor it is on.
     /// </remarks>
-    internal static NoticeRect? Bounds(IntPtr window, bool whereRestored = false)
+    internal static ScreenRect? Bounds(IntPtr window, bool whereRestored = false)
     {
         if (window == IntPtr.Zero)
         {
             return null;
         }
 
-        NativeRect rect;
+        ScreenRect pixels;
         if (whereRestored && IsIconic(window))
         {
             WindowPlacement placement = new() { Length = Marshal.SizeOf<WindowPlacement>() };
-            if (!GetWindowPlacement(window, ref placement))
+            MonitorInfo monitor = new() { Size = Marshal.SizeOf<MonitorInfo>() };
+
+            // For a minimised window, MonitorFromWindow answers with the monitor it will restore to.
+            if (!GetWindowPlacement(window, ref placement)
+                || !GetMonitorInfo(MonitorFromWindow(window, MonitorDefaultToNearest), ref monitor))
             {
                 return null;
             }
 
-            rect = placement.NormalPosition;
+            pixels = ImportWindowPlacement.Restored(
+                Of(placement.NormalPosition),
+                Of(monitor.WorkArea),
+                restoresMaximised: (placement.Flags & RestoreToMaximized) != 0);
         }
-        else if (!GetWindowRect(window, out rect))
+        else if (GetWindowRect(window, out NativeRect rect))
+        {
+            pixels = Of(rect);
+        }
+        else
         {
             return null;
         }
 
         double scale = GetDpiForWindow(window) is var dpi and > 0 ? dpi / BaselineDpi : 1.0;
-        return new NoticeRect(
-            rect.Left / scale,
-            rect.Top / scale,
-            (rect.Right - rect.Left) / scale,
-            (rect.Bottom - rect.Top) / scale);
+        return new ScreenRect(pixels.Left / scale, pixels.Top / scale, pixels.Width / scale, pixels.Height / scale);
     }
+
+    private static ScreenRect Of(NativeRect rect) => new(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect
@@ -104,6 +116,22 @@ internal static class RevitWindowGeometry
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowPlacement(IntPtr hWnd, ref WindowPlacement placement);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public NativeRect Monitor;
+        public NativeRect WorkArea;
+        public uint Flags;
+    }
+
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
 }

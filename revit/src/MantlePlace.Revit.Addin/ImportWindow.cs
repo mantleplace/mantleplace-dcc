@@ -80,7 +80,7 @@ internal sealed class ImportWindow : Window
     private readonly Button _cancel = new() { Content = WindowLabels.Cancel, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
     private readonly Button _close = new() { Content = WindowLabels.Close, Padding = new Thickness(12, 4, 12, 4), Visibility = Visibility.Collapsed };
 
-    /// <summary>Repaints the status line once a second, so the clock moves while Revit posts nothing.</summary>
+    /// <summary>Repaints the status line every <see cref="ClockTick"/>, so the clock moves while Revit posts nothing.</summary>
     private readonly DispatcherTimer _tick;
 
     /// <summary>How long the step in flight has run, from the moment a view naming it arrived here.</summary>
@@ -95,30 +95,17 @@ internal sealed class ImportWindow : Window
     private bool _closeWhenFinished;
     private bool _refreshing;
 
-    /// <param name="deliveryLine">The order's unit system, linear unit and delivery CRS; <c>null</c> shows no line.</param>
-    /// <param name="unitsDisagreement">Shown only when set: the project displays the other unit system.</param>
-    /// <param name="revitWindow">Revit's main window: where the window opens. It is not the owner.</param>
-    /// <param name="begin">Called once, with the curator's choice, when Import is pressed.</param>
-    /// <param name="cancelRun">Called once, when the curator asks a running import to stop.</param>
-    /// <param name="dismiss">Called once when the window goes before Import was pressed.</param>
-    /// <param name="note">Writes a line to the import's log, for what went wrong here without stopping anything.</param>
-    internal ImportWindow(
-        string bundleName,
-        string? deliveryLine,
-        string? unitsDisagreement,
-        ImportChecklist checklist,
-        IntPtr revitWindow,
-        Action<ImportLayerChoice> begin,
-        Action cancelRun,
-        Action dismiss,
-        Action<string> note)
+    /// <param name="request">What the window shows, and its callbacks, already marshalled onto Revit's thread.</param>
+    internal ImportWindow(ImportWindowRequest request)
     {
-        _checklist = checklist;
-        _begin = begin;
-        _cancelRun = cancelRun;
-        _dismiss = dismiss;
-        _note = note;
-        _revitWindow = revitWindow;
+        ArgumentNullException.ThrowIfNull(request);
+
+        _checklist = request.Checklist;
+        _begin = request.Begin;
+        _cancelRun = request.CancelRun;
+        _dismiss = request.Dismiss;
+        _note = request.Note;
+        _revitWindow = request.RevitWindow;
 
         Title = WindowLabels.ImportWindowTitle;
         Width = 520;
@@ -132,13 +119,13 @@ internal sealed class ImportWindow : Window
         // ⛔ No owner (revit/CLAUDE.md). Without one it needs a taskbar button of its own to be found
         // again behind something else (revit/README.md).
         ShowInTaskbar = true;
-        ShowActivated = ImportWindowStacking.ShowsActivated(ForegroundWatch.Now(IntPtr.Zero, revitWindow));
-        PlaceOver(revitWindow);
+        ShowActivated = ImportWindowStacking.ShowsActivated(ForegroundWatch.Now(IntPtr.Zero, _revitWindow));
+        PlaceOver(_revitWindow);
 
         _tick = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = ClockTick };
         _tick.Tick += (_, _) => PaintRun();
 
-        Content = BuildLayout(bundleName, deliveryLine, unitsDisagreement);
+        Content = BuildLayout(request.BundleName, request.DeliveryLine, request.UnitsDisagreement);
         _body.Child = BuildChecklist();
         BrandChrome.MakePrimary(_import);
 
@@ -309,7 +296,7 @@ internal sealed class ImportWindow : Window
             return;
         }
 
-        NoticeRect place = ImportWindowPlacement.CentreOver(revit, Width, MinHeight);
+        ScreenRect place = ImportWindowPlacement.CentreOver(revit, Width, MinHeight);
         WindowStartupLocation = WindowStartupLocation.Manual;
         Left = place.Left;
         Top = place.Top;

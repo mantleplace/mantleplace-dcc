@@ -70,7 +70,7 @@ internal sealed class ActiveImport : IDisposable
         ZipPath = zipPath;
         _importer = new RevitBundleImporter(application, document, archive, log.Append);
         _importer.CommitStarting += () => Tell(staged => staged.CommitStarted());
-        _importer.CommitEnded += () => Tell(staged => staged.CommitFinished());
+        _importer.CommitEnded += () => Tell(staged => staged.CommitEnded());
         _importer.Announced += notice => Tell(staged => staged.Announce(notice));
         _importer.Counted += progress => Tell(staged => staged.ReportProgress(progress));
         Checklist = ImportChecklist.For(plan);

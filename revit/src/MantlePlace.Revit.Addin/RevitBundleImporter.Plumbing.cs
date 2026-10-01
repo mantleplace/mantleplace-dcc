@@ -21,8 +21,13 @@ internal sealed partial class RevitBundleImporter
     /// Says a <see cref="SlowStepNotice"/> line, and hands it to whoever is showing the run, to show
     /// beside the step's clock while the wait it describes goes on.
     /// </summary>
-    private void Announce(string notice)
+    private void Announce(string? notice)
     {
+        if (notice is null)
+        {
+            return;
+        }
+
         Say(notice);
         Announced?.Invoke(notice);
     }

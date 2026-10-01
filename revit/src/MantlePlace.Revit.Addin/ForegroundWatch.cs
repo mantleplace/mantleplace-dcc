@@ -40,8 +40,6 @@ internal sealed class ForegroundWatch : IDisposable
     private const uint SwpShowWindow = 0x0040;
     private const uint SwpNoOwnerZOrder = 0x0200;
     private const uint ReorderOnly = SwpNoSize | SwpNoMove | SwpNoActivate | SwpNoOwnerZOrder;
-    private const int GwlExStyle = -20;
-    private const int WsExTopmost = 0x00000008;
 
     private static readonly IntPtr HwndTopmost = new(-1);
     private static readonly IntPtr HwndNoTopmost = new(-2);
@@ -99,11 +97,9 @@ internal sealed class ForegroundWatch : IDisposable
     /// </summary>
     internal void Lower()
     {
-        if (_floating)
-        {
-            _floating = false;
-            Move(StackingMove.SinkBelowFloating, IntPtr.Zero);
-        }
+        Stacking lowered = ImportWindowStacking.Lowered(_floating);
+        _floating = lowered.Floating;
+        Move(lowered.Move, IntPtr.Zero);
     }
 
     public void Dispose()
@@ -117,10 +113,11 @@ internal sealed class ForegroundWatch : IDisposable
 
     private static ForegroundFacts FactsOf(IntPtr foreground, IntPtr importWindow, IntPtr revitWindow)
     {
-        bool modal = revitWindow != IntPtr.Zero && !IsWindowEnabled(revitWindow);
+        // Read, not judged: what a disabled main window means is the core's.
+        bool mainEnabled = revitWindow == IntPtr.Zero || IsWindowEnabled(revitWindow);
         if (foreground == IntPtr.Zero)
         {
-            return new ForegroundFacts(false, false, false, false, modal, false, string.Empty, false);
+            return new ForegroundFacts(false, false, false, false, mainEnabled, false, string.Empty, false);
         }
 
         _ = GetWindowThreadProcessId(foreground, out uint processId);
@@ -134,8 +131,8 @@ internal sealed class ForegroundWatch : IDisposable
             IsImportWindow: foreground == importWindow,
             InThisProcess: inThisProcess,
             IsRevitMainWindow: foreground == revitWindow,
-            RevitShowsModal: modal,
-            ForegroundFloats: (GetWindowLong(foreground, GwlExStyle) & WsExTopmost) != 0,
+            RevitMainWindowEnabled: mainEnabled,
+            ForegroundFloats: WindowStyles.Has(foreground, WindowStyles.Topmost),
             ClassName: className.ToString(),
             HungWindowOfThisProcess: inThisProcess ? false : HungWindowIsOurs(foreground));
     }
@@ -257,9 +254,6 @@ internal sealed class ForegroundWatch : IDisposable
 
     [DllImport("user32.dll", EntryPoint = "GetClassNameW", CharSet = CharSet.Unicode)]
     private static extern int GetClassName(IntPtr window, StringBuilder className, int maxCount);
-
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
-    private static extern int GetWindowLong(IntPtr window, int index);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

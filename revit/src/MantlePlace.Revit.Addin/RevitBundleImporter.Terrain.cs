@@ -36,7 +36,7 @@ internal sealed partial class RevitBundleImporter
             Say(cleaned.Explanation);
         }
 
-        BuildTerrain(points, LinearUnits.MetresPerUnit(step.Units), step.EntryName, "points", stamp, step.ToposolidType);
+        BuildTerrain(step.Kind, points, LinearUnits.MetresPerUnit(step.Units), step.EntryName, "points", stamp, step.ToposolidType);
     }
 
     /// <summary>
@@ -97,7 +97,7 @@ internal sealed partial class RevitBundleImporter
 
         // 1.0, not step.Units: SurfaceTinFrame consumed the artifact's unit when it subtracted the
         // origin, exactly as TreePointsReader does, so these coordinates are already metres.
-        BuildTerrain(vertices, 1.0, step.EntryName, "TIN vertices", stamp, step.ToposolidType);
+        BuildTerrain(step.Kind, vertices, 1.0, step.EntryName, "TIN vertices", stamp, step.ToposolidType);
     }
 
     /// <summary>
@@ -165,6 +165,7 @@ internal sealed partial class RevitBundleImporter
     /// what the imagery type is duplicated from, and its thickness is what the base plane clears.
     /// </param>
     private void BuildTerrain(
+        ImportStepKind kind,
         IReadOnlyList<SurfacePoint> points,
         double metresPerUnit,
         string entryName,
@@ -207,6 +208,10 @@ internal sealed partial class RevitBundleImporter
             Say(plan.Explanation + " Start from an architectural template and try again.");
             return;
         }
+
+        // Before the transaction: its commit is where the time goes, and built for the drape that is
+        // tens of seconds where on the default type it is a few.
+        Announce(SlowStepNotice.For(kind, relief.PointCount, toposolidType == TerrainToposolidType.Imagery ? 1 : 0));
 
         if (!TryBuildTerrain(plan, chosenType, toposolidType, revitPoints, relief, stamp))
         {
@@ -427,6 +432,11 @@ internal sealed partial class RevitBundleImporter
 
         _smoothingSettled = true;
 
+        // Before the commit, which is shaded across every subdivision on the terrain: seconds on a
+        // bare terrain, up to two minutes after every polygon layer in Revit 2026 and 2027. After the
+        // last step this is the finishing work, and the window shows it there.
+        Announce(SlowStepNotice.ForSmoothShading(SubDivisionsOnTerrain(), _terrainVertexCount));
+
         ImportFailureSwallower swallower = new("Smoothing the terrain surface");
         using Transaction transaction = BeginTransaction("Mantle Place: terrain smooth shading", swallower);
 
@@ -487,6 +497,12 @@ internal sealed partial class RevitBundleImporter
     private bool HasTerrain()
         => _document.GetElement(
             _terrainId != ElementId.InvalidElementId ? _terrainId : TerrainToposolidId()) is Toposolid;
+
+    /// <summary>How many subdivisions the terrain this import works on carries now; 0 when there is none.</summary>
+    private int SubDivisionsOnTerrain()
+        => _document.GetElement(_terrainId != ElementId.InvalidElementId ? _terrainId : TerrainToposolidId()) is Toposolid terrain
+            ? terrain.GetSubDivisionIds().Count
+            : 0;
 
     /// <summary>Every level in the project, as the pure planner needs to see it.</summary>
     private List<CandidateLevel> CollectLevels()

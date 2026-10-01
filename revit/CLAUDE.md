@@ -234,25 +234,36 @@ follow.
     surfaces, water or the drape as the step in flight, and in 2027 no UI Automation read of it
     completed for the drape's 2,759 s.
   - **How.** `ImportWindowHost` runs it on an STA thread with its own `Dispatcher`, unowned, and
-    only posts cross: views of the run (`ImportRunView`) one way; Import, Cancel, a dismissal and a
-    log line the other, onto Revit's dispatcher, where they run as the click handlers they used to
-    be. Every `Transaction` commit goes through `CommitAndReport`, which says on both sides that Revit
-    is committing (the drape's `SubTransaction` commits do not, and regenerate nothing). The slow steps
-    hand the window their `SlowStepNotice` lines, and the drape and the polygon layers count their
-    subdivisions as they go. So through a commit the window names the step, says Revit is committing,
-    keeps the step's clock and shows the notice beside it, and the smooth shading committed after the
-    last step reads `Finishing`. A Cancel pressed then is said at once and lands when the commit
-    returns. Cancel still lands only between slices: a step that does its work in one transaction
-    counts but cannot be sliced, because a slice never yields inside an open transaction.
+    only posts cross: views of the run (`ImportRunView`) one way; Import, Cancel, a dismissal, a log
+    line and a fault the other, onto Revit's dispatcher, where they run as the click handlers they
+    used to be. Every `Transaction` commit goes through `CommitAndReport`, which says on both sides
+    that Revit is committing (the drape's `SubTransaction` commits do not, and regenerate nothing).
+    What the window then shows a curator is [`README.md`](./README.md)'s, and told only there.
+  - **⛔ Which steps are announced: any measured at 30 s or more in any version.** Each such step
+    says, before its wait, what it was measured at, per version, and the window shows that beside
+    the step's clock; no other step says anything, so the line is worth reading when it appears. The
+    threshold is `SlowStepNotice.AnnouncedFromSeconds`, the figures `SlowStepNotice.Measured`, and
+    which steps are quiet follows from them rather than from a list kept by hand. Today that is the
+    terrain built for the drape, the context buildings, the site model's conversion, the polygon layers
+    but water, planting, the site context view, the drape, the flood zones, and the smooth shading
+    committed after the last step. A step is announced only when it has the work that was measured.
+  - **Not sliced for Cancel.** The drape and the polygon layers count their subdivisions inside
+    their one slice, but Cancel still lands only between slices: a slice never yields inside an open
+    transaction, and slicing them means splitting the transaction, which would change what a
+    rollback undoes.
   - **What is headless.** What the window says (`WindowLabels`, `ImportRunView`), when it floats,
-    takes the focus or comes forward, and where it opens (`ImportWindowStacking`,
-    `ImportWindowPlacement`). It never floats over a Revit modal. `ForegroundWatch` carries the
-    stacking out without ever sending Revit's thread a message.
+    takes the focus or comes forward, where it opens (`ImportWindowStacking`,
+    `ImportWindowPlacement`), and what each notice says (`SlowStepNotice`). It never floats over a
+    Revit modal. `ForegroundWatch` carries the stacking out without ever sending Revit's thread a
+    message.
   - **Its edges.** An exception leaving the window's thread would end Revit, so the thread body is
-    inside a net, and a fault is said in the add-in's fault dialog after the window has stopped
-    floating. Nothing closes an unowned window with Revit, so `OnShutdown` closes it, and a checklist
-    whose project has closed goes with it. Two statics went thread-aware: `BrandChrome`'s primary
-    style is built per thread, and `ResourceImages`' table is locked.
+    inside a net; a fault lowers the window, the first is said in the add-in's fault dialog and the
+    rest go to the log. A window's callback that arrives while a slice runs — should Revit pump
+    messages inside a commit — is held until the slice ends, and the log counts it. Nothing closes an
+    unowned window with Revit, so every window still up, a finished one showing its report included,
+    is tracked until its thread ends and closed at `OnShutdown`; a checklist whose project has closed
+    goes with it. Two statics went thread-aware: `BrandChrome`'s primary style is built per thread,
+    and `ResourceImages`' table is locked.
   - **Not taken.** `ControlledApplication.ProgressChanged` is silent through 57% of the road commit
     and 99.6% of the drape's, so it cannot feed a bar. `DisableProcessWindowsGhosting` is
     process-wide with no undo.

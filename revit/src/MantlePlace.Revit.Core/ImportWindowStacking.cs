@@ -35,7 +35,10 @@ public enum ForegroundHolder
 /// <param name="IsImportWindow">Whether it is the import window itself.</param>
 /// <param name="InThisProcess">Whether it is one of Revit's process's windows.</param>
 /// <param name="IsRevitMainWindow">Whether it is Revit's main window.</param>
-/// <param name="RevitShowsModal">Whether Revit's main window is disabled, which is what a modal does to the window it belongs to.</param>
+/// <param name="RevitMainWindowEnabled">
+/// Whether Revit's main window takes input. A modal disables the window it belongs to, so a disabled
+/// main window is how a Revit modal is told (<see cref="ImportWindowStacking.Classify"/>).
+/// </param>
 /// <param name="ForegroundFloats">Whether the window in front floats over others itself.</param>
 /// <param name="ClassName">Its window class.</param>
 /// <param name="HungWindowOfThisProcess">
@@ -47,7 +50,7 @@ public readonly record struct ForegroundFacts(
     bool IsImportWindow,
     bool InThisProcess,
     bool IsRevitMainWindow,
-    bool RevitShowsModal,
+    bool RevitMainWindowEnabled,
     bool ForegroundFloats,
     string ClassName,
     bool? HungWindowOfThisProcess);
@@ -121,7 +124,7 @@ public static class ImportWindowStacking
         }
 
         bool revits = facts.InThisProcess || (ghost && facts.HungWindowOfThisProcess == true);
-        if (revits && facts.RevitShowsModal)
+        if (revits && !facts.RevitMainWindowEnabled)
         {
             return ForegroundHolder.RevitModal;
         }
@@ -148,12 +151,24 @@ public static class ImportWindowStacking
     /// Where a window just created goes, before it is shown. It starts on top of the ordinary
     /// windows, so one that should not float is put behind what is in front, or it would flash over it.
     /// </summary>
-    public static Stacking First(ForegroundFacts facts) => Floats(Classify(facts)) switch
+    /// <remarks>
+    /// One that opens with the focus (<see cref="ShowsActivated"/>) floats from the start: it is in
+    /// front the moment it is shown, and the import window in front is a window that floats.
+    /// </remarks>
+    public static Stacking First(ForegroundFacts facts)
     {
-        true => new Stacking(true, StackingMove.Float),
-        false => new Stacking(false, Sink(facts)),
-        null => new Stacking(false, StackingMove.None),
-    };
+        if (ShowsActivated(facts))
+        {
+            return new Stacking(true, StackingMove.Float);
+        }
+
+        return Floats(Classify(facts)) switch
+        {
+            true => new Stacking(true, StackingMove.Float),
+            false => new Stacking(false, Sink(facts)),
+            null => new Stacking(false, StackingMove.None),
+        };
+    }
 
     /// <summary>Where the window goes when <paramref name="facts"/>' window comes forward.</summary>
     /// <param name="facts">The window that has just come to the front.</param>
@@ -167,6 +182,14 @@ public static class ImportWindowStacking
         false => new Stacking(false, floating ? Sink(facts) : StackingMove.None),
         null => new Stacking(floating, StackingMove.None),
     };
+
+    /// <summary>
+    /// Where the window goes when Revit is about to show a dialog: among the ordinary windows, where
+    /// the dialog opens on top of it, rather than above them. The next change of foreground decides
+    /// again.
+    /// </summary>
+    public static Stacking Lowered(bool floating)
+        => floating ? new Stacking(false, StackingMove.SinkBelowFloating) : new Stacking(false, StackingMove.None);
 
     /// <summary>Whether the window takes the focus as it opens.</summary>
     /// <remarks>
@@ -208,10 +231,28 @@ public static class ImportWindowPlacement
     /// <param name="revit">Revit's window, in device-independent pixels.</param>
     /// <param name="width">The import window's width.</param>
     /// <param name="height">The import window's height, or the least it will be.</param>
-    public static NoticeRect CentreOver(NoticeRect revit, double width, double height)
+    public static ScreenRect CentreOver(ScreenRect revit, double width, double height)
         => new(
             revit.Left + Math.Max(0, (revit.Width - width) / 2),
             revit.Top + Math.Max(0, (revit.Height - height) / 2),
             width,
             height);
+
+    /// <summary>
+    /// Where a minimised window will be when it is restored, on the screen, in device pixels.
+    /// </summary>
+    /// <param name="normalInWorkspace">
+    /// Its restored rectangle as Windows keeps it, in workspace coordinates: from the top-left corner
+    /// of the work area of the monitor it is on.
+    /// </param>
+    /// <param name="workArea">That monitor's work area — the monitor less its taskbar — on the screen.</param>
+    /// <param name="restoresMaximised">Whether it restores maximised, filling that work area.</param>
+    public static ScreenRect Restored(ScreenRect normalInWorkspace, ScreenRect workArea, bool restoresMaximised)
+        => restoresMaximised
+            ? workArea
+            : normalInWorkspace with
+            {
+                Left = normalInWorkspace.Left + workArea.Left,
+                Top = normalInWorkspace.Top + workArea.Top,
+            };
 }
