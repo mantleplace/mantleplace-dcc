@@ -34,6 +34,7 @@ docs/adr/                      architecture decision records, numbered and cross
 docs/agents/                   how the engineering skills read this repo — tracker, labels, domain
 docs/platform-auth-contract.md sign-in and tokens — the one contract both hosts implement
 docs/host-support.md           which host does what with each feature, and why a gap exists
+docs/import-inventory.md       what each host imports, when, and what it was measured to cost
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
 .github/workflows/             the five public CI gates, plus the stale and tracker-hygiene jobs
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
@@ -246,6 +247,9 @@ Most facts already have exactly one home. Find it before writing a fact down any
   [`docs/host-support.md`](docs/host-support.md), the one place a per-host feature status is
   stated. Its opening says what it owns, what it leaves to a README, the roadmap and an ADR, and who
   edits which column.
+- **What each host imports, whether by default, and what it costs** →
+  [`docs/import-inventory.md`](docs/import-inventory.md), one row per category per host. Revit's
+  measured figures stay in `SlowStepNotice.Measured` and are cited there; Unreal's live in it.
 - **Writing anything public** — a file, a commit message, a PR title or body, a branch name →
   [`docs/agents/public-surface.md`](docs/agents/public-surface.md).
 - **What a word means** → [`CONTEXT.md`](CONTEXT.md) — the glossary, and only that; no rule, no
