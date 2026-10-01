@@ -212,8 +212,9 @@ follow.
   `ExternalEvent` raise, and the handler posts the next raise at `DispatcherPriority.Background` so
   a Cancel the window posted lands first. Revit does service a raise posted from inside
   its own handler promptly: the harness below pressed Import in the real window in 2025, 2026 and
-  2027 and every slice ran with no mouse or keyboard input, the trees' ~47 chunks in under a minute
-  each time, and in 2026 with Revit minimized for the whole tree step. A Comments write on a
+  2027 and every slice ran with no mouse or keyboard input, the ~47 chunks of a 9,293-tree order in
+  under a minute each time, and in 2026 with Revit minimized for the whole tree step (what a tree
+  costs at the commit has one home, `ImportChunking.ElementsPerTransaction`). A Comments write on a
   `DirectShape` holds: the re-imports in a fresh Revit process found all 290 road centrelines by the
   stamp in their Comments, in each of the three. What is settled
   headlessly is everything about *when*: `StagedImport` decides the slice order, where a cancel lands
