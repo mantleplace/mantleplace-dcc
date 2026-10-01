@@ -159,6 +159,24 @@ internal static class HeightDatumTests
             Same(run, Step(plan, ImportStepKind.Vegetation)?.HeightDatum, Unstated17, "trees");
         });
 
+        run.Case("a site model the block names rides the block's datum where buildings.ifc states none", () =>
+        {
+            BundleImportPlan plan = Plan(
+                Manifest("1.8.0", Navd, ownRoads: true).Replace(
+                    "\"buildings\": { \"ifc\": { \"schema\": \"IFC4\", \"vertical_datum\": \"NAVD88 (GEOID18)\" } }",
+                    "\"buildings\": { \"ifc\": { \"schema\": \"IFC4\" } }",
+                    StringComparison.Ordinal),
+                entries);
+            Same(run, Step(plan, ImportStepKind.ContextBuildings)?.HeightDatum, new StatedDatum(Navd, true), "copied");
+            Same(run, Step(plan, ImportStepKind.LinkSiteIfc)?.HeightDatum, new StatedDatum(Navd, true), "linked");
+        });
+
+        run.Case("a 1.8.0 block stating no datum: the ground records none, owed", () =>
+        {
+            BundleImportPlan plan = Plan(Manifest("1.8.0", string.Empty, ownRoads: true), entries);
+            Same(run, Step(plan, ImportStepKind.ToposurfaceFromPointsFile)?.HeightDatum, Unstated18, "the ground's");
+        });
+
         run.Case("steps that place no height carry no datum", () =>
         {
             BundleImportPlan plan = Plan(Manifest("1.8.0", Navd, ownRoads: true), entries);

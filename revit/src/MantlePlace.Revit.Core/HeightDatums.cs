@@ -92,7 +92,8 @@ public static class HeightDatums
     /// <remarks>
     /// A file this host's own block points at is in the block's datum unless it states its own: the
     /// block's <c>vertical_datum</c> covers every file it points at, and the own vector layers state
-    /// none beside it. That covering statement is read on the terms the ground's is
+    /// none beside it. So does a shared pointer whose file the block also names, the site model's
+    /// <c>ifc_site</c> among them, where <c>buildings.ifc.vertical_datum</c> is optional. That covering statement is read on the terms the ground's is
     /// (<see cref="GroundStatement"/>), so before 1.8.0 it is no statement at all. A file stating its
     /// own is read verbatim at any version. A host-neutral file has only its own.
     /// </remarks>
@@ -103,7 +104,7 @@ public static class HeightDatums
         string? block = GroundStatement(manifest.Georeference.VerticalDatum, manifest.Version);
         if (BuildsGround(kind))
         {
-            return new StatedDatum(block, Statement(null, manifest.Version).Owed);
+            return new StatedDatum(block, IsOwed(manifest.Version));
         }
 
         if (!PlacesHeights(kind) || artifact is null)
@@ -112,14 +113,18 @@ public static class HeightDatums
         }
 
         StatedDatum own = Statement(artifact.VerticalDatum, manifest.Version);
-        return own.Stated is null && artifact.FromOwnBlock ? own with { Stated = block } : own;
+        return own.Stated is null && (artifact.FromOwnBlock || artifact.NamedByOwnBlock)
+            ? own with { Stated = block }
+            : own;
     }
+
+    /// <summary>Whether a manifest of <paramref name="manifestVersion"/> owes a datum for every height.</summary>
+    public static bool IsOwed(string? manifestVersion)
+        => !ManifestVersion.IsBelowFloor(manifestVersion, StatedFromVersion);
 
     /// <summary>A file's statement, read verbatim; a blank string is unstated.</summary>
     public static StatedDatum Statement(string? stated, string? manifestVersion)
-        => new(
-            string.IsNullOrWhiteSpace(stated) ? null : stated,
-            !ManifestVersion.IsBelowFloor(manifestVersion, StatedFromVersion));
+        => new(string.IsNullOrWhiteSpace(stated) ? null : stated, IsOwed(manifestVersion));
 
     /// <summary>
     /// The datum a ground built from this manifest records: this host's block's

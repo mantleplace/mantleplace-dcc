@@ -1198,6 +1198,7 @@ public static class BundleManifestReader
             FootprintCount = template.FootprintCount,
             FoliageTypeVocabulary = template.FoliageTypeVocabulary,
             HorizontalUnits = template.HorizontalUnits,
+            NamedByOwnBlock = host is not null,
         };
     }
 

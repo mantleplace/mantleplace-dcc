@@ -110,6 +110,15 @@ public sealed class BundleArtifact
     public bool FromOwnBlock { get; init; }
 
     /// <summary>
+    /// True for a host-neutral pointer whose file this host's own block also names — the v19
+    /// deliverables (<c>toposurface_points</c>, <c>surface_dxf</c>, <c>ifc_site</c>). The block's
+    /// statements cover a file it names, its <c>vertical_datum</c> included
+    /// (<see cref="HeightDatums.For"/>); unlike <see cref="FromOwnBlock"/> it says nothing about the
+    /// file's horizontal frame.
+    /// </summary>
+    public bool NamedByOwnBlock { get; init; }
+
+    /// <summary>
     /// Raw <c>vertical_reference</c>, own vector layers only — present on a layer whose geometry
     /// carries Z, and <c>null</c> on a planar one.
     /// </summary>
