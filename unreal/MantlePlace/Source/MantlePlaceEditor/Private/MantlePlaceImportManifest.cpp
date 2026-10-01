@@ -3,6 +3,7 @@
 #include "MantlePlaceImportManifest.h"
 
 #include "MantlePlaceDrapeAlignmentLogic.h" // the `alignment` descriptor is classified, not skimmed
+#include "MantlePlaceRoadSplinesLogic.h"    // FMantlePlaceRoadSplinesDatum
 #include "MantlePlaceTreePointsLogic.h"     // FMantlePlaceTreePointsFrame
 #include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion (the MPB clean-break floor)
 
@@ -131,6 +132,18 @@ FMantlePlaceTreePointsFrame FMantlePlaceVaultManifest::GetFoliagePointsFrame() c
 	Frame.HostCrs = CrsProjected;
 	Frame.bRequired = !MantlePlaceIsManifestVersionBelowFloor(Version, FirstVersionStatingTreePointsFrame);
 	return Frame;
+}
+
+FMantlePlaceRoadSplinesDatum FMantlePlaceVaultManifest::GetRoadSplinesDatum() const
+{
+	// The first MPB version whose layers state the datum of their heights. Below it, every height a
+	// bundle carried was EGM2008, and a road layer that states none is one of those.
+	static const FString FirstVersionStatingHeightDatum = TEXT("1.8.0");
+
+	FMantlePlaceRoadSplinesDatum Datum;
+	Datum.Stated = RoadSplinesVerticalDatum;
+	Datum.bRequired = !MantlePlaceIsManifestVersionBelowFloor(Version, FirstVersionStatingHeightDatum);
+	return Datum;
 }
 
 // ── Parsing ────────────────────────────────────────────────────────────────
@@ -447,6 +460,10 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 				{
 					continue;
 				}
+				// The datum of the layer's heights (MPB 1.8.0), verbatim. Whether it is this host's
+				// is FMantlePlaceRoadSplinesLogic's call: a datum that is not refuses the layer by
+				// name at import, never the manifest.
+				M.RoadSplinesVerticalDatum = GetString(Layer, TEXT("vertical_datum"));
 				const TArray<TSharedPtr<FJsonValue>>* Formats = nullptr;
 				if (Layer->TryGetArrayField(TEXT("formats"), Formats) && Formats != nullptr)
 				{

@@ -218,6 +218,9 @@
       "revit",
       "unreal"
     ],
+    "manifest.roadSplinesStatedDatum": [
+      "unreal"
+    ],
     "manifest.siteBriefIgnored": [
       "revit",
       "unreal"
@@ -236,6 +239,10 @@
       "unreal"
     ],
     "manifest.vectorLayerVocabulary": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.verticalDatumsIgnored": [
       "revit",
       "unreal"
     ],
