@@ -267,8 +267,9 @@ and ticking both shows every building twice. `Published Contours` is for a curat
 order's own linework: the toposolid already draws contours of its own. `Flood Zones` and
 `Steep Ground` draw a hazard plan, which is for planning the site rather than rendering it, so they
 wait to be asked for. `Land Use Subdivisions`, `Land Cover Subdivisions` and `Road Subdivisions`
-are most of a full import's time: on the order they were measured on, every box ticked took 37 to
-42 minutes and the same import without the subdivisions about five. Ticking one says below the
+are most of a full import's time. On the order they were measured on, through the import window,
+an import with every box ticked took 44 to 51 minutes across Revit 2025, 2026 and 2027, and the
+default import, with these three unticked, about five. Ticking one says below the
 list what it was measured to cost in the Revit you are running, and with what else ticked. Land
 cover costs more than its own step, because every subdivision cut after it takes longer. Nothing
 remembers a tick from one import to the next, so a box you ticked last time starts unticked again.

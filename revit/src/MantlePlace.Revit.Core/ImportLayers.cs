@@ -105,11 +105,12 @@ public static class ImportLayers
     /// </para>
     /// <para>
     /// The land use, land cover and road surfaces, the boxes <see cref="SlowStepNotice.IsSlowBox"/>
-    /// names: on the order they were measured on, a full import took 37 to 42 minutes with every box
-    /// ticked and about five with the subdivision layers left out, and these three were nearly all of
-    /// the difference. A curator who wants them ticks them, and the checklist then says what each was
-    /// measured to cost (<see cref="ImportChecklist.SlowLayerWarnings"/>). The water bodies stay
-    /// ticked: they took seconds.
+    /// names: on the order they were measured on, they were nearly all of what a full import with
+    /// every box ticked took beyond the default import (the figures, through the import window, are
+    /// <c>revit/README.md</c>'s; each box's own is <see cref="SlowStepNotice.Measured"/>'s). A curator
+    /// who wants them ticks them, and the checklist then says what each was measured to cost
+    /// (<see cref="ImportChecklist.SlowLayerWarnings"/>). The water bodies stay ticked: they took
+    /// seconds.
     /// </para>
     /// <para>
     /// The unattended path does not read it: it imports everything

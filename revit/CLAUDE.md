@@ -401,9 +401,8 @@ follow.
     617 and 643 s against 641 and 753 s, inside 2025's own spread. 2026 has since been timed with
     it, beside 2027: full imports with every box ticked, through the import window at `fbfce41`,
     which carries both this move and the cut-time typing above. Both versions took less time than
-    their window runs before either change, by about a sixth in 2026 and over a third in 2027. Those
-    runs do not separate the two changes. The totals are tabled in the pull request that started the
-    slowest boxes unticked; the per-step figures are `SlowStepNotice.Measured`'s.
+    their window runs before either change, and those runs do not separate the two changes. Their
+    per-step figures are `SlowStepNotice.Measured`'s.
     Smoothing is the curator's project-wide setting
     (ADR 0008): a cancelled import already turned it on as it ended, and an import that fails after
     its first polygon step, which ends without that last step, now leaves it on where it used to

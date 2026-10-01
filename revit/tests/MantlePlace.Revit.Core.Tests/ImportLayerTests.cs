@@ -630,6 +630,27 @@ internal static class ImportLayerTests
             }
         });
 
+        run.Case("the land cover's step notice quotes the same row its box warns from", () =>
+        {
+            SlowStepNotice.StepMeasurement landCover = SlowStepNotice.Measured(ImportStepKind.LandCover)!;
+            string expected = new SlowStepNotice.StepMeasurement(null, landCover.Revit2026, landCover.Revit2027).Describe();
+            run.Contains(
+                SlowStepNotice.For(ImportStepKind.LandCover, 75_314, 19),
+                "in full imports with every box ticked the whole land-cover layer took " + expected + ".",
+                "one source for the 2026 and 2027 land-cover figure");
+        });
+
+        run.Case("one list of versions answers every per-version lookup, and a version outside it has nothing", () =>
+        {
+            SlowStepNotice.StepMeasurement row = new(new(1, 2), null, new(5, 6)) { Saves = new(10, null, 30) };
+            run.Equal(string.Join(", ", SlowStepNotice.MeasuredVersions), "2025, 2026, 2027", "the versions");
+            run.True(row.In(2025) == new SlowStepNotice.SecondsRange(1, 2), "2025's range");
+            run.True(row.In(2026) is null, "2026 not measured");
+            run.True(row.In(2028) is null && row.Saves!.Value.In(2028) is null, "a version not in the list");
+            run.True(row.Saves!.Value.In(2027) == 30, "2027's saving");
+            run.Equal(row.Describe(), "about 1 to 2 seconds in Revit 2025 and 5 to 6 seconds in Revit 2027", "Describe walks the same list");
+        });
+
         run.Case("ticking a slow box warns with this Revit's measured time, and unticking it takes the warning away", () =>
         {
             const string Measured = ": on the one order this has been measured on, ";
@@ -645,8 +666,8 @@ internal static class ImportLayerTests
 
                 // What leaving it out saved was inside the spread between two full imports in these two,
                 // so the figure is the step's own.
-                [(ImportLayer.LandUseSubdivisions, "2026")] = "Land Use Subdivisions" + Measured + "its own step took about 3 to 4 minutes in Revit 2026.",
-                [(ImportLayer.LandUseSubdivisions, "2027")] = "Land Use Subdivisions" + Measured + "its own step took about 3 to 4 minutes in Revit 2027.",
+                [(ImportLayer.LandUseSubdivisions, "2026")] = "Land Use Subdivisions" + Measured + "with every other box ticked, its own step took about 3 to 4 minutes in Revit 2026.",
+                [(ImportLayer.LandUseSubdivisions, "2027")] = "Land Use Subdivisions" + Measured + "with every other box ticked, its own step took about 3 to 4 minutes in Revit 2027.",
             };
 
             foreach (((ImportLayer layer, string version), string warning) in expected)

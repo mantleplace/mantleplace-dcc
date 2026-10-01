@@ -83,6 +83,20 @@ public static class SlowStepNotice
     /// <summary>Seconds a step took in one Revit version, the fastest and the slowest run measured.</summary>
     public readonly record struct SecondsRange(double Low, double High);
 
+    /// <summary>
+    /// The Revit versions every per-version figure here is for, oldest first. A figure's place in its
+    /// record is its version's place in this list (<see cref="ForVersion"/>).
+    /// </summary>
+    public static IReadOnlyList<int> MeasuredVersions { get; } = [2025, 2026, 2027];
+
+    /// <summary>The figure for Revit <paramref name="version"/>, or <c>null</c> for a version not in <see cref="MeasuredVersions"/>.</summary>
+    private static T? ForVersion<T>(int version, T? revit2025, T? revit2026, T? revit2027)
+        where T : struct
+    {
+        int index = MeasuredVersions.ToList().IndexOf(version);
+        return index < 0 ? null : new[] { revit2025, revit2026, revit2027 }[index];
+    }
+
     /// <summary>What one step was measured at, per Revit version; <c>null</c> where it was not measured.</summary>
     /// <remarks>
     /// The three ranges are the step's <b>own</b> seconds. <see cref="Saves"/>, where a row has it, is a
@@ -102,16 +116,11 @@ public static class SlowStepNotice
         public ImportSaving? Saves { get; init; }
 
         /// <summary>The step's own seconds in Revit <paramref name="version"/>, or <c>null</c> where not measured.</summary>
-        public SecondsRange? In(int version) => version switch
-        {
-            2025 => Revit2025,
-            2026 => Revit2026,
-            2027 => Revit2027,
-            _ => null,
-        };
+        public SecondsRange? In(int version) => ForVersion(version, Revit2025, Revit2026, Revit2027);
 
         /// <summary>The slowest run in any version.</summary>
-        public double Slowest => new[] { Revit2025, Revit2026, Revit2027 }
+        public double Slowest => MeasuredVersions
+            .Select(In)
             .Where(range => range is not null)
             .Select(range => range!.Value.High)
             .DefaultIfEmpty(0)
@@ -121,9 +130,9 @@ public static class SlowStepNotice
         public string Describe()
         {
             List<string> parts = [];
-            foreach ((SecondsRange? range, int year) in new[] { (Revit2025, 2025), (Revit2026, 2026), (Revit2027, 2027) })
+            foreach (int year in MeasuredVersions)
             {
-                if (range is { } seconds)
+                if (In(year) is { } seconds)
                 {
                     parts.Add(string.Format(CultureInfo.InvariantCulture, "{0} seconds in Revit {1}", Seconds(seconds), year));
                 }
@@ -518,12 +527,12 @@ public static class SlowStepNotice
     /// <remarks>1,210.4 s, 2026-09-25, Revit 2025.4. One run.</remarks>
     public const int MeasuredWholeOrderSubDivisionLastMinutes2025 = 20;
 
-    /// <summary>
-    /// Rounded minutes the whole land-cover layer took as one commit in Revit 2026 and 2027, cut after
-    /// the site boundaries.
-    /// </summary>
-    /// <remarks>150.1 s in 2026 and 177.5 s in 2027, 2026-09-25, one run each.</remarks>
-    public const int MeasuredLandCoverLayerMinutes2026And2027 = 3;
+
+    /// <summary>The land-cover row of <see cref="Measured"/>, its 2026 and 2027 runs only.</summary>
+    private static StepMeasurement LandCoverLayerLater
+        => Measured(ImportStepKind.LandCover) is { } landCover
+            ? new(null, landCover.Revit2026, landCover.Revit2027)
+            : throw new InvalidOperationException("the land cover has no row in Measured");
 
     /// <summary>
     /// The body for a polygon layer: what the cost appears to follow in Revit 2025, the one
@@ -537,8 +546,10 @@ public static class SlowStepNotice
     /// order's whole-order grass ring first, alone, onto a bare terrain: nine minutes. Cut last, onto
     /// 57 other subdivisions, the same ring took twenty. So in Revit 2025 on this order both matter:
     /// how much of the terrain a subdivision covers, and how much of that ground other subdivisions
-    /// already cover. Neither has been measured anywhere else, and 2026 and 2027 have only one
-    /// whole-layer number each, so the sentence is scoped to 2025 and says "appears".
+    /// already cover. Neither has been measured anywhere else, and 2026 and 2027 have only whole-layer
+    /// numbers, so the sentence is scoped to 2025 and says "appears". Those numbers are the land-cover
+    /// row of <see cref="Measured"/>: one earlier pair of runs, cut after the site boundaries, gave 150 s
+    /// and 178 s, and the row's full imports since, cut first and typed as they are cut, replace it.
     /// </para>
     /// <para>
     /// The same rule as <see cref="Describe"/>: the measurements and this terrain are stated side by
@@ -554,14 +565,14 @@ public static class SlowStepNotice
             + "to grow when it lands on ground other subdivisions already cover. On the one order this "
             + "has been measured on ({1:N0} points), a single land-cover subdivision covering the whole "
             + "order took about {2} minutes on its own in Revit 2025 when nothing else was cut into the "
-            + "terrain, and about {3} minutes when cut after 57 others; in Revit 2026 and 2027 the whole "
-            + "land-cover layer took about {4} minutes. How long this layer takes depends on the "
+            + "terrain, and about {3} minutes when cut after 57 others; in full imports with every box "
+            + "ticked the whole land-cover layer took {4}. How long this layer takes depends on the "
             + "polygons it carries, and no duration is predicted here. {5}. {6}",
             opening,
             MeasuredSubDivisionTerrainPointCount,
             MeasuredWholeOrderSubDivisionAloneMinutes2025,
             MeasuredWholeOrderSubDivisionLastMinutes2025,
-            MeasuredLandCoverLayerMinutes2026And2027,
+            LandCoverLayerLater.Describe(),
             ThisTerrain(terrainPointCount),
             InsideOneCommit);
 
@@ -772,17 +783,8 @@ public static class SlowStepNotice
     public readonly record struct ImportSaving(double? Revit2025, double? Revit2026, double? Revit2027)
     {
         /// <summary>The saving in Revit <paramref name="version"/>, or <c>null</c>.</summary>
-        public double? In(int version) => version switch
-        {
-            2025 => Revit2025,
-            2026 => Revit2026,
-            2027 => Revit2027,
-            _ => null,
-        };
+        public double? In(int version) => ForVersion(version, Revit2025, Revit2026, Revit2027);
     }
-
-    /// <summary>The Revit versions a <see cref="StepMeasurement"/> holds, oldest first.</summary>
-    private static readonly int[] MeasuredVersions = [2025, 2026, 2027];
 
     /// <summary>The row of the step <paramref name="layer"/>'s box builds, when that row has a saving.</summary>
     private static StepMeasurement? SlowBoxRow(ImportLayer layer)
@@ -804,14 +806,16 @@ public static class SlowStepNotice
     /// <param name="layer">The ticked box.</param>
     /// <param name="revitVersionNumber">
     /// <c>Application.VersionNumber</c>, the release year as a string. A version that was not timed, or
-    /// none, hears the newest measurement and is told this Revit was not timed.
+    /// none, hears the newest measurement and is told this Revit was not timed. A slow box whose row
+    /// holds no figure for any version says nothing.
     /// </param>
     /// <remarks>
     /// <para>
     /// The saving where this version has one, said with what else was ticked, because a curator who
     /// ticks one box onto the defaults is not the import that was measured. Where the saving is more
     /// than twice the step's own slowest run, the line says most of it was the steps after it. Where
-    /// this version has no saving, the step's own seconds, said as its own step's.
+    /// this version has no saving, the step's own seconds, said as its own step's and with what else was
+    /// ticked: alone on the defaults it is cheaper, since the land cover makes it dearer.
     /// </para>
     /// <para>
     /// It picks which measurement is quoted and decides nothing in Revit, so reading the version here
@@ -828,6 +832,11 @@ public static class SlowStepNotice
         bool Timed(int version) => saves.In(version) is not null || measured.In(version) is not null;
         bool timed = int.TryParse(revitVersionNumber, NumberStyles.None, CultureInfo.InvariantCulture, out int version)
             && Timed(version);
+        if (!timed && !MeasuredVersions.Any(Timed))
+        {
+            return null;
+        }
+
         int quoted = timed ? version : MeasuredVersions.Last(Timed);
 
         string figure;
@@ -848,7 +857,7 @@ public static class SlowStepNotice
             string high = Minutes(own.High);
             figure = string.Format(
                 CultureInfo.InvariantCulture,
-                "its own step took about {0} minutes in Revit {1}",
+                "with every other box ticked, its own step took about {0} minutes in Revit {1}",
                 low == high ? low : low + " to " + high,
                 quoted);
         }
