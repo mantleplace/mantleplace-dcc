@@ -39,8 +39,8 @@ namespace MantlePlace.Revit.Core;
 /// non-data-driven toggle into <see cref="BundleImportPlanner"/>. What was actually wrong was that a
 /// ten-minute freeze arrived with no warning and read as a crash. So it is announced instead. The
 /// checklist has since started the three slowest subdivision layers unticked, on a whole-import
-/// measurement of every box (<see cref="MeasuredWhenTicked"/>); the planner still takes no toggle of
-/// its own, and what is ticked is still built at the cost said here.
+/// measurement of every box (<see cref="StepMeasurement.Saves"/>); the planner still takes no toggle
+/// of its own, and what is ticked is still built at the cost said here.
 /// </para>
 /// <para>
 /// ⛔ <b>What cannot be shown is the inside of one commit.</b> This used to say that a progress bar
@@ -84,8 +84,32 @@ public static class SlowStepNotice
     public readonly record struct SecondsRange(double Low, double High);
 
     /// <summary>What one step was measured at, per Revit version; <c>null</c> where it was not measured.</summary>
+    /// <remarks>
+    /// The three ranges are the step's <b>own</b> seconds. <see cref="Saves"/>, where a row has it, is a
+    /// different figure, and this is the one place the difference is stated: what leaving the step's
+    /// checklist box out saved a whole import, which also counts every later step the box makes
+    /// dearer. The two part company where a box slows what comes after it: the land cover's own step
+    /// was minutes, and leaving it out saved four to ten times that, because the land use and road
+    /// surfaces cut after it took far longer with it.
+    /// </remarks>
     public sealed record StepMeasurement(SecondsRange? Revit2025, SecondsRange? Revit2026, SecondsRange? Revit2027)
     {
+        /// <summary>
+        /// What leaving this step's box out saved a full import, or <c>null</c> for a step whose box
+        /// was not measured that way. A row with one is a slow box: it starts unticked
+        /// (<see cref="ImportLayers.OnByDefault"/>) and warns when ticked (<see cref="ForTickedBox"/>).
+        /// </summary>
+        public ImportSaving? Saves { get; init; }
+
+        /// <summary>The step's own seconds in Revit <paramref name="version"/>, or <c>null</c> where not measured.</summary>
+        public SecondsRange? In(int version) => version switch
+        {
+            2025 => Revit2025,
+            2026 => Revit2026,
+            2027 => Revit2027,
+            _ => null,
+        };
+
         /// <summary>The slowest run in any version.</summary>
         public double Slowest => new[] { Revit2025, Revit2026, Revit2027 }
             .Where(range => range is not null)
@@ -143,6 +167,20 @@ public static class SlowStepNotice
     /// ones the 65 s commit measured since (<see cref="ForDrapeCommit"/>), a terrain still to retype its
     /// own (<see cref="For"/>).
     /// </para>
+    /// <para>
+    /// The four subdivision steps' 2026 and 2027 ranges are later: the window run and the first and last
+    /// layers runs with every box ticked, Revit 2026.5 and 2027.2, 2026-09-30 and 2026-10-01, after the
+    /// subdivisions took their drape types as they were cut, which moved cost into these steps. Their
+    /// 2025 ranges stand, because that change does not reach 2025.
+    /// </para>
+    /// <para>
+    /// The savings (<see cref="StepMeasurement.Saves"/>) are the layers runs of the same order: per
+    /// version, the mean of the first and last full imports minus one import with only that box
+    /// unticked; 2025.4 on 2026-09-30, and 2026 and 2027 from the later runs above. Those two full
+    /// imports differed by about nine minutes in 2025 and 2026 and eleven in 2027. Leaving out the land
+    /// use saved 530 s in 2026 and 520 s in 2027, inside that spread, so its row has no saving there and
+    /// its warning quotes its own step.
+    /// </para>
     /// </remarks>
     public static StepMeasurement? Measured(ImportStepKind kind) => kind switch
     {
@@ -153,10 +191,10 @@ public static class SlowStepNotice
         ImportStepKind.LinkSiteIfc => new(new(41.1, 71.2), new(39.3, 39.5), new(43.8, 44.6)),
         ImportStepKind.SetSharedCoordinates or ImportStepKind.SetSiteLocation or ImportStepKind.RoadCentrelines
             => new(new(1.6, 3.1), new(1.9, 1.9), new(1.6, 2.8)),
-        ImportStepKind.LandCover => new(new(274, 471), new(77.4, 78.4), new(73.1, 116)),
-        ImportStepKind.SiteBoundaries => new(new(330, 407), new(116, 117), new(109, 148)),
-        ImportStepKind.Water => new(new(2.1, 2.8), new(5.4, 5.4), new(5.4, 7.3)),
-        ImportStepKind.RoadPolygons => new(new(870, 1_112), new(879, 881), new(911, 1_231)),
+        ImportStepKind.LandCover => new(new(274, 471), new(111.0, 140.4), new(111.2, 144.3)) { Saves = new(1_522, 1_170, 1_164) },
+        ImportStepKind.SiteBoundaries => new(new(330, 407), new(153.8, 237.8), new(161.0, 246.2)) { Saves = new(712, null, null) },
+        ImportStepKind.Water => new(new(2.1, 2.8), new(5.7, 11.4), new(7.7, 11.1)),
+        ImportStepKind.RoadPolygons => new(new(870, 1_112), new(1_318.6, 1_754.6), new(1_337.0, 1_781.7)) { Saves = new(1_169, 1_888, 1_900) },
         ImportStepKind.Vegetation => new(new(206, 415), new(266, 275), new(231, 338)),
         ImportStepKind.AttributionAndProvenance => new(new(0.1, 0.6), new(0.1, 0.1), new(0.1, 0.2)),
         ImportStepKind.SiteContextView => new(new(1.4, 4.8), new(41.5, 42.4), new(32.7, 52.6)),
@@ -726,62 +764,38 @@ public static class SlowStepNotice
             ? string.Format(CultureInfo.InvariantCulture, "This terrain has {0:N0} points", count)
             : "This terrain's point count is not known to this run — it was built by an earlier import";
 
-    /// <summary>What a slow checklist box was measured to cost in one Revit version, and what kind of figure it is.</summary>
-    /// <param name="Seconds">The measured seconds.</param>
-    /// <param name="WholeImport">
-    /// <c>true</c> when the figure is what leaving the box out saved a full import with every other box
-    /// ticked; <c>false</c> when it is the box's own step, because that saving was smaller than the
-    /// spread between two full imports and could not be told from it.
-    /// </param>
-    public readonly record struct TickedBoxMeasurement(int Seconds, bool WholeImport);
+    /// <summary>
+    /// What leaving one box out saved a full import, in seconds per Revit version; <c>null</c> where it
+    /// was not measured or could not be told from the spread between two full imports. What this is,
+    /// against a step's own seconds, is <see cref="StepMeasurement"/>'s.
+    /// </summary>
+    public readonly record struct ImportSaving(double? Revit2025, double? Revit2026, double? Revit2027)
+    {
+        /// <summary>The saving in Revit <paramref name="version"/>, or <c>null</c>.</summary>
+        public double? In(int version) => version switch
+        {
+            2025 => Revit2025,
+            2026 => Revit2026,
+            2027 => Revit2027,
+            _ => null,
+        };
+    }
 
-    /// <summary>The Revit versions <see cref="MeasuredWhenTicked"/> has figures for, oldest first.</summary>
-    public static IReadOnlyList<int> TickedBoxVersions { get; } = [2025, 2026, 2027];
+    /// <summary>The Revit versions a <see cref="StepMeasurement"/> holds, oldest first.</summary>
+    private static readonly int[] MeasuredVersions = [2025, 2026, 2027];
+
+    /// <summary>The row of the step <paramref name="layer"/>'s box builds, when that row has a saving.</summary>
+    private static StepMeasurement? SlowBoxRow(ImportLayer layer)
+        => Enum.GetValues<ImportStepKind>()
+            .Where(kind => ImportLayers.Of(kind) == layer)
+            .Select(Measured)
+            .FirstOrDefault(measured => measured?.Saves is not null);
 
     /// <summary>
-    /// What ticking <paramref name="layer"/>'s box was measured to cost in Revit
-    /// <paramref name="revitVersion"/>, or <c>null</c> for a box that is not slow, or a version not timed.
+    /// Whether <paramref name="layer"/>'s box starts unticked and warns when ticked: its step's row in
+    /// <see cref="Measured"/> has a saving.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The boxes listed here are the ones that start unticked for their time
-    /// (<see cref="ImportLayers.OnByDefault"/>), so this table decides both which boxes warn and which
-    /// start unticked, and the two cannot drift apart.
-    /// </para>
-    /// <para>
-    /// Order <c>4276ef78</c> (405 subdivisions, 344 of them road surfaces), the real importer with no
-    /// window, one machine: Revit 2025.4 on 2026-09-30, and Revit 2026.5 and 2027.2 on 2026-09-30 and
-    /// 2026-10-01, after the subdivisions took their drape types as they were cut. Each version ran two
-    /// full imports with every box ticked, first and last, and one import with only one box unticked.
-    /// A whole-import figure is the mean of the two full imports minus that one, so it counts the later
-    /// steps the box makes dearer: the land cover's is four to ten times its own step, because the road
-    /// surfaces and the land use cut after it took far longer with it. The two full imports differed by
-    /// about nine minutes in 2025 and 2026 and eleven in 2027. Leaving out the land use saved 530 s in 2026 and
-    /// 520 s in 2027, inside that spread, so those two quote its own step, the mean over the two full
-    /// imports.
-    /// </para>
-    /// <para>
-    /// It picks which measurement is quoted and decides nothing in Revit, so reading the version here is
-    /// not the branch on the version number <c>revit/CLAUDE.md</c> forbids.
-    /// </para>
-    /// </remarks>
-    public static TickedBoxMeasurement? MeasuredWhenTicked(ImportLayer layer, int revitVersion) => (layer, revitVersion) switch
-    {
-        (ImportLayer.LandUseSubdivisions, 2025) => new(712, WholeImport: true),
-        (ImportLayer.LandUseSubdivisions, 2026) => new(167, WholeImport: false),
-        (ImportLayer.LandUseSubdivisions, 2027) => new(171, WholeImport: false),
-        (ImportLayer.LandCoverSubdivisions, 2025) => new(1_522, WholeImport: true),
-        (ImportLayer.LandCoverSubdivisions, 2026) => new(1_170, WholeImport: true),
-        (ImportLayer.LandCoverSubdivisions, 2027) => new(1_164, WholeImport: true),
-        (ImportLayer.RoadSubdivisions, 2025) => new(1_169, WholeImport: true),
-        (ImportLayer.RoadSubdivisions, 2026) => new(1_888, WholeImport: true),
-        (ImportLayer.RoadSubdivisions, 2027) => new(1_900, WholeImport: true),
-        _ => null,
-    };
-
-    /// <summary>Whether <paramref name="layer"/>'s box is slow enough to start unticked and warn when ticked.</summary>
-    public static bool IsSlowBox(ImportLayer layer)
-        => TickedBoxVersions.Any(version => MeasuredWhenTicked(layer, version) is not null);
+    public static bool IsSlowBox(ImportLayer layer) => SlowBoxRow(layer) is not null;
 
     /// <summary>
     /// What the checklist says while <paramref name="layer"/>'s box is ticked, or <c>null</c> for a box
@@ -793,31 +807,51 @@ public static class SlowStepNotice
     /// none, hears the newest measurement and is told this Revit was not timed.
     /// </param>
     /// <remarks>
-    /// The figure is rounded to minutes and said with what it was measured with, because a curator who
-    /// ticks one box onto the defaults is not the import that was measured: with every other box
-    /// ticked, the land cover made the road surfaces after it several times dearer.
+    /// <para>
+    /// The saving where this version has one, said with what else was ticked, because a curator who
+    /// ticks one box onto the defaults is not the import that was measured. Where the saving is more
+    /// than twice the step's own slowest run, the line says most of it was the steps after it. Where
+    /// this version has no saving, the step's own seconds, said as its own step's.
+    /// </para>
+    /// <para>
+    /// It picks which measurement is quoted and decides nothing in Revit, so reading the version here
+    /// is not the branch on the version number <c>revit/CLAUDE.md</c> forbids.
+    /// </para>
     /// </remarks>
     public static string? ForTickedBox(ImportLayer layer, string? revitVersionNumber)
     {
-        if (!IsSlowBox(layer))
+        if (SlowBoxRow(layer) is not { Saves: { } saves } measured)
         {
             return null;
         }
 
+        bool Timed(int version) => saves.In(version) is not null || measured.In(version) is not null;
         bool timed = int.TryParse(revitVersionNumber, NumberStyles.None, CultureInfo.InvariantCulture, out int version)
-            && MeasuredWhenTicked(layer, version) is not null;
-        int quoted = timed ? version : TickedBoxVersions.Last(candidate => MeasuredWhenTicked(layer, candidate) is not null);
-        TickedBoxMeasurement measured = MeasuredWhenTicked(layer, quoted)!.Value;
-        double minutes = Math.Round(measured.Seconds / 60.0, MidpointRounding.AwayFromZero);
+            && Timed(version);
+        int quoted = timed ? version : MeasuredVersions.Last(Timed);
 
-        string figure = measured.WholeImport
-            ? string.Format(
+        string figure;
+        if (saves.In(quoted) is { } saved)
+        {
+            bool mostlyLater = measured.In(quoted) is { } own && saved > 2 * own.High;
+            figure = string.Format(
                 CultureInfo.InvariantCulture,
-                "with every other box ticked, it added about {0:N0} minutes to the import in Revit {1}{2}",
-                minutes,
+                "with every other box ticked, it added about {0} minutes to the import in Revit {1}{2}",
+                Minutes(saved),
                 quoted,
-                layer == ImportLayer.LandCoverSubdivisions ? ", most of it by making the subdivisions cut after it take longer" : string.Empty)
-            : string.Format(CultureInfo.InvariantCulture, "its own step took about {0:N0} minutes in Revit {1}", minutes, quoted);
+                mostlyLater ? ", most of it by making the steps after it take longer" : string.Empty);
+        }
+        else
+        {
+            SecondsRange own = measured.In(quoted)!.Value;
+            string low = Minutes(own.Low);
+            string high = Minutes(own.High);
+            figure = string.Format(
+                CultureInfo.InvariantCulture,
+                "its own step took about {0} minutes in Revit {1}",
+                low == high ? low : low + " to " + high,
+                quoted);
+        }
 
         return string.Format(
             CultureInfo.InvariantCulture,
@@ -826,4 +860,8 @@ public static class SlowStepNotice
             figure,
             timed ? string.Empty : " This Revit has not been timed.");
     }
+
+    /// <summary>Seconds as whole minutes, rounded half away from zero.</summary>
+    private static string Minutes(double seconds)
+        => Math.Round(seconds / 60.0, MidpointRounding.AwayFromZero).ToString("N0", CultureInfo.InvariantCulture);
 }

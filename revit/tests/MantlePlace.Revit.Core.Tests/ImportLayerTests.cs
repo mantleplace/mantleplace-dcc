@@ -603,6 +603,33 @@ internal static class ImportLayerTests
             }
         });
 
+        run.Case("a box is slow exactly when its step's row in the one measurement table has a saving", () =>
+        {
+            // The step notice and the checklist read the same row: Measured. A row with a saving is a
+            // box that starts unticked and warns; a row without one is neither.
+            foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
+            {
+                bool rowHasSaving = Enum.GetValues<ImportStepKind>()
+                    .Where(kind => ImportLayers.Of(kind) == layer)
+                    .Any(kind => SlowStepNotice.Measured(kind)?.Saves is not null);
+                run.Equal(SlowStepNotice.IsSlowBox(layer), rowHasSaving, $"{layer} is slow by its row");
+                run.Equal(ImportLayers.OnByDefault(layer), !StartsUnchecked(layer), $"{layer} starts as its row says");
+            }
+        });
+
+        run.Case("the land cover's saving is several times its own step, and the road surfaces' is not", () =>
+        {
+            // Saves is the whole import's difference; the ranges are the step's own seconds. They part
+            // company where a box makes the steps after it dearer.
+            SlowStepNotice.StepMeasurement landCover = SlowStepNotice.Measured(ImportStepKind.LandCover)!;
+            SlowStepNotice.StepMeasurement roads = SlowStepNotice.Measured(ImportStepKind.RoadPolygons)!;
+            foreach (int version in new[] { 2025, 2026, 2027 })
+            {
+                run.True(landCover.Saves!.Value.In(version) > 2 * landCover.In(version)!.Value.High, $"land cover in {version}");
+                run.False(roads.Saves!.Value.In(version) > 2 * roads.In(version)!.Value.High, $"road surfaces in {version}");
+            }
+        });
+
         run.Case("ticking a slow box warns with this Revit's measured time, and unticking it takes the warning away", () =>
         {
             const string Measured = ": on the one order this has been measured on, ";
@@ -611,15 +638,15 @@ internal static class ImportLayerTests
                 [(ImportLayer.RoadSubdivisions, "2025")] = "Road Subdivisions" + Measured + "with every other box ticked, it added about 19 minutes to the import in Revit 2025.",
                 [(ImportLayer.RoadSubdivisions, "2026")] = "Road Subdivisions" + Measured + "with every other box ticked, it added about 31 minutes to the import in Revit 2026.",
                 [(ImportLayer.RoadSubdivisions, "2027")] = "Road Subdivisions" + Measured + "with every other box ticked, it added about 32 minutes to the import in Revit 2027.",
-                [(ImportLayer.LandCoverSubdivisions, "2025")] = "Land Cover Subdivisions" + Measured + "with every other box ticked, it added about 25 minutes to the import in Revit 2025, most of it by making the subdivisions cut after it take longer.",
-                [(ImportLayer.LandCoverSubdivisions, "2026")] = "Land Cover Subdivisions" + Measured + "with every other box ticked, it added about 20 minutes to the import in Revit 2026, most of it by making the subdivisions cut after it take longer.",
-                [(ImportLayer.LandCoverSubdivisions, "2027")] = "Land Cover Subdivisions" + Measured + "with every other box ticked, it added about 19 minutes to the import in Revit 2027, most of it by making the subdivisions cut after it take longer.",
+                [(ImportLayer.LandCoverSubdivisions, "2025")] = "Land Cover Subdivisions" + Measured + "with every other box ticked, it added about 25 minutes to the import in Revit 2025, most of it by making the steps after it take longer.",
+                [(ImportLayer.LandCoverSubdivisions, "2026")] = "Land Cover Subdivisions" + Measured + "with every other box ticked, it added about 20 minutes to the import in Revit 2026, most of it by making the steps after it take longer.",
+                [(ImportLayer.LandCoverSubdivisions, "2027")] = "Land Cover Subdivisions" + Measured + "with every other box ticked, it added about 19 minutes to the import in Revit 2027, most of it by making the steps after it take longer.",
                 [(ImportLayer.LandUseSubdivisions, "2025")] = "Land Use Subdivisions" + Measured + "with every other box ticked, it added about 12 minutes to the import in Revit 2025.",
 
                 // What leaving it out saved was inside the spread between two full imports in these two,
                 // so the figure is the step's own.
-                [(ImportLayer.LandUseSubdivisions, "2026")] = "Land Use Subdivisions" + Measured + "its own step took about 3 minutes in Revit 2026.",
-                [(ImportLayer.LandUseSubdivisions, "2027")] = "Land Use Subdivisions" + Measured + "its own step took about 3 minutes in Revit 2027.",
+                [(ImportLayer.LandUseSubdivisions, "2026")] = "Land Use Subdivisions" + Measured + "its own step took about 3 to 4 minutes in Revit 2026.",
+                [(ImportLayer.LandUseSubdivisions, "2027")] = "Land Use Subdivisions" + Measured + "its own step took about 3 to 4 minutes in Revit 2027.",
             };
 
             foreach (((ImportLayer layer, string version), string warning) in expected)
