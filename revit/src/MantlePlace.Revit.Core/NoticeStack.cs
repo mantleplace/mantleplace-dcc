@@ -1,8 +1,5 @@
 namespace MantlePlace.Revit.Core;
 
-/// <summary>A rectangle in device-independent pixels.</summary>
-public readonly record struct NoticeRect(double Left, double Top, double Width, double Height);
-
 /// <summary>
 /// Where each Prepare notice sits: stacked upward from the bottom-right corner of Revit's window.
 /// Pure.
@@ -34,10 +31,10 @@ public static class NoticeStack
     public const int MaxShown = 4;
 
     /// <summary>The place of the notice at <paramref name="index"/>, 0 being the bottom one.</summary>
-    public static NoticeRect Place(NoticeRect owner, int index)
+    public static ScreenRect Place(ScreenRect owner, int index)
     {
         double left = Math.Max(owner.Left, owner.Left + owner.Width - Inset - Width);
         double top = owner.Top + owner.Height - Inset - Height - (index * (Height + Gap));
-        return new NoticeRect(left, top, Width, Height);
+        return new ScreenRect(left, top, Width, Height);
     }
 }

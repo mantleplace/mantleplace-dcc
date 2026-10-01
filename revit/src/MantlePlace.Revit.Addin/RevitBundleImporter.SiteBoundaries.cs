@@ -122,7 +122,7 @@ internal sealed partial class RevitBundleImporter
         // announced at the first cut that takes a type (SlowStepNotice.ForTypesAtCut).
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, newBoundaries.Count) is { } notice)
         {
-            Say(notice);
+            Announce(notice);
         }
 
         // ⛔ Settled before the first cut when Core says so (TerrainSmoothing.SettleBeforeCuts), so a
@@ -138,8 +138,12 @@ internal sealed partial class RevitBundleImporter
         ImportFailureSwallower swallower = new($"Importing the {label}");
         using Transaction transaction = BeginTransaction($"Mantle Place: {label}", swallower);
 
+        // Counted as it goes, for the window: the cuts are inside the step's one transaction, which
+        // cannot yield, and where each is typed for the drape as it is cut that is seconds a cut.
+        int handled = 0;
         foreach (NewSiteBoundary boundary in newBoundaries)
         {
+            Count(handled++, newBoundaries.Count);
             GroundCut cut = cuts[boundary.Ordinal - 1];
             if (Loop(cut.Outer) is not { } outer)
             {
@@ -225,7 +229,7 @@ internal sealed partial class RevitBundleImporter
                 && SlowStepNotice.ForTypesAtCut(layer, route, step.DrapePlanned, newBoundaries.Count, _terrainVertexCount) is { } typing)
             {
                 typingAnnounced = true;
-                Say(typing);
+                Announce(typing);
             }
 
             if (SubDivisionMaterial.TakesTypeAtCut(route, step.DrapePlanned)
@@ -237,6 +241,8 @@ internal sealed partial class RevitBundleImporter
 
             typingTime += Stopwatch.GetElapsedTime(before);
         }
+
+        Count(newBoundaries.Count, newBoundaries.Count);
 
         // A subdivision Revit cannot make is refused only at commit, where the catch above never
         // sees it. Declaring this run's cuts lets the swallower delete the one it names instead of

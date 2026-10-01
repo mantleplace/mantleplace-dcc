@@ -84,23 +84,27 @@ internal sealed partial class RevitBundleImporter
         // curator to ignore the line.
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, wearsImageryType ? 0 : 1) is { } notice)
         {
-            Say(notice);
+            Announce(notice);
         }
 
         // Revit 2026 and later: every typed subdivision not already on its material's type is one
         // ChangeTypeId (revit/CLAUDE.md). Counted before anything is written, like the notice above. A
         // subdivision this import cut is already on it (TypeForDrapeAtCut), so what is left is an
         // earlier import's cut, a keyword changed since, or a type Revit refused at the cut.
-        (int onTheirTypes, int toRetype) = CountTypedSubDivisions(terrain, name, smoothed);
+        (int onInstances, int onTheirTypes, int toRetype) = CountDrapeRoutes(terrain, name, smoothed);
         if (SlowStepNotice.ForSubDivisionRetypes(toRetype, _terrainVertexCount) is { } retypes)
         {
-            Say(retypes);
+            Announce(retypes);
         }
+
+        // Revit 2025: typeless subdivisions, one Material each, one at a time — the route the drape was
+        // measured over the threshold on in that version.
+        Announce(SlowStepNotice.ForDrapeOnInstances(onInstances, _terrainVertexCount));
 
         // With nothing to retype, the one commit below is still the longest wait in this step.
         if (SlowStepNotice.ForDrapeCommit(onTheirTypes, toRetype, wearsImageryType ? 0 : 1, _terrainVertexCount) is { } commit)
         {
-            Say(commit);
+            Announce(commit);
         }
 
         ImportFailureSwallower swallower = new("Applying the aerial photograph");
@@ -333,14 +337,26 @@ internal sealed partial class RevitBundleImporter
     /// count is zero there, which is what keeps the drape from announcing a wait it will not have.
     /// Typeless subdivisions count in neither.
     /// </remarks>
-    private (int OnTheirTypes, int ToRetype) CountTypedSubDivisions(Toposolid terrain, string imageryName, bool smoothed)
+    private (int OnInstances, int OnTheirTypes, int ToRetype) CountDrapeRoutes(Toposolid terrain, string imageryName, bool smoothed)
     {
+        int onInstances = 0;
         int onTheirTypes = 0;
         int toRetype = 0;
         foreach (ElementId id in DrapeableSubDivisionIds(terrain))
         {
-            if (_document.GetElement(id) is not Element subdivision
-                || RouteFor(subdivision, out _, out ToposolidType? own) != SubDivisionMaterialRoute.Type)
+            if (_document.GetElement(id) is not Element subdivision)
+            {
+                continue;
+            }
+
+            SubDivisionMaterialRoute route = RouteFor(subdivision, out _, out ToposolidType? own);
+            if (route == SubDivisionMaterialRoute.Instance)
+            {
+                onInstances++;
+                continue;
+            }
+
+            if (route != SubDivisionMaterialRoute.Type)
             {
                 continue;
             }
@@ -356,7 +372,7 @@ internal sealed partial class RevitBundleImporter
             }
         }
 
-        return (onTheirTypes, toRetype);
+        return (onInstances, onTheirTypes, toRetype);
     }
 
     /// <summary>

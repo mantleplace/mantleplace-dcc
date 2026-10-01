@@ -45,8 +45,10 @@ public sealed class ImportLocalBundleCommand : IExternalCommand
         // One import at a time: two staged runs would interleave their slices in one document.
         if (unattended is null && MantlePlaceApplication.ImportHandler.IsImporting)
         {
-            MantlePlaceApplication.ImportHandler.ShowRunning();
+            // The dialog first, and the window forward once it is dismissed: the window floats over
+            // Revit, and brought forward first it would sit over the dialog Revit is blocked on.
             Report(unattended, "Another import is open.", MantlePlaceApplication.ImportHandler.BusyReason);
+            MantlePlaceApplication.ImportHandler.ShowRunning();
             return Result.Cancelled;
         }
 

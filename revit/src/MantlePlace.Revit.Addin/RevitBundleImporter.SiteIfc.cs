@@ -33,8 +33,11 @@ internal sealed partial class RevitBundleImporter
         // is there and File.Exists skips the work — and it is what rebuilds a companion that Remove
         // download took while the project kept its link. Checking first would return early and
         // leave that link permanently unresolvable, which is the failure this whole step is about.
-        if (!File.Exists(companionRvt))
+        bool companionExists = File.Exists(companionRvt);
+        Announce(SlowStepNotice.ForSiteModel(convertedFileExists: companionExists));
+        if (!companionExists)
         {
+
             Document? converted = null;
             try
             {

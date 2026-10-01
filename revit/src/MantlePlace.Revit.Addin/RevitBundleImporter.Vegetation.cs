@@ -102,6 +102,8 @@ internal sealed partial class RevitBundleImporter
             rows.Any(row => points[row].FoliageType == FoliageType.Tree) ? PrepareGeometry(FoliageType.Tree) : TreeGeometry.None,
             rows.Any(row => points[row].FoliageType == FoliageType.Shrub) ? PrepareGeometry(FoliageType.Shrub) : TreeGeometry.None);
 
+        Announce(SlowStepNotice.For(step.Kind, _terrainVertexCount, rows.Count));
+
         TreeChunkResult total = default;
         foreach (ImportChunk chunk in ImportChunking.Chunks(rows.Count))
         {

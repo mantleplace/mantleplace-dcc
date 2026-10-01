@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -33,10 +32,6 @@ namespace MantlePlace.Revit.Addin;
 /// </remarks>
 internal sealed class NoticePopup : Window
 {
-    private const int GwlExStyle = -20;
-    private const int WsExNoActivate = 0x08000000;
-    private const int WsExToolWindow = 0x00000080;
-
     private readonly DispatcherTimer _timer;
 
     /// <param name="selectOrderId">The order a click selects in the vault; <c>null</c> for none in particular.</param>
@@ -86,7 +81,7 @@ internal sealed class NoticePopup : Window
     internal string? SelectOrderId { get; }
 
     /// <summary>Moves the notice to <paramref name="place"/>, in device-independent pixels.</summary>
-    internal void PlaceAt(NoticeRect place)
+    internal void PlaceAt(ScreenRect place)
     {
         Left = place.Left;
         Top = place.Top;
@@ -151,16 +146,6 @@ internal sealed class NoticePopup : Window
 
     private void RefuseActivation()
     {
-        IntPtr handle = new WindowInteropHelper(this).Handle;
-        int style = GetWindowLong(handle, GwlExStyle);
-        _ = SetWindowLong(handle, GwlExStyle, style | WsExNoActivate | WsExToolWindow);
+        WindowStyles.Add(new WindowInteropHelper(this).Handle, WindowStyles.NoActivate | WindowStyles.ToolWindow);
     }
-
-    // DllImport rather than LibraryImport, for RibbonImagery's reason: the generator needs
-    // AllowUnsafeBlocks across the whole assembly.
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
-    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
-    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 }

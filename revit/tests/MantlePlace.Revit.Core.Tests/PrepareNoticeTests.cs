@@ -130,21 +130,21 @@ internal static class PrepareNoticeTests
 
         run.Case("notices stack upward from the owner's bottom-right corner", () =>
         {
-            NoticeRect owner = new(100, 50, 1600, 900);
+            ScreenRect owner = new(100, 50, 1600, 900);
 
-            NoticeRect first = NoticeStack.Place(owner, 0);
+            ScreenRect first = NoticeStack.Place(owner, 0);
             run.Within(first.Left, 100 + 1600 - NoticeStack.Inset - NoticeStack.Width, 1e-9, "right-aligned inside the owner");
             run.Within(first.Top, 50 + 900 - NoticeStack.Inset - NoticeStack.Height, 1e-9, "on the owner's bottom edge");
             run.Within(first.Width, NoticeStack.Width, 1e-9, "fixed width");
 
-            NoticeRect second = NoticeStack.Place(owner, 1);
+            ScreenRect second = NoticeStack.Place(owner, 1);
             run.Within(second.Top, first.Top - NoticeStack.Height - NoticeStack.Gap, 1e-9, "the next sits above, a gap apart");
             run.Within(second.Left, first.Left, 1e-9, "in the same column");
         });
 
         run.Case("an owner narrower than a notice keeps the notice on the owner's left edge", () =>
         {
-            NoticeRect first = NoticeStack.Place(new NoticeRect(10, 10, 200, 400), 0);
+            ScreenRect first = NoticeStack.Place(new ScreenRect(10, 10, 200, 400), 0);
             run.Within(first.Left, 10, 1e-9, "clamped, never off the owner to the left");
         });
 

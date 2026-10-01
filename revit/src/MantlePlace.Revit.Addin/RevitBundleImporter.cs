@@ -136,6 +136,30 @@ internal sealed partial class RevitBundleImporter(
     internal IReadOnlyList<string> Log => _log;
 
     /// <summary>
+    /// Raised on Revit's thread just before a transaction commits — the start of the span in which
+    /// Revit answers nothing.
+    /// </summary>
+    /// <remarks>
+    /// Every <see cref="Transaction"/> the import opens is committed through <c>CommitAndReport</c>,
+    /// so this is every transaction's commit. The drape's <see cref="SubTransaction"/> commits are not
+    /// among them: they regenerate nothing, and are seconds at most. A handler must not call back into
+    /// the document: the transaction is still open.
+    /// </remarks>
+    internal event Action? CommitStarting;
+
+    /// <summary>Raised on Revit's thread once a commit <see cref="CommitStarting"/> announced has returned or thrown.</summary>
+    internal event Action? CommitEnded;
+
+    /// <summary>Raised on Revit's thread with each <see cref="SlowStepNotice"/> line as it is said.</summary>
+    internal event Action<string>? Announced;
+
+    /// <summary>
+    /// Raised on Revit's thread with how far a step that does its work in one slice has got: the drape
+    /// through its subdivisions, a polygon layer through its cuts.
+    /// </summary>
+    internal event Action<StepProgress>? Counted;
+
+    /// <summary>
     /// Runs <paramref name="slice"/> — one <see cref="StagedImport.Advance"/> — with the import's
     /// failure hook attached for exactly as long as it runs.
     /// </summary>

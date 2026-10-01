@@ -17,6 +17,27 @@ internal sealed partial class RevitBundleImporter
         Trace(line);
     }
 
+    /// <summary>
+    /// Says a <see cref="SlowStepNotice"/> line, and hands it to whoever is showing the run, to show
+    /// beside the step's clock while the wait it describes goes on.
+    /// </summary>
+    private void Announce(string? notice)
+    {
+        if (notice is null)
+        {
+            return;
+        }
+
+        Say(notice);
+        Announced?.Invoke(notice);
+    }
+
+    /// <summary>
+    /// Says how far a step that does its work in one slice has got, for the window to show: such a
+    /// step cannot yield inside its open transaction, so it counts instead (<see cref="StagedImport.ReportProgress"/>).
+    /// </summary>
+    private void Count(int done, int total) => Counted?.Invoke(new StepProgress(done, total));
+
     /// <summary>The same, for a batch the swallower already worded.</summary>
     private void SayAll(IEnumerable<string> lines)
     {
@@ -96,9 +117,23 @@ internal sealed partial class RevitBundleImporter
         // at commit, not at the API call, so "the step took N seconds" and "the commit took N
         // seconds" point at completely different levers — and only the second one was ever the
         // problem for the site-boundary subdivisions.
+        //
+        // ⛔ Said either side of the call, and the far side in a finally: this is the last thing the
+        // import window hears before Revit's thread stops answering, and a commit that throws must
+        // not leave it saying Revit is still committing.
         Stopwatch clock = Stopwatch.StartNew();
-        TransactionStatus status = transaction.Commit();
-        clock.Stop();
+        TransactionStatus status;
+        CommitStarting?.Invoke();
+        try
+        {
+            status = transaction.Commit();
+        }
+        finally
+        {
+            clock.Stop();
+            CommitEnded?.Invoke();
+        }
+
         Trace($"[{transaction.GetName()}] commit took {clock.Elapsed.TotalSeconds:N1} s ({status}).");
 
         SayAll(swallower.Lines);

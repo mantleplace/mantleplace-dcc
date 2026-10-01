@@ -308,11 +308,30 @@ road centrelines, the trees and the site context view and filter it finds and cr
 missing. Opening the site model to copy from is one call and is not counted: the window shows the
 building count once it is open. Road centrelines drawn by a build that predates their stamp carry none, so the first import
 after upgrading draws them once more; delete the older set by hand. The log's last line names the
-steps that completed and those that never ran. What no window can show is the inside of one
-commit: the terrain and the
+steps that completed and those that never ran. What no window can show is how far one commit has
+got: the terrain and the
 subdivisions are one commit each — and so is the drape's retype, which only a ground built before the
 terrain took the imagery type still needs — Revit reports "not responding" while one runs, and a
-Cancel pressed then takes effect when it finishes. Closing the window while it runs is a cancel.
+Cancel pressed then takes effect when it finishes. The window does not stop with it: it runs on a
+thread of its own, so through a commit it names the step, says Revit is committing and keeps the
+step's clock running (`Road Subdivisions: Revit is committing, 4 min 10 s`), and a Cancel pressed then
+is shown at once. Every step measured at 30 s or more says first what it took on the order it was
+measured on, and the window shows that beside the clock. The drape and the polygon
+layers count their subdivisions as they go (`Imagery Drape: 120 of 405`), though Cancel still waits
+for the step to finish, and smooth shading committed after the last step reads `Finishing`.
+
+Revit's window no longer owns the import window (why is in [`CLAUDE.md`](./CLAUDE.md)), and that is a
+trade:
+
+- it floats over Revit while Revit is the application in front, including when you click a Revit that
+  is stuck in a commit;
+- it goes behind any other application, and behind Revit's own dialogs: it never covers a Revit modal;
+- it has a taskbar button of its own, which is how to find it when it is behind something;
+- it does not minimise with Revit;
+- while Revit is in front it floats over Revit's palettes too.
+
+It closes with Revit, and the checklist window closes when the project it was opened for closes. Closing the
+window while it runs is a cancel.
 
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
 runs unattended from a Revit journal or a tester script. An unattended run raises no dialog and opens
