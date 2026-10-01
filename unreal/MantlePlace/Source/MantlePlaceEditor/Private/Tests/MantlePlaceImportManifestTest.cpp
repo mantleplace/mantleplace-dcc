@@ -8,7 +8,7 @@
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceIntegrityLogic.h"      // which payloads the pre-check covers, as a list
 #include "MantlePlaceLandscapeWeightsLogic.h" // the band legend the corpus states the answer for
-#include "MantlePlaceRoadSplinesLogic.h"    // the height-datum check the road-layer table drives
+#include "MantlePlaceRoadSplinesLogic.h"      // the height-datum check the road-layer table drives
 #include "MantlePlaceTreePointsLogic.h"     // the row-count and frame checks the vector tables drive
 #include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion
 #include "Tests/MantlePlaceConformanceCorpus.h"
@@ -549,18 +549,24 @@ bool OverlayMembers(const TSharedPtr<FJsonObject>& Row, const TCHAR* OverlayFiel
 TSharedPtr<FJsonObject> RoadSplinesLayer(const TSharedPtr<FJsonObject>& Manifest)
 {
 	const TSharedPtr<FJsonObject>* Vector = nullptr;
+	if (!Manifest.IsValid() || !Manifest->TryGetObjectField(TEXT("vector"), Vector))
+	{
+		return nullptr;
+	}
 	const TArray<TSharedPtr<FJsonValue>>* Layers = nullptr;
-	if (!Manifest.IsValid() || !Manifest->TryGetObjectField(TEXT("vector"), Vector)
-		|| !(*Vector)->TryGetArrayField(TEXT("layers"), Layers))
+	if (!(*Vector)->TryGetArrayField(TEXT("layers"), Layers))
 	{
 		return nullptr;
 	}
 	for (const TSharedPtr<FJsonValue>& Value : *Layers)
 	{
 		const TSharedPtr<FJsonObject>* Layer = nullptr;
+		if (!Value.IsValid() || !Value->TryGetObject(Layer))
+		{
+			continue;
+		}
 		FString Name;
-		if (Value.IsValid() && Value->TryGetObject(Layer) && (*Layer)->TryGetStringField(TEXT("name"), Name)
-			&& Name == TEXT("road_splines"))
+		if ((*Layer)->TryGetStringField(TEXT("name"), Name) && Name == TEXT("road_splines"))
 		{
 			return *Layer;
 		}
@@ -591,8 +597,12 @@ FString ManifestWithOverlays(const FCase& Case, const TSharedPtr<FJsonObject>& R
 	const TSharedPtr<FJsonObject> Unreal = Child(Child(Manifest, TEXT("hosts")), TEXT("unreal"));
 	if (!OverlayMembers(Row, TEXT("root"), Manifest)
 		|| !OverlayMembers(Row, TEXT("unreal"), Unreal)
-		|| !OverlayMembers(Row, TEXT("foliagePoints"), Child(Unreal, TEXT("foliage_points")))
-		|| !OverlayMembers(Row, TEXT("roadSplines"), RoadSplinesLayer(Manifest)))
+		|| !OverlayMembers(Row, TEXT("foliagePoints"), Child(Unreal, TEXT("foliage_points"))))
+	{
+		return FString();
+	}
+	// Last, so a `root` overlay that replaces `vector` is the document this one lands on.
+	if (!OverlayMembers(Row, TEXT("roadSplines"), RoadSplinesLayer(Manifest)))
 	{
 		return FString();
 	}
@@ -887,32 +897,34 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		for (const TSharedPtr<FJsonObject>& Row : Vectors)
 		{
 			const FString Name = RowString(Row, TEXT("name"));
+			const FString Overlaid = ManifestWithOverlays(*Case, Row);
 			FString ManifestError;
-			const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(
-				ManifestWithOverlays(*Case, Row), ManifestError);
-			TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": embedded manifest parses (%s)"),
-				*Name, *ManifestError)), M.bValid);
-			TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": the road layer is selected"), *Name)),
-				M.bHasRoadSplines);
+			const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(Overlaid, ManifestError);
+			const FString Parses = FString::Printf(TEXT("\"%s\": embedded manifest parses (%s)"), *Name, *ManifestError);
+			TestTrue(Case->What(*Parses), M.bValid);
+			const FString Selected = FString::Printf(TEXT("\"%s\": the road layer is selected"), *Name);
+			TestTrue(Case->What(*Selected), M.bHasRoadSplines);
 
 			FString Reason;
 			const bool bPlaceable = FMantlePlaceRoadSplinesLogic::CanPlaceHeights(M.GetRoadSplinesDatum(), Reason);
-			TestEqual(Case->What(*FString::Printf(TEXT("\"%s\" outcome (%s)"), *Name, *Reason)),
-				FString(bPlaceable ? TEXT("placeable") : TEXT("unplaceable")), RowString(Row, TEXT("outcome")));
+			const FString Outcome = FString::Printf(TEXT("\"%s\" outcome (%s)"), *Name, *Reason);
+			const FString ActualOutcome = bPlaceable ? TEXT("placeable") : TEXT("unplaceable");
+			TestEqual(Case->What(*Outcome), ActualOutcome, RowString(Row, TEXT("outcome")));
 			if (bPlaceable)
 			{
-				TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": a placeable layer carries no refusal"), *Name)),
-					Reason.IsEmpty());
+				const FString NoRefusal = FString::Printf(TEXT("\"%s\": a placeable layer carries no refusal"), *Name);
+				TestTrue(Case->What(*NoRefusal), Reason.IsEmpty());
 				continue;
 			}
 			// A refusal names what was stated, as HPS-53's named skip does, so a curator can tell a
 			// layer in another datum from one that said nothing.
-			TestFalse(Case->What(*FString::Printf(TEXT("\"%s\" states a reason"), *Name)), Reason.IsEmpty());
+			const FString StatesReason = FString::Printf(TEXT("\"%s\" states a reason"), *Name);
+			TestFalse(Case->What(*StatesReason), Reason.IsEmpty());
 			const FString ErrorContains = RowString(Row, TEXT("errorContains"));
 			if (!ErrorContains.IsEmpty())
 			{
-				TestTrue(Case->What(*FString::Printf(TEXT("\"%s\" message contains \"%s\" (got: %s)"),
-					*Name, *ErrorContains, *Reason)), Reason.Contains(ErrorContains, ESearchCase::CaseSensitive));
+				const FString Contains = FString::Printf(TEXT("\"%s\" message contains \"%s\" (got: %s)"), *Name, *ErrorContains, *Reason);
+				TestTrue(Case->What(*Contains), Reason.Contains(ErrorContains, ESearchCase::CaseSensitive));
 			}
 		}
 	}

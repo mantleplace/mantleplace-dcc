@@ -22,10 +22,12 @@ history, not contract.
 ### 1.8.0 — the datum of every height, and US terrain from USGS 3DEP (additive minor; published and frozen 2026-10-01)
 
 Every item below is additive: no member is removed, re-typed or re-meant, and the one shape that
-changes, a source's acquisition date, is widened rather than narrowed. So it is a MINOR under
+changes, a source's acquisition date, is loosened to admit the month-precise dates producers state.
+1.7.0's `format: date` there was an annotation, not a constraint. So it is a MINOR under
 [compatibility](compatibility.md) §2, and every host floor at 1.0.0 reads it. What changes on a US
-order is content, not a key: the heights in the delivery CRS move to the datum surveyors there work
-in, and from 1.8.0 every such height says which datum it is in.
+order is content, not a key: the DEM comes straight from USGS 3DEP wherever a 3DEP rung covers the
+AOI, so the ground is bare earth, and the heights in the delivery CRS move to the datum surveyors
+there work in. From 1.8.0 every such height says which datum it is in.
 
 - **A height names its datum, and there are two.** Every height in a bundle is an orthometric height
   in `EGM2008-orthometric` or in `NAVD88 (GEOID18)`. A datum a reader does not know fails closed: the
@@ -53,6 +55,12 @@ in, and from 1.8.0 every such height says which datum it is in.
   time, are declared, and `resolution_confidence` gains `conservative_smooth_terrain` for a 3DEP DEM
   whose smooth ground measures coarser than it is. A source's `acquired` dates may be `YYYY-MM` where
   its producer states only the month; no day is invented.
+- **A DEM straight from 3DEP is bare earth.** Its `surface_model` is `dtm`, always, so a US order
+  whose DEM comes from a 3DEP rung delivers ground without canopy or structures. That is a change of
+  content under an existing key.
+- **3DEP is named where it is credited.** `attribution.sources[].provider_id` documents `usgs-3dep`
+  for a DEM taken straight from 3DEP, and Mapterhorn is credited only when it shipped. A DEM source's
+  `id` names a 3DEP rung the way Mapterhorn's index does: `usgs-3dep-1m`, `usgs3dep19`, `usgs3dep13`.
 
 ⚠️ **Additive in the schema is not additive in every reader**, the second time a minor has needed
 saying so. The Unreal host's ground is EGM2008, and it places the shared `road_splines` with the
@@ -60,7 +68,7 @@ heights the file carries. From 1.8.0 those heights are NAVD88 on a US order, so 
 released through `unreal-0.5.0` places a US order's roads above or below its landscape by up to a
 metre, and the import reports success. The reader that pins 1.8.0 reads the layer's `vertical_datum`
 and places the layer only where it is `EGM2008-orthometric`, compared verbatim; it refuses any other
-datum by name, an unstated one included where the version owes one, and converts nothing. No copy
+datum by name, and on a layer from 1.8.0 on an unstated one too, and converts nothing. No copy
 of the road layer in the engine's datum is published yet, so on a US order the Unreal host places no
 roads. The Revit host places its block in the delivery's datum, and the shared road layer is in that
 same datum, so it reads nothing it must refuse.

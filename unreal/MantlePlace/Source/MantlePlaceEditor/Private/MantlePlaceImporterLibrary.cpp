@@ -1074,8 +1074,10 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		int32 LinesSeen = 0;
 		bool bParsed = false;
 		// The layer's heights are placed only in this host's datum, the landscape's. A layer stating
-		// another is a named skip before a byte is read, as HPS-53 skips a file in another frame, and
-		// is never shifted (HPS-33).
+		// another is a named skip, as HPS-53 skips a file in another frame, and is never shifted
+		// (HPS-33). The skip comes after the integrity pre-check, which hashes every declared payload
+		// whether or not it is placed, so a refused layer's bytes are still verified and a bad digest
+		// still stops the import; what the skip spares is reading the file for placement.
 		FString DatumRefusal;
 		if (!FMantlePlaceRoadSplinesLogic::CanPlaceHeights(Manifest.GetRoadSplinesDatum(), DatumRefusal))
 		{

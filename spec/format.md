@@ -225,12 +225,15 @@ enum: some are informational and are echoed opaquely, others are load-bearing an
 **A height has a datum, and one bundle can carry two.** Every height is an orthometric height in a
 named vertical datum. The files in the delivery CRS can be in a national datum while the content
 made for an engine keeps one datum on every order, so that a fixed-frame host's ground is the same
-everywhere; the [changelog](changelog.md) records which content is in which. **Read the datum from
-the thing you are placing**, as you read its unit, and place a height only on ground in the same
-datum. A consumer MUST NOT convert one datum to the other: the published difference between them is
-one number for the site, while the producer shifted its content point by point, and applying that
-number is re-deriving a placement value. A height in another datum is refused by name, and a datum
-the consumer does not know fails closed.
+everywhere. Which content is in which is the schema's to say: its `$defs/verticalDatum`, and the
+`vertical_datum` each entry that carries heights declares. **A host whose ground is in one datum
+places only heights in that datum.** A fixed-frame host's ground is the engine's, so where it
+places a file that is not engine content it reads the datum the file states and refuses by name a
+height in any other. An order-frame host's ground and everything it places from one bundle are
+delivery-CRS content, and within one bundle they share the delivery's datum. A consumer MUST NOT
+convert one datum to the other: the published difference between them is one number for the site,
+while the producer shifted its content point by point, and applying that number is re-deriving a
+placement value. A datum a consumer reads and does not know fails closed.
 
 ⛔ **Where the manifest states a value twice over, a consumer MUST verify the identity and refuse on
 mismatch** rather than picking one. Those redundancies are published where a host's own API demands
@@ -397,10 +400,12 @@ A fixed-frame host reads points in its own frame, and the delivered file is only
 metric delivery. So the bundle carries the trees once per frame a host needs:
 
 - **`hosts.unreal.foliage_points` names only a file in the Unreal frame** — its `crs` is
-  `georeference.crs_projected`, and its `units` and `horizontal_units` are `m`, by schema. On a
-  metric delivery that is `Landcover/TreePoints.csv`, and one file carries both pointers. On any
-  foot delivery it is `Landcover/TreePointsMetric.csv`: the same trees, `x` and `y` reprojected into
-  the metric UTM grid and `ground_z` re-sampled in metres, every other column carried verbatim.
+  `georeference.crs_projected`, its `units` and `horizontal_units` are `m`, and its `ground_z` is in
+  the engine's datum (§6), by schema. On a metric delivery whose heights are in that datum, the
+  delivered `Landcover/TreePoints.csv` is that file, and one file carries both pointers. On any foot
+  delivery, and on any delivery whose heights are in another datum, it is
+  `Landcover/TreePointsMetric.csv`: the same trees in the metric UTM grid with `ground_z` re-sampled
+  in metres on the engine's ground, every other column carried verbatim.
 - The producer chooses between the two by comparing the frames the files state with the host's, and
   never by the delivery tier. Where neither file is in the Unreal frame — a foot delivery built
   before 1.3.0, until its next rebuild — the block carries no `foliage_points` at all, rather than a
