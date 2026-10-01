@@ -222,6 +222,16 @@ offending value. A linear unit misread by a factor is a site misplaced by a whol
 silent fallback to a default is how that happens. The schema states unknown-value behaviour per
 enum: some are informational and are echoed opaquely, others are load-bearing and fail closed.
 
+**A height has a datum, and one bundle can carry two.** Every height is an orthometric height in a
+named vertical datum. The files in the delivery CRS can be in a national datum while the content
+made for an engine keeps one datum on every order, so that a fixed-frame host's ground is the same
+everywhere; the [changelog](changelog.md) records which content is in which. **Read the datum from
+the thing you are placing**, as you read its unit, and place a height only on ground in the same
+datum. A consumer MUST NOT convert one datum to the other: the published difference between them is
+one number for the site, while the producer shifted its content point by point, and applying that
+number is re-deriving a placement value. A height in another datum is refused by name, and a datum
+the consumer does not know fails closed.
+
 ⛔ **Where the manifest states a value twice over, a consumer MUST verify the identity and refuse on
 mismatch** rather than picking one. Those redundancies are published where a host's own API demands
 internal consistency; they exist to be checked.
@@ -304,7 +314,8 @@ geometry type rather than on the layer; each file of a split layer holds one fam
 row names it. Every layer's coordinates are geographic, and the block
 says so: `vector.crs` is `EPSG:4326` whenever the set shipped. §6's one projection exception
 applies to all of them — and a host whose own block carries the layer in its own frame (§6.5)
-reads that copy instead.
+reads that copy instead. The heights `road_splines` carries are the delivered elevation's, in its
+datum, and the layer states that datum: a host whose ground is in another places none of them (§6).
 
 What presence and absence mean:
 

@@ -18,6 +18,11 @@ constexpr double K0 = 0.9996;
 constexpr double FalseEastingM = 500000.0;
 constexpr double SouthFalseNorthingM = 10000000.0;
 
+// The vertical datum of every height this host places: its landscape, its mesh and its foliage,
+// on every order. The format's own spelling, compared verbatim — the same string the heightmap's
+// `uint16_mapping.datum` and `foliage_points.vertical_datum` carry.
+const TCHAR* const HostVerticalDatum = TEXT("EGM2008-orthometric");
+
 /** Convert one GeoJSON position array [lon, lat, z?] into the Local Projected Frame (UE cm). */
 bool PositionToUeCm(
     const TArray<TSharedPtr<FJsonValue>>& Position,
@@ -108,6 +113,34 @@ void AppendGeometry(
 		}
 	}
 }
+}
+
+bool FMantlePlaceRoadSplinesLogic::CanPlaceHeights(const FMantlePlaceRoadSplinesDatum& Datum, FString& OutReason)
+{
+	OutReason.Reset();
+	if (Datum.Stated.IsEmpty())
+	{
+		if (!Datum.bRequired)
+		{
+			return true; // a bundle from before the format stated a datum: every height was EGM2008
+		}
+		OutReason = FString::Printf(
+		    TEXT("the road layer states no vertical datum for its heights, which this manifest's "
+		         "version requires it to state, and an unstated datum is never taken to be %s, the "
+		         "datum of this landscape. The roads were not placed."),
+		    HostVerticalDatum);
+		return false;
+	}
+	if (Datum.Stated.Equals(HostVerticalDatum, ESearchCase::CaseSensitive))
+	{
+		return true;
+	}
+	OutReason = FString::Printf(
+	    TEXT("the road layer states its heights in \"%s\", not %s, the datum of this landscape. "
+	         "Placed as they are they would not sit on the ground, and this plugin converts no "
+	         "height, so the roads were not placed."),
+	    *Datum.Stated, HostVerticalDatum);
+	return false;
 }
 
 bool FMantlePlaceRoadSplinesLogic::IsUtmEpsg(int32 Epsg)

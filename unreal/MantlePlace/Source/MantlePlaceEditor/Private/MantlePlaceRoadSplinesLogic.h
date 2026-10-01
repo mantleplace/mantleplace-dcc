@@ -18,6 +18,26 @@ struct FMantlePlaceRoadSpline
 };
 
 /**
+ * The vertical datum the shared `road_splines` layer states for its heights (MPB 1.8.0), beside
+ * whether the manifest's version owes that statement. Built by
+ * `FMantlePlaceVaultManifest::GetRoadSplinesDatum()`, so the parser reports what was published and
+ * FMantlePlaceRoadSplinesLogic::CanPlaceHeights decides what it means.
+ */
+struct FMantlePlaceRoadSplinesDatum
+{
+	/** vector.layers[road_splines].vertical_datum, verbatim; empty when the layer states none. */
+	FString Stated;
+
+	/**
+	 * The manifest's version is one whose format states the datum of a layer's heights (MPB 1.8.0
+	 * and later). There, a road layer that states none is refused rather than read as a bundle from
+	 * before the format could say: the version decides which kind of bundle this is, never the
+	 * absence of the key.
+	 */
+	bool bRequired = false;
+};
+
+/**
  * Pure (engine-/IO-free) logic for the road-splines layer: GeoJSON text -> spline point sets in
  * the Local Projected Frame. The GeoJSON ships WGS84 lon/lat (RFC 7946) with orthometric Z in
  * meters, so this owns the one place the plugin projects geographic coordinates: a WGS84 ->
@@ -36,6 +56,23 @@ struct FMantlePlaceRoadSplinesLogic
 	 * (326xx = north, 327xx = south). Returns false for a non-UTM EPSG or out-of-range input.
 	 */
 	static bool LonLatToUtm(double LonDeg, double LatDeg, int32 Epsg, double& OutEastingM, double& OutNorthingM);
+
+	/**
+	 * Whether the road layer's heights are in this host's vertical datum, so its splines sit on the
+	 * landscape rather than above or below it. This host is a fixed-frame host (HPS-54), and fixed
+	 * vertically too: its landscape, mesh and foliage are EGM2008 orthometric heights on
+	 * every order, while the shared layer's heights are the delivered elevation's, which on some
+	 * deliveries is another datum.
+	 *
+	 * True when the layer states `EGM2008-orthometric`, compared verbatim, or when it states nothing
+	 * and the version owes nothing — a bundle from before the format stated a datum, when every
+	 * height it carried was EGM2008. False, with OutReason naming what was stated, for any other
+	 * datum, an unknown one included (the format makes an unknown datum fail closed), and for an
+	 * owed datum the layer leaves out. The refusal is a named skip of the layer, as HPS-53 skips a
+	 * file in another frame, and never a conversion: no offset is applied, because shifting a height
+	 * is deriving one (HPS-33).
+	 */
+	static bool CanPlaceHeights(const FMantlePlaceRoadSplinesDatum& Datum, FString& OutReason);
 
 	/**
 	 * Parse a RoadSplines GeoJSON FeatureCollection into Local-Projected-Frame splines.

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 
 class FJsonObject;
+struct FMantlePlaceRoadSplinesDatum;
 struct FMantlePlaceTreePointsFrame;
 
 /**
@@ -226,6 +227,9 @@ struct FMantlePlaceVaultManifest
 	bool bHasRoadSplines = false;
 	FString RoadSplinesPath;   // in-zip path, e.g. "Vector/RoadSplines.geojson"
 	FString RoadSplinesSha256; // from the matching vector.layers[].formats[] entry; empty = skip check
+	FString RoadSplinesVerticalDatum; // vector.layers[road_splines].vertical_datum, verbatim; empty when
+	                                  // not stated (MPB 1.8.0 states it). Judged nowhere here:
+	                                  // FMantlePlaceRoadSplinesLogic::CanPlaceHeights decides.
 
 	// --- Native Cesium streaming (v8: the bundle's own Cesium-ready artifacts) ----------
 	// These let Cesium for Unreal stream the bundle from a local server, alongside the native-asset
@@ -322,6 +326,14 @@ struct FMantlePlaceVaultManifest
 	 * mistaken for a bundle built before the format had one.
 	 */
 	FMantlePlaceTreePointsFrame GetFoliagePointsFrame() const; // callers include MantlePlaceTreePointsLogic.h
+
+	/**
+	 * The vertical datum the road layer states, for FMantlePlaceRoadSplinesLogic::CanPlaceHeights.
+	 * Marked required when the manifest's version is one whose format states the datum of a
+	 * layer's heights, so a missing datum there is refused rather than mistaken for a bundle built
+	 * before the format had one.
+	 */
+	FMantlePlaceRoadSplinesDatum GetRoadSplinesDatum() const; // callers include MantlePlaceRoadSplinesLogic.h
 };
 
 namespace MantlePlaceImportManifest

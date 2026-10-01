@@ -1073,7 +1073,15 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		TArray<FMantlePlaceRoadSpline> Splines;
 		int32 LinesSeen = 0;
 		bool bParsed = false;
-		if (!Reader.TryReadFile(Manifest.RoadSplinesPath, GeoJsonBytes))
+		// The layer's heights are placed only in this host's datum, the landscape's. A layer stating
+		// another is a named skip before a byte is read, as HPS-53 skips a file in another frame, and
+		// is never shifted (HPS-33).
+		FString DatumRefusal;
+		if (!FMantlePlaceRoadSplinesLogic::CanPlaceHeights(Manifest.GetRoadSplinesDatum(), DatumRefusal))
+		{
+			Log.Add(FString::Printf(TEXT("Road splines skipped: %s"), *DatumRefusal));
+		}
+		else if (!Reader.TryReadFile(Manifest.RoadSplinesPath, GeoJsonBytes))
 		{
 			Log.Add(FString::Printf(TEXT("Road splines skipped: bundle is missing %s."), *Manifest.RoadSplinesPath));
 		}

@@ -19,6 +19,55 @@ history, not contract.
 
 ## Semver era
 
+### 1.8.0 — the datum of every height, and US terrain from USGS 3DEP (additive minor; published and frozen 2026-10-01)
+
+Every item below is additive: no member is removed, re-typed or re-meant, and the one shape that
+changes, a source's acquisition date, is widened rather than narrowed. So it is a MINOR under
+[compatibility](compatibility.md) §2, and every host floor at 1.0.0 reads it. What changes on a US
+order is content, not a key: the heights in the delivery CRS move to the datum surveyors there work
+in, and from 1.8.0 every such height says which datum it is in.
+
+- **A height names its datum, and there are two.** Every height in a bundle is an orthometric height
+  in `EGM2008-orthometric` or in `NAVD88 (GEOID18)`. A datum a reader does not know fails closed: the
+  height's datum is undetermined, and it is never converted. On a US order, an AOI inside the
+  GEOID18 grid of the contiguous United States, the files in the delivery CRS are NAVD88: the DEM,
+  its contours, the LandXML, toposurface-point and DXF surfaces, the IFC site model, the road
+  splines' heights, the Revit block and the tree points. The content made for an engine stays
+  EGM2008 on every order: the heightmap, the terrain and buildings meshes, the Cesium terrain and the
+  whole Unreal block. Every other order is EGM2008 throughout, as every bundle before 1.8.0 was.
+- **Where each datum is stated.** `vertical_datum` is declared on `elevation.dem`,
+  `elevation.contours`, `elevation.landxml`, `elevation.points_csv`, `elevation.surface_dxf`,
+  `buildings.ifc`, `mesh` (beside `vertex_z_datum`), `landcover.tree_points`, and a shared vector
+  layer whose geometry carries heights, which today is `road_splines`. `hosts.unreal.foliage_points`
+  states it too, always EGM2008: on a US order its pointer names `Landcover/TreePointsMetric.csv`, the
+  same trees on the engine's ground, metric orders included. `elevation.hillshade` and the derived
+  raster pointers state `derived_from_datum`. `hosts.revit.georeference.vertical_datum` and
+  `hosts.revit.contours.vertical_datum` stay free strings, now documented with the same two values.
+- **`elevation.dem.navd88_minus_egm2008_m`**, on a US order only: NAVD88 minus EGM2008 at the AOI's
+  centre, in metres. It is one number for the site, for a person to read; the engine content was
+  shifted point by point, not by it.
+- **`elevation.dem` says where it came from.** `provenance` names the provider, `source_tier` the
+  tier that shipped, and on a US order `ladder` lists each USGS 3DEP rung tried, 1 m, then 1/9
+  arc-second, then 1/3 arc-second, with what became of it, and `failover` says why the DEM came from
+  elsewhere when no rung shipped. `effective_gsd_m` and `resolution_confidence`, emitted for some
+  time, are declared, and `resolution_confidence` gains `conservative_smooth_terrain` for a 3DEP DEM
+  whose smooth ground measures coarser than it is. A source's `acquired` dates may be `YYYY-MM` where
+  its producer states only the month; no day is invented.
+
+⚠️ **Additive in the schema is not additive in every reader**, the second time a minor has needed
+saying so. The Unreal host's ground is EGM2008, and it places the shared `road_splines` with the
+heights the file carries. From 1.8.0 those heights are NAVD88 on a US order, so the Unreal reader as
+released through `unreal-0.5.0` places a US order's roads above or below its landscape by up to a
+metre, and the import reports success. The reader that pins 1.8.0 reads the layer's `vertical_datum`
+and places the layer only where it is `EGM2008-orthometric`, compared verbatim; it refuses any other
+datum by name, an unstated one included where the version owes one, and converts nothing. No copy
+of the road layer in the engine's datum is published yet, so on a US order the Unreal host places no
+roads. The Revit host places its block in the delivery's datum, and the shared road layer is in that
+same datum, so it reads nothing it must refuse.
+
+Both hosts re-pin to 1.8.0 on the corpus case `manifest.verticalDatumsIgnored`, a US order carrying
+every new member; the Unreal-scoped `manifest.roadSplinesStatedDatum` pins the road-layer refusal.
+
 ### 1.7.0 — an honest delivery verdict, and the unit of every value (minor, with one exception to compatibility §2; published and frozen 2026-09-30)
 
 Every item below but one is additive, and no member is removed or re-typed, so every host floor at

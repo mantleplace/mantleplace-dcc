@@ -865,6 +865,20 @@
       }
     },
     {
+      "id": "manifest.verticalDatumsIgnored",
+      "group": "manifest",
+      "file": "manifest/vertical-datums-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 1.8.0 adds keys and removes none, and most of them say which datum a height is in. A height is an orthometric height in one of two datums, `EGM2008-orthometric` or `NAVD88 (GEOID18)`, an enum whose unknown value fails closed. On a US order the files in the delivery CRS -- the DEM, the contours, the CAD surfaces, the IFC site model, the road splines, the Revit block and the tree points -- are in NAVD88, while the content made for an engine stays in EGM2008, and `elevation.dem.navd88_minus_egm2008_m` states the difference at the site's centre. `vertical_datum` is declared on `elevation.dem`, `elevation.contours`, `elevation.landxml`, `elevation.points_csv`, `elevation.surface_dxf`, `buildings.ifc`, `mesh`, `landcover.tree_points` and a vector layer that carries heights; `hosts.unreal.foliage_points` states it, always EGM2008; and `elevation.hillshade` and the derived raster pointers gain `derived_from_datum`. `elevation.dem` also says where it came from -- `provenance`, `source_tier`, and on a US order the `ladder` of USGS 3DEP rungs tried and a `failover` saying why none shipped -- and declares `effective_gsd_m` and `resolution_confidence`, which gains `conservative_smooth_terrain`; a source's `acquired` dates may be month-precise. What any host does with the members is other cases' business: the Unreal host's reading of the road layer's datum is `manifest.roadSplinesStatedDatum`. The fixture is versioned 1.8.0 and is a US order carrying every new member in the shape the 1.8.0 schema gives it: a NAVD88 DEM from the 1/9 arc-second rung after the 1 m rung missed part of the AOI, its source acquired from a month to a day, the datum on every elevation entry, the IFC, the tree points and the road layer, an EGM2008 mesh, and the Unreal tree-point pointer on the metric file in the engine's datum -- plus everything the 1.7.0 case carries, its verdict now `complete` because every selected token shipped, so that every block the fixture carries validates against the published 1.8.0 schema. A reader MUST accept it and still read everything around the new keys. Two readers fail here while every earlier case stays green: one that gates the version on equality with its floor or with the last minor it saw, and one that refuses a member it does not recognise inside a block it does read -- both readers walk `vector.layers`, whose `road_splines` entry now states its datum, and the Revit reader walks `elevation`, `buildings` and `landcover`, which gain one each. Either turns an additive minor into a breaking release (compatibility.md). Host-invariant on purpose: ignoring a key nobody has taught you is every reader's obligation, not one host's.",
+      "manifestVersion": "1.8.0",
+      "expectations": {
+        "jobId": "vertical-datums",
+        "orderId": "ord-vertical-datums-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "7777777777777777777777777777777777777777777777777777777777777777"
+      }
+    },
+    {
       "id": "manifest.revitOwnFramePointers",
       "group": "manifest",
       "file": "manifest/revit-own-frame-pointers.json",
@@ -1342,6 +1356,14 @@
       "file": "manifest/tree-points-stated-frame.json",
       "expect": "vector",
       "reason": "A tree-point pointer that states its frame is placed only where that frame is this host's (HPS-53, MPB 1.3.0). `hosts.unreal.foliage_points` states `crs`, `units` and `horizontal_units`, and the format says they are always the fixed-frame host's own: `georeference.crs_projected`, in metres. A reader compares them with its own georeference verbatim and refuses by name what does not match -- a State Plane foot CRS, feet for `ground_z`, US survey feet for `x` and `y` -- before a row is read, scaling and reprojecting nothing. The manifest's version, not the presence of the keys, says a frame is owed: a 1.3.0 pointer that omits one member, or all three, is refused rather than read as a bundle from before the format could state one. The landscape extent stays as the backstop behind a stated frame, because a producer can state one wrongly: foot rows under a pointer that says metres are refused on the extent's evidence. Each row lays its members over one embedded 1.3.0 manifest, so the refusals are proven through the parser.",
+      "appliesTo": "unreal"
+    },
+    {
+      "id": "manifest.roadSplinesStatedDatum",
+      "group": "manifest",
+      "file": "manifest/road-splines-stated-datum.json",
+      "expect": "vector",
+      "reason": "A road layer's heights are placed only where the datum the layer states is this host's (MPB 1.8.0), and refused otherwise by the named skip HPS-53 gives a file in another frame. The Unreal host is fixed-frame vertically too: its landscape, mesh and foliage are EGM2008 orthometric heights on every order. The shared `road_splines` layer is draped on the delivered elevation instead, which from 1.8.0 is NAVD88 (GEOID18) on a US order, and the layer says so in `vertical_datum`. A reader compares that string with `EGM2008-orthometric` verbatim and refuses the layer by name when it states anything else -- NAVD88, a datum it does not know, a spelling that differs only in case -- placing no road and shifting no height: the published offset between the two datums is one number for the whole site, and applying it would be deriving a placement value. Placed as they come, a US order's roads would float above or sink into the landscape by up to a metre, and every test that does not check heights would stay green. The manifest's version, not the key, says a datum is owed: a 1.8.0 layer that states none is refused rather than read as a bundle from before the format could say, and a layer from before 1.8.0 states none and is placed, every height being EGM2008 then. Each row lays its members over one embedded 1.8.0 manifest, so the decision is proven through the parser. Unreal-scoped because the Revit host places its ground in the delivery's datum, which is the shared layer's own.",
       "appliesTo": "unreal"
     },
     {

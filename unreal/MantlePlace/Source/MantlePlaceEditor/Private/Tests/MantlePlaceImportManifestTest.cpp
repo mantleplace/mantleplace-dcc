@@ -8,6 +8,7 @@
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceIntegrityLogic.h"      // which payloads the pre-check covers, as a list
 #include "MantlePlaceLandscapeWeightsLogic.h" // the band legend the corpus states the answer for
+#include "MantlePlaceRoadSplinesLogic.h"    // the height-datum check the road-layer table drives
 #include "MantlePlaceTreePointsLogic.h"     // the row-count and frame checks the vector tables drive
 #include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion
 #include "Tests/MantlePlaceConformanceCorpus.h"
@@ -544,11 +545,35 @@ bool OverlayMembers(const TSharedPtr<FJsonObject>& Row, const TCHAR* OverlayFiel
 	return true;
 }
 
+/** The `vector.layers` entry named `road_splines`, or null when the document carries none. */
+TSharedPtr<FJsonObject> RoadSplinesLayer(const TSharedPtr<FJsonObject>& Manifest)
+{
+	const TSharedPtr<FJsonObject>* Vector = nullptr;
+	const TArray<TSharedPtr<FJsonValue>>* Layers = nullptr;
+	if (!Manifest.IsValid() || !Manifest->TryGetObjectField(TEXT("vector"), Vector)
+		|| !(*Vector)->TryGetArrayField(TEXT("layers"), Layers))
+	{
+		return nullptr;
+	}
+	for (const TSharedPtr<FJsonValue>& Value : *Layers)
+	{
+		const TSharedPtr<FJsonObject>* Layer = nullptr;
+		FString Name;
+		if (Value.IsValid() && Value->TryGetObject(Layer) && (*Layer)->TryGetStringField(TEXT("name"), Name)
+			&& Name == TEXT("road_splines"))
+		{
+			return *Layer;
+		}
+	}
+	return nullptr;
+}
+
 /**
  * The case's embedded `manifest` with the row's overlays laid on it: `root` over the document,
- * `unreal` over `hosts.unreal` and `foliagePoints` over `hosts.unreal.foliage_points`, in that
- * order. One manifest per case and a few members per row keeps the table about the frame and not
- * about the document. Empty — which no parser accepts — when an overlay has nothing to land on.
+ * `unreal` over `hosts.unreal`, `foliagePoints` over `hosts.unreal.foliage_points` and
+ * `roadSplines` over the `road_splines` entry of `vector.layers`, in that order. One manifest per
+ * case and a few members per row keeps the table about the frame and not about the document.
+ * Empty — which no parser accepts — when an overlay has nothing to land on.
  */
 FString ManifestWithOverlays(const FCase& Case, const TSharedPtr<FJsonObject>& Row)
 {
@@ -566,7 +591,8 @@ FString ManifestWithOverlays(const FCase& Case, const TSharedPtr<FJsonObject>& R
 	const TSharedPtr<FJsonObject> Unreal = Child(Child(Manifest, TEXT("hosts")), TEXT("unreal"));
 	if (!OverlayMembers(Row, TEXT("root"), Manifest)
 		|| !OverlayMembers(Row, TEXT("unreal"), Unreal)
-		|| !OverlayMembers(Row, TEXT("foliagePoints"), Child(Unreal, TEXT("foliage_points"))))
+		|| !OverlayMembers(Row, TEXT("foliagePoints"), Child(Unreal, TEXT("foliage_points")))
+		|| !OverlayMembers(Row, TEXT("roadSplines"), RoadSplinesLayer(Manifest)))
 	{
 		return FString();
 	}
@@ -845,6 +871,54 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 	else
 	{
 		AddError(TEXT("corpus case manifest.treePointsStatedFrame has gone missing"));
+	}
+
+	// --- The datum the road layer states is read, and must be this host's (MPB 1.8.0) ----------
+	// Each row lays its members over the one embedded manifest — the layer's datum, and where it
+	// matters the version — and the manifest is parsed again per row, so what is proven is the
+	// importer's path, Parse then GetRoadSplinesDatum then CanPlaceHeights: that the datum is read
+	// off the layer the importer selects, that a missing one is read as missing, and that the
+	// version, not the key, says one is owed.
+	if (const FCase* Case = FindCase(Cases, TEXT("manifest.roadSplinesStatedDatum")))
+	{
+		Driven.Add(Case->Id);
+		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("rows"));
+		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
+		for (const TSharedPtr<FJsonObject>& Row : Vectors)
+		{
+			const FString Name = RowString(Row, TEXT("name"));
+			FString ManifestError;
+			const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(
+				ManifestWithOverlays(*Case, Row), ManifestError);
+			TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": embedded manifest parses (%s)"),
+				*Name, *ManifestError)), M.bValid);
+			TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": the road layer is selected"), *Name)),
+				M.bHasRoadSplines);
+
+			FString Reason;
+			const bool bPlaceable = FMantlePlaceRoadSplinesLogic::CanPlaceHeights(M.GetRoadSplinesDatum(), Reason);
+			TestEqual(Case->What(*FString::Printf(TEXT("\"%s\" outcome (%s)"), *Name, *Reason)),
+				FString(bPlaceable ? TEXT("placeable") : TEXT("unplaceable")), RowString(Row, TEXT("outcome")));
+			if (bPlaceable)
+			{
+				TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": a placeable layer carries no refusal"), *Name)),
+					Reason.IsEmpty());
+				continue;
+			}
+			// A refusal names what was stated, as HPS-53's named skip does, so a curator can tell a
+			// layer in another datum from one that said nothing.
+			TestFalse(Case->What(*FString::Printf(TEXT("\"%s\" states a reason"), *Name)), Reason.IsEmpty());
+			const FString ErrorContains = RowString(Row, TEXT("errorContains"));
+			if (!ErrorContains.IsEmpty())
+			{
+				TestTrue(Case->What(*FString::Printf(TEXT("\"%s\" message contains \"%s\" (got: %s)"),
+					*Name, *ErrorContains, *Reason)), Reason.Contains(ErrorContains, ESearchCase::CaseSensitive));
+			}
+		}
+	}
+	else
+	{
+		AddError(TEXT("corpus case manifest.roadSplinesStatedDatum has gone missing"));
 	}
 
 	// Vector cases' `expectations`, swept once every id-dispatched assertion above has run. HPS-46
