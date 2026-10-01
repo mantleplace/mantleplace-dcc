@@ -91,7 +91,7 @@ A `declined` cell with no ADR may carry one line of reason instead. No cell desc
 | Capability | Unreal | Revit |
 | --- | --- | --- |
 | Context buildings | supported | supported — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) |
-| Road centrelines | supported | supported |
+| Road centrelines | partial — [issue 280](https://github.com/mantleplace/mantleplace-dcc/issues/280) | supported |
 | Tree points | partial — [issue 76](https://github.com/mantleplace/mantleplace-dcc/issues/76), [issue 196](https://github.com/mantleplace/mantleplace-dcc/issues/196) | supported |
 | Parcels and zoning | planned — [issue 259](https://github.com/mantleplace/mantleplace-dcc/issues/259) | planned — [issue 268](https://github.com/mantleplace/mantleplace-dcc/issues/268) |
 | The bundle's attribution, written into the project | planned — [issue 263](https://github.com/mantleplace/mantleplace-dcc/issues/263) | supported — [ADR 0011](adr/0011-revit-provenance-record-and-attribution-note-identity.md) |

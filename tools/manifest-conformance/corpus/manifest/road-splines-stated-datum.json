@@ -1,0 +1,231 @@
+{
+  "$comment": [
+    "A road layer's heights are placed only where the datum it states is this host's, and the layer",
+    "is refused by name otherwise, the named skip HPS-53 gives a file in another frame (MPB 1.8.0).",
+    "",
+    "The Unreal host is fixed-frame, vertically too: its landscape, mesh and foliage are EGM2008",
+    "orthometric heights on every order. The shared `road_splines` layer is draped on the delivered",
+    "elevation instead, and from 1.8.0 a US order delivers its elevation in NAVD88 (GEOID18) and the",
+    "layer says so in `vertical_datum`. A reader compares that string verbatim with",
+    "`EGM2008-orthometric`, and a layer stating anything else -- NAVD88, a datum it does not know, a",
+    "spelling that differs only in case -- is `unplaceable`: a named skip that places no road and",
+    "shifts no height. The published offset between the two datums is one number for the whole site",
+    "and is not this host's to apply.",
+    "",
+    "The version decides whether a datum is owed, never the key. A 1.8.0 layer that states none is",
+    "not a bundle from before the format could say, and an unstated datum is never assumed to match;",
+    "a layer from before 1.8.0 states none and is placed, because every height a bundle carried then",
+    "was EGM2008. A stated datum outranks the version either way.",
+    "",
+    "`manifest` is one embedded 1.8.0 document. Each row lays its own members over it before it is",
+    "parsed -- `root` over the document, `roadSplines` over the `road_splines` entry of",
+    "`vector.layers`; a value sets a member and null removes it -- so the decision is proven through",
+    "the parser, not beside it. `outcome` is `placeable` or `unplaceable`; `errorContains` is asserted",
+    "on an `unplaceable` row only.",
+    "",
+    "The base row states EGM2008, as a layer does wherever the delivered elevation is EGM2008; the",
+    "document's site is the corpus's usual one, and nothing in this table reads where it is."
+  ],
+  "manifest": {
+    "version": "1.8.0",
+    "job_id": "fixture-mpb-road-splines-stated-datum",
+    "order_id": "ord-road-splines-stated-datum-1",
+    "location": {
+      "time_zone": {
+        "iana": "America/Denver",
+        "utc_offset_standard_h": -7,
+        "observes_dst": true,
+        "tzdata_version": "2026b"
+      }
+    },
+    "delivery": {
+      "unit_system": "metric",
+      "tier": "metric",
+      "horizontal_epsg": 32613,
+      "linear_unit": "m",
+      "label": "WGS 84 / UTM zone 13N"
+    },
+    "landcover": {
+      "tree_points": {
+        "path": "Landcover/TreePoints.csv",
+        "crs": "EPSG:32613",
+        "units": "m",
+        "horizontal_units": "m",
+        "point_count": 3,
+        "columns": [
+          "x",
+          "y",
+          "ground_z",
+          "height_m",
+          "crown_radius_m",
+          "foliage_type"
+        ],
+        "foliage_type_vocabulary": "1",
+        "vertical_datum": "EGM2008-orthometric"
+      }
+    },
+    "hosts": {
+      "unreal": {
+        "engine_min_version": "5.7",
+        "georeference": {
+          "crs_projected": "EPSG:32613",
+          "crs_geographic": "EPSG:4326",
+          "origin": {
+            "lon": -105.64620798739834,
+            "lat": 36.27254939041837,
+            "utm": {
+              "epsg": 32613,
+              "easting_m": 441959.49999999854,
+              "northing_m": 4014372.4999999995
+            },
+            "ground_orthometric_h_m": 2640.955078125
+          },
+          "planet_shape": "Flat",
+          "is_projected": true
+        },
+        "file_frame": {
+          "type": "projected",
+          "crs": "EPSG:32613",
+          "horizontal_unit": "m",
+          "vertical_unit": "m"
+        },
+        "heightmap": {
+          "path": "Elevation/Heightmap.png",
+          "format": "png-16bit-grayscale",
+          "resolution": 1009,
+          "row0_is_north": true,
+          "native_gsd_m": 1,
+          "landscape_post_spacing_m": 1.4136904761904763,
+          "uint16_mapping": {
+            "z_min_m": 2577.826171875,
+            "z_max_m": 2962.585693359375,
+            "datum": "EGM2008-orthometric",
+            "to_meters": "z_m = z_min_m + (u16/65535)*(z_max_m - z_min_m)",
+            "quantization_step_m": 0.005871053963292515
+          },
+          "landscape_transform": {
+            "z_scale_percent": 75.14834403991699,
+            "scale_x_percent": 141.36904761904762,
+            "scale_y_percent": 138.98809523809524,
+            "location_z_offset_cm": 277020.59326171875,
+            "section_size_quads": 63,
+            "sections_per_component": 2,
+            "component_count_x": 8,
+            "component_count_y": 8
+          },
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "mesh_alternative": {
+          "path": "Mesh/Terrain.glb",
+          "up_axis": "y",
+          "nanite_recommended": true,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "foliage_points": {
+          "path": "Landcover/TreePoints.csv",
+          "crs": "EPSG:32613",
+          "units": "m",
+          "horizontal_units": "m",
+          "columns": [
+            "x",
+            "y",
+            "ground_z",
+            "height_m",
+            "crown_radius_m",
+            "foliage_type"
+          ],
+          "vertical_datum": "EGM2008-orthometric"
+        },
+        "readiness": {
+          "landscape": {
+            "present": true
+          },
+          "mesh_terrain": {
+            "present": true,
+            "tile_count": 4
+          },
+          "mesh_import": {
+            "present": true
+          }
+        }
+      }
+    },
+    "vector": {
+      "present": true,
+      "crs": "EPSG:4326",
+      "layers": [
+        {
+          "name": "road_splines",
+          "feature_count": 1,
+          "vertical_datum": "EGM2008-orthometric",
+          "formats": [
+            {
+              "format": "geojson",
+              "path": "Vector/RoadSplines.geojson",
+              "sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "rows": [
+    {
+      "name": "a layer stating this host's datum, EGM2008 orthometric, is placed",
+      "outcome": "placeable"
+    },
+    {
+      "name": "a layer stating NAVD88 (GEOID18), a US order's delivered heights, is unplaceable and not shifted",
+      "roadSplines": {
+        "vertical_datum": "NAVD88 (GEOID18)"
+      },
+      "outcome": "unplaceable",
+      "errorContains": "NAVD88 (GEOID18)"
+    },
+    {
+      "name": "a datum no reader knows is unplaceable: an unknown datum fails closed",
+      "roadSplines": {
+        "vertical_datum": "a-datum-no-reader-knows"
+      },
+      "outcome": "unplaceable",
+      "errorContains": "a-datum-no-reader-knows"
+    },
+    {
+      "name": "the datum is compared verbatim: a spelling that differs only in case is not this host's",
+      "roadSplines": {
+        "vertical_datum": "egm2008-orthometric"
+      },
+      "outcome": "unplaceable",
+      "errorContains": "egm2008-orthometric"
+    },
+    {
+      "name": "a 1.8.0 layer that states no datum is unplaceable, not read as an older bundle",
+      "roadSplines": {
+        "vertical_datum": null
+      },
+      "outcome": "unplaceable",
+      "errorContains": "states no vertical datum"
+    },
+    {
+      "name": "a layer from before 1.8.0, stating no datum, is placed: every height was EGM2008 then",
+      "root": {
+        "version": "1.7.0"
+      },
+      "roadSplines": {
+        "vertical_datum": null
+      },
+      "outcome": "placeable"
+    },
+    {
+      "name": "a stated datum outranks the version: a 1.7.0 layer stating NAVD88 is unplaceable",
+      "root": {
+        "version": "1.7.0"
+      },
+      "roadSplines": {
+        "vertical_datum": "NAVD88 (GEOID18)"
+      },
+      "outcome": "unplaceable",
+      "errorContains": "NAVD88 (GEOID18)"
+    }
+  ]
+}
