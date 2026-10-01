@@ -16,7 +16,9 @@ the construct differs where an ADR records it.
 [`ROADMAP.md`](../ROADMAP.md); why a host differs is its ADR or issue, linked from the cell. None of
 those keeps a feature list of its own. The one table elsewhere that names a host surface per action
 is the standard's shared-vocabulary table (`HPS-51`), and it says which *words* a host shows, not
-whether the host has the feature.
+whether the host has the feature. Which pointer each host imports a category from, whether it comes in
+by default, and what it was measured to cost is the [import inventory](import-inventory.md)'s, and
+it states no status either.
 
 **Each column belongs to its host.** A change that adds, narrows or drops a feature in one host
 edits that host's column in the same pull request, and no other. A new host adds its own column; a
