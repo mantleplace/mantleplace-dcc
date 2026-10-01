@@ -439,6 +439,27 @@ internal static class StagedImportTests
             run.True(committingIndeterminate, "and the bar says working once all that was counted is Revit's to commit");
         });
 
+        run.Case("a step that counted nothing to do says working, not an empty bar", () =>
+        {
+            // A re-import whose subdivisions are all on the terrain already counts 0 of 0; a bar at
+            // 0% beside it would read as stuck.
+            FakeRunner runner = new();
+            StagedImport import = null!;
+            bool indeterminate = false;
+            string? status = null;
+            runner.Bodies[ImportStepKind.Water] = () => Counting(() => import, () =>
+            {
+                indeterminate = ImportRunView.Of(import).Indeterminate;
+                status = Status(import, 2);
+            });
+            import = new([Step(ImportStepKind.Water)], runner);
+
+            import.Advance();
+            import.Advance();
+            run.True(indeterminate, "the bar says working");
+            run.Equal(status, "Water Subdivisions: 2 s", "and the line counts nothing");
+        });
+
         run.Case("a chunk's commit keeps the bar on its count", () =>
         {
             // The trees count after each chunk commits, so during a chunk's commit the count is short
@@ -562,6 +583,14 @@ internal static class StagedImportTests
         import().CommitStarted();
         inCommit();
         import().CommitFinished();
+        yield break;
+    }
+
+    /// <summary>A step that counts 0 of 0, then runs <paramref name="after"/> before any commit.</summary>
+    private static IEnumerable<StepProgress> Counting(Func<StagedImport> import, Action after)
+    {
+        import().ReportProgress(new StepProgress(0, 0));
+        after();
         yield break;
     }
 

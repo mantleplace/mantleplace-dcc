@@ -66,8 +66,9 @@ public sealed class ImportRunView
     public bool Finishing { get; }
 
     /// <summary>
-    /// Whether the bar says "working" rather than a fraction: for a step that has counted nothing, for
-    /// one whose every counted element is now Revit's to commit, and for the work after the last step.
+    /// Whether the bar says "working" rather than a fraction: for a step that has counted nothing, or
+    /// counted nothing to do, for one whose every counted element is now Revit's to commit, and for
+    /// the work after the last step.
     /// </summary>
     /// <remarks>
     /// A chunk's commit keeps the bar on its count: the trees count after each chunk commits, so the
@@ -75,7 +76,7 @@ public sealed class ImportRunView
     /// few seconds per chunk would only flicker.
     /// </remarks>
     public bool Indeterminate => Current is not null
-        ? Progress is not { } progress || (Committing && progress.IsComplete)
+        ? Progress is not { Total: > 0 } progress || (Committing && progress.IsComplete)
         : Finishing;
 
     /// <summary>
