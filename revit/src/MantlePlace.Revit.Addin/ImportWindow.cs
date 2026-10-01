@@ -40,8 +40,12 @@ namespace MantlePlace.Revit.Addin;
 /// </remarks>
 internal sealed class ImportWindow : Window
 {
-    /// <summary>How often the step's clock is repainted.</summary>
-    private static readonly TimeSpan ClockTick = TimeSpan.FromSeconds(1);
+    /// <summary>
+    /// How often the step's clock is repainted: a quarter of a second, so the whole seconds it shows
+    /// are never more than that behind. A timer of one second that fires a hair early reads the same
+    /// second twice, and the clock then looks stuck while Revit is.
+    /// </summary>
+    private static readonly TimeSpan ClockTick = TimeSpan.FromMilliseconds(250);
 
     private readonly ImportChecklist _checklist;
     private readonly Action<ImportLayerChoice> _begin;
@@ -190,11 +194,6 @@ internal sealed class ImportWindow : Window
         if (ImportRunView.RestartsClock(_view, view))
         {
             _stepClock.Restart();
-
-            // Ticking from the step's own start, so the clock turns over on its whole seconds
-            // rather than up to a second late.
-            _tick.Stop();
-            _tick.Start();
         }
 
         _view = view;
