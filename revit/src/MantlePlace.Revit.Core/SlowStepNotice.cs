@@ -29,7 +29,10 @@ namespace MantlePlace.Revit.Core;
 /// one; sampling fewer points is the same trade in a different wrapper and has never been measured;
 /// and skipping the boundaries addresses at most half the cost while putting the first
 /// non-data-driven toggle into <see cref="BundleImportPlanner"/>. What was actually wrong was that a
-/// ten-minute freeze arrived with no warning and read as a crash. So it is announced instead.
+/// ten-minute freeze arrived with no warning and read as a crash. So it is announced instead. The
+/// checklist has since started the three slowest subdivision layers unticked, on a whole-import
+/// measurement of every box (<see cref="MeasuredWhenTicked"/>); the planner still takes no toggle of
+/// its own, and what is ticked is still built at the cost said here.
 /// </para>
 /// <para>
 /// ⛔ <b>What cannot be shown is the inside of one commit.</b> This used to say that a progress bar
@@ -393,4 +396,105 @@ public static class SlowStepNotice
         => terrainPointCount is { } count
             ? string.Format(CultureInfo.InvariantCulture, "This terrain has {0:N0} points", count)
             : "This terrain's point count is not known to this run — it was built by an earlier import";
+
+    /// <summary>What a slow checklist box was measured to cost in one Revit version, and what kind of figure it is.</summary>
+    /// <param name="Seconds">The measured seconds.</param>
+    /// <param name="WholeImport">
+    /// <c>true</c> when the figure is what leaving the box out saved a full import with every other box
+    /// ticked; <c>false</c> when it is the box's own step, because that saving was smaller than the
+    /// spread between two full imports and could not be told from it.
+    /// </param>
+    public readonly record struct TickedBoxMeasurement(int Seconds, bool WholeImport);
+
+    /// <summary>The Revit versions <see cref="MeasuredWhenTicked"/> has figures for, oldest first.</summary>
+    public static IReadOnlyList<int> TickedBoxVersions { get; } = [2025, 2026, 2027];
+
+    /// <summary>
+    /// What ticking <paramref name="layer"/>'s box was measured to cost in Revit
+    /// <paramref name="revitVersion"/>, or <c>null</c> for a box that is not slow, or a version not timed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The boxes listed here are the ones that start unticked for their time
+    /// (<see cref="ImportLayers.OnByDefault"/>), so this table decides both which boxes warn and which
+    /// start unticked, and the two cannot drift apart.
+    /// </para>
+    /// <para>
+    /// Order <c>4276ef78</c> (405 subdivisions, 344 of them road surfaces), the real importer with no
+    /// window, one machine: Revit 2025.4 on 2026-09-30, and Revit 2026.5 and 2027.2 on 2026-09-30 and
+    /// 2026-10-01, after the subdivisions took their drape types as they were cut. Each version ran two
+    /// full imports with every box ticked, first and last, and one import with only one box unticked.
+    /// A whole-import figure is the mean of the two full imports minus that one, so it counts the later
+    /// steps the box makes dearer: the land cover's is four to ten times its own step, because the road
+    /// surfaces and the land use cut after it took far longer with it. The two full imports differed by
+    /// about nine minutes in 2025 and 2026 and eleven in 2027. Leaving out the land use saved 530 s in 2026 and
+    /// 520 s in 2027, inside that spread, so those two quote its own step, the mean over the two full
+    /// imports.
+    /// </para>
+    /// <para>
+    /// It picks which measurement is quoted and decides nothing in Revit, so reading the version here is
+    /// not the branch on the version number <c>revit/CLAUDE.md</c> forbids.
+    /// </para>
+    /// </remarks>
+    public static TickedBoxMeasurement? MeasuredWhenTicked(ImportLayer layer, int revitVersion) => (layer, revitVersion) switch
+    {
+        (ImportLayer.LandUseSubdivisions, 2025) => new(712, WholeImport: true),
+        (ImportLayer.LandUseSubdivisions, 2026) => new(167, WholeImport: false),
+        (ImportLayer.LandUseSubdivisions, 2027) => new(171, WholeImport: false),
+        (ImportLayer.LandCoverSubdivisions, 2025) => new(1_522, WholeImport: true),
+        (ImportLayer.LandCoverSubdivisions, 2026) => new(1_170, WholeImport: true),
+        (ImportLayer.LandCoverSubdivisions, 2027) => new(1_164, WholeImport: true),
+        (ImportLayer.RoadSubdivisions, 2025) => new(1_169, WholeImport: true),
+        (ImportLayer.RoadSubdivisions, 2026) => new(1_888, WholeImport: true),
+        (ImportLayer.RoadSubdivisions, 2027) => new(1_900, WholeImport: true),
+        _ => null,
+    };
+
+    /// <summary>Whether <paramref name="layer"/>'s box is slow enough to start unticked and warn when ticked.</summary>
+    public static bool IsSlowBox(ImportLayer layer)
+        => TickedBoxVersions.Any(version => MeasuredWhenTicked(layer, version) is not null);
+
+    /// <summary>
+    /// What the checklist says while <paramref name="layer"/>'s box is ticked, or <c>null</c> for a box
+    /// that is not slow.
+    /// </summary>
+    /// <param name="layer">The ticked box.</param>
+    /// <param name="revitVersionNumber">
+    /// <c>Application.VersionNumber</c>, the release year as a string. A version that was not timed, or
+    /// none, hears the newest measurement and is told this Revit was not timed.
+    /// </param>
+    /// <remarks>
+    /// The figure is rounded to minutes and said with what it was measured with, because a curator who
+    /// ticks one box onto the defaults is not the import that was measured: with every other box
+    /// ticked, the land cover made the road surfaces after it several times dearer.
+    /// </remarks>
+    public static string? ForTickedBox(ImportLayer layer, string? revitVersionNumber)
+    {
+        if (!IsSlowBox(layer))
+        {
+            return null;
+        }
+
+        bool timed = int.TryParse(revitVersionNumber, NumberStyles.None, CultureInfo.InvariantCulture, out int version)
+            && MeasuredWhenTicked(layer, version) is not null;
+        int quoted = timed ? version : TickedBoxVersions.Last(candidate => MeasuredWhenTicked(layer, candidate) is not null);
+        TickedBoxMeasurement measured = MeasuredWhenTicked(layer, quoted)!.Value;
+        double minutes = Math.Round(measured.Seconds / 60.0, MidpointRounding.AwayFromZero);
+
+        string figure = measured.WholeImport
+            ? string.Format(
+                CultureInfo.InvariantCulture,
+                "with every other box ticked, it added about {0:N0} minutes to the import in Revit {1}{2}",
+                minutes,
+                quoted,
+                layer == ImportLayer.LandCoverSubdivisions ? ", most of it by making the subdivisions cut after it take longer" : string.Empty)
+            : string.Format(CultureInfo.InvariantCulture, "its own step took about {0:N0} minutes in Revit {1}", minutes, quoted);
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "{0}: on the one order this has been measured on, {1}.{2}",
+            WindowLabels.LayerName(layer),
+            figure,
+            timed ? string.Empty : " This Revit has not been timed.");
+    }
 }

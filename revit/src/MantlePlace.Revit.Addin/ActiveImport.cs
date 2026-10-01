@@ -69,7 +69,7 @@ internal sealed class ActiveImport : IDisposable
         _log = log;
         ZipPath = zipPath;
         _importer = new RevitBundleImporter(application, document, archive, log.Append);
-        Checklist = ImportChecklist.For(plan);
+        Checklist = ImportChecklist.For(plan, application.VersionNumber);
         DeliveryLine = DeliveryHeader.Describe(manifest.Delivery);
         UnitsDisagreement = DeliveryHeader.DisplayDisagreement(manifest.Delivery, LengthUnitTypeId(document));
     }
