@@ -255,7 +255,7 @@ public static class WindowLabels
         => string.Format(CultureInfo.InvariantCulture, "{0:N0} of {1:N0}", progress.Done, progress.Total);
 
     /// <summary>
-    /// What the status line says while Revit is inside the step's commit.
+    /// What the status line says while Revit is inside a commit.
     /// </summary>
     /// <remarks>
     /// Prose, not one of <c>HPS-51</c>'s labels: a status line is bound by the glossary. It names
@@ -263,7 +263,13 @@ public static class WindowLabels
     /// transaction and is waiting like the curator is — and it is the same fact the log's notice
     /// explains at length before the step (<see cref="SlowStepNotice"/>).
     /// </remarks>
-    public const string Committing = "Revit is committing";
+    public const string RevitIsCommitting = "Revit is committing";
+
+    /// <summary>
+    /// What the status line calls the work after the last step, which belongs to no row: smooth
+    /// shading the terrain, when the drape did not settle it. Prose, like the rest of the line.
+    /// </summary>
+    public const string Finishing = "Finishing";
 
     /// <summary>How long the step in flight has run, as the window's clock says it: <c>4 min 10 s</c>.</summary>
     /// <remarks>
@@ -283,8 +289,9 @@ public static class WindowLabels
     }
 
     /// <summary>
-    /// The import window's status line: the step in flight, how far a chunked one has got, how long
-    /// it has run, and a cancel that is waiting for its boundary. Empty between steps.
+    /// The import window's status line: the step in flight, how far it has got, whether Revit is
+    /// committing it, how long it has run, and a cancel that is waiting for its boundary; or the work
+    /// after the last step. Empty between steps.
     /// </summary>
     /// <param name="view">The run, as Revit's thread last posted it.</param>
     /// <param name="elapsed">How long the step in flight has run, by the window's own clock.</param>
@@ -296,7 +303,16 @@ public static class WindowLabels
     {
         ArgumentNullException.ThrowIfNull(view);
 
-        if (view.Current is not { } kind)
+        string name;
+        if (view.Current is { } kind)
+        {
+            name = StepName(kind);
+        }
+        else if (view.Finishing)
+        {
+            name = Finishing;
+        }
+        else
         {
             return string.Empty;
         }
@@ -309,12 +325,16 @@ public static class WindowLabels
 
         if (view.Committing)
         {
-            parts.Add(Committing);
+            parts.Add(RevitIsCommitting);
         }
 
         parts.Add(Elapsed(elapsed));
-        string line = $"{StepName(kind)}: {string.Join(", ", parts)}";
+        string line = $"{name}: {string.Join(", ", parts)}";
 
-        return view.CancelRequested ? line + ". Cancelling at the next step or chunk." : line;
+        // Only over a step: once the steps are over the cancel has landed, and the finishing work is
+        // not something it stops.
+        return view.CancelRequested && view.Current is not null
+            ? line + ". Cancelling at the next step or chunk."
+            : line;
     }
 }

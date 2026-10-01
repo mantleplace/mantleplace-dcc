@@ -187,8 +187,69 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             revitWindow,
             BeginChosen,
             CancelRun,
-            DismissBeforeStart);
+            DismissBeforeStart,
+            NoteFromWindow,
+            out Exception? failure);
+
+        if (_window is null)
+        {
+            // No window means no Import to press and no close box, so nothing could ever end this
+            // import: it is dropped, and the curator is told why.
+            import.Note($"The import window could not be opened: {failure?.Message}");
+            import.CancelBeforeStart();
+            End(import);
+            MantlePlaceApplication.SayFault(failure ?? new InvalidOperationException("The import window could not be opened."));
+        }
     }
+
+    /// <summary>Lowers the import window before Revit shows a dialog, so the dialog does not open under it.</summary>
+    internal void LowerWindow() => _window?.Lower();
+
+    /// <summary>
+    /// A project has closed. If it was the one an import is still choosing for, the checklist goes
+    /// with it: nothing ran, and Import would have nothing to write into.
+    /// </summary>
+    /// <remarks>
+    /// After the close rather than before it, because a curator can still cancel a closing project at
+    /// its save prompt. A running import needs nothing here: its next slice finds the project gone,
+    /// stops, and says so in the window it leaves open.
+    /// </remarks>
+    internal void OnDocumentClosed()
+    {
+        if (_import is not { Staged: null } import || import.DocumentIsOpen)
+        {
+            return;
+        }
+
+        _window?.CloseNow();
+        import.CancelBeforeStart();
+        End(import);
+    }
+
+    /// <summary>
+    /// Revit is shutting down: the window goes with it, and an import still open is dropped where it
+    /// stands, with a line in its log.
+    /// </summary>
+    /// <remarks>
+    /// An unowned window is not closed by Revit's main window going, and its thread would keep it on
+    /// screen until the process ended. At shutdown rather than at <c>ApplicationClosing</c>, which a
+    /// save prompt's Cancel can still undo, leaving Revit open with its import window closed.
+    /// </remarks>
+    internal void Shutdown()
+    {
+        _window?.CloseNow();
+        _window = null;
+
+        if (_import is { } import)
+        {
+            import.Note("Revit closed while this import was open, so it stopped where it stood.");
+            import.Dispose();
+            _import = null;
+        }
+    }
+
+    /// <summary>Writes a line from the import window into the open import's log, if there still is one.</summary>
+    private void NoteFromWindow(string line) => _import?.Note(line);
 
     /// <summary>Posts the window the run as it stands. Never waits on the window's thread.</summary>
     private void Refresh(ActiveImport import)

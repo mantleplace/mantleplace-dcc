@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Windows.Threading;
+using Autodesk.Revit.DB.Events;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using MantlePlace.Revit.Client;
@@ -157,6 +158,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
         SayFault(e.Exception);
     }
 
+    /// <summary>A project has closed; the import handler decides whether its window goes with it.</summary>
+    private static void OnDocumentClosed(object? sender, DocumentClosedEventArgs e) => _importHandler?.OnDocumentClosed();
+
     /// <summary>
     /// Tells the curator a fault of this add-in's was caught and Revit is still running. On Revit's
     /// thread only: it is a <see cref="TaskDialog"/>.
@@ -168,6 +172,10 @@ public sealed class MantlePlaceApplication : IExternalApplication
     internal static void SayFault(Exception fault)
     {
         ArgumentNullException.ThrowIfNull(fault);
+
+        // The import window floats over Revit and sits where Revit centres its dialogs; this one must
+        // not open under it (ImportWindowStacking).
+        _importHandler?.LowerWindow();
 
         // Said out loud rather than swallowed. A curator who sees this once has a bug to report; one
         // who sees nothing has a plugin that quietly does not work.
@@ -531,6 +539,10 @@ public sealed class MantlePlaceApplication : IExternalApplication
         // The handler re-raises its own event between slices of a staged import, so it holds it.
         _importHandler.Attach(_importEvent);
 
+        // The import window is not owned by Revit's window, so nothing closes it with a project or
+        // with Revit unless it is told to (BundleImportEventHandler.OnDocumentClosed, Shutdown).
+        application.ControlledApplication.DocumentClosed += OnDocumentClosed;
+
         // CreateRibbonTab throws when the tab already exists — which happens whenever the .addin
         // manifest is installed both machine-wide and per-user. An unhandled throw here disables the
         // whole add-in with a load error, so a duplicate tab is treated as "already there".
@@ -658,6 +670,15 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         // Stopped before the watcher is interrupted, so no re-join starts a Prepare behind it.
         _rejoiner?.Stop();
+
+        // Before the event goes: an unowned window outlives Revit's main window, so it is closed here,
+        // and an import still open is dropped with a line in its log.
+        if (application is not null)
+        {
+            application.ControlledApplication.DocumentClosed -= OnDocumentClosed;
+        }
+
+        _importHandler?.Shutdown();
 
         // Before the ribbon goes: a Prepare ending during teardown would badge a button Revit has
         // already taken apart. Interrupted, never announced, and left in the record for the next

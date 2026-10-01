@@ -224,30 +224,47 @@ follow.
   checklist and raises nothing until Import is pressed; what each box shows, and what a plan
   without a layer looks like, is `ImportChecklist` and the planner's choice argument, both headless.
 
-- **⛔ The import window has a thread of its own, and Revit's window does not own it.** Slicing the
-  import was not enough: most of a full import is spent inside single commits (road surfaces, the
-  drape), a commit cannot yield, and a window owned by Revit's main window shares Revit's input
-  queue, so it froze with Revit. Measured on the full plan before this changed, Revit was hung in 61
-  to 74% of 5-second samples, the window never once showed road surfaces, water or the drape as the
-  step in flight, and in 2027 no UI Automation read of it completed for the drape's 2,759 s. Now
-  `ImportWindowHost` runs it on an STA thread with its own `Dispatcher`, unowned, and only posts
-  cross: views of the run (`ImportRunView`) one way; Import, Cancel and a dismissal the other, onto
-  Revit's dispatcher, where they run as the click handlers they used to be. Every commit goes through
-  `CommitAndReport`, which says either side of `Transaction.Commit` that Revit is committing, and the
-  slow steps hand the window their `SlowStepNotice` lines, so through a commit the window names the
-  step, says Revit is committing, keeps the step's clock and shows the notice beside it; a Cancel
-  pressed then is said at once and lands when the commit returns. What it says is `WindowLabels`,
-  and when it may float or take the focus is `ImportWindowStacking`, both headless; `ForegroundWatch`
-  applies the second without ever sending Revit's thread a message. Two statics went thread-aware
-  with it: `BrandChrome`'s primary style is built per thread, and `ResourceImages`' table is locked.
-  Two alternatives were measured or weighed and not taken: `ControlledApplication.ProgressChanged` is
-  silent through 57% of the road commit and 99.6% of the drape's, so it cannot feed a bar, and
-  `DisableProcessWindowsGhosting` is process-wide with no undo. Proven offscreen, without Revit: the
-  built add-in's host driven from a scratch exe whose own UI thread hung in 20 s "commits", read from
-  another process every second, answered every read in about 25 ms while that thread was hung,
-  with its clock moving and a Cancel said at once and landing after the commit. Whether Revit's own
-  hooks leave the thread that alone, the foreground hook's floating, and the placement over a
-  minimised Revit are compiled and unexecuted inside Revit.
+- **⛔ The import window has a thread of its own, and Revit's window does not own it.** This bullet
+  is the one home of why; the code points here.
+  - **Why.** Slicing the import was not enough: most of a full import is spent inside single
+    commits (road surfaces, the drape), a commit cannot yield, and a window owned by Revit's main
+    window shares Revit's input queue, so it froze with Revit. Measured on the full plan before this
+    changed, Revit was hung in 61 to 74% of 5-second samples, the window never once showed road
+    surfaces, water or the drape as the step in flight, and in 2027 no UI Automation read of it
+    completed for the drape's 2,759 s.
+  - **How.** `ImportWindowHost` runs it on an STA thread with its own `Dispatcher`, unowned, and
+    only posts cross: views of the run (`ImportRunView`) one way; Import, Cancel, a dismissal and a
+    log line the other, onto Revit's dispatcher, where they run as the click handlers they used to
+    be. Every `Transaction` commit goes through `CommitAndReport`, which says on both sides that Revit
+    is committing (the drape's `SubTransaction` commits do not, and regenerate nothing). The slow steps
+    hand the window their `SlowStepNotice` lines, and the drape and the polygon layers count their
+    subdivisions as they go. So through a commit the window names the step, says Revit is committing,
+    keeps the step's clock and shows the notice beside it, and the smooth shading committed after the
+    last step reads `Finishing`. A Cancel pressed then is said at once and lands when the commit
+    returns. Cancel still lands only between slices: a step that does its work in one transaction
+    counts but cannot be sliced, because a slice never yields inside an open transaction.
+  - **What is headless.** What the window says (`WindowLabels`, `ImportRunView`), when it floats,
+    takes the focus or comes forward, and where it opens (`ImportWindowStacking`,
+    `ImportWindowPlacement`). It never floats over a Revit modal. `ForegroundWatch` carries the
+    stacking out without ever sending Revit's thread a message.
+  - **Its edges.** An exception leaving the window's thread would end Revit, so the thread body is
+    inside a net, and a fault is said in the add-in's fault dialog after the window has stopped
+    floating. Nothing closes an unowned window with Revit, so `OnShutdown` closes it, and a checklist
+    whose project has closed goes with it. Two statics went thread-aware: `BrandChrome`'s primary
+    style is built per thread, and `ResourceImages`' table is locked.
+  - **Not taken.** `ControlledApplication.ProgressChanged` is silent through 57% of the road commit
+    and 99.6% of the drape's, so it cannot feed a bar. `DisableProcessWindowsGhosting` is
+    process-wide with no undo.
+  - **Proven offscreen, without Revit.** A scratch exe drove the built add-in's host while its own
+    UI thread hung in "commits" of up to 20 s. Read by UI Automation from another process every
+    second, the window answered every read, each in under a quarter of a second, with its clock and
+    the drape's count moving, `Finishing` named, and a Cancel pressed mid-commit said at once and
+    landing after the commit. Opened while another application was in front, it was behind that
+    application from its first visible moment: WPF's `Show` raises a window as it shows it, so
+    `ForegroundWatch` rewrites that one `WM_WINDOWPOSCHANGING` rather than moving the window first.
+  - **Unexecuted inside Revit.** Whether Revit's own hooks leave the window's thread alone, the
+    foreground hook against a real Revit and its modals, and the placement over a minimised Revit.
+    What it gives a curator, and gives up, is [`README.md`](./README.md)'s.
 - **The site location and the context view have left that set.** `SiteLocation.Latitude`/`Longitude`,
   `View3D.CreateIsometric`, `ParameterFilterElement.Create` over every model category that
   `ParameterFilterUtilities.GetFilterableParametersInCommon` says has Comments, the 2023+

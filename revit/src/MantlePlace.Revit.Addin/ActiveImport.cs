@@ -69,8 +69,10 @@ internal sealed class ActiveImport : IDisposable
         _log = log;
         ZipPath = zipPath;
         _importer = new RevitBundleImporter(application, document, archive, log.Append);
-        _importer.CommitChanged += OnCommitChanged;
-        _importer.Announced += OnAnnounced;
+        _importer.CommitStarting += () => Tell(staged => staged.CommitStarted());
+        _importer.CommitEnded += () => Tell(staged => staged.CommitFinished());
+        _importer.Announced += notice => Tell(staged => staged.Announce(notice));
+        _importer.Counted += progress => Tell(staged => staged.ReportProgress(progress));
         Checklist = ImportChecklist.For(plan);
         DeliveryLine = DeliveryHeader.Describe(manifest.Delivery);
         UnitsDisagreement = DeliveryHeader.DisplayDisagreement(manifest.Delivery, LengthUnitTypeId(document));
@@ -101,7 +103,8 @@ internal sealed class ActiveImport : IDisposable
 
     /// <summary>
     /// Raised on Revit's thread, from inside a slice, when the run has something new to show before
-    /// the slice is over: a commit starting or ending, or a step saying what its wait has measured at.
+    /// the slice is over: a commit starting or ending, a step saying what its wait has measured at or
+    /// how far it has got, or the work after the last step starting.
     /// </summary>
     /// <remarks>
     /// The window is refreshed after every slice anyway. This is for the part of a slice the window
@@ -279,11 +282,21 @@ internal sealed class ActiveImport : IDisposable
                 return true;
             }
 
-            _importer.InSlice(() =>
+            // Named for the window: smooth shading can be committed here, after every row has ended,
+            // and Revit may take minutes over it (StagedImport.Finishing).
+            Tell(finishing => finishing.FinishStarted());
+            try
             {
-                _importer.Finish();
-                return false;
-            });
+                _importer.InSlice(() =>
+                {
+                    _importer.Finish();
+                    return false;
+                });
+            }
+            finally
+            {
+                staged.FinishEnded();
+            }
 
             if (staged.Outcome is { } outcome)
             {
@@ -343,34 +356,23 @@ internal sealed class ActiveImport : IDisposable
 
     public void Dispose() => _archive.Dispose();
 
-    private void OnCommitChanged(bool committing)
+    /// <summary>Whether the project this import writes into is still open.</summary>
+    internal bool DocumentIsOpen => _document.IsValidObject;
+
+    /// <summary>
+    /// Writes a line to this import's log from outside its steps — something the import window could
+    /// not do, said without stopping anything.
+    /// </summary>
+    internal void Note(string line) => _log.Append(line);
+
+    /// <summary>Tells the staged run what the importer has just said, and the window that there is something new.</summary>
+    private void Tell(Action<StagedImport> change)
     {
-        if (Staged is not { } staged)
+        if (Staged is { } staged)
         {
-            return;
+            change(staged);
+            Changed?.Invoke();
         }
-
-        if (committing)
-        {
-            staged.CommitStarted();
-        }
-        else
-        {
-            staged.CommitFinished();
-        }
-
-        Changed?.Invoke();
-    }
-
-    private void OnAnnounced(string notice)
-    {
-        if (Staged is not { } staged)
-        {
-            return;
-        }
-
-        staged.Announce(notice);
-        Changed?.Invoke();
     }
 
     private void Close(string summary)

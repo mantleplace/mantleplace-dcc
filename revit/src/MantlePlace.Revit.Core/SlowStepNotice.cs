@@ -42,13 +42,10 @@ namespace MantlePlace.Revit.Core;
 /// still the only line there will be <em>for that step</em>, and it says exactly that much.
 /// </para>
 /// <para>
-/// The window no longer goes dark with the commit. It has a thread of its own, so through the commit
-/// it names the step, says Revit is committing and keeps the step's clock running
-/// (<see cref="ImportRunView"/>), and it shows this line beside that clock
+/// The import window no longer goes dark with the commit (<c>revit/CLAUDE.md</c> says how): it names
+/// the step and keeps its clock running, and shows this line beside that clock
 /// (<see cref="StagedImport.Announce"/>). Revit's own window still does not answer until the commit
-/// returns, and neither does Cancel. Revit's <c>ControlledApplication.ProgressChanged</c> was
-/// measured as a feed for a bar and is not one: it is silent through most of the road commit and
-/// nearly all of the drape's.
+/// returns, and neither does Cancel.
 /// </para>
 /// <para>
 /// This is text, so it lives where text can be asserted. The shim decides nothing: it hands over the
@@ -396,6 +393,92 @@ public static class SlowStepNotice
             MeasuredDrapeCommitSubDivisions,
             ThisTerrain(terrainPointCount));
     }
+
+    /// <summary>Rounded seconds converting the site model's IFC took in Revit 2025, fastest and slowest.</summary>
+    /// <remarks>
+    /// 54.7 s and 57.3 s, Revit 2025.4.6, 2026-09-29 and -30: the site model alone, twice, on one order's
+    /// terrain with its converted file absent. With the file present the step took 4.7 s and 5.0 s.
+    /// </remarks>
+    public static readonly (int Low, int High) MeasuredSiteModelConversionSeconds2025 = (55, 57);
+
+    /// <summary>Rounded seconds the same conversion took in Revit 2027.</summary>
+    /// <remarks>43.8 s and 44.6 s, Revit 2027.2, in the same pair of runs.</remarks>
+    public static readonly (int Low, int High) MeasuredSiteModelConversionSeconds2027 = (44, 45);
+
+    /// <summary>
+    /// The line to say before the site model is linked, or <c>null</c> when a converted file is
+    /// already there to link.
+    /// </summary>
+    /// <param name="converts">Whether this Revit has to convert the IFC first, its converted file being absent.</param>
+    /// <remarks>
+    /// The conversion is the cost, and it is paid once per order and Revit version: the converted file
+    /// is kept beside the bundle, and a later import links it in seconds, unannounced. The same rule as
+    /// <see cref="Describe"/>: measurements, never a prediction.
+    /// </remarks>
+    public static string? ForSiteModel(bool converts)
+    {
+        if (!converts)
+        {
+            return null;
+        }
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "Next: the site model. Revit converts the IFC into a Revit file before it can link it, once "
+            + "for each order and Revit version; a later import reuses the converted file. On the one order "
+            + "this has been measured on, converting took about {0} to {1} seconds in Revit 2025 and {2} to "
+            + "{3} seconds in Revit 2027. {4}",
+            MeasuredSiteModelConversionSeconds2025.Low,
+            MeasuredSiteModelConversionSeconds2025.High,
+            MeasuredSiteModelConversionSeconds2027.Low,
+            MeasuredSiteModelConversionSeconds2027.High,
+            InsideRevitsOwnCalls);
+    }
+
+    /// <summary>
+    /// Rounded seconds making the site context view took in Revit 2026 and 2027, fastest and slowest.
+    /// </summary>
+    /// <remarks>
+    /// 41.5 s and 42.4 s in Revit 2026.5, and 32.7 s, 42.4 s and 52.6 s in Revit 2027.2: full imports
+    /// of one order into a new project, 2026-09-29 and -30, most of them with another Revit importing
+    /// on the same machine. How much of it is Revit reading which parameters each category can filter
+    /// on, and how much the commit, was not measured, so the line names neither.
+    /// </remarks>
+    public static readonly (int Low, int High) MeasuredSiteContextViewSeconds2026And2027 = (33, 53);
+
+    /// <summary>The most the same step took in Revit 2025, rounded up: 1.4 s and 4.8 s in the same imports.</summary>
+    public const int MeasuredSiteContextViewSecondsAtMost2025 = 5;
+
+    /// <summary>
+    /// The line to say before the site context view is made, or <c>null</c> when an earlier import's
+    /// view and filter are reused, or nothing is made.
+    /// </summary>
+    /// <param name="decision">What the step will do with the view and the filter (<see cref="SiteContext.Decide"/>).</param>
+    public static string? ForSiteContextView(SiteContextDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+
+        if (decision.View != NamedElementAction.Create && decision.Filter != NamedElementAction.Create)
+        {
+            return null;
+        }
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "Next: the site context view — a 3D view, and a filter that finds what an import stamped across "
+            + "every model category. On the one order this has been measured on, making them took about {0} "
+            + "to {1} seconds in Revit 2026 and 2027, and under {2} seconds in Revit 2025. {3}",
+            MeasuredSiteContextViewSeconds2026And2027.Low,
+            MeasuredSiteContextViewSeconds2026And2027.High,
+            MeasuredSiteContextViewSecondsAtMost2025,
+            InsideRevitsOwnCalls);
+    }
+
+    /// <summary>The reassurance for a wait inside Revit's own calls rather than one commit of ours.</summary>
+    private const string InsideRevitsOwnCalls =
+        "That time is inside Revit's own calls, which cannot report part of themselves: the import window "
+        + "names this step and keeps its clock running. Revit will report \"not responding\" until they "
+        + "finish, and Cancel takes effect when the step finishes. It has not crashed; leave it alone.";
 
     /// <summary>This terrain's point count as a sentence, or the admission that it is not known.</summary>
     private static string ThisTerrain(int? terrainPointCount)

@@ -9,51 +9,41 @@ namespace MantlePlace.Revit.Addin;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⛔ <b>Why a thread.</b> A bundle import spends most of its time inside single commits — road
-/// surfaces for fifteen to twenty minutes, the drape for up to forty-five in Revit 2027 — and a commit
-/// cannot yield. A window on Revit's thread repaints only between them, so it sat for the whole of each
-/// naming a step that had finished, and a UI Automation read of it went unanswered for up to
-/// 2,759 s. On its own STA thread with its own <see cref="Dispatcher"/>, the window paints, ticks its
-/// clock and answers reads whatever Revit's thread is doing. WPF supports a window per thread; what it
-/// takes is that nothing on this thread ever waits on Revit's.
+/// Why a thread, and why unowned, is <c>revit/CLAUDE.md</c>'s. What it takes is that nothing on this
+/// thread ever waits on Revit's, so <b>everything across is posted, never invoked</b>: Revit's thread
+/// posts views of the run (<see cref="ImportRunView"/>); the curator's Import, Cancel and dismissal,
+/// and a line for the log, are posted back to Revit's dispatcher, where they run as the click handlers
+/// they used to be — on Revit's thread, outside any API context. This thread makes no Revit API call.
 /// </para>
 /// <para>
-/// So <b>everything across is posted, never invoked</b>. Revit's thread posts views of the run
-/// (<see cref="ImportRunView"/>), and the curator's Import, Cancel and dismissal are posted back to
-/// Revit's dispatcher, where they run exactly as the click handlers they used to be ran: on Revit's
-/// thread, outside any API context. A cancel pressed during a commit therefore lands when the commit
-/// returns, ahead of the next slice, which is posted below it at background priority
-/// (<see cref="BundleImportEventHandler"/>). This thread makes no Revit API call at all, which is
-/// what makes it allowed.
-/// </para>
-/// <para>
-/// ⛔ <b>An exception here would end Revit.</b> An exception that leaves a thread's start method
-/// terminates the process, and this thread's dispatcher has no host behind it to catch one. Its
-/// dispatcher is this add-in's own, with nothing of Revit's running on it, so it marks every fault
-/// handled and posts it to Revit's thread to be said in the same dialog as a fault there
-/// (<see cref="MantlePlaceApplication.SayFault"/>). A window that could not be built also drops its
-/// import, which would otherwise wait for an Import press forever.
+/// ⛔ <b>An exception that leaves this thread ends Revit.</b> So the whole thread body is inside the
+/// net, its dispatcher marks every fault handled, and a fault is said on Revit's thread in the add-in's
+/// fault dialog (<see cref="MantlePlaceApplication.SayFault"/>) — after the window has stopped
+/// floating, so the dialog does not open under it. A thread that cannot start, or a window that cannot
+/// be built, drops its import: nothing else could ever close it.
 /// </para>
 /// </remarks>
 internal sealed class ImportWindowHost
 {
-    private readonly Dispatcher _windowThread;
+    private readonly Dispatcher _revit;
+    private Dispatcher? _windowThread;
 
     /// <summary>The window, once built. Read and written on its own thread only.</summary>
     private ImportWindow? _window;
 
-    private ImportWindowHost(Dispatcher windowThread) => _windowThread = windowThread;
+    private ImportWindowHost(Dispatcher revit) => _revit = revit;
 
     /// <summary>
-    /// Starts the window's thread and shows the window on its checklist. Called on Revit's thread,
-    /// whose dispatcher the callbacks are posted to.
+    /// Starts the window's thread and shows the window on its checklist, or says why it could not.
+    /// Called on Revit's thread, whose dispatcher the callbacks are posted to.
     /// </summary>
     /// <remarks>
-    /// Revit's thread waits only for the new thread's dispatcher to exist, never for the window: the
-    /// window is built by an operation on that dispatcher once Revit's thread has moved on, so showing
-    /// it — which activates it — never meets a Revit thread that is waiting on it.
+    /// Revit's thread waits only for the new thread's dispatcher to exist, or to fail to, never for the
+    /// window: the window is built by an operation on that dispatcher once Revit's thread has moved on,
+    /// so showing it — which may activate it — never meets a Revit thread that is waiting on it.
     /// </remarks>
-    internal static ImportWindowHost Open(
+    /// <returns>The host, or <c>null</c> with <paramref name="failure"/> set when the thread did not start.</returns>
+    internal static ImportWindowHost? Open(
         string bundleName,
         string? deliveryLine,
         string? unitsDisagreement,
@@ -61,32 +51,48 @@ internal sealed class ImportWindowHost
         IntPtr revitWindow,
         Action<ImportLayerChoice> begin,
         Action cancelRun,
-        Action dismiss)
+        Action dismiss,
+        Action<string> note,
+        out Exception? failure)
     {
-        Dispatcher revit = Dispatcher.CurrentDispatcher;
-        Dispatcher? windowThread = null;
+        ImportWindowHost host = new(Dispatcher.CurrentDispatcher);
+        Exception? startFailure = null;
 
         using (ManualResetEventSlim started = new())
         {
             Thread thread = new(() =>
             {
-                windowThread = Dispatcher.CurrentDispatcher;
-                windowThread.UnhandledException += (_, e) =>
-                {
-                    e.Handled = true;
-                    ReportFault(revit, e.Exception);
-                };
-
-                started.Set();
                 try
                 {
+                    Dispatcher own = Dispatcher.CurrentDispatcher;
+                    own.UnhandledException += (_, e) =>
+                    {
+                        e.Handled = true;
+                        host.ReportFault(e.Exception);
+                    };
+
+                    own.BeginInvoke(() => host.Build(bundleName, deliveryLine, unitsDisagreement, checklist, revitWindow, begin, cancelRun, dismiss, note));
+                    host._windowThread = own;
+                    started.Set();
                     Dispatcher.Run();
                 }
                 catch (Exception ex)
                 {
-                    // Not reached while the handler above marks faults handled; here so that nothing
-                    // can leave this method, which is the one place an exception ends Revit.
-                    ReportFault(revit, ex);
+                    // Before the dispatcher ran, Revit's thread is still waiting below and hears it
+                    // there. After, the dispatcher's own handler has marked every fault handled, so
+                    // this is the net under the net, and all it must do is keep the exception in here.
+                    if (host._windowThread is null)
+                    {
+                        startFailure = ex;
+                    }
+                    else
+                    {
+                        host.ReportFault(ex);
+                    }
+                }
+                finally
+                {
+                    started.Set();
                 }
             })
             {
@@ -98,37 +104,8 @@ internal sealed class ImportWindowHost
             started.Wait();
         }
 
-        ImportWindowHost host = new(windowThread!);
-        host.Post(() =>
-        {
-            try
-            {
-                ImportWindow window = new(
-                    bundleName,
-                    deliveryLine,
-                    unitsDisagreement,
-                    checklist,
-                    revitWindow,
-                    choice => ToRevit(revit, () => begin(choice)),
-                    () => ToRevit(revit, cancelRun),
-                    () => ToRevit(revit, dismiss));
-
-                // The thread lives exactly as long as its window.
-                window.Closed += (_, _) => Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
-                host._window = window;
-                window.Show();
-            }
-            catch (Exception ex)
-            {
-                // No window, so no Import to press and no close box: the import is dropped, the
-                // curator is told, and the thread ends.
-                ToRevit(revit, dismiss);
-                ReportFault(revit, ex);
-                Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
-            }
-        });
-
-        return host;
+        failure = startFailure;
+        return host._windowThread is null ? null : host;
     }
 
     /// <summary>Swaps the checklist for the chosen steps. Called on Revit's thread.</summary>
@@ -141,23 +118,70 @@ internal sealed class ImportWindowHost
     internal void ShowFinished(ImportRunView? view, string? outcome, string report)
         => Post(() => _window?.ShowFinished(view, outcome, report));
 
-    /// <summary>Brings the window forward. Called on Revit's thread.</summary>
+    /// <summary>Brings the window forward, unless a Revit modal is up. Called on Revit's thread.</summary>
     internal void BringForward() => Post(() => _window?.BringForward());
 
+    /// <summary>Stops the window floating, before Revit shows a dialog. Called on Revit's thread.</summary>
+    internal void Lower() => Post(() => _window?.Lower());
+
+    /// <summary>Closes the window whatever it shows, asking nothing. Called on Revit's thread.</summary>
+    internal void CloseNow() => Post(() => _window?.CloseNow());
+
+    /// <summary>Builds and shows the window: the window thread's first operation.</summary>
+    private void Build(
+        string bundleName,
+        string? deliveryLine,
+        string? unitsDisagreement,
+        ImportChecklist checklist,
+        IntPtr revitWindow,
+        Action<ImportLayerChoice> begin,
+        Action cancelRun,
+        Action dismiss,
+        Action<string> note)
+    {
+        try
+        {
+            ImportWindow window = new(
+                bundleName,
+                deliveryLine,
+                unitsDisagreement,
+                checklist,
+                revitWindow,
+                choice => ToRevit(() => begin(choice)),
+                () => ToRevit(cancelRun),
+                () => ToRevit(dismiss),
+                line => ToRevit(() => note(line)));
+
+            // The thread lives exactly as long as its window.
+            window.Closed += (_, _) => Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
+            _window = window;
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            // No window, so no Import to press and no close box: the import is dropped, the curator is
+            // told, and the thread ends.
+            _window = null;
+            ToRevit(dismiss);
+            ReportFault(ex);
+            Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
+        }
+    }
+
     /// <summary>
-    /// Queues <paramref name="action"/> on the window's thread. Never throws and never waits: a
-    /// window that has closed, taking its thread with it, has nothing left to show.
+    /// Queues <paramref name="action"/> on the window's thread. Never throws and never waits: a window
+    /// that has closed, taking its thread with it, has nothing left to show.
     /// </summary>
     private void Post(Action action)
     {
-        if (_windowThread.HasShutdownStarted)
+        if (_windowThread is not { HasShutdownStarted: false } windowThread)
         {
             return;
         }
 
         try
         {
-            _windowThread.BeginInvoke(DispatcherPriority.Normal, action);
+            windowThread.BeginInvoke(DispatcherPriority.Normal, action);
         }
         catch (InvalidOperationException)
         {
@@ -166,10 +190,34 @@ internal sealed class ImportWindowHost
     }
 
     /// <summary>Queues <paramref name="action"/> on Revit's thread, where the import lives.</summary>
-    private static void ToRevit(Dispatcher revit, Action action)
-        => revit.BeginInvoke(DispatcherPriority.Normal, action);
+    private void ToRevit(Action action) => _revit.BeginInvoke(DispatcherPriority.Normal, action);
 
-    /// <summary>Has a fault on the window's thread said on Revit's, where a dialog may be shown.</summary>
-    private static void ReportFault(Dispatcher revit, Exception fault)
-        => ToRevit(revit, () => MantlePlaceApplication.SayFault(fault));
+    /// <summary>
+    /// A fault on the window's thread: the window stops floating here and now, then the fault is said in
+    /// a dialog on Revit's thread.
+    /// </summary>
+    /// <remarks>
+    /// It is the last net on this thread, so it catches everything it does itself: a throw from here
+    /// would leave the thread, and that ends Revit.
+    /// </remarks>
+    private void ReportFault(Exception fault)
+    {
+        try
+        {
+            _window?.Lower();
+        }
+        catch (Exception)
+        {
+            // A window too broken to restack is no reason not to say what broke it.
+        }
+
+        try
+        {
+            ToRevit(() => MantlePlaceApplication.SayFault(fault));
+        }
+        catch (Exception)
+        {
+            // A Revit already shutting its dispatcher down has nobody left to tell.
+        }
+    }
 }

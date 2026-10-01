@@ -43,6 +43,14 @@ internal static class SlowStepNoticeTests
     /// The point count a slow kind's notice quotes: every polygon layer shares one measurement, and
     /// the drape has its own.
     /// </summary>
+    private static SiteContextDecision ContextDecision(NamedElementAction view, NamedElementAction filter) => new()
+    {
+        View = view,
+        Filter = filter,
+        ApplyFilterToView = view != NamedElementAction.Refuse && filter != NamedElementAction.Refuse,
+        Explanation = string.Empty,
+    };
+
     private static string MeasuredTerrainOf(ImportStepKind kind)
         => GroundCuts.LayerOf(kind) is null ? "80,372" : "74,855";
 
@@ -333,6 +341,39 @@ internal static class SlowStepNoticeTests
                     !retypeSaid,
                     $"retypes {toRetype}, terrain retypes {terrainRetypes}");
             }
+        });
+
+        run.Case("converting the site model announces itself, and linking one already converted does not", () =>
+        {
+            // The conversion is the cost: linking a file converted by an earlier import took about
+            // 5 s, converting it first 44 to 57 s, all of it inside Revit's own calls.
+            string? notice = SlowStepNotice.ForSiteModel(converts: true);
+            run.Contains(notice, "Next: the site model.", "it names the step");
+            run.Contains(notice, "about 55 to 57 seconds in Revit 2025 and 44 to 45 seconds in Revit 2027", "what it measured at");
+            run.Contains(notice, "reuses", "it says a later import does not pay it again");
+            run.Contains(notice, "not responding", "it says what Revit is about to look like");
+            run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
+            run.Contains(notice, "the import window names this step and keeps its clock running", "it says what the window shows");
+            run.True(SlowStepNotice.ForSiteModel(converts: false) is null, "a file already converted is linked in seconds, unannounced");
+        });
+
+        run.Case("making the site context view announces itself, and reusing it does not", () =>
+        {
+            string? notice = SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Create, NamedElementAction.Create));
+            run.Contains(notice, "Next: the site context view", "it names the step");
+            run.Contains(notice, "about 33 to 53 seconds in Revit 2026 and 2027, and under 5 seconds in Revit 2025", "what it measured at");
+            run.Contains(notice, "not responding", "it says what Revit is about to look like");
+            run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
+
+            run.True(
+                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Reuse, NamedElementAction.Create)) is not null,
+                "a filter to make is the same wait");
+            run.True(
+                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Reuse, NamedElementAction.Reuse)) is null,
+                "an earlier import's view and filter, reused, are not announced");
+            run.True(
+                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Refuse, NamedElementAction.Refuse)) is null,
+                "nor is a step that makes nothing");
         });
 
         run.Case("every other step stays quiet", () =>

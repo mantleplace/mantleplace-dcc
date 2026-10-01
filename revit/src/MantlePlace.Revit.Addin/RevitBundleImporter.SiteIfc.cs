@@ -35,6 +35,11 @@ internal sealed partial class RevitBundleImporter
         // leave that link permanently unresolvable, which is the failure this whole step is about.
         if (!File.Exists(companionRvt))
         {
+            if (SlowStepNotice.ForSiteModel(converts: true) is { } notice)
+            {
+                Announce(notice);
+            }
+
             Document? converted = null;
             try
             {

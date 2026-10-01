@@ -315,9 +315,21 @@ terrain took the imagery type still needs — Revit reports "not responding" whi
 Cancel pressed then takes effect when it finishes. The window does not stop with it: it runs on a
 thread of its own, so through a commit it names the step, says Revit is committing, keeps the step's
 clock running and shows what the step said beforehand about how long that has taken, and a Cancel
-pressed then is shown at once. Because Revit's window no longer owns it, it floats over Revit only
-while Revit is the application in front, has a taskbar button of its own, and does not minimise with
-Revit. Closing the window while it runs is a cancel.
+pressed then is shown at once. The drape and the polygon layers count their subdivisions as they go
+(`Imagery Drape: 120 of 405`), and smooth shading committed after the last step reads `Finishing`.
+
+Revit's window no longer owns the import window (why is in [`CLAUDE.md`](./CLAUDE.md)), and that is a
+trade:
+
+- it floats over Revit while Revit is the application in front, including when you click a Revit that
+  is stuck in a commit;
+- it goes behind any other application, and behind Revit's own dialogs: it never covers a Revit modal;
+- it has a taskbar button of its own, which is how to find it when it is behind something;
+- it no longer minimises with Revit;
+- while Revit is in front it floats over Revit's other windows too, such as a floating palette.
+
+It closes with Revit, and a checklist whose project you close goes with the project. Closing the
+window while it runs is a cancel.
 
 Setting `MANTLEPLACE_BUNDLE_ZIP` names the zip up front and skips the file picker, so the import
 runs unattended from a Revit journal or a tester script. An unattended run raises no dialog and opens

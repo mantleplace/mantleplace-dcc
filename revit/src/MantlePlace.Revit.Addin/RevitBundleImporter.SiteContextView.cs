@@ -29,6 +29,11 @@ internal sealed partial class RevitBundleImporter
                 _ => NameHolder.SomethingElse,
             });
 
+        if (SlowStepNotice.ForSiteContextView(decision) is { } notice)
+        {
+            Announce(notice);
+        }
+
         ImportFailureSwallower swallower = new("Making the site context view");
         using Transaction transaction = BeginTransaction("Mantle Place: site context view", swallower);
 

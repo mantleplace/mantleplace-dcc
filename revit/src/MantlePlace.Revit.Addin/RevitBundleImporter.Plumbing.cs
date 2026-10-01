@@ -27,6 +27,12 @@ internal sealed partial class RevitBundleImporter
         Announced?.Invoke(notice);
     }
 
+    /// <summary>
+    /// Says how far a step that does its work in one slice has got, for the window to show: such a
+    /// step cannot yield inside its open transaction, so it counts instead (<see cref="StagedImport.ReportProgress"/>).
+    /// </summary>
+    private void Count(int done, int total) => Counted?.Invoke(new StepProgress(done, total));
+
     /// <summary>The same, for a batch the swallower already worded.</summary>
     private void SayAll(IEnumerable<string> lines)
     {
@@ -112,7 +118,7 @@ internal sealed partial class RevitBundleImporter
         // not leave it saying Revit is still committing.
         Stopwatch clock = Stopwatch.StartNew();
         TransactionStatus status;
-        CommitChanged?.Invoke(true);
+        CommitStarting?.Invoke();
         try
         {
             status = transaction.Commit();
@@ -120,7 +126,7 @@ internal sealed partial class RevitBundleImporter
         finally
         {
             clock.Stop();
-            CommitChanged?.Invoke(false);
+            CommitEnded?.Invoke();
         }
 
         Trace($"[{transaction.GetName()}] commit took {clock.Elapsed.TotalSeconds:N1} s ({status}).");

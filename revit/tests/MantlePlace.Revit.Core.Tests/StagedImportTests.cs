@@ -338,6 +338,127 @@ internal static class StagedImportTests
             run.Equal(Status(import, 1), "Site Model: 1 s", "and the next step is not said to be committing");
         });
 
+        run.Case("the window's clock restarts when a view names a new step, and only then", () =>
+        {
+            FakeRunner runner = new();
+            runner.Bodies[ImportStepKind.Vegetation] = () => Chunks(runner, 250, 350);
+            StagedImport import = new([Step(ImportStepKind.LinkSiteIfc), Step(ImportStepKind.Vegetation)], runner);
+
+            ImportRunView before = ImportRunView.Of(import);
+            run.False(ImportRunView.RestartsClock(null, before), "the first view, with nothing in flight");
+
+            import.Advance();
+            ImportRunView first = ImportRunView.Of(import);
+            run.True(ImportRunView.RestartsClock(before, first), "the first step starts");
+            run.False(ImportRunView.RestartsClock(first, ImportRunView.Of(import)), "the same step again");
+
+            import.Advance();
+            ImportRunView between = ImportRunView.Of(import);
+            run.True(ImportRunView.RestartsClock(first, between), "the step ended");
+
+            import.Advance();
+            import.Advance();
+            ImportRunView chunk = ImportRunView.Of(import);
+            run.True(ImportRunView.RestartsClock(between, chunk), "the next step");
+            import.Advance();
+            run.False(ImportRunView.RestartsClock(chunk, ImportRunView.Of(import)), "a later chunk of the same step keeps its clock");
+        });
+
+        run.Case("the work after the last step is named, clocked, and never said to be cancelling", () =>
+        {
+            // Smooth shading, when the drape did not settle it, is committed after every step has
+            // ended: no row is in flight, and without a name the window would read every step Done,
+            // an empty bar and no status while Revit hangs.
+            FakeRunner runner = new();
+            StagedImport import = new([Step(ImportStepKind.LinkSiteIfc)], runner);
+            import.RunToEnd();
+            ImportRunView over = ImportRunView.Of(import);
+
+            import.FinishStarted();
+            run.True(import.Finishing, "finishing");
+            run.Equal(Status(import, 3), "Finishing: 3 s", "named, with its clock");
+            run.True(ImportRunView.Of(import).Indeterminate, "and the bar says working");
+            run.True(ImportRunView.RestartsClock(over, ImportRunView.Of(import)), "its clock starts as a step's does");
+
+            import.CommitStarted();
+            ImportRunView committing = ImportRunView.Of(import);
+            run.Equal(Status(import, 80), "Finishing: Revit is committing, 1 min 20 s", "its commit");
+            run.False(ImportRunView.RestartsClock(ImportRunView.Of(import), committing), "which keeps the clock");
+            run.Equal(
+                WindowLabels.StatusLine(committing.WithCancelRequested(), TimeSpan.FromSeconds(80)),
+                "Finishing: Revit is committing, 1 min 20 s",
+                "a cancel has nothing left to stop here");
+
+            import.CommitFinished();
+            import.FinishEnded();
+            run.Equal(Status(import, 81), string.Empty, "and nothing once it is over");
+            run.False(ImportRunView.Of(import).Indeterminate, "with the bar at rest");
+        });
+
+        run.Case("a run still in its steps cannot start finishing", () =>
+        {
+            FakeRunner runner = new();
+            StagedImport import = new([Step(ImportStepKind.LinkSiteIfc)], runner);
+            import.Advance();
+            import.FinishStarted();
+            run.False(import.Finishing, "a step is still to run");
+        });
+
+        run.Case("a step can count inside its one slice, and the bar follows the count", () =>
+        {
+            // The drape gives the photograph to each subdivision in turn inside one transaction, which
+            // cannot yield, so it counts instead, and the window says how far it has got.
+            FakeRunner runner = new();
+            StagedImport import = null!;
+            string? counting = null;
+            bool countingIndeterminate = true;
+            string? committing = null;
+            bool committingIndeterminate = false;
+            runner.Bodies[ImportStepKind.ImageryDrape] = () => CountingThenCommit(
+                () => import,
+                405,
+                () =>
+                {
+                    counting = Status(import, 65);
+                    countingIndeterminate = ImportRunView.Of(import).Indeterminate;
+                },
+                () =>
+                {
+                    committing = Status(import, 70);
+                    committingIndeterminate = ImportRunView.Of(import).Indeterminate;
+                });
+            import = new([Step(ImportStepKind.ImageryDrape)], runner);
+
+            import.Advance();
+            run.True(ImportRunView.Of(import).Indeterminate, "a one-commit step with no count yet says working");
+
+            import.Advance();
+            run.Equal(counting, "Imagery Drape: 120 of 405, 1 min 5 s", "the count, as it goes");
+            run.False(countingIndeterminate, "the bar shows the count");
+            run.Equal(committing, "Imagery Drape: 405 of 405, Revit is committing, 1 min 10 s", "then Revit's commit");
+            run.True(committingIndeterminate, "and the bar says working once all that was counted is Revit's to commit");
+        });
+
+        run.Case("a chunk's commit keeps the bar on its count", () =>
+        {
+            // The trees count after each chunk commits, so during a chunk's commit the count is short
+            // of the total, and the bar keeps it rather than flickering to working every few seconds.
+            FakeRunner runner = new();
+            StagedImport import = null!;
+            bool indeterminate = true;
+            runner.Bodies[ImportStepKind.Vegetation] = () => ChunksCommittingInside(
+                () => import,
+                () => indeterminate = ImportRunView.Of(import).Indeterminate,
+                250,
+                350);
+            import = new([Step(ImportStepKind.Vegetation)], runner);
+
+            import.Advance();
+            import.Advance();
+            import.Advance();
+            run.False(indeterminate, "the second chunk's commit, at 250 of 600");
+        });
+
         run.Case("the window reads a copy of the run, which the run's next slice does not change", () =>
         {
             // The window lives on a thread of its own, so it may still be reading a view while Revit's
@@ -420,6 +541,43 @@ internal static class StagedImportTests
 
         during();
         yield break;
+    }
+
+    /// <summary>
+    /// A step that is one commit and counts <paramref name="total"/> elements inside its one slice,
+    /// the way the drape does: <paramref name="midway"/> runs at 120, <paramref name="inCommit"/>
+    /// inside the commit that follows the count.
+    /// </summary>
+    private static IEnumerable<StepProgress> CountingThenCommit(Func<StagedImport> import, int total, Action midway, Action inCommit)
+    {
+        for (int done = 0; done <= total; done++)
+        {
+            import().ReportProgress(new StepProgress(done, total));
+            if (done == 120)
+            {
+                midway();
+            }
+        }
+
+        import().CommitStarted();
+        inCommit();
+        import().CommitFinished();
+        yield break;
+    }
+
+    /// <summary>The tree step's shape: one commit per chunk, counted once the chunk is in, with <paramref name="inCommit"/> run inside each.</summary>
+    private static IEnumerable<StepProgress> ChunksCommittingInside(Func<StagedImport> import, Action inCommit, params int[] sizes)
+    {
+        int total = sizes.Sum();
+        int done = 0;
+        foreach (int size in sizes)
+        {
+            import().CommitStarted();
+            inCommit();
+            import().CommitFinished();
+            done += size;
+            yield return new StepProgress(done, total);
+        }
     }
 
     /// <summary>A step whose commit throws, before the host can say it has ended.</summary>
