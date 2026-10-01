@@ -14,6 +14,11 @@ internal sealed partial class RevitBundleImporter
     /// </summary>
     private void LinkSiteIfc(ImportStep step)
     {
+        if (HeightsRefused(step))
+        {
+            return;
+        }
+
         // Both the IFC and the companion .rvt are referenced by the link for the life of the
         // project, so the kind's lifetime carries the .rvt written next to it too.
         string ifcPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);

@@ -186,6 +186,38 @@ internal sealed partial class RevitBundleImporter
         return [.. toposolids.Where(toposolid => !subdivisionIds.Contains(toposolid.Id))];
     }
 
+    /// <summary>Every ground toposolid, as the pure core reads one: its id and its Comments.</summary>
+    private List<ExistingTerrain> ExistingGrounds()
+        => [.. GroundToposolids().Select(ground => new ExistingTerrain(
+            ground.Id.Value,
+            ground.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString()))];
+
+    /// <summary>
+    /// Whether <paramref name="step"/>'s heights are in another vertical datum than the ground they
+    /// would land on, saying so by name when they are (<c>HPS-53</c>).
+    /// </summary>
+    /// <remarks>
+    /// Asked first, before the step extracts or reads anything, so a refused step costs nothing. The
+    /// decision is <see cref="HeightDatums"/>'s; the shim supplies the two facts only a document has —
+    /// the grounds and their stamps — and the ground this import has already settled on.
+    /// </remarks>
+    private bool HeightsRefused(ImportStep step)
+    {
+        if (step.HeightDatum is not { } content)
+        {
+            return false;
+        }
+
+        GroundDatum? ground = HeightDatums.GroundFor(ExistingGrounds(), _archive.Layout.Key.Stem, _terrainId.Value);
+        if (HeightDatums.Refusal(ground, content, HeightDatums.Noun(step.Kind)) is not { } reason)
+        {
+            return false;
+        }
+
+        Say(reason);
+        return true;
+    }
+
     /// <summary>
     /// The ground a step works on when this run did not build one — a bundle whose plan carries
     /// boundaries or a drape but no surface.

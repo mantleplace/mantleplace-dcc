@@ -1,0 +1,228 @@
+{
+  "$comment": [
+    "Content's heights are placed on the project's ground only where the vertical datum the content",
+    "states is the one the ground was built in, and are refused by name otherwise: a frame names its",
+    "datum as well as its CRS and its unit, and this is the named skip HPS-53 gives a file in another",
+    "frame (MPB 1.8.0).",
+    "",
+    "The Revit host is an order-frame host: within one bundle every height it places is in the",
+    "delivery's datum, the ground's included. Across two it is not. From 1.8.0 a US order's content in",
+    "the delivery CRS is NAVD88 (GEOID18), and before it every bundle was EGM2008. A re-import of a",
+    "1.8.0 rebuild keeps the ground an earlier build made, so the ground records its datum when it is",
+    "built and each height step compares the datum its own content states with that record. A",
+    "difference is a skip that places nothing and shifts no height; the published offset between the",
+    "two datums is one number for the whole site and is not this host's to apply.",
+    "",
+    "Unstated compares by version, never by key. Every bundle before 1.8.0 was EGM2008, so content",
+    "from before 1.8.0 stating none, and a ground recording none, both read as EGM2008; a stated datum",
+    "outranks that on either side. Content that states none on a 1.8.0 manifest is a producer's gap and",
+    "is refused rather than assumed to match. A datum no reader knows fails closed, naming the value,",
+    "even against the same string. Datums are compared verbatim.",
+    "",
+    "`manifest` is one embedded 1.8.0 document. Each row lays its own members over it before it is",
+    "parsed -- `root` over the document, `treePoints` over `landcover.tree_points`; a value sets a",
+    "member and null removes it -- and plans it, so the statement the tree step carries is proven",
+    "through the parser and the planner, not beside them. `ground` is what the project's ground of",
+    "this order records: `vertical_datum` is the datum its stamp names, or null for a ground recording",
+    "none (built from a manifest before 1.8.0, or by a build of the host before the record). `outcome`",
+    "is `placeable` or `unplaceable`; `errorContains` is asserted on an `unplaceable` row only.",
+    "",
+    "The unknown and case-folded datums sit on the ground's side because that is where a free string",
+    "reaches this host: the ground records `hosts.revit.georeference.vertical_datum`, which the format",
+    "leaves a free string, while `landcover.tree_points.vertical_datum` is an enum of the two datums",
+    "and every row here validates against the schema its version names.",
+    "",
+    "The base row is a US order on its first import: everything NAVD88, the ground included. The",
+    "tree points stand for every height step, since what is compared is the step's statement and the",
+    "ground's record, whichever file the statement came from; the document's site is the corpus's usual",
+    "one, and nothing in this table reads where it is."
+  ],
+  "manifest": {
+    "version": "1.8.0",
+    "job_id": "fixture-mpb-revit-height-datum",
+    "order_id": "ord-revit-height-datum-1",
+    "location": {
+      "time_zone": {
+        "iana": "America/Denver",
+        "utc_offset_standard_h": -7,
+        "observes_dst": true,
+        "tzdata_version": "2026b"
+      }
+    },
+    "layout": {
+      "readme": "README.md",
+      "manifest": "Metadata/manifest.json",
+      "tree_points": "Landcover/TreePoints.csv"
+    },
+    "delivery": {
+      "unit_system": "metric",
+      "tier": "metric",
+      "horizontal_epsg": 32613,
+      "linear_unit": "m",
+      "label": "WGS 84 / UTM zone 13N"
+    },
+    "landcover": {
+      "tree_points": {
+        "path": "Landcover/TreePoints.csv",
+        "crs": "EPSG:32613",
+        "units": "m",
+        "horizontal_units": "m",
+        "point_count": 3,
+        "columns": [
+          "x",
+          "y",
+          "ground_z",
+          "height_m",
+          "crown_radius_m",
+          "foliage_type"
+        ],
+        "foliage_type_vocabulary": "1",
+        "vertical_datum": "NAVD88 (GEOID18)"
+      }
+    },
+    "hosts": {
+      "revit": {
+        "host_min_version": "2025",
+        "georeference": {
+          "crs_projected": "EPSG:32613",
+          "crs_geographic": "EPSG:4326",
+          "vertical_datum": "NAVD88 (GEOID18)",
+          "grid_rotation_deg": 0.0,
+          "is_projected": true,
+          "origin": {
+            "lon": -105.6462,
+            "lat": 36.2725,
+            "projected": {
+              "epsg": 32613,
+              "easting": 441959.5,
+              "northing": 4014372.5,
+              "linear_unit": "m"
+            }
+          }
+        },
+        "file_frame": {
+          "type": "projected",
+          "crs": "EPSG:32613",
+          "horizontal_unit": "m",
+          "vertical_unit": "m"
+        },
+        "readiness": {
+          "toposurface_points": {
+            "present": false,
+            "reason": "not_produced"
+          },
+          "ifc_site": {
+            "present": false,
+            "reason": "not_produced"
+          },
+          "surface_dxf": {
+            "present": false,
+            "reason": "not_produced"
+          },
+          "vectors": {
+            "present": false,
+            "reason": "not_produced"
+          },
+          "steep_slope": {
+            "present": false,
+            "reason": "not_produced"
+          },
+          "flood_zones": {
+            "present": false,
+            "reason": "not_produced"
+          },
+          "contours": {
+            "present": false,
+            "reason": "not_produced"
+          }
+        }
+      }
+    }
+  },
+  "rows": [
+    {
+      "name": "stated and equal: NAVD88 trees on a ground built in NAVD88 are placed",
+      "ground": {
+        "vertical_datum": "NAVD88 (GEOID18)"
+      },
+      "outcome": "placeable"
+    },
+    {
+      "name": "unstated against unstated: trees from before 1.8.0 on a ground recording no datum are placed",
+      "root": {
+        "version": "1.7.0"
+      },
+      "treePoints": {
+        "vertical_datum": null
+      },
+      "ground": {
+        "vertical_datum": null
+      },
+      "outcome": "placeable"
+    },
+    {
+      "name": "a ground recording no datum reads as EGM2008, so trees stating EGM2008 are placed",
+      "treePoints": {
+        "vertical_datum": "EGM2008-orthometric"
+      },
+      "ground": {
+        "vertical_datum": null
+      },
+      "outcome": "placeable"
+    },
+    {
+      "name": "a ground recording no datum against trees stating NAVD88 is unplaceable: the re-import this case exists for",
+      "ground": {
+        "vertical_datum": null
+      },
+      "outcome": "unplaceable",
+      "errorContains": "NAVD88 (GEOID18)"
+    },
+    {
+      "name": "a stated pair that differs is unplaceable and not shifted",
+      "ground": {
+        "vertical_datum": "EGM2008-orthometric"
+      },
+      "outcome": "unplaceable",
+      "errorContains": "NAVD88 (GEOID18)"
+    },
+    {
+      "name": "a stated datum outranks the version: 1.7.0 trees stating NAVD88 on a ground recording none are unplaceable",
+      "root": {
+        "version": "1.7.0"
+      },
+      "ground": {
+        "vertical_datum": null
+      },
+      "outcome": "unplaceable",
+      "errorContains": "NAVD88 (GEOID18)"
+    },
+    {
+      "name": "the datum is compared verbatim: a ground recording a spelling that differs only in case is another datum",
+      "ground": {
+        "vertical_datum": "navd88 (geoid18)"
+      },
+      "outcome": "unplaceable",
+      "errorContains": "navd88 (geoid18)"
+    },
+    {
+      "name": "a datum no reader knows fails closed, naming it: a ground recording one places nothing on it",
+      "ground": {
+        "vertical_datum": "a-datum-no-reader-knows"
+      },
+      "outcome": "unplaceable",
+      "errorContains": "a-datum-no-reader-knows"
+    },
+    {
+      "name": "trees stating no datum on a 1.8.0 manifest are unplaceable, not read as an older bundle",
+      "treePoints": {
+        "vertical_datum": null
+      },
+      "ground": {
+        "vertical_datum": null
+      },
+      "outcome": "unplaceable",
+      "errorContains": "states no vertical datum"
+    }
+  ]
+}

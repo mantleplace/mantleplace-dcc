@@ -106,6 +106,12 @@ internal static class ManifestConformanceTests
             return;
         }
 
+        if (string.Equals(corpusCase.Id, "manifest.revitHeightDatum", StringComparison.Ordinal))
+        {
+            DriveHeightDatumVectors(run, corpusCase);
+            return;
+        }
+
         BundleManifest manifest = BundleManifestReader.Parse(corpusCase.Payload);
 
         if (corpusCase.IsAccept)
@@ -265,6 +271,111 @@ internal static class ManifestConformanceTests
         {
             run.Fail($"'{unread}' is a vector value nothing in this suite read.");
         }
+    }
+
+    /// <summary>
+    /// Drives <c>manifest.revitHeightDatum</c> (<c>HPS-53</c>): each row lays its members over one
+    /// embedded manifest, which is parsed and planned, and the tree step's statement is compared with
+    /// the datum the row's ground records.
+    /// </summary>
+    /// <remarks>
+    /// Through <see cref="BundleManifestReader.Parse"/>, <see cref="BundleImportPlanner.Plan"/> and
+    /// <see cref="HeightDatums.Refusal"/>, the seams the import itself goes through: the shim adds only
+    /// the ground it found in the document, which is what the row's <c>ground</c> stands for.
+    /// </remarks>
+    private static void DriveHeightDatumVectors(TestRun run, CorpusCase corpusCase)
+    {
+        using VectorDocument vectors = VectorDocument.Parse(corpusCase.Payload);
+        if (vectors.Root.Obj("manifest") is not { } manifestNode)
+        {
+            run.Fail("the vector file has no embedded `manifest` object");
+            return;
+        }
+
+        string baseManifest = manifestNode.Element.GetRawText();
+        vectors.Root.MarkConsumed("manifest");
+
+        IReadOnlyList<VectorNode> rows = vectors.Root.Items("rows");
+        if (rows.Count == 0)
+        {
+            run.Fail("the vector file has no non-empty `rows` array — zero rows would report "
+                + "green for the wrong reason (HPS-40)");
+            return;
+        }
+
+        foreach (VectorNode row in rows)
+        {
+            string name = row.Str("name") ?? string.Empty;
+            string? outcome = row.Str("outcome");
+            VectorNode? ground = row.Obj("ground");
+            if (name.Length == 0 || outcome is not ("placeable" or "unplaceable") || ground is null)
+            {
+                run.Fail($"row '{name}' is missing `name`, a `ground` object, or an `outcome` of "
+                    + "`placeable` or `unplaceable`");
+                continue;
+            }
+
+            System.Text.Json.Nodes.JsonObject document = System.Text.Json.Nodes.JsonNode.Parse(baseManifest)!.AsObject();
+            Overlay(document, row, "root");
+            Overlay(document["landcover"]!["tree_points"]!.AsObject(), row, "treePoints");
+
+            BundleManifest manifest = BundleManifestReader.Parse(document.ToJsonString());
+            if (!manifest.IsValid || manifest.TreePoints is not { } treePoints)
+            {
+                run.Fail($"row '{name}': the manifest must parse and carry tree points ({manifest.Error})");
+                continue;
+            }
+
+            BundleImportPlan plan = BundleImportPlanner.Plan(manifest, [treePoints.Path], _ => null);
+            if (plan.Steps.FirstOrDefault(step => step.Kind == ImportStepKind.Vegetation) is not { HeightDatum: { } content })
+            {
+                run.Fail($"row '{name}': the tree step was not planned with a height datum");
+                continue;
+            }
+
+            string? refusal = HeightDatums.Refusal(
+                new GroundDatum(1, ground.Str("vertical_datum")),
+                content,
+                HeightDatums.Noun(ImportStepKind.Vegetation));
+
+            if (outcome == "placeable")
+            {
+                run.True(refusal is null, $"row '{name}': placeable (refused with: {refusal})");
+            }
+            else
+            {
+                run.True(refusal is not null, $"row '{name}': unplaceable");
+                run.Contains(refusal, row.Str("errorContains") ?? string.Empty, $"row '{name}': the refusal names it");
+            }
+        }
+
+        foreach (string unread in vectors.UnreadPaths())
+        {
+            run.Fail($"'{unread}' is a vector value nothing in this suite read.");
+        }
+    }
+
+    /// <summary>Lays a row's <paramref name="key"/> object over <paramref name="target"/>: a value sets, null removes.</summary>
+    private static void Overlay(System.Text.Json.Nodes.JsonObject target, VectorNode row, string key)
+    {
+        if (row.Obj(key) is not { } overlay)
+        {
+            return;
+        }
+
+        foreach (JsonProperty member in overlay.Element.EnumerateObject())
+        {
+            if (member.Value.ValueKind == JsonValueKind.Null)
+            {
+                target.Remove(member.Name);
+            }
+            else
+            {
+                target[member.Name] = System.Text.Json.Nodes.JsonNode.Parse(member.Value.GetRawText());
+            }
+        }
+
+        row.MarkConsumed(key);
     }
 
     /// <summary>The vocabulary's own word for a foliage type — what the corpus states.</summary>

@@ -54,7 +54,7 @@ internal sealed partial class RevitBundleImporter
     /// </remarks>
     private IEnumerable<StepProgress> ImportVegetation(ImportStep step)
     {
-        if (step.Frame is not { } frame)
+        if (step.Frame is not { } frame || HeightsRefused(step))
         {
             yield break;
         }

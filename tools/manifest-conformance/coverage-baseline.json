@@ -201,6 +201,9 @@
     "manifest.revitContoursPointer": [
       "revit"
     ],
+    "manifest.revitHeightDatum": [
+      "revit"
+    ],
     "manifest.revitOwnFramePointers": [
       "revit"
     ],

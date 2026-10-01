@@ -482,7 +482,7 @@ public static class BundleManifestReader
 
                     // A row with no path points at nothing: it neither ends the search nor stands in
                     // for a later row as the whole layer.
-                    if (SharedLayerFile(format) is not { } file)
+                    if (SharedLayerFile(format, layer.OptionalStr("vertical_datum")) is not { } file)
                     {
                         wantedWithoutPath = true;
                         continue;
@@ -517,7 +517,7 @@ public static class BundleManifestReader
     }
 
     /// <summary>One file of the shared set, or <c>null</c> when its row names no path.</summary>
-    private static BundleArtifact? SharedLayerFile(JsonElement format)
+    private static BundleArtifact? SharedLayerFile(JsonElement format, string? layerVerticalDatum)
     {
         string path = format.Str("path");
         return string.IsNullOrWhiteSpace(path)
@@ -532,6 +532,7 @@ public static class BundleManifestReader
                 // `crs` member. Stated rather than left blank so the planner branches on a value
                 // instead of on the layer's name.
                 HorizontalFrame = GeographicFrame,
+                VerticalDatum = layerVerticalDatum,
             };
     }
 
@@ -966,6 +967,7 @@ public static class BundleManifestReader
                 Format = detail?.OptionalStr("schema"),
                 Units = detail?.OptionalStr("units"),
                 Georeference = detail?.OptionalStr("georeference"),
+                VerticalDatum = detail?.OptionalStr("vertical_datum"),
                 TriangleCount = detail?.OptionalInt("terrain_triangle_count"),
                 FootprintCount = detail?.OptionalInt("footprint_count"),
             },
@@ -1013,6 +1015,7 @@ public static class BundleManifestReader
                 HorizontalUnits = detail?.OptionalStr("horizontal_units"),
                 FootprintCount = detail?.OptionalInt("point_count"),
                 FoliageTypeVocabulary = detail?.OptionalStr("foliage_type_vocabulary"),
+                VerticalDatum = detail?.OptionalStr("vertical_datum"),
             });
 
         ReadImagery(manifest, root, elevation);

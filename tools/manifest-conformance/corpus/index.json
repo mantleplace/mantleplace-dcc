@@ -1367,6 +1367,14 @@
       "appliesTo": "unreal"
     },
     {
+      "id": "manifest.revitHeightDatum",
+      "group": "manifest",
+      "file": "manifest/revit-height-datum.json",
+      "expect": "vector",
+      "reason": "A ground's heights and the heights placed on it are in one vertical datum, or the content is refused by name (MPB 1.8.0, HPS-53): a frame names its datum as well as its CRS and its unit. The Revit host places a bundle's content on the ground it built, and within one bundle every height it places is in the delivery's datum. Across two builds it is not: from 1.8.0 a US order's content in the delivery CRS is NAVD88 (GEOID18) where every earlier bundle was EGM2008, and a re-import of the 1.8.0 rebuild keeps the ground the earlier build made. So the ground records its datum when it is built, and each height step compares the datum its content states with that record, converting nothing. Each row lays members over one embedded 1.8.0 document, plans it, and compares the tree step's statement with what the row's ground records. Unstated compares by version: content from before 1.8.0 and a ground recording no datum both read as EGM2008, a stated datum outranks that, content unstated on a 1.8.0 manifest is refused, and a datum no reader knows fails closed, naming it. The unknown and case-folded datums are on the ground's side, which records `hosts.revit.georeference.vertical_datum`, a free string, because `landcover.tree_points.vertical_datum` is an enum and every row validates against the schema its version names. A reader fails here if it places content without asking which datum the ground is in, if it reads an unstated datum on a 1.8.0 manifest as matching, or if it shifts heights by the published offset instead of refusing. Revit-scoped because the ground's record is this host's; the fixed-frame host's ground is EGM2008 by construction and its road-layer refusal is manifest.roadSplinesStatedDatum.",
+      "appliesTo": "revit"
+    },
+    {
       "id": "manifest.drapeAlignmentDiverges",
       "group": "manifest",
       "file": "manifest/drape-alignment-diverges.json",

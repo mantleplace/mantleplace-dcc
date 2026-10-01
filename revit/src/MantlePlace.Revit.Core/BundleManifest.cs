@@ -47,6 +47,11 @@ public sealed class BundleArtifact
     public string? Units { get; init; }
 
     /// <summary>Raw <c>vertical_datum</c>, e.g. <c>"EGM2008-orthometric"</c>.</summary>
+    /// <remarks>
+    /// On a shared <c>vector</c> layer it is the layer's, stated beside its formats rather than on a
+    /// file. This host's own vector layers state none of their own: they are in the block's
+    /// (<see cref="RevitGeoreference.VerticalDatum"/>).
+    /// </remarks>
     public string? VerticalDatum { get; init; }
 
     /// <summary>

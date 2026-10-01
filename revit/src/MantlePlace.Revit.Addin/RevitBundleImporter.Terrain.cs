@@ -121,18 +121,13 @@ internal sealed partial class RevitBundleImporter
     /// </remarks>
     private string? TerrainToBuild(ImportStep step)
     {
-        List<ExistingTerrain> grounds = [];
-        foreach (Toposolid ground in GroundToposolids())
-        {
-            grounds.Add(new ExistingTerrain(
-                ground.Id.Value,
-                ground.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString()));
-        }
-
+        // The datum rides into the stamp of a ground this import creates, so the height steps after
+        // it, and every later import, can compare their own with it (HeightDatums).
         TerrainDecision decision = TerrainIdentity.Decide(
-            grounds,
+            ExistingGrounds(),
             _archive.Layout.Key.Stem,
-            step.ExpectedSha256);
+            step.ExpectedSha256,
+            step.HeightDatum?.Stated);
 
         if (decision.Explanation.Length > 0)
         {

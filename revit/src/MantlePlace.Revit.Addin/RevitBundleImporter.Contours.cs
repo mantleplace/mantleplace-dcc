@@ -28,7 +28,7 @@ internal sealed partial class RevitBundleImporter
     /// </remarks>
     private void ImportPublishedContours(ImportStep step)
     {
-        if (step.Frame is not { } frame || step.Layer is not { } layer)
+        if (step.Frame is not { } frame || step.Layer is not { } layer || HeightsRefused(step))
         {
             return;
         }

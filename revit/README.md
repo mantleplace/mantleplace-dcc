@@ -105,7 +105,11 @@ Revit licence.
   than either stacking or deleting: a curator's buildings and views may be standing on it, and this
   plugin does not remove ground it did not create in that run. A toposolid it does not recognise —
   yours, another order's, or one from an import that predates the stamp — is left alone and reported.
-  See [ADR 0004](../docs/adr/0004-revit-terrain-identity.md);
+  See [ADR 0004](../docs/adr/0004-revit-terrain-identity.md). The stamp also records the vertical
+  datum the ground's heights are in, from MPB 1.8.0 on, and roads, trees, contours and buildings whose
+  heights are in another datum than the ground they would stand on are left out by name rather than
+  placed beside it: a US order rebuilt at 1.8.0 is NAVD88 where the ground an earlier build made is
+  EGM2008. Nothing is shifted to make them agree; deleting that ground and importing again does;
 - copies every building in the site model (`Site/Site.ifc`) into the project as its own Generic
   Model element — the platform's own extrusion, not one rebuilt here — so each can be selected,
   hidden or coloured, and a renderer's live link sees it as model geometry. The site model's context

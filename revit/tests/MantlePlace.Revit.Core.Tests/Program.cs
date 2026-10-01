@@ -24,6 +24,7 @@ exitCode |= PngHeaderTests.Run();
 exitCode |= SiteBoundaryIdentityTests.Run();
 exitCode |= SiteBoundaryCoextensionTests.Run();
 exitCode |= TerrainIdentityTests.Run();
+exitCode |= HeightDatumTests.Run();
 exitCode |= TreeIdentityTests.Run();
 exitCode |= TreeFamilyTests.Run();
 exitCode |= ShrubFamilyTests.Run();
