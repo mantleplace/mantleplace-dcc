@@ -94,8 +94,9 @@ starts at Landscape: the landscape and its paint layers come with Landscape or B
 with Mesh or Both, and every other row comes in whenever the bundle carries it, in every mode.
 Cesium streaming is a separate request.
 
-**What was measured, and why most rows were not.** Order `4276ef78`'s cached bundle (MPB 1.6.0) is
-`base_on_demand`, and its `hosts.unreal` block carries `readiness` and nothing else. The import
+**What was measured, and why most rows were not.** Order `4276ef78`'s cached bundle (MPB 1.6.0) has
+`packaging.delivery_model` `base_on_demand`, and its `hosts.unreal` block carries `readiness` and
+nothing else. The import
 refuses it before anything is extracted: the bundle has not generated its Unreal formats. That was
 confirmed headless in two runs, in each of the three import modes, in UE 5.8.2 with the plugin at
 `b0251a1`. Bringing those formats in is a Prepare for Unreal, which needs a sign-in, so every
