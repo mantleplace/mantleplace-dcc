@@ -28,8 +28,8 @@ internal static class RevitWindowGeometry
     /// <param name="window">Revit's main window.</param>
     /// <param name="whereRestored">
     /// For a minimised window, where it would be restored to rather than the parking place Windows
-    /// moves it to: its restored rectangle, kept by Windows from the corner of its monitor's work area,
-    /// or that work area when it restores maximised (<see cref="ImportWindowPlacement.Restored"/>).
+    /// moves it to: its restored rectangle, kept by Windows less its monitor's work-area inset, or that
+    /// work area when it restores maximised (<see cref="ImportWindowPlacement.Restored"/>).
     /// </param>
     /// <remarks>
     /// GetWindowRect answers in device pixels and WPF places in device-independent ones, so Revit's
@@ -58,6 +58,7 @@ internal static class RevitWindowGeometry
             pixels = ImportWindowPlacement.Restored(
                 Of(placement.NormalPosition),
                 Of(monitor.WorkArea),
+                Of(monitor.Monitor),
                 restoresMaximised: (placement.Flags & RestoreToMaximized) != 0);
         }
         else if (GetWindowRect(window, out NativeRect rect))

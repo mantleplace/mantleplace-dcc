@@ -121,7 +121,9 @@ public static class SlowStepNotice
     /// </summary>
     /// <remarks>
     /// <para>
-    /// One order (74,855 points, 834 buildings, 19,755 trees and shrubs, 405 subdivisions), full imports
+    /// Order <c>4276ef78</c> (<see cref="MeasuredOrderVertexCount"/> points, <see cref="MeasuredOrderBuildings"/>
+    /// buildings, <see cref="MeasuredOrderPlantings"/> trees and shrubs, <see cref="MeasuredOrderSubDivisions"/>
+    /// subdivisions), full imports
     /// with every layer ticked, Revit 2025.4, 2026.5 and 2027.2, 2026-09-29 and -30: the window and
     /// layers runs of the measurement on issue 258's first phase, with other Revits importing on the
     /// same machine for most of them. The terrain is built on the imagery type, as the default import
@@ -132,9 +134,11 @@ public static class SlowStepNotice
     /// added to that plan. Coordinates, location and centrelines were timed together.
     /// </para>
     /// <para>
-    /// The drape's figures predate its typed cuts, which took most of its cost in 2026 and 2027; its
-    /// notices quote their own measurements. Its row only classifies it, and it would still be announced
-    /// at its 65 s commit.
+    /// The drape is 2025's alone: the 2026 and 2027 runs predate its typed cuts, which took most of its
+    /// cost, so they are not quoted. Each of its notices says the measurement of the route it takes —
+    /// 2025's typeless subdivisions this row (<see cref="ForDrapeOnInstances"/>), 2026 and 2027's typed
+    /// ones the 65 s commit measured since (<see cref="ForDrapeCommit"/>), a terrain still to retype its
+    /// own (<see cref="For"/>).
     /// </para>
     /// </remarks>
     public static StepMeasurement? Measured(ImportStepKind kind) => kind switch
@@ -153,7 +157,7 @@ public static class SlowStepNotice
         ImportStepKind.Vegetation => new(new(206, 415), new(266, 275), new(231, 338)),
         ImportStepKind.AttributionAndProvenance => new(new(0.1, 0.6), new(0.1, 0.1), new(0.1, 0.2)),
         ImportStepKind.SiteContextView => new(new(1.4, 4.8), new(41.5, 42.4), new(32.7, 52.6)),
-        ImportStepKind.ImageryDrape => new(new(25.6, 61.6), new(1_792, 1_863), new(1_839, 2_759)),
+        ImportStepKind.ImageryDrape => new(new(25.6, 61.6), null, null),
         ImportStepKind.FloodZones => new(new(32.9, 32.9), new(31.7, 31.7), new(43.5, 43.5)),
         ImportStepKind.SteepGround => new(new(0.8, 0.8), new(0.8, 0.8), new(0.9, 0.9)),
 
@@ -209,7 +213,7 @@ public static class SlowStepNotice
                 + "drape is chosen. On the one order this has been measured on ({0:N0} points), that took {1} "
                 + "in full imports, most of it in its commit; on the default type the same terrain took 5 to 7 "
                 + "seconds. {2}. {3}",
-                MeasuredSubDivisionTerrainPointCount,
+                MeasuredOrderVertexCount,
                 measured.Describe(),
                 ThisTerrain(terrainPointCount),
                 InsideOneCommit),
@@ -226,29 +230,26 @@ public static class SlowStepNotice
                 CultureInfo.InvariantCulture,
                 "Next: the context buildings — {0} to copy out of the site model. Revit opens the site model's "
                 + "IFC first, in one call, and the import window counts the buildings in once it is open. On the "
-                + "one order this has been measured on (834 buildings), the step took {1}. Revit will report "
+                + "one order this has been measured on ({2:N0} buildings), the step took {1}. Revit will report "
                 + "\"not responding\" while it opens the IFC, which cannot report part of itself, and Cancel "
                 + "takes effect once it has, between chunks. It has not crashed; leave it alone.",
                 count,
-                measured.Describe()),
+                measured.Describe(),
+                MeasuredOrderBuildings),
 
             ImportStepKind.Vegetation => string.Format(
                 CultureInfo.InvariantCulture,
                 "Next: planting — {0} tree(s) and shrub(s), placed and committed {1} at a time, which the import "
-                + "window counts in as each chunk commits. On the one order this has been measured on (19,755 "
+                + "window counts in as each chunk commits. On the one order this has been measured on ({3:N0} "
                 + "trees and shrubs), planting took {2} in full imports, most of it in Revit's commits. Revit may "
                 + "report \"not responding\" during a chunk's commit, and Cancel takes effect at the next chunk, "
                 + "keeping every chunk already in. It has not crashed; leave it alone.",
                 count,
                 ImportChunking.ElementsPerTransaction,
-                measured.Describe()),
-
-            ImportStepKind.SiteContextView => string.Format(
-                CultureInfo.InvariantCulture,
-                "Next: the site context view — a 3D view, and a filter that finds what an import stamped across "
-                + "every model category. On the one order this has been measured on, making them took {0}. {1}",
                 measured.Describe(),
-                InsideRevitsOwnCalls),
+                MeasuredOrderPlantings),
+
+            ImportStepKind.SiteContextView => SiteContextViewNotice("the view and its filter", measured),
 
             ImportStepKind.FloodZones => string.Format(
                 CultureInfo.InvariantCulture,
@@ -287,9 +288,10 @@ public static class SlowStepNotice
     /// <remarks>
     /// Said where it is committed: inside the drape, or after the last step when the drape did not
     /// settle it, where the window shows it beside its clock as the finishing work
-    /// (<see cref="StagedImport.Finishing"/>). Measured at 98 to 111 s in Revit 2026 and 2027, it is
-    /// over <see cref="AnnouncedFromSeconds"/> however few subdivisions this terrain has, and the figures
-    /// for 405 and for 61 are both given rather than scaled.
+    /// (<see cref="StagedImport.Finishing"/>). The work is announced because it was measured at 98 to
+    /// 111 s in Revit 2026 and 2027 with the order's 405 subdivisions; with 61 it took 2 and 14 s, under
+    /// <see cref="AnnouncedFromSeconds"/>. How the cost grows between the two has not been measured, so
+    /// it is said whenever there are subdivisions, and both figures are given rather than scaled.
     /// </remarks>
     public static string? ForSmoothShading(int subDivisions, int? terrainPointCount)
     {
@@ -301,15 +303,106 @@ public static class SlowStepNotice
         return string.Format(
             CultureInfo.InvariantCulture,
             "Next: smooth shading, which Revit commits across the terrain and the {0:N0} subdivision(s) on it. "
-            + "On the one order this has been measured on ({1:N0} points), with its 405 subdivisions that took "
+            + "On the one order this has been measured on ({1:N0} points), with its {6:N0} subdivisions that took "
             + "{2}, and with 61 {3}. {4}. {5}",
             subDivisions,
-            MeasuredSubDivisionTerrainPointCount,
+            MeasuredOrderVertexCount,
             MeasuredSmoothShadingWith405.Describe(),
             MeasuredSmoothShadingWith61.Describe(),
             ThisTerrain(terrainPointCount),
-            InsideOneCommit);
+            InsideOneCommit,
+            MeasuredOrderSubDivisions);
     }
+
+    /// <summary>The terrain step's line, from which type it is being built on.</summary>
+    /// <param name="kind">The terrain step running.</param>
+    /// <param name="onImageryType">Whether the terrain is being built on the type that will wear the photograph.</param>
+    /// <param name="pointCount">The points it is being built from.</param>
+    /// <remarks>
+    /// Built on the imagery type it was measured at tens of seconds; on the default type, which it falls
+    /// back to when that type cannot be made, at 5 to 7. So the shim says which type it is building on,
+    /// once that is decided, and only the first is announced.
+    /// </remarks>
+    public static string? ForTerrain(ImportStepKind kind, bool onImageryType, int pointCount)
+        => onImageryType ? For(kind, pointCount, 1) : null;
+
+    /// <summary>The site model's line, from whether this Revit's converted file of it is already there.</summary>
+    /// <remarks>Converting the IFC is the work measured; linking a file an earlier import converted takes seconds.</remarks>
+    public static string? ForSiteModel(bool convertedFileExists)
+        => convertedFileExists ? null : For(ImportStepKind.LinkSiteIfc, null, 1);
+
+    /// <summary>The site context view's line, from what the step will make; <c>null</c> when it makes nothing.</summary>
+    /// <remarks>
+    /// The figure is for making both, and the line says so when only one is made: how the time divides
+    /// between the view and the filter has not been measured.
+    /// </remarks>
+    public static string? ForSiteContextView(SiteContextDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+
+        string? making = (decision.View == NamedElementAction.Create, decision.Filter == NamedElementAction.Create) switch
+        {
+            (true, true) => "the view and its filter",
+            (true, false) => "the view",
+            (false, true) => "the filter",
+            _ => null,
+        };
+
+        return making is null || Measured(ImportStepKind.SiteContextView) is not { } measured
+            ? null
+            : SiteContextViewNotice(making, measured);
+    }
+
+    /// <summary>A hazard layer's line, from whether it makes the hazard plan and how many regions it draws.</summary>
+    /// <remarks>
+    /// The flood zones were measured making a new plan; drawn onto a plan that is already there, they
+    /// are not the work that was measured, and steep ground was measured in under a second.
+    /// </remarks>
+    public static string? ForHazardLayer(ImportStepKind kind, bool createsPlan, int regions)
+        => createsPlan ? For(kind, null, regions) : null;
+
+    /// <summary>
+    /// The drape's line for subdivisions that take the photograph through their own Material, one at a
+    /// time — Revit 2025's typeless ones; <c>null</c> when there are none.
+    /// </summary>
+    /// <param name="subDivisionsOnInstance">Subdivisions the drape will give the photograph through their own Material.</param>
+    /// <param name="terrainPointCount">The host toposolid's point count, or <c>null</c> when this run did not build it.</param>
+    /// <remarks>
+    /// The drape is measured over <see cref="AnnouncedFromSeconds"/> in Revit 2025, and that is the
+    /// route 2025 takes: its subdivisions are typeless, so neither of the typed notices
+    /// (<see cref="ForSubDivisionRetypes"/>, <see cref="ForDrapeCommit"/>) is ever said there.
+    /// </remarks>
+    public static string? ForDrapeOnInstances(int subDivisionsOnInstance, int? terrainPointCount)
+    {
+        if (subDivisionsOnInstance <= 0 || Measured(ImportStepKind.ImageryDrape) is not { } measured)
+        {
+            return null;
+        }
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "Next: the imagery drape — the photograph written into the material of each of {0:N0} subdivision(s), "
+            + "one at a time, which the import window counts, then committed in one transaction. On the one order "
+            + "this has been measured on ({1:N0} points, {2:N0} subdivisions), the drape took {3}, most of it "
+            + "the subdivisions one at a time. {4}. Revit will report \"not responding\" until the step finishes, "
+            + "and Cancel takes effect when it finishes. It has not crashed; leave it alone.",
+            subDivisionsOnInstance,
+            MeasuredOrderVertexCount,
+            MeasuredOrderSubDivisions,
+            measured.Describe(),
+            ThisTerrain(terrainPointCount));
+    }
+
+    /// <summary>The site context view's line, for whichever of the view and the filter is made.</summary>
+    private static string SiteContextViewNotice(string making, StepMeasurement measured)
+        => string.Format(
+            CultureInfo.InvariantCulture,
+            "Next: the site context view, making {0}: the view is a 3D view, and the filter finds what an import "
+            + "stamped across every model category. On the one order this has been measured on, making both took "
+            + "{1}. {2}",
+            making,
+            measured.Describe(),
+            InsideRevitsOwnCalls);
 
     /// <summary>
     /// The shared body: where the time goes, the one measurement, this terrain, and the reassurance.
@@ -346,8 +439,26 @@ public static class SlowStepNotice
         + "commit has got. Revit will report \"not responding\" until it finishes, and Cancel takes "
         + "effect when it finishes. It has not crashed; leave it alone.";
 
-    /// <summary>The point count of the terrain the subdivision measurements were taken on.</summary>
+    /// <summary>
+    /// The point count of the terrain the polygon layers' single-subdivision measurements were taken
+    /// on: the MPB 1.4.0 order of the land-cover investigation (<see cref="DescribePolygonLayer"/>).
+    /// </summary>
     public const int MeasuredSubDivisionTerrainPointCount = 74_855;
+
+    /// <summary>
+    /// The terrain of order <c>4276ef78</c>, the one every whole-import figure here was measured on:
+    /// Phase 1, the on/off matrix, and the typed cuts. Its TIN has this many vertices.
+    /// </summary>
+    public const int MeasuredOrderVertexCount = 75_314;
+
+    /// <summary>The buildings that order's site model gives the context buildings step.</summary>
+    public const int MeasuredOrderBuildings = 1_319;
+
+    /// <summary>The trees and shrubs that order plants.</summary>
+    public const int MeasuredOrderPlantings = 19_755;
+
+    /// <summary>The subdivisions that order cuts: 19 land cover, 40 land use, 2 water and 344 road surfaces.</summary>
+    public const int MeasuredOrderSubDivisions = 405;
 
     /// <summary>
     /// Rounded minutes one land-cover subdivision covering the whole order took to commit on its own
@@ -467,7 +578,7 @@ public static class SlowStepNotice
 
     /// <summary>
     /// What giving one layer's subdivisions their drape types as they were cut measured, per
-    /// subdivision, in Revit 2027 on <see cref="MeasuredSubDivisionTerrainPointCount"/> points.
+    /// subdivision, in Revit 2027 on <see cref="MeasuredOrderVertexCount"/> points.
     /// </summary>
     /// <param name="LowSeconds">The fastest import's seconds a subdivision.</param>
     /// <param name="HighSeconds">The slowest import's, equal to <paramref name="LowSeconds"/> after one import.</param>
@@ -538,7 +649,7 @@ public static class SlowStepNotice
             + "been measured on ({1:N0} points), in Revit 2027, that took {2} a subdivision for the {3}, "
             + "over {4:N0} import(s) of {5:N0} subdivision(s) each. {6}.",
             newSubDivisions,
-            MeasuredSubDivisionTerrainPointCount,
+            MeasuredOrderVertexCount,
             perSubDivision,
             GroundLayerWords.For(layer).Label,
             measured.Imports,
@@ -552,7 +663,7 @@ public static class SlowStepNotice
 
     /// <summary>
     /// Rounded seconds the drape's commit took in Revit 2027 with that many subdivisions already on
-    /// their types, on <see cref="MeasuredSubDivisionTerrainPointCount"/> points.
+    /// their types, on <see cref="MeasuredOrderVertexCount"/> points.
     /// </summary>
     /// <remarks>revit/CLAUDE.md's bullet on typed subdivisions records the run.</remarks>
     public const int MeasuredDrapeCommitSeconds = 65;
@@ -594,7 +705,7 @@ public static class SlowStepNotice
             + "Revit will report \"not responding\" until it finishes, and Cancel takes effect when it "
             + "finishes. It has not crashed; leave it alone.",
             subDivisionsOnTheirTypes,
-            MeasuredSubDivisionTerrainPointCount,
+            MeasuredOrderVertexCount,
             MeasuredDrapeCommitSeconds,
             MeasuredDrapeCommitSubDivisions,
             ThisTerrain(terrainPointCount));

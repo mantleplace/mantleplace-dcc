@@ -5,6 +5,9 @@ using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
+/// <summary>The window in front at one moment, and what the core reads off it.</summary>
+internal readonly record struct ForegroundReading(IntPtr Window, ForegroundFacts Facts);
+
 /// <summary>
 /// Reads the window in front and carries out <see cref="ImportWindowStacking"/>'s decision on the
 /// import window's place in the z-order, once before the window is shown and on every change of
@@ -57,19 +60,24 @@ internal sealed class ForegroundWatch : IDisposable
     /// <summary>The window to appear directly behind when the import window is first shown, or zero.</summary>
     private IntPtr _showBehind;
 
-    /// <summary>Stacks the window for what is in front now — before it is shown — and watches from then on.</summary>
+    /// <summary>Stacks the window for what was in front as it opened — before it is shown — and watches from then on.</summary>
     /// <param name="window">The import window's handle. Its thread must pump messages: the hook is delivered there.</param>
     /// <param name="revitWindow">Revit's main window.</param>
+    /// <param name="opening">
+    /// The reading the window decided its focus from (<see cref="ImportWindowStacking.ShowsActivated"/>):
+    /// the same one decides where it goes, so the two cannot disagree over a foreground that changed
+    /// between two reads.
+    /// </param>
     /// <param name="fault">Told of an exception the hook caught, so it can be logged; the watch carries on.</param>
-    internal ForegroundWatch(IntPtr window, IntPtr revitWindow, Action<Exception> fault)
+    internal ForegroundWatch(IntPtr window, IntPtr revitWindow, ForegroundReading opening, Action<Exception> fault)
     {
         _window = window;
         _revitWindow = revitWindow;
         _fault = fault;
         _callback = OnForegroundChanged;
 
-        IntPtr foreground = GetForegroundWindow();
-        Stacking first = ImportWindowStacking.First(FactsOf(foreground, window, revitWindow));
+        IntPtr foreground = opening.Window;
+        Stacking first = ImportWindowStacking.First(opening.Facts);
         _floating = first.Floating;
         if (first.Move == StackingMove.SinkBehindForeground)
         {
@@ -87,9 +95,12 @@ internal sealed class ForegroundWatch : IDisposable
         _hook = SetWinEventHook(EventSystemForeground, EventSystemForeground, IntPtr.Zero, _callback, 0, 0, WinEventOutOfContext);
     }
 
-    /// <summary>The window in front now, as the core reads it — usable before the import window exists.</summary>
-    internal static ForegroundFacts Now(IntPtr importWindow, IntPtr revitWindow)
-        => FactsOf(GetForegroundWindow(), importWindow, revitWindow);
+    /// <summary>The window in front now, and what the core reads off it — usable before the import window exists.</summary>
+    internal static ForegroundReading Read(IntPtr importWindow, IntPtr revitWindow)
+    {
+        IntPtr foreground = GetForegroundWindow();
+        return new ForegroundReading(foreground, FactsOf(foreground, importWindow, revitWindow));
+    }
 
     /// <summary>
     /// Stops floating now, whatever is in front: Revit is about to show a dialog, which must not open

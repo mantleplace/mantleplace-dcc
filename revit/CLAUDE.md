@@ -243,10 +243,8 @@ follow.
     says, before its wait, what it was measured at, per version, and the window shows that beside
     the step's clock; no other step says anything, so the line is worth reading when it appears. The
     threshold is `SlowStepNotice.AnnouncedFromSeconds`, the figures `SlowStepNotice.Measured`, and
-    which steps are quiet follows from them rather than from a list kept by hand. Today that is the
-    terrain built for the drape, the context buildings, the site model's conversion, the polygon layers
-    but water, planting, the site context view, the drape, the flood zones, and the smooth shading
-    committed after the last step. A step is announced only when it has the work that was measured.
+    which steps are quiet follows from them rather than from a list kept by hand. A step is announced
+    only when it has the work that was measured, and the shim hands the core facts, never a decision.
   - **Not sliced for Cancel.** The drape and the polygon layers count their subdivisions inside
     their one slice, but Cancel still lands only between slices: a slice never yields inside an open
     transaction, and slicing them means splitting the transaction, which would change what a
@@ -371,7 +369,7 @@ follow.
   and the material is its type's. Each element is asked which shape it has (`SubDivisionMaterial`),
   and a typed one is moved onto a type of its own with `ChangeTypeId`. This bullet is where what
   that costs is recorded; the code's comments point here, and the import's notices quote it. Every
-  figure below is order `4276ef78` on a 74,855-point terrain unless it says otherwise, and the
+  figure below is order `4276ef78` on a 75,314-point terrain unless it says otherwise, and the
   timing tables are in the pull request that added the move to the cut.
   - **The call is the whole cost of a retype.** Profiled in the drape in 2027, it was 96% of the
     retype loop, a median of 1.74 s a subdivision over 405; every other call around it took

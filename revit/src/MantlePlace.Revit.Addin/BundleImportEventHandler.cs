@@ -289,10 +289,38 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
 
         Action[] held = [.. _heldUntilSliceEnds];
         _heldUntilSliceEnds.Clear();
-        import.Note($"{held.Length:N0} call(s) from the import window arrived while a slice was running, and were held until it ended.");
+        Guarded(import, () => import.Note($"{held.Length:N0} call(s) from the import window arrived while a slice was running, and were held until it ended."));
         foreach (Action callback in held)
         {
+            Guarded(import, callback);
+        }
+    }
+
+    /// <summary>
+    /// Runs one held callback inside the same net as the slice it waited for, so a throw costs that
+    /// callback alone: the rest still run, and the window's refresh, the import's end and the next
+    /// raise still follow.
+    /// </summary>
+    /// <remarks>
+    /// A catch-all for the slice's catch-all's reason (<see cref="Execute"/>): this runs where an
+    /// exception would leave the import unable to advance or close.
+    /// </remarks>
+    private static void Guarded(ActiveImport import, Action callback)
+    {
+        try
+        {
             callback();
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                import.Note($"A call from the import window failed after its slice, and the import went on: {ex.GetType().Name}: {ex.Message}");
+            }
+            catch (Exception)
+            {
+                // The log itself refusing is no reason to strand the import.
+            }
         }
     }
 

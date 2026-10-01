@@ -47,6 +47,15 @@ internal static class SlowStepNoticeTests
     private static string MeasuredTerrainOf(ImportStepKind kind)
         => GroundCuts.LayerOf(kind) is null ? "80,372" : "74,855";
 
+    /// <summary>What the site context step decides, for the notice to read.</summary>
+    private static SiteContextDecision ContextDecision(NamedElementAction view, NamedElementAction filter) => new()
+    {
+        View = view,
+        Filter = filter,
+        ApplyFilterToView = view != NamedElementAction.Refuse && filter != NamedElementAction.Refuse,
+        Explanation = string.Empty,
+    };
+
     internal static int Run()
     {
         TestRun run = new();
@@ -155,6 +164,12 @@ internal static class SlowStepNoticeTests
 
             run.Equal(SlowStepNotice.MeasuredPointCount, 80_372, "the measured reference count");
             run.Equal(SlowStepNotice.MeasuredSubDivisionTerrainPointCount, 74_855, "the polygon layers' measured count");
+
+            // Order 4276ef78, which every figure of the whole-import measurement is: issue 258's table.
+            run.Equal(SlowStepNotice.MeasuredOrderVertexCount, 75_314, "the measured order's terrain");
+            run.Equal(SlowStepNotice.MeasuredOrderBuildings, 1_319, "its site model's buildings");
+            run.Equal(SlowStepNotice.MeasuredOrderPlantings, 19_755, "its trees and shrubs");
+            run.Equal(SlowStepNotice.MeasuredOrderSubDivisions, 405, "its subdivisions"); 
         });
 
         run.Case("every slow notice ends on the same reassurance", () =>
@@ -244,7 +259,7 @@ internal static class SlowStepNoticeTests
                 run.Contains(notice, "40 subdivision(s)", $"{layer}: it names how many are coming");
                 run.Contains(notice, "as it is cut", $"{layer}: it says when the type is given");
                 run.Contains(notice, GroundLayerWords.For(layer).Label, $"{layer}: it names its own layer");
-                run.Contains(notice, "74,855", $"{layer}: the terrain it was measured on");
+                run.Contains(notice, "75,314", $"{layer}: the terrain it was measured on");
                 run.Contains(notice, "This terrain has 12,000 points", $"{layer}: this terrain, beside it");
                 run.Contains(
                     notice,
@@ -305,7 +320,7 @@ internal static class SlowStepNoticeTests
             string? notice = SlowStepNotice.ForDrapeCommit(405, subDivisionsToRetype: 0, terrainRetypes: 0, 12_000);
             run.True(notice is not null, "announced");
             run.Contains(notice, "405 subdivision(s)", "it names how many");
-            run.Contains(notice, "74,855", "the terrain it was measured on");
+            run.Contains(notice, "75,314", "the terrain it was measured on");
             run.Contains(notice, "This terrain has 12,000 points", "this terrain, beside it");
             run.Contains(
                 notice,
@@ -350,6 +365,8 @@ internal static class SlowStepNoticeTests
             run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
             run.Contains(notice, "the import window names this step and keeps its clock running", "it says what the window shows");
             run.True(SlowStepNotice.For(ImportStepKind.LinkSiteIfc, null, 0) is null, "a file already converted is linked in seconds, unannounced");
+            run.Equal(SlowStepNotice.ForSiteModel(convertedFileExists: false), notice, "the shim says whether the converted file exists");
+            run.True(SlowStepNotice.ForSiteModel(convertedFileExists: true) is null, "and the core decides that one there means nothing to say");
         });
 
         run.Case("making the site context view announces itself, and reusing it does not", () =>
@@ -362,36 +379,67 @@ internal static class SlowStepNoticeTests
                 "what it measured at");
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
             run.True(SlowStepNotice.For(ImportStepKind.SiteContextView, null, 0) is null, "an earlier import's view and filter, reused, are not announced");
+
+            run.Contains(
+                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Create, NamedElementAction.Create)),
+                "making the view and its filter",
+                "both made");
+            string? filterOnly = SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Reuse, NamedElementAction.Create));
+            run.Contains(filterOnly, "making the filter", "only the filter made");
+            run.False(filterOnly is not null && filterOnly.Contains("making the view", StringComparison.Ordinal), "and it does not say the view is made");
+            run.Contains(
+                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Create, NamedElementAction.Reuse)),
+                "making the view",
+                "only the view made");
+            run.Contains(filterOnly, "making both took", "the figure is for making both, and says so");
+            run.True(
+                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Reuse, NamedElementAction.Reuse)) is null,
+                "both reused: nothing");
+            run.True(
+                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Refuse, NamedElementAction.Refuse)) is null,
+                "both refused: nothing");
         });
 
         run.Case("the terrain announces itself when it is built for the drape, as the default import builds it", () =>
         {
             // Built on the type that will wear the photograph, its commit took 45 s where on the default
             // type it took 3 s: the drape, ticked by default, is what makes this step slow.
-            string? notice = SlowStepNotice.For(ImportStepKind.ToposurfaceFromSurfaceTin, 74_855, 1);
+            string? notice = SlowStepNotice.For(ImportStepKind.ToposurfaceFromSurfaceTin, 60_000, 1);
             run.Contains(notice, "Next: the terrain", "it names the step");
+            run.Contains(notice, "(75,314 points)", "the order it was measured on");
             run.Contains(
                 notice,
                 "about 26 to 42 seconds in Revit 2025, 57 seconds in Revit 2026 and 60 to 79 seconds in Revit 2027",
                 "what it measured at in full imports");
             run.Contains(notice, "5 to 7 seconds", "and without the drape");
-            run.Contains(notice, "This terrain has 74,855 points", "this terrain");
+            run.Contains(notice, "This terrain has 60,000 points", "this terrain");
             run.Contains(notice, "one commit", "it says where the wait is");
             run.Equal(
-                SlowStepNotice.For(ImportStepKind.ToposurfaceFromPointsFile, 74_855, 1),
+                SlowStepNotice.For(ImportStepKind.ToposurfaceFromPointsFile, 60_000, 1),
                 notice,
                 "the points path says the same as the TIN path");
-            run.True(SlowStepNotice.For(ImportStepKind.ToposurfaceFromSurfaceTin, 74_855, 0) is null, "not built for the drape: unannounced");
+            run.True(SlowStepNotice.For(ImportStepKind.ToposurfaceFromSurfaceTin, 60_000, 0) is null, "not built for the drape: unannounced");
+
+            // The shim says which type the terrain went on; the core decides what that means.
+            run.Equal(
+                SlowStepNotice.ForTerrain(ImportStepKind.ToposurfaceFromSurfaceTin, onImageryType: true, 60_000),
+                notice,
+                "on the imagery type: the notice");
+            run.True(
+                SlowStepNotice.ForTerrain(ImportStepKind.ToposurfaceFromSurfaceTin, onImageryType: false, 60_000) is null,
+                "fallen back to the default type, 5 to 7 s of work: nothing");
         });
 
         run.Case("the context buildings announce the site model's opening, and then count", () =>
         {
-            string? notice = SlowStepNotice.For(ImportStepKind.ContextBuildings, null, 834);
-            run.Contains(notice, "Next: the context buildings — 834", "it names the step and how many");
+            string? notice = SlowStepNotice.For(ImportStepKind.ContextBuildings, null, 1_000);
+            run.Contains(notice, "Next: the context buildings — 1,000", "it names the step and how many");
             run.Contains(
                 notice,
                 "about 34 to 57 seconds in Revit 2025, 32 to 34 seconds in Revit 2026 and 36 to 59 seconds in Revit 2027",
                 "what it measured at");
+            run.Contains(notice, "(1,319 buildings)", "the order it was measured on");
+            run.False(notice is not null && notice.Contains("834", StringComparison.Ordinal), "not another site model's count");
             run.Contains(notice, "opens the site model", "it says where the dark part is");
             run.Contains(notice, "between chunks", "and that Cancel works once the copying starts");
             run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
@@ -406,6 +454,7 @@ internal static class SlowStepNoticeTests
                 notice,
                 "about 206 to 415 seconds in Revit 2025, 266 to 275 seconds in Revit 2026 and 231 to 338 seconds in Revit 2027",
                 "what it measured at in full imports");
+            run.Contains(notice, "(19,755 trees and shrubs)", "the order it was measured on");
             run.Contains(notice, ImportChunking.ElementsPerTransaction.ToString(CultureInfo.InvariantCulture) + " at a time", "the chunk it commits in");
             run.Contains(notice, "next chunk", "where Cancel lands");
         });
@@ -417,14 +466,20 @@ internal static class SlowStepNoticeTests
             run.Contains(notice, "about 33 seconds in Revit 2025, 32 seconds in Revit 2026 and 44 seconds in Revit 2027", "what it measured at");
             run.Contains(notice, "the one bundle", "it says what that was measured on");
             run.True(SlowStepNotice.For(ImportStepKind.SteepGround, null, 32) is null, "steep ground, added to a plan in under a second, is quiet");
+            run.Equal(SlowStepNotice.ForHazardLayer(ImportStepKind.FloodZones, createsPlan: true, 65), notice, "drawn on a new plan: the notice");
+            run.True(
+                SlowStepNotice.ForHazardLayer(ImportStepKind.FloodZones, createsPlan: false, 65) is null,
+                "drawn onto a plan that is already there: not the work that was measured");
+            run.True(SlowStepNotice.ForHazardLayer(ImportStepKind.SteepGround, createsPlan: true, 32) is null, "steep ground stays quiet");
         });
 
         run.Case("smooth shading after the last step announces itself when there are subdivisions to shade", () =>
         {
             // Committed after every row when the drape did not settle it first: 98 to 111 s in Revit
             // 2026 and 2027 with the order's 405 subdivisions, about a second with none.
-            string? notice = SlowStepNotice.ForSmoothShading(405, 74_855);
+            string? notice = SlowStepNotice.ForSmoothShading(405, 60_000);
             run.Contains(notice, "Next: smooth shading", "it names the work");
+            run.Contains(notice, "(75,314 points)", "the order it was measured on");
             run.Contains(notice, "405 subdivision(s)", "and how many it shades");
             run.Contains(
                 notice,
@@ -432,7 +487,7 @@ internal static class SlowStepNoticeTests
                 "what it measured at with 405");
             run.Contains(notice, "about 2 seconds in Revit 2025 and 14 seconds in Revit 2027", "and with 61");
             run.Contains(notice, "one commit", "it says where the wait is");
-            run.True(SlowStepNotice.ForSmoothShading(0, 74_855) is null, "a terrain with no subdivisions is shaded in about a second, unannounced");
+            run.True(SlowStepNotice.ForSmoothShading(0, 60_000) is null, "a terrain with no subdivisions is shaded in about a second, unannounced");
         });
 
         run.Case("a step is announced exactly when it was measured at 30 s or more in some version", () =>
@@ -446,6 +501,22 @@ internal static class SlowStepNoticeTests
                 run.Equal(SlowStepNotice.IsAnnounced(kind), slow, $"{kind} is classified by its measurement");
                 run.Equal(SlowStepNotice.For(kind, 74_855, 5) is not null, slow, $"{kind} has a notice exactly when it is slow");
             }
+        });
+
+        run.Case("the drape over subdivisions that take the photograph on themselves announces itself", () =>
+        {
+            // Revit 2025: a subdivision is typeless and wears the photograph through its own Material,
+            // one at a time, and the drape took 26 to 62 s on the measured order. The other drape
+            // notices are for typed subdivisions and the terrain's retype, so without this the 2025
+            // drape, measured over the threshold, said nothing.
+            string? notice = SlowStepNotice.ForDrapeOnInstances(405, 60_000);
+            run.Contains(notice, "Next: the imagery drape", "it names the step");
+            run.Contains(notice, "405 subdivision(s)", "and how many");
+            run.Contains(notice, "about 26 to 62 seconds in Revit 2025", "what it measured at");
+            run.Contains(notice, "(75,314 points, 405 subdivisions)", "the order it was measured on");
+            run.Contains(notice, "This terrain has 60,000 points", "this terrain");
+            run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
+            run.True(SlowStepNotice.ForDrapeOnInstances(0, 60_000) is null, "no such subdivision: nothing");
         });
 
         run.Case("the water bodies are quiet: seconds in every version", () =>

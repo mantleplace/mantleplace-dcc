@@ -209,11 +209,7 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        // Before the transaction: its commit is where the time goes, and built for the drape that is
-        // tens of seconds where on the default type it is a few.
-        Announce(SlowStepNotice.For(kind, relief.PointCount, toposolidType == TerrainToposolidType.Imagery ? 1 : 0));
-
-        if (!TryBuildTerrain(plan, chosenType, toposolidType, revitPoints, relief, stamp))
+        if (!TryBuildTerrain(kind, plan, chosenType, toposolidType, revitPoints, relief, stamp, announce: true))
         {
             // ⛔ The retry is not defensive coding. Toposolid.Create takes no offset argument, so the
             // height offset can only be written after the element exists — and whether Revit
@@ -224,7 +220,7 @@ internal sealed partial class RevitBundleImporter
             TerrainBasePlan escalated = TerrainBasePlanner.Escalate(plan, relief);
             Say(escalated.Explanation);
 
-            if (!TryBuildTerrain(escalated, chosenType, toposolidType, revitPoints, relief, stamp))
+            if (!TryBuildTerrain(kind, escalated, chosenType, toposolidType, revitPoints, relief, stamp, announce: false))
             {
                 Say("The terrain could not be built on either base plane, so this project has no "
                     + "ground. The rest of the bundle was still imported.");
@@ -244,13 +240,19 @@ internal sealed partial class RevitBundleImporter
     /// attempt rolls the duplicate back with the terrain and the retry finds the document as the
     /// first attempt did.
     /// </remarks>
+    /// <param name="announce">
+    /// Whether to say the step's notice: on the first attempt only, once the type is decided, so it
+    /// names the work this terrain actually has — the imagery type, or the default it fell back to.
+    /// </param>
     private bool TryBuildTerrain(
+        ImportStepKind kind,
         TerrainBasePlan plan,
         CandidateToposolidType type,
         TerrainToposolidType toposolidType,
         IList<XYZ> revitPoints,
         TerrainRelief relief,
-        string stamp)
+        string stamp,
+        bool announce)
     {
         ImportFailureSwallower swallower = new("Building the terrain");
         using Transaction transaction = BeginTransaction("Mantle Place: terrain from points file", swallower);
@@ -269,6 +271,12 @@ internal sealed partial class RevitBundleImporter
                 typeId = imagery.Id;
                 typeName = imagery.Name;
             }
+        }
+
+        // Before the commit, where the time goes: tens of seconds on the imagery type, a few on the default.
+        if (announce)
+        {
+            Announce(SlowStepNotice.ForTerrain(kind, onImageryType: typeId != new ElementId(type.Id), relief.PointCount));
         }
 
         Toposolid terrain = Toposolid.Create(_document, revitPoints, typeId, levelId);

@@ -29,11 +29,7 @@ internal sealed partial class RevitBundleImporter
                 _ => NameHolder.SomethingElse,
             });
 
-        // What was measured is making them; reusing an earlier import's view and filter is not.
-        Announce(SlowStepNotice.For(
-            ImportStepKind.SiteContextView,
-            null,
-            (decision.View == NamedElementAction.Create ? 1 : 0) + (decision.Filter == NamedElementAction.Create ? 1 : 0)));
+        Announce(SlowStepNotice.ForSiteContextView(decision));
 
         ImportFailureSwallower swallower = new("Making the site context view");
         using Transaction transaction = BeginTransaction("Mantle Place: site context view", swallower);

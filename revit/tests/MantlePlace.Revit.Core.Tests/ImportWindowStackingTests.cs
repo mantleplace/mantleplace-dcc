@@ -167,21 +167,29 @@ internal static class ImportWindowStackingTests
 
         run.Case("a minimised Revit is placed where it will restore to, on the screen", () =>
         {
-            // Windows keeps a minimised window's restored place in workspace coordinates: from the top
-            // left of its monitor's work area, which a taskbar on the left or the top moves.
+            // Windows keeps a minimised window's restored place in screen coordinates less its monitor's
+            // work-area inset: a taskbar on the left or the top of that monitor shifts it, nothing else.
+            ScreenRect primary = new(0, 0, 1920, 1080);
+            ScreenRect primaryWork = new(60, 0, 1860, 1080);
             ScreenRect normal = new(100, 50, 800, 600);
-            ScreenRect workArea = new(60, 0, 1860, 1080);
             run.True(
-                ImportWindowPlacement.Restored(normal, workArea, restoresMaximised: false) == new ScreenRect(160, 50, 800, 600),
-                "offset by the work area's corner");
+                ImportWindowPlacement.Restored(normal, primaryWork, primary, restoresMaximised: false) == new ScreenRect(160, 50, 800, 600),
+                "a taskbar on the left: shifted by its width");
             run.True(
-                ImportWindowPlacement.Restored(normal, workArea, restoresMaximised: true) == workArea,
+                ImportWindowPlacement.Restored(normal, primaryWork, primary, restoresMaximised: true) == primaryWork,
                 "one that restores maximised fills the work area");
 
-            ScreenRect secondMonitor = new(1920, -1080, 1920, 1040);
+            // Probed on a machine with a second monitor above the first: a Revit restored at the upper
+            // monitor's corner keeps that corner as its restored place, and the work area is the monitor.
+            ScreenRect upper = new(641, -2160, 3840, 2160);
             run.True(
-                ImportWindowPlacement.Restored(new ScreenRect(10, 20, 400, 300), secondMonitor, restoresMaximised: false) == new ScreenRect(1930, -1060, 400, 300),
-                "on a monitor above and to the right of the first");
+                ImportWindowPlacement.Restored(new ScreenRect(641, -2160, 1200, 800), upper, upper, restoresMaximised: false) == new ScreenRect(641, -2160, 1200, 800),
+                "on the upper monitor, with no taskbar, it is where it was");
+
+            ScreenRect upperWithTaskbarOnTop = new(641, -2112, 3840, 2112);
+            run.True(
+                ImportWindowPlacement.Restored(new ScreenRect(700, -2000, 1200, 800), upperWithTaskbarOnTop, upper, restoresMaximised: false) == new ScreenRect(700, -1952, 1200, 800),
+                "on the upper monitor with a taskbar along its top, shifted by the taskbar alone");
         });
 
         return run.Report("import window stacking");

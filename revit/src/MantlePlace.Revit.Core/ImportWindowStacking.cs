@@ -242,17 +242,24 @@ public static class ImportWindowPlacement
     /// Where a minimised window will be when it is restored, on the screen, in device pixels.
     /// </summary>
     /// <param name="normalInWorkspace">
-    /// Its restored rectangle as Windows keeps it, in workspace coordinates: from the top-left corner
-    /// of the work area of the monitor it is on.
+    /// Its restored rectangle as Windows keeps it, in workspace coordinates: screen coordinates less the
+    /// inset of its monitor's work area from that monitor — a taskbar on the left or the top of that
+    /// monitor, and nothing else.
     /// </param>
     /// <param name="workArea">That monitor's work area — the monitor less its taskbar — on the screen.</param>
+    /// <param name="monitor">That monitor, on the screen.</param>
     /// <param name="restoresMaximised">Whether it restores maximised, filling that work area.</param>
-    public static ScreenRect Restored(ScreenRect normalInWorkspace, ScreenRect workArea, bool restoresMaximised)
+    /// <remarks>
+    /// Not offset by the work area's whole corner: on a monitor above the first, at (641, -2160), a
+    /// window restored at that corner keeps (641, -2160) as its restored place, and adding the corner
+    /// again would put it at (1282, -4320), off every screen.
+    /// </remarks>
+    public static ScreenRect Restored(ScreenRect normalInWorkspace, ScreenRect workArea, ScreenRect monitor, bool restoresMaximised)
         => restoresMaximised
             ? workArea
             : normalInWorkspace with
             {
-                Left = normalInWorkspace.Left + workArea.Left,
-                Top = normalInWorkspace.Top + workArea.Top,
+                Left = normalInWorkspace.Left + (workArea.Left - monitor.Left),
+                Top = normalInWorkspace.Top + (workArea.Top - monitor.Top),
             };
 }

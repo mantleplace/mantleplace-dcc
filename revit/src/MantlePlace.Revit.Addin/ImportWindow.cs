@@ -54,6 +54,9 @@ internal sealed class ImportWindow : Window
     private readonly Action<string> _note;
     private readonly IntPtr _revitWindow;
 
+    /// <summary>What was in front as the window opened: read once, for its focus and its first place alike.</summary>
+    private readonly ForegroundReading _opening;
+
     private readonly Dictionary<ImportLayer, CheckBox> _boxes = [];
     private readonly Dictionary<ImportLayer, TextBlock> _notes = [];
     private readonly Border _body = new() { Margin = new Thickness(0, 8, 0, 0) };
@@ -119,7 +122,8 @@ internal sealed class ImportWindow : Window
         // ⛔ No owner (revit/CLAUDE.md). Without one it needs a taskbar button of its own to be found
         // again behind something else (revit/README.md).
         ShowInTaskbar = true;
-        ShowActivated = ImportWindowStacking.ShowsActivated(ForegroundWatch.Now(IntPtr.Zero, _revitWindow));
+        _opening = ForegroundWatch.Read(IntPtr.Zero, _revitWindow);
+        ShowActivated = ImportWindowStacking.ShowsActivated(_opening.Facts);
         PlaceOver(_revitWindow);
 
         _tick = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = ClockTick };
@@ -140,6 +144,7 @@ internal sealed class ImportWindow : Window
         SourceInitialized += (_, _) => _foreground ??= new ForegroundWatch(
             new WindowInteropHelper(this).Handle,
             _revitWindow,
+            _opening,
             fault => _note($"The import window could not restack itself: {fault.GetType().Name}: {fault.Message}"));
         Closed += (_, _) =>
         {
@@ -241,7 +246,7 @@ internal sealed class ImportWindow : Window
     /// <summary>Brings the window forward, for a second click on Import Bundle — never over a Revit modal.</summary>
     internal void BringForward()
     {
-        if (!ImportWindowStacking.BringsForward(ForegroundWatch.Now(new WindowInteropHelper(this).Handle, _revitWindow)))
+        if (!ImportWindowStacking.BringsForward(ForegroundWatch.Read(new WindowInteropHelper(this).Handle, _revitWindow).Facts))
         {
             return;
         }

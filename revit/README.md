@@ -316,7 +316,7 @@ Cancel pressed then takes effect when it finishes. The window does not stop with
 thread of its own, so through a commit it names the step, says Revit is committing and keeps the
 step's clock running (`Road Subdivisions: Revit is committing, 4 min 10 s`), and a Cancel pressed then
 is shown at once. Every step measured at 30 s or more says first what it took on the order it was
-measured on, per Revit version, and the window shows that beside the clock. The drape and the polygon
+measured on, and the window shows that beside the clock. The drape and the polygon
 layers count their subdivisions as they go (`Imagery Drape: 120 of 405`), though Cancel still waits
 for the step to finish, and smooth shading committed after the last step reads `Finishing`.
 
