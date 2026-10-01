@@ -79,6 +79,14 @@ internal sealed class ImportWindow : Window
         Visibility = Visibility.Collapsed,
     };
 
+    // Below the rows: what each ticked slow box was measured to cost (ImportChecklist.SlowLayerWarnings).
+    private readonly TextBlock _slowLayers = new()
+    {
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(0, 6, 0, 0),
+        Visibility = Visibility.Collapsed,
+    };
+
     private readonly Button _import = new() { Content = WindowLabels.Import, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
     private readonly Button _cancel = new() { Content = WindowLabels.Cancel, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
     private readonly Button _close = new() { Content = WindowLabels.Close, Padding = new Thickness(12, 4, 12, 4), Visibility = Visibility.Collapsed };
@@ -374,6 +382,7 @@ internal sealed class ImportWindow : Window
         StackPanel panel = new();
         panel.Children.Add(new TextBlock { Text = WindowLabels.IncludeHeading, FontWeight = FontWeights.SemiBold });
         panel.Children.Add(rows);
+        panel.Children.Add(_slowLayers);
 
         // Below the boxes, and never a box itself: what the bundle holds and this import cannot
         // offer, said before anything runs. Nothing at all for a bundle with nothing withheld.
@@ -414,6 +423,10 @@ internal sealed class ImportWindow : Window
         _refreshing = true;
         try
         {
+            IReadOnlyList<string> slow = _checklist.SlowLayerWarnings;
+            _slowLayers.Text = string.Join(Environment.NewLine, slow);
+            _slowLayers.Visibility = slow.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
             foreach (ImportLayer layer in _checklist.Layers)
             {
                 _boxes[layer].IsChecked = _checklist.IsChecked(layer);

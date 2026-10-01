@@ -90,7 +90,7 @@ public static class ImportLayers
     /// <summary>Whether a layer's box starts checked.</summary>
     /// <remarks>
     /// <para>
-    /// Every layer but four, each with the stated reason <c>HPS-51</c> asks for before a row starts
+    /// Every layer but seven, each with the stated reason <c>HPS-51</c> asks for before a row starts
     /// unchecked. The two hazard layers: the curator this import is made for is the visualiser
     /// presenting a render, and a hazard plan is for someone planning the site; both are one tick
     /// away, and neither touches the model a render is made from.
@@ -104,14 +104,24 @@ public static class ImportLayers
     /// (<c>docs/adr/0013-revit-published-contours-are-directshapes.md</c>).
     /// </para>
     /// <para>
+    /// The land use, land cover and road surfaces, the boxes <see cref="SlowStepNotice.IsSlowBox"/>
+    /// names: on the order they were measured on, they were nearly all of what a full import with
+    /// every box ticked took beyond the default import (the figures, through the import window, are
+    /// <c>revit/README.md</c>'s; each box's own is <see cref="SlowStepNotice.Measured"/>'s). A curator
+    /// who wants them ticks them, and the checklist then says what each was measured to cost
+    /// (<see cref="ImportChecklist.SlowLayerWarnings"/>). The water bodies stay ticked: they took
+    /// seconds.
+    /// </para>
+    /// <para>
     /// The unattended path does not read it: it imports everything
-    /// (<see cref="ImportLayerChoice.All"/>), the link included, because the standard says an import
-    /// nobody is there to choose for brings in everything.
+    /// (<see cref="ImportLayerChoice.All"/>), the link and the slow layers included, because the
+    /// standard says an import nobody is there to choose for brings in everything.
     /// </para>
     /// </remarks>
     public static bool OnByDefault(ImportLayer layer)
         => layer is not (ImportLayer.SiteModel or ImportLayer.PublishedContours
-            or ImportLayer.FloodZones or ImportLayer.SteepGround);
+                or ImportLayer.FloodZones or ImportLayer.SteepGround)
+            && !SlowStepNotice.IsSlowBox(layer);
 }
 
 /// <summary>Which layers an import brings in. Immutable.</summary>
@@ -161,6 +171,7 @@ public sealed record UnavailableLayers(IReadOnlyList<ImportLayer> Layers, string
 public sealed class ImportChecklist
 {
     private readonly HashSet<ImportLayer> _wanted;
+    private readonly string? _revitVersionNumber;
 
     /// <param name="carried">The layers the bundle has a step for. Nothing else is offered.</param>
     public ImportChecklist(IEnumerable<ImportLayer> carried)
@@ -170,24 +181,45 @@ public sealed class ImportChecklist
 
     /// <param name="carried">The layers the bundle has a step for. Nothing else is offered.</param>
     /// <param name="skipped">The plan's skips, which say why a layer that is not offered is not.</param>
-    public ImportChecklist(IEnumerable<ImportLayer> carried, IEnumerable<SkippedImport> skipped)
+    /// <param name="revitVersionNumber">
+    /// <c>Application.VersionNumber</c>, which picks the measurement a slow box warns with
+    /// (<see cref="SlowLayerWarnings"/>); <c>null</c> when it is not known.
+    /// </param>
+    public ImportChecklist(IEnumerable<ImportLayer> carried, IEnumerable<SkippedImport> skipped, string? revitVersionNumber = null)
     {
         ArgumentNullException.ThrowIfNull(carried);
         ArgumentNullException.ThrowIfNull(skipped);
 
         Layers = [.. carried.Distinct().Order()];
         _wanted = [.. Layers.Where(ImportLayers.OnByDefault)];
+        _revitVersionNumber = revitVersionNumber;
         Unavailable = UnavailableFrom(Layers, skipped);
     }
 
     /// <summary>The checklist for everything a plan made with <see cref="ImportLayerChoice.All"/> would build.</summary>
-    public static ImportChecklist For(BundleImportPlan plan)
+    /// <param name="plan">The plan made with every layer.</param>
+    /// <param name="revitVersionNumber"><c>Application.VersionNumber</c>, or <c>null</c> when it is not known.</param>
+    public static ImportChecklist For(BundleImportPlan plan, string? revitVersionNumber = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         return new ImportChecklist(
             plan.Steps.Select(step => ImportLayers.Of(step.Kind)).OfType<ImportLayer>(),
-            plan.Skipped);
+            plan.Skipped,
+            revitVersionNumber);
     }
+
+    /// <summary>
+    /// What the window says below the rows while a slow box is ticked: one line per ticked slow box,
+    /// in the order the rows run, each with what it was measured to cost in this Revit. Empty when
+    /// none is ticked, which is how the window opens.
+    /// </summary>
+    /// <remarks>
+    /// Only a box that shows ticked warns, so unticking the terrain takes its dependents' warnings
+    /// with it and ticking it again gives them back with the ticks. The words and the figures are
+    /// <see cref="SlowStepNotice.ForTickedBox"/>'s.
+    /// </remarks>
+    public IReadOnlyList<string> SlowLayerWarnings
+        => [.. Layers.Where(IsChecked).Select(layer => SlowStepNotice.ForTickedBox(layer, _revitVersionNumber)).OfType<string>()];
 
     /// <summary>The rows, in the order the steps run.</summary>
     public IReadOnlyList<ImportLayer> Layers { get; }

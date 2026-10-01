@@ -262,11 +262,18 @@ yours. Then the checklist: one box for each
 layer the bundle carries (`Terrain`, `Published Contours`, `Context Buildings`, `Site Model`,
 `Road Centrelines`, `Land Use Subdivisions`, `Land Cover Subdivisions`, `Water Subdivisions`,
 `Road Subdivisions`, `Planting`, `Flood Zones`, `Steep Ground`, `Imagery Drape`), all ticked but
-four. `Site Model` links the site model, whose buildings `Context Buildings` has already copied in,
+seven. `Site Model` links the site model, whose buildings `Context Buildings` has already copied in,
 and ticking both shows every building twice. `Published Contours` is for a curator who wants the
 order's own linework: the toposolid already draws contours of its own. `Flood Zones` and
 `Steep Ground` draw a hazard plan, which is for planning the site rather than rendering it, so they
-wait to be asked for. Nothing runs until `Import` is pressed. Every kind of subdivision and the drape need the terrain, so unticking `Terrain` disables
+wait to be asked for. `Land Use Subdivisions`, `Land Cover Subdivisions` and `Road Subdivisions`
+are most of a full import's time. On the order they were measured on, through the import window,
+an import with every box ticked took 44 to 51 minutes across Revit 2025, 2026 and 2027, and the
+default import, with these three unticked, about five. Ticking one says below the
+list what it was measured to cost in the Revit you are running, and with what else ticked. Land
+cover costs more than its own step, because every subdivision cut after it takes longer. Nothing
+remembers a tick from one import to the next, so a box you ticked last time starts unticked again.
+Nothing runs until `Import` is pressed. Every kind of subdivision and the drape need the terrain, so unticking `Terrain` disables
 them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
 out creates nothing, and the log says it was left out by choice. The shared coordinates, the site
 location and the attribution are not layers and are written whatever is ticked. Leaving out the drape also builds the

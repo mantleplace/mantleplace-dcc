@@ -73,7 +73,7 @@ internal sealed class ActiveImport : IDisposable
         _importer.CommitEnded += () => Tell(staged => staged.CommitEnded());
         _importer.Announced += notice => Tell(staged => staged.Announce(notice));
         _importer.Counted += progress => Tell(staged => staged.ReportProgress(progress));
-        Checklist = ImportChecklist.For(plan);
+        Checklist = ImportChecklist.For(plan, application.VersionNumber);
         DeliveryLine = DeliveryHeader.Describe(manifest.Delivery);
         UnitsDisagreement = DeliveryHeader.DisplayDisagreement(manifest.Delivery, LengthUnitTypeId(document));
     }

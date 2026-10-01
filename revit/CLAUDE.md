@@ -398,7 +398,11 @@ follow.
     to 5 to 9 s from 306 to 334 s, the polygon commits were no slower (land cover 40 to 42 s against
     74 to 80 s), and the import took 391 and 424 s against 570 and 630 s. In 2025 the commit moved
     likewise at 0.7 to 0.8 s from 1.9 s, the polygon commits were no slower, and the import took
-    617 and 643 s against 641 and 753 s, inside 2025's own spread. 2026 has not been timed with it.
+    617 and 643 s against 641 and 753 s, inside 2025's own spread. 2026 has since been timed with
+    it, beside 2027: full imports with every box ticked, through the import window at `fbfce41`,
+    which carries both this move and the cut-time typing above. Both versions took less time than
+    their window runs before either change, and those runs do not separate the two changes. Their
+    per-step figures are `SlowStepNotice.Measured`'s.
     Smoothing is the curator's project-wide setting
     (ADR 0008): a cancelled import already turned it on as it ended, and an import that fails after
     its first polygon step, which ends without that last step, now leaves it on where it used to
