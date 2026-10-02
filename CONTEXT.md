@@ -159,6 +159,14 @@ Bringing a bundle the user already holds into the open document. Deliberately re
 sign-in and no server call — it is not a vault operation and must never acquire one.
 _Avoid_: load, ingest, sync
 
+**Fidelity level**:
+One of the published versions of a deliverable in a bundle, from most to least: MAX, MED and MIN. A
+curator chooses one at import. MAX is the deliverable in full. A lower level holds less of it, or
+holds it coarser, from the same source data, and so is never less accurate. A deliverable that
+publishes no levels has only MAX. "Quality" is avoided because a bundle's quality already means its
+data, and "tier" because a delivery tier and a source tier are something else.
+_Avoid_: scale, tier, quality, LOD, resolution, detail level
+
 ### Orders and builds
 
 These two were one word for a long time, and a host plugin that keys anything on the wrong one
