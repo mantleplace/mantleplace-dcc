@@ -5,6 +5,10 @@ everything in it is world-readable.**
 
 Read that line before running any write command. Both halves matter — see "The three rules" below.
 
+Maintainer agent sessions follow the Mantle Place agent standard for workflow — worktrees, branches,
+issues, landing, finishing a session — loaded by the maintainers' tooling at session start. This file
+holds what is specific to this repository; nothing a contributor needs lives only in that standard.
+
 ## Identity
 
 | | |
@@ -109,19 +113,11 @@ This applies to any consumer of this repo. The Mantle Place project tree mounts 
 path UE's recursive plugin scan finds it on — and documents the full loop on its side. The rule
 above is what matters wherever you are.
 
-## Worktrees and branches
+## Worktrees
 
-Worktrees are created by hand with `git worktree add ../<dir> -b <type>/<short-description>`, as
-**siblings of `main`** — never inside the repository. The directory name is the branch name with `/`
-replaced by `-`, so the folder always names the branch it holds; a folder whose name does not resolve
-to its branch is a defect, not a style choice. **Do not use `claude --worktree` or the
-`EnterWorktree` tool here:** both are hard-coded to `<repo-root>/.claude/worktrees/<name>` and to a
-branch named `worktree-<name>`, neither is configurable, and the location rule has teeth here — this
-tree is mounted inside a consuming Unreal project's `Plugins/` directory, where plugin discovery is a
-recursive scan, so a worktree under the repo root would put a second `MantlePlace.uplugin` inside
-that scan. Retire a worktree when its pull request merges — `git worktree remove <dir>` then
-`git branch -d <branch>`. Nothing does this for you: Claude Code's periodic sweep removes only the
-worktrees it created itself and never touches one made with `git worktree add`.
+A worktree goes beside the checkout, **never inside the repository**: this tree is mounted inside a
+consuming Unreal project's `Plugins/` directory, where plugin discovery is a recursive scan, so a
+worktree under the repo root puts a second `MantlePlace.uplugin` inside that scan.
 
 ## Releases
 
@@ -185,26 +181,13 @@ keep it on `main`:
   `MANTLEPLACE_CONSUMING_PROJECT_ROOT` names the consuming project, and that is fine on any machine that has none.
 - **A session that merges a pull request touching `revit/` or `unreal/` deploys from `main` before
   it finishes**: pull `main`, run `revit/tools/Deploy-MantlePlaceRevit.ps1` there and
-  `unreal/tools/Refresh-UnrealInstall.ps1`, and report the stamp each printed. Revit refuses while
-  Revit is open; that refusal is an item under test (2) below, reported as such, never skipped
+  `unreal/tools/Refresh-UnrealInstall.ps1`, and report the stamp each printed. The session is not
+  finished until each touched host's install is `main` again. Revit refuses while Revit is open;
+  that refusal is reported as a leftover the session lacked the access to clear, never skipped
   silently. The first launch of a new Revit build is a human's — see `revit/README.md`.
 - **A preview from a branch happens only when the founder asks for it in that session.** It is
   stamped as a preview, the deploy script says so, and the slot returns to `main` at the next
   post-merge deploy. Nothing deploys from a branch by default.
-
-## Finishing a session
-
-A session finishes what it starts. An item may outlive the session only if it (1) needs a decision
-only the founder can make, (2) needs access the agent does not have, (3) touches a file this repo's
-law forbids editing, or (4) sits outside the session's working tree, where fixing it would put
-unrelated changes in the diff. Nothing else qualifies — not size, not risk, not "the founder might
-not want it." Where checks exist, closed out means the checks pass; if they cannot be made to pass,
-that is (2), and it is raised when it is hit, not at the end. A merge that touched a host's folder
-is not closed out until that host's local install is `main` again ("Local installs" above), or the
-refusal is reported under (2). There is no standing "next steps" or
-"outstanding" section: one appears only when an item passes one of the four tests or the founder
-asks, and each item names the test it claims. Work resolved on the agent's own judgment is disclosed
-in writing (commit body, ledger, or manifest), never saved up for the closing message.
 
 ## CI
 
@@ -328,8 +311,9 @@ contains.
 - **Issue tracker** → [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). GitHub issues
   on `mantleplace/mantleplace-dcc`, via `gh`; external PRs are **not** a triage surface.
 - **Triage labels** → [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md). Five state
-  roles and two categories, each label string equal to its own name; plus the stale-job exemptions,
-  the `wayfinder:` planning family, and the `host:` labels saying which plugin an issue is about —
-  all three orthogonal to the category-and-state pair, and `host:` may repeat.
+  roles and two categories, each label string equal to its own name; plus the `spec` parent label,
+  which takes a state's place, and the stale-job exemptions, the `wayfinder:` planning family and the
+  `host:` labels saying which plugin an issue is about — those three orthogonal to the
+  category-and-state pair, and `host:` may repeat.
 - **Domain docs** → [`docs/agents/domain.md`](docs/agents/domain.md). Single-context: one
   [`CONTEXT.md`](CONTEXT.md) and one [`docs/adr/`](docs/adr/), both cross-host.

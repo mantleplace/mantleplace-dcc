@@ -1,6 +1,6 @@
 ---
 name: triage-labels
-description: Maps the skills' five canonical triage state roles and two categories to the label strings that actually exist on this tracker, and names the labels that are not triage roles at all, and the separate wayfinder family used for planning work. Read before applying, removing or reasoning about a label.
+description: Maps the skills' five canonical triage state roles and two categories to the label strings that actually exist on this tracker, the `spec` label a parent spec carries in place of a state, the labels that are not triage roles at all, and the separate wayfinder family used for planning work. Read before applying, removing or reasoning about a label.
 ---
 
 # Triage labels
@@ -25,7 +25,15 @@ maps those roles to the label strings that actually exist on this repo's tracker
 | `bug`          | `bug`                | Something is broken        |
 | `enhancement`  | `enhancement`        | New feature or improvement |
 
-Every triaged issue carries exactly one category and one state.
+Every triaged issue carries exactly one category and one state, except a parent spec.
+
+## Spec
+
+`spec` marks a parent spec: an effort that spans several pull requests. It carries its category and
+`spec`, and **no state** — `spec` takes the state's place. Its tickets are native sub-issues, each a
+normal triaged issue with its own category and state. The parent closes when its last sub-issue
+closes. A spec one pull request can deliver is its own ticket and gets no `spec` label. It is not
+exempt from the stale job; a spec expected to run past the stale window wants `tracking` as well.
 
 ## Labels that are not triage roles
 

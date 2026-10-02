@@ -23,7 +23,7 @@ disagree with each other, which is exactly why none of them is the test.
 
 Applied here: if the deliverable is a file under [`unreal/`](../../unreal/),
 [`revit/`](../../revit/), [`spec/`](../../spec/), [`tools/`](../../tools/) or [`docs/`](../), it is
-this repository's work and it gets an issue here. If the deliverable is a level, a rendered image, a
+this repository's work and it is tracked here. If the deliverable is a level, a rendered image, a
 packaged application, a private test fixture, a build gate that needs a licensed install, or a
 document that governs more than one repository, it is not, whatever it is about.
 
