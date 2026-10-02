@@ -134,7 +134,7 @@ _Enforcer:_ `agent-review`.
 ## 2. Authentication (`HPS-04` … `HPS-13`)
 
 Spec source: `FMantlePlaceAuthLogic`
-(`unreal/Plugins/MantlePlaceDcc/unreal/MantlePlace/Source/MantlePlaceRuntime/Private/MantlePlaceAuthLogic.{h,cpp}`).
+(`unreal/MantlePlace/Source/MantlePlaceRuntime/Private/MantlePlaceAuthLogic.{h,cpp}`).
 Corpus: `auth.pkceVectors`, `auth.callbackQueryVectors`, `auth.tokenResponseVectors`,
 `auth.stateMachine`.
 
@@ -265,7 +265,7 @@ _Enforcer:_ `agent-review`.
 ## 3. Secret store (`HPS-14` … `HPS-17`)
 
 Spec source: `IMantlePlaceSecretStore`
-(`unreal/Plugins/MantlePlaceDcc/unreal/MantlePlace/Source/MantlePlaceRuntime/Private/MantlePlaceSecretStore.{h,cpp}`).
+(`unreal/MantlePlace/Source/MantlePlaceRuntime/Private/MantlePlaceSecretStore.{h,cpp}`).
 
 ⛔ **`HPS-14` — The refresh token is persisted encrypted, scoped to the operating-system user, or
 it is not persisted at all.** Plaintext on disk is never an option, and neither is
@@ -303,7 +303,7 @@ _Enforcer:_ `agent-review`.
 ## 4. Vault client (`HPS-18` … `HPS-25`, `HPS-48`, `HPS-55`)
 
 Spec source: `FMantlePlaceVaultLogic`
-(`unreal/Plugins/MantlePlaceDcc/unreal/MantlePlace/Source/MantlePlaceRuntime/Private/MantlePlaceVaultLogic.{h,cpp}`).
+(`unreal/MantlePlace/Source/MantlePlaceRuntime/Private/MantlePlaceVaultLogic.{h,cpp}`).
 Corpus group: `vault`.
 
 **`HPS-18` — The vault surface is list → materialize → poll → re-list → presign → download.** A
@@ -477,7 +477,7 @@ _Enforcer:_ `agent-review`, plus a pure-core test where a host has one.
 ## 5. Bundle cache and integrity (`HPS-26` … `HPS-30`, `HPS-44`)
 
 Spec source: `FMantlePlaceBundleCacheLogic`
-(`unreal/Plugins/MantlePlaceDcc/unreal/MantlePlace/Source/MantlePlaceRuntime/Private/MantlePlaceBundleCacheLogic.{h,cpp}`).
+(`unreal/MantlePlace/Source/MantlePlaceRuntime/Private/MantlePlaceBundleCacheLogic.{h,cpp}`).
 Corpus: `cache.validityTruthTable`, `cache.keySanitisation`, `digest.sha256Vectors`.
 
 ⛔ **`HPS-26` — Downloads are written to a `.part` file and promoted by rename only after they
@@ -585,7 +585,7 @@ _Enforcer:_ `agent-review`.
 ## 6. Manifest consumption (`HPS-31` … `HPS-37`, `HPS-45`, `HPS-47`)
 
 Spec source: `MantlePlaceImportManifest`
-(`unreal/Plugins/MantlePlaceDcc/unreal/MantlePlace/Source/MantlePlaceEditor/Private/MantlePlaceImportManifest.{h,cpp}`).
+(`unreal/MantlePlace/Source/MantlePlaceEditor/Private/MantlePlaceImportManifest.{h,cpp}`).
 Corpus group: `manifest`.
 
 ⛔ **`HPS-31` — Clean break: a host supports exactly one manifest version, declares that floor in
@@ -790,7 +790,7 @@ green.
 
 > **The reader's semantics are their own rule.** How a reader consumes the corpus — what it must
 > assert, how it fails, and the self-test it must pass — is `HPS-46`. The reference reader is
-> `unreal/Plugins/MantlePlaceDcc/unreal/MantlePlace/Source/MantlePlaceRuntime/Public/Tests/MantlePlaceConformanceCorpus.h`
+> `unreal/MantlePlace/Source/MantlePlaceRuntime/Public/Tests/MantlePlaceConformanceCorpus.h`
 > (no dependencies beyond the engine's JSON module); every host re-implements it, permanently
 > (`HPS-46` — the reader is carved out of `HPS-43`'s extraction trigger).
 
