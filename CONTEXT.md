@@ -160,13 +160,13 @@ sign-in and no server call — it is not a vault operation and must never acquir
 _Avoid_: load, ingest, sync
 
 **Fidelity level**:
-One of the four published versions of a deliverable in a bundle, from most to least: RAW, MAX, MED
+One of the four versions of a deliverable that a bundle carries, from most to least: RAW, MAX, MED
 and MIN. A curator chooses one for each category when downloading or importing, never when ordering.
 MAX is the deliverable in full, within what a host can import. RAW is the source data with nothing
 capped. MED and MIN hold less of it, or hold it coarser, from the same source data: a level may leave
 elements out, or coarsen a surface and state how far it deviates, but it never moves, invents or
 reclassifies anything. "Quality" is avoided because a bundle's quality already means its data, and
-"tier" because a delivery tier and a source tier are something else.
+"tier" because a **delivery tier** is something else.
 _Avoid_: scale, tier, quality, LOD, resolution, detail level
 
 ### Orders and builds
