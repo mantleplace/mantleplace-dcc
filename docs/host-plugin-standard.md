@@ -52,7 +52,7 @@ host met the contract for real:
 | **v1.1** | `HPS-46` … `HPS-48` — reader semantics, materialization signals, error-body precedence |
 | **v1.2** | `HPS-46a`/`HPS-46b` — vector-row and nested-expectation coverage, found by the second host completing the `auth`, `vault`, `cache` and `digest` groups; `HPS-46b` became ⛔ once the corpus obstruction it named was gone |
 | **v1.3** | `HPS-06` requires an OS-assigned callback port, `HPS-06a` adds the declared-list override — the declared range it previously mandated was unbindable on any machine whose reserved blocks happened to cover it |
-| **v1.4** | `HPS-24` rewritten over the platform's full four-outcome start response, `HPS-25a` added for delivery-derived polling. The old wording described a two-outcome start and a job-status poll, and **both hosts were built to it** — so a materialize that named no job read as a failure, and a poll carrying no status word read as five errors in a row |
+| **v1.4** | `HPS-24` rewritten over the platform's full four-outcome start response, `HPS-25a` added for delivery-derived polling. The old wording described a two-outcome start and a job-status poll, and **both hosts were built to it** — so a materialize that named no job read as a failure, and a poll carrying no status word read as five errors in a row. The fourth outcome, queued, was retired in v1.17 |
 | **v1.5** | ⛔`HPS-49` — the presign request states its payload explicitly. The same flow, once past the start and the poll, died on a schema rejection: one host had been sending an empty body and the other a deprecated whole-bundle alias. Both had been green throughout, because the corpus pinned presign RESPONSES and never the request |
 | **v1.6** | ⛔`HPS-50` — a host's local install is a single slot that tracks `main`, and says what it holds. The installed Revit add-in on the maintainer machine predated a full day of ribbon commits and the consuming project's Unreal checkout sat twenty commits behind; nothing detected either, because nothing said what was installed |
 | **v1.7** | `HPS-51` — the shared user-facing actions carry one set of words in every host, and a host construct carries the host's own noun. Unreal's panel said `Sign In` and `Sign Out`, Revit's ribbon said `Sign in` and `Sign out`, and Revit's vault window said `Remove download`; nothing said which of those words were shared, so each host went on naming the same actions by itself |
@@ -65,6 +65,7 @@ host met the contract for real:
 | **v1.14** | `HPS-51` gains a tenth action, saying before a bundle import runs what the bundle holds and the import cannot offer. Revit's checklist was built from the plan, so a layer the planner skipped never became a row: the curator saw a shorter list and no reason, and read the reason only in the closing report, in the planner's words, EPSG codes included. The list that fixed it speaks to the user and leaves the technical sentence to the log, and the reference host's roadmapped picker will meet the same bundles, so its words were fixed here first |
 | **v1.15** | `HPS-55` — a vault listing nobody asked for is bounded. Revit began telling the curator about orders they never prepared from it, which means listing the vault in the background on every signed-in session; nothing in the standard bounded a request the curator did not make, and the only polling rule, `HPS-25`, is about a job someone is waiting on |
 | **v1.16** | ⛔`HPS-53` — a frame names its **vertical datum** as well as its CRS and its unit, and a height whose datum is not the one the host's ground is in is refused by name, never converted. MPB 1.8.0 moved a US order's heights in the delivery CRS from EGM2008 to NAVD88 (GEOID18) and stated the datum beside each of them. The fixed-frame host's road layer already refused by datum. The order-frame host read the strings and acted on none, which is right within one bundle and wrong across two: a re-import of the 1.8.0 rebuild over a ground from an earlier build put roads, trees, contours and buildings up to a metre off that ground, and the import reported success |
+| **v1.17** | ⛔`HPS-24` drops the queued outcome, and `HPS-36` and `HPS-47` name the keys MPB 1.0.0 reads. The platform retired the queued arm, so an order whose core build has not finished now answers a `not_ready` error; and MPB 1.0.0 folded the top-level `dcc_readiness` into `hosts.<hostId>.readiness`. Both hosts already read the new keys, and the queued arm left only dead code behind it, while the rule text still sent a new host to a start outcome that never arrives and to keys no bundle carries |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -368,7 +369,7 @@ the explicit array. Each host substitutes its own token list; only the shape is 
 
 _Enforcer:_ `automation-test` (corpus `vault.materializeTokenList`) + `agent-review`.
 
-⛔ **`HPS-24` — A materialize start has FOUR outcomes, each recognised by its own marker in the
+⛔ **`HPS-24` — A materialize start has THREE outcomes, each recognised by its own marker in the
 body rather than by status code — and never by the absence of a job id.** The platform answers a
 start with one of:
 
@@ -377,13 +378,19 @@ start with one of:
 | **started** | a job id | a fresh run |
 | **joined** | an active-job id, a coalesce flag, or an `active_job` code | a run was already in flight |
 | **already-delivered** | a no-op flag, with the delivered set | nothing to build |
-| **queued** | a queued flag, with the parked set | the order's core build has not finished; the picks fire on their own |
 
-**Two of the four name no job at all, and a third carries its id under a different key than a fresh
-start does.** A host that reads "no job id" as a failure therefore refuses three of the four —
-including the one that means *your bundle is ready*. Where the download sits on the far side of that
-parse, such a host cannot import at all. Absence is the one thing a growing protocol reassigns for
-free; key each outcome on a marker that is present.
+**One of the three names no job at all, and another carries its id under a different key than a
+fresh start does, or under none.** A host that reads "no job id" as a failure therefore refuses two
+of the three — including the one that means *your bundle is ready*. Where the download sits on the
+far side of that parse, such a host cannot import at all. Absence is the one thing a growing protocol
+reassigns for free; key each outcome on a marker that is present.
+
+**An order whose core build has not finished is refused, not parked.** A fourth outcome, **queued**,
+once parked the picks to fire on their own when the build finished. The platform has retired it:
+such a start now fails with the error code `not_ready`, an error body like any other (`HPS-48`) whose
+message the host surfaces. It does not report a build under way, because none is. A host that still
+recognises the queued marker is carrying dead code rather than breaking this rule, and the corpus
+case that pins it goes when that code does.
 
 A join is a **success**, and it stays a success when the platform reports the running job **without
 naming it**. Polling is keyed on the **order**, not the job — the status request never took a job id
@@ -397,8 +404,8 @@ one call up — the single-flight response carries both an error string and a jo
 fact is the useful half. Asserting `HPS-24` against the parser alone will not catch it.
 
 _Enforcer:_ `automation-test` (corpus `vault.materialize.alreadyRunning`, `vault.materialize.noop`,
-`vault.materialize.queued`, `vault.materialize.coalesced`, `vault.materialize.activeJobWithoutId`)
-+ `agent-review` for the transport-layer clause.
+`vault.materialize.coalesced`, `vault.materialize.activeJobWithoutId`) + `agent-review` for the
+transport-layer clause and the `not_ready` refusal, which has no corpus case yet.
 
 **`HPS-25` — Polling is bounded on three axes and progress may be indeterminate.** A host declares:
 a poll interval (reference 3 s) with a hard floor, a maximum poll count (reference 200, ≈ 10 min),
@@ -680,13 +687,14 @@ value, never a silent fallback to the default.
 _Enforcer:_ `automation-test` (corpus `manifest.resolutionMismatch`,
 `manifest.planetShapeSphere`).
 
-**`HPS-36` — A host reads its own `dcc_readiness.<host>` block and surfaces the stated reason.**
-When an expected artifact is absent, the manifest says why; the plugin shows that reason instead of
-dead-ending on an empty import. A host reads only its own key.
+**`HPS-36` — A host reads its own `hosts.<hostId>.readiness` block and surfaces the stated
+reason.** When an expected artifact is absent, the manifest says why; the plugin shows that reason
+instead of dead-ending on an empty import. A host reads only its own subtree.
 
-Per-host keys are the manifest's shape: a sibling host's block is ignored, never merged, and the
-retired v17 anonymous `dcc_readiness.mesh_import` is **not** a fallback — reading it would turn a
-clean break into dual-parsing.
+Readiness lives inside the host's own block, which is the manifest's shape: a sibling host's
+readiness is ignored, never merged. The retired top-level `dcc_readiness` is **not** a fallback in
+either of its old shapes, the anonymous `dcc_readiness.mesh_import` or the per-host
+`dcc_readiness.<host>`; reading it would turn a clean break into dual-parsing.
 
 _Enforcer:_ `automation-test` (corpus `manifest.dccReadinessReason`,
 `manifest.dccReadinessIgnoresRetiredFlatKey`).
@@ -734,12 +742,13 @@ it lands that half is `agent-review`, and the per-host test where a host has one
 `SiteFrame.CanPlaceGeographic` is the only one today.
 
 **`HPS-47` — A host decides "is this bundle materialized" from the manifest's neutral signals,
-never from its own content alone.** The signals, any one of which means materialized: a known host
-block at top level, a `dcc_readiness` object, or a non-empty `vector.layers` array. The host-block
-roster is corroborative, not load-bearing — a bundle materialized for a host this plugin has never
-heard of still carries `dcc_readiness` and its vector layers, so roster staleness degrades nothing.
-(The day the roster can be replaced by a structural marker is a v19 `hosts.<hostId>` namespace,
-proposed in the decision log.)
+never from its own content alone.** The signals, either of which means materialized: a non-empty
+`hosts` object, or a non-empty `vector.layers` array. A host asks whether `hosts` has any key, never
+which keys it has, so a bundle materialized for a host this plugin has never heard of reads as
+materialized, and there is no roster of host ids to go stale. A `hosts` entry whose readiness paths
+all read absent still counts: the bundle reached the readiness stage. (Before MPB 1.0.0 moved
+everything host-specific under `hosts.<hostId>`, the same question took three host signals — this
+host's top-level block, a sibling's, a `dcc_readiness` object — and they are now this one.)
 
 "Materialized" and "importable by me" are different questions. A bundle materialized for another
 host is a **well-formed manifest** this host parses and then refuses to _import_, with guidance to
