@@ -225,8 +225,9 @@ accepted lag rather than a gap we would rather you not notice.
 ## Roadmap
 
 Quarter-by-quarter, in [ROADMAP.md](ROADMAP.md). The headline: **World Partition large-AOI import**,
-the main course of the Unreal plugin's path from pre-1.0 to 1.0 on Fab. What each host does today is
-the [host support matrix](docs/host-support.md).
+the main course of the Unreal plugin's path to 1.0. The Unreal importer is listed on Fab before 1.0, once a
+release gate holds, with each GitHub release submitted to Fab the same day; GitHub Releases stays the primary
+channel. What each host does today is the [host support matrix](docs/host-support.md).
 
 ## Contributing
 
