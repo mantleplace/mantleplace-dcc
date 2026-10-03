@@ -19,6 +19,68 @@ history, not contract.
 
 ## Semver era
 
+### 1.10.0 — a bundle stored as parts, and the archive that holds some of them (additive minor; published and frozen 2026-10-03)
+
+Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under
+[compatibility](compatibility.md) §2, and every host floor at 1.0.0 reads it. A bundle stored as one
+zip carries neither new block and reads exactly as before.
+
+- **`files`**, on a complete bundle stored as parts: every file of the whole bundle by archive path,
+  in archive order, each with the `part` that holds it, its `size_bytes` and the `sha256` of its
+  exact bytes. It describes the whole bundle in every archive cut from it, so every such archive
+  carries the same manifest; in a partial archive it lists only the parts landed so far. The
+  manifest itself is never listed. Absent, the archive is verified whole by the sidecar's
+  `bundle.sha256`, as before.
+- **`view`**: what this one archive holds. `kind` is `everything` (every part at every level, the
+  sealed archive the sidecar describes), `selection` (a curator's download selection) or `host` (a
+  host plugin's own request); an unknown kind means the archive holds exactly `parts`. `partial`
+  says the archive was cut before the bundle completed, `snapshot` the bundle version it was cut
+  from, `parts` the parts it holds, `missing` the parts it was asked for that had not landed, and
+  `file_count` its member count, this manifest included. A pointer to a file whose part is not in
+  `parts` names a file this archive does not hold. A host that does not declare view support never
+  receives a partial archive.
+- **A part** is a packaging token at a fidelity level, `<token>@<level>`, or one of a few parts that
+  belong to no token (`readme`, `placement_txt`, `site_brief`, `revit_vectors`, `other`). A reader
+  compares a part id and never parses it beyond the `@`.
+- **Level pointers declare what 1.9.0 bundles already carried**: a level file's `format`, the
+  `formats` of a terrain mesh level with their companions, `texture`, vertex and triangle counts,
+  `footprint_count` and `triangle_budget`, a heightmap level's resolution, post spacing, pixel-to-height
+  mapping and Landscape transform, a grid level's size, ground sample distance and extent, a mesh
+  level's frame, datum and axes, and a deviation's `posts`. MAX may state the entry's own sizes.
+
+Both hosts re-pin to 1.10.0 on the corpus case `manifest.bundlePartsIgnored`. Neither host reads a
+view yet: each reads the bundle it is given as it read a single zip.
+
+### 1.9.0 — fidelity levels, and trees in rank order (additive minor; published and frozen 2026-10-02)
+
+Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under
+[compatibility](compatibility.md) §2, and every host floor at 1.0.0 reads it.
+
+- **`levels`, four fidelity levels per deliverable.** `RAW` is the source-native data with nothing
+  capped or reduced; `MAX` is the entry itself, its key and meaning unchanged, and what every bundle
+  before 1.9.0 delivered; `MED` and `MIN` are less of it, or coarser, from the same source data. All
+  four are always named. MAX names no file of its own and may carry a `cost_driver`, the published
+  count a level's import cost scales with in a host (`elements`, `cuts`, `triangles`, `pixels` or
+  `posts`). Every other level is exactly one of three shapes: a **pointer** to a file of its own,
+  stating its own frame and datum with the entry's keys and, for a coarsened surface, its measured
+  `deviation` against the DEM; a **`cut`** of the MAX file, either its first `rows` (a ranked row
+  file) or the features whose `lowest_level_field` names that level or a lighter one, an unknown
+  form failing closed to an unavailable level; or **`same_as`** another level, with a `reason`.
+  `levels` is declared on the elevation, imagery, basemap, mesh, buildings, Cesium terrain, Site
+  Brief and tree-point entries, on a shared vector layer, on the derived raster pointers, and on
+  every file pointer in both host blocks. Absent, an entry reads as MAX only. A host reads the levels
+  in its own block and picks one; it never derives a level.
+- **Trees in rank order.** `landcover.tree_points` and `hosts.unreal.foliage_points` gain `rank`, the
+  rule the rows are ordered by, with its `version` and `thinning_radius_m`, `point_cap`, the most
+  crowns the MAX file holds, and `uncapped_point_count`, every crown detected. A row's number is its
+  rank at every level: MAX is ranks 1 to the cap, MED and MIN are row prefixes, and RAW holds every
+  crown in the same order. The rank thins dense canopy first, so a capped forest stays even rather
+  than keeping its tallest trees. A bundle built since the rank no longer carries
+  `truncated_to_tallest`, which keeps its meaning on the bundles that do.
+
+The hosts' re-pin to 1.10.0 covers 1.9.0 with the corpus case `manifest.fidelityLevelsIgnored`.
+Neither host offers a level yet: each imports MAX, the entry it always read.
+
 ### 1.8.0 — the datum of every height, and US terrain from USGS 3DEP (additive minor; published and frozen 2026-10-01)
 
 Every item below is additive: no member is removed, re-typed or re-meant, and the one shape that
