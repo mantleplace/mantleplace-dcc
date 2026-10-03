@@ -29,6 +29,7 @@ namespace
 			TEXT("deadbeefcafef00ddeadbeefcafef00ddeadbeefcafef00ddeadbeefcafef00d");
 		Record.TerrainPrefix = TEXT("CesiumTerrain/");
 		Record.CesiumTerrainPath = TEXT("CesiumTerrain/layer.json");
+		Record.DrapePath = TEXT("Imagery/Drape.png");
 		Record.EntryCount = 42;
 		Record.SchemeVersion = MantlePlaceStreamStaging::CurrentSchemeVersion;
 		return Record;
@@ -112,6 +113,67 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 			Classify(true, MovedPointer, Incoming, true) == EVerdict::Stage);
 	}
 
+	// --- The served drape moved, appeared or went away ------------------------------------------
+	// The drape is extracted by its manifest pointer, so the files on disk depend on it.
+	{
+		FRecord Moved = Incoming;
+		Moved.DrapePath = TEXT("Imagery/Other.png");
+		TestTrue(TEXT("a moved drape pointer stages"),
+			Classify(true, Moved, Incoming, true) == EVerdict::Stage);
+
+		FRecord NoDrape = Incoming;
+		NoDrape.DrapePath = FString();
+		TestTrue(TEXT("a drape that appeared stages"),
+			Classify(true, NoDrape, Incoming, true) == EVerdict::Stage);
+		TestTrue(TEXT("a drape that went away stages"),
+			Classify(true, Incoming, NoDrape, true) == EVerdict::Stage);
+
+		// A directory staged by scheme 1 holds every Imagery/ entry; it is not served as it stands.
+		FRecord SchemeOne = Incoming;
+		SchemeOne.SchemeVersion = 1;
+		TestTrue(TEXT("a directory staged by the folder-name layout stages again"),
+			Classify(true, SchemeOne, Incoming, true) == EVerdict::Stage);
+	}
+
+	// --- What is extracted: only what a manifest pointer names --------------------------------------
+	// HPS-32: every artifact path comes from a manifest pointer, never from folder convention. The
+	// record's terrain prefix is derived from layout.cesium_terrain and its drape path is
+	// hosts.unreal.imagery_drape.source, so these assertions are about pointers, not folders.
+	{
+		TestTrue(TEXT("a terrain tile under the pointer's directory is extracted"),
+			SelectsEntry(Incoming, TEXT("CesiumTerrain/14/5615/11520.terrain")));
+		TestTrue(TEXT("the pointed-at layer.json is extracted"),
+			SelectsEntry(Incoming, TEXT("CesiumTerrain/layer.json")));
+		TestTrue(TEXT("the served drape is extracted"),
+			SelectsEntry(Incoming, TEXT("Imagery/Drape.png")));
+
+		// The rest of the imagery folder is not served, so it is not extracted.
+		TestFalse(TEXT("a COG beside the drape is not extracted"),
+			SelectsEntry(Incoming, TEXT("Imagery/Imagery.tif")));
+		TestFalse(TEXT("a PMTiles archive beside the drape is not extracted"),
+			SelectsEntry(Incoming, TEXT("Imagery/Imagery.pmtiles")));
+		TestFalse(TEXT("the manifest is not extracted"),
+			SelectsEntry(Incoming, TEXT("Metadata/manifest.json")));
+		TestFalse(TEXT("a directory entry is not extracted"),
+			SelectsEntry(Incoming, TEXT("CesiumTerrain/14/")));
+		TestFalse(TEXT("a name that only begins with the drape's is not the drape"),
+			SelectsEntry(Incoming, TEXT("Imagery/Drape.png.aux.xml")));
+
+		// A stream that serves no imagery extracts none.
+		FRecord NoDrape = Incoming;
+		NoDrape.DrapePath = FString();
+		TestFalse(TEXT("with no served drape, no imagery is extracted"),
+			SelectsEntry(NoDrape, TEXT("Imagery/Drape.png")));
+		TestTrue(TEXT("and the terrain still is"),
+			SelectsEntry(NoDrape, TEXT("CesiumTerrain/0/0/0.terrain")));
+
+		// An empty prefix would match every entry.
+		FRecord NoPrefix = NoDrape;
+		NoPrefix.TerrainPrefix = FString();
+		TestFalse(TEXT("an empty terrain prefix selects nothing"),
+			SelectsEntry(NoPrefix, TEXT("CesiumTerrain/0/0/0.terrain")));
+	}
+
 	// --- A layout this build does not know ---------------------------------------------------------
 	{
 		FRecord Newer = Incoming;
@@ -133,6 +195,7 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("digest survives"), Parsed.ManifestSha256, Incoming.ManifestSha256);
 		TestEqual(TEXT("terrain prefix survives"), Parsed.TerrainPrefix, Incoming.TerrainPrefix);
 		TestEqual(TEXT("terrain pointer survives"), Parsed.CesiumTerrainPath, Incoming.CesiumTerrainPath);
+		TestEqual(TEXT("drape pointer survives"), Parsed.DrapePath, Incoming.DrapePath);
 		TestEqual(TEXT("entry count survives"), Parsed.EntryCount, Incoming.EntryCount);
 		TestEqual(TEXT("scheme survives"), Parsed.SchemeVersion, Incoming.SchemeVersion);
 

@@ -17,6 +17,7 @@ namespace MantlePlaceStreamStaging
 		const TCHAR* const KeyManifestSha256 = TEXT("manifest_sha256");
 		const TCHAR* const KeyTerrainPrefix = TEXT("terrain_prefix");
 		const TCHAR* const KeyCesiumTerrainPath = TEXT("cesium_terrain_path");
+		const TCHAR* const KeyDrapePath = TEXT("drape_path");
 		const TCHAR* const KeyEntryCount = TEXT("entry_count");
 		const TCHAR* const KeyScheme = TEXT("scheme_version");
 
@@ -79,7 +80,28 @@ namespace MantlePlaceStreamStaging
 			return EVerdict::Stage;
 		}
 
+		// The drape is extracted by its pointer, so a bundle whose drape moved, appeared or went away
+		// has a different set of files on disk than this stream would produce.
+		if (!Found.DrapePath.Equals(Incoming.DrapePath, ESearchCase::CaseSensitive))
+		{
+			return EVerdict::Stage;
+		}
+
 		return EVerdict::Reuse;
+	}
+
+	bool SelectsEntry(const FRecord& Record, const FString& EntryName)
+	{
+		if (EntryName.IsEmpty() || EntryName.EndsWith(TEXT("/")))
+		{
+			return false; // a directory entry
+		}
+		// An empty prefix would match every entry; the caller refuses one, and so does this.
+		if (!Record.TerrainPrefix.IsEmpty() && EntryName.StartsWith(Record.TerrainPrefix))
+		{
+			return true;
+		}
+		return !Record.DrapePath.IsEmpty() && EntryName.Equals(Record.DrapePath);
 	}
 
 	FString ToJson(const FRecord& Record)
@@ -89,6 +111,7 @@ namespace MantlePlaceStreamStaging
 		Root->SetStringField(KeyManifestSha256, Record.ManifestSha256);
 		Root->SetStringField(KeyTerrainPrefix, Record.TerrainPrefix);
 		Root->SetStringField(KeyCesiumTerrainPath, Record.CesiumTerrainPath);
+		Root->SetStringField(KeyDrapePath, Record.DrapePath);
 		Root->SetNumberField(KeyEntryCount, Record.EntryCount);
 		Root->SetNumberField(KeyScheme, Record.SchemeVersion);
 
@@ -117,6 +140,7 @@ namespace MantlePlaceStreamStaging
 		Root->TryGetStringField(KeyManifestSha256, Parsed.ManifestSha256);
 		Root->TryGetStringField(KeyTerrainPrefix, Parsed.TerrainPrefix);
 		Root->TryGetStringField(KeyCesiumTerrainPath, Parsed.CesiumTerrainPath);
+		Root->TryGetStringField(KeyDrapePath, Parsed.DrapePath);
 		int32 EntryCount = 0;
 		if (Root->TryGetNumberField(KeyEntryCount, EntryCount))
 		{

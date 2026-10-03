@@ -170,31 +170,21 @@ namespace
 	}
 
 	/**
-	 * Extract every zip entry whose path begins with one of `Prefixes` into `TempDir`, preserving the
-	 * in-zip subpath (Terrain/14/5615/11520.terrain -> TempDir/Terrain/14/5615/11520.terrain). Returns
-	 * the number of files written. Used to lay the bundle's Cesium-ready artifacts on disk for the local
-	 * tile server to host.
+	 * Extract every zip entry the staging record selects into `TempDir`, preserving the in-zip subpath
+	 * (CesiumTerrain/14/5615/11520.terrain -> TempDir/CesiumTerrain/14/5615/11520.terrain). Which
+	 * entries those are is `MantlePlaceStreamStaging::SelectsEntry`'s decision, made from manifest
+	 * pointers only. Returns the number of files written and adds their size to `OutBytes`. Used to
+	 * lay the bundle's Cesium-ready artifacts on disk for the local tile server to host.
 	 */
-	int32 ExtractSubtree(const FZipArchiveReader& Reader, const TArray<FString>& Prefixes, const FString& TempDir)
+	int32 ExtractSelectedEntries(
+		const FZipArchiveReader& Reader, const MantlePlaceStreamStaging::FRecord& Selection,
+		const FString& TempDir, int64& OutBytes)
 	{
 		int32 Count = 0;
 		IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 		for (const FString& Name : Reader.GetFileNames())
 		{
-			if (Name.EndsWith(TEXT("/")))
-			{
-				continue; // directory entry
-			}
-			bool bWanted = false;
-			for (const FString& Prefix : Prefixes)
-			{
-				if (Name.StartsWith(Prefix))
-				{
-					bWanted = true;
-					break;
-				}
-			}
-			if (!bWanted)
+			if (!MantlePlaceStreamStaging::SelectsEntry(Selection, Name))
 			{
 				continue;
 			}
@@ -208,6 +198,7 @@ namespace
 			if (FFileHelper::SaveArrayToFile(Bytes, *OutPath))
 			{
 				++Count;
+				OutBytes += Bytes.Num();
 			}
 		}
 		return Count;
@@ -231,8 +222,10 @@ namespace
 	 * assumes: **is the defect still there?** It cannot be answered from the source, only from a
 	 * bundle, so the answer is logged on every stream. A bundle whose availability already matches its
 	 * tiles is written out loud as such and nothing is rewritten: that log line is the evidence this
-	 * code can be deleted. A bundle that does not match reports the two counts, which is the evidence
-	 * an upstream report needs — "declares 8, ships 1" is a bug report, "availability is wrong" is not.
+	 * code can be deleted. Consistency is judged by tile set, so a multi-tile rectangle whose tiles are
+	 * all on disk is consistent. A bundle that does not match reports how many declared tiles are
+	 * absent and how many present ones are undeclared, which is the evidence an upstream report needs
+	 * — "7 of them absent" is a bug report, "availability is wrong" is not.
 	 *
 	 * Best-effort in both directions: on any failure the original file is left untouched and streaming
 	 * proceeds (Cesium will 404 the siblings as before). Returns true if the file was rewritten.
@@ -271,8 +264,8 @@ namespace
 			return false;
 		}
 
-		int64 DeclaredTileCount = 0;
-		if (FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(Root, Tiles, DeclaredTileCount))
+		FMantlePlaceCesiumAvailabilityDiff Diff;
+		if (!FMantlePlaceCesiumAvailabilityLogic::CorrectAvailability(Root, Tiles, Diff))
 		{
 			// The signal that this workaround has outlived the defect. If it appears for every bundle
 			// a user streams, delete this function and its call — that is what item 3 of the
@@ -286,14 +279,8 @@ namespace
 		}
 
 		// The upstream evidence, with the numbers in it.
-		UE_LOG(LogMantlePlaceImport, Warning,
-			TEXT("Cesium terrain layer.json for job %s declares %lld tiles but the bundle ships %d. "
-				 "Rewriting availability so Cesium does not 404 its way to a load error. This is an "
-				 "upstream packaging defect in the bundle, not an import fault — report it with this "
-				 "line."),
-			*JobId, DeclaredTileCount, Tiles.Num());
-
-		Root->SetArrayField(TEXT("available"), FMantlePlaceCesiumAvailabilityLogic::BuildAvailability(Tiles));
+		UE_LOG(LogMantlePlaceImport, Warning, TEXT("%s"),
+			*FMantlePlaceCesiumAvailabilityLogic::DescribeMismatch(JobId, Diff, Tiles.Num()));
 
 		FString OutText;
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutText);
@@ -1438,6 +1425,10 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 	Incoming.ManifestSha256 = ManifestSha256;
 	Incoming.TerrainPrefix = TerrainPrefix;
 	Incoming.CesiumTerrainPath = Manifest.CesiumTerrainPath;
+	// The one imagery file this stream serves, by the same pointer and the same condition that build
+	// Info.ImageryUrl below — the only imagery the Python helper reads. Empty when the stream serves
+	// none, and then none is extracted.
+	Incoming.DrapePath = (Manifest.bHasDrape && !Manifest.DrapePath.IsEmpty()) ? Manifest.DrapePath : FString();
 	Incoming.SchemeVersion = MantlePlaceStreamStaging::CurrentSchemeVersion;
 
 	MantlePlaceStreamStaging::FRecord Staged;
@@ -1453,13 +1444,18 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 		PlatformFile.DeleteDirectoryRecursively(*StageDir);
 		PlatformFile.CreateDirectoryTree(*StageDir);
 
-		const TArray<FString> Prefixes = { TerrainPrefix, TEXT("Imagery/") };
-		Incoming.EntryCount = ExtractSubtree(Reader, Prefixes, StageDir);
+		// Every extracted entry is named by a manifest pointer: the terrain subtree under
+		// layout.cesium_terrain's directory, and the drape the stream serves (HPS-32).
+		int64 StagedBytes = 0;
+		Incoming.EntryCount = ExtractSelectedEntries(Reader, Incoming, StageDir, StagedBytes);
 		if (Incoming.EntryCount == 0)
 		{
 			Info.Message = FString::Printf(TEXT("Bundle declares Cesium terrain but no %s entries were extracted."), *TerrainPrefix);
 			return Info;
 		}
+		UE_LOG(LogMantlePlaceImport, Log,
+			TEXT("Staged %d entries (%lld bytes) for this bundle at %s."),
+			Incoming.EntryCount, StagedBytes, *StageDir);
 
 		// Correct the bundle's over-declared `available` so Cesium only requests tiles that exist,
 		// and log whether it needed correcting — see RewriteCesiumTerrainAvailability.
@@ -1528,9 +1524,9 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 	Info.bSuccess = true;
 	Info.BaseUrl = BaseUrl;
 	Info.CesiumTerrainUrl = BaseUrl / Manifest.CesiumTerrainPath;
-	if (Manifest.bHasDrape && !Manifest.DrapePath.IsEmpty())
+	if (!Incoming.DrapePath.IsEmpty())
 	{
-		Info.ImageryUrl = BaseUrl / Manifest.DrapePath;
+		Info.ImageryUrl = BaseUrl / Incoming.DrapePath;
 	}
 	Info.bHasBbox = Manifest.bHasBbox;
 	Info.BboxWestDeg = Manifest.BboxWestDeg;

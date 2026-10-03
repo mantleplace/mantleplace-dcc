@@ -38,9 +38,11 @@ namespace MantlePlaceStreamStaging
 	 * that does not know a layout re-stages rather than serving something it cannot predict.
 	 *
 	 * 1 = full-identity directory under Saved/MantlePlace/StreamStaging, Cesium terrain subtree plus
-	 *     Imagery/, availability rewritten in place.
+	 *     every entry under the literal Imagery/ folder, availability rewritten in place.
+	 * 2 = as 1, but the only imagery extracted is the one drape file the stream serves, found by its
+	 *     manifest pointer (`DrapePath`), and none when it serves none (HPS-32).
 	 */
-	constexpr int32 CurrentSchemeVersion = 1;
+	constexpr int32 CurrentSchemeVersion = 2;
 
 	struct FRecord
 	{
@@ -56,6 +58,10 @@ namespace MantlePlaceStreamStaging
 
 		/** The manifest's own pointer to the rewritten layer.json, relative to the staging root. */
 		FString CesiumTerrainPath;
+
+		/** The manifest's pointer to the one imagery file the stream serves — `hosts.unreal.imagery_drape
+		 *  .source`, the same path the served imagery URL is built from. Empty when it serves none. */
+		FString DrapePath;
 
 		/** How many zip entries the extraction wrote. Zero is not a staged bundle. */
 		int32 EntryCount = 0;
@@ -87,6 +93,13 @@ namespace MantlePlaceStreamStaging
 		const FRecord& Found,
 		const FRecord& Incoming,
 		bool bTerrainRootPresent);
+
+	/**
+	 * Whether the zip entry `EntryName` is part of what this record stages: an entry under
+	 * `TerrainPrefix`, or the entry `DrapePath` names exactly. Nothing is selected by a folder name —
+	 * both come from manifest pointers — and a directory entry is never selected.
+	 */
+	bool SelectsEntry(const FRecord& Record, const FString& EntryName);
 
 	// --- Serialization (pure) -------------------------------------------------------------------
 
