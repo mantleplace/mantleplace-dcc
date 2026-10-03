@@ -1,0 +1,15 @@
+# Unreal and the Host Plugin Standard
+
+The Host Plugin Standard ([`docs/host-plugin-standard.md`](../../docs/host-plugin-standard.md)) is
+normative and is cited by `HPS-NN` id in the code. This table is what the rules this tree turns on
+most visibly — and which a patch here is most likely to break — mean here. It moved here from
+[`unreal/CLAUDE.md`](../CLAUDE.md), which keeps the index.
+
+| Rule     | What it means here                                                                                                                        |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `HPS-32` | the paint-layer band legend is **data**. Which weight channel is which material is read from the manifest, never inferred from a filename. |
+| `HPS-33` | manifest values are applied verbatim. A paint layer's name is the platform's material name exactly — never prettified, never prefixed.    |
+| `HPS-46` | the conformance corpus's expectation keys are asserted. A case edited to expect something different turns the suite red.                   |
+| `HPS-51` | the vault panel's auth button, heading and local-import button take the standard's words — the editor's own casing, not its own wording. The words are the standard's table; the casing and the layout are this host's. The import summary's delivery line takes the standard's words for unit system, linear unit and delivery CRS (`MantlePlaceDeliveryLogic`), read off the `delivery` block for display and never for placement, and on a foot delivery adds that this host's content is metric. |
+| `HPS-52` | placement reads the `unreal` block's own pointers first; a host-neutral file is the fallback, never the first reach.                                                                       |
+| `HPS-53` | a file is placed only where its frame can be shown to be this host's metric UTM frame, and a refusal is a **named** skip. The tree-point reader reads the CRS and both units `foliage_points` states and refuses the file unless they are this block's georeference CRS and `m`, compared verbatim (`MantlePlaceTreePointsLogic`, corpus case `manifest.treePointsStatedFrame`); the version, not the keys, says a frame is owed. Behind that it refuses a file with any point outside the landscape extent this block publishes (`manifest.treePointsFrame`) — a backstop that refuses and never a showing that places, and the whole of the check on a manifest older than the one that states the frame, where a block with no landscape extent refuses too. Heights get the same named skip: this host's ground is EGM2008 on every order, so the road-spline reader places the shared `road_splines` layer only where its `vertical_datum` is `EGM2008-orthometric`, compared verbatim, and otherwise places no roads and shifts no height (`MantlePlaceRoadSplinesLogic`, corpus case `manifest.roadSplinesStatedDatum`). One open deviation: the road-spline reader still drops a single refused point without naming it (a non-UTM origin, or a layer nothing could place, is now named). |

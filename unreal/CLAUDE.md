@@ -1,51 +1,43 @@
 ---
 name: unreal-host-onboarding
-description: Onboarding for the Unreal plugin — UE 5.8 and Interchange, the two modules, how to drive the headless automation tests, the generated-name standard and where imported content lands, and the traps (CI never compiles this plugin, nothing the importer generates is saved, the identity is not the job id). Read first for any change under `unreal/`.
+description: Onboarding for the Unreal plugin — UE 5.8 and Interchange, the two modules, how to drive the headless automation tests, the generated-name standard and where imported content lands, and the traps (CI never compiles this plugin, nothing the importer generates is saved, the identity is not the job id). An index — the detail is in `unreal/docs/`. Read first for any change under `unreal/`.
 ---
 
 # Mantle Place for Unreal — agent onboarding
 
-Read the repo root [`CLAUDE.md`](../CLAUDE.md) first. This folder is one host among several; the
-root is one level up.
+Read the repo root [`CLAUDE.md`](../CLAUDE.md) first. This file is an index: each rule is stated
+here in a line, and its detail lives in the document it links.
 
 ## Identity
 
 - **Host:** Unreal Engine **5.8**, editor-side. The plugin folder plus its `.uplugin` is
-  [`MantlePlace/`](MantlePlace/) — PascalCase within, and plugin discovery in a consuming project is
-  a recursive scan of `Plugins/`.
-- **Engine dependency:** Epic's built-in **Interchange**, and nothing else. Keep it that way; a new
-  engine plugin dependency is a new thing a stranger's project has to have enabled.
+  [`MantlePlace/`](MantlePlace/) — PascalCase within; a consuming project's plugin discovery is a
+  recursive scan of `Plugins/`.
+- **Engine dependency:** Epic's built-in **Interchange**, and nothing else. A new engine plugin
+  dependency is a new thing a stranger's project has to have enabled.
 - **Modules:** `MantlePlaceRuntime` (Runtime) and `MantlePlaceEditor` (Editor). The version lives in
   the `.uplugin` and nowhere else.
-- **Frame:** Unreal is a **fixed-frame host** (`HPS-54`) — one native unit, so its host frame does
-  not move with the order's unit system. The content made for this host, and the origin it is placed
-  against, are **metric UTM on every order, an imperial one included**: a bundle's delivery CRS is
-  not this host's frame unless it happens to be the AOI's UTM zone, and a file stated on another grid
-  is one this host refuses rather than converts (`HPS-53`, and the open deviation below).
-- **Role:** host #1, and the reference host. Where a rule was written with Unreal in mind, this is
-  the tree that shows what it meant — which makes an expedient shortcut here more expensive than the
-  same shortcut elsewhere.
-- **Releases** are their own track, tagged `unreal-<version>` with no `v` — see
-  [ADR 0001](../docs/adr/0001-per-host-release-tracks.md). There is no changelog file; the release
-  body is the changelog.
+- **Frame:** Unreal is a **fixed-frame host** (`HPS-54`) — one native unit, so its frame does not
+  move with the order's unit system. Its content, and the origin it is placed against, are **metric
+  UTM on every order, an imperial one included**; a file stated on another grid is refused rather
+  than converted (`HPS-53`).
+- **Role:** host #1, the reference host — where a rule was written with Unreal in mind, this tree
+  shows what it meant, so an expedient shortcut here costs more than elsewhere.
+- **Releases:** their own track, tagged `unreal-<version>` with no `v`
+  ([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)); the release body is the changelog.
 
 ## The standard binds this folder
 
-The Host Plugin Standard is normative and is cited by `HPS-NN` id in the code. The ones this tree
-turns on most visibly, and which a patch here is most likely to break:
+The Host Plugin Standard is normative and cited by `HPS-NN` id in the code. What the rules a patch
+here is most likely to break mean here is [`docs/standard-map.md`](docs/standard-map.md): `HPS-32`
+the band legend is data · `HPS-33` verbatim, a paint layer's name included · `HPS-46` corpus keys
+asserted · `HPS-51` the panel takes the standard's words · `HPS-52` the `unreal` block first ·
+`HPS-53` a placed file is shown to be in this frame, and a refusal is a **named** skip (one open
+deviation: the road-spline reader still drops a single refused point unnamed).
 
-| Rule     | What it means here                                                                                                                        |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `HPS-32` | the paint-layer band legend is **data**. Which weight channel is which material is read from the manifest, never inferred from a filename. |
-| `HPS-33` | manifest values are applied verbatim. A paint layer's name is the platform's material name exactly — never prettified, never prefixed.    |
-| `HPS-46` | the conformance corpus's expectation keys are asserted. A case edited to expect something different turns the suite red.                   |
-| `HPS-51` | the vault panel's auth button, heading and local-import button take the standard's words — the editor's own casing, not its own wording. The words are the standard's table; the casing and the layout are this host's. The import summary's delivery line takes the standard's words for unit system, linear unit and delivery CRS (`MantlePlaceDeliveryLogic`), read off the `delivery` block for display and never for placement, and on a foot delivery adds that this host's content is metric. |
-| `HPS-52` | placement reads the `unreal` block's own pointers first; a host-neutral file is the fallback, never the first reach.                                                                       |
-| `HPS-53` | a file is placed only where its frame can be shown to be this host's metric UTM frame, and a refusal is a **named** skip. The tree-point reader reads the CRS and both units `foliage_points` states and refuses the file unless they are this block's georeference CRS and `m`, compared verbatim (`MantlePlaceTreePointsLogic`, corpus case `manifest.treePointsStatedFrame`); the version, not the keys, says a frame is owed. Behind that it refuses a file with any point outside the landscape extent this block publishes (`manifest.treePointsFrame`) — a backstop that refuses and never a showing that places, and the whole of the check on a manifest older than the one that states the frame, where a block with no landscape extent refuses too. Heights get the same named skip: this host's ground is EGM2008 on every order, so the road-spline reader places the shared `road_splines` layer only where its `vertical_datum` is `EGM2008-orthometric`, compared verbatim, and otherwise places no roads and shifts no height (`MantlePlaceRoadSplinesLogic`, corpus case `manifest.roadSplinesStatedDatum`). One open deviation: the road-spline reader still drops a single refused point without naming it (a non-UTM origin, or a layer nothing could place, is now named). |
-
-Root `CLAUDE.md`'s boundary section is the one to internalise: **this plugin applies pre-derived
-values and never derives them.** A patch that computes a placement value locally is refused even when
-the arithmetic is correct.
+Root `CLAUDE.md`'s boundary is the one to internalise: **this plugin applies pre-derived values and
+never derives them.** A patch that computes a placement value locally is refused even when the
+arithmetic is correct.
 
 ## Layout, and where logic goes
 
@@ -57,58 +49,44 @@ MantlePlace/Content/                     shipped assets: the drape material, the
 MantlePlace/Content/Python/              the Cesium streaming helper. Spawns actors; imports no assets.
 ```
 
-**Put the decision in a `*Logic` translation unit.** That is the pattern already here —
-`MantlePlaceLandscapeWeightsLogic`, `MantlePlaceCoverageRasterLogic`, `MantlePlaceRoadSplinesLogic`,
-`MantlePlaceTreePointsLogic`, `MantlePlaceDrapeAlignmentLogic`, `MantlePlaceDeliveryLogic`,
-`MantlePlaceIntegrityLogic`, `MantlePlaceVaultLogic`, `MantlePlaceAuthLogic`,
-`MantlePlaceBundleCacheLogic` — and each one has a
-headless test beside it. The importer *executes*; the Logic unit *decides*. The test question is the design question: if asserting it needs a running
-editor and a real bundle, it is in the wrong translation unit.
-
-This matters more here than it would elsewhere, because **CI never compiles this plugin** (below).
-Logic in a pure unit is covered by a test you can run; logic in the importer is covered by review.
+**Put the decision in a `*Logic` translation unit** — `MantlePlaceLandscapeWeightsLogic`,
+`MantlePlaceCoverageRasterLogic`, `MantlePlaceRoadSplinesLogic`, `MantlePlaceTreePointsLogic`,
+`MantlePlaceDrapeAlignmentLogic`, `MantlePlaceDeliveryLogic`, `MantlePlaceIntegrityLogic`,
+`MantlePlaceVaultLogic`, `MantlePlaceAuthLogic`, `MantlePlaceBundleCacheLogic`, each with a headless
+test beside it. The importer *executes*; the Logic unit *decides*. If asserting it needs a running
+editor and a real bundle, it is in the wrong unit — and since **CI never compiles this plugin**,
+logic in the importer is covered by review alone.
 
 ## Commands
 
-There is no hosted build. The tests are Unreal automation tests, all named under a `MantlePlace.`
-prefix, and the standard way to drive them unattended is:
+The tests are Unreal automation tests under a `MantlePlace.` prefix; drive them unattended with:
 
 ```
 UnrealEditor-Cmd.exe <YourProject>.uproject -ExecCmds="Automation RunTests MantlePlace." -unattended -nopause -nosplash -testexit="Automation Test Queue Empty" -log
 ```
 
-`MantlePlace.Import.LiveFreeTier` is the exception — it wants a real bundle and real credentials, so
-it is not part of an offline sweep.
+`MantlePlace.Import.LiveFreeTier` wants a real bundle and credentials, so it is not part of an
+offline sweep.
 
 ```bash
-# The cross-host contract gate (Python 3.12, standard library, offline for the corpus half).
-python ../tools/manifest-conformance/check_manifest_conformance.py
-
-# The generated-name drift gate. Text-only, no engine — run it before you push.
-python ../tools/unreal-naming/check_generated_names.py
+python ../tools/manifest-conformance/check_manifest_conformance.py   # contract gate: Python 3.12, stdlib, offline corpus half
+python ../tools/unreal-naming/check_generated_names.py              # name drift gate: text-only, no engine — run before you push
 ```
 
 ## Naming
 
-Two different rules meet here, and conflating them is the mistake this section exists to prevent.
+Two rules meet here; conflating them is the mistake. **Root `CLAUDE.md`'s "`mantleplace`, never
+`mp`" governs the repository and the code** — paths, folders, modules, classes, C++ symbols — not
+strings the plugin writes into a user's project. **Inside a user's project, `MP_` is the permitted
+marker on outliner-visible actor labels, and only there**
+([ADR 0003](../docs/adr/0003-naming-authority-and-mp-prefix.md)): a label is read in a cramped
+outliner column, reappears unqualified in Details, logs and Blueprint references, and is the only
+marker that survives a reconfigured content root.
 
-**Root `CLAUDE.md`'s "spelled out in full — `mantleplace`, never `mp`" governs the repository and the
-code**: paths, folder names, module and class names, C++ symbols. It is not a rule about strings the
-plugin writes into a user's project.
-
-**Inside a user's project, `MP_` is the permitted marker on outliner-visible actor labels**, and only
-there. The reason is in [ADR 0003](../docs/adr/0003-naming-authority-and-mp-prefix.md): an actor
-label is read in a cramped outliner column and reappears unqualified in the Details panel, in logs
-and in Blueprint references, and it is the only Mantle Place marker that survives a project whose
-content root has been reconfigured.
-
-**A third kind of string, which neither of those two is about: the words on the panel's own
-controls** — the auth button, the heading over the list, the local-import section. Those name actions
-a curator also meets in Revit, so their words are fixed cross-host by `HPS-51` and the standard's
-table is where they are spelled; the editor's casing and the panel's layout stay ours. A host
-construct keeps its host noun: it is a `Landscape` here and a `Toposolid` there, and that is outside
-the rule. They live inline in `SMantlePlaceVaultPanel.cpp`, which CI never compiles — so a label is
-changed under review alone, and the standard's table is what review reads.
+**A third kind: the words on the panel's own controls** — the auth button, the list heading, the
+local-import section. They are fixed cross-host by `HPS-51`'s table; the editor's casing and the
+panel's layout stay ours, and a host construct keeps its noun (`Landscape` here, `Toposolid` there).
+They live inline in `SMantlePlaceVaultPanel.cpp`, which CI never compiles, so review reads the table.
 
 ### Generated assets
 
@@ -125,123 +103,62 @@ a document a reader of this repository cannot open:
 | `DT_`  | Data table                   |
 | `BP_`  | Blueprint                    |
 
-An imported asset is *given* its name so it lands conforming, rather than being renamed afterwards;
-renaming inside the import transaction is the hazardous path and exists only as a fallback for assets
-a glTF brings with it.
+An imported asset is *given* its name so it lands conforming; renaming inside the import
+transaction is the hazardous path, a fallback only for assets a glTF brings with it.
 
-### Where generated content lands
+The rest is [`docs/generated-content.md`](docs/generated-content.md):
 
-```
-<ContentRoot>/<identity>/Imagery          the drape texture and its material instance
-<ContentRoot>/<identity>/Mesh             the terrain static mesh
-<ContentRoot>/<identity>/Buildings        the buildings static mesh
-<ContentRoot>/<identity>/CoverageRasters  slope, water, canopy and their like, as textures
-<ContentRoot>/<identity>/Landcover        one layer info per paint layer, plus the tree points table
-```
-
-- `<ContentRoot>` defaults to `/Game/MantlePlace` and is a **project** setting —
-  `UMantlePlaceEditorSettings`, Project Settings → Plugins → Mantle Place, `config=Game`, checked
-  into `DefaultGame.ini`. Deliberately not per-user: two developers with different roots in one
-  project produce two copies of the same import that neither one's re-import will clean up. An
-  unusable value falls back to the default rather than failing the import, because the importer
-  creates and force-deletes a directory beneath it and a malformed root is not something to resolve
-  creatively.
-- `<identity>` identifies the *order*, not the build that produced it. See
-  [ADR 0002](../docs/adr/0002-import-identity.md) — this is the part most likely to be got wrong, and
-  getting it wrong duplicates a user's landscape silently.
-- **The identity does not repeat in leaf asset names.** The folder already carries it.
-- The **outliner** folder is `MantlePlace/<identity>`, fixed, and does *not* follow the content-root
-  setting. Outliner folders have no project layout policy to collide with, and keeping it fixed keeps
-  one predictable marker for support.
-
-### Paint layers are not ours to name
-
-A paint layer's name is what a landscape material's `LandscapeLayerBlend` nodes bind to, so it is the
-platform's material name verbatim (`HPS-33`). Conforming those names to the table above would be
-deriving a published value locally, which the boundary rule refuses. The legitimate half is already
-done: the *asset* is `LI_<material>` while the layer's own name stays exactly as delivered.
-
-### One place, not every call site
-
-Every generated name and package path comes from `MantlePlaceImportNaming`. No `/Game/` literal, no
-prefix literal and no subfolder literal at a call site — a convention with no single point of
-definition rots at the first patch that does not know about it, and a naming regression compiles
-cleanly.
-
-Two things check it. `MantlePlace.Import.Naming` asserts the exact strings the module produces, and
-`tools/unreal-naming/check_generated_names.py` refuses a `/Game/` literal, a bare prefix, an `MP_`
-label, a subfolder path segment or an inline identity truncation anywhere else. The second exists
-because the first only runs where an engine does — a line added at a call site would otherwise reach
-`main` unchallenged. A line that genuinely needs one can carry `// naming-gate: allow <reason>`; the
-reason is required.
-
-### Re-import, and the two things that make it safe
-
-Re-importing an order **replaces** its content: the destination directory is force-deleted and
-rebuilt, because Interchange re-creates source-named assets. Two things stand in front of that
-delete, and neither is optional.
-
-**A provenance record**, written outside the content tree under the project's `Saved` directory. The
-folder is named by the *truncated* identity, so two orders sharing eight characters name one folder;
-the record holds the full identity, and a mismatch refuses instead of deleting. It lives outside the
-content because it has to be readable at the moment the importer is deciding whether to delete that
-content — loading an asset inside a folder about to be force-deleted is the hazard documented at the
-delete itself. Its absence is also how content from 0.3.0 and earlier is recognised: that content is
-refused, with its path, rather than adopted or silently replaced.
-
-**An actor tag**, `mantleplace_import=<identity>`, carrying the full identity. This, not the label,
-is what the stale-actor sweep matches. Labels are user-editable, and matching on them meant a user
-who renamed an actor in the outliner broke their own next re-import and got a second landscape on
-top of the first.
+- **Where content lands** — `<ContentRoot>/<identity>/{Imagery,Mesh,Buildings,CoverageRasters,Landcover}`;
+  the content root is a **project** setting, never per-user; the identity names the *order*
+  ([ADR 0002](../docs/adr/0002-import-identity.md)) and does not repeat in leaf names; the outliner
+  folder is fixed.
+- **Paint layers are not ours to name** — the layer's name is the platform's material name verbatim
+  (`HPS-33`); only the asset is `LI_<material>`.
+- **One place, not every call site** — every generated name and path comes from
+  `MantlePlaceImportNaming`; `MantlePlace.Import.Naming` and the drift gate check it, and a line that
+  needs an exception carries `// naming-gate: allow <reason>`.
+- **Re-import replaces, behind two guards** — a provenance record under `Saved` holding the full
+  identity, and the `mantleplace_import=<identity>` actor tag the sweep matches.
 
 ## Things that will bite you
 
-- **CI never compiles this plugin.** It needs a licensed engine on Windows, and a self-hosted runner
-  on a public repository would let a fork's pull request execute on the build machine. A green pull
-  request here can still break the engine build — an accepted, published lag. Corollary: build it
-  locally before you claim it works, and be suspicious of a type widening, which compiles at some
-  call sites and silently rots others.
-- **The editor does not compile this tree. It compiles the consuming project's submodule checkout
-  of it** (`HPS-50`), a single slot that is `main` by default and moves only by
-  `tools/Refresh-UnrealInstall.ps1` — `origin/main` after a merge, `origin/<branch>` for a preview
-  you were asked for. `tools/Check-UnrealInstall.ps1` says which it currently holds; both need
-  `MANTLEPLACE_CONSUMING_PROJECT_ROOT` or `-ConsumingProjectRoot` to find the consuming project, and say `not configured`
-  otherwise. Editing inside that checkout is the orphan-commit hazard root `CLAUDE.md` rule 3
-  describes: edit in a worktree here, push, and preview from origin. Live Coding picks up `.cpp`
-  bodies; a header or an asset that changed under the checkout needs a restart. The consuming
-  project documents its own side of the loop, including the pin bump that follows a merge.
-- **Nothing the importer generates is ever saved.** There is no `SavePackage` call in the plugin;
-  every import task sets `bSave = false` and generated packages are only marked dirty. A user who
-  closes without saving loses the import.
-- **The identity is not the job id, and this is the mistake to expect.** `FMantlePlaceVaultManifest`
-  offers `JobId` first and it reads like the obvious key. It changes on every rebuild. Anything
-  keyed on it duplicates a user's content instead of replacing it, silently, and the symptom shows
-  up one refresh later. `MantlePlaceImportNaming::ResolveIdentity` is the only place that decides.
-- **The actor tag is load-bearing; the label is not.** Re-import matches the tag. Change the label
-  format freely; change the tag and you have changed which actors a re-import destroys.
-- **Re-import wipes before it writes.** Interchange re-creates source-named assets, so the importer
-  force-deletes the destination directory first. Anything that widens what the destination path can
-  be widens what that delete can reach — guard the inputs to it, not the delete.
-- **[`.clang-format`](.clang-format) is for new code only.** The existing files predate it and are
-  not clean against it. Nothing in CI checks formatting, and a reformat sweep is refused — see
-  [CONTRIBUTING.md](../CONTRIBUTING.md).
-- **No credentials in a `.uasset`, ever.** Property values are serialized, so a URL typed into a
-  Blueprint's class defaults is in the committed file.
+- **CI never compiles this plugin** — a licensed engine is needed, and a self-hosted runner would
+  run a fork's code. Build it locally before you claim it works, and distrust a type widening: it
+  compiles at some call sites and silently rots others.
+- **The editor compiles the consuming project's submodule checkout, not this tree** (`HPS-50`), a
+  single slot that is `main` by default and moves only by `tools/Refresh-UnrealInstall.ps1`
+  (`origin/main` after a merge, `origin/<branch>` for a preview you were asked for);
+  `tools/Check-UnrealInstall.ps1` says which it holds. Both need `MANTLEPLACE_CONSUMING_PROJECT_ROOT`
+  or `-ConsumingProjectRoot`, else `not configured`. Editing inside that checkout is root rule 3's
+  orphan-commit hazard: edit in a worktree here, push, preview from origin. Live Coding picks up
+  `.cpp` bodies; a changed header or asset needs a restart. The consumer documents its pin bump.
+- **Nothing the importer generates is ever saved.** No `SavePackage`; every task sets
+  `bSave = false` and packages are only marked dirty. Closing without saving loses the import.
+- **The identity is not the job id.** `FMantlePlaceVaultManifest` offers `JobId` first; it changes
+  on every rebuild, so anything keyed on it silently duplicates a user's content one refresh later.
+  `MantlePlaceImportNaming::ResolveIdentity` is the only place that decides.
+- **The actor tag is load-bearing; the label is not.** Change the label format freely; change the
+  tag and you change which actors a re-import destroys.
+- **Re-import wipes before it writes.** Anything that widens what the destination path can be widens
+  what that delete can reach — guard the inputs to it, not the delete.
+- **[`.clang-format`](.clang-format) is for new code only**; nothing checks it and a reformat sweep
+  is refused ([CONTRIBUTING.md](../CONTRIBUTING.md)).
+- **No credentials in a `.uasset`, ever** — a URL in a Blueprint's class defaults is in the file.
 
 ## Where knowledge lives
 
 - The bundle-manifest contract → the published JSON Schema series at
-  `https://mantle.place/.well-known/schemas/bundle-manifest/`. It is the authority; the version this
-  host is verified against lives in
+  `https://mantle.place/.well-known/schemas/bundle-manifest/`; this host's verified version lives in
   [`verified-against.json`](../tools/manifest-conformance/verified-against.json), never in prose.
-- Cross-host normative rules → the Host Plugin Standard, cited by `HPS-NN` id.
-- Signing in, tokens, refresh, sign-out — what the platform must serve →
-  [`docs/platform-auth-contract.md`](../docs/platform-auth-contract.md). Cross-host: Revit reads the
-  same rejection codes from the same routes, and both hosts share one stored credential.
-- Shared domain vocabulary → [`CONTEXT.md`](../CONTEXT.md).
-- Why a decision was taken → [`docs/adr/`](../docs/adr/).
+- What each `HPS-NN` means here → [`docs/standard-map.md`](docs/standard-map.md); the rules
+  themselves → [`docs/host-plugin-standard.md`](../docs/host-plugin-standard.md).
+- Signing in, tokens, refresh, sign-out →
+  [`docs/platform-auth-contract.md`](../docs/platform-auth-contract.md), cross-host; both hosts share
+  one stored credential.
+- Shared vocabulary → [`CONTEXT.md`](../CONTEXT.md). Why a decision was taken →
+  [`docs/adr/`](../docs/adr/).
 - How this plugin behaves and how to build it → [`README.md`](../README.md).
-- Whether this plugin supports a feature at all, and why not → the
+- Whether this plugin supports a feature, and why not → the
   [host support matrix](../docs/host-support.md). A change that adds, narrows or drops a feature
-  here edits the **Unreal** column in the same pull request, and only that column; a gap it opens or
-  leaves links its issue or ADR. Never state a per-host status anywhere else.
+  edits the **Unreal** column in the same pull request, and only that column; a gap links its issue
+  or ADR. Never state a per-host status anywhere else.

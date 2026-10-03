@@ -5,9 +5,9 @@ everything in it is world-readable.**
 
 Read that line before running any write command. Both halves matter — see "The three rules" below.
 
-Maintainer agent sessions follow the Mantle Place agent standard for workflow — worktrees, branches,
-issues, landing, finishing a session — loaded by the maintainers' tooling at session start. This file
-holds what is specific to this repository; nothing a contributor needs lives only in that standard.
+**Workflow** — worktrees, branches, issues, landing, finishing a session — is the Mantle Place agent
+standard, loaded by the maintainers' tooling at session start. This file holds only what is specific
+to this repository; nothing a contributor needs lives only in that standard.
 
 ## Identity
 
@@ -19,9 +19,9 @@ holds what is specific to this repository; nothing a contributor needs lives onl
 | Contribution terms | DCO sign-off, no CLA ([CONTRIBUTING.md](CONTRIBUTING.md)) |
 
 **dcc means *digital content creation*:** the host applications designers work in. This repo holds
-the Mantle Place plugin for each such host, and nothing else. It is consumed by the Mantle Place
-project tree as a git submodule mounted inside the Unreal project's `Plugins/` directory, where
-plugin discovery is a recursive scan.
+the Mantle Place plugin for each such host, and nothing else. A consumer mounts it as a git
+submodule inside the Unreal project's `Plugins/` directory, where plugin discovery is a recursive
+scan.
 
 ## Layout
 
@@ -35,7 +35,7 @@ tools/unreal-naming/           the generated-name drift gate + its cases
 tools/brand-assets/            renders the mark for both hosts; its input is private
 tools/local-install/           the session-start check that a host's local install is the tree
 docs/adr/                      architecture decision records, numbered and cross-host
-docs/agents/                   how the engineering skills read this repo — tracker, labels, domain
+docs/agents/                   how agents work this repo — tracker, labels, domain, CI, public text
 docs/platform-auth-contract.md sign-in and tokens — the one contract both hosts implement
 docs/host-support.md           which host does what with each feature, and why a gap exists
 docs/import-inventory.md       what each host imports, when, and what it was measured to cost
@@ -45,275 +45,184 @@ LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP
 CONTEXT.md  CLAUDE.md
 ```
 
-**The rule for every future top-level addition:** *a top-level folder is a DCC host or a cross-host
-concern, nothing else.* Names are spelled out in full — `mantleplace`, never `mp`. `max/`,
-`blender/`, `rhino/` are created when they have real content, never as empty placeholders — and
-"real content" means the triad every layer here is built as (an impure host shim, a pure logic core,
-and a headless test of that core — [CONTRIBUTING.md](CONTRIBUTING.md#style-and-shape)), the
-host's local-install tool and check script (`HPS-50` — see "Local installs" below), and the new
-folder's own `<host>/CLAUDE.md`. **That
-rule governs this repository and its code** — paths, folders, modules, symbols — **not the strings a
-plugin writes into a user's project.** A host may abbreviate where a user reads the name in a cramped
-host UI; Unreal does, on actor labels, and only there
+**Every future top-level addition is a DCC host or a cross-host concern, nothing else.** Names are
+spelled out in full — `mantleplace`, never `mp`. `max/`, `blender/`, `rhino/` are created only with
+real content: the triad every layer is built as (an impure host shim, a pure logic core, a headless
+test of that core — [CONTRIBUTING.md](CONTRIBUTING.md#style-and-shape)), the host's local-install
+tool and check script (`HPS-50`), and its own `<host>/CLAUDE.md`. **That rule governs this
+repository's code** — paths, folders, modules, symbols — **not the strings a plugin writes into a
+user's project.** Unreal abbreviates on actor labels, and only there
 ([ADR 0003](docs/adr/0003-naming-authority-and-mp-prefix.md)). Do not "fix" one by citing the other.
 
 ## The three rules
 
 ### 1. Everything here is public
 
-Anything you write lands in a world-readable repository, permanently, whether or not it is later
-deleted — across six surfaces: tracked files, commit messages, pull request titles, pull request
-bodies, branch names and the issue tracker's own text. Internal trackers, internal documents and
-internal repositories are not citable here, not by URL, not by path, not by issue number; a bare
-`#42` in a Markdown file auto-links to *this* repo's issue 42, which is worse than dangling.
-Credentials never, including in `.uasset` files, which serialize property values. **This one is
-checked** — by `ci-public-hygiene` on the first five, whose `references` job is a required check on
-`main`, and by `ci-tracker-hygiene` on the sixth, which detects after the fact because no workflow
-can block a post. **Before writing on any of those six surfaces, read
+Anything you write lands in a world-readable repository, permanently, across six surfaces: tracked
+files, commit messages, pull request titles, pull request bodies, branch names and the issue
+tracker's own text. Internal trackers, documents and repositories are not citable here — not by URL,
+path or issue number; a bare `#42` in a Markdown file auto-links to *this* repo's issue 42. No
+credentials, including in `.uasset` files, which serialize property values. `ci-public-hygiene`
+checks the first five (its `references` job is required on `main`); `ci-tracker-hygiene` detects the
+sixth after the fact. **Before writing on any of the six, read
 [`docs/agents/public-surface.md`](docs/agents/public-surface.md)** — what is refused, the one split
-that makes a bare `#42` fine in a commit message, the structural exemptions, and the pre-publication
-hook that catches a violation before a push publishes it.
+that makes a bare `#42` fine in a commit message, the exemptions, and the pre-publication hook.
 
 ### 2. Confirm the repo before any write command
 
-`git remote -v` must show `mantleplace-dcc`. This tree sits beside sibling checkouts of other Mantle
-Place repositories, all of them git, so a session confused about which root it is in can run a
-*successful* commit in the wrong place. A commit that lands in the wrong repo is a real incident, and
-it is silent. Never assume the working directory from conversation history — check it.
+`git remote -v` must show `mantleplace-dcc`. Sibling checkouts of other Mantle Place repositories
+sit beside this one, all git, so a confused session can run a *successful* commit in the wrong
+place — silently. Never assume the working directory from conversation history; check it.
 
 ### 3. If this tree is a submodule, create a branch before your first edit
 
-⛔ **Run `git status` here first. If it says `HEAD detached at <sha>`, you are inside a consuming
-project's submodule checkout, and a commit made now belongs to no branch.**
-
-```
-$ git status
-HEAD detached at a0f1c37
-```
-
-`git submodule update` checks out a *commit*, not a branch — that is what a pin is — so this is the
-**default state** in every consumer, not a mistake someone made. Commit in it, let any later
-`git submodule update` run, and the commit is unreachable and for practical purposes gone. Nothing
-warns you. The work is simply lost.
-
-The cure is one command, and it has to come **before** you edit anything:
+⛔ **Run `git status` first. `HEAD detached at <sha>` means you are inside a consumer's submodule
+checkout, and a commit made now belongs to no branch.** That is the default state in every consumer
+— `git submodule update` checks out a commit, not a branch — and the next update leaves the commit
+unreachable. Nothing warns you. Before you edit anything:
 
 ```bash
 git fetch origin
 git switch -c <type>/<short-description> origin/main
 ```
 
-Then commit with `-s` (see [CONTRIBUTING.md](CONTRIBUTING.md)), **push the branch before you touch
-anything in the consuming project**, and open the PR here. The consuming project's pin moves only
-after that PR merges, and only to the merged commit on `main` — pinning to your branch tip is green
-on your machine and unfetchable for everyone else.
-
-This applies to any consumer of this repo. The Mantle Place project tree mounts it at
-`Plugins/MantlePlaceDcc/` — the consuming project's root is an Unreal project root, so that is the
-path UE's recursive plugin scan finds it on — and documents the full loop on its side. The rule
-above is what matters wherever you are.
+Commit with `-s` ([CONTRIBUTING.md](CONTRIBUTING.md)), **push the branch before touching the
+consuming project**, and open the PR here. The consumer's pin moves only after that PR merges, and
+only to the merged commit on `main` — a pin to your branch tip is unfetchable for everyone else. The
+Mantle Place project tree mounts this repo at `Plugins/MantlePlaceDcc/` and documents its side.
 
 ## Worktrees
 
-A worktree goes beside the checkout, **never inside the repository**: this tree is mounted inside a
-consuming Unreal project's `Plugins/` directory, where plugin discovery is a recursive scan, so a
-worktree under the repo root puts a second `MantlePlace.uplugin` inside that scan.
+Beside the checkout, never inside the repository: a worktree under the repo root puts a second
+`MantlePlace.uplugin` inside the consumer's recursive plugin scan. Harness-made worktrees are
+relocated beside `main`; everything else about worktrees is the agent standard's.
 
 ## Releases
 
-**One release track per host.** Tags are `<host>-<version>` — `revit-0.1.0`, `unreal-0.4.0` — no
-`v`, so tag-matches-artifact is a string equality; `v0.1.0`–`v0.3.0` are Unreal's pre-history and are
-never renamed. Each release body is that track's changelog *and* its provenance record; there is no
-changelog file. **No release can be built or gated in public CI, and none ever will be** — both hosts
-need a licensed install on the build machine (Unreal an engine, Revit `RevitAPI.dll` from Revit
-2025), and a self-hosted runner is forbidden here, so packaging runs privately. Packaging is not the
-gate: for Revit the gate is the ribbon loading and one real import completing in **2025, 2026 and
-2027**, which no machine without all three can claim. See
-[`docs/adr/0001-per-host-release-tracks.md`](docs/adr/0001-per-host-release-tracks.md), and
-`revit/tools/Package-MantlePlaceRevit.ps1` for the repeatable half.
+**One release track per host**, tagged `<host>-<version>` with no `v` (`revit-0.1.0`,
+`unreal-0.4.0`), so tag-matches-artifact is a string equality; `v0.1.0`–`v0.3.0` are Unreal's
+pre-history, never renamed. The release body is the changelog and the provenance record; there is no
+changelog file. **No release is built or gated in public CI, ever** — both hosts need a licensed
+install (an engine; `RevitAPI.dll` from Revit 2025), so packaging runs privately. Revit's gate is the
+ribbon loading and one real import completing in 2025, 2026 and 2027.
+[ADR 0001](docs/adr/0001-per-host-release-tracks.md) and
+[`revit/README.md` ▸ Packaging a release](revit/README.md#packaging-a-release) hold the rest.
 
 ## Binaries
 
-**There are no Git LFS patterns in this repository, on purpose** — a stranger's first clone must not
-be a multi-hundred-megabyte pull; the binaries that are here — one `.uasset`, three fonts, twenty-seven PNG
-icons, one Revit family — total about 1.6 MB and are plain git blobs. **Ask before you `git add` any binary, a
-new file of a type already here included:** the axis is bytes, not novelty, and the budget being
-protected is a stranger's first clone rather than a list of blessed extensions. Git decides
-text-vs-binary at `git add` time, and a binary committed here is in the history forever with no later
-fix that is not a force-push. There is deliberately **no stated per-file size threshold** — nobody
-has set one — which is exactly why the answer is to ask rather than to judge. **No engine binaries,
-no compiled plugins, no test bundles, no sample assets, and no sample bundles — ever.** The last one has teeth: real geospatial data carries licence
-obligations, and shipping a bundle is redistributing it. The docs show generation instead.
+**No Git LFS, on purpose** — a stranger's first clone must not be a multi-hundred-megabyte pull. The
+binaries here (one `.uasset`, three fonts, twenty-seven PNG icons, one Revit family, about 1.6 MB)
+are plain git blobs. **Ask before you `git add` any binary**, a new file of a type already here
+included: the axis is bytes, not novelty, and there is deliberately no per-file size threshold, which
+is why the answer is to ask. A binary committed here is in history forever. **No engine binaries, no
+compiled plugins, no test bundles, no sample assets, no sample bundles — ever**; real geospatial data
+carries licence obligations, so the docs show generation instead.
 
 ## The boundary that keeps this client thin
 
 **Any logic whose capture by a fork would hurt Mantle Place does not belong in this repository.**
-
-Concretely: the plugins apply pre-derived values and never derive them. No CRS or datum machinery, no
+The plugins apply pre-derived values and never derive them: no CRS or datum machinery, no
 coverage-aware source selection, no mosaic assembly, no material-weight derivation, no licence
 compliance gating. The manifest publishes a survey point, a landscape transform, a drape extent — the
-plugin reads them and applies them verbatim.
+plugin reads them and applies them verbatim. Enforced at review, permanently: a patch that computes a
+placement value locally is refused even when the arithmetic is correct.
 
-This is enforced at review, permanently. A patch that computes a placement value locally is refused
-even when the arithmetic is correct.
-
-That is a boundary on *logic*. The boundary on *work* — which repository an item belongs to, and why
-the project you open to do the work is never the tracker for it — is
-[`docs/agents/work-routing.md`](docs/agents/work-routing.md). The two are independent: work can be
-perfectly thin and still belong somewhere else.
+That bounds *logic*. Which repository a piece of *work* belongs to is
+[`docs/agents/work-routing.md`](docs/agents/work-routing.md); the two are independent.
 
 ## Local installs
 
-**The plugin a host application loads on this machine is a copy of the tree, and the copy is a
-single slot that tracks `main`** (`HPS-50`, [`tools/local-install/`](tools/local-install/README.md)).
-Revit loads one Mantle Place per process and the consuming Unreal project has one submodule
-checkout, so there is no install per worktree; the slot says what it holds instead, and the rules
-keep it on `main`:
+**The plugin a host loads on this machine is a copy of the tree: a single slot that tracks `main`**
+(`HPS-50`; [`tools/local-install/`](tools/local-install/README.md) holds the model and the verdicts).
 
-- **At session start, run the check** and read its lines before deciding what a host will show you:
-
-  ```powershell
-  ./tools/local-install/Check-LocalInstall.ps1
-  ```
-
-  `current` and `preview` need nothing. `stale` or `unverified` means the host is not the tree, and
-  a bug seen there is not yet evidence about the code. Unreal reports `not configured` unless
-  `MANTLEPLACE_CONSUMING_PROJECT_ROOT` names the consuming project, and that is fine on any machine that has none.
-- **A session that merges a pull request touching `revit/` or `unreal/` deploys from `main` before
-  it finishes**: pull `main`, run `revit/tools/Deploy-MantlePlaceRevit.ps1` there and
-  `unreal/tools/Refresh-UnrealInstall.ps1`, and report the stamp each printed. The session is not
-  finished until each touched host's install is `main` again. Revit refuses while Revit is open;
-  that refusal is reported as a leftover the session lacked the access to clear, never skipped
-  silently. The first launch of a new Revit build is a human's — see `revit/README.md`.
-- **A preview from a branch happens only when the founder asks for it in that session.** It is
-  stamped as a preview, the deploy script says so, and the slot returns to `main` at the next
-  post-merge deploy. Nothing deploys from a branch by default.
+- **At session start, run `./tools/local-install/Check-LocalInstall.ps1`.** `current` and `preview`
+  need nothing; `stale` or `unverified` means a bug seen in the host is not yet evidence about the
+  code. Unreal says `not configured` without `MANTLEPLACE_CONSUMING_PROJECT_ROOT`, which is fine.
+- **A session that merges a PR touching `revit/` or `unreal/` deploys from `main` before it
+  finishes**: pull `main`, run `revit/tools/Deploy-MantlePlaceRevit.ps1` and
+  `unreal/tools/Refresh-UnrealInstall.ps1`, and report each stamp. Revit refuses while Revit is open;
+  report that as a leftover, never skip it silently. A new Revit build's first launch is a human's
+  ([`revit/README.md`](revit/README.md#loading-it-into-revit)).
+- **A preview from a branch happens only when the founder asks in that session.** It is stamped as a
+  preview, and the next post-merge deploy returns the slot to `main`.
 
 ## CI
 
-Five workflows run on every pull request, all on free hosted runners: `ci-manifest-conformance`,
-`ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming` and `ci-brand-assets`. (`stale.yml` and
-`ci-tracker-hygiene.yml` are tracker hygiene, not gates — the second runs on issue and comment
-events, a pull request's own comments included, and it detects rather than blocks.)
-
-`ci-brand-assets` is **half a gate by construction**: the mark renderer's input is a private file,
-so no runner can regenerate the committed PNGs, and the job tests the rules that decide what a
-render looks like rather than the renders themselves ([ADR 0009](docs/adr/0009-host-assets-render-the-monogram.md)).
-
-**A workflow name is not a check name.** Branch protection matches *jobs*, and the mapping is not
-one-to-one — `ci-revit-tests` contributes two. The four required checks on `main` are
-`conformance`, `pure-core`, `pure-core-windows` and `references`; read them from the repository
-rather than from this list, with
-`gh api repos/mantleplace/mantleplace-dcc/branches/main/protection`. Note what is **absent**:
-`generated-names`, the `ci-unreal-naming` job, reports on every pull request but is not a required
-check, so the one automated guard in front of an Unreal naming regression cannot currently block a
-merge.
-
-**No workflow may carry a `paths:` filter on `pull_request`** — a required check that is
-path-filtered never reports on a pull request outside its paths, so the check sits pending forever
-and nothing can merge. (A `paths:` filter on `push` is fine; `ci-revit-tests` has one.) **Never attach a self-hosted runner to this repository:** a fork's pull request would
-execute on the build machine. The Unreal compile stays on private infrastructure for exactly that
-reason, so a green pull request here can still break the engine build — an accepted, published lag
-([README](README.md#ci-and-what-it-does-not-cover)). **C++ formatting** is
-[`unreal/.clang-format`](unreal/.clang-format), for new code only; nothing in CI checks it and a
-reformat sweep is refused.
+Five workflows gate every pull request on free hosted runners: `ci-manifest-conformance`,
+`ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming`, `ci-brand-assets`. **No workflow may
+carry a `paths:` filter on `pull_request`**, and **never attach a self-hosted runner** — a fork's
+pull request would execute on the build machine, which is why the Unreal compile is private and a
+green PR here can still break it. The required checks, the jobs behind them, what is not required,
+and C++ formatting are in [`docs/agents/ci.md`](docs/agents/ci.md).
 
 ## Where knowledge lives
 
 Most facts already have exactly one home. Find it before writing a fact down anywhere else.
 
 - **Which repository a piece of work belongs to** → [`docs/agents/work-routing.md`](docs/agents/work-routing.md).
-  The test is mechanical: **work belongs to the repository whose tracked files its merge commit
-  touches**, and **the project you open to do the work is never the tracker for it**. Read it before
-  filing an issue or deciding that something you hit while working here is this repository's problem.
+  Work belongs to the repository whose tracked files its merge commit touches, and the project you
+  open to do the work is never the tracker for it.
 - **Which host does what with each feature, and why a gap exists** →
-  [`docs/host-support.md`](docs/host-support.md), the one place a per-host feature status is
-  stated. Its opening says what it owns, what it leaves to a README, the roadmap and an ADR, and who
-  edits which column.
-- **What each host imports, whether by default, and what it costs** →
-  [`docs/import-inventory.md`](docs/import-inventory.md), one row per category per host. Revit's
-  measured figures stay in `SlowStepNotice.Measured` and are cited there; Unreal's live in it.
-- **Writing anything public** — a file, a commit message, a PR title or body, a branch name →
-  [`docs/agents/public-surface.md`](docs/agents/public-surface.md).
-- **What a word means** → [`CONTEXT.md`](CONTEXT.md) — the glossary, and only that; no rule, no
-  decision, no implementation detail. A term belongs there once the same word has meant two things
-  to two people.
-- **Why a decision was taken** → [`docs/adr/`](docs/adr/), numbered and append-only. Today:
-  **0001** per-host release tracks and the missing `v` · **0002** Unreal import identity, where a
-  **re-import replaces** · **0003** naming authority and the `MP_` prefix · **0004** Revit terrain
-  identity, where a **re-import refuses** — 0002's bug in the other host with the opposite remedy ·
+  [`docs/host-support.md`](docs/host-support.md), the one place a per-host status is stated.
+- **What each host imports, by default or not, and what it costs** →
+  [`docs/import-inventory.md`](docs/import-inventory.md); Revit's measured figures stay in
+  `SlowStepNotice.Measured` and are cited there.
+- **Writing anything public** → [`docs/agents/public-surface.md`](docs/agents/public-surface.md).
+- **CI jobs, required checks, workflow rules** → [`docs/agents/ci.md`](docs/agents/ci.md).
+- **What a word means** → [`CONTEXT.md`](CONTEXT.md) — the glossary only; no rule, decision or
+  implementation detail. A term belongs there once the same word has meant two things to two people.
+- **Why a decision was taken** → [`docs/adr/`](docs/adr/), numbered and append-only:
+  **0001** per-host release tracks, no `v` · **0002** Unreal: a **re-import replaces** ·
+  **0003** naming authority and the `MP_` prefix · **0004** Revit terrain: a **re-import refuses** ·
   **0005** release installs are copy-first · **0006** Unreal **declines**
-  `elevation.dem.bounds_target_crs` while Revit consumes it, and why the asymmetry is the contract
-  rather than a disagreement · **0007** every `HPS-NN` cited in a public file must resolve in a
-  public document, so the **publicly-cited half of the standard is published here** and a private
-  rule becomes uncitable in public · **0008** the Revit imagery drape is anchored to the
-  **smooth-shading origin**, so a project-wide display checkbox the curator owns is load-bearing for
-  the photograph · **0009** host assets render the **monogram**, not the mark as drawn — the extrude
-  is below a pixel at ribbon sizes, and the roundel is retired · **0010** Revit's tooltip
-  **vignettes are drawn, not photographed**, and sized to the 355 px cap the ribbon enforces in
-  silence · **0011** the Revit provenance record's **schema GUID is permanent**, and the attribution
-  note is **known by the text that record says was written**, for its own order only — so a re-import
-  rewrites it in place, the one Revit element that is · **0012** Revit's context buildings are
-  **the site model's own extrusions, copied** into Generic Model elements — not footprints extruded
-  here, not the glb, and no longer a link · **0013** Revit's **published contours** are one
-  DirectShape per contour — not model lines — placed only from Revit's own block, and a re-import
-  of an earlier build **refuses** · **0014** Revit draws **flood zones and steep ground on a hazard
-  plan** of filled regions, one per build, as context — never on the terrain, never through the
-  Analysis Visualization Framework, and never redrawn once a curator may have put it on a sheet.
-  Write one only for a decision hard to reverse,
-  surprising without the context, and the result of a real trade-off; an ADR is not a design
-  document.
+  `elevation.dem.bounds_target_crs`, Revit consumes it · **0007** a publicly cited `HPS-NN` must
+  resolve in a public document · **0008** the Revit drape is anchored to the **smooth-shading
+  origin** · **0009** host assets render the **monogram** · **0010** Revit tooltip **vignettes are
+  drawn**, capped at 355 px · **0011** the Revit provenance **schema GUID is permanent** ·
+  **0012** Revit context buildings are **the site model's own extrusions, copied** · **0013** Revit
+  **published contours** are DirectShapes · **0014** Revit draws hazards **on a hazard plan**.
+  Write one only for a decision hard to reverse, surprising without the context, and the result of a
+  real trade-off; an ADR is not a design document. Adding one is two edits
+  ([`docs/agents/domain.md`](docs/agents/domain.md)).
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
-  authority; never restate a value it owns, and never hardcode a version in prose — the version each
-  host is verified against lives in
+  authority; never restate a value it owns or hardcode a version in prose — each host's verified
+  version lives in
   [`tools/manifest-conformance/verified-against.json`](tools/manifest-conformance/verified-against.json),
   where CI checks it.
-- **The bundle format, in public prose** → [`spec/`](spec/), **descriptive** — it never restates a
-  field, an enum, a constraint or a version:
-  - [`format.md`](spec/format.md) — the zip layout, **the pointer doctrine** (find every file by a
-    manifest pointer value, never by folder name), the `hosts.<hostId>` block boundary a consumer
-    may not cross, **sha256 present / absent / required-and-missing**, and apply-placement-verbatim.
-  - [`compatibility.md`](spec/compatibility.md) — what MAJOR/MINOR/PATCH mean, and what to do with
-    **an unknown field, an unknown enum value, or an unknown higher major**.
-  - [`conformance.md`](spec/conformance.md) — what claiming a corpus group obliges you to.
-    **Adding a corpus case** starts here and continues in
-    [`corpus/README.md`](tools/manifest-conformance/corpus/README.md); the corpus is normative and
-    maintainer-owned, so a case is proposed by pull request, never forked.
-  - [`changelog.md`](spec/changelog.md) — the one place versions appear, as dated history.
+- **The bundle format, in public prose** → [`spec/`](spec/), descriptive — it never restates a field,
+  enum, constraint or version. [`format.md`](spec/format.md): the zip layout, the pointer doctrine
+  (find every file by a manifest pointer, never by folder name), the `hosts.<hostId>` boundary,
+  sha256 present / absent / required-and-missing, apply-placement-verbatim.
+  [`compatibility.md`](spec/compatibility.md): MAJOR/MINOR/PATCH, and an unknown field, enum value or
+  higher major. [`conformance.md`](spec/conformance.md): what claiming a corpus group obliges; the
+  corpus is maintainer-owned and a case is proposed by pull request, never forked
+  ([`corpus/README.md`](tools/manifest-conformance/corpus/README.md)).
+  [`changelog.md`](spec/changelog.md): the one place versions appear.
 - **Cross-host normative rules** → [`docs/host-plugin-standard.md`](docs/host-plugin-standard.md),
-  cited by `HPS-NN` id. [ADR 0007](docs/adr/0007-publicly-cited-standard-rules-are-published-here.md)
-  decides that **a public file may cite only a rule whose text is public**, and `ci-public-hygiene`
-  now enforces it: an `HPS-NN` that the published standard does not state fails the gate. The
-  interim "no new citations" rule is retired — add one freely, and if the rule it names is not
-  published yet, state the rule rather than dropping the citation. This is not [`spec/`](spec/),
-  whose charter is the bundle format and nothing else; the standard says what a host must *do* with
-  a field, `spec/` says what the field is.
+  cited by `HPS-NN` id. A public file may cite only a rule whose text is published there
+  ([ADR 0007](docs/adr/0007-publicly-cited-standard-rules-are-published-here.md)), and
+  `ci-public-hygiene` enforces it; if the rule is not published yet, state it rather than drop the
+  citation. The standard says what a host must *do* with a field; `spec/` says what the field is.
 - **Signing in, tokens, refresh, sign-out** →
-  [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md) — what `mantle.place` must
-  serve for either host to sign in and stay signed in, and which rejections are definitive. Both
-  hosts implement it against one shared credential, so it is cross-host, not Unreal's.
+  [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md) — cross-host; both hosts share
+  one stored credential.
 - **Building, testing, or what a host writes into a *user's* project** → that host's own `CLAUDE.md`
-  ([`unreal/`](unreal/CLAUDE.md), [`revit/`](revit/CLAUDE.md)), read before touching that host. Not
-  `spec/`, which describes the format, and not here.
-- **Issues, labels, triage** → [`docs/agents/`](docs/agents/) — see "Agent skills" below.
+  ([`unreal/`](unreal/CLAUDE.md), [`revit/`](revit/CLAUDE.md)), read before touching that host.
 - **What the plugins do, and how to build them** → [`README.md`](README.md).
-- **Governance, and what this repo refuses** → [`CONTRIBUTING.md`](CONTRIBUTING.md) (the merge bar,
-  DCO sign-off, and the patches declined unread), [`SECURITY.md`](SECURITY.md) — **the auth flow
-  (PKCE, the loopback redirect listener, the token grant, the auth state machine) and the secret
-  stores are closed to outside patches: a defect there is a private report, not a pull request**,
+- **Governance, and what this repo refuses** → [`CONTRIBUTING.md`](CONTRIBUTING.md) (merge bar, DCO,
+  patches declined unread), [`SECURITY.md`](SECURITY.md) — **the auth flow (PKCE, the loopback
+  listener, the token grant, the auth state machine) and the secret stores are closed to outside
+  patches: a defect there is a private report, not a pull request** — and
   [`TRADEMARK.md`](TRADEMARK.md).
 
 ## Agent skills
 
-Configuration the engineering skills read before they act — how *this* repo is worked, not what it
-contains.
+How the engineering skills work *this* repo:
 
 - **Issue tracker** → [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). GitHub issues
-  on `mantleplace/mantleplace-dcc`, via `gh`; external PRs are **not** a triage surface.
-- **Triage labels** → [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md). Five state
-  roles and two categories, each label string equal to its own name; plus the `spec` parent label,
-  which takes a state's place, and the stale-job exemptions, the `wayfinder:` planning family and the
-  `host:` labels saying which plugin an issue is about — those three orthogonal to the
-  category-and-state pair, and `host:` may repeat.
+  on `mantleplace/mantleplace-dcc`, via `gh`; external PRs are not a triage surface.
+- **Triage labels** → [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md): five states
+  and two categories, each label string equal to its own name; the `spec` parent label; and the
+  orthogonal stale-exemption, `wayfinder:` and repeatable `host:` labels.
 - **Domain docs** → [`docs/agents/domain.md`](docs/agents/domain.md). Single-context: one
   [`CONTEXT.md`](CONTEXT.md) and one [`docs/adr/`](docs/adr/), both cross-host.

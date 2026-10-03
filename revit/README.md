@@ -331,8 +331,8 @@ measured on, and the window shows that beside the clock. The drape and the polyg
 layers count their subdivisions as they go (`Imagery Drape: 120 of 405`), though Cancel still waits
 for the step to finish, and smooth shading committed after the last step reads `Finishing`.
 
-Revit's window no longer owns the import window (why is in [`CLAUDE.md`](./CLAUDE.md)), and that is a
-trade:
+Revit's window no longer owns the import window (why is in the
+[API record](docs/api-record.md)), and that is a trade:
 
 - it floats over Revit while Revit is the application in front, including when you click a Revit that
   is stuck in a commit;
