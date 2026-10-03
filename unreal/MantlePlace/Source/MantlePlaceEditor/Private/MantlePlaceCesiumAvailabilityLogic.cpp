@@ -45,6 +45,20 @@ namespace
 		}
 		return ByZoom;
 	}
+
+	/** One declared rectangle, inclusive on both ends. int64 so a deep whole-world area fits. */
+	struct FRect
+	{
+		int64 StartX = 0, StartY = 0, EndX = 0, EndY = 0;
+
+		bool Covers(const TTuple<int32, int32>& XY) const
+		{
+			return XY.Get<0>() >= StartX && XY.Get<0>() <= EndX
+				&& XY.Get<1>() >= StartY && XY.Get<1>() <= EndY;
+		}
+
+		int64 Area() const { return (EndX - StartX + 1) * (EndY - StartY + 1); }
+	};
 }
 
 bool FMantlePlaceCesiumAvailabilityLogic::ParseTilePath(
@@ -153,16 +167,6 @@ bool FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(
 		}
 
 		// Read every rectangle first, so the level's size is known before anything is expanded.
-		struct FRect
-		{
-			int64 StartX, StartY, EndX, EndY;
-			bool Covers(const TTuple<int32, int32>& XY) const
-			{
-				return XY.Get<0>() >= StartX && XY.Get<0>() <= EndX
-					&& XY.Get<1>() >= StartY && XY.Get<1>() <= EndY;
-			}
-			int64 Area() const { return (EndX - StartX + 1) * (EndY - StartY + 1); }
-		};
 		TArray<FRect> LevelRects;
 		int64 LevelArea = 0;
 		for (const TSharedPtr<FJsonValue>& RectValue : *Rects)
@@ -187,7 +191,11 @@ bool FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(
 			// Inclusive on both ends, which is what makes the whole-world claim eight tiles rather
 			// than three. int64 because a low-zoom whole-world rectangle is small but a deep one is
 			// not.
-			const FRect Parsed{ StartX, StartY, EndX, EndY };
+			FRect Parsed;
+			Parsed.StartX = StartX;
+			Parsed.StartY = StartY;
+			Parsed.EndX = EndX;
+			Parsed.EndY = EndY;
 			if (Parsed.EndX < Parsed.StartX || Parsed.EndY < Parsed.StartY)
 			{
 				bConsistent = false;
