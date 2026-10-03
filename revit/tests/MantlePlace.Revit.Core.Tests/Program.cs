@@ -6,6 +6,7 @@ int exitCode = 0;
 exitCode |= ManifestConformanceTests.Run();
 exitCode |= ConformanceCorpusSelfTests.Run();
 exitCode |= ManifestReaderTests.Run();
+exitCode |= HostBlockPrecedenceTests.Run();
 exitCode |= ImportPlannerTests.Run();
 exitCode |= ImportLayerTests.Run();
 exitCode |= SurfacePointsTests.Run();

@@ -1149,18 +1149,32 @@ public static class BundleManifestReader
     }
 
     /// <summary>
-    /// Resolves one artifact: path from the <c>layout</c> table, falling back to the detail block's
-    /// own <c>path</c>; metadata and the optional sha256 from the detail block. No path from either
-    /// pointer means the artifact is absent — this never guesses a well-known folder (HPS-32).
+    /// Resolves one artifact. The path is this host's own block's <c>path</c> when
+    /// <paramref name="hostDetail"/> carries one (<c>HPS-52</c>); otherwise the <c>layout</c> table's,
+    /// falling back to the detail block's own <c>path</c>. Metadata and the optional sha256 come from
+    /// whichever of those blocks describes the file chosen. No path from any pointer means the
+    /// artifact is absent — this never guesses a well-known folder (HPS-32).
     /// </summary>
     /// <remarks>
-    /// The two pointers can disagree. <c>layout</c> is schema-required; the <c>elevation.*</c> and
-    /// <c>buildings.ifc</c> detail blocks still ride <c>additionalProperties</c> in v18, so producer
-    /// drift between them is a live possibility rather than a hypothetical. When they name different
-    /// files the <c>layout</c> path wins — it is the declared one — and the detail block's metadata
-    /// is DISCARDED rather than transplanted onto a file it does not describe. Carrying a
-    /// <c>units: "ftUS"</c> from one file over to another is a site imported 3.28× wrong with
-    /// nothing on screen to suggest it (HPS-20: unknown, not assumed).
+    /// <para>
+    /// The block is first because it is this host's, in this host's frame on every delivery tier; a
+    /// host-neutral file is in whatever frame its producer found convenient, and a host that reaches
+    /// for it first is right by coincidence. The host-neutral pointers are the fallback for a block
+    /// carrying no path, a bundle cut before the block carried one included. A block path naming an
+    /// entry the bundle lacks is still that pointer, and the planner skips it as one; it never falls
+    /// through to the host-neutral file.
+    /// </para>
+    /// <para>
+    /// The pointers can disagree. <c>layout</c> is schema-required; the <c>elevation.*</c> and
+    /// <c>buildings.ifc</c> detail blocks ride <c>additionalProperties</c>, so producer drift between
+    /// them is a live possibility rather than a hypothetical, and between the block and either of them
+    /// it is the frame difference the block exists for. Among the host-neutral two, the
+    /// <c>layout</c> path is preferred — it is the declared one. Whatever is chosen, a block that
+    /// describes a different file has its metadata DISCARDED rather than transplanted onto a file it
+    /// does not describe; a detail block with no <c>path</c> of its own describes the host-neutral
+    /// file. Carrying a <c>units: "ftUS"</c> from one file over to another is a site imported 3.28×
+    /// wrong with nothing on screen to suggest it (HPS-20: unknown, not assumed).
+    /// </para>
     /// </remarks>
     private static BundleArtifact? BuildArtifact(
         BundleManifest manifest,
@@ -1171,66 +1185,41 @@ public static class BundleManifestReader
     {
         string layoutPath = manifest.Layout.GetValueOrDefault(layoutKey, string.Empty);
         string detailPath = detail?.Str("path") ?? string.Empty;
+        string hostPath = hostDetail?.Str("path") ?? string.Empty;
 
-        string path = string.IsNullOrWhiteSpace(layoutPath) ? detailPath : layoutPath;
+        string neutralPath = string.IsNullOrWhiteSpace(layoutPath) ? detailPath : layoutPath;
+        string path = string.IsNullOrWhiteSpace(hostPath) ? neutralPath : hostPath;
         if (string.IsNullOrWhiteSpace(path))
         {
             return null;
         }
 
-        if (!string.IsNullOrWhiteSpace(detailPath) && !SamePath(detailPath, path))
+        string described = string.IsNullOrWhiteSpace(detailPath) ? neutralPath : detailPath;
+        if (!SamePath(described, path))
         {
             detail = null;
         }
 
+        // This host's block always describes the file chosen: its own path when it carries one, and
+        // the host-neutral file when it carries none. Its statements are read first — since MPB 1.0.0
+        // the generic detail blocks are empty, and the block's own `units_note` says each artifact's
+        // `units` describes that file (HPS-33, HPS-36).
         BundleArtifact template = shape(detail);
-        JsonElement? host = HostBlock(hostDetail, path);
         return new BundleArtifact
         {
             Path = path,
-            Sha256 = host?.OptionalStr("sha256") ?? detail?.OptionalStr("sha256"),
+            Sha256 = hostDetail?.OptionalStr("sha256") ?? detail?.OptionalStr("sha256"),
             Format = template.Format,
-            Units = host?.OptionalStr("units") ?? template.Units,
+            Units = hostDetail?.OptionalStr("units") ?? template.Units,
             VerticalDatum = template.VerticalDatum,
-            HorizontalFrame = host?.OptionalStr("horizontal_frame") ?? template.HorizontalFrame,
+            HorizontalFrame = hostDetail?.OptionalStr("horizontal_frame") ?? template.HorizontalFrame,
             Georeference = template.Georeference,
             TriangleCount = template.TriangleCount,
             FootprintCount = template.FootprintCount,
             FoliageTypeVocabulary = template.FoliageTypeVocabulary,
             HorizontalUnits = template.HorizontalUnits,
-            NamedByOwnBlock = host is not null,
+            NamedByOwnBlock = hostDetail is not null,
         };
-    }
-
-    /// <summary>
-    /// This host's own <c>hosts.revit.*</c> sub-object for an artifact, or <c>null</c> when there is
-    /// no such block or it describes a different file.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// It is where the deliverables' hashes live and, since MPB 1.0.0, where their metadata lives at
-    /// all: that release emptied the generic <c>elevation.*</c> detail blocks, so a reader taking
-    /// <c>units</c> and <c>horizontal_frame</c> from them alone now sees null for every artifact and
-    /// falls back on a delivery-wide default. The host block is this host's own and is read in
-    /// preference to the generic one (<c>HPS-33</c>, <c>HPS-36</c>) — the block's own
-    /// <c>units_note</c> says so in as many words: <em>each artifact's own <c>units</c> describes
-    /// that file</em>, and on the <c>local_ft</c> tier the artifacts and the origin genuinely differ.
-    /// </para>
-    /// <para>
-    /// A block naming a different file is discarded whole, for the reason its sibling metadata is:
-    /// checking one file's bytes against another file's hash reports a corruption that is not there,
-    /// and carrying one file's units onto another is a site imported 3.28× wrong.
-    /// </para>
-    /// </remarks>
-    private static JsonElement? HostBlock(JsonElement? hostDetail, string path)
-    {
-        if (hostDetail is not { } block)
-        {
-            return null;
-        }
-
-        string blockPath = block.Str("path");
-        return blockPath.Length > 0 && !SamePath(blockPath, path) ? null : block;
     }
 
     /// <summary>
