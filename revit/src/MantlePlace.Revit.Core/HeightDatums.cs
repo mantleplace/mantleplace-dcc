@@ -92,9 +92,10 @@ public static class HeightDatums
     /// <remarks>
     /// A file this host's own block points at is in the block's datum unless it states its own: the
     /// block's <c>vertical_datum</c> covers every file it points at, and the own vector layers state
-    /// none beside it. So does a shared pointer whose file the block also names, the site model's
-    /// <c>ifc_site</c> among them, where <c>buildings.ifc.vertical_datum</c> is optional. That covering statement is read on the terms the ground's is
-    /// (<see cref="GroundStatement"/>), so before 1.8.0 it is no statement at all. A file stating its
+    /// none beside it. So does a deliverable the block names
+    /// (<see cref="BundleArtifact.NamedByOwnBlock"/>), the site model's <c>ifc_site</c> among them,
+    /// where <c>buildings.ifc.vertical_datum</c> is optional. That covering statement is read on the
+    /// terms the ground's is (<see cref="GroundStatement"/>), so before 1.8.0 it is no statement at all. A file stating its
     /// own is read verbatim at any version. A host-neutral file has only its own.
     /// </remarks>
     public static StatedDatum? For(ImportStepKind kind, BundleArtifact? artifact, BundleManifest manifest)
