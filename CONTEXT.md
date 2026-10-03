@@ -134,7 +134,8 @@ _Avoid_: panel, browser, window
 
 **Prepare**:
 Asking the platform to build an order's bundle for this host, and fetching the bundle once it is
-built. The platform's API calls the same request a materialize.
+built. The platform's API calls the same request a materialize. Only an on-demand order needs one; a
+complete order is already built.
 _Avoid_: materialize, build
 
 **Interrupted Prepare**:
@@ -169,6 +170,12 @@ reclassifies anything. "Quality" is avoided because a bundle's quality already m
 "tier" because a **delivery tier** is something else.
 _Avoid_: scale, tier, quality, LOD, resolution, detail level
 
+**Download view**:
+The selection of a bundle's files one download carries — a host's own files at the fidelity levels
+it asked for, or every file at every level — delivered as one zip whose manifest still describes the
+whole bundle. A host asks for its view; it never assembles one from file names.
+_Avoid_: subset, partial bundle, export, package
+
 ### Orders and builds
 
 These two were one word for a long time, and a host plugin that keys anything on the wrong one
@@ -178,6 +185,16 @@ duplicates a user's content instead of replacing it.
 What a customer asked the platform for. Stable: the same order rebuilt and re-delivered is still that
 order, and it is what a user thinks of as owning.
 _Avoid_: purchase, request, job
+
+**Complete order**:
+An order the platform builds in full when it is procured — every host's files at every fidelity
+level — so a host downloads its view and imports, with no Prepare.
+_Avoid_: materialized order, full bundle, new order
+
+**On-demand order**:
+An order procured before orders were built complete. Its first build holds only the base content;
+everything else a host needs is built by a Prepare, and it carries no fidelity levels.
+_Avoid_: legacy order, base bundle, old order
 
 **Job**:
 One run of the platform's pipeline that produces a bundle. Rebuilding an order produces a new job, so
@@ -337,8 +354,9 @@ _Avoid_: main toposolid, base toposolid, alternate
 
 **Subdivision**:
 A toposolid cut into a ground, carrying its own surface, its own material and its own contour lines.
-A bundle's land-use, land-cover, water and road-surface polygons all become subdivisions; a ground
-can hold many, and they may overlap one another because the published polygons do. One can have
+A bundle's water and road-surface polygons become subdivisions — the surfaces a designer builds
+against; land use and land cover are drawn on land plans instead (ADR 0015). A ground can hold many,
+and they may overlap one another because the published polygons do. One can have
 holes in it — a water body's islands, a road network's city blocks. Say subdivision whatever it was
 cut from — where it came from is the polygon's business, not the element's.
 _Avoid_: district, region, site-boundary polygon, sub-toposolid
@@ -358,6 +376,12 @@ Revit's flat plan of one bundle's build where its flood zones and steep ground a
 the terrain and the model a visualiser renders. A later build gets its own; a plan a curator may
 have annotated is never redrawn.
 _Avoid_: hazard overlay, flood view, analysis view
+
+**Land plan**:
+Revit's flat plan of one bundle's build where one layer — its land use, or its land cover — is drawn
+as filled regions, cropped to the order. Two per build, one per layer, by the hazard plan's rule: a
+later build gets its own, and a plan a curator may have annotated is never redrawn.
+_Avoid_: land use view, land cover overlay, zoning plan
 
 **Zone key**:
 The key drawn inside a hazard plan naming each flood zone and steep-ground threshold that plan shows,

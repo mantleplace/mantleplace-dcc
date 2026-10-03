@@ -180,7 +180,8 @@ Most facts already have exactly one home. Find it before writing a fact down any
   origin** · **0009** host assets render the **monogram** · **0010** Revit tooltip **vignettes are
   drawn**, capped at 355 px · **0011** the Revit provenance **schema GUID is permanent** ·
   **0012** Revit context buildings are **the site model's own extrusions, copied** · **0013** Revit
-  **published contours** are DirectShapes · **0014** Revit draws hazards **on a hazard plan**.
+  **published contours** are DirectShapes · **0014** Revit draws hazards **on a hazard plan** ·
+  **0015** Revit **subdivides only roads and water**; land use and land cover go **on land plans**.
   Write one only for a decision hard to reverse, surprising without the context, and the result of a
   real trade-off; an ADR is not a design document. Adding one is two edits
   ([`docs/agents/domain.md`](docs/agents/domain.md)).
