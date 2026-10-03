@@ -1,0 +1,350 @@
+# Revit API record — what compiles, and what has run
+
+The Revit compiler proves that a member exists and how it is shaped; it says nothing about what
+Revit does when the member runs. This file is the record of which calls the add-in shim makes that
+have **run inside a real Revit**, in which versions, how that was proven, and which are still
+**compiled and unexecuted**. Code comments that say "`revit/CLAUDE.md` lists them" or "says why"
+reach this file through that file's index, which names every entry below. Treat a call's behaviour as unverified until a real import
+proves it, and add to this record — in the bullet for that area — when one does.
+
+It also holds three design records the code points to: why the import window has a thread of its
+own (and which steps announce themselves), what a typed subdivision costs, and why the add-in is
+renderer-neutral.
+
+- **Revit API risk is real and not caught by the compiler.** `Toposolid.Create`, `ProjectLocation.SetProjectPosition`, `Toposolid.CreateSubDivision`,
+  `DirectShape.SetShape` over curves, `AppearanceAssetEditScope`, the `UnifiedBitmap` schema and
+  `ToposolidType.Duplicate` have left that set: the harness imports of 2026-09-18 ran each of them in
+  Revit 2025, 2026 and 2027, and the drape's own read-back put the texture writes in the log.
+  `RevitLinkType.CreateFromIFC` has too: the unattended re-imports of 2026-09-18, which take every
+  layer, linked the site model in all three, and so did a 2027 import from the install slot. `Application.GetAssets` and
+  `AppearanceAssetElement.Create`, the drape material's fallback for a project with no appearance
+  asset, ran in a 2027 probe on 2026-09-19.
+  Compiling is worth more than nothing: it is what caught
+  `AssetEditScope` not existing (it is `AppearanceAssetEditScope`), what surfaced
+  `AssetPropertyDistance.GetUnitTypeId()`, which replaced a guess about texture units with a read,
+  and what settled the scope of `Toposolid.SetSmoothedSurface` in one build — `CS0176` says it is
+  **static**, so the setting is per document and the code that would have walked the subdivisions
+  was never written. Reflection tells you a member exists; only the compiler tells you how it is
+  shaped, and `GetMembers()` will happily list a static method as though it were an instance one.
+  Treat their behaviour as unverified until a real import proves it — and note that `Toposolid`
+  itself is Revit 2024+, so the 2025 compile target also bounds the topo path. There is a way to
+  drive them without a human: set `MANTLEPLACE_BUNDLE_ZIP` and the import command skips its file
+  picker, so a journal or a test script can run it unattended (`LocalBundleSource`).
+- **The ribbon is in that set too, and it has no unattended path at all.** The Account split button
+  — `SplitButtonData`, `SplitButton.IsSynchronizedWithCurrentItem`, `RibbonItem.Visible` on a
+  dropdown child, and `TaskDialog.AddCommandLink` — compiles, and the compiler is again worth more
+  than nothing: it is what pins `SplitButton.AddPushButton` and the `RibbonItem` setters to their
+  real shapes. What it cannot answer is whether the face repeats as the dropdown's first row, since
+  `IsSynchronizedWithCurrentItem = false` is documented as "the first listed PushButton is shown"
+  without saying whether that item is also listed. The row order in `BuildAccountPanel` is written
+  to read correctly either way. A journal cannot settle it — `Jrn.RibbonEvent` executes a command
+  and never reports what a button looked like — so this one is proven by opening Revit and looking,
+  the same way the release gate is.
+- **The ribbon's imagery joined that set.** `UIThemeManager.CurrentTheme`,
+  `UIControlledApplication.ThemeChanged` with `ThemeChangedEventArgs.ThemeChangedType`, and
+  `RibbonButton.Image`/`LargeImage` assigned on retained items compile and have not been executed
+  inside Revit. The compiler earned its keep here too: it is what settled that `SplitButton` derives
+  from `PulldownButton` and therefore has no `Image` of its own, so the face's picture is the first
+  dropdown item's. What no compiler can answer is whether a `SplitButton` face actually draws that
+  item's image, and whether a live theme change repaints a ribbon rather than needing a restart.
+  Both are eyes-on-a-running-Revit, in both themes. What IS settled without Revit: the pure core
+  picks the file name, the headless suite reads `Resources/` in both directions, and the built
+  assembly's WPF resource table plus every pack URI in it can be checked from a script — see the
+  pull request that added `RibbonImagery`.
+- **`RibbonItem.ToolTipImage` is the newest member of that set.** It compiles — which is what pins
+  down that it exists on `RibbonItem` and not only on `RibbonItemData`, so a vignette can be
+  repainted after the ribbon is built and a theme change reaches it. What the compiler cannot say is
+  whether Revit lays the picture out, whether it clips against a fifty-word `LongDescription`, or
+  where the **355 px cap** actually bites: the API documents it in 2025, 2026 and 2027 alike and
+  enforces it **silently**, so an over-large image is simply not there. That is why
+  `Vignettes.MaxPixels` is asserted against the committed files' own PNG headers — no other detector
+  is possible. Hovering the two Bundles buttons in a running Revit is the check, and it is the one
+  manual step [ADR 0010](../../docs/adr/0010-tooltip-vignettes-are-drawn-not-photographed.md) leaves
+  open.
+
+- **The staged import joined that set.** One step, or one chunk of trees, runs per
+  `ExternalEvent` raise, and the handler posts the next raise at `DispatcherPriority.Background` so
+  a Cancel the window posted lands first. Revit does service a raise posted from inside
+  its own handler promptly: the harness below pressed Import in the real window in 2025, 2026 and
+  2027 and every slice ran with no mouse or keyboard input, the ~47 chunks of a 9,293-tree order in
+  under a minute each time, and in 2026 with Revit minimized for the whole tree step (what a tree
+  costs at the commit has one home, `ImportChunking.ElementsPerTransaction`). A Comments write on a
+  `DirectShape` holds: the re-imports in a fresh Revit process found all 290 road centrelines by the
+  stamp in their Comments, in each of the three. What is settled
+  headlessly is everything about *when*: `StagedImport` decides the slice order, where a cancel lands
+  and what a failure costs, and `ImportChunking`/`TreeIdentity` decide the chunks and the resume.
+  Never `yield` inside an open transaction — a chunked step commits, then yields — and never leave
+  the session-wide `FailuresProcessing` hook attached across a slice boundary: between slices the
+  curator is editing their own model (`RevitBundleImporter.InSlice`). The window opens on a
+  checklist and raises nothing until Import is pressed; what each box shows, and what a plan
+  without a layer looks like, is `ImportChecklist` and the planner's choice argument, both headless.
+
+- **⛔ The import window has a thread of its own, and Revit's window does not own it.** This bullet
+  is the one home of why; the code points here.
+  - **Why.** Slicing the import was not enough: most of a full import is spent inside single
+    commits (road surfaces, the drape), a commit cannot yield, and a window owned by Revit's main
+    window shares Revit's input queue, so it froze with Revit. Measured on the full plan before this
+    changed, Revit was hung in 61 to 74% of 5-second samples, the window never once showed road
+    surfaces, water or the drape as the step in flight, and in 2027 no UI Automation read of it
+    completed for the drape's 2,759 s.
+  - **How.** `ImportWindowHost` runs it on an STA thread with its own `Dispatcher`, unowned, and
+    only posts cross: views of the run (`ImportRunView`) one way; Import, Cancel, a dismissal, a log
+    line and a fault the other, onto Revit's dispatcher, where they run as the click handlers they
+    used to be. Every `Transaction` commit goes through `CommitAndReport`, which says on both sides
+    that Revit is committing (the drape's `SubTransaction` commits do not, and regenerate nothing).
+    What the window then shows a curator is [`README.md`](../README.md)'s, and told only there.
+  - **⛔ Which steps are announced: any measured at 30 s or more in any version.** Each such step
+    says, before its wait, what it was measured at, per version, and the window shows that beside
+    the step's clock; no other step says anything, so the line is worth reading when it appears. The
+    threshold is `SlowStepNotice.AnnouncedFromSeconds`, the figures `SlowStepNotice.Measured`, and
+    which steps are quiet follows from them rather than from a list kept by hand. A step is announced
+    only when it has the work that was measured, and the shim hands the core facts, never a decision.
+  - **Not sliced for Cancel.** The drape and the polygon layers count their subdivisions inside
+    their one slice, but Cancel still lands only between slices: a slice never yields inside an open
+    transaction, and slicing them means splitting the transaction, which would change what a
+    rollback undoes.
+  - **What is headless.** What the window says (`WindowLabels`, `ImportRunView`), when it floats,
+    takes the focus or comes forward, where it opens (`ImportWindowStacking`,
+    `ImportWindowPlacement`), and what each notice says (`SlowStepNotice`). It never floats over a
+    Revit modal. `ForegroundWatch` carries the stacking out without ever sending Revit's thread a
+    message.
+  - **Its edges.** An exception leaving the window's thread would end Revit, so the thread body is
+    inside a net; a fault lowers the window, the first is said in the add-in's fault dialog and the
+    rest go to the log. A window's callback that arrives while a slice runs — should Revit pump
+    messages inside a commit — is held until the slice ends, and the log counts it. Nothing closes an
+    unowned window with Revit, so every window still up, a finished one showing its report included,
+    is tracked until its thread ends and closed at `OnShutdown`; a checklist whose project has closed
+    goes with it. Two statics went thread-aware: `BrandChrome`'s primary style is built per thread,
+    and `ResourceImages`' table is locked.
+  - **Not taken.** `ControlledApplication.ProgressChanged` is silent through 57% of the road commit
+    and 99.6% of the drape's, so it cannot feed a bar. `DisableProcessWindowsGhosting` is
+    process-wide with no undo.
+  - **Proven offscreen, without Revit.** A scratch exe drove the built add-in's host while its own
+    UI thread hung in "commits" of up to 20 s. Read by UI Automation from another process every
+    second, the window answered every read, each in under a quarter of a second, with its clock and
+    the drape's count moving, `Finishing` named, and a Cancel pressed mid-commit said at once and
+    landing after the commit. Opened while another application was in front, it was behind that
+    application from its first visible moment: WPF's `Show` raises a window as it shows it, so
+    `ForegroundWatch` rewrites that one `WM_WINDOWPOSCHANGING` rather than moving the window first.
+  - **Unexecuted inside Revit.** Whether Revit's own hooks leave the window's thread alone, the
+    foreground hook against a real Revit and its modals, and the placement over a minimised Revit.
+    What it gives a curator, and gives up, is [`README.md`](../README.md)'s.
+- **The site location and the context view have left that set.** `SiteLocation.Latitude`/`Longitude`,
+  `View3D.CreateIsometric`, `ParameterFilterElement.Create` over every model category that
+  `ParameterFilterUtilities.GetFilterableParametersInCommon` says has Comments, the 2023+
+  `CreateBeginsWithRule` overload (case-insensitive — the case-sensitive one is deprecated) and
+  `View.AddFilter` have run: the journals of Revit 2025 and 2027 imports record the "Mantle Place:
+  site location" and "Mantle Place: site context view" transactions committing, so Revit does let a
+  3D view and a view filter share the name `SiteContext` gives both. The sign of a longitude is
+  settled without Revit: Revit's own `en-US/SiteAndWeatherStationName.txt` lists Boston at
+  `-71.0335`, so a published west-negative longitude goes in as it is. The time zone write-back is
+  settled too, in 2026 and 2027 by a direct test and in all three by real imports: setting the
+  coordinates makes Revit recalculate the zone in the same transaction (to 9 for Tokyo, to −5 for
+  Boston), and writing the zone read beforehand back in the same transaction holds after the commit.
+  The published zone (`location.time_zone`) goes through the same write. `SiteTimeZone` decides what
+  is written, including the wrap for zones east of +12, and it is tested headlessly. Both awkward
+  cases have run in Revit 2027 through the harness described under the tree family below, on a
+  cached bundle whose manifest was given a `location` block. After the commit, +5:45 read back as
+  5.75 and +13 as −11. So Revit takes a fractional zone as it is, and the wrap holds. They have
+  not run in 2025 or 2026.
+  `SunAndShadowSettings.UsesDST` is read-only in 2025's API, so daylight saving time is a log line
+  and never a write.
+- **The attribution step has left that set.** `ViewDrafting.Create`, `TextNote.Create`, and
+  ExtensibleStorage — `SchemaBuilder` with `AccessLevel.Vendor` write access, `Entity`,
+  `ProjectInformation.SetEntity`/`GetEntity` — have run in Revit 2025, 2026 and 2027 through the
+  harness described under the tree family below: an import through the real import window, a save,
+  and a reopen in a fresh Revit process read the record back with every field, found the view with
+  every source line, and a second import said `This project already records an import of order …`
+  and kept the note. A `TextNote.Text` write (the rewrite path) has still not run: it needs a
+  second build of the same order. Two failure modes are also settled headlessly:
+  `ProvenanceStorage.VendorId` is asserted equal to the `.addin` file's `VendorId` (a vendor-write
+  schema refuses any other add-in), and every schema and field name is checked against the
+  identifier rule Revit enforces. ⛔ **The schema GUID is permanent:** changing a field under
+  `ProvenanceStorage.SchemaGuid` breaks every project that already holds the old definition, so a
+  field change is a new GUID
+  ([ADR 0011](../../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md)).
+- **The context buildings have left that set.** The step converts the site model with
+  `Application.OpenIFCDocument`, finds each building in the result by `BuiltInParameter.IFC_GUID`,
+  clones its solids with `SolidUtils.Clone` and gives them to a Generic Model `DirectShape`. The
+  converted document is closed in the slice that opened it, before the first chunk: a document held
+  across slices is closed only when a step ends through `StagedImport`, and an import abandoned from
+  the event handler does not. All of it ran in Revit 2027 through the harness described under the
+  tree family below, with the import pressed in the real window. Revit's import does record each
+  proxy's GlobalId in `IFC_GUID`: an 834-building site model came in as 834 stamped elements, every
+  one with a solid, in 22.7 s including the conversion. A second import of the same build copied
+  nothing and never converted the site model. The harness imports of 2026-09-18 had already copied
+  834 of 834 buildings in Revit 2025 and 2026 as well, and a re-import in a fresh Revit process
+  found all 834 and copied none. Three things the run settled that reading would not have. Open IFC raises *IFC versions 4 and above are only
+  partially supported* on every IFC4 file, as a warning that waits for a click unless a failures
+  handler takes it, which the step's swallower does. A new `DirectShape` gets an `IfcGUID` of Revit's
+  own, not the source GlobalId, so the Comments stamp is the only identity. And the copy carries no
+  height, area or volume parameter. Open IFC turns an `IfcPropertySet` property into a project
+  parameter named `<set>.<property>`, ignores an `IfcElementQuantity`, and nothing it attaches
+  survives the solid's copy onto a `DirectShape`: a value the site model publishes reaches a building
+  only if this step writes it. Which elements are buildings is not in that set —
+  `SiteModelReader` reads it from the IFC's text, headlessly ([ADR 0012](../../docs/adr/0012-context-buildings-come-from-the-site-model.md)).
+
+- **A subdivision cut from an outer loop plus its inner loops has left that set**, in all three
+  versions. `Toposolid.CreateSubDivision` takes a list of curve loops and documents nothing about
+  more than one: measured 2026-09-19 in 2025, 2026 and 2027, an outer loop with its inner loops comes
+  back as ONE subdivision with the holes left out of its surface, the sketch profile carries a loop
+  per ring, the winding of a ring is not read, and no failure of any severity is posted — see
+  [`README.md` ▸ Holes in a subdivision](../README.md#holes-in-a-subdivision). That is what the water
+  bodies and the road surfaces are cut with (`GroundCuts`); the two land layers still cut one
+  subdivision per ring, because their stamps are positions in the layer and grouping the rings now
+  would move every stamp after the first polygon with a hole.
+
+- **Revit can refuse a subdivision at commit, after `CreateSubDivision` returned for it**, and no
+  `try` around the cut sees that. A platform-built 1.4.0 bundle's land use did exactly this in 2027:
+  forty cuts returned, then the commit posted *"An error occurred during the sub-divide action. The
+  sub-divide can not be completed."* (failure id `07338aaa-c5fe-4aa0-91e1-fa0569a8fe76`, no
+  `BuiltInFailures` member in 2025's API) naming one subdivision, and the rollback took the whole
+  layer. The published ring was valid, simple and inside the terrain, so nothing upstream could
+  have caught it, and Revit 2025 and 2026 cut the same forty without complaint. A polygon step now declares its new cuts to its `ImportFailureSwallower`
+  (`OwnNewElements`), and `ImportFailurePolicy` lets that one error, and only when every element it
+  names is one of them, be answered with `FailuresAccessor.DeleteElements` instead of a rollback:
+  the feature is counted as declined and named in the log, in the same single commit.
+
+- **The hazard plan's calls have left that set**, in all three versions. `ViewPlan.Create` on the
+  lowest level, a plan's `CropBox` set in model coordinates with its annotation crop off,
+  `FilledRegionType.Duplicate` with a solid fill, a hatch over a fill and a hatch alone,
+  `FillPatternElement.Create` for a drafting hatch, `FilledRegion.Create` with an outer loop and its
+  inner loops at the level's elevation, a Comments write on a filled region, and `TextNote.Create`
+  in the plan all ran on 2026-09-24 through the harness described under the tree family below, on a
+  hand-made 1.4.0 copy of a cached order: 65 flood zones and 32 steep-ground polygons drawn, a
+  re-import adding steep ground to a plan that already held the flood zones, and a third import
+  drawing nothing. The regions and the key's swatches are clipped by the crop and the key's text is
+  not, which is why the crop is widened to take the swatches in ([ADR 0014](../../docs/adr/0014-revit-hazards-are-drawn-on-a-hazard-plan.md)).
+  Which regions, colours, key rows and names is `HazardPlan`, `HazardStyles` and `ZoneKey`, headless.
+
+- **A toposolid subdivision is a different element in 2025 than in 2026 and 2027**, and one build has
+  to drape both. In 2025 it is typeless and takes its material as an instance parameter. From 2026
+  it is a `Toposolid` on the document's default toposolid type, the instance parameter is absent,
+  and the material is its type's. Each element is asked which shape it has (`SubDivisionMaterial`),
+  and a typed one is moved onto a type of its own with `ChangeTypeId`. This bullet is where what
+  that costs is recorded; the code's comments point here, and the import's notices quote it. Every
+  figure below is order `4276ef78` on a 75,314-point terrain unless it says otherwise, and the
+  timing tables are in the pull request that added the move to the cut.
+  - **The call is the whole cost of a retype.** Profiled in the drape in 2027, it was 96% of the
+    retype loop, a median of 1.74 s a subdivision over 405; every other call around it took
+    milliseconds. The first measurement, 2026-09-19 on another order's 74,852-point terrain in
+    2027, had 33 retypes take 190 s of an import, 71 s of calls then a 121 s commit, where a probe
+    on the saved and reopened project committed the same retypes in about a second: time a retype
+    in an import, not a probe.
+  - **Where it runs decides what the commit after it costs.** When the drape is planned, the move is
+    made in the polygon step's own transaction as each subdivision is cut
+    (`SubDivisionMaterial.TakesTypeAtCut`), and the drape finds each one already typed and writes
+    only the photograph and its offset. The call costs about the same there; per subdivision in
+    2027 it took 3.3 to 5.0 s for land cover and 1.2 to 1.6 s for site boundaries over four imports,
+    1.0 to 1.3 s for water over the same four (two water bodies each), and 1.2 s for road surfaces
+    over one. But the drape's commit no longer rebuilds the subdivisions. In 2027, at `50c8c31`
+    against `9e44ab3`, with 61 subdivisions the drape's imagery commit fell from about 145 s to 3 s
+    and the import from 541 to 578 s to 364 to 413 s; with the road surfaces too, 405 subdivisions,
+    the imagery commit fell from 1,024 s to 65 s and the import from 3,104 s to 1,744 s, one run
+    each. Revit 2026 did the same at that
+    commit: 566 s to 422 s with 61.
+  - **Smooth shading is settled before the first cut** when the drape is planned
+    (`TerrainSmoothing.SettleBeforeCuts`), so a cut is named for the shading the drape will write
+    for. In terrain-only imports its commit took 1.0 to 1.1 s in 2027 and 0.5 s in 2025, against
+    96 s after 405 subdivisions. The import times above predate the move. Timed with it, at
+    `c21d15a` against `9e44ab3` on the 61-subdivision plan, two imports each: in 2027 the smoothing
+    commit moved to before the first cut at 1.9 s from 16 to 18 s in the drape, the drape step fell
+    to 5 to 9 s from 306 to 334 s, the polygon commits were no slower (land cover 40 to 42 s against
+    74 to 80 s), and the import took 391 and 424 s against 570 and 630 s. In 2025 the commit moved
+    likewise at 0.7 to 0.8 s from 1.9 s, the polygon commits were no slower, and the import took
+    617 and 643 s against 641 and 753 s, inside 2025's own spread. 2026 has since been timed with
+    it, beside 2027: full imports with every box ticked, through the import window at `fbfce41`,
+    which carries both this move and the cut-time typing above. Both versions took less time than
+    their window runs before either change, and those runs do not separate the two changes. Their
+    per-step figures are `SlowStepNotice.Measured`'s.
+    Smoothing is the curator's project-wide setting
+    (ADR 0008): a cancelled import already turned it on as it ended, and an import that fails after
+    its first polygon step, which ends without that last step, now leaves it on where it used to
+    leave it untouched.
+  - **Two alternatives were measured and not taken.** Revit 2026's typed `CreateSubDivision`
+    overload, probed by reflection outside this tree, cut every subdivision but the first straight
+    onto its type, and the polygon commits absorbed what the calls had cost: 1,850 s against 1,744 s
+    with 405. And the default type the two-argument overload uses cannot be set through 2025's API:
+    `IsDefaultFamilyTypeIdValid` refuses every toposolid type for the Toposolid category.
+
+  Never branch on the version number, and never "fix" a 2025-only observation into a universal
+  comment: that is how this one shipped.
+
+- **The tree family's calls left that set in Revit 2025 before they merged**, through a harness that
+  compiles this tree's sources into one differently named assembly and loads it into a Revit of its
+  own, beside whatever the install slot holds. The Family API calls in `PlantingFamilyAuthoring` (`NewExtrusion`, `NewBlend`, `NewRadialDimension` with a
+  `FamilyLabel`, formulas, `AssociateElementParameterToFamilyParameter`) and the tree step's
+  `LoadFamily`, `EditFamily` and level-hosted `NewFamilyInstance` executed in Revit 2025, measured
+  against the numbers that drove them. 2026 and 2027 load the same 2025-saved family by upgrading it
+  on load, and the harness imports of 2026-09-18 placed 9,293 of 9,293 trees with it in each; the
+  measured accuracy is still 2025's alone. Two things it settled that reading would not have:
+  a Planting family already owns a built-in *type* parameter named `Height`, so the per-instance one
+  is `Tree Height`; and a saved `.rfa` records its save folder and the Revit user name — see
+  [`README.md` ▸ Authoring the Planting families](../README.md#authoring-the-planting-families).
+  The shrub family went the same way on 2026-09-22: authored and measured in Revit 2025, then
+  placed by a real import of a hand-built shrub bundle in 2025, 2026 and 2027 through the same
+  harness. That run also executed `GeometryCreationUtilities.CreateBlendGeometry` for the first
+  time, in all three, by building the shrub's DirectShape fallback and measuring it; the tree's
+  fallback, which makes the same call, has still never had to run in an import.
+- **The Prepare notice and the Vault badge have left that set, with one edge still open.** A
+  Prepare belongs to `PrepareWatcher`, not to the vault window, and `PrepareNotifier` tells the
+  curator when one ends with the window closed. That means a `NoticePopup` owned by Revit's window,
+  made unable to activate by `ShowActivated = false` plus `WS_EX_NOACTIVATE`, and a badge drawn at
+  run time over the Vault glyph by `RenderTargetBitmap` and assigned to `RibbonButton.LargeImage`.
+  On 2026-09-22 the harness described under the tree family below ran the real notifier, popup,
+  badge and `VaultBrowserCommand.Open` in Revit 2025 and 2027, on scripted Prepare steps with no
+  network. It measured:
+  - Revit's thread-active window, its focus window and the foreground were unchanged as two notices
+    appeared and stacked.
+  - Each notice carried `WS_EX_NOACTIVATE`.
+  - The badged image reached the ribbon, and `UIControlledApplication.MainWindowHandle` read after
+    startup named the main window.
+  - A click opened the vault and cleared both the notices and the badge.
+  - With the vault open, nothing was announced.
+  - An untouched notice closed itself while the badge kept counting it.
+
+  What it did not run is a Revit that was itself the foreground application, which only a human at
+  the keyboard can: a harness that took the foreground to test it would steal the user's. Which
+  notice, when, and where it sits are `PrepareNotices`, `VaultBadge` and `NoticeStack`, headless.
+  The new-order notice (`VaultNewsChecker`, `PrepareNotifier.OnArrived`) rides the same popup and
+  badge but has **not** run inside Revit: its loop's first listing racing the startup restore, the
+  wake on sign-in, and a notice raised from a background listing are compiled and unexecuted. What
+  is settled headlessly is which orders are news (`VaultNews`), the per-machine record two Revits
+  share (`AnnouncedOrderStore`), and when the checker asks (`VaultNewsChecker.CheckAsync`).
+  Re-joining an **interrupted Prepare** went further. The watcher writes each Prepare to
+  `InterruptedPrepareStore` as it starts and strikes it off as it ends, unless Revit ended it
+  (`PrepareEnding.Interrupted`), and `PrepareRejoiner` picks up what a closed or crashed Revit left,
+  from the background checker's first listing after each sign-in. On 2026-09-23 the harness described under the tree family below killed a Revit
+  2025, and then a 2027, while its watcher held a Prepare, and a fresh Revit of the same version
+  re-joined it through the real record, liveness check, notifier and popup, on scripted steps and a
+  scripted vault. It measured:
+  - The killed process's entry was on disk, owned by its process id and start time.
+  - `PrepareOwners.IsAlive` read a running process as live, and the same id with another start
+    time as gone.
+  - The crashed Revit's Prepare and the reused-id one were re-joined from their original asks; the
+    live owner's was left alone.
+  - Both notices appeared inactive, with `WS_EX_NOACTIVATE`, the badge counted two, and the active
+    window, focus and foreground were unchanged.
+  - Both entries were struck off once the Prepares ended.
+
+  What it did not run is the add-in's own wiring: the startup restore's sign-in arming
+  `PrepareRejoiner`, the checker's listing reaching it, and `OnShutdown` calling `InterruptAll`. Those are compiled and
+  unexecuted, because the harness never signs in. Which entries a process may take is
+  `InterruptedPrepares`, headless. Both records share one exclusive-open helper, `MachineRecordFile`.
+- **The published contours' calls have left that set.** `DirectShape.IsValidCategoryId` accepts
+  Topography, `Categories.NewSubcategory` makes `Published Contours` under it, and
+  `Curve.SetGraphicsStyleId` on a DirectShape's lines holds: on 2026-09-24 the harness described
+  under the tree family below imported hand-made 1.4.0-shaped copies of two cached bundles in Revit
+  2025, 2026 and 2027, contours only. A State Plane bundle drew 945 contours in about 5 s, one
+  commit of about 2 s, every line on the subcategory's projection style and at the published
+  elevation; the same build again drew nothing, and a rebuild refused naming the prefix. A metric
+  bundle was clipped to its crop window. The hand-made half is the manifest's pointer and
+  `file_frame`; the contour files are the bundles' own. What is settled headlessly is everything
+  else — `PublishedContourReader`, `PublishedContours` and `ContourIdentity`.
+- **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
+  issue and reaches for their storage.** It writes Revit elements sized as published, with names a
+  renderer recognises (`RendererKeywords`), and leaves a renderer's own storage to the curator —
+  see [`README.md`](../README.md) on the tree family. Writing Twinmotion's substitution entity at
+  import was declined: it saves one click per project by coupling the add-in to an
+  ExtensibleStorage schema Autodesk owns and an asset GUID from Epic's library. Writing it later is
+  purely additive, which is why this is not an ADR.
