@@ -492,8 +492,8 @@ internal static class SlowStepNoticeTests
 
         run.Case("a step is announced exactly when it was measured at 30 s or more in some version", () =>
         {
-            // The rule, whose one home is revit/CLAUDE.md: the quiet steps follow from the measurements
-            // rather than being kept by hand.
+            // The rule, whose one home is revit/docs/api-record.md: the quiet steps follow from the
+            // measurements rather than being kept by hand.
             run.Within(SlowStepNotice.AnnouncedFromSeconds, 30, 0, "the threshold");
             foreach (ImportStepKind kind in Enum.GetValues<ImportStepKind>())
             {

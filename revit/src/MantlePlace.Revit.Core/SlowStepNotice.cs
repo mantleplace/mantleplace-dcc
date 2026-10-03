@@ -9,10 +9,10 @@ namespace MantlePlace.Revit.Core;
 /// <remarks>
 /// <para>
 /// ⛔ <b>A step measured at <see cref="AnnouncedFromSeconds"/> or more in any version is announced,
-/// and no other.</b> The rule is <c>revit/CLAUDE.md</c>'s; the figures it reads are
-/// <see cref="Measured"/>, and which steps stay quiet follows from them rather than being kept by
-/// hand. A step is announced only when it has the work that was measured — a terrain built for the
-/// drape, an IFC still to convert, buildings still to copy — so a re-import that has none says
+/// and no other.</b> The rule is <c>revit/docs/api-record.md</c>'s; the figures it reads
+/// are <see cref="Measured"/>, and which steps stay quiet follows from them rather than being kept
+/// by hand. A step is announced only when it has the work that was measured — a terrain built for
+/// the drape, an IFC still to convert, buildings still to copy — so a re-import that has none says
 /// nothing.
 /// </para>
 /// <para>
@@ -577,15 +577,15 @@ public static class SlowStepNotice
             InsideOneCommit);
 
     /// <summary>The point count of the terrain <see cref="ForSubDivisionRetypes"/> was measured on.</summary>
-    /// <remarks>revit/CLAUDE.md's bullet on typed subdivisions records the run.</remarks>
+    /// <remarks>revit/docs/api-record.md's bullet on typed subdivisions records the run.</remarks>
     public const int MeasuredRetypePointCount = 74_852;
 
     /// <summary>How many subdivisions that measurement retyped, one <c>ChangeTypeId</c> each.</summary>
-    /// <remarks>revit/CLAUDE.md's bullet on typed subdivisions records the run.</remarks>
+    /// <remarks>revit/docs/api-record.md's bullet on typed subdivisions records the run.</remarks>
     public const int MeasuredRetypeSubDivisions = 33;
 
     /// <summary>Rounded seconds those retypes took in a real Revit 2027 import, commit included.</summary>
-    /// <remarks>revit/CLAUDE.md's bullet on typed subdivisions records the run.</remarks>
+    /// <remarks>revit/docs/api-record.md's bullet on typed subdivisions records the run.</remarks>
     public const int MeasuredRetypeSeconds = 190;
 
     /// <summary>
@@ -639,7 +639,7 @@ public static class SlowStepNotice
     public readonly record struct TypeAtCutMeasurement(double LowSeconds, double HighSeconds, int SubDivisions, int Imports);
 
     /// <summary>What typing <paramref name="layer"/>'s cuts measured.</summary>
-    /// <remarks>revit/CLAUDE.md's bullet on typed subdivisions records the run.</remarks>
+    /// <remarks>revit/docs/api-record.md's bullet on typed subdivisions records the run.</remarks>
     public static TypeAtCutMeasurement MeasuredTypeAtCut(GroundLayer layer) => layer switch
     {
         GroundLayer.LandCover => new(3.3, 5.0, 19, 4),
@@ -710,14 +710,14 @@ public static class SlowStepNotice
     }
 
     /// <summary>How many subdivisions <see cref="MeasuredDrapeCommitSeconds"/> was measured with.</summary>
-    /// <remarks>revit/CLAUDE.md's bullet on typed subdivisions records the run.</remarks>
+    /// <remarks>revit/docs/api-record.md's bullet on typed subdivisions records the run.</remarks>
     public const int MeasuredDrapeCommitSubDivisions = 405;
 
     /// <summary>
     /// Rounded seconds the drape's commit took in Revit 2027 with that many subdivisions already on
     /// their types, on <see cref="MeasuredOrderVertexCount"/> points.
     /// </summary>
-    /// <remarks>revit/CLAUDE.md's bullet on typed subdivisions records the run.</remarks>
+    /// <remarks>revit/docs/api-record.md's bullet on typed subdivisions records the run.</remarks>
     public const int MeasuredDrapeCommitSeconds = 65;
 
     /// <summary>

@@ -69,8 +69,8 @@ UnrealEditor-Cmd.exe <YourProject>.uproject -ExecCmds="Automation RunTests Mantl
 offline sweep.
 
 ```bash
-python ../tools/manifest-conformance/check_manifest_conformance.py   # contract gate, offline corpus half
-python ../tools/unreal-naming/check_generated_names.py              # name drift gate, no engine — run before you push
+python ../tools/manifest-conformance/check_manifest_conformance.py   # contract gate: Python 3.12, stdlib, offline corpus half
+python ../tools/unreal-naming/check_generated_names.py              # name drift gate: text-only, no engine — run before you push
 ```
 
 ## Naming

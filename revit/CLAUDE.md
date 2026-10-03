@@ -62,7 +62,7 @@ review alone. `Client` references no Revit API, so a hosted runner builds and te
 what makes a test a real enforcer for ⛔`HPS-26`. Reach for `Addin` only for a `Document`, a
 `Transaction` or the ribbon.
 
-`Core` and `Client` stay `net8.0`: Revit 2025 and 2026 run .NET 8, and the next .NET host extracts
+`Core` and `Client` stay `net8.0`; do not raise the target framework without a reason: Revit 2025 and 2026 run .NET 8, and the next .NET host extracts
 its shared code **from this shipped code** (`HPS-43`). The suite multi-targets `net8.0;net10.0` and
 CI runs both — the cheapest honest test of the three-versions-from-one-build bet.
 
@@ -103,7 +103,8 @@ there moves the standard first. Title Case is Revit's; a host construct keeps it
   `RevitApiDir` has no `RevitAPI.dll`, in place of a forty-line `CS0246` storm.
 - **The corpus is maintainer-owned.** Edit this host's own `verified-against.json` key freely, as
   text — a `json.load`/`json.dump` round-trip re-encodes the shared `$comment` block — and
-  **propose** corpus cases by pull request, never add them unilaterally.
+  **propose** corpus cases by pull request, never add them unilaterally:
+  a forked corpus is the drift the corpus exists to prevent.
 - **The expiry skew is a constant with no parameter**, deliberately: the reference host takes it as an argument and its shim can pass `0`; here there is
   nowhere to put a zero.
   Do not add an override "for testability".
@@ -117,8 +118,8 @@ there moves the standard first. Title Case is Revit's; a host construct keeps it
     are eyes-on-Revit checks ([ADR 0010](../docs/adr/0010-tooltip-vignettes-are-drawn-not-photographed.md));
   - the **staged import** — never `yield` inside an open transaction, never leave the
     `FailuresProcessing` hook attached across a slice;
-  - ⛔ **the import window has a thread of its own, and Revit's window does not own it** — the one
-    home of why, and ⛔ **a step is announced only when measured at 30 s or more in any version**
+  - ⛔ **the import window has a thread of its own, and Revit's window does not own it** — the
+    record is the one home of why, and ⛔ **a step is announced only when measured at 30 s or more in any version**
     (`SlowStepNotice`);
   - the site location, context view and time zone; the attribution step, where ⛔ **the schema GUID
     is permanent** ([ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md));
