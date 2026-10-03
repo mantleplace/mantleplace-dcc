@@ -109,9 +109,9 @@ TArray<TSharedPtr<FJsonValue>> FMantlePlaceCesiumAvailabilityLogic::BuildAvailab
 bool FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(
 	const TSharedPtr<FJsonObject>& Root,
 	const TArray<FMantlePlaceCesiumTile>& Tiles,
-	int64& OutDeclaredTileCount)
+	FMantlePlaceCesiumAvailabilityDiff& OutDiff)
 {
-	OutDeclaredTileCount = 0;
+	OutDiff = FMantlePlaceCesiumAvailabilityDiff();
 
 	int32 MaxZoom = -1;
 	const TMap<int32, FTileSet> ByZoom = GroupByZoom(Tiles, MaxZoom);
@@ -121,23 +121,50 @@ bool FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(
 	{
 		// No `available` at all. Cesium treats that as "ask and find out", which is the 404 storm
 		// this workaround exists to prevent, so it is not consistent with anything.
+		OutDiff.UndeclaredTileCount = Tiles.Num();
 		return false;
 	}
 
-	// Every level is walked even once a mismatch is known, because the count is what makes the log
+	// Every level is walked even once a mismatch is known, because the counts are what make the log
 	// line an upstream bug report rather than a complaint.
 	bool bConsistent = (Declared->Num() == MaxZoom + 1);
 
+	// Present tiles at a zoom the file has no entry for are undeclared, whatever the rest says.
+	for (const TPair<int32, FTileSet>& Level : ByZoom)
+	{
+		if (Level.Key >= Declared->Num())
+		{
+			OutDiff.UndeclaredTileCount += Level.Value.Num();
+		}
+	}
+
+	const FTileSet NoTiles;
 	for (int32 Level = 0; Level < Declared->Num(); ++Level)
 	{
+		const FTileSet* PresentPtr = ByZoom.Find(Level);
+		const FTileSet& Present = PresentPtr != nullptr ? *PresentPtr : NoTiles;
+
 		const TArray<TSharedPtr<FJsonValue>>* Rects = nullptr;
 		if (!(*Declared)[Level].IsValid() || !(*Declared)[Level]->TryGetArray(Rects) || Rects == nullptr)
 		{
 			bConsistent = false;
+			OutDiff.UndeclaredTileCount += Present.Num();
 			continue;
 		}
 
-		FTileSet DeclaredHere;
+		// Read every rectangle first, so the level's size is known before anything is expanded.
+		struct FRect
+		{
+			int64 StartX, StartY, EndX, EndY;
+			bool Covers(const TTuple<int32, int32>& XY) const
+			{
+				return XY.Get<0>() >= StartX && XY.Get<0>() <= EndX
+					&& XY.Get<1>() >= StartY && XY.Get<1>() <= EndY;
+			}
+			int64 Area() const { return (EndX - StartX + 1) * (EndY - StartY + 1); }
+		};
+		TArray<FRect> LevelRects;
+		int64 LevelArea = 0;
 		for (const TSharedPtr<FJsonValue>& RectValue : *Rects)
 		{
 			const TSharedPtr<FJsonObject>* Rect = nullptr;
@@ -159,34 +186,97 @@ bool FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(
 
 			// Inclusive on both ends, which is what makes the whole-world claim eight tiles rather
 			// than three. int64 because a low-zoom whole-world rectangle is small but a deep one is
-			// not, and this number is only ever printed.
-			const int64 Width = static_cast<int64>(EndX) - StartX + 1;
-			const int64 Height = static_cast<int64>(EndY) - StartY + 1;
-			if (Width <= 0 || Height <= 0)
+			// not.
+			const FRect Parsed{ StartX, StartY, EndX, EndY };
+			if (Parsed.EndX < Parsed.StartX || Parsed.EndY < Parsed.StartY)
 			{
 				bConsistent = false;
 				continue;
 			}
-			OutDeclaredTileCount += Width * Height;
-
-			if (Width != 1 || Height != 1)
-			{
-				// A rectangle covering more than one tile declares siblings that are not on disk —
-				// exactly the shape of the upstream defect. Counted, then judged inconsistent.
-				bConsistent = false;
-				continue;
-			}
-			DeclaredHere.Add(MakeTuple(StartX, StartY));
+			LevelRects.Add(Parsed);
+			LevelArea += Parsed.Area();
 		}
 
-		const FTileSet* Present = ByZoom.Find(Level);
-		const int32 PresentNum = Present != nullptr ? Present->Num() : 0;
-		if (DeclaredHere.Num() != PresentNum
-			|| (Present != nullptr && !DeclaredHere.Includes(*Present)))
+		int64 UndeclaredHere = 0;
+		for (const TTuple<int32, int32>& XY : Present)
+		{
+			if (!LevelRects.ContainsByPredicate([&XY](const FRect& R) { return R.Covers(XY); }))
+			{
+				++UndeclaredHere;
+			}
+		}
+		OutDiff.UndeclaredTileCount += UndeclaredHere;
+
+		// A bundle's levels hold a handful of tiles, so a level declaring more than this many is
+		// already far from what is on disk. Expanding it would cost memory to learn nothing, so its
+		// absent tiles are counted per rectangle instead — exact unless two rectangles overlap.
+		constexpr int64 ExpansionLimit = 1 << 20;
+		int64 AbsentHere = 0;
+		if (LevelArea > ExpansionLimit)
+		{
+			bConsistent = false;
+			OutDiff.DeclaredTileCount += LevelArea;
+			for (const FRect& R : LevelRects)
+			{
+				int64 PresentInRect = 0;
+				for (const TTuple<int32, int32>& XY : Present)
+				{
+					PresentInRect += R.Covers(XY) ? 1 : 0;
+				}
+				AbsentHere += R.Area() - PresentInRect;
+			}
+		}
+		else
+		{
+			FTileSet DeclaredHere;
+			for (const FRect& R : LevelRects)
+			{
+				for (int64 X = R.StartX; X <= R.EndX; ++X)
+				{
+					for (int64 Y = R.StartY; Y <= R.EndY; ++Y)
+					{
+						DeclaredHere.Add(MakeTuple(static_cast<int32>(X), static_cast<int32>(Y)));
+					}
+				}
+			}
+			OutDiff.DeclaredTileCount += DeclaredHere.Num();
+			for (const TTuple<int32, int32>& XY : DeclaredHere)
+			{
+				AbsentHere += Present.Contains(XY) ? 0 : 1;
+			}
+		}
+		OutDiff.AbsentTileCount += AbsentHere;
+
+		if (AbsentHere != 0 || UndeclaredHere != 0)
 		{
 			bConsistent = false;
 		}
 	}
 
 	return bConsistent;
+}
+
+bool FMantlePlaceCesiumAvailabilityLogic::CorrectAvailability(
+	const TSharedPtr<FJsonObject>& Root,
+	const TArray<FMantlePlaceCesiumTile>& Tiles,
+	FMantlePlaceCesiumAvailabilityDiff& OutDiff)
+{
+	if (IsAvailabilityConsistent(Root, Tiles, OutDiff) || !Root.IsValid())
+	{
+		return false;
+	}
+	Root->SetArrayField(AvailableField, BuildAvailability(Tiles));
+	return true;
+}
+
+FString FMantlePlaceCesiumAvailabilityLogic::DescribeMismatch(
+	const FString& JobId, const FMantlePlaceCesiumAvailabilityDiff& Diff, int32 PresentTileCount)
+{
+	return FString::Printf(
+		TEXT("Cesium terrain layer.json for job %s declares %lld tiles, %lld of them absent from the "
+			 "bundle, and leaves %lld of the %d tiles the bundle ships undeclared. Rewriting "
+			 "availability so Cesium does not 404 its way to a load error. This is an upstream "
+			 "packaging defect in the bundle, not an import fault — report it with this line."),
+		*JobId, Diff.DeclaredTileCount, Diff.AbsentTileCount, Diff.UndeclaredTileCount,
+		PresentTileCount);
 }

@@ -15,9 +15,10 @@ struct FHttpServerRequest;
  * Cesium for Unreal fetches terrain/imagery over HTTP, so to let it read the user's *own* downloaded
  * bundle (download-to-own, never streamed from the platform) we host the extracted bundle directory on
  * 127.0.0.1. It serves the bundle's Cesium-ready artifacts verbatim:
- *   - `Terrain/layer.json` + `Terrain/{z}/{x}/{y}.terrain` (quantized-mesh; `.terrain` is gzip on disk,
+ *   - the `layer.json` `layout.cesium_terrain` points at + its `{z}/{x}/{y}.terrain` tiles (quantized-mesh; `.terrain` is gzip on disk,
  *     so it is served with `Content-Encoding: gzip` and the quantized-mesh content-type), and
- *   - `Imagery/Imagery.png` (the AOI raster) as a single-tile raster overlay source.
+ *   - the drape `hosts.unreal.imagery_drape.source` points at (the AOI raster), when there is one,
+ *     as a single-tile raster overlay source.
  *
  * Editor-only, QA/preview tool — bound to loopback, no auth, low traffic. One server instance per
  * served root; Start() is idempotent-ish (Stop() any prior instance first).
