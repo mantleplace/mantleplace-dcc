@@ -123,8 +123,9 @@ read both shapes, so the existing fixtures stay the documents they are and the n
 a case carrying its own `manifestVersion` — `manifest.locationBlockIgnored` is the first,
 `manifest.foliageVocabularyIgnored` the second, `manifest.hostFramesIgnored` the third,
 `manifest.hazardLayersIgnored` the fourth, `manifest.basemapFilesIgnored` the fifth,
-`manifest.siteBriefIgnored` the sixth, `manifest.partialDeliveryIgnored` the seventh and
-`manifest.verticalDatumsIgnored` the eighth. Stamping a newer version onto a fixture that lacks
+`manifest.siteBriefIgnored` the sixth, `manifest.partialDeliveryIgnored` the seventh,
+`manifest.verticalDatumsIgnored` the eighth, `manifest.fidelityLevelsIgnored` the ninth and
+`manifest.bundlePartsIgnored` the tenth. Stamping a newer version onto a fixture that lacks
 what that version requires would make the fixture untrue.
 
 **The reject set waits for the slowest host.** It is host-invariant (no case carries `appliesTo`),

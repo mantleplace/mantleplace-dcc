@@ -879,6 +879,34 @@
       }
     },
     {
+      "id": "manifest.fidelityLevelsIgnored",
+      "group": "manifest",
+      "file": "manifest/fidelity-levels-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 1.9.0 adds keys and removes none, and they say how much of each deliverable a host may import. A deliverable entry may carry `levels`, its four fidelity levels, always all four: `RAW`, the source-native data with nothing capped or reduced; `MAX`, the entry itself, its key and meaning unchanged and every bundle before 1.9.0; and `MED` and `MIN`, less of it or coarser. MAX names no file of its own and may carry a `cost_driver`, the count a host's import cost scales with. Every other level is exactly one of three shapes: a pointer to a file of its own, stating its own frame and datum with the entry's keys and, for a coarsened surface, its measured `deviation` against the DEM; a `cut` of the MAX file, either its first `rows` (a ranked row file) or the features whose `lowest_level_field` names that level or a lighter one; or `same_as` another level, with a `reason`. `levels` is declared on the elevation, imagery, basemap, mesh, buildings, Cesium terrain, Site Brief and tree-point entries, on a shared vector layer, and on every file pointer in both host blocks. The tree points gain `rank`, the rule their rows are ordered by, with `point_cap` and `uncapped_point_count`, on `landcover.tree_points` and `hosts.unreal.foliage_points` alike; a bundle built since the rank no longer carries `truncated_to_tallest`. What any host does with a level is other cases' business. The fixture is versioned 1.9.0 and carries the new members in the shape the 1.9.0 schema gives them: a DEM whose MED and MIN are files of their own with their deviation, tree points capped at two of five crowns -- RAW a file of its own, MED a one-row cut, MIN the same as MED -- in both the shared entry and Unreal's, Unreal's terrain mesh with coarser files at MED and MIN, the shared `road_splines` layer cut by a level field, Revit's drape with a coarser MED file, and Revit's contours, GeoPackage and road layer at MAX only -- plus everything the 1.8.0 case carries, so that every block the fixture carries validates against the published 1.9.0 schema. A reader MUST accept it and still read everything around the new keys. Two readers fail here while every earlier case stays green: one that gates the version on equality with its floor or with the last minor it saw, and one that refuses a member it does not recognise inside a block it does read -- both readers walk `vector.layers`, whose `road_splines` entry now carries `levels`, the Unreal reader reads `foliage_points` and the Revit reader its own drape, contours and vectors, which gain them too. Either turns an additive minor into a breaking release (compatibility.md). Host-invariant on purpose: ignoring a key nobody has taught you is every reader's obligation, not one host's.",
+      "manifestVersion": "1.9.0",
+      "expectations": {
+        "jobId": "fidelity-levels",
+        "orderId": "ord-fidelity-levels-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "7777777777777777777777777777777777777777777777777777777777777777"
+      }
+    },
+    {
+      "id": "manifest.bundlePartsIgnored",
+      "group": "manifest",
+      "file": "manifest/bundle-parts-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 1.10.0 adds keys and removes none, and they describe a bundle stored as parts. Such a bundle's manifest gains `files`, every file of the whole bundle by archive path, each with the `part` that holds it, its `size_bytes` and the `sha256` of its exact bytes, and `view`, what this one archive holds: its `kind` (`everything`, `selection` or `host`), whether it is `partial`, the bundle `snapshot` it was cut from, the `parts` it holds and the `missing` parts it was asked for, and its `file_count`. A part id is a packaging token at a level, `<token>@<level>`, or one of a few parts that belong to no token, and is compared, never parsed beyond the `@`. Both blocks are absent on a bundle stored as one zip, which every earlier case is. 1.10.0 also declares level-pointer members 1.9.0 bundles already carried: a level file's `format`, `formats`, `texture`, mesh counts and budgets, heightmap and grid sizes, extent, frame and datum, and a deviation's `posts`. What any host does with a view is other cases' business. The fixture is versioned 1.10.0 and is the sealed Everything view of a complete bundle: `files` lists every file the fixture points at, each pointer's own sha256 where it states one, under the parts its packaging rows name or `other`, and `view` holds every part with nothing missing -- plus everything the 1.9.0 case carries, whose level files already state members only 1.10.0 declares, as 1.9.0 bundles did, so that every block the fixture carries validates against the published 1.10.0 schema. A reader MUST accept it and still read everything around the new keys. Two readers fail here while every earlier case stays green: one that gates the version on equality with its floor or with the last minor it saw, and one that refuses a top-level member it does not recognise. Either turns an additive minor into a breaking release (compatibility.md). Host-invariant on purpose: ignoring a key nobody has taught you is every reader's obligation, not one host's.",
+      "manifestVersion": "1.10.0",
+      "expectations": {
+        "jobId": "bundle-parts",
+        "orderId": "ord-bundle-parts-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "7777777777777777777777777777777777777777777777777777777777777777"
+      }
+    },
+    {
       "id": "manifest.revitOwnFramePointers",
       "group": "manifest",
       "file": "manifest/revit-own-frame-pointers.json",
