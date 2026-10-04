@@ -304,10 +304,41 @@ public sealed class LocalBundleArchive : IDisposable
             : BundleCacheLayout.ForOrder(filingKey, cacheRoot);
     }
 
+    /// <summary>
+    /// The lowercase hex sha256 of a zip's manifest member, found as <see cref="Open(string)"/> finds
+    /// it; empty when the zip holds none or cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// A download view's response states this digest, and it is the root the per-file digests are
+    /// trusted from: a view with a tampered manifest would carry tampered digests that every file
+    /// then matches.
+    /// </remarks>
+    public static string ManifestSha256(string zipPath)
+    {
+        try
+        {
+            using ZipArchive archive = ZipFile.OpenRead(zipPath);
+            if (FindManifest(archive) is not { } entry)
+            {
+                return string.Empty;
+            }
+
+            using Stream stream = entry.Open();
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static ZipArchiveEntry? FindManifest(ZipArchive archive)
+        => archive.Entries.FirstOrDefault(candidate =>
+            candidate.FullName.Replace('\\', '/').EndsWith(ManifestEntrySuffix, StringComparison.OrdinalIgnoreCase));
+
     private static string? ReadManifestText(ZipArchive archive)
     {
-        ZipArchiveEntry? entry = archive.Entries.FirstOrDefault(candidate =>
-            candidate.FullName.Replace('\\', '/').EndsWith(ManifestEntrySuffix, StringComparison.OrdinalIgnoreCase));
+        ZipArchiveEntry? entry = FindManifest(archive);
 
         if (entry is null)
         {

@@ -83,7 +83,6 @@ internal static class VaultConformanceTests
             case "vault.materialize.alreadyRunning":
             case "vault.materialize.startNoJobId":
             case "vault.materialize.noop":
-            case "vault.materialize.queued":
             case "vault.materialize.coalesced":
             case "vault.materialize.activeJobWithoutId":
                 DriveMaterializeStart(run, corpusCase);
@@ -327,9 +326,9 @@ internal static class VaultConformanceTests
             run.Equal(start.AlreadyRunning, alreadyRunning, "already running");
         }
 
-        // ⛔ The outcome, not the presence of an id. Two of the platform's five start shapes are
-        // successes that name no job at all, and inferring failure from a missing `jobId` is what
-        // stopped this host importing any bundle with nothing left to build.
+        // ⛔ The outcome, not the presence of an id. The platform's no-op is a success that names no
+        // job at all, and inferring failure from a missing `jobId` is what stopped this host
+        // importing any bundle with nothing left to build.
         if (ConformanceCorpus.WantsString(corpusCase, "outcome", out string outcome))
         {
             run.Equal(start.Outcome.ToString(), outcome, "outcome");

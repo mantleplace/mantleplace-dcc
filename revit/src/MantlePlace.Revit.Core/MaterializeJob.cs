@@ -15,9 +15,11 @@ public enum MaterializeState
 
 /// <summary>What the platform did with a materialize request (<c>HPS-24</c>).</summary>
 /// <remarks>
-/// Five wire shapes, four outcomes. Modelling this as "a job id, or an error" was wrong: two of the
-/// five shapes are successes that name no job at all, and reading their absence of a job id as a
-/// failure is what stopped Revit importing any already-complete bundle.
+/// Four wire shapes, three outcomes. Modelling this as "a job id, or an error" was wrong: the no-op
+/// names no job at all, and reading its absence of a job id as a failure is what stopped Revit
+/// importing any already-complete bundle. A fourth outcome, <c>queued</c>, was retired by the
+/// platform (<c>HPS-24</c>, v1.17): an order whose core build has not finished now answers a
+/// <c>not_ready</c> error body, so the marker is no longer read.
 /// </remarks>
 public enum MaterializeStartOutcome
 {
@@ -36,20 +38,14 @@ public enum MaterializeStartOutcome
     /// nothing to poll — the caller goes straight to the download.
     /// </summary>
     NothingToDo,
-
-    /// <summary>
-    /// The order's core build has not finished, so the picks are parked and fire automatically when
-    /// it does. <c>Tokens</c> is the parked set. No job exists yet.
-    /// </summary>
-    Queued,
 }
 
 /// <summary>The response to starting a materialize.</summary>
-/// <param name="Outcome">Which of the four things happened.</param>
+/// <param name="Outcome">Which of the three things happened.</param>
 /// <param name="JobId">The job to poll. Empty for every outcome except a started or joined run.</param>
 /// <param name="Tokens">
-/// The token list this outcome names — the effective set being built, the delivered set, or the
-/// parked set, according to <paramref name="Outcome"/>.
+/// The token list this outcome names — the effective set being built, or the delivered set,
+/// according to <paramref name="Outcome"/>.
 /// </param>
 public readonly record struct MaterializeStart(
     MaterializeStartOutcome Outcome,
@@ -70,9 +66,6 @@ public readonly record struct MaterializeStart(
 
     public static MaterializeStart NothingToDo(IReadOnlyList<string> delivered)
         => new(MaterializeStartOutcome.NothingToDo, string.Empty, delivered);
-
-    public static MaterializeStart Queued(IReadOnlyList<string> pending)
-        => new(MaterializeStartOutcome.Queued, string.Empty, pending);
 }
 
 /// <summary>A requested deliverable this bundle will never carry, and the platform's reason.</summary>
@@ -219,12 +212,13 @@ public static class MaterializeJobs
     /// <para>
     /// ⛔<c>HPS-24</c>: recognised by BODY SHAPE, not by status code, and <b>each outcome is keyed
     /// on its own marker — never on the absence of <c>jobId</c></b>. That inference is what broke
-    /// this: two of the platform's five shapes are successes carrying no job at all, and both read
-    /// as "the platform accepted the request but named no job to poll".
+    /// this: the platform's no-op is a success carrying no job at all, and it read as "the platform
+    /// accepted the request but named no job to poll".
     /// </para>
     /// <para>
-    /// <c>noop</c> and <c>queued</c> are read FIRST because they are unambiguous discriminators; a
-    /// body carrying either cannot be anything else. The join test comes before the error body
+    /// <c>noop</c> is read FIRST because it is an unambiguous discriminator; a body carrying it
+    /// cannot be anything else. The retired <c>queued</c> marker is not read at all: a body carrying
+    /// only it names no job and is refused like any other unrecognised shape. The join test comes before the error body
     /// because the single-flight response carries both a job fact and error-ish prose, and the job
     /// fact is the useful half.
     /// </para>
@@ -266,13 +260,6 @@ public static class MaterializeJobs
             if (root.Bool("noop"))
             {
                 start = MaterializeStart.NothingToDo(root.StringArray("delivered"));
-                return null;
-            }
-
-            // The order's core build has not finished; the picks are parked and fire on their own.
-            if (root.Bool("queued"))
-            {
-                start = MaterializeStart.Queued(root.StringArray("pendingTokens"));
                 return null;
             }
 

@@ -44,6 +44,7 @@ A `declined` cell with no ADR may carry one line of reason instead. No cell desc
 | --- | --- | --- |
 | Sign in and out in the system browser | supported | supported |
 | List, prepare and download your orders | supported | supported |
+| Import a complete order in one press, downloading only the host's files | planned — [issue 301](https://github.com/mantleplace/mantleplace-dcc/issues/301) | partial — [issue 300](https://github.com/mantleplace/mantleplace-dcc/issues/300) |
 | Search the vault | supported | supported |
 | Remove a download on request | planned — [issue 264](https://github.com/mantleplace/mantleplace-dcc/issues/264) | supported |
 | A notice when a Prepare ends | partial — [issue 265](https://github.com/mantleplace/mantleplace-dcc/issues/265) | supported |

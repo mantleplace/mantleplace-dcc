@@ -36,6 +36,14 @@ throughout. Closing the window is not cancelling — only the Cancel button canc
 going without the window: reopened, the vault shows it still running, and pressing
 `Prepare for Revit` again follows it rather than starting a second (`HPS-24`).
 
+`Import` on a bundle that is not on disk yet asks the order first. An order built complete when it
+was bought has nothing left to build, so the plugin downloads Revit's own view of it — the files
+Revit's import reads, without the meshes and rasters other hosts use — and opens the import, with
+no Prepare. While the platform's Revit view leaves out the tree points, the plugin downloads the
+whole bundle for an order that has them, so the trees still import. An order built on demand is
+prepared exactly as `Prepare for Revit` prepares it, and `Import` opens it once the Prepare says it
+is ready.
+
 When a Prepare ends while the vault is closed, a notice appears in the bottom-right corner of
 Revit's window without taking focus — the bundle is ready to import, it could not be prepared, or it
 is still building after the ten-minute poll budget (`HPS-25`). Clicking it opens the vault on that

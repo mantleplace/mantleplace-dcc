@@ -287,6 +287,12 @@ internal sealed class VaultBrowserWindow : Window
             return;
         }
 
+        Prepare(bundle);
+    }
+
+    /// <summary>As <see cref="Prepare()"/>, for a bundle already chosen — the Import press that found an on-demand order.</summary>
+    private void Prepare(VaultBundle bundle)
+    {
         if (!SignedIn())
         {
             return;
@@ -361,10 +367,98 @@ internal sealed class VaultBrowserWindow : Window
 
         if (entry.State != CacheState.CachedValid)
         {
-            Report(entry.Describe() + $" Use “{WindowLabels.PrepareForRevit}” first.");
-            return;
+            // Nothing importable on disk: ask the order whether it is complete, and fetch it if so.
+            (CacheEntry? fetched, bool prepare) = await FetchCompleteAsync(bundle).ConfigureAwait(true);
+            if (prepare)
+            {
+                // The Prepare is the watcher's, and this window's own work is over.
+                Prepare(bundle);
+                return;
+            }
+
+            if (fetched is null)
+            {
+                return;
+            }
+
+            entry = fetched.Value;
         }
 
+        OpenImport(entry);
+    }
+
+    /// <summary>
+    /// One materialize start, then Revit's download view for a complete order — or the existing
+    /// Prepare for an on-demand one (<see cref="CompleteOrders"/>).
+    /// </summary>
+    /// <remarks>
+    /// A complete order was built whole at procurement, so a Prepare on it does nothing but fill the
+    /// cache; this fills it directly and opens the import, with one press and no Prepare shown. An
+    /// on-demand order is handed to the Prepare as it was, and its import is the curator's next
+    /// press once the Prepare says the bundle is ready.
+    /// </remarks>
+    /// <returns>
+    /// The cache entry to import; or <c>Prepare</c> set when the order is the Prepare's to follow; or
+    /// neither, when there is nothing yet and the status line says why.
+    /// </returns>
+    private async Task<(CacheEntry? Entry, bool Prepare)> FetchCompleteAsync(VaultBundle bundle)
+    {
+        if (!await BeginAsync($"Checking {bundle.AoiLabel} in your vault…").ConfigureAwait(true))
+        {
+            return (null, false);
+        }
+
+        try
+        {
+            ImportRouteDecision route = await _vault.RouteImportAsync(bundle.OrderId, _work!.Token).ConfigureAwait(true);
+            if (route.Route == ImportRoute.Refused)
+            {
+                Report(route.Message);
+                return (null, false);
+            }
+
+            if (route.Route == ImportRoute.Prepare)
+            {
+                return (null, true);
+            }
+
+            CompleteDownload download = await _vault.DownloadCompleteAsync(
+                bundle,
+                route.Delivered,
+                _cache,
+                new Progress<string>(Report),
+                _work!.Token).ConfigureAwait(true);
+
+            if (download.NeedsPrepare)
+            {
+                return (null, true);
+            }
+
+            CacheEntry entry = _cache.Inspect(
+                download.Bundle.OrderId, download.Bundle.SizeBytes, download.Bundle.Sha256, download.Bundle.ManifestVersion);
+            UpdateRow(download.Bundle, entry);
+
+            if (!download.Ready || entry.State != CacheState.CachedValid)
+            {
+                Report(download.Ready ? entry.Describe() : download.Message);
+                return (null, false);
+            }
+
+            return (entry, false);
+        }
+        catch (OperationCanceledException)
+        {
+            Report("Cancelled.");
+            return (null, false);
+        }
+        finally
+        {
+            EndWork();
+        }
+    }
+
+    private void OpenImport(CacheEntry entry)
+    {
         // Not "Importing…": the import window opens on its checklist, and nothing is imported until
         // the curator presses Import there.
         Report($"Opening the {WindowLabels.ImportHeading} window — choose what to include, then press {WindowLabels.Import}.");
@@ -372,8 +466,6 @@ internal sealed class VaultBrowserWindow : Window
         // Hands off to Revit's thread. The window stays responsive and hears back through Completed.
         _importHandler.QueueImport(entry.Layout.BundleZipPath);
         _importEvent.Raise();
-
-        await Task.CompletedTask.ConfigureAwait(true);
     }
 
     private void RemoveSelected()

@@ -100,6 +100,36 @@ public static class PlatformErrors
         return string.Join("; ", rendered);
     }
 
+    /// <summary>
+    /// A non-2xx reduced to something a curator can act on, or <c>null</c> when the response was a
+    /// success (<c>HPS-48</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A non-2xx whose body explains itself is returned as that explanation. The status code alone
+    /// ("410") tells a curator nothing; "This order was refunded" tells them everything.
+    /// </para>
+    /// <para>
+    /// It is returned as <see cref="PlatformError.Sentence"/>, not <c>Message</c>: this is the one
+    /// read with no parser behind it to add context, so a schema rejection that answers
+    /// "Invalid request" and names the offending field in a sibling must show both halves. Showing
+    /// only the first is how a missing request field looked like an unexplained refusal.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>A non-2xx that explains nothing is still a refusal.</b> Passing its body through as
+    /// success is how a 502 proxy page and a 500 with an unfamiliar error envelope both reached a
+    /// parser expecting a materialize response, and surfaced as "the platform accepted the request
+    /// but named no job to poll" — blaming the shape of a body that was never a success in the first
+    /// place.
+    /// </para>
+    /// </remarks>
+    public static string? Refusal(int status, string body)
+        => status is >= 200 and < 300
+            ? null
+            : FromBody(body) is { } platformError
+                ? platformError.Sentence
+                : $"mantle.place refused this request (HTTP {status}) and gave no reason.";
+
     /// <summary>Reads an error body from raw bytes. <c>null</c> when it is not JSON or states none.</summary>
     public static PlatformError? FromBody(string body)
     {

@@ -24,6 +24,21 @@ public readonly record struct VaultResult<T>(T? Value, string? Error)
 /// </param>
 public readonly record struct PollOutcome(VaultResult<MaterializeStatus> Result, bool OutOfPolls);
 
+/// <summary>How fetching a complete order's download ended.</summary>
+/// <param name="Ready">Whether the cache now holds a zip Import can open.</param>
+/// <param name="NeedsPrepare">
+/// Whether the order turned out to be still building, which is the existing Prepare's to follow.
+/// </param>
+/// <param name="Message">The cache's verdict, or why there is none.</param>
+/// <param name="Bundle">The row the download was checked against — re-listed when the whole archive was fetched.</param>
+/// <param name="Fetched">What was fetched, so the window can say it and a measurement can name it.</param>
+public readonly record struct CompleteDownload(
+    bool Ready,
+    bool NeedsPrepare,
+    string Message,
+    VaultBundle Bundle,
+    ViewFetch Fetched);
+
 /// <summary>
 /// The vault surface: list → materialize → poll → re-list → presign → download (<c>HPS-18</c>).
 /// </summary>
@@ -111,6 +126,136 @@ public sealed class VaultClient
         return parseError is null
             ? VaultResult<MaterializeStart>.Ok(start)
             : VaultResult<MaterializeStart>.Failed(parseError);
+    }
+
+    /// <summary>
+    /// Starts a materialize once, and reads the answer as the route an Import press takes
+    /// (<see cref="CompleteOrders"/>).
+    /// </summary>
+    /// <remarks>
+    /// The same request a Prepare sends (⛔<c>HPS-23</c>'s explicit token list), so an on-demand
+    /// order this starts is the build a Prepare would have started, and the Prepare that follows
+    /// joins it rather than starting a second.
+    /// </remarks>
+    public async Task<ImportRouteDecision> RouteImportAsync(string orderId, CancellationToken cancellationToken)
+    {
+        (int status, string body, string? error) = await SendAsync(
+            HttpMethod.Post,
+            MaterializeUrl(orderId),
+            MaterializeJobs.BuildRequestBody(MaterializeJobs.HostScope),
+            cancellationToken).ConfigureAwait(false);
+
+        return error is not null ? ImportRouteDecision.Refuse(error) : CompleteOrders.FromStart(status, body);
+    }
+
+    /// <summary>
+    /// Fetches a complete order's Revit view into the cache — or the whole bundle, when the view
+    /// would leave out a file the import reads (<see cref="HostViews"/>).
+    /// </summary>
+    /// <param name="delivered">What the order delivered, from the no-op; <c>null</c> when unknown.</param>
+    public async Task<CompleteDownload> DownloadCompleteAsync(
+        VaultBundle bundle,
+        IReadOnlyCollection<string>? delivered,
+        BundleCache cache,
+        IProgress<string> say,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(bundle);
+        ArgumentNullException.ThrowIfNull(cache);
+        ArgumentNullException.ThrowIfNull(say);
+
+        (int status, string body, string? error) = await SendAsync(
+            HttpMethod.Post,
+            DownloadUrl(bundle.OrderId),
+            HostViews.BuildRequestBody(),
+            cancellationToken).ConfigureAwait(false);
+
+        HostViewLink link = default;
+        error ??= Refusal(status, body) ?? HostViews.TryParse(body, out link);
+        if (error is not null)
+        {
+            return new CompleteDownload(false, false, error, bundle, ViewFetch.View);
+        }
+
+        ViewFetch fetch = HostViews.Decide(link, delivered);
+
+        switch (fetch)
+        {
+            case ViewFetch.Prepare:
+                return new CompleteDownload(false, true, string.Empty, bundle, fetch);
+
+            case ViewFetch.View:
+            {
+                if (IsExpired(link.ExpiresAt))
+                {
+                    return new CompleteDownload(false, false, ExpiredLink, bundle, fetch);
+                }
+
+                say.Report(link.SizeBytes is { } bytes
+                    ? $"Downloading Revit's files ({bytes / 1_000_000.0:0} MB)…"
+                    : "Downloading Revit's files…");
+
+                string? viewError = await cache.PromoteAsync(
+                    bundle.OrderId,
+                    StreamFrom(link.Url),
+                    link.SizeBytes,
+                    expectedSha256: null,
+                    bundle.ManifestVersion,
+                    DateTimeOffset.UtcNow,
+                    cancellationToken,
+                    holdsView: true,
+                    expectedManifestSha256: link.ManifestSha256).ConfigureAwait(false);
+
+                return Settled(cache, bundle, viewError, fetch);
+            }
+
+            default:
+            {
+                // The whole archive, either way, so it is checked against the listing's facts for
+                // the bundle as it stands now (HPS-18) rather than a row the window read earlier.
+                say.Report("Fetching the integrity details…");
+                (VaultListing? relisted, string? listError) = await ListAsync(cancellationToken).ConfigureAwait(false);
+                if (listError is not null)
+                {
+                    return new CompleteDownload(false, false, listError, bundle, fetch);
+                }
+
+                VaultBundle refreshed = relisted!.Bundles
+                    .FirstOrDefault(row => string.Equals(row.OrderId, bundle.OrderId, StringComparison.Ordinal))
+                    ?? bundle;
+
+                say.Report("Downloading…");
+                string? wholeError;
+                if (fetch == ViewFetch.WholeArchive)
+                {
+                    wholeError = IsExpired(link.ExpiresAt)
+                        ? ExpiredLink
+                        : await PromoteWholeAsync(refreshed, cache, link.Url, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    wholeError = await DownloadAsync(refreshed, cache, cancellationToken).ConfigureAwait(false);
+                }
+
+                return Settled(cache, refreshed, wholeError, fetch);
+            }
+        }
+    }
+
+    private const string ExpiredLink = "The download link expired before it could be used. Try again.";
+
+    private static bool IsExpired(string expiresAt)
+        => new PresignedDownload(string.Empty, expiresAt).IsExpired(DateTimeOffset.UtcNow);
+
+    private static CompleteDownload Settled(BundleCache cache, VaultBundle bundle, string? error, ViewFetch fetch)
+    {
+        CacheEntry entry = cache.InspectQuick(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion);
+        return new CompleteDownload(
+            error is null && entry.State == CacheState.CachedValid,
+            false,
+            error ?? entry.Describe(),
+            bundle,
+            fetch);
     }
 
     /// <summary>One poll.</summary>
@@ -254,24 +399,36 @@ public sealed class VaultClient
             return "The download link expired before it could be used. Try again.";
         }
 
-        return await cache.PromoteAsync(
-            bundle.OrderId,
-            async (destination, token) =>
-            {
-                using HttpResponseMessage response = await Http
-                    .GetAsync(link.Url, HttpCompletionOption.ResponseHeadersRead, token)
-                    .ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
+        return await PromoteWholeAsync(bundle, cache, link.Url, cancellationToken).ConfigureAwait(false);
+    }
 
-                using Stream source = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
-                await source.CopyToAsync(destination, token).ConfigureAwait(false);
-            },
+    /// <summary>Streams the whole archive into the cache, checked against the listing's size and digest.</summary>
+    private static Task<string?> PromoteWholeAsync(
+        VaultBundle bundle,
+        BundleCache cache,
+        string url,
+        CancellationToken cancellationToken)
+        => cache.PromoteAsync(
+            bundle.OrderId,
+            StreamFrom(url),
             bundle.SizeBytes,
             bundle.Sha256,
             bundle.ManifestVersion,
             DateTimeOffset.UtcNow,
-            cancellationToken).ConfigureAwait(false);
-    }
+            cancellationToken);
+
+    /// <summary>The body writer the cache streams a presigned link into.</summary>
+    private static Func<Stream, CancellationToken, Task> StreamFrom(string url)
+        => async (destination, token) =>
+        {
+            using HttpResponseMessage response = await Http
+                .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token)
+                .ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+
+            using Stream source = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+            await source.CopyToAsync(destination, token).ConfigureAwait(false);
+        };
 
     /// <summary>The single-flight status: a refusal everywhere except the materialize start.</summary>
     private const int Conflict = 409;
@@ -371,33 +528,6 @@ public sealed class VaultClient
         }
     }
 
-    /// <summary>
-    /// A non-2xx reduced to something a curator can act on, or <c>null</c> when the response was a
-    /// success (<c>HPS-48</c>).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A non-2xx whose body explains itself is returned as that explanation. The status code alone
-    /// ("410") tells a curator nothing; "This order was refunded" tells them everything.
-    /// </para>
-    /// <para>
-    /// It is returned as <see cref="PlatformError.Sentence"/>, not <c>Message</c>: this is the one
-    /// read with no parser behind it to add context, so a schema rejection that answers
-    /// "Invalid request" and names the offending field in a sibling must show both halves. Showing
-    /// only the first is how a missing request field looked like an unexplained refusal.
-    /// </para>
-    /// <para>
-    /// ⛔ <b>A non-2xx that explains nothing is still a refusal.</b> Passing its body through as
-    /// success is how a 502 proxy page and a 500 with an unfamiliar error envelope both reached a
-    /// parser expecting a materialize response, and surfaced as "the platform accepted the request
-    /// but named no job to poll" — blaming the shape of a body that was never a success in the first
-    /// place.
-    /// </para>
-    /// </remarks>
-    private static string? Refusal(int status, string body)
-        => status is >= 200 and < 300
-            ? null
-            : PlatformErrors.FromBody(body) is { } platformError
-                ? platformError.Sentence
-                : $"mantle.place refused this request (HTTP {status}) and gave no reason.";
+    /// <summary>A non-2xx reduced to something a curator can act on (<see cref="PlatformErrors.Refusal"/>).</summary>
+    private static string? Refusal(int status, string body) => PlatformErrors.Refusal(status, body);
 }
