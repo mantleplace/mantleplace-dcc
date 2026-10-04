@@ -38,7 +38,9 @@ terrain's third tier. "When" is the checklist's starting state, `ImportLayers.On
 where the bundle publishes levels, `ImportLayers.DefaultLevel`. Both are set by measurement: with
 every box ticked at its default level, an import through the window stayed under five minutes in
 Revit 2025, 2026 and 2027 on both reference orders, so every row whose default fits starts ticked
-(the gate table is on [issue 300](https://github.com/mantleplace/mantleplace-dcc/issues/300)). An
+(the gate table is on [issue 300](https://github.com/mantleplace/mantleplace-dcc/issues/300)). The
+margin is thin: the slowest run, the dense order in Revit 2026, took 297 s, and one level up on the
+trees or the road surfaces took that order past 300 s. An
 import with nobody there to choose, the unattended path, brings in every row at `MAX`
 (`ImportLayerChoice.All`). The two subdivision rows and the drape need the terrain row ticked.
 

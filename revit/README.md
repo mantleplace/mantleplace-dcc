@@ -327,8 +327,8 @@ extra. The unattended path is unchanged: it imports everything it can and logs t
 four levels of a deliverable — `RAW`, `MAX`, `MED` and `MIN` — and every checklist row whose
 category publishes them gets a dropdown under `Fidelity Level`, with one `Set All To` control above
 the rows. `Planting` and `Road Subdivisions` open on `MIN`, and every other row on `MAX`, the
-deliverable as every earlier bundle had it: one level up on either took the whole import past five
-minutes on a dense order. A row whose `MIN` this version cannot import opens on `MAX`. Each level says
+deliverable as every earlier bundle had it ([why](../docs/import-inventory.md)). A row whose `MIN`
+this version cannot import opens on `MAX`. Each level says
 what the bundle publishes it as, and its count where the bundle states one: a level that is another
 reads `Same as MAX` and the reason, and where the step has a measured cost per unit the count comes
 with an estimate for the Revit you are running ([which rows](../docs/import-inventory.md)). The level is applied as published and never

@@ -251,7 +251,13 @@ public static class SlowStepNotice
     /// version, one Revit at a time, Revit 2025.4, 2026.5 and 2027.2, 2026-10-03, on two imperial
     /// reference bundles regenerated that day: a 2 km² mountain order of 75,091 TIN vertices, 1,317
     /// buildings and 725 steep-ground polygons, and a denser 1.96 km² flat one of 1,672 buildings. Where
-    /// a row below names it, the gate's runs are folded into the row's range.
+    /// a row below names it, the gate's runs are folded into the row's range. The water bodies, the
+    /// road surfaces' own seconds, the flood zones and the drape ran in the gate too, and their rows
+    /// are left as they were: each notice quotes its row with the counts it was measured on (2 water
+    /// bodies and 344 road surfaces on order <c>4276ef78</c>, 65 zones on the hand-made bundle), and
+    /// the gate's bundles carry other counts, so folding them in would quote one order's seconds
+    /// against another's count. The road surfaces' saving went: it measured leaving out the box at
+    /// MAX, and the box now opens on MIN, which fits, so it is no longer a slow box.
     /// </para>
     /// <para>
     /// The terrain and the context buildings fold in the mountain order's gate runs, which is the same
