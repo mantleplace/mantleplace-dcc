@@ -175,7 +175,9 @@ public sealed class Harness : IExternalApplication
         if (parts.Length == 1 && parts[0].Equals("All", StringComparison.OrdinalIgnoreCase))
         {
             names = [.. Enum.GetNames<ImportLayer>()];
-            return ImportLayerChoice.All;
+            return Env("LEVELS").Length == 0
+                ? ImportLayerChoice.All
+                : ImportLayerChoice.Only(Enum.GetValues<ImportLayer>(), ParseLevels(Env("LEVELS"), Enum.GetValues<ImportLayer>()));
         }
 
         // The checklist's own defaults in the source this tag was built from: the boxes a curator who changes
@@ -184,7 +186,7 @@ public sealed class Harness : IExternalApplication
         {
             ImportLayer[] defaults = [.. Enum.GetValues<ImportLayer>().Where(ImportLayers.OnByDefault)];
             names = [.. defaults.Select(layer => layer.ToString())];
-            return ImportLayerChoice.Only(defaults);
+            return ImportLayerChoice.Only(defaults, ParseLevels(Env("LEVELS") is { Length: > 0 } given ? given : "Default", defaults));
         }
 
         List<ImportLayer> layers = [];
@@ -200,7 +202,54 @@ public sealed class Harness : IExternalApplication
         }
 
         names = [.. layers.Select(layer => layer.ToString())];
-        return ImportLayerChoice.Only(layers);
+        return ImportLayerChoice.Only(layers, ParseLevels(Env("LEVELS"), layers));
+    }
+
+    // MANTLEPLACE_TIMING_LEVELS: 'Default' (each layer at ImportLayers.DefaultLevel of the source this tag was
+    // built from, what the window opens on), 'All=Min' (every layer at one level), or 'Planting=Min,RoadSubdivisions=Med'.
+    // Empty means every layer at MAX, as before levels existed. A level the bundle publishes in a form the step cannot
+    // take is refused by the planner, as the window would never offer it.
+    private static Dictionary<ImportLayer, FidelityLevel>? ParseLevels(string list, IEnumerable<ImportLayer> layers)
+    {
+        string[] parts = list.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return null;
+        }
+
+        if (parts.Length == 1 && parts[0].Equals("Default", StringComparison.OrdinalIgnoreCase))
+        {
+            return layers.ToDictionary(layer => layer, ImportLayers.DefaultLevel);
+        }
+
+        Dictionary<ImportLayer, FidelityLevel> levels = [];
+        foreach (string part in parts)
+        {
+            string[] pair = part.Split('=', StringSplitOptions.TrimEntries);
+            if (pair.Length != 2 || !FidelityLevelNames.TryParse(pair[1].ToUpperInvariant(), out FidelityLevel level))
+            {
+                throw new ArgumentException($"MANTLEPLACE_TIMING_LEVELS '{part}' is not <ImportLayer>=<RAW|MAX|MED|MIN>, 'All=<level>' or 'Default'.");
+            }
+
+            if (pair[0].Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (ImportLayer layer in layers)
+                {
+                    levels[layer] = level;
+                }
+
+                continue;
+            }
+
+            if (!Enum.TryParse(pair[0].Replace(" ", string.Empty), ignoreCase: true, out ImportLayer named) || !Enum.IsDefined(named))
+            {
+                throw new ArgumentException($"MANTLEPLACE_TIMING_LEVELS '{part}': '{pair[0]}' is not an ImportLayer. Valid: " + string.Join(", ", Enum.GetNames<ImportLayer>()) + ", or All.");
+            }
+
+            levels[named] = level;
+        }
+
+        return levels;
     }
 
     private static ImportLayer? ParseStopBefore(string text)
@@ -344,6 +393,7 @@ public sealed class Harness : IExternalApplication
         {
             ImportLayerChoice choice = ParseLayers(Env("LAYERS"), out string[] names);
             facts["layers"] = names;
+            facts["levels"] = Env("LEVELS");
             facts["bundle"] = Bundle;
             ImportLayer? stopBefore = ParseStopBefore(Env("STOP_BEFORE"));
             if (stopBefore is { } named)

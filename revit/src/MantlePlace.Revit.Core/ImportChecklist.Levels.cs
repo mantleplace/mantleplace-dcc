@@ -14,7 +14,8 @@ public sealed record LevelOption(FidelityLevel Level, string Label, bool IsAvail
 /// MPB 1.9.0 (<see cref="FidelityCuts.Apply"/>).
 /// </para>
 /// <para>
-/// Every row starts at MAX, the entry itself, until measured defaults are set. A level this plugin
+/// Every row starts at its measured default (<see cref="ImportLayers.DefaultLevel"/>), or at MAX, the
+/// entry itself, where this plugin cannot import that level from the bundle. A level this plugin
 /// cannot import is listed so the four always read the same, and choosing it does nothing; the set-all
 /// control skips a row whose level it is.
 /// </para>
@@ -59,8 +60,23 @@ public sealed partial class ImportChecklist
         ];
     }
 
-    /// <summary>The level a row imports at: MAX until the curator chooses another.</summary>
-    public FidelityLevel ChosenLevel(ImportLayer layer) => _chosenLevels.GetValueOrDefault(layer, FidelityLevel.Max);
+    /// <summary>
+    /// The level a row imports at: its default until the curator chooses another, or MAX for a row
+    /// whose default this plugin cannot import from the bundle, and for a row that offers none.
+    /// </summary>
+    public FidelityLevel ChosenLevel(ImportLayer layer)
+    {
+        if (_chosenLevels.TryGetValue(layer, out FidelityLevel chosen))
+        {
+            return chosen;
+        }
+
+        FidelityLevel preferred = ImportLayers.DefaultLevel(layer);
+        return _offeredLevels.TryGetValue(layer, out (ImportStepKind Kind, FidelityLevels Levels) offered)
+               && FidelityCuts.IsAvailable(offered.Levels, preferred, offered.Kind)
+            ? preferred
+            : FidelityLevel.Max;
+    }
 
     /// <summary>
     /// Records a row's level. A row that offers none, or a level this plugin cannot import, is

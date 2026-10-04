@@ -450,7 +450,7 @@ internal static class FidelityLevelTests
                 ImportStepKind.Vegetation, new CostDriver(CostUnit.Elements, "elements", 20534), "2025");
             run.True(trees is not null, "trees are estimated");
             run.Within(trees!.Seconds.Low, 20534 * 0.00328, 1e-9, "fastest");
-            run.Within(trees.Seconds.High, 20534 * 0.00540, 1e-9, "slowest");
+            run.Within(trees.Seconds.High, 20534 * 0.00561, 1e-9, "slowest");
             run.True(trees.Timed && trees.Version == 2025, "from this Revit's own measurement");
 
             SlowStepNotice.LevelEstimate? roads = SlowStepNotice.EstimateLevel(
@@ -462,7 +462,7 @@ internal static class FidelityLevelTests
         run.Case("a Revit never timed is estimated from the newest one that was, and says so", () =>
         {
             SlowStepNotice.LevelEstimate? roads = SlowStepNotice.EstimateLevel(
-                ImportStepKind.RoadPolygons, new CostDriver(CostUnit.Cuts, "cuts", 342), "2026");
+                ImportStepKind.RoadPolygons, new CostDriver(CostUnit.Cuts, "cuts", 342), "2028");
             run.False(roads!.Timed, "not this Revit's");
             run.Equal(roads.Version, 2027, "the newest measured");
             run.Equal(
@@ -494,7 +494,7 @@ internal static class FidelityLevelTests
             PublishedLevel max = Parse(Fixture()).TreePoints!.Levels![FidelityLevel.Max];
             run.Equal(
                 WindowLabels.LevelOption(FidelityLevel.Max, max, true, new CostDriver(CostUnit.Elements, "elements", 20534), trees),
-                "MAX — 20,534 elements, about 67 to 111 seconds",
+                "MAX — 20,534 elements, about 67 to 115 seconds",
                 "seconds");
 
             PublishedLevel med = Parse(Fixture()).TreePoints!.Levels![FidelityLevel.Min];
@@ -532,8 +532,31 @@ internal static class FidelityLevelTests
             run.Equal(options.Count, 4, "all four levels");
             run.True(options.Select(option => option.Level).SequenceEqual(FidelityLevelNames.All), "RAW to MIN");
             run.Equal(options[3].Label, "MIN: Same as MED (already the smallest useful size) — 2 elements, about 1 second", "MIN says MED's count");
-            run.True(checklist.ChosenLevel(ImportLayer.Planting) == FidelityLevel.Max, "every row starts at MAX");
-            run.True(checklist.AllLevels == FidelityLevel.Max, "so set-all reads MAX");
+            run.True(checklist.ChosenLevel(ImportLayer.Planting) == FidelityLevel.Min, "trees open on their default, MIN");
+            run.True(checklist.ChosenLevel(ImportLayer.RoadSubdivisions) == FidelityLevel.Min, "and so do the road surfaces");
+            run.True(checklist.ChosenLevel(ImportLayer.ImageryDrape) == FidelityLevel.Max, "a row whose default is MAX opens on MAX");
+            run.True(checklist.AllLevels is null, "so set-all reads mixed");
+        });
+
+        run.Case("each row opens on its measured default, and on MAX where that default cannot be imported", () =>
+        {
+            foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
+            {
+                FidelityLevel expected = layer is ImportLayer.Planting or ImportLayer.RoadSubdivisions ? FidelityLevel.Min : FidelityLevel.Max;
+                run.True(ImportLayers.DefaultLevel(layer) == expected, $"{layer} defaults to {expected}");
+            }
+
+            // Road surfaces whose MIN is published as a row cut, which their step cannot take.
+            string rowCutRoads = Fixture().Replace(
+                "\"MIN\": { \"cut\": { \"lowest_level_field\": \"lowest_level\" }",
+                "\"MIN\": { \"cut\": { \"rows\": 1 }",
+                StringComparison.Ordinal);
+            run.False(rowCutRoads == Fixture(), "the fixture has the road surfaces' MIN to replace");
+            ImportChecklist checklist = ImportChecklist.For(Plan(rowCutRoads), "2025");
+            run.True(checklist.ChosenLevel(ImportLayer.RoadSubdivisions) == FidelityLevel.Max, "an unavailable default falls back to MAX");
+
+            BundleImportPlan plan = Plan(Fixture(), ImportChecklist.For(Plan(Fixture()), "2025").Choice);
+            run.True(Find(plan, ImportStepKind.Vegetation).Level?.Chosen == FidelityLevel.Min, "the untouched window plants the trees at MIN");
         });
 
         run.Case("a row's level is chosen, and an unavailable one is not", () =>

@@ -74,13 +74,11 @@ internal static class ImportLayerTests
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.LandCoverPlan) is null, "and so is the other");
         });
 
-        run.Case("every layer but the site model's link, the published contours, the drawn plans and the slow road surfaces is on by default", () =>
+        run.Case("every layer but the site model's link is on by default", () =>
         {
-            // The reasons HPS-51 asks for before a row starts unchecked: the site model's buildings are
-            // already copied in, and a link as well shows each one twice; the toposolid already draws
-            // contours of its own (ADR 0013); the land plans and the hazard plan are for the curator
-            // planning the site, not the visualiser this import is made for; and the road surfaces
-            // were measured at most of a full import's time.
+            // The reason HPS-51 asks for before a row starts unchecked: the site model's buildings are
+            // already copied in, and a link as well shows each one twice. Every other box fits the
+            // five-minute import at its default level, so none starts unticked for its time.
             foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
             {
                 run.Equal(ImportLayers.OnByDefault(layer), !StartsUnchecked(layer), $"{layer}'s box");
@@ -139,7 +137,7 @@ internal static class ImportLayerTests
             run.False(checklist.IsChecked(ImportLayer.SiteModel), "a layer that is not offered is never chosen");
         });
 
-        run.Case("everything but the link, the contours, the drawn plans and the slow road surfaces starts checked, all of it enabled, and can be imported", () =>
+        run.Case("everything but the link starts checked, all of it enabled, and can be imported", () =>
         {
             ImportChecklist checklist = new(Enum.GetValues<ImportLayer>());
 
@@ -583,48 +581,41 @@ internal static class ImportLayerTests
         "This bundle was built before Revit could receive this. Download the bundle again from your vault to get it.";
 
     /// <summary>
-    /// The road surfaces start unticked for their time, and say what they were measured at when a
-    /// curator ticks them. Everything that imports without a curator is unchanged.
+    /// No box starts unticked for its time any more: each fits the five-minute import at its default
+    /// level. The slow-box rule stays (a row of the measurement table with a saving is a box that
+    /// starts unticked and warns), and no row has one.
     /// </summary>
     private static void RunSlowLayerCases(TestRun run)
     {
-        run.Case("the default plan leaves out exactly the road surfaces beyond the rows that start unticked for another reason", () =>
+        run.Case("the default plan leaves out only the site model's link", () =>
         {
-            ImportLayer[] alreadyUnticked =
-            [
-                ImportLayer.SiteModel, ImportLayer.PublishedContours, ImportLayer.LandUsePlan, ImportLayer.LandCoverPlan,
-                ImportLayer.FloodZones, ImportLayer.SteepGround,
-            ];
             run.Equal(
-                string.Join(", ", Enum.GetValues<ImportLayer>().Where(layer => !ImportLayers.OnByDefault(layer) && !alreadyUnticked.Contains(layer))),
-                "RoadSubdivisions",
-                "the slow one, and no other");
+                string.Join(", ", Enum.GetValues<ImportLayer>().Where(layer => !ImportLayers.OnByDefault(layer))),
+                "SiteModel",
+                "the link, and no other");
 
             ImportChecklist checklist = ImportChecklist.For(PlanFor(Everything, EverythingBundle), "2025");
             BundleImportPlan plan = PlanFor(Everything, EverythingBundle, checklist.Choice);
 
-            run.Equal(
-                string.Join(", ", plan.Steps.Select(step => step.Kind)),
-                "ToposurfaceFromPointsFile, ContextBuildings, SetSharedCoordinates, SetSiteLocation, SiteContextView, "
-                    + "RoadCentrelines, Water, Vegetation, AttributionAndProvenance, ImageryDrape",
-                "the water and the drape stay; the road surfaces, the land plans and the link go");
+            run.True(
+                plan.Skipped.SingleOrDefault(skip => skip.Kind == ImportStepKind.LinkSiteIfc)?.ReasonCode == SkipReasonCode.LeftOutByChoice,
+                "the link is logged as left out by choice");
             foreach (ImportStepKind kind in new[] { ImportStepKind.LandUse, ImportStepKind.LandCover, ImportStepKind.RoadPolygons })
             {
-                run.True(
-                    plan.Skipped.SingleOrDefault(skip => skip.Kind == kind)?.ReasonCode == SkipReasonCode.LeftOutByChoice,
-                    $"{kind} is logged as left out by choice");
+                run.True(plan.Steps.Any(step => step.Kind == kind), $"{kind} is planned");
             }
 
             run.Equal(checklist.SlowLayerWarnings.Count, 0, "nothing ticked by default warns");
         });
 
-        run.Case("the slow box warns in every version measured, and no other box warns", () =>
+        run.Case("no box is slow, so none warns in any version", () =>
         {
             foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
             {
+                run.False(SlowStepNotice.IsSlowBox(layer), $"{layer} is not slow");
                 foreach (string version in new[] { "2025", "2026", "2027" })
                 {
-                    run.Equal(SlowStepNotice.ForTickedBox(layer, version) is not null, SlowLayers.Contains(layer), $"{layer} in Revit {version}");
+                    run.True(SlowStepNotice.ForTickedBox(layer, version) is null, $"{layer} in Revit {version}");
                 }
             }
         });
@@ -654,85 +645,25 @@ internal static class ImportLayerTests
             run.Equal(row.Describe(), "about 1 to 2 seconds in Revit 2025 and 5 to 6 seconds in Revit 2027", "Describe walks the same list");
         });
 
-        run.Case("ticking a slow box warns with this Revit's measured time, and unticking it takes the warning away", () =>
-        {
-            const string Measured = ": on the one order this has been measured on, ";
-            Dictionary<(ImportLayer Layer, string Version), string> expected = new()
-            {
-                [(ImportLayer.RoadSubdivisions, "2025")] = "Road Subdivisions" + Measured + "with every other box ticked, it added about 19 minutes to the import in Revit 2025.",
-                [(ImportLayer.RoadSubdivisions, "2026")] = "Road Subdivisions" + Measured + "with every other box ticked, it added about 31 minutes to the import in Revit 2026.",
-                [(ImportLayer.RoadSubdivisions, "2027")] = "Road Subdivisions" + Measured + "with every other box ticked, it added about 32 minutes to the import in Revit 2027.",
-            };
-
-            foreach (((ImportLayer layer, string version), string warning) in expected)
-            {
-                ImportChecklist checklist = new(Enum.GetValues<ImportLayer>(), [], version);
-                run.False(checklist.IsChecked(layer), $"{layer} starts unticked in Revit {version}");
-
-                checklist.Set(layer, true);
-                run.True(checklist.Choice.Includes(layer), $"the curator's tick on {layer} wins");
-                run.Equal(string.Join(" | ", checklist.SlowLayerWarnings), warning, $"{layer} in Revit {version}");
-
-                checklist.Set(layer, false);
-                run.Equal(checklist.SlowLayerWarnings.Count, 0, $"{layer} unticked again says nothing");
-            }
-        });
-
-        run.Case("unticking the terrain takes a slow box's warning with it, and ticking it again gives back both", () =>
-        {
-            ImportChecklist checklist = new(Enum.GetValues<ImportLayer>(), [], "2026");
-            checklist.Set(ImportLayer.RoadSubdivisions, true);
-            checklist.Set(ImportLayer.Terrain, false);
-
-            run.False(checklist.Choice.Includes(ImportLayer.RoadSubdivisions), "no terrain, no road surfaces");
-            run.Equal(checklist.SlowLayerWarnings.Count, 0, "and nothing to warn of");
-
-            checklist.Set(ImportLayer.Terrain, true);
-            run.True(checklist.IsChecked(ImportLayer.RoadSubdivisions), "the curator's tick is given back");
-            run.Equal(checklist.SlowLayerWarnings.Count, 1, "and so is its warning");
-        });
-
-        run.Case("a Revit nobody has timed hears the newest measurement, and is told so", () =>
-        {
-            foreach (string? version in new[] { "2028", null, "not a year" })
-            {
-                run.Equal(
-                    SlowStepNotice.ForTickedBox(ImportLayer.RoadSubdivisions, version),
-                    "Road Subdivisions: on the one order this has been measured on, with every other box ticked, it added about "
-                        + "32 minutes to the import in Revit 2027. This Revit has not been timed.",
-                    $"Revit {version ?? "unknown"}");
-            }
-        });
-
         run.Case("no tick is carried from one window to the next", () =>
         {
             // Nothing persists a choice: every window opens on ImportLayers.OnByDefault. A curator who
-            // ticked these boxes before they started unticked finds them unticked in the next window,
-            // and ticks them again there.
+            // ticked the link finds it unticked in the next window, and ticks it again there.
             BundleImportPlan plan = PlanFor(Everything, EverythingBundle);
             ImportChecklist first = ImportChecklist.For(plan, "2025");
-            foreach (ImportLayer layer in SlowLayers)
-            {
-                first.Set(layer, true);
-            }
+            first.Set(ImportLayer.SiteModel, true);
 
             ImportChecklist second = ImportChecklist.For(plan, "2025");
-            foreach (ImportLayer layer in SlowLayers)
-            {
-                run.True(first.IsChecked(layer), $"{layer} ticked in the first window");
-                run.False(second.IsChecked(layer), $"{layer} starts unticked in the next");
-            }
+            run.True(first.IsChecked(ImportLayer.SiteModel), "the link ticked in the first window");
+            run.False(second.IsChecked(ImportLayer.SiteModel), "and unticked in the next");
         });
 
-        run.Case("the unattended path, ImportLayerChoice.Only and RunToEnd import the unticked rows as before", () =>
+        run.Case("the unattended path, ImportLayerChoice.Only and RunToEnd import the unticked row as before", () =>
         {
-            foreach (ImportLayer layer in SlowLayers)
-            {
-                run.True(ImportLayerChoice.All.Includes(layer), $"All includes {layer}");
-            }
+            run.True(ImportLayerChoice.All.Includes(ImportLayer.SiteModel), "All includes the link");
 
             BundleImportPlan all = PlanFor(Everything, EverythingBundle, ImportLayerChoice.All);
-            foreach (ImportStepKind kind in new[] { ImportStepKind.LandUse, ImportStepKind.LandCover, ImportStepKind.RoadPolygons })
+            foreach (ImportStepKind kind in new[] { ImportStepKind.LinkSiteIfc, ImportStepKind.LandUse, ImportStepKind.LandCover, ImportStepKind.RoadPolygons })
             {
                 run.True(all.Steps.Any(step => step.Kind == kind), $"an import nobody chooses for plans {kind}");
             }
@@ -743,12 +674,12 @@ internal static class ImportLayerTests
             run.Equal(
                 string.Join(", ", runner.Ran),
                 string.Join(", ", all.Steps.Select(step => step.Kind)),
-                "RunToEnd runs every planned step, the unticked rows included");
+                "RunToEnd runs every planned step, the unticked row included");
 
-            BundleImportPlan only = PlanFor(Everything, EverythingBundle, ImportLayerChoice.Only([ImportLayer.Terrain, ImportLayer.RoadSubdivisions]));
+            BundleImportPlan only = PlanFor(Everything, EverythingBundle, ImportLayerChoice.Only([ImportLayer.Terrain, ImportLayer.SiteModel]));
             run.Equal(
                 string.Join(", ", only.Steps.Select(step => ImportLayers.Of(step.Kind)).OfType<ImportLayer>().Distinct()),
-                "Terrain, RoadSubdivisions",
+                "Terrain, SiteModel",
                 "Only plans exactly what it names, an unticked-by-default layer included");
         });
     }
@@ -770,13 +701,7 @@ internal static class ImportLayerTests
         => ImportLayerChoice.Only(Enum.GetValues<ImportLayer>().Where(candidate => candidate != layer));
 
     /// <summary>The rows a host has stated a reason to start unchecked (<c>HPS-51</c>).</summary>
-    private static bool StartsUnchecked(ImportLayer layer)
-        => layer is ImportLayer.SiteModel or ImportLayer.PublishedContours or ImportLayer.LandUsePlan
-            or ImportLayer.LandCoverPlan or ImportLayer.FloodZones or ImportLayer.SteepGround
-            || SlowLayers.Contains(layer);
-
-    /// <summary>The rows that start unchecked for their time, and warn of it when ticked.</summary>
-    private static readonly ImportLayer[] SlowLayers = [ImportLayer.RoadSubdivisions];
+    private static bool StartsUnchecked(ImportLayer layer) => layer is ImportLayer.SiteModel;
 
     /// <summary>A host with no Revit that runs every step it is handed and records which.</summary>
     private sealed class RecordingRunner : IImportStepRunner

@@ -22,6 +22,10 @@ param(
     [string]$SourceCommit = '',
     # layers phase: ImportLayer names (Terrain, PublishedContours, ...), All, or Default (the checklist's own defaults).
     [string]$Layers = '',
+    # layers phase: the fidelity level of each layer - Default (ImportLayers.DefaultLevel, what the window opens on),
+    # All=<RAW|MAX|MED|MIN>, or a list such as 'Planting=Min,RoadSubdivisions=Med'. Empty: every layer at MAX, except
+    # with -Layers Default, which takes the default levels too. The window phase always imports the window's levels.
+    [string]$Levels = '',
     # layers phase: an ImportLayer name. Plans with the full -Layers choice, runs the staged import slice by slice and
     # stops cleanly in front of the first step that builds that layer: every earlier step committed, the named step
     # not started, no transaction open. Combine with -SaveCheckpoint to keep the project as a full import leaves it at
@@ -88,7 +92,7 @@ function Iso([datetime]$d) { $d.ToString('yyyy-MM-ddTHH:mm:ss.fff', $inv) }
 # ---- arguments ---------------------------------------------------------------------------------------
 if ($Tag -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$') { throw "Tag '$Tag' must match ^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$" }
 if ($Phase -eq 'layers' -and -not $Layers) { throw '-Layers is required for the layers phase (ImportLayer names, All, or Default).' }
-if ($Phase -eq 'window' -and ($Layers -or $SaveCheckpoint)) { throw '-Layers and -SaveCheckpoint belong to the layers phase; the window phase takes -Boxes.' }
+if ($Phase -eq 'window' -and ($Layers -or $Levels -or $SaveCheckpoint)) { throw '-Layers, -Levels and -SaveCheckpoint belong to the layers phase; the window phase takes -Boxes and imports the levels the window opens on.' }
 if ($StopBefore -and $Phase -ne 'layers') { throw '-StopBefore belongs to the layers phase.' }
 $StopBefore = ($StopBefore -replace '\s', '')
 if ($SourceRoot -and $Commit) { throw 'pass -SourceRoot or -Commit, not both.' }
@@ -479,6 +483,7 @@ $envMap['MANTLEPLACE_TIMING_PHASE'] = $Phase
 $envMap['MANTLEPLACE_TIMING_BUNDLE'] = $zip
 if ($Phase -eq 'layers') {
     $envMap['MANTLEPLACE_TIMING_LAYERS'] = $Layers
+    if ($Levels) { $envMap['MANTLEPLACE_TIMING_LEVELS'] = $Levels }
     if ($StopBefore) { $envMap['MANTLEPLACE_TIMING_STOP_BEFORE'] = $StopBefore }
     if ($savePath) { $envMap['MANTLEPLACE_TIMING_SAVE_CHECKPOINT'] = (Join-Path $runDir 'checkpoint-saving.rvt') }
 }
@@ -555,7 +560,7 @@ $doneFile = Join-Path $runDir 'done.txt'
 $meta = [ordered]@{
     tag = $Tag; year = $Year; phase = $Phase
     sourceRoot = $build.sourceRoot; sourceCommit = $build.sourceCommit; dllSha256 = $build.dllSha256
-    layers = $Layers; boxes = $(if ($Phase -eq 'window') { $Boxes } else { $null }); stopBefore = $StopBefore
+    layers = $Layers; levels = $Levels; boxes = $(if ($Phase -eq 'window') { $Boxes } else { $null }); stopBefore = $StopBefore
     openCheckpoint = $openPath; saveCheckpoint = $savePath
     bundleSource = $Bundle; bundleBytes = $sourceInfo.Length; bundleSha256 = $bundleSha
     timeoutSeconds = $TimeoutSeconds; sampleSeconds = $SampleSeconds

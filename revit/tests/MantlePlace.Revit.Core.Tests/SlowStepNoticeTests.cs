@@ -382,7 +382,7 @@ internal static class SlowStepNoticeTests
             run.Contains(notice, "(75,314 points)", "the order it was measured on");
             run.Contains(
                 notice,
-                "about 26 to 42 seconds in Revit 2025, 57 seconds in Revit 2026 and 60 to 79 seconds in Revit 2027",
+                "about 26 to 42 seconds in Revit 2025, 57 to 58 seconds in Revit 2026 and 60 to 79 seconds in Revit 2027",
                 "what it measured at in full imports");
             run.Contains(notice, "5 to 7 seconds", "and without the drape");
             run.Contains(notice, "This terrain has 60,000 points", "this terrain");
@@ -409,7 +409,7 @@ internal static class SlowStepNoticeTests
             run.Contains(notice, "Next: the context buildings — 1,000", "it names the step and how many");
             run.Contains(
                 notice,
-                "about 34 to 57 seconds in Revit 2025, 32 to 34 seconds in Revit 2026 and 36 to 59 seconds in Revit 2027",
+                "about 34 to 57 seconds in Revit 2025, 32 to 41 seconds in Revit 2026 and 36 to 59 seconds in Revit 2027",
                 "what it measured at");
             run.Contains(notice, "(1,319 buildings)", "the order it was measured on");
             run.False(notice is not null && notice.Contains("834", StringComparison.Ordinal), "not another site model's count");
