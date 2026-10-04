@@ -424,9 +424,9 @@ public static class BundleImportPlanner
     /// </para>
     /// <para>
     /// Both read the site model through a Revit conversion of the IFC, one of the slowest things an
-    /// import does, and each used to make its own. When the curator keeps both, the copy, which runs first, saves its
-    /// conversion where the link looks for one (<see cref="ImportStep.SavesLinkCompanion"/>), and the
-    /// link converts nothing.
+    /// import does, and each used to make its own. When the curator keeps both, the copy, which runs
+    /// first, saves its conversion where the link looks for one
+    /// (<see cref="ImportStep.SavesLinkCompanion"/>), and the link converts nothing.
     /// </para>
     /// </remarks>
     private static void PlanSiteIfc(
