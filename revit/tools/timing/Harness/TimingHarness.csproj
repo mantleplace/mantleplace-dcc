@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Real-Revit timing harness for the Mantle Place Revit plugin. Build-TimingHarness.ps1 copies this folder to builds\<tag>\proj and
+       builds it with:
+         HarnessTag             the tag, kept as assembly metadata for the record. The GATE reads BuildInfo.Tag, a
+                                const in BuildInfo.g.cs that Build-TimingHarness.ps1 writes beside this file: the
+                                harness does nothing unless the Revit it is loaded into was launched with
+                                MANTLEPLACE_TIMING_TAG equal to it, and logs a line to %TEMP%\mantleplace-timing-declined.log when not
+         HarnessAssemblyName    MantlePlace.Scratch.Timing.<tag>, so no two tags share an assembly identity
+         HarnessSourceCommit    the commit the sources are, "-dirty" appended for a modified tree
+         Tree                   <SourceRoot>\revit\src
+         RevitApiDir            Revit 2025, the compile target the real add-in uses
+       The plugin's Core, Client and Addin sources compile into this ONE assembly. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>$(HarnessAssemblyName)</AssemblyName>
+    <RootNamespace>MantlePlace.Scratch.Timing</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <NoWarn>$(NoWarn);CA1416;MSB3277;CS1591;CS8632</NoWarn>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Version>0.1.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <InformationalVersion>0.1.0+$(HarnessSourceCommit)</InformationalVersion>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(Tree)\MantlePlace.Revit.Core\**\*.cs" Exclude="$(Tree)\**\obj\**;$(Tree)\**\bin\**" />
+    <Compile Include="$(Tree)\MantlePlace.Revit.Client\**\*.cs" Exclude="$(Tree)\**\obj\**;$(Tree)\**\bin\**" />
+    <Compile Include="$(Tree)\MantlePlace.Revit.Addin\**\*.cs" Exclude="$(Tree)\**\obj\**;$(Tree)\**\bin\**" />
+    <Compile Include="TimingHarness.cs" />
+    <Compile Include="BuildInfo.g.cs" Condition="Exists('BuildInfo.g.cs')" />   <!-- written by Build-TimingHarness.ps1: the tag as a compile-time constant -->
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+    <EmbeddedResource Include="$(Tree)\MantlePlace.Revit.Addin\Families\*.rfa" LogicalName="MantlePlace.Revit.Addin.Families.%(Filename)%(Extension)" />
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>HarnessTag</_Parameter1>
+      <_Parameter2>$(HarnessTag)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SourceCommit</_Parameter1>
+      <_Parameter2>$(HarnessSourceCommit)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SourceRoot</_Parameter1>
+      <_Parameter2>$(Tree)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="RevitAPI"><HintPath>$(RevitApiDir)\RevitAPI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="RevitAPIUI"><HintPath>$(RevitApiDir)\RevitAPIUI.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
