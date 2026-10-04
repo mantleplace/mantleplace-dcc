@@ -66,6 +66,7 @@ host met the contract for real:
 | **v1.15** | `HPS-55` — a vault listing nobody asked for is bounded. Revit began telling the curator about orders they never prepared from it, which means listing the vault in the background on every signed-in session; nothing in the standard bounded a request the curator did not make, and the only polling rule, `HPS-25`, is about a job someone is waiting on |
 | **v1.16** | ⛔`HPS-53` — a frame names its **vertical datum** as well as its CRS and its unit, and a height whose datum is not the one the host's ground is in is refused by name, never converted. MPB 1.8.0 moved a US order's heights in the delivery CRS from EGM2008 to NAVD88 (GEOID18) and stated the datum beside each of them. The fixed-frame host's road layer already refused by datum. The order-frame host read the strings and acted on none, which is right within one bundle and wrong across two: a re-import of the 1.8.0 rebuild over a ground from an earlier build put roads, trees, contours and buildings up to a metre off that ground, and the import reported success |
 | **v1.17** | ⛔`HPS-24` drops the queued outcome, and `HPS-36` and `HPS-47` name the keys MPB 1.0.0 reads. The platform retired the queued arm, so an order whose core build has not finished now answers a `not_ready` error; and MPB 1.0.0 folded the top-level `dcc_readiness` into `hosts.<hostId>.readiness`. Both hosts already read the new keys, and the queued arm left only dead code behind it, while the rule text still sent a new host to a start outcome that never arrives and to keys no bundle carries |
+| **v1.18** | `HPS-51` gains an eleventh action, choosing each category's fidelity level before a bundle import runs. MPB 1.9.0 lets a bundle publish RAW, MAX, MED and MIN of a deliverable, and Revit's import window grew a level beside each checklist row; the reference host's chooser is roadmapped against the same bundles, so its words were fixed here before either host named them — the glossary's `Fidelity Level`, never `Quality` or `Detail`, and a level that is another said to be the same in place rather than hidden |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -1028,7 +1029,7 @@ scripts are proven by being run, and the rule by the check script's line at the 
 **`HPS-51` — The shared actions carry the same words in every host; anything naming a host construct
 carries the host's own noun.** A curator who signs in to Revit in the morning and to Unreal in the
 afternoon is doing one thing twice, and the plugin that calls it two things has made them learn it
-twice. Ten actions are shared, and each carries one set of words:
+twice. Eleven actions are shared, and each carries one set of words:
 
 | The action                                                     | The words            | Revit says it on                                                 | Unreal says it on                                    |
 | -------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
@@ -1042,6 +1043,7 @@ twice. Ten actions are shared, and each carries one set of words:
 | Show a bundle import running, step by step, and stop it        | `Bundle Import`, `Cancel`; a step reads `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run` | the import window's heading, its stop button and each step's row | nothing yet; these are the words when it grows one |
 | Choose what a bundle import brings in, before its steps run    | `Include` over the list, `Import` to start; a row that cannot be chosen until another is reads `Needs` and that row's name | the import window, before its steps | nothing yet; these are the words when it grows one |
 | Say what a bundle holds that an import cannot offer, and why, before its steps run | `Unavailable` over the list; each entry is the row's name and one sentence from the table below — never a box | the import window, below its checklist | nothing yet; these are the words when it grows one |
+| Choose each category's fidelity level, before its steps run | `Fidelity Level` over the levels and `Set All To` for every row at once, reading `Mixed` while the rows differ; a level reads its own token — `RAW`, `MAX`, `MED`, `MIN` — then `Same as` and the level it names where the bundle publishes it as another, and `not available in this version of Mantle Place` where the host cannot import it | the import window, beside each checklist row whose category publishes levels | nothing yet; these are the words when it grows one |
 
 **A row in that list is named for what it builds, and a step is named the same.** The glossary's
 word where it has one — `Terrain`, `Site Model`, and names built on it, as `Water Subdivisions`
