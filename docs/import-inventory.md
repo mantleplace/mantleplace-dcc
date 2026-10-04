@@ -69,9 +69,12 @@ subdivision on it. With the drape ticked that happens before the first cut, on a
 otherwise it happens after the last step, where it grows with the subdivisions cut:
 `MeasuredSmoothShadingWith405` and `MeasuredSmoothShadingWith61`.
 
-**The plugin reads none of these counts for cost today.** The Revit core parses `triangle_count`,
+**The plugin reads none of these counts for cost; it reads a level's `cost_driver`.** The Revit core parses `triangle_count`,
 `terrain_triangle_count`, `footprint_count` and the tree points' `point_count`, but nothing reads
-them. Every notice counts from the files at run time.
+them. Every notice counts from the files at run time. The one published count it does read is a
+fidelity level's `cost_driver`, in the `levels` block beside each of these pointers: the import
+window multiplies it by the step's measured cost per unit, `Measured(kind).PerUnit`, which Planting
+and Road surface subdivisions carry today, and shows the count alone for every other row.
 
 ### In the bundle and not imported by Revit
 

@@ -360,6 +360,7 @@ internal static class ImportLayerTests
                 [SkipReasonCode.NoGeographicOrigin] = null,
                 [SkipReasonCode.GeographicOriginOutOfRange] = null,
                 [SkipReasonCode.LeftOutByChoice] = null,
+                [SkipReasonCode.LevelUnavailable] = null,
             };
 
             foreach (SkipReasonCode code in Enum.GetValues<SkipReasonCode>())

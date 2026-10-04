@@ -38,7 +38,7 @@ namespace MantlePlace.Revit.Addin;
 /// Built in code rather than XAML, for <see cref="VaultBrowserWindow"/>'s reason.
 /// </para>
 /// </remarks>
-internal sealed class ImportWindow : Window
+internal sealed partial class ImportWindow : Window
 {
     /// <summary>
     /// How often the step's clock is repainted: a quarter of a second, so the whole seconds it shows
@@ -119,7 +119,7 @@ internal sealed class ImportWindow : Window
         _revitWindow = request.RevitWindow;
 
         Title = WindowLabels.ImportWindowTitle;
-        Width = 520;
+        Width = _checklist.OffersLevels ? WidthWithLevels : 520;
 
         // The height it always had, and taller when the unavailable list below the boxes needs it:
         // at a fixed height that list pushed the buttons off the window. Fixed again once the run
@@ -379,8 +379,15 @@ internal sealed class ImportWindow : Window
             _notes[layer] = note;
         }
 
+        if (_checklist.OffersLevels)
+        {
+            AddLevelColumn(rows);
+        }
+
         StackPanel panel = new();
-        panel.Children.Add(new TextBlock { Text = WindowLabels.IncludeHeading, FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(_checklist.OffersLevels
+            ? BuildLevelHeading()
+            : new TextBlock { Text = WindowLabels.IncludeHeading, FontWeight = FontWeights.SemiBold });
         panel.Children.Add(rows);
         panel.Children.Add(_slowLayers);
 
@@ -436,6 +443,7 @@ internal sealed class ImportWindow : Window
                     : string.Empty;
             }
 
+            RefreshLevels();
             _import.IsEnabled = !_begun && _checklist.CanImport;
         }
         finally

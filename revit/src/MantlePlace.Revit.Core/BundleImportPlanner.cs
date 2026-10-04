@@ -68,7 +68,7 @@ public static class BundleImportPlanner
         // theirs, stay exactly where they were.
         List<ImportStep> drapeSteps = [];
         List<SkippedImport> drapeSkipped = [];
-        PlanImageryDrape(manifest, entries, drapeSteps, drapeSkipped, probeImageSize);
+        PlanImageryDrape(manifest, entries, drapeSteps, drapeSkipped, probeImageSize, choice.LevelOf(ImportLayer.ImageryDrape));
         bool drapePlanned = drapeSteps.Count > 0 && choice.Includes(ImportLayer.ImageryDrape);
 
         PlanToposurface(
@@ -76,12 +76,13 @@ public static class BundleImportPlanner
             entries,
             steps,
             skipped,
-            drapePlanned ? TerrainToposolidType.Imagery : TerrainToposolidType.Project);
-        PlanPublishedContours(manifest, entries, steps, skipped);
-        PlanSiteIfc(manifest, entries, steps, skipped);
+            drapePlanned ? TerrainToposolidType.Imagery : TerrainToposolidType.Project,
+            choice.LevelOf(ImportLayer.Terrain));
+        PlanPublishedContours(manifest, entries, steps, skipped, choice.LevelOf(ImportLayer.PublishedContours));
+        PlanSiteIfc(manifest, entries, steps, skipped, choice);
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteLocation(manifest, steps, skipped);
-        PlanSiteContext(manifest, entries, steps, skipped, drapePlanned);
+        PlanSiteContext(manifest, entries, steps, skipped, drapePlanned, choice);
 
         // The drawn plans, after every layer that builds the model: the two land plans, land use
         // first, then the hazard plan, flood before steep because steep ground is a hatch drawn over
@@ -91,10 +92,10 @@ public static class BundleImportPlanner
         FootprintExtent? crop = drapeSteps.FirstOrDefault()?.Drape is { } placed
             ? new FootprintExtent(placed.LeftM, placed.BottomM, placed.RightM, placed.TopM)
             : null;
-        PlanLandPlan(manifest, entries, steps, skipped, LandLayer.LandUse, crop);
-        PlanLandPlan(manifest, entries, steps, skipped, LandLayer.LandCover, crop);
-        PlanHazard(manifest, entries, steps, skipped, HazardLayer.FloodZones, crop);
-        PlanHazard(manifest, entries, steps, skipped, HazardLayer.SteepGround, crop);
+        PlanLandPlan(manifest, entries, steps, skipped, LandLayer.LandUse, crop, choice.LevelOf(ImportLayer.LandUsePlan));
+        PlanLandPlan(manifest, entries, steps, skipped, LandLayer.LandCover, crop, choice.LevelOf(ImportLayer.LandCoverPlan));
+        PlanHazard(manifest, entries, steps, skipped, HazardLayer.FloodZones, crop, choice.LevelOf(ImportLayer.FloodZones));
+        PlanHazard(manifest, entries, steps, skipped, HazardLayer.SteepGround, crop, choice.LevelOf(ImportLayer.SteepGround));
 
         // Every import, whatever else it carries: the order and the build are worth recording even
         // when the manifest names no sources, and a record is how the next import finds the note
@@ -224,7 +225,8 @@ public static class BundleImportPlanner
         BundleEntryIndex entries,
         List<ImportStep> steps,
         List<SkippedImport> skipped,
-        TerrainToposolidType toposolidType)
+        TerrainToposolidType toposolidType,
+        FidelityLevel level)
     {
         // The crop rides on the step, so the shim never has to work out what the area of interest was
         // — and so the case that matters, a bundle whose frame cannot project one, is a null a
@@ -232,7 +234,7 @@ public static class BundleImportPlanner
         SiteFrame? frame = SiteFrame.For(manifest);
         SurfaceCropWindow? crop = SurfaceCrop.For(manifest, frame);
 
-        if (TryPlanTin(manifest, entries, crop, frame, toposolidType, out ImportStep? tinStep, out SkippedImport? tinSkip))
+        if (TryPlanTin(manifest, entries, crop, frame, toposolidType, level, out ImportStep? tinStep, out SkippedImport? tinSkip))
         {
             steps.Add(tinStep!);
             return;
@@ -249,7 +251,8 @@ public static class BundleImportPlanner
                 out SkippedImport? pointsSkip,
                 out bool pointsUnitUnreadable,
                 crop,
-                toposolidType: toposolidType))
+                toposolidType: toposolidType,
+                level: level))
         {
             skipped.Add(tinSkip!);
             steps.Add(pointsStep!);
@@ -282,7 +285,8 @@ public static class BundleImportPlanner
                 "surface DXF",
                 out ImportStep? dxfStep,
                 out SkippedImport? dxfSkip,
-                out _))
+                out _,
+                level: level))
         {
             skipped.Add(tinSkip!);
             skipped.Add(new SkippedImport
@@ -325,6 +329,7 @@ public static class BundleImportPlanner
         SurfaceCropWindow? crop,
         SiteFrame? frame,
         TerrainToposolidType toposolidType,
+        FidelityLevel level,
         out ImportStep? step,
         out SkippedImport? skipped)
     {
@@ -345,7 +350,8 @@ public static class BundleImportPlanner
                 out _,
                 crop,
                 frame,
-                toposolidType))
+                toposolidType,
+                level))
         {
             return false;
         }
@@ -415,7 +421,8 @@ public static class BundleImportPlanner
         BundleManifest manifest,
         BundleEntryIndex entries,
         List<ImportStep> steps,
-        List<SkippedImport> skipped)
+        List<SkippedImport> skipped,
+        ImportLayerChoice choice)
     {
         if (!TryPlanArtifact(
                 manifest.SiteIfc,
@@ -426,7 +433,8 @@ public static class BundleImportPlanner
                 "IFC site model",
                 out ImportStep? copy,
                 out SkippedImport? skip,
-                out _))
+                out _,
+                level: choice.LevelOf(ImportLayer.ContextBuildings)))
         {
             skipped.Add(skip!);
             return;
@@ -440,6 +448,12 @@ public static class BundleImportPlanner
             Units = copy.Units,
             ExpectedSha256 = copy.ExpectedSha256,
             HeightDatum = HeightDatums.For(ImportStepKind.LinkSiteIfc, manifest.SiteIfc, manifest),
+
+            // The same file, so the same levels, applied once: a level the copy refused never reaches
+            // here, and only MAX, or a level naming it, reaches a site model step
+            // (FidelityCuts.CanTake), so the link is the file in full at whichever its row shows.
+            Levels = copy.Levels,
+            Level = copy.Level,
         });
     }
 
@@ -579,7 +593,8 @@ public static class BundleImportPlanner
         BundleEntryIndex entries,
         List<ImportStep> steps,
         List<SkippedImport> skipped,
-        bool drapePlanned)
+        bool drapePlanned,
+        ImportLayerChoice choice)
     {
         SiteFrame? frame = SiteFrame.For(manifest);
 
@@ -592,7 +607,8 @@ public static class BundleImportPlanner
             SiteVectorLayers.RoadSplines.Label,
             steps,
             skipped,
-            VectorAbsence(manifest, ImportStepKind.RoadCentrelines));
+            VectorAbsence(manifest, ImportStepKind.RoadCentrelines),
+            level: choice.LevelOf(ImportLayer.RoadCentrelines));
 
         PlanPlacedArtifact(
             manifest,
@@ -604,9 +620,10 @@ public static class BundleImportPlanner
             steps,
             skipped,
             VectorAbsence(manifest, ImportStepKind.Water),
-            drapePlanned: drapePlanned);
+            drapePlanned: drapePlanned,
+            level: choice.LevelOf(ImportLayer.WaterSubdivisions));
 
-        PlanRoadPolygons(manifest, frame, entries, steps, skipped, drapePlanned);
+        PlanRoadPolygons(manifest, frame, entries, steps, skipped, drapePlanned, choice.LevelOf(ImportLayer.RoadSubdivisions));
 
         PlanPlacedArtifact(
             manifest,
@@ -616,7 +633,8 @@ public static class BundleImportPlanner
             ImportStepKind.Vegetation,
             "trees",
             steps,
-            skipped);
+            skipped,
+            level: choice.LevelOf(ImportLayer.Planting));
     }
 
     /// <summary>
@@ -636,7 +654,8 @@ public static class BundleImportPlanner
         BundleEntryIndex entries,
         List<ImportStep> steps,
         List<SkippedImport> skipped,
-        bool drapePlanned)
+        bool drapePlanned,
+        FidelityLevel level)
     {
         if (manifest.RoadPolygons is null && manifest.HasRoadLayer)
         {
@@ -662,7 +681,8 @@ public static class BundleImportPlanner
             steps,
             skipped,
             VectorAbsence(manifest, ImportStepKind.RoadPolygons),
-            drapePlanned: drapePlanned);
+            drapePlanned: drapePlanned,
+            level: level);
     }
 
     /// <summary>
@@ -680,7 +700,8 @@ public static class BundleImportPlanner
         List<ImportStep> steps,
         List<SkippedImport> skipped,
         LandLayer layer,
-        FootprintExtent? crop)
+        FootprintExtent? crop,
+        FidelityLevel level)
     {
         ImportStepKind kind = layer == LandLayer.LandUse ? ImportStepKind.LandUse : ImportStepKind.LandCover;
         PlanPlacedArtifact(
@@ -693,7 +714,8 @@ public static class BundleImportPlanner
             steps,
             skipped,
             VectorAbsence(manifest, kind),
-            landPlan: new LandPlanFacts { Build = LandPlan.BuildToken(manifest.JobId), Crop = crop });
+            landPlan: new LandPlanFacts { Build = LandPlan.BuildToken(manifest.JobId), Crop = crop },
+            level: level);
     }
 
     /// <summary>
@@ -721,7 +743,8 @@ public static class BundleImportPlanner
         List<ImportStep> steps,
         List<SkippedImport> skipped,
         HazardLayer layer,
-        FootprintExtent? crop)
+        FootprintExtent? crop,
+        FidelityLevel level)
     {
         bool flood = layer == HazardLayer.FloodZones;
         ImportStepKind kind = flood ? ImportStepKind.FloodZones : ImportStepKind.SteepGround;
@@ -752,7 +775,8 @@ public static class BundleImportPlanner
                 Crop = crop,
                 FloodMap = flood ? manifest.FloodMap : null,
                 Threshold = flood ? null : manifest.SteepGroundThreshold,
-            });
+            },
+            level: level);
     }
 
     private static (SkipReasonCode Code, string Reason) HazardAbsence(string label, ReadinessPath readiness, bool carriesGeoPackage)
@@ -808,7 +832,8 @@ public static class BundleImportPlanner
         LinearUnit verticalUnits = LinearUnit.Unspecified,
         HazardPlanFacts? hazard = null,
         bool drapePlanned = false,
-        LandPlanFacts? landPlan = null)
+        LandPlanFacts? landPlan = null,
+        FidelityLevel level = FidelityLevel.Max)
     {
         if (artifact is null)
         {
@@ -821,6 +846,20 @@ public static class BundleImportPlanner
             });
             return;
         }
+
+        // The level first, so a pointer level's file meets every refusal below exactly as the entry's
+        // own would: it states its own frame, and is placed only once the block shows it is this
+        // host's (HPS-53). The step keeps the entry's levels for the window, whichever file it reads.
+        FidelityLevels? published = artifact.Levels;
+        LevelApplication leveled = FidelityCuts.Apply(artifact, kind, level, label);
+        if (leveled.File is not { } file)
+        {
+            skipped.Add(new SkippedImport { Kind = kind, ReasonCode = SkipReasonCode.LevelUnavailable, Reason = leveled.Refusal! });
+            return;
+        }
+
+        IReadOnlyList<string> levelFiles = FidelityCuts.LevelFiles(artifact);
+        artifact = file;
 
         string? entry = entries.Resolve(artifact.Path);
         if (entry is null)
@@ -903,6 +942,9 @@ public static class BundleImportPlanner
             Hazard = hazard,
             LandPlan = landPlan,
             HeightDatum = HeightDatums.For(kind, artifact, manifest),
+            Levels = published,
+            Level = leveled.Applied,
+            LevelFiles = levelFiles,
         });
     }
 
@@ -933,7 +975,8 @@ public static class BundleImportPlanner
         BundleEntryIndex entries,
         List<ImportStep> steps,
         List<SkippedImport> skipped,
-        Func<string, ImageSize?> probeImageSize)
+        Func<string, ImageSize?> probeImageSize,
+        FidelityLevel level)
     {
         void Skip(SkipReasonCode code, string reason) => skipped.Add(new SkippedImport
         {
@@ -958,7 +1001,7 @@ public static class BundleImportPlanner
         // is never a fallback: on a State Plane delivery it is on the UTM grid, and where the grids
         // agree the own pointer already names the same file.
         bool own = manifest.RevitDrape is not null;
-        if ((manifest.RevitDrape ?? manifest.ImageryDrape) is not { } drape)
+        if ((manifest.RevitDrape ?? manifest.ImageryDrape) is not { } entryDrape)
         {
             Skip(
                 SkipReasonCode.ArtifactNotInManifest,
@@ -966,6 +1009,18 @@ public static class BundleImportPlanner
                 + "the Revit deliverables to this order, then re-download.");
             return;
         }
+
+        // A pointer level is a smaller image of the same ground, and states that ground itself: its
+        // extent and CRS are its own, read and refused exactly as the entry's are.
+        LevelApplication leveled = FidelityCuts.Apply(entryDrape, ImportStepKind.ImageryDrape, level, "satellite imagery");
+        if (leveled.File is not { } drape)
+        {
+            Skip(SkipReasonCode.LevelUnavailable, leveled.Refusal!);
+            return;
+        }
+
+        bool pointer = leveled.Applied?.Kind == FidelityLevelKind.Pointer;
+        GroundExtent? pointerExtent = pointer ? entryDrape.Levels!.Resolve(level).Extent : null;
 
         if (entries.Resolve(drape.Path) is not { } entry)
         {
@@ -988,8 +1043,8 @@ public static class BundleImportPlanner
 
         // An own drape's extent is declared, and so is the shared drape block's; only the DEM's
         // bounds are inferred and have to be corroborated against the image.
-        bool fromDrapeBlock = own || manifest.ImageryDrapeExtent is { IsUsable: true };
-        GroundExtent? declared = own ? manifest.RevitDrapeExtent : manifest.ImageryDrapeExtent;
+        bool fromDrapeBlock = own || pointer || manifest.ImageryDrapeExtent is { IsUsable: true };
+        GroundExtent? declared = pointer ? pointerExtent : own ? manifest.RevitDrapeExtent : manifest.ImageryDrapeExtent;
         if ((fromDrapeBlock ? declared : manifest.DemBounds) is not { IsUsable: true } extent)
         {
             Skip(
@@ -1067,6 +1122,8 @@ public static class BundleImportPlanner
                 PixelSize = pixels,
                 ExtentFromDrapeBlock = fromDrapeBlock,
             },
+            Levels = entryDrape.Levels,
+            Level = leveled.Applied,
         });
     }
 
@@ -1192,7 +1249,8 @@ public static class BundleImportPlanner
         BundleManifest manifest,
         BundleEntryIndex entries,
         List<ImportStep> steps,
-        List<SkippedImport> skipped)
+        List<SkippedImport> skipped,
+        FidelityLevel level)
     {
         if (manifest.RevitContours is not { } contours)
         {
@@ -1221,7 +1279,8 @@ public static class BundleImportPlanner
             steps,
             skipped,
             crop: SurfaceCrop.For(manifest, frame),
-            verticalUnits: verticalUnits);
+            verticalUnits: verticalUnits,
+            level: level);
     }
 
     /// <summary>
@@ -1293,7 +1352,8 @@ public static class BundleImportPlanner
         out bool unitUnreadable,
         SurfaceCropWindow? crop = null,
         SiteFrame? frame = null,
-        TerrainToposolidType toposolidType = TerrainToposolidType.Project)
+        TerrainToposolidType toposolidType = TerrainToposolidType.Project,
+        FidelityLevel level = FidelityLevel.Max)
     {
         step = null;
         skipped = null;
@@ -1307,6 +1367,15 @@ public static class BundleImportPlanner
                 ReasonCode = SkipReasonCode.ArtifactNotInManifest,
                 Reason = DescribeMissingArtifact(label, readiness),
             };
+            return false;
+        }
+
+        // The terrain and the site model take MAX, and a level naming it, and nothing else
+        // (FidelityCuts.CanTake), so the file planned is always the entry's own.
+        LevelApplication leveled = FidelityCuts.Apply(artifact, kind, level, label);
+        if (leveled.File is null)
+        {
+            skipped = new SkippedImport { Kind = kind, ReasonCode = SkipReasonCode.LevelUnavailable, Reason = leveled.Refusal! };
             return false;
         }
 
@@ -1347,6 +1416,8 @@ public static class BundleImportPlanner
             Frame = frame,
             ToposolidType = toposolidType,
             HeightDatum = HeightDatums.For(kind, artifact, manifest),
+            Levels = artifact.Levels,
+            Level = leveled.Applied,
         };
         return true;
     }

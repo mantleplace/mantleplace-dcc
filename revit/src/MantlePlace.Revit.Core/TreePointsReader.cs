@@ -126,11 +126,19 @@ public static class TreePointsReader
     /// (<c>spec/format.md</c> §6.6). Required rather than defaulted to metres: a caller that forgot
     /// it would stand every tree on a foot delivery at 3.28 times its ground height.
     /// </param>
+    /// <param name="rowLimit">
+    /// A fidelity level's row cut: only the first this-many data rows are read, header excluded,
+    /// whether or not each one parses — the cut is of the published file's rows, and the row number
+    /// is the rank. <c>null</c> reads the whole file. Because a dropped row is counted and not
+    /// replaced, the points of a cut are always the first points of the whole file, so a point's
+    /// position — what its stamp records (<see cref="TreeIdentity"/>) — is the same at every level.
+    /// </param>
     public static TreePointsParse Parse(
         string csvText,
         SiteFrame frame,
         string? foliageVocabulary,
-        LinearUnit groundUnit)
+        LinearUnit groundUnit,
+        int? rowLimit = null)
     {
         ArgumentNullException.ThrowIfNull(frame);
 
@@ -149,6 +157,7 @@ public static class TreePointsReader
         int emptyCells = 0;
         int withoutGround = 0;
         int unreadable = 0;
+        int dataRows = 0;
 
         foreach (string rawLine in lines)
         {
@@ -177,6 +186,12 @@ public static class TreePointsReader
                 continue;
             }
 
+            if (rowLimit is { } limit && dataRows >= limit)
+            {
+                break;
+            }
+
+            dataRows++;
             RowReading row = ReadRow(fields, columns, frame, groundUnit, out SiteTreePoint point);
             switch (row)
             {

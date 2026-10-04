@@ -126,24 +126,35 @@ public static class ImportLayers
             && !SlowStepNotice.IsSlowBox(layer);
 }
 
-/// <summary>Which layers an import brings in. Immutable.</summary>
+/// <summary>Which layers an import brings in, and at which fidelity level each. Immutable.</summary>
 public sealed class ImportLayerChoice
 {
     private readonly HashSet<ImportLayer> _layers;
+    private readonly Dictionary<ImportLayer, FidelityLevel> _levels;
 
-    private ImportLayerChoice(IEnumerable<ImportLayer> layers) => _layers = [.. layers];
+    private ImportLayerChoice(IEnumerable<ImportLayer> layers, IReadOnlyDictionary<ImportLayer, FidelityLevel>? levels)
+    {
+        _layers = [.. layers];
+        _levels = levels is null ? [] : new Dictionary<ImportLayer, FidelityLevel>(levels);
+    }
 
-    /// <summary>Every layer — what an import with no one there to choose brings in.</summary>
-    public static ImportLayerChoice All { get; } = new(Enum.GetValues<ImportLayer>());
+    /// <summary>Every layer, at MAX — what an import with no one there to choose brings in.</summary>
+    public static ImportLayerChoice All { get; } = new(Enum.GetValues<ImportLayer>(), null);
 
-    /// <summary>Exactly these layers.</summary>
-    public static ImportLayerChoice Only(IEnumerable<ImportLayer> layers)
+    /// <summary>Exactly these layers, each at MAX.</summary>
+    public static ImportLayerChoice Only(IEnumerable<ImportLayer> layers) => Only(layers, null);
+
+    /// <summary>Exactly these layers, at the levels given; a layer not given one is at MAX.</summary>
+    public static ImportLayerChoice Only(IEnumerable<ImportLayer> layers, IReadOnlyDictionary<ImportLayer, FidelityLevel>? levels)
     {
         ArgumentNullException.ThrowIfNull(layers);
-        return new ImportLayerChoice(layers);
+        return new ImportLayerChoice(layers, levels);
     }
 
     public bool Includes(ImportLayer layer) => _layers.Contains(layer);
+
+    /// <summary>The level chosen for <paramref name="layer"/>: MAX unless another was chosen.</summary>
+    public FidelityLevel LevelOf(ImportLayer layer) => _levels.GetValueOrDefault(layer, FidelityLevel.Max);
 }
 
 /// <summary>
@@ -170,7 +181,7 @@ public sealed record UnavailableLayers(IReadOnlyList<ImportLayer> Layers, string
 /// were, rather than making the curator redo them.
 /// </para>
 /// </remarks>
-public sealed class ImportChecklist
+public sealed partial class ImportChecklist
 {
     private readonly HashSet<ImportLayer> _wanted;
     private readonly string? _revitVersionNumber;
@@ -204,10 +215,12 @@ public sealed class ImportChecklist
     public static ImportChecklist For(BundleImportPlan plan, string? revitVersionNumber = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        return new ImportChecklist(
+        ImportChecklist checklist = new(
             plan.Steps.Select(step => ImportLayers.Of(step.Kind)).OfType<ImportLayer>(),
             plan.Skipped,
             revitVersionNumber);
+        checklist.OfferLevels(plan.Steps);
+        return checklist;
     }
 
     /// <summary>
@@ -263,7 +276,7 @@ public sealed class ImportChecklist
     public bool CanImport => Layers.Any(IsChecked);
 
     /// <summary>What the curator has chosen, as the planner takes it.</summary>
-    public ImportLayerChoice Choice => ImportLayerChoice.Only(Layers.Where(IsChecked));
+    public ImportLayerChoice Choice => ImportLayerChoice.Only(Layers.Where(IsChecked), ChosenLevels);
 
     /// <summary>
     /// Records a change to a layer's box, however it was made. A write to a box that is not offered,

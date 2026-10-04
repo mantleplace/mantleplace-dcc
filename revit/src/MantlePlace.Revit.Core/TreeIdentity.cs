@@ -12,6 +12,13 @@ public enum TreeDisposition
     /// This order's trees are here from a DIFFERENT build. Create nothing, and delete nothing.
     /// </summary>
     RefuseStale,
+
+    /// <summary>
+    /// This order's trees are here from the same build at another fidelity level whose file is its
+    /// own — a pointer level, or MAX beside one. Two files' rows cannot be matched by row number, so
+    /// create nothing, and delete nothing.
+    /// </summary>
+    RefuseOtherLevel,
 }
 
 /// <summary>The tree step's decision, and the sentence a curator gets when it refuses.</summary>
@@ -24,6 +31,12 @@ public sealed class TreeDecision
 
     /// <summary>How many rows an earlier import of this same build already created.</summary>
     public int AlreadyPresent { get; init; }
+
+    /// <summary>
+    /// How many of this build's rows are in the project beyond the rows asked for — trees an earlier
+    /// import at a higher fidelity level placed, which a lower level keeps and never deletes.
+    /// </summary>
+    public int KeptAboveLevel { get; init; }
 
     /// <summary>One line for the log on the refuse arm; empty otherwise.</summary>
     public string Explanation { get; init; } = string.Empty;
@@ -79,12 +92,23 @@ public static class TreeIdentity
     /// Comments of the candidate elements. Anything that is not this bundle's stamp is ignored, so a
     /// caller may pass more than it needs to.
     /// </param>
-    /// <param name="rowCount">How many trees the tree-points file publishes.</param>
+    /// <param name="rowCount">
+    /// How many trees this import places: every row of the tree-points file, or the first rows a
+    /// fidelity level's row cut keeps. The rows are the same file's at every level, so a higher level
+    /// creates only the rows a lower one did not, and a lower level creates nothing and keeps the
+    /// rest (<see cref="TreeDecision.KeptAboveLevel"/>).
+    /// </param>
+    /// <param name="levelFiles">
+    /// The sha256 of every file the entry publishes at any level (<see cref="ImportStep.LevelFiles"/>).
+    /// Trees from one of them that is not this import's file are this build at another level, and
+    /// are refused as that rather than as an earlier build.
+    /// </param>
     public static TreeDecision Decide(
         IEnumerable<string?> existingComments,
         string cacheKeyStem,
         string? artifactSha256,
-        int rowCount)
+        int rowCount,
+        IReadOnlyCollection<string>? levelFiles = null)
     {
         ArgumentNullException.ThrowIfNull(existingComments);
         ArgumentNullException.ThrowIfNull(cacheKeyStem);
@@ -96,7 +120,10 @@ public static class TreeIdentity
         string thisBuild = BuildPrefix(cacheKeyStem, artifactSha256);
 
         HashSet<string> present = new(StringComparer.Ordinal);
+        HashSet<string> otherLevels = [.. (levelFiles ?? []).Select(sha => BuildPrefix(cacheKeyStem, sha))];
+        otherLevels.Remove(thisBuild);
         int stale = 0;
+        int otherLevel = 0;
         foreach (string? comments in existingComments)
         {
             if (comments is null || !comments.StartsWith(ours, StringComparison.Ordinal))
@@ -108,10 +135,30 @@ public static class TreeIdentity
             {
                 present.Add(comments);
             }
+            else if (otherLevels.Any(prefix => comments.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                otherLevel++;
+            }
             else
             {
                 stale++;
             }
+        }
+
+        if (otherLevel > 0 && stale == 0)
+        {
+            return new TreeDecision
+            {
+                Disposition = TreeDisposition.RefuseOtherLevel,
+                Explanation = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "The trees in this project are this bundle's at another fidelity level ({0:N0} of them), "
+                        + "published as a file of its own, and its rows cannot be matched to this level's — so no "
+                        + "second set was created on top of them, and they were not deleted. To change level, "
+                        + "delete the elements whose Comments begin \"{1}\" and import again.",
+                    otherLevel,
+                    ours),
+            };
         }
 
         if (stale > 0)
@@ -143,11 +190,19 @@ public static class TreeIdentity
             }
         }
 
+        // The rest of this build's rows, beyond the ones asked for: placed by an earlier import at a
+        // higher level, and kept. Read off the stamp's row, so a row this run would not create is
+        // never mistaken for one it did.
+        int keptAbove = present.Count(stamp =>
+            int.TryParse(stamp.AsSpan(thisBuild.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int row)
+            && row > rowCount);
+
         return new TreeDecision
         {
             Disposition = TreeDisposition.Create,
             RowsToCreate = rows,
             AlreadyPresent = alreadyPresent,
+            KeptAboveLevel = keptAbove,
         };
     }
 
