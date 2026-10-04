@@ -368,12 +368,20 @@ internal sealed class VaultBrowserWindow : Window
         if (entry.State != CacheState.CachedValid)
         {
             // Nothing importable on disk: ask the order whether it is complete, and fetch it if so.
-            if (await FetchCompleteAsync(bundle).ConfigureAwait(true) is not { } fetched)
+            (CacheEntry? fetched, bool prepare) = await FetchCompleteAsync(bundle).ConfigureAwait(true);
+            if (prepare)
+            {
+                // The Prepare is the watcher's, and this window's own work is over.
+                Prepare(bundle);
+                return;
+            }
+
+            if (fetched is null)
             {
                 return;
             }
 
-            entry = fetched;
+            entry = fetched.Value;
         }
 
         OpenImport(entry);
@@ -389,28 +397,29 @@ internal sealed class VaultBrowserWindow : Window
     /// on-demand order is handed to the Prepare as it was, and its import is the curator's next
     /// press once the Prepare says the bundle is ready.
     /// </remarks>
-    /// <returns>The cache entry to import, or <c>null</c> when there is none yet and the status line says why.</returns>
-    private async Task<CacheEntry?> FetchCompleteAsync(VaultBundle bundle)
+    /// <returns>
+    /// The cache entry to import; or <c>Prepare</c> set when the order is the Prepare's to follow; or
+    /// neither, when there is nothing yet and the status line says why.
+    /// </returns>
+    private async Task<(CacheEntry? Entry, bool Prepare)> FetchCompleteAsync(VaultBundle bundle)
     {
         if (!await BeginAsync($"Checking {bundle.AoiLabel} in your vault…").ConfigureAwait(true))
         {
-            return null;
+            return (null, false);
         }
 
-        bool prepare = false;
         try
         {
             ImportRouteDecision route = await _vault.RouteImportAsync(bundle.OrderId, _work!.Token).ConfigureAwait(true);
             if (route.Route == ImportRoute.Refused)
             {
                 Report(route.Message);
-                return null;
+                return (null, false);
             }
 
             if (route.Route == ImportRoute.Prepare)
             {
-                prepare = true;
-                return null;
+                return (null, true);
             }
 
             CompleteDownload download = await _vault.DownloadCompleteAsync(
@@ -422,8 +431,7 @@ internal sealed class VaultBrowserWindow : Window
 
             if (download.NeedsPrepare)
             {
-                prepare = true;
-                return null;
+                return (null, true);
             }
 
             CacheEntry entry = _cache.Inspect(
@@ -433,25 +441,19 @@ internal sealed class VaultBrowserWindow : Window
             if (!download.Ready || entry.State != CacheState.CachedValid)
             {
                 Report(download.Ready ? entry.Describe() : download.Message);
-                return null;
+                return (null, false);
             }
 
-            return entry;
+            return (entry, false);
         }
         catch (OperationCanceledException)
         {
             Report("Cancelled.");
-            return null;
+            return (null, false);
         }
         finally
         {
             EndWork();
-
-            // After EndWork: the Prepare is the watcher's, and this window's own work is over.
-            if (prepare)
-            {
-                Prepare(bundle);
-            }
         }
     }
 

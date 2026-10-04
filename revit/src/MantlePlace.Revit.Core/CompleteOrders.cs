@@ -122,7 +122,10 @@ public enum ViewFetch
     /// <summary>Download the view: it holds every file Revit's import reads.</summary>
     View,
 
-    /// <summary>The platform answered with the whole archive; download it, checked against the listing.</summary>
+    /// <summary>
+    /// The platform answered a no-op order with the whole archive — a bundle stored as one zip, with
+    /// nothing left to build — so download it, checked against the listing.
+    /// </summary>
     WholeArchive,
 
     /// <summary>
@@ -131,7 +134,10 @@ public enum ViewFetch
     /// </summary>
     WholeBundleInstead,
 
-    /// <summary>The view is partial: the order is still being built, which is the Prepare's to follow.</summary>
+    /// <summary>
+    /// The order is not shown complete: the view is partial, or a start whose delivery state was
+    /// unknown was answered with no view at all. Either way the Prepare is what follows it.
+    /// </summary>
     Prepare,
 }
 
@@ -142,8 +148,8 @@ public enum ViewFetch
 /// <para>
 /// A complete order's bundle is stored in parts, and the platform cuts a <b>host view</b> from them:
 /// exactly the files the manifest's <c>hosts.revit</c> block points at, plus the whole-bundle
-/// manifest with a <c>view</c> block. On the 2 km² Jackson reference bundle that is 87 MB of
-/// 441 MB.
+/// manifest with a <c>view</c> block — a fraction of the whole archive, which carries every host's
+/// meshes and rasters.
 /// </para>
 /// <para>
 /// ⛔ <b>The host view holds only <c>hosts.revit</c>'s files, and Revit reads one file outside that
@@ -237,11 +243,17 @@ public static class HostViews
     /// What the order delivered, from the no-op; <c>null</c> when unknown, and then every file read
     /// from outside the host block is required of the view.
     /// </param>
+    /// <remarks>
+    /// ⛔ <b>With the delivery state unknown, only a <c>view</c> block proves the order complete.</b>
+    /// A no-op already proved there is nothing to build, so its whole-archive answer is importable;
+    /// a <c>503 delivery_state_unknown</c> proved nothing, and a whole archive after it may be an
+    /// on-demand order's unbuilt bundle, which is the Prepare's to build.
+    /// </remarks>
     public static ViewFetch Decide(HostViewLink link, IReadOnlyCollection<string>? delivered)
     {
         if (!link.IsView)
         {
-            return ViewFetch.WholeArchive;
+            return delivered is null ? ViewFetch.Prepare : ViewFetch.WholeArchive;
         }
 
         if (link.Partial)

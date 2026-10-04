@@ -225,10 +225,18 @@ internal static class CompleteOrderTests
             run.True(HostViews.Decide(link, withTrees) == ViewFetch.Prepare, "Prepare");
         });
 
-        run.Case("no view block: the whole archive the platform already linked", () =>
+        run.Case("no view block after a no-op: the whole archive the platform already linked", () =>
         {
             HostViewLink link = Parse("""{"url":"https://r2.example/z.zip","expiresAt":"","view":null}""");
             run.True(HostViews.Decide(link, withTrees) == ViewFetch.WholeArchive, "the whole archive");
+        });
+
+        run.Case("no view block after a 503 delivery_state_unknown: unproven, so the Prepare follows it", () =>
+        {
+            // Only a view block proves a complete order when the start proved nothing. An on-demand
+            // order's single zip is not imported on the strength of an unreadable delivery state.
+            HostViewLink link = Parse("""{"url":"https://r2.example/z.zip","expiresAt":"","view":null}""");
+            run.True(HostViews.Decide(link, null) == ViewFetch.Prepare, "Prepare");
         });
 
         run.Case("a part's token is everything before the level", () =>
