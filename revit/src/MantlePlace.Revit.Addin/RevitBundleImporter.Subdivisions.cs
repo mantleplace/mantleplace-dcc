@@ -4,15 +4,14 @@ using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The subdivision steps: the published polygon layers — land use, land cover, water bodies and road
-// surfaces — cut into the ground, stamped so a re-import finds them.
+// The subdivision steps: the surfaces a designer builds against — water bodies and road surfaces —
+// cut into the ground, stamped so a re-import finds them (ADR 0015).
 internal sealed partial class RevitBundleImporter
 {
     /// <summary>
-    /// A published polygon layer as toposolid subdivisions. For <c>land_use</c> that is property
-    /// boundaries — Forma's "Site limits" row, by the mechanism Forma itself offers alongside Model
-    /// Lines — and for <c>land_cover</c>, <c>water</c> and <c>road_polygons</c> the ground cover, the
-    /// water bodies and the road surfaces, cut the same way.
+    /// A published polygon layer as toposolid subdivisions: the water bodies of <c>water</c> and the
+    /// road surfaces of <c>road_polygons</c>. Land use and land cover are drawn on land plans instead
+    /// (<see cref="ImportLandPlan"/>, <c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -24,19 +23,17 @@ internal sealed partial class RevitBundleImporter
     /// therefore comes in flat, at the terrain's own surface, rather than recessed into it.
     /// </para>
     /// <para>
-    /// What each layer's rings become is <see cref="GroundCuts"/>'s: a land ring is its own
-    /// subdivision, while a water body or a road network is cut whole, with its islands and city
-    /// blocks left out of it. Nothing is clipped against another layer and no layer takes precedence
-    /// — the published polygons overlap because the ground they describe does, and Revit keeps them
-    /// all (<see cref="ImportFailurePolicy"/>).
+    /// What each layer's rings become is <see cref="GroundCuts"/>'s: a water body or a road network is
+    /// cut whole, with its islands and city blocks left out of it. Nothing is clipped against another
+    /// layer and no layer takes precedence — the published polygons overlap because the ground they
+    /// describe does, and Revit keeps them all (<see cref="ImportFailurePolicy"/>).
     /// </para>
     /// <para>
-    /// The renderer keyword each cut's material will carry is decided there too, and remembered by
-    /// element for the drape (<see cref="_subDivisionKeywords"/>) — for a subdivision this run cut,
-    /// and for one an earlier import left, alike.
+    /// The word each cut's drape material carries is its layer's (<see cref="GroundLayerWords.MaterialWord"/>),
+    /// read off the stamp when the drape runs, so nothing about a cut is remembered here for it.
     /// </para>
     /// </remarks>
-    private void ImportSiteBoundaries(ImportStep step, GroundLayer layer)
+    private void CutSubdivisions(ImportStep step, GroundLayer layer)
     {
         GroundLayerWords words = GroundLayerWords.For(layer);
         string label = words.Label;
@@ -46,7 +43,7 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        (IReadOnlyList<GroundCut> cuts, int strandedHoles) = GroundCuts.For(layer, rings);
+        (IReadOnlyList<GroundCut> cuts, int strandedHoles) = GroundCuts.For(rings);
         if (cuts.Count == 0)
         {
             Say($"The {label} layer ({step.EntryName}) carries no polygon this plugin could cut: "
@@ -74,10 +71,6 @@ internal sealed partial class RevitBundleImporter
             stem);
         int alreadyPresent = cuts.Count - newBoundaries.Count;
 
-        // The keywords for the subdivisions an earlier import cut, found by the stamp each carries.
-        // The ones this run cuts are remembered below, as each is created.
-        RememberKeywords(terrain, layer, GroundCuts.KeywordsByStamp(cuts, SiteBoundaryIdentity.Stamps(layer, names, stem)));
-
         int created = 0;
         int declined = 0;
         int unclosed = 0;
@@ -96,26 +89,6 @@ internal sealed partial class RevitBundleImporter
         // How many cuts took the drape's type as they were cut, and what that cost, for the log.
         int typedForDrape = 0;
         TimeSpan typingTime = TimeSpan.Zero;
-
-        // Which cuts end up with a subdivision on the terrain: everything already present, plus
-        // whatever this run manages to cut. A ring Revit declines, or one that cannot be closed
-        // into a loop, leaves nothing behind — and a report naming a subdivision that does not exist is
-        // the same lie as a summary counting one.
-        bool[] onTerrain = new bool[cuts.Count];
-        Array.Fill(onTerrain, true);
-        foreach (NewSiteBoundary boundary in newBoundaries)
-        {
-            onTerrain[boundary.Ordinal - 1] = false;
-        }
-
-        // ⛔ Before the transaction, and before this step cuts anything: whether a parent toposolid's
-        // bounding box absorbs its subdivisions is unexecuted Revit behaviour, and the ground can
-        // already carry subdivisions — an earlier import's, or an earlier polygon step's in this
-        // run. If Revit does absorb them, and one
-        // reaches past the ground it was cut from, this footprint is that much too large and the
-        // comparison below under-reports. It never over-reports, which is the direction that matters
-        // for a line asserting a subdivision is redundant.
-        FootprintExtent? ground = GroundFootprint(terrain);
 
         // ⛔ Before the transaction, because the commit's whole cost is inside it and nothing can be
         // written while that runs. This line is the commit's only warning; the typing before it is
@@ -179,15 +152,10 @@ internal sealed partial class RevitBundleImporter
                 // Counted only now: there is no subdivision for a hole to be missing from until
                 // this call returns.
                 holesUncut += uncut;
-                onTerrain[boundary.Ordinal - 1] = true;
 
                 // Remembered for the drape, which prefers the stamp below but cannot use it for a
                 // subdivision that fails to take one.
                 _createdSubDivisionIds.Add(subdivision.Id);
-                if (cut.Keyword is { } keyword)
-                {
-                    _subDivisionKeywords[subdivision.Id] = keyword;
-                }
 
                 // The plugin's first parameter write. Comments is the subdivision's identity for the
                 // NEXT import — a subdivision it could not stamp is kept (the boundary is real), it
@@ -275,9 +243,7 @@ internal sealed partial class RevitBundleImporter
                 declined++;
                 holesUncut -= uncut;
                 unstamped -= stampRefused ? 1 : 0;
-                onTerrain[index] = false;
                 _createdSubDivisionIds.Remove(id);
-                _subDivisionKeywords.Remove(id);
                 _stampsCutWith.Remove(id);
                 Say(ImportFailurePolicy.ExplainRefusedSubDivision(
                     index + 1,
@@ -321,7 +287,6 @@ internal sealed partial class RevitBundleImporter
         }
 
         Say(summary + ".");
-        ReportCoextensiveBoundaries(ground, cuts, onTerrain);
     }
 
     /// <summary>
@@ -393,112 +358,6 @@ internal sealed partial class RevitBundleImporter
         {
             Trace($"  a ring of {ring.Vertices.Count:N0} vertices could not be closed: {ex.Message}");
             return null;
-        }
-    }
-
-    /// <summary>
-    /// The ground toposolid's footprint in the bundle's own east/north metres, or <c>null</c> when
-    /// Revit will not give a bounding box.
-    /// </summary>
-    /// <remarks>
-    /// The same box <c>TerrainProbeCommand</c>'s inventory prints. It is comparable with a ring's
-    /// vertices because those are placed at <see cref="MetresToInternal"/> of frame metres with no
-    /// further translation — <em>for a terrain this plugin built</em>. A terrain found by
-    /// <see cref="TerrainToposolidId"/> may be a curator's own or another bundle's, in which case
-    /// the two are in the same model axes but not necessarily about the same origin, and a
-    /// comparison between them is meaningless rather than wrong.
-    /// </remarks>
-    private FootprintExtent? GroundFootprint(Toposolid terrain)
-    {
-        if (terrain.get_BoundingBox(null) is not { } box)
-        {
-            Trace("  site boundaries: the terrain has no bounding box, so no footprint could be compared.");
-            return null;
-        }
-
-        return new FootprintExtent(
-            InternalToMetres(box.Min.X),
-            InternalToMetres(box.Min.Y),
-            InternalToMetres(box.Max.X),
-            InternalToMetres(box.Max.Y));
-    }
-
-    /// <summary>
-    /// Says which published boundaries reproduce the ground's own outline, and nothing else about
-    /// them.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Every feature that ENDED UP on the terrain is measured, not just the ones this run created:
-    /// a re-import creates nothing and the reading is just as true the second time. A feature with
-    /// no subdivision behind it — declined by Revit, or a ring that cannot close — is passed over,
-    /// because a line naming a subdivision that is not in the model is the same lie as a count of
-    /// one that was never cut. The verdict is <see cref="SiteBoundaryCoextension"/>'s
-    /// (<c>HPS-02</c>); this reads the two footprints and says whatever comes back.
-    /// </para>
-    /// <para>
-    /// The subdivision's footprint is the box around the ring this import drew, in the bundle's own
-    /// east/north metres; the ground's comes from <see cref="GroundFootprint"/>, which says how the
-    /// two are made comparable.
-    /// </para>
-    /// <para>
-    /// ⛔ Nothing is skipped, refused or arbitrated on the strength of this. The published polygons
-    /// are what the bundle publishes and this host applies what it is given.
-    /// </para>
-    /// </remarks>
-    private void ReportCoextensiveBoundaries(
-        FootprintExtent? ground,
-        IReadOnlyList<GroundCut> cuts,
-        bool[] onTerrain)
-    {
-        if (ground is not { } groundFootprint)
-        {
-            return;
-        }
-
-        for (int index = 0; index < cuts.Count; index++)
-        {
-            if (!onTerrain[index] || FootprintExtent.Around(cuts[index].Outer.Vertices) is not { } footprint)
-            {
-                continue;
-            }
-
-            // The position is stated by the core alongside whatever name there is, because names are
-            // not unique and an unnamed feature's stamp is its position (SiteBoundaryIdentity).
-            string name = FeatureName(cuts[index].Outer, "(unnamed)");
-
-            if (SiteBoundaryCoextension.Describe(name, index + 1, footprint, groundFootprint) is { } line)
-            {
-                Say(line);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Pairs each subdivision already on the terrain with the renderer keyword its published feature
-    /// names, by the stamp the subdivision carries.
-    /// </summary>
-    /// <remarks>
-    /// The pairing is <see cref="RendererKeywords.ByStamp"/>'s; this only reads the stamps off the
-    /// elements. A stamp is matched in full, so a subdivision of the other layer, of another order,
-    /// or a curator's own is never given a keyword here.
-    /// </remarks>
-    private void RememberKeywords(Toposolid terrain, GroundLayer layer, IReadOnlyDictionary<string, string> byStamp)
-    {
-        if (byStamp.Count == 0)
-        {
-            return;
-        }
-
-        foreach (ElementId id in terrain.GetSubDivisionIds())
-        {
-            if (_document.GetElement(id) is Toposolid subdivision
-                && subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString() is { } stamp
-                && SiteBoundaryIdentity.Parse(stamp, _archive.Layout.Key.Stem)?.Layer == layer
-                && byStamp.TryGetValue(stamp, out string? keyword))
-            {
-                _subDivisionKeywords[id] = keyword;
-            }
         }
     }
 

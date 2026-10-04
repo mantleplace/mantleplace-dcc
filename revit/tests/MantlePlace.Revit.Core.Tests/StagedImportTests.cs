@@ -104,8 +104,8 @@ internal static class StagedImportTests
         run.Case("a step whose commit Revit rolled back is failed, not done", () =>
         {
             FakeRunner runner = new();
-            runner.RolledBack.Add(ImportStepKind.SiteBoundaries);
-            StagedImport import = new([Step(ImportStepKind.SiteBoundaries)], runner);
+            runner.RolledBack.Add(ImportStepKind.LandUse);
+            StagedImport import = new([Step(ImportStepKind.LandUse)], runner);
 
             import.RunToEnd();
 

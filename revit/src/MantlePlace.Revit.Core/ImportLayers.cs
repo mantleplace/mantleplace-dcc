@@ -28,13 +28,17 @@ public enum ImportLayer
     /// <summary>The site model as a link — the same buildings as <see cref="ContextBuildings"/>, unselectable.</summary>
     SiteModel,
     RoadCentrelines,
-    LandUseSubdivisions,
-    LandCoverSubdivisions,
     WaterSubdivisions,
     RoadSubdivisions,
 
     /// <summary>The tree points, of every foliage type: Revit's Planting category, and the host's own noun.</summary>
     Planting,
+
+    /// <summary>The land use, drawn on a land plan of its own.</summary>
+    LandUsePlan,
+
+    /// <summary>The land cover, drawn on a land plan of its own.</summary>
+    LandCoverPlan,
 
     /// <summary>The flood map's zones, on the hazard plan.</summary>
     FloodZones,
@@ -57,8 +61,8 @@ public static class ImportLayers
         ImportStepKind.ContextBuildings => ImportLayer.ContextBuildings,
         ImportStepKind.LinkSiteIfc => ImportLayer.SiteModel,
         ImportStepKind.RoadCentrelines => ImportLayer.RoadCentrelines,
-        ImportStepKind.SiteBoundaries => ImportLayer.LandUseSubdivisions,
-        ImportStepKind.LandCover => ImportLayer.LandCoverSubdivisions,
+        ImportStepKind.LandUse => ImportLayer.LandUsePlan,
+        ImportStepKind.LandCover => ImportLayer.LandCoverPlan,
         ImportStepKind.Water => ImportLayer.WaterSubdivisions,
         ImportStepKind.RoadPolygons => ImportLayer.RoadSubdivisions,
         ImportStepKind.Vegetation => ImportLayer.Planting,
@@ -72,15 +76,13 @@ public static class ImportLayers
     /// The layer this one cannot be imported without, or <c>null</c> for one that stands alone.
     /// </summary>
     /// <remarks>
-    /// Every kind of subdivision is cut into the ground and the drape is a material the ground
+    /// Both kinds of subdivision are cut into the ground and the drape is a material the ground
     /// wears, so all of them need the terrain. Road centrelines, trees and context buildings carry
-    /// their own Z and do not; the site model is a link. Neither hazard layer does either: both are
-    /// drawn flat in a plan view, which needs a level and no toposolid.
+    /// their own Z and do not; the site model is a link. Neither land plan nor hazard layer does
+    /// either: each is drawn flat in a plan view, which needs a level and no toposolid.
     /// </remarks>
     public static ImportLayer? PrerequisiteOf(ImportLayer layer) => layer switch
     {
-        ImportLayer.LandUseSubdivisions => ImportLayer.Terrain,
-        ImportLayer.LandCoverSubdivisions => ImportLayer.Terrain,
         ImportLayer.WaterSubdivisions => ImportLayer.Terrain,
         ImportLayer.RoadSubdivisions => ImportLayer.Terrain,
         ImportLayer.ImageryDrape => ImportLayer.Terrain,
@@ -91,9 +93,9 @@ public static class ImportLayers
     /// <remarks>
     /// <para>
     /// Every layer but seven, each with the stated reason <c>HPS-51</c> asks for before a row starts
-    /// unchecked. The two hazard layers: the curator this import is made for is the visualiser
-    /// presenting a render, and a hazard plan is for someone planning the site; both are one tick
-    /// away, and neither touches the model a render is made from.
+    /// unchecked. The two land plans and the two hazard layers: the curator this import is made for
+    /// is the visualiser presenting a render, and a drawn plan is for someone planning the site; each
+    /// is one tick away, and none touches the model a render is made from.
     /// </para>
     /// <para>
     /// The site model's link: its buildings are copied into the project as
@@ -104,13 +106,12 @@ public static class ImportLayers
     /// (<c>docs/adr/0013-revit-published-contours-are-directshapes.md</c>).
     /// </para>
     /// <para>
-    /// The land use, land cover and road surfaces, the boxes <see cref="SlowStepNotice.IsSlowBox"/>
-    /// names: on the order they were measured on, they were nearly all of what a full import with
-    /// every box ticked took beyond the default import (the figures, through the import window, are
-    /// <c>revit/README.md</c>'s; each box's own is <see cref="SlowStepNotice.Measured"/>'s). A curator
-    /// who wants them ticks them, and the checklist then says what each was measured to cost
-    /// (<see cref="ImportChecklist.SlowLayerWarnings"/>). The water bodies stay ticked: they took
-    /// seconds.
+    /// The road surfaces, the box <see cref="SlowStepNotice.IsSlowBox"/> names: on the order it was
+    /// measured on, it was most of what a full import with every box ticked took beyond the default
+    /// import (the figures, through the import window, are <c>revit/README.md</c>'s; the box's own is
+    /// <see cref="SlowStepNotice.Measured"/>'s). A curator who wants it ticks it, and the checklist
+    /// then says what it was measured to cost (<see cref="ImportChecklist.SlowLayerWarnings"/>). The
+    /// water bodies stay ticked: they took seconds.
     /// </para>
     /// <para>
     /// The unattended path does not read it: it imports everything
@@ -120,6 +121,7 @@ public static class ImportLayers
     /// </remarks>
     public static bool OnByDefault(ImportLayer layer)
         => layer is not (ImportLayer.SiteModel or ImportLayer.PublishedContours
+                or ImportLayer.LandUsePlan or ImportLayer.LandCoverPlan
                 or ImportLayer.FloodZones or ImportLayer.SteepGround)
             && !SlowStepNotice.IsSlowBox(layer);
 }

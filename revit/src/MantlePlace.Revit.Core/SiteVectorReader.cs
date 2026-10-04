@@ -70,7 +70,7 @@ public sealed class SiteFeature
 
     /// <summary>
     /// GeoJSON <c>properties.subtype</c> verbatim — Overture's physical or use subtype, such as
-    /// <c>forest</c> — or empty. What <see cref="RendererKeywords"/> reads a keyword from.
+    /// <c>forest</c> — or empty. The class a land plan draws a polygon in (<see cref="LandStyles"/>).
     /// </summary>
     public string Subtype { get; init; } = string.Empty;
 

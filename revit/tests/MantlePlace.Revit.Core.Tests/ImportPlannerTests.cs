@@ -970,17 +970,15 @@ internal static class ImportPlannerTests
         });
     }
 
-    /// <summary>The four kinds that cut subdivisions into the terrain.</summary>
+    /// <summary>The two kinds that cut subdivisions into the terrain (ADR 0015).</summary>
     private static readonly ImportStepKind[] PolygonKinds =
     [
-        ImportStepKind.LandCover,
-        ImportStepKind.SiteBoundaries,
         ImportStepKind.Water,
         ImportStepKind.RoadPolygons,
     ];
 
     /// <summary>
-    /// The three Forma-parity layers: roads, site boundaries and vegetation. Each is
+    /// The three Forma-parity layers: roads, land use and vegetation. Each is
     /// placed against the bundle's own pre-derived origin, and each fails closed rather than being
     /// placed in a frame nobody checked.
     /// </summary>
@@ -991,7 +989,7 @@ internal static class ImportPlannerTests
             BundleImportPlan plan = PlanFor(ParityManifest(MetricGeoreference), ParityBundle);
 
             run.True(HasStep(plan, ImportStepKind.RoadCentrelines), "roads planned");
-            run.True(HasStep(plan, ImportStepKind.SiteBoundaries), "site boundaries planned");
+            run.True(HasStep(plan, ImportStepKind.LandUse), "land use planned");
             run.True(HasStep(plan, ImportStepKind.LandCover), "land cover planned");
             run.True(HasStep(plan, ImportStepKind.Water), "water planned");
             run.True(HasStep(plan, ImportStepKind.RoadPolygons), "road surfaces planned");
@@ -1307,7 +1305,7 @@ internal static class ImportPlannerTests
 
             run.True(HasStep(plan, ImportStepKind.LandCover), "the land cover is planned");
             run.Equal(
-                FindSkip(plan, ImportStepKind.SiteBoundaries)?.ReasonCode == SkipReasonCode.ArtifactNotInManifest,
+                FindSkip(plan, ImportStepKind.LandUse)?.ReasonCode == SkipReasonCode.ArtifactNotInManifest,
                 true,
                 "and the land use is absent, not read from the land-cover file");
             run.True(plan.CanImport, "land cover alone is importable content");
@@ -1581,7 +1579,7 @@ internal static class ImportPlannerTests
     private static readonly ImportStepKind[] ParityKinds =
     [
         ImportStepKind.RoadCentrelines,
-        ImportStepKind.SiteBoundaries,
+        ImportStepKind.LandUse,
         ImportStepKind.LandCover,
         ImportStepKind.Water,
         ImportStepKind.RoadPolygons,

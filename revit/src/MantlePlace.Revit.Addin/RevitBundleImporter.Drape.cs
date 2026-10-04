@@ -238,14 +238,14 @@ internal sealed partial class RevitBundleImporter
     }
 
     /// <summary>
-    /// Under flat shading, the material a subdivision shares: the ground's own when its subtype names
-    /// no renderer keyword, and otherwise one per keyword, made once per step
+    /// Under flat shading, the material a subdivision shares: the ground's own when its layer names no
+    /// material word, and otherwise one per word, made once per step
     /// (<see cref="GroundMaterialNames.Shared"/>).
     /// </summary>
     /// <remarks>
     /// Anchored to the project origin like the ground, which is what flat shading measures every
     /// offset from, so the photograph lines up across the subdivision's edge. A keyword material this
-    /// Revit will not make falls back to the ground's: the photograph matters more than the grass.
+    /// Revit will not make falls back to the ground's: the photograph matters more than the word.
     /// </remarks>
     private ElementId SharedMaterialId(
         Element subdivision,
@@ -256,7 +256,7 @@ internal sealed partial class RevitBundleImporter
         ElementId groundMaterialId,
         Dictionary<string, ElementId> sharedByKeyword)
     {
-        if (_subDivisionKeywords.GetValueOrDefault(subdivision.Id) is not { } keyword)
+        if (GroundLayerWords.For(NamingStampOf(subdivision).Layer).MaterialWord is not { } keyword)
         {
             return groundMaterialId;
         }
@@ -393,22 +393,29 @@ internal sealed partial class RevitBundleImporter
     /// </summary>
     private string SubDivisionMaterialName(Element subdivision, string imageryName, bool smoothed)
     {
-        string? keyword = _subDivisionKeywords.GetValueOrDefault(subdivision.Id);
-        if (!smoothed)
-        {
-            return GroundMaterialNames.Shared(imageryName, keyword);
-        }
+        GroundStamp stamp = NamingStampOf(subdivision);
+        string? keyword = GroundLayerWords.For(stamp.Layer).MaterialWord;
+        return smoothed
+            ? GroundMaterialNames.PerSubDivision(imageryName, stamp.Layer, stamp.Token, keyword)
+            : GroundMaterialNames.Shared(imageryName, keyword);
+    }
 
-        // A subdivision this run cut and could not stamp is named by the stamp it was cut with, so
-        // the cut and the drape, and a later import, all compute the same name.
-        GroundStamp stamp = SiteBoundaryIdentity.NamingStamp(
+    /// <summary>
+    /// The stamp <paramref name="subdivision"/>'s drape material is named by, and so the layer whose
+    /// material word it carries (<see cref="SiteBoundaryIdentity.NamingStamp"/>).
+    /// </summary>
+    /// <remarks>
+    /// A subdivision this run cut and could not stamp is named by the stamp it was cut with, so the
+    /// cut and the drape, and a later import, all compute the same name. Read off the element every
+    /// time rather than remembered by the step that cut it, so a water body an earlier import cut
+    /// wears <c>water</c> whether or not this import ran the water step.
+    /// </remarks>
+    private GroundStamp NamingStampOf(Element subdivision)
+        => SiteBoundaryIdentity.NamingStamp(
             subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString(),
             _stampsCutWith.GetValueOrDefault(subdivision.Id),
             subdivision.Id.Value,
             _archive.Layout.Key.Stem);
-
-        return GroundMaterialNames.PerSubDivision(imageryName, stamp.Layer, stamp.Token, keyword);
-    }
 
     /// <summary>
     /// Splits the drape type's top layer into a thin imagery layer over the original material — the

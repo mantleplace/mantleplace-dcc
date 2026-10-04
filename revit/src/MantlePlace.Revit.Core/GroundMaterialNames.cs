@@ -10,7 +10,11 @@ namespace MantlePlace.Revit.Core;
 /// (<see cref="Shared"/>).
 /// </para>
 /// <para>
-/// Every name is derived from the stamp and the subtype and from nothing this session invented, so
+/// The keyword is the layer's own material word (<see cref="GroundLayerWords.MaterialWord"/>):
+/// <c>water</c> or <c>asphalt</c>, and none for a land subdivision an earlier build cut.
+/// </para>
+/// <para>
+/// Every name is derived from the stamp and the layer and from nothing this session invented, so
 /// a re-import resolves the material an earlier import made rather than growing another. A name
 /// with no keyword is exactly the name this plugin wrote before keywords existed, for the same
 /// reason.
@@ -33,14 +37,14 @@ public static class GroundMaterialNames
 
     /// <summary>
     /// One subdivision's own material under smooth shading:
-    /// <c>{imagery} boundary {token} {keyword}</c> for land use and
-    /// <c>{imagery} land cover {token} {keyword}</c> for land cover.
+    /// <c>{imagery} {kind} {token} {keyword}</c> — <c>{imagery} water body {token} water</c> for a
+    /// water body, and <c>{imagery} boundary {token}</c> for a land-use cut an earlier build made.
     /// </summary>
     /// <param name="imageryName">The ground's drape material name (<see cref="DrapeLayering.ImageryName"/>).</param>
     /// <param name="layer">Which layer the subdivision was cut from. Both stamp unnamed features by
     /// position, so without it land-use 1 and land-cover 1 would share one material and one offset.</param>
     /// <param name="token">The stamp's per-feature token (<see cref="SiteBoundaryIdentity.Parse"/>).</param>
-    /// <param name="keyword">The renderer phrase, or <c>null</c>.</param>
+    /// <param name="keyword">The layer's material word, or <c>null</c>.</param>
     public static string PerSubDivision(string imageryName, GroundLayer layer, string token, string? keyword)
     {
         ArgumentNullException.ThrowIfNull(imageryName);

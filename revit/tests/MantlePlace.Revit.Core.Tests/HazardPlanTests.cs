@@ -303,7 +303,7 @@ internal static class HazardPlanTests
 
         run.Case("a first import makes the plan and draws the layer", () =>
         {
-            HazardPlanDecision decision = HazardPlan.Decide(HazardViewFound.None, [], HazardLayer.FloodZones, Stem, "0d4cbfb1");
+            PlanDecision decision = HazardPlan.Decide(PlanViewFound.None, [], HazardLayer.FloodZones, Stem, "0d4cbfb1");
             run.True(decision.CreateView, "makes the plan");
             run.True(decision.Draw, "draws");
         });
@@ -312,11 +312,11 @@ internal static class HazardPlanTests
         {
             string[] onPlan = [HazardPlan.Stamp(HazardLayer.FloodZones, Stem, "0d4cbfb1"), HazardPlan.Stamp(HazardLayer.FloodZones, Stem, "0d4cbfb1"), "a curator's note"];
 
-            HazardPlanDecision steep = HazardPlan.Decide(HazardViewFound.PlanView, onPlan, HazardLayer.SteepGround, Stem, "0d4cbfb1");
+            PlanDecision steep = HazardPlan.Decide(PlanViewFound.PlanView, onPlan, HazardLayer.SteepGround, Stem, "0d4cbfb1");
             run.False(steep.CreateView, "the plan is there");
             run.True(steep.Draw, "steep ground is added");
 
-            HazardPlanDecision flood = HazardPlan.Decide(HazardViewFound.PlanView, onPlan, HazardLayer.FloodZones, Stem, "0d4cbfb1");
+            PlanDecision flood = HazardPlan.Decide(PlanViewFound.PlanView, onPlan, HazardLayer.FloodZones, Stem, "0d4cbfb1");
             run.False(flood.Draw, "flood zones are not drawn twice");
             run.Equal(flood.AlreadyDrawn, 2, "and the ones there are counted");
             run.Contains(flood.Explanation, "already", "said");
@@ -325,13 +325,13 @@ internal static class HazardPlanTests
         run.Case("another build's regions do not count as this build's", () =>
         {
             string[] onPlan = [HazardPlan.Stamp(HazardLayer.FloodZones, Stem, "11111111")];
-            HazardPlanDecision decision = HazardPlan.Decide(HazardViewFound.PlanView, onPlan, HazardLayer.FloodZones, Stem, "0d4cbfb1");
+            PlanDecision decision = HazardPlan.Decide(PlanViewFound.PlanView, onPlan, HazardLayer.FloodZones, Stem, "0d4cbfb1");
             run.True(decision.Draw, "drawn: that region belongs to another plan");
         });
 
         run.Case("a view of another kind holding the name draws nothing and says so", () =>
         {
-            HazardPlanDecision decision = HazardPlan.Decide(HazardViewFound.SomethingElse, [], HazardLayer.FloodZones, Stem, "0d4cbfb1");
+            PlanDecision decision = HazardPlan.Decide(PlanViewFound.SomethingElse, [], HazardLayer.FloodZones, Stem, "0d4cbfb1");
             run.False(decision.Draw, "nothing drawn");
             run.False(decision.CreateView, "no second view: Revit refuses the name");
             run.Contains(decision.Explanation, HazardPlan.ViewName("0d4cbfb1"), "names the view");
@@ -342,8 +342,8 @@ internal static class HazardPlanTests
     {
         run.Case("a special flood hazard zone is filled, and a floodway is hatched over its zone's fill", () =>
         {
-            HazardStyle ae = HazardStyles.ForFloodZone("AE", string.Empty);
-            HazardStyle floodway = HazardStyles.ForFloodZone("AE", "FLOODWAY");
+            RegionStyle ae = HazardStyles.ForFloodZone("AE", string.Empty);
+            RegionStyle floodway = HazardStyles.ForFloodZone("AE", "FLOODWAY");
 
             run.True(ae.Fill is not null, "AE is filled");
             run.True(ae.Hatch is null, "and not hatched");
@@ -355,9 +355,9 @@ internal static class HazardPlanTests
 
         run.Case("shaded X and minimal-hazard X are told apart; an unknown subtype takes its zone's colour", () =>
         {
-            HazardStyle shaded = HazardStyles.ForFloodZone("X", "0.2 PCT ANNUAL CHANCE FLOOD HAZARD");
-            HazardStyle minimal = HazardStyles.ForFloodZone("X", "AREA OF MINIMAL FLOOD HAZARD");
-            HazardStyle unknown = HazardStyles.ForFloodZone("X", "SOMETHING FEMA ADDS LATER");
+            RegionStyle shaded = HazardStyles.ForFloodZone("X", "0.2 PCT ANNUAL CHANCE FLOOD HAZARD");
+            RegionStyle minimal = HazardStyles.ForFloodZone("X", "AREA OF MINIMAL FLOOD HAZARD");
+            RegionStyle unknown = HazardStyles.ForFloodZone("X", "SOMETHING FEMA ADDS LATER");
 
             run.True(shaded.Fill?.ToString() != minimal.Fill?.ToString(), "two colours");
             run.True(
@@ -369,7 +369,7 @@ internal static class HazardPlanTests
 
         run.Case("a zone this table does not know is drawn in a neutral type named with its code, never dropped", () =>
         {
-            HazardStyle style = HazardStyles.ForFloodZone("ZZ", string.Empty);
+            RegionStyle style = HazardStyles.ForFloodZone("ZZ", string.Empty);
             run.True(style.Fill is not null, "drawn");
             run.Equal(style.Fill?.ToString(), HazardStyles.Neutral.ToString(), "neutral");
             run.Contains(style.TypeName, "ZZ", "named with the code");
@@ -377,8 +377,8 @@ internal static class HazardPlanTests
 
         run.Case("steep ground is a hatch with no fill, at an angle the floodway's is not", () =>
         {
-            HazardStyle steep = HazardStyles.SteepGround;
-            HazardStyle floodway = HazardStyles.ForFloodZone("AE", "FLOODWAY");
+            RegionStyle steep = HazardStyles.SteepGround;
+            RegionStyle floodway = HazardStyles.ForFloodZone("AE", "FLOODWAY");
 
             run.True(steep.Fill is null, "no fill: the flood colour shows through");
             run.True(steep.Hatch is not null, "hatched");
@@ -388,7 +388,7 @@ internal static class HazardPlanTests
 
         run.Case("a type name is kept legal; the zone key keeps the published words", () =>
         {
-            HazardStyle style = HazardStyles.ForFloodZone("A:1", "{odd}");
+            RegionStyle style = HazardStyles.ForFloodZone("A:1", "{odd}");
             run.True(style.TypeName.IndexOfAny(['{', '}', ':']) < 0, $"\"{style.TypeName}\" is a legal name");
             run.Equal(ZoneKey.FloodRowText("A:1", "{odd}"), "A:1 — {odd}", "the key says what was published");
         });
@@ -408,7 +408,7 @@ internal static class HazardPlanTests
             ];
             FloodMap map = Parse(Manifest()).FloodMap!;
 
-            IReadOnlyList<ZoneKeyRow> rows = ZoneKey.FloodRows(drawn, map);
+            IReadOnlyList<KeyRow> rows = ZoneKey.FloodRows(drawn, map);
             run.Equal(
                 string.Join(" | ", rows.Select(row => row.Text)),
                 "AE — FLOODWAY | AE | X — AREA OF MINIMAL FLOOD HAZARD",
@@ -433,14 +433,14 @@ internal static class HazardPlanTests
 
         run.Case("steep ground's row is its published threshold, in degrees, in the schema's comparison", () =>
         {
-            IReadOnlyList<ZoneKeyRow> rows = ZoneKey.SteepRows([RingWithThreshold("35.0"), RingWithThreshold("35.0")], "35.0");
+            IReadOnlyList<KeyRow> rows = ZoneKey.SteepRows([RingWithThreshold("35.0"), RingWithThreshold("35.0")], "35.0");
             run.Equal(rows.Count, 1, "one row");
             run.Equal(rows[0].Text, "Steep ground — at or above 35.0°", "the published number, verbatim");
         });
 
         run.Case("features stating different thresholds get a row each; one stating none takes the manifest's", () =>
         {
-            IReadOnlyList<ZoneKeyRow> rows = ZoneKey.SteepRows([RingWithThreshold("35.0"), RingWithThreshold("30"), RingWithThreshold(string.Empty)], "35.0");
+            IReadOnlyList<KeyRow> rows = ZoneKey.SteepRows([RingWithThreshold("35.0"), RingWithThreshold("30"), RingWithThreshold(string.Empty)], "35.0");
             run.Equal(string.Join(" | ", rows.Select(row => row.Text)), "Steep ground — at or above 35.0° | Steep ground — at or above 30°", "each as written");
         });
 

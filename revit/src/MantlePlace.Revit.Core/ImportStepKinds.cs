@@ -50,10 +50,10 @@ public static class ImportStepKinds
         // Read into DirectShapes; Revit keeps no reference to the DXF.
         ImportStepKind.PublishedContours => ExtractionLifetime.Transient,
 
-        // The parity layers become model elements — model curves, subdivisions, direct shapes — and
-        // Revit keeps no reference to the file any of them was read out of.
+        // The parity layers become elements — model curves, subdivisions, direct shapes, the land
+        // plans' filled regions — and Revit keeps no reference to the file any was read out of.
         ImportStepKind.RoadCentrelines => ExtractionLifetime.Transient,
-        ImportStepKind.SiteBoundaries => ExtractionLifetime.Transient,
+        ImportStepKind.LandUse => ExtractionLifetime.Transient,
         ImportStepKind.LandCover => ExtractionLifetime.Transient,
         ImportStepKind.Water => ExtractionLifetime.Transient,
         ImportStepKind.RoadPolygons => ExtractionLifetime.Transient,

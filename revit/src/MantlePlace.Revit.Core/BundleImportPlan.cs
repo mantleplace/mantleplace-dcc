@@ -68,20 +68,25 @@ public enum ImportStepKind
     RoadCentrelines,
 
     /// <summary>
-    /// Property boundaries from the <c>land_use</c> vector layer — Forma's "Site limits" row.
+    /// The <c>land_use</c> vector layer, drawn as filled regions on its build's land use plan
+    /// (<see cref="LandPlan"/>).
     /// </summary>
-    SiteBoundaries,
+    /// <remarks>
+    /// Never on the terrain: it was cut as subdivisions until
+    /// <c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>, and is a classification of
+    /// the ground rather than a surface anyone builds against.
+    /// </remarks>
+    LandUse,
 
     /// <summary>
-    /// Ground cover from the <c>land_cover</c> vector layer, cut as subdivisions the way the
-    /// <see cref="SiteBoundaries"/> are. A different Overture layer from <c>land_use</c>, not a
-    /// second name for it: this one carries the physical subtype — forest and its like.
+    /// The <c>land_cover</c> vector layer, drawn on a land cover plan of its own the way
+    /// <see cref="LandUse"/> is. A different Overture layer from <c>land_use</c>, not a second name for
+    /// it: this one carries the physical subtype — forest and its like.
     /// </summary>
     LandCover,
 
     /// <summary>
-    /// The water bodies of the <c>water</c> vector layer, cut as subdivisions after the two land
-    /// layers.
+    /// The water bodies of the <c>water</c> vector layer, cut as subdivisions.
     /// </summary>
     /// <remarks>
     /// Polygons only. That layer's stream centrelines stay out: turning a centreline into an area
@@ -643,7 +648,7 @@ public sealed class ImportStep
 
     /// <summary>
     /// Whether this plan's drape will run after this step and drape what it cuts. Read only for the
-    /// four kinds that cut subdivisions (<see cref="GroundCuts.LayerOf"/>).
+    /// two kinds that cut subdivisions (<see cref="GroundCuts.LayerOf"/>).
     /// </summary>
     /// <remarks>
     /// ⛔ The same decision as <see cref="ToposolidType"/>, one step later, and for the same reason: a
@@ -664,6 +669,12 @@ public sealed class ImportStep
     /// which plan the layer is drawn on, and what its zone key quotes.
     /// </summary>
     public HazardPlanFacts? Hazard { get; init; }
+
+    /// <summary>
+    /// Populated only for <see cref="ImportStepKind.LandUse"/> and <see cref="ImportStepKind.LandCover"/>:
+    /// which build's land plan the layer is drawn on, and the rectangle it is cropped to.
+    /// </summary>
+    public LandPlanFacts? LandPlan { get; init; }
 
     /// <summary>
     /// The vertical datum this step's heights are stated in, for the kinds that place a height on the
@@ -703,6 +714,23 @@ public sealed class HazardPlanFacts
 
     /// <summary>The manifest's steep-ground threshold as written. Read for steep ground only.</summary>
     public string? Threshold { get; init; }
+}
+
+/// <summary>
+/// What a land plan step needs beyond its file: the build whose plan it draws, and the rectangle that
+/// plan is cropped to (<see cref="Core.LandPlan"/>).
+/// </summary>
+/// <remarks>Decided by the planner, where a test reaches it, as <see cref="HazardPlanFacts"/> are.</remarks>
+public sealed class LandPlanFacts
+{
+    /// <summary>The build token the plan is named and stamped with (<see cref="Core.LandPlan.BuildToken"/>).</summary>
+    public required string Build { get; init; }
+
+    /// <summary>
+    /// The order's published rectangle in frame-local metres — the one the hazard plan is cropped to —
+    /// or <c>null</c> when this import has none: the plan is then drawn uncropped, and the log says so.
+    /// </summary>
+    public FootprintExtent? Crop { get; init; }
 }
 
 /// <summary>

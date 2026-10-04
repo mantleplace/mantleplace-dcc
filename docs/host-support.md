@@ -81,10 +81,10 @@ A `declined` cell with no ADR may carry one line of reason instead. No cell desc
 | Terrain as a mesh | supported | declined — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) |
 | Imagery drape | supported | supported — [ADR 0008](adr/0008-revit-drape-is-anchored-to-the-smooth-shading-origin.md) |
 | Stylized map drape | planned — [issue 255](https://github.com/mantleplace/mantleplace-dcc/issues/255) | planned — [issue 255](https://github.com/mantleplace/mantleplace-dcc/issues/255) |
-| Land cover | partial — [issue 43](https://github.com/mantleplace/mantleplace-dcc/issues/43) | supported |
-| Land use, water bodies and road surfaces | planned — [issue 260](https://github.com/mantleplace/mantleplace-dcc/issues/260) | supported |
+| Land cover | partial — [issue 43](https://github.com/mantleplace/mantleplace-dcc/issues/43) | supported, on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
+| Land use, water bodies and road surfaces | planned — [issue 260](https://github.com/mantleplace/mantleplace-dcc/issues/260) | supported; land use on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
 | Coverage rasters as data textures | supported | not applicable |
-| Ground material names a renderer recognises | not applicable | supported |
+| Ground material names a renderer recognises | not applicable | supported, for water bodies and road surfaces — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
 | Published contours | planned — [issue 261](https://github.com/mantleplace/mantleplace-dcc/issues/261) | supported — [ADR 0013](adr/0013-revit-published-contours-are-directshapes.md) |
 | Flood zones and steep ground | planned — [issue 270](https://github.com/mantleplace/mantleplace-dcc/issues/270) | supported — [ADR 0014](adr/0014-revit-hazards-are-drawn-on-a-hazard-plan.md) |
 

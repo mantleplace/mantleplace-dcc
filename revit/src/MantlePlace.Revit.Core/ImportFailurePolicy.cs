@@ -221,7 +221,7 @@ public static class ImportFailurePolicy
                 + "ground can be; nothing was flattened.",
 
             ImportFailureKind.InaccurateSketchLine =>
-                $"Revit noted {places} where a sketch line sits fractionally off axis. Site boundaries "
+                $"Revit noted {places} where a sketch line sits fractionally off axis. Published polygons "
                 + "follow real ground, so almost none of their edges are square; nothing was moved.",
 
             ImportFailureKind.IfcPartiallySupported =>

@@ -209,7 +209,7 @@ internal static class ImportFailurePolicyTests
         run.Case("a rollback carries Revit's failure id, so the next session can map it without a rerun", () =>
         {
             string text = ImportFailurePolicy.ExplainRollBack(
-                "Importing the site boundaries",
+                "Importing the water bodies",
                 "An error occurred during the sub-divide action. The sub-divide can not be completed.",
                 "4c9b0f2a-7e61-4d3b-9a55-0123456789ab");
             run.Contains(text, "(id 4c9b0f2a-7e61-4d3b-9a55-0123456789ab)", "the id is quoted after Revit's text");

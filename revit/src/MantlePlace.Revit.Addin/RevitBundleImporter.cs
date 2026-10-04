@@ -87,18 +87,6 @@ internal sealed partial class RevitBundleImporter(
     /// </remarks>
     private readonly List<ElementId> _createdSubDivisionIds = [];
 
-    /// <summary>
-    /// The renderer keyword each subdivision's material is to carry, by element, for the subdivisions
-    /// this import cut or found stamped on the terrain.
-    /// </summary>
-    /// <remarks>
-    /// Filled by the subdivision steps, which are the only ones that read the published subtype, and
-    /// read by the drape, which names the materials. By element rather than by stamp so a subdivision
-    /// this run cut and could not stamp still gets its keyword. A subdivision absent from it — its
-    /// layer did not run this import, or its subtype names no keyword — wears a name with none.
-    /// </remarks>
-    private readonly Dictionary<ElementId, string> _subDivisionKeywords = [];
-
     /// <summary>The stamp each subdivision this run cut was cut with, whether or not Comments took it.</summary>
     /// <remarks>
     /// Filled by the subdivision steps and read wherever a subdivision's drape material is named
@@ -216,11 +204,11 @@ internal sealed partial class RevitBundleImporter(
     {
         ArgumentNullException.ThrowIfNull(step);
 
-        // Every polygon layer runs the same step, in its own words (GroundCuts.LayerOf), so a new
-        // one is a row in the core rather than a case here.
+        // Every layer cut as subdivisions runs the same step, in its own words (GroundCuts.LayerOf),
+        // so a new one is a row in the core rather than a case here.
         if (GroundCuts.LayerOf(step.Kind) is { } groundLayer)
         {
-            return Once(() => ImportSiteBoundaries(step, groundLayer));
+            return Once(() => CutSubdivisions(step, groundLayer));
         }
 
         switch (step.Kind)
@@ -251,6 +239,10 @@ internal sealed partial class RevitBundleImporter(
                 return Once(() => ApplyImageryDrape(step));
             case ImportStepKind.AttributionAndProvenance:
                 return Once(() => WriteAttributionAndProvenance(step));
+            case ImportStepKind.LandUse:
+                return Once(() => ImportLandPlan(step, LandLayer.LandUse));
+            case ImportStepKind.LandCover:
+                return Once(() => ImportLandPlan(step, LandLayer.LandCover));
             case ImportStepKind.FloodZones:
                 return Once(() => ImportHazardLayer(step, HazardLayer.FloodZones));
             case ImportStepKind.SteepGround:

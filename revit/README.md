@@ -99,7 +99,7 @@ Revit licence.
   falls back again to linking the DXF as CAD when neither surface can be built. Whichever tier is
   used, it says which and why;
 - **is repeatable.** A second import of the same bundle recognises the ground it built — the terrain
-  carries a stamp naming the order and the surface build, the way the site-boundary subdivisions
+  carries a stamp naming the order and the surface build, the way the subdivisions
   already do — and reuses it instead of laying a second terrain on top of the first. Where the ground
   came from an *earlier build* of the same order it stops and names the toposolid to delete rather
   than either stacking or deleting: a curator's buildings and views may be standing on it, and this
@@ -146,8 +146,8 @@ Revit licence.
   refuses and names the Comments prefix to delete
   ([ADR 0013](../docs/adr/0013-revit-published-contours-are-directshapes.md)). A bundle from before
   1.4.0 keeps its contours file in the bundle and says so under *Also in this bundle*;
-- draws the road centrelines from the `road_splines` vector layer as DirectShape linework, drapes
-  the `land_use` boundaries onto the terrain as toposolid subdivisions, and places the trees from
+- draws the road centrelines from the `road_splines` vector layer as DirectShape linework, draws
+  the `land_use` polygons on a land plan of their own (below), and places the trees from
   `Landcover/TreePoints.csv` at their published height and crown radius — the three rows that closed
   the Forma Site Design Add-In parity gap. Each tree point is an instance of the Planting family its
   published foliage type names: **`Mantle Place Tree`**, a trunk and a crown, with the published
@@ -177,31 +177,26 @@ Revit licence.
   forest until the Revit trees are hidden in its scene graph. All three are positioned from the same
   published origin as the survey point, and a bundle whose origin is in a CRS they cannot be brought
   into is **skipped with that reason** rather than placed ~2000 km out;
-- cuts the `land_cover` polygons into the terrain as subdivisions too, the same way and stamped
-  under their own kind. `land_cover` is a different layer from `land_use`, not a second name for it,
-  and it is the one carrying the physical subtype — forest and its like;
 - cuts the `water` layer's **water bodies** and the `road_polygons` layer's **road surfaces** into
-  the terrain as subdivisions as well, after the two land layers and stamped under kinds of their
-  own. Polygons only: the streams in `water` stay out, because widening a centreline into an area is
+  the terrain as toposolid subdivisions, each stamped under a kind of its own — the only layers it
+  cuts, because they are the surfaces a designer builds against
+  ([ADR 0015](../docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md)). Polygons only: the streams in `water` stay out, because widening a centreline into an area is
   deriving what nobody published. A road surface comes in **flat**, at the terrain's own surface —
   issue 158 records why it is not recessed. These two keep their **holes**: a water body's islands and a merged road
   network's city blocks are cut out of the subdivision rather than becoming subdivisions of their
-  own, which is what the land layers do with an inner ring. Nothing is clipped against another layer
+  own. Nothing is clipped against another layer
   and no layer wins where two meet — the published polygons overlap because the ground does, and
   Revit keeps them all, with the overlaps counted in the log. `road_polygons` is derived from `road`
   and is **best-effort**: where a bundle carries the roads and not the surfaces, the log says the
   surfaces were not derived for that order rather than reporting an area without roads;
-- names each subdivision's drape material with the **renderer keyword** for its published `subtype`
-  — `Mantle Place Site Imagery {stem} grass`, and so on — so Enscape grows 3D grass on it without
-  anything being renamed by hand. The photograph stays; the keyword rides on the name, last, in the
-  renderer's own word order (`tall grass`, never `grass tall`). The table from subtype to keyword is
-  `RendererKeywords` in the pure core; a subtype it does not name, and a hole cut out of a polygon,
-  get no keyword. The water bodies and the road surfaces take their word from the **layer** instead —
-  `water` and `asphalt` — because a reservoir, a pond and a swimming pool are one material and the
-  road surfaces are merged per class before they are published. Those two are plain material names
-  first: Enscape documents `water` as one of the words it reads, nothing documents `asphalt` to any
-  renderer, and no renderer effect is claimed as verified. Enscape growing grass on a keyworded
-  material has not been watched yet;
+- names each subdivision's drape material with its **layer's word**, last — `water` for a water
+  body and `asphalt` for a road surface — because a reservoir, a pond and a swimming pool are one
+  material and the road surfaces are merged per class before they are published. The photograph
+  stays; the word rides on the name. These are plain material names first: Enscape documents
+  `water` as one of the words it reads, nothing documents `asphalt` to any renderer, and no renderer
+  effect is claimed as verified. The grass keywords the land cover's subdivisions once carried went
+  with those subdivisions (ADR 0015), so a land subdivision an earlier build cut is draped again
+  under its order's name alone;
 - drapes `Imagery/Drape.png` over the terrain as a real-world-scaled material texture — the last
   parity row — on a **duplicated** toposolid type, so the project's own type is
   never repainted. The rectangle the image is pinned to is not taken on trust: the only extent this
@@ -264,20 +259,18 @@ the block itself existed shows no line. The words are `HPS-51`'s. A second line 
 the project displays lengths in the other unit system, and it changes nothing: Project Units are
 yours. Then the checklist: one box for each
 layer the bundle carries (`Terrain`, `Published Contours`, `Context Buildings`, `Site Model`,
-`Road Centrelines`, `Land Use Subdivisions`, `Land Cover Subdivisions`, `Water Subdivisions`,
-`Road Subdivisions`, `Planting`, `Flood Zones`, `Steep Ground`, `Imagery Drape`), all ticked but
+`Road Centrelines`, `Water Subdivisions`, `Road Subdivisions`, `Planting`, `Land Use Plan`,
+`Land Cover Plan`, `Flood Zones`, `Steep Ground`, `Imagery Drape`), all ticked but
 seven. `Site Model` links the site model, whose buildings `Context Buildings` has already copied in,
 and ticking both shows every building twice. `Published Contours` is for a curator who wants the
-order's own linework: the toposolid already draws contours of its own. `Flood Zones` and
-`Steep Ground` draw a hazard plan, which is for planning the site rather than rendering it, so they
-wait to be asked for. `Land Use Subdivisions`, `Land Cover Subdivisions` and `Road Subdivisions`
-are most of a full import's time. On the order they were measured on, through the import window,
-an import with every box ticked took 44 to 51 minutes across Revit 2025, 2026 and 2027, and the
-default import, with these three unticked, about five. Ticking one says below the
-list what it was measured to cost in the Revit you are running, and with what else ticked. Land
-cover costs more than its own step, because every subdivision cut after it takes longer. Nothing
-remembers a tick from one import to the next, so a box you ticked last time starts unticked again.
-Nothing runs until `Import` is pressed. Every kind of subdivision and the drape need the terrain, so unticking `Terrain` disables
+order's own linework: the toposolid already draws contours of its own. `Land Use Plan`,
+`Land Cover Plan`, `Flood Zones` and `Steep Ground` draw plans, which are for planning the site
+rather than rendering it, so they wait to be asked for. `Road Subdivisions` is most of a full
+import's time: on the order it was measured on, leaving it out alone saved about 19 to 32 minutes
+across Revit 2025, 2026 and 2027. Ticking it says below the list what it was measured to cost in
+the Revit you are running, and with what else ticked. Nothing remembers a tick from one import to
+the next, so a box you ticked last time starts unticked again.
+Nothing runs until `Import` is pressed. Both kinds of subdivision and the drape need the terrain, so unticking `Terrain` disables
 them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
 out creates nothing, and the log says it was left out by choice. The shared coordinates, the site
 location and the attribution are not layers and are written whatever is ticked. Leaving out the drape also builds the
@@ -299,6 +292,22 @@ leaves one it already holds alone; a later build gets a plan of its own, and the
 touched. A bundle that has no flood zones for the area says so in the log and draws no plan: an
 absent layer says nothing about the site. [ADR 0014](../docs/adr/0014-revit-hazards-are-drawn-on-a-hazard-plan.md)
 is why.
+
+**Land use and land cover go on land plans, never on the terrain.** Ticking `Land Use Plan` makes a
+floor plan on the project's lowest level named `Mantle Place Land Use Plan` and the build's token,
+cropped to the imagery's published rectangle as the hazard plan is, and draws each published
+polygon there whole, as a filled region; `Land Cover Plan` does the same on a plan of its own, since
+the two layers lie over the same ground. A polygon's class is its published `subtype`, and each
+class has a filled region type of its own, named for the layer and the class (`Mantle Place Land
+Cover forest`) and coloured by this host; a class the host has no colour for is drawn in neutral
+grey under its own name rather than left out. A key beside the site lists each class the plan
+shows, in the bundle's words — for land use with the finer published `class` values after it, as in
+`recreation — pitch, playground`. Polygons are drawn as published, and the crop decides what shows;
+nothing is clipped to the order. A polygon Revit refuses is skipped and counted, never repaired. A
+colour you change on a type is kept, because the types are found by name. Importing the same build
+again leaves a plan that already holds its layer alone, and a later build gets plans of its own.
+These were cut into the terrain as subdivisions until they were most of an import's time for an edge
+line under the drape: [ADR 0015](../docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md).
 
 **What the bundle holds and cannot be imported is said before the import.** Below the checklist,
 under `Unavailable`, each row the bundle holds and this import cannot place is named with one plain
@@ -688,7 +697,7 @@ materialization signals — plus this host's **own three
 `revit` claims **all six groups**: `manifest`, `auth`, `vault`, `cache`, `digest`, `projection`.
 
 **`projection` is claimed for one thing only**, per `HPS-45`: the WGS84 lon/lat → UTM forward
-projection behind the `vector` layers (roads, site boundaries) — see `GeoProjection.cs` and
+projection behind the `vector` layers (roads, land use) — see `GeoProjection.cs` and
 `ProjectionConformanceTests.cs`. Placement is different: the survey point is applied verbatim from
 the manifest, and this host computes no easting, northing or zone of its own for it (`HPS-33`).
 

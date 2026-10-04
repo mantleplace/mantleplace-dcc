@@ -308,7 +308,7 @@ internal sealed partial class RevitBundleImporter
                 + "not recognise it and will build a second ground alongside it.");
         }
 
-        // Remembered, not re-found: the site-boundary step drapes its rings onto THIS toposolid, and
+        // Remembered, not re-found: the subdivision step cuts its rings into THIS toposolid, and
         // a collector would happily return one the user had already modelled.
         _terrainId = built;
         _terrainVertexCount = relief.PointCount;
