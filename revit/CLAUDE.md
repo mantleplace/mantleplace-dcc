@@ -76,6 +76,8 @@ CI runs both — the cheapest honest test of the three-versions-from-one-build b
   and `-Launch` starts Revit 2027 for Hot Reload. The loop, and the first launch's *Always Load*
   click no script can make → [`README.md` ▸ Loading it into Revit](./README.md#loading-it-into-revit).
 - **The cross-host contract gate:** `python ../tools/manifest-conformance/check_manifest_conformance.py`.
+- **Timing any commit in a real Revit** → [`tools/timing/README.md`](./tools/timing/README.md): a quiet
+  Revit beside the install slot, one Revit at a time, a per-step table of where the seconds went.
 
 ## Naming
 
