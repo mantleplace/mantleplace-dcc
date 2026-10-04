@@ -884,6 +884,7 @@ public static class BundleImportPlanner
             ExpectedSha256 = artifact.Sha256,
             Frame = frame,
             Crop = crop,
+            CropUnavailable = CropUnavailable(kind, crop, manifest),
             VerticalUnits = verticalUnits,
             DrapePlanned = drapePlanned,
 
@@ -1334,12 +1335,25 @@ public static class BundleImportPlanner
             Units = units,
             ExpectedSha256 = artifact.Sha256,
             Crop = crop,
+            CropUnavailable = CropUnavailable(kind, crop, manifest),
             Frame = frame,
             ToposolidType = toposolidType,
             HeightDatum = HeightDatums.For(kind, artifact, manifest),
         };
         return true;
     }
+
+    /// <summary>
+    /// Why a step that crops to the area of interest has no window, or <c>null</c> — for a kind that
+    /// never crops, or a window that exists.
+    /// </summary>
+    private static string? CropUnavailable(ImportStepKind kind, SurfaceCropWindow? crop, BundleManifest manifest)
+        => crop is null
+            && (kind is ImportStepKind.ToposurfaceFromPointsFile
+                or ImportStepKind.ToposurfaceFromSurfaceTin
+                or ImportStepKind.PublishedContours)
+            ? SurfaceCrop.Unavailable(manifest, SiteFrame.For(manifest))
+            : null;
 
     private static (SkipReasonCode Code, string Reason) CrsRefusal(BundleArtifact artifact, SiteFrame frame, string label)
         => (SkipReasonCode.CoordinateSystemNotSupported,

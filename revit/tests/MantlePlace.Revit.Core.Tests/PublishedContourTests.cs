@@ -9,8 +9,9 @@ namespace MantlePlace.Revit.Core.Tests;
 /// could not draw a segment between, and the layer's build-scoped identity.
 /// </summary>
 /// <remarks>
-/// The DXF shape pinned here is the one two real bundles carry: <c>LWPOLYLINE</c> only, in
-/// <c>ENTITIES</c>, elevation in group 38, absolute projected X/Y in groups 10/20.
+/// The DXF shape pinned here is the one real bundles carry: <c>LWPOLYLINE</c>s in <c>ENTITIES</c>,
+/// elevation in group 38, absolute projected X/Y in groups 10/20 — and, since the 2026-10-03
+/// complete bundles, <c>TEXT</c> labels between them, which are skipped and counted.
 /// </remarks>
 internal static class PublishedContourTests
 {
@@ -113,6 +114,47 @@ internal static class PublishedContourTests
             run.Contains(reason, "LINE", "names the entity");
             run.True(contours is null, "nothing half-read");
         });
+
+        run.Case("TEXT and MTEXT labels are skipped and counted, and every polyline beside them is placed", () =>
+        {
+            // The shape both 2026-10-03 reference bundles carry: CONTOUR-LABEL TEXT entities
+            // interleaved with the LWPOLYLINEs, each label with its own 10/20/30 insertion point.
+            string dxf = Entities(
+                Polyline("6210.0", closed: false, (0, 0), (1, 1)),
+                Label("TEXT", "6250"),
+                Polyline("6220.0", closed: true, (0, 0), (2, 0), (2, 2)),
+                Label("MTEXT", "6260"),
+                Label("TEXT", "6270"),
+                Polyline("6230.0", closed: false, (5, 5), (6, 6)));
+
+            string? reason = PublishedContourReader.TryParse(new StringReader(dxf), out IReadOnlyList<PublishedContour>? contours, out int skipped);
+            run.Equal(reason, null, "read");
+            run.Equal(contours!.Count, 3, "every polyline");
+            run.Equal(skipped, 3, "every label counted");
+            run.Equal(contours[1].Vertices.Count, 3, "a label's own 10/20 never lands on a contour");
+            run.Equal(contours[2].ElevationText, "6230.0", "and the one after the labels is intact");
+        });
+
+        run.Case("a file of labels alone is still refused as having no contours", () =>
+            run.Contains(
+                PublishedContourReader.TryParse(new StringReader(Entities(Label("TEXT", "40"))), out _, out _),
+                "no LWPOLYLINE",
+                "refused"));
+
+        foreach (string kind in new[] { "LINE", "POLYLINE", "ARC", "INSERT", "SPLINE", "3DFACE" })
+        {
+            run.Case($"a {kind} beside labels still refuses the file: only TEXT and MTEXT are skipped", () =>
+            {
+                string dxf = Entities(
+                    Polyline("1", closed: false, (0, 0), (1, 1)),
+                    Label("TEXT", "1"),
+                    $"0\n{kind}\n8\n0\n10\n0\n20\n0\n30\n0\n");
+
+                string? reason = PublishedContourReader.TryParse(new StringReader(dxf), out IReadOnlyList<PublishedContour>? contours, out _);
+                run.Contains(reason, $"a {kind} entity", "names the entity");
+                run.True(contours is null, "nothing half-read");
+            });
+        }
 
         run.Case("a bulge refuses the file, because an arc is not a polyline segment", () =>
         {
@@ -431,6 +473,9 @@ internal static class PublishedContourTests
 
     private static string Entities(params string[] entities)
         => "0\nSECTION\n2\nENTITIES\n" + string.Concat(entities) + "0\nENDSEC\n0\nEOF\n";
+
+    private static string Label(string kind, string text)
+        => $"0\n{kind}\n8\nCONTOUR-LABEL\n10\n123.5\n20\n456.5\n30\n{text}\n40\n18.6\n1\n{text}\n50\n-14.09\n";
 
     private static string Polyline(string? elevation, bool closed, params (double X, double Y)[] vertices)
     {

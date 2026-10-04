@@ -50,9 +50,10 @@ internal sealed partial class RevitBundleImporter
 
         string path = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
         IReadOnlyList<PublishedContour>? contours;
+        int skippedLabels;
         using (StreamReader reader = File.OpenText(path))
         {
-            if (PublishedContourReader.TryParse(reader, out contours) is { } readError)
+            if (PublishedContourReader.TryParse(reader, out contours, out skippedLabels) is { } readError)
             {
                 Say(readError);
                 return;
@@ -68,10 +69,11 @@ internal sealed partial class RevitBundleImporter
 
         if (step.Crop is null)
         {
-            // SurfaceCrop.For is null for a bundle with no bbox and for a frame it cannot project the
-            // bbox into — every State Plane delivery — and the terrain is left uncropped in both.
-            Say("No crop window could be made for this bundle's frame, so the published contours were left "
-                + "unclipped, as the terrain was.");
+            // SurfaceCrop.Unavailable says why — on every State Plane delivery, by design — and the
+            // terrain is left uncropped for the same reason.
+            Say("The published contours were not clipped to the area you ordered: "
+                + (step.CropUnavailable ?? "no crop window could be made for this bundle's frame")
+                + ". They were left unclipped, as the terrain was.");
         }
 
         ElementId category = DirectShapeCategory(BuiltInCategory.OST_Topography);
@@ -148,6 +150,11 @@ internal sealed partial class RevitBundleImporter
         if (placement.OutsideWindow > 0)
         {
             summary += $"; {placement.OutsideWindow:N0} lay wholly outside the terrain's crop window";
+        }
+
+        if (skippedLabels > 0)
+        {
+            summary += $"; {skippedLabels:N0} contour label(s) in the file were skipped, since this plugin draws the lines only";
         }
 
         if (tooShort > 0)

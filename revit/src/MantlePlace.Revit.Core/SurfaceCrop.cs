@@ -86,4 +86,64 @@ public static class SurfaceCrop
 
         return window.IsUsable ? window : null;
     }
+
+    /// <summary>
+    /// Why <see cref="For"/> has no window for this bundle, as a clause for the log, or <c>null</c>
+    /// when it has one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>The State Plane case is correct, not a defect, and must not be "fixed" here.</b> Both
+    /// imperial reference bundles of 2026-10-03 (EPSG:6616 and EPSG:6445, ftUS) hit it. The
+    /// manifest publishes the area of interest only as WGS84 longitude and latitude
+    /// (<c>bbox</c>, <c>attribution.aoi</c>); <see cref="SiteFrame.TryProjectToLocalMetres"/> projects
+    /// that into a metric UTM zone only, because transverse Mercator on WGS84 is the one projection
+    /// this host owns (<c>HPS-45</c>). Projecting into a State Plane zone — Lambert conformal conic on
+    /// NAD83, in US survey feet — is CRS and datum machinery, which the thin-client boundary keeps
+    /// out of this repository. The remedy is upstream: a manifest that publishes the AOI in the
+    /// delivery CRS, which this host would then read verbatim.
+    /// </para>
+    /// <para>
+    /// Nothing is lost on those bundles but the crop: the terrain is still built and the fill guard
+    /// still runs, exactly as <see cref="For"/>'s own remarks promise.
+    /// </para>
+    /// </remarks>
+    public static string? Unavailable(BundleManifest manifest, SiteFrame? frame)
+    {
+        ArgumentNullException.ThrowIfNull(manifest);
+
+        if (For(manifest, frame) is not null)
+        {
+            return null;
+        }
+
+        if (!manifest.HasBbox)
+        {
+            return "this bundle publishes no area of interest";
+        }
+
+        if (frame is null)
+        {
+            return "this bundle publishes no origin to place its area of interest against";
+        }
+
+        if (!frame.CanPlaceGeographic)
+        {
+            string unit = LinearUnits.ToManifestToken(frame.Origin.LinearUnit);
+            string stated = unit.Length == 0 ? $"EPSG:{frame.Epsg}" : $"EPSG:{frame.Epsg} in {unit}";
+            return $"this bundle publishes its area of interest only as longitude and latitude, and its frame "
+                + $"({stated}) is not a metric UTM zone, the only frame this plugin projects longitude and "
+                + "latitude into — converting between coordinate systems is the platform's work, never a host's";
+        }
+
+        return "this bundle's area of interest does not project to a usable rectangle in its frame";
+    }
+
+    /// <summary>The log line for a terrain built with no crop window.</summary>
+    /// <param name="reason"><see cref="Unavailable"/>'s clause, or <c>null</c> when it is not known.</param>
+    /// <param name="builtFrom">What the terrain was built from instead, e.g. "every point in the file".</param>
+    public static string NoWindowNotice(string? reason, string builtFrom)
+        => "The terrain was not cropped to the area you ordered: "
+            + (reason ?? "this plugin could not make a crop window from this bundle's area of interest")
+            + $". It was built from {builtFrom}.";
 }

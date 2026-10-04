@@ -30,7 +30,7 @@ internal sealed partial class RevitBundleImporter
 
         // Guard the producer's nodata fill before Revit ever sees it. What this removes and why is
         // SurfacePointsSanitiser's; the underlying defect is filed against the platform.
-        points = SurfacePointsSanitiser.Clean(points, step.Crop, out SurfaceCleanReport cleaned);
+        points = SurfacePointsSanitiser.Clean(points, step.Crop, out SurfaceCleanReport cleaned, step.CropUnavailable);
         if (cleaned.Explanation.Length > 0)
         {
             Say(cleaned.Explanation);
@@ -89,7 +89,7 @@ internal sealed partial class RevitBundleImporter
 
         // Guard the producer's nodata fill before Revit ever sees it. What this removes and why is
         // SurfaceTinSanitiser's; the underlying defect is filed against the platform.
-        IReadOnlyList<SurfacePoint> vertices = SurfaceTinSanitiser.Clean(tin, local, step.Crop, out SurfaceCleanReport cleaned);
+        IReadOnlyList<SurfacePoint> vertices = SurfaceTinSanitiser.Clean(tin, local, step.Crop, out SurfaceCleanReport cleaned, step.CropUnavailable);
         if (cleaned.Explanation.Length > 0)
         {
             Say(cleaned.Explanation);

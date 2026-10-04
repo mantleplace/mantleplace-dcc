@@ -238,7 +238,8 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
         IReadOnlyList<SurfacePoint> points = SurfacePointsSanitiser.Clean(
             raw,
             pointsStep.Crop,
-            out SurfaceCleanReport cleaned);
+            out SurfaceCleanReport cleaned,
+            pointsStep.CropUnavailable);
         report.AppendLine(CultureInfo.InvariantCulture,
             $"  after cleaning: {cleaned.Kept:N0} kept, {cleaned.DroppedOutsideAoi:N0} outside the AOI, "
             + $"{cleaned.DroppedFilledEdge:N0} on a filled edge line");

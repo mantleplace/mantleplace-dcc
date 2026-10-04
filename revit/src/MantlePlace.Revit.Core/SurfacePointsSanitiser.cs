@@ -67,10 +67,14 @@ public static class SurfacePointsSanitiser
     /// bbox and a projectable frame, and a fill could in principle land inside the AOI. A point
     /// removed by both is counted once, against the crop.
     /// </remarks>
+    /// <param name="noWindowReason">
+    /// <see cref="SurfaceCrop.Unavailable"/>'s reason, said in the log when there is no window.
+    /// </param>
     public static IReadOnlyList<SurfacePoint> Clean(
         IReadOnlyList<SurfacePoint> points,
         SurfaceCropWindow? window,
-        out SurfaceCleanReport report)
+        out SurfaceCleanReport report,
+        string? noWindowReason = null)
     {
         ArgumentNullException.ThrowIfNull(points);
 
@@ -119,7 +123,7 @@ public static class SurfacePointsSanitiser
             Kept = kept.Count,
             DroppedOutsideAoi = outside,
             DroppedFilledEdge = onFill,
-            Explanation = Describe(points.Count, outside, onFill, window, capReport),
+            Explanation = Describe(points.Count, outside, onFill, window, capReport, noWindowReason),
         };
 
         return report.TotalDropped == 0 ? points : kept;
@@ -130,7 +134,8 @@ public static class SurfacePointsSanitiser
         int outside,
         int onFill,
         SurfaceCropWindow? window,
-        string? capReport)
+        string? capReport,
+        string? noWindowReason)
     {
         if (capReport is not null)
         {
@@ -141,8 +146,7 @@ public static class SurfacePointsSanitiser
         {
             return window is { IsUsable: true }
                 ? string.Empty
-                : "This bundle publishes no area of interest this plugin can project, so the terrain "
-                    + "was built from every point in the file.";
+                : SurfaceCrop.NoWindowNotice(noWindowReason, "every point in the file");
         }
 
         List<string> clauses = [];

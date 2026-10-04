@@ -42,17 +42,35 @@ public sealed class PublishedContour
 /// +Z (the vertices would then be in an object coordinate system, not world X/Y). A silently dropped
 /// entity is a contour missing from the site with nothing on screen to say so.
 /// </para>
+/// <para>
+/// The one exception is a label: <c>TEXT</c> and <c>MTEXT</c> are skipped and counted, never
+/// refused. They are annotation, not geometry — dropping one loses no contour — and the complete
+/// bundles of 2026-10-03 carry one beside every few polylines, so refusing them refused every
+/// contour in the file. Drawing the labels is a separate question. Every other kind still refuses.
+/// </para>
 /// </remarks>
 public static class PublishedContourReader
 {
     private const int ClosedFlag = 1;
 
+    /// <summary>
+    /// The entity kinds skipped rather than refused: labels, which carry no contour geometry.
+    /// </summary>
+    private static readonly HashSet<string> SkippedEntityKinds = new(StringComparer.Ordinal) { "TEXT", "MTEXT" };
+
     /// <summary>Parses the whole file, streaming.</summary>
     /// <returns><c>null</c> on success, or a user-facing reason the file could not be read.</returns>
     public static string? TryParse(TextReader dxf, out IReadOnlyList<PublishedContour>? contours)
+        => TryParse(dxf, out contours, out _);
+
+    /// <summary>Parses the whole file, streaming, and counts the labels it skipped.</summary>
+    /// <param name="skippedLabels">How many <c>TEXT</c> and <c>MTEXT</c> labels were passed over.</param>
+    /// <returns><c>null</c> on success, or a user-facing reason the file could not be read.</returns>
+    public static string? TryParse(TextReader dxf, out IReadOnlyList<PublishedContour>? contours, out int skippedLabels)
     {
         ArgumentNullException.ThrowIfNull(dxf);
         contours = null;
+        skippedLabels = 0;
 
         List<PublishedContour> read = [];
         Polyline? current = null;
@@ -104,6 +122,11 @@ public static class PublishedContourReader
                         break;
                     case "LWPOLYLINE" when inEntities:
                         current = new Polyline();
+                        break;
+                    case var label when inEntities && SkippedEntityKinds.Contains(label):
+                        // Its own group codes, the 10/20 insertion point included, fall through
+                        // below with no polyline open, so none of them can land on a contour.
+                        skippedLabels++;
                         break;
                     default:
                         if (inEntities)

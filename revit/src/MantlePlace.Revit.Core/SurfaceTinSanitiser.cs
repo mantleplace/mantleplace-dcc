@@ -52,7 +52,8 @@ public static class SurfaceTinSanitiser
         SurfaceTin tin,
         IReadOnlyList<SurfacePoint> vertices,
         SurfaceCropWindow? window,
-        out SurfaceCleanReport report)
+        out SurfaceCleanReport report,
+        string? noWindowReason = null)
     {
         ArgumentNullException.ThrowIfNull(tin);
         ArgumentNullException.ThrowIfNull(vertices);
@@ -105,7 +106,7 @@ public static class SurfaceTinSanitiser
             Kept = kept.Count,
             DroppedOutsideAoi = outside,
             DroppedFilledEdge = onFill,
-            Explanation = Describe(vertices.Count, outside, onFill, window, capReport),
+            Explanation = Describe(vertices.Count, outside, onFill, window, capReport, noWindowReason),
         };
 
         return report.TotalDropped == 0 ? vertices : kept;
@@ -277,7 +278,8 @@ public static class SurfaceTinSanitiser
         int outside,
         int onFill,
         SurfaceCropWindow? window,
-        string? capReport)
+        string? capReport,
+        string? noWindowReason)
     {
         if (capReport is not null)
         {
@@ -288,8 +290,7 @@ public static class SurfaceTinSanitiser
         {
             return window is { IsUsable: true }
                 ? string.Empty
-                : "This bundle publishes no area of interest this plugin can project, so the terrain "
-                    + "was built from every vertex in the surface.";
+                : SurfaceCrop.NoWindowNotice(noWindowReason, "every vertex in the surface");
         }
 
         List<string> clauses = [];
