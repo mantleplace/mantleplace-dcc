@@ -621,6 +621,12 @@ public sealed class ImportStep
     public SurfaceCropWindow? Crop { get; init; }
 
     /// <summary>
+    /// Why <see cref="Crop"/> is <c>null</c> on a step that crops — <see cref="SurfaceCrop.Unavailable"/>'s
+    /// clause, for the log line — or <c>null</c> when there is a window or the step never crops.
+    /// </summary>
+    public string? CropUnavailable { get; init; }
+
+    /// <summary>
     /// The type the terrain is built on. Read only for
     /// <see cref="ImportStepKind.ToposurfaceFromPointsFile"/> and
     /// <see cref="ImportStepKind.ToposurfaceFromSurfaceTin"/>, the two kinds that build a toposolid.

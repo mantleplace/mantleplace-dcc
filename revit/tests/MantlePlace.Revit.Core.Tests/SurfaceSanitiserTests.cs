@@ -176,8 +176,109 @@ internal static class SurfaceSanitiserTests
             run.Equal(cleaned.Count, points.Count, "and it crops nothing rather than everything");
         });
 
+        RunCropUnavailableCases(run);
+
         return run.Report("surface sanitiser");
     }
+
+    /// <summary>
+    /// Why there is no crop window, said in the log rather than "no area of interest this plugin can
+    /// project" — which fired on both 2026-10-03 imperial reference bundles (EPSG:6616 and
+    /// EPSG:6445, ftUS) and read as a defect. It is not one: the manifest publishes the AOI only as
+    /// lon/lat, and projecting that into a State Plane frame is CRS machinery a host never carries.
+    /// </summary>
+    private static void RunCropUnavailableCases(TestRun run)
+    {
+        run.Case("an ftUS State Plane bundle has no crop window, and the reason names its frame and why", () =>
+        {
+            BundleManifest manifest = Parse(ImperialManifest(withBbox: true));
+            SiteFrame? frame = SiteFrame.For(manifest);
+
+            run.True(frame is not null, "the State Plane origin is still a frame");
+            run.True(SurfaceCrop.For(manifest, frame) is null, "no window");
+
+            string? reason = SurfaceCrop.Unavailable(manifest, frame);
+            run.Contains(reason, "longitude and latitude", "the AOI is published only as lon/lat");
+            run.Contains(reason, "EPSG:6616", "names the frame");
+            run.Contains(reason, "ftUS", "and its unit");
+            run.Contains(reason, "UTM", "says which frames this plugin projects into");
+        });
+
+        run.Case("a metric UTM bundle has a window and no reason", () =>
+        {
+            BundleManifest manifest = Parse(MetricManifest());
+            SiteFrame? frame = SiteFrame.For(manifest);
+
+            run.True(SurfaceCrop.For(manifest, frame) is { IsUsable: true }, "a window");
+            run.Equal(SurfaceCrop.Unavailable(manifest, frame), null, "and so no reason");
+        });
+
+        run.Case("a bundle with no bbox says it publishes no area of interest", () =>
+        {
+            BundleManifest manifest = Parse(ImperialManifest(withBbox: false));
+
+            run.Contains(SurfaceCrop.Unavailable(manifest, SiteFrame.For(manifest)), "publishes no area of interest", "the plain reason");
+        });
+
+        run.Case("the planner carries the reason on the terrain step, and the sanitiser logs it", () =>
+        {
+            BundleManifest manifest = Parse(ImperialManifest(withBbox: true));
+            BundleImportPlan plan = BundleImportPlanner.Plan(manifest, ["Metadata/manifest.json", "Surface/SurfacePoints.csv"], _ => new ImageSize(1, 1));
+            ImportStep? step = plan.Steps.FirstOrDefault(candidate => candidate.Kind == ImportStepKind.ToposurfaceFromPointsFile);
+
+            run.True(step is { Crop: null }, "the terrain step, with no window");
+            run.Equal(step?.CropUnavailable, SurfaceCrop.Unavailable(manifest, SiteFrame.For(manifest)), "and the reason");
+
+            SurfacePointsSanitiser.Clean(Grid(columns: 30, rows: 20, filledColumns: 0), null, out SurfaceCleanReport report, step?.CropUnavailable);
+            run.Contains(report.Explanation, "EPSG:6616", "the log line says why");
+            run.Contains(report.Explanation, "every point", "and what was built instead");
+        });
+    }
+
+    private static BundleManifest Parse(string json)
+    {
+        BundleManifest manifest = BundleManifestReader.Parse(json);
+        if (!manifest.IsValid)
+        {
+            throw new InvalidOperationException($"fixture refused: {manifest.Error}");
+        }
+
+        return manifest;
+    }
+
+    /// <summary>The Jackson reference bundle's frame: State Plane EPSG:6616 in US survey feet.</summary>
+    private static string ImperialManifest(bool withBbox)
+        => Manifest(
+            withBbox ? "\"bbox\": { \"west\": -110.769253195258, \"south\": 43.4681979807655, \"east\": -110.751746804742, \"north\": 43.4809020192345 }," : string.Empty,
+            "EPSG:6616",
+            "{ \"epsg\": 6616, \"easting\": 2444921.346921498, \"northing\": 1412709.3759964514, \"linear_unit\": \"ftUS\" }",
+            "-110.76049814296273",
+            "43.474551661372026",
+            "ftUS");
+
+    private static string MetricManifest()
+        => Manifest(
+            "\"bbox\": { \"west\": -105.33, \"south\": 38.455, \"east\": -105.32, \"north\": 38.465 },",
+            "EPSG:32613",
+            "{ \"epsg\": 32613, \"easting\": 471595.0, \"northing\": 4257050.0, \"linear_unit\": \"m\" }",
+            "-105.32557885004304",
+            "38.46130517000308",
+            "m");
+
+    private static string Manifest(string bbox, string crs, string projected, string lon, string lat, string unit)
+        => $$"""
+            {
+              "version": "1.4.0",
+              {{bbox}}
+              "layout": { "points_csv": "Surface/SurfacePoints.csv" },
+              "hosts": { "revit": {
+                "georeference": { "crs_projected": "{{crs}}", "origin": { "lon": {{lon}}, "lat": {{lat}}, "projected": {{projected}} } },
+                "readiness": { "toposurface_points": { "present": true } },
+                "toposurface_points": { "path": "Surface/SurfacePoints.csv", "format": "csv", "horizontal_frame": "local_enu",
+                  "units": "{{unit}}", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }
+              } }
+            }
+            """;
 
     /// <summary>
     /// A regular grid whose ground climbs steeply west-to-east, with the westernmost
