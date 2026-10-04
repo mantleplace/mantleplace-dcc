@@ -92,38 +92,53 @@ public static class ImportLayers
     /// <summary>Whether a layer's box starts checked.</summary>
     /// <remarks>
     /// <para>
-    /// Every layer but seven, each with the stated reason <c>HPS-51</c> asks for before a row starts
-    /// unchecked. The two land plans and the two hazard layers: the curator this import is made for
-    /// is the visualiser presenting a render, and a drawn plan is for someone planning the site; each
-    /// is one tick away, and none touches the model a render is made from.
+    /// Every layer whose default level fits starts ticked: with every box ticked at its
+    /// <see cref="DefaultLevel"/>, a whole import was measured under five minutes in Revit 2025, 2026
+    /// and 2027 on both reference orders of spec issue 300's gate, so no box needs leaving out for
+    /// its time. That brought the land plans, the hazard layers and the published contours back on.
     /// </para>
     /// <para>
-    /// The site model's link: its buildings are copied into the project as
-    /// <see cref="ImportLayer.ContextBuildings"/>, and a link as well shows each one twice, once
-    /// selectable and once not (<c>docs/adr/0012-context-buildings-come-from-the-site-model.md</c>).
-    /// The published contours: the toposolid already draws contours of its own, so the published
-    /// ones are for a curator who wants the order's linework beside them
-    /// (<c>docs/adr/0013-revit-published-contours-are-directshapes.md</c>).
+    /// One row starts unchecked, with the stated reason <c>HPS-51</c> asks for: the site model's link.
+    /// Its buildings are copied into the project as <see cref="ImportLayer.ContextBuildings"/>, and a
+    /// link as well shows each one twice, once selectable and once not
+    /// (<c>docs/adr/0012-context-buildings-come-from-the-site-model.md</c>). That is not a cost.
     /// </para>
     /// <para>
-    /// The road surfaces, the box <see cref="SlowStepNotice.IsSlowBox"/> names: on the order it was
-    /// measured on, it was most of what a full import with every box ticked took beyond the default
-    /// import (the figures, through the import window, are <c>revit/README.md</c>'s; the box's own is
-    /// <see cref="SlowStepNotice.Measured"/>'s). A curator who wants it ticks it, and the checklist
-    /// then says what it was measured to cost (<see cref="ImportChecklist.SlowLayerWarnings"/>). The
-    /// water bodies stay ticked: they took seconds.
+    /// A box whose default does not fit is a slow box (<see cref="SlowStepNotice.IsSlowBox"/>): it
+    /// starts unticked and says what it was measured to cost when ticked
+    /// (<see cref="ImportChecklist.SlowLayerWarnings"/>). None is today. The road surfaces were one
+    /// until levels let them open on <see cref="FidelityLevel.Min"/>.
     /// </para>
     /// <para>
-    /// The unattended path does not read it: it imports everything
-    /// (<see cref="ImportLayerChoice.All"/>), the link and the slow layers included, because the
-    /// standard says an import nobody is there to choose for brings in everything.
+    /// The unattended path does not read it: it imports everything at MAX
+    /// (<see cref="ImportLayerChoice.All"/>), the link included, because the standard says an import
+    /// nobody is there to choose for brings in everything.
     /// </para>
     /// </remarks>
     public static bool OnByDefault(ImportLayer layer)
-        => layer is not (ImportLayer.SiteModel or ImportLayer.PublishedContours
-                or ImportLayer.LandUsePlan or ImportLayer.LandCoverPlan
-                or ImportLayer.FloodZones or ImportLayer.SteepGround)
-            && !SlowStepNotice.IsSlowBox(layer);
+        => layer is not ImportLayer.SiteModel && !SlowStepNotice.IsSlowBox(layer);
+
+    /// <summary>The fidelity level a row's list opens on, where the bundle publishes levels for it.</summary>
+    /// <remarks>
+    /// <para>
+    /// Chosen by spec issue 300's rule: the highest level that keeps every box ticked under five
+    /// minutes in the slowest Revit version on the denser reference order. The trees and the road
+    /// surfaces open on MIN; one level up on either took that import past the line
+    /// (<see cref="SlowStepNotice.Measured"/> holds the costs, and the window shows each level's
+    /// estimate beside it). Every other row opens on MAX: the bundle publishes them at MAX only, or
+    /// their lower levels are the same file.
+    /// </para>
+    /// <para>
+    /// A row whose default this plugin cannot import from the bundle opens on MAX instead
+    /// (<see cref="ImportChecklist.ChosenLevel"/>), and a curator may choose any level.
+    /// </para>
+    /// </remarks>
+    public static FidelityLevel DefaultLevel(ImportLayer layer) => layer switch
+    {
+        ImportLayer.Planting => FidelityLevel.Min,
+        ImportLayer.RoadSubdivisions => FidelityLevel.Min,
+        _ => FidelityLevel.Max,
+    };
 }
 
 /// <summary>Which layers an import brings in, and at which fidelity level each. Immutable.</summary>

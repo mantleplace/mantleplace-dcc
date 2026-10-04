@@ -282,7 +282,6 @@ public static class SlowStepNotice
         ImportStepKind.Water => new(new(2.1, 2.8), new(5.7, 11.4), new(7.7, 11.1)),
         ImportStepKind.RoadPolygons => new(new(870, 1_112), new(1_318.6, 1_754.6), new(1_337.0, 1_781.7))
         {
-            Saves = new(1_169, 1_888, 1_900),
             PerUnit = new(CostUnit.Cuts, new(0.65, 1.67), null, new(1.85, 2.46)),
         },
         ImportStepKind.Vegetation => new(new(206, 415), new(266, 275), new(231, 338))

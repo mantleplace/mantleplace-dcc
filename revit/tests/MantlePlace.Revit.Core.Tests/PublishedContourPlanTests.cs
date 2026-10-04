@@ -208,22 +208,22 @@ internal static class PublishedContourPlanTests
 
     private static void RunLayerCases(TestRun run)
     {
-        run.Case("the contours are their own layer, after the terrain, unchecked and standing alone", () =>
+        run.Case("the contours are their own layer, after the terrain, checked and standing alone", () =>
         {
             run.True(ImportLayers.Of(ImportStepKind.PublishedContours) == ImportLayer.PublishedContours, "own layer");
-            run.False(ImportLayers.OnByDefault(ImportLayer.PublishedContours), "off by default");
+            run.True(ImportLayers.OnByDefault(ImportLayer.PublishedContours), "on by default");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.PublishedContours) is null, "not gated on the terrain");
             run.True(ImportLayer.PublishedContours == ImportLayer.Terrain + 1, "the row after the terrain");
             run.Equal(WindowLabels.LayerName(ImportLayer.PublishedContours), "Published Contours", "the glossary's words");
             run.Equal(ImportStepKinds.LifetimeOf(ImportStepKind.PublishedContours), ExtractionLifetime.Transient, "read, never linked");
         });
 
-        run.Case("the checklist offers the row unchecked and enabled with the terrain off", () =>
+        run.Case("the checklist offers the row checked and enabled with the terrain off", () =>
         {
             ImportChecklist checklist = new([ImportLayer.Terrain, ImportLayer.PublishedContours]);
             checklist.Set(ImportLayer.Terrain, false);
 
-            run.False(checklist.IsChecked(ImportLayer.PublishedContours), "unchecked");
+            run.True(checklist.IsChecked(ImportLayer.PublishedContours), "checked");
             run.True(checklist.IsEnabled(ImportLayer.PublishedContours), "still enabled");
         });
     }

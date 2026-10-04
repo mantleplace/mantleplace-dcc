@@ -110,12 +110,12 @@ internal static class LandPlanTests
             run.Equal(WindowLabels.StepName(ImportStepKind.LandCover), "Land Cover Plan", "the step reads the same");
         });
 
-        run.Case("both rows need no terrain, start unticked like the hazard plan's, and warn of nothing", () =>
+        run.Case("both rows need no terrain, start ticked like the hazard plan's, and warn of nothing", () =>
         {
             foreach (ImportLayer layer in (ImportLayer[])[ImportLayer.LandUsePlan, ImportLayer.LandCoverPlan])
             {
                 run.True(ImportLayers.PrerequisiteOf(layer) is null, $"{layer} does not need the terrain");
-                run.False(ImportLayers.OnByDefault(layer), $"{layer} starts unticked");
+                run.True(ImportLayers.OnByDefault(layer), $"{layer} starts ticked");
                 run.False(SlowStepNotice.IsSlowBox(layer), $"{layer} is not a slow box");
             }
 

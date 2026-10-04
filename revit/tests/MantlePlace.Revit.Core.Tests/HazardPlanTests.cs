@@ -254,17 +254,17 @@ internal static class HazardPlanTests
             run.Equal(WindowLabels.StepName(ImportStepKind.SteepGround), "Steep Ground", "the step reads the same");
         });
 
-        run.Case("both rows start unticked and need nothing: the visualiser's model is left alone", () =>
+        run.Case("both rows start ticked, their default fitting the five-minute import, and need nothing", () =>
         {
             foreach (ImportLayer layer in (ImportLayer[])[ImportLayer.FloodZones, ImportLayer.SteepGround])
             {
-                run.False(ImportLayers.OnByDefault(layer), $"{layer} starts unticked");
+                run.True(ImportLayers.OnByDefault(layer), $"{layer} starts ticked");
                 run.True(ImportLayers.PrerequisiteOf(layer) is null, $"{layer} does not need the terrain");
             }
 
             ImportChecklist checklist = ImportChecklist.For(Plan(Manifest()));
             run.True(checklist.Layers.Contains(ImportLayer.FloodZones), "offered");
-            run.False(checklist.IsChecked(ImportLayer.FloodZones), "not checked");
+            run.True(checklist.IsChecked(ImportLayer.FloodZones), "checked");
             checklist.Set(ImportLayer.Terrain, false);
             run.True(checklist.IsEnabled(ImportLayer.SteepGround), "still available without the terrain");
         });
@@ -280,7 +280,11 @@ internal static class HazardPlanTests
                 Entries,
                 _ => new ImageSize(4000, 3000),
                 ImportChecklist.For(all).Choice);
-            run.True(Find(chosen, ImportStepKind.FloodZones) is null, "the default choice leaves them out");
+            run.True(Find(chosen, ImportStepKind.FloodZones) is not null, "the default choice brings them in");
+
+            ImportChecklist unticked = ImportChecklist.For(all);
+            unticked.Set(ImportLayer.SteepGround, false);
+            chosen = BundleImportPlanner.Plan(manifest, Entries, _ => new ImageSize(4000, 3000), unticked.Choice);
             run.Equal(
                 Skip(chosen, ImportStepKind.SteepGround)?.ReasonCode ?? SkipReasonCode.DeclaredAbsent,
                 SkipReasonCode.LeftOutByChoice,

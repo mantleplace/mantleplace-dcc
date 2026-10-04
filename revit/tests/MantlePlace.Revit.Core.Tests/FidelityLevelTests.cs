@@ -532,8 +532,31 @@ internal static class FidelityLevelTests
             run.Equal(options.Count, 4, "all four levels");
             run.True(options.Select(option => option.Level).SequenceEqual(FidelityLevelNames.All), "RAW to MIN");
             run.Equal(options[3].Label, "MIN: Same as MED (already the smallest useful size) — 2 elements, about 1 second", "MIN says MED's count");
-            run.True(checklist.ChosenLevel(ImportLayer.Planting) == FidelityLevel.Max, "every row starts at MAX");
-            run.True(checklist.AllLevels == FidelityLevel.Max, "so set-all reads MAX");
+            run.True(checklist.ChosenLevel(ImportLayer.Planting) == FidelityLevel.Min, "trees open on their default, MIN");
+            run.True(checklist.ChosenLevel(ImportLayer.RoadSubdivisions) == FidelityLevel.Min, "and so do the road surfaces");
+            run.True(checklist.ChosenLevel(ImportLayer.ImageryDrape) == FidelityLevel.Max, "a row whose default is MAX opens on MAX");
+            run.True(checklist.AllLevels is null, "so set-all reads mixed");
+        });
+
+        run.Case("each row opens on its measured default, and on MAX where that default cannot be imported", () =>
+        {
+            foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
+            {
+                FidelityLevel expected = layer is ImportLayer.Planting or ImportLayer.RoadSubdivisions ? FidelityLevel.Min : FidelityLevel.Max;
+                run.True(ImportLayers.DefaultLevel(layer) == expected, $"{layer} defaults to {expected}");
+            }
+
+            // Road surfaces whose MIN is published as a row cut, which their step cannot take.
+            string rowCutRoads = Fixture().Replace(
+                "\"MIN\": { \"cut\": { \"lowest_level_field\": \"lowest_level\" }",
+                "\"MIN\": { \"cut\": { \"rows\": 1 }",
+                StringComparison.Ordinal);
+            run.False(rowCutRoads == Fixture(), "the fixture has the road surfaces' MIN to replace");
+            ImportChecklist checklist = ImportChecklist.For(Plan(rowCutRoads), "2025");
+            run.True(checklist.ChosenLevel(ImportLayer.RoadSubdivisions) == FidelityLevel.Max, "an unavailable default falls back to MAX");
+
+            BundleImportPlan plan = Plan(Fixture(), ImportChecklist.For(Plan(Fixture()), "2025").Choice);
+            run.True(Find(plan, ImportStepKind.Vegetation).Level?.Chosen == FidelityLevel.Min, "the untouched window plants the trees at MIN");
         });
 
         run.Case("a row's level is chosen, and an unavailable one is not", () =>
