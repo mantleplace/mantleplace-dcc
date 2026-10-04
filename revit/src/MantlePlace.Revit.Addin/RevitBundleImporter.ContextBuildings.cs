@@ -1,4 +1,5 @@
 // UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
+using System.Diagnostics;
 using System.IO;
 using Autodesk.Revit.DB;
 using MantlePlace.Revit.Core;
@@ -34,8 +35,10 @@ internal sealed partial class RevitBundleImporter
     /// solids are cloned out of it and it is closed before the first chunk, because a document held
     /// open across slices is closed only if the step ends through <see cref="StagedImport"/> — and an
     /// import abandoned from the event handler does not, which would leave an invisible document open
-    /// for the rest of the session. It is never saved either: the version-qualified companion
-    /// <c>.rvt</c> exists only for a link to point at (<see cref="SiteCompanionPath"/>).
+    /// for the rest of the session. It is saved only when this import also links the site model
+    /// (<see cref="ImportStep.SavesLinkCompanion"/>), and then only as that link's version-qualified
+    /// companion <c>.rvt</c> (<see cref="SiteCompanionPath"/>), so the link step finds the conversion
+    /// on disk instead of making a second one.
     /// </para>
     /// <para>
     /// One transaction per chunk and a yield after each commit, for the trees' reason
@@ -51,7 +54,7 @@ internal sealed partial class RevitBundleImporter
             yield break;
         }
 
-        string ifcPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
+        string ifcPath = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
         if (SiteModelReader.TryRead(File.ReadAllText(ifcPath), out SiteModelContents contents) is { } readError)
         {
             Say(readError);
@@ -90,7 +93,16 @@ internal sealed partial class RevitBundleImporter
         // time it. Nothing to copy means it is never opened, and nothing is announced above.
         Announce(SlowStepNotice.For(step.Kind, _terrainVertexCount, globalIds.Count));
 
-        if (ReadBuildingSolids(step, ifcPath, globalIds) is not { } solids)
+        // A companion already on disk is the link's to reuse, and is never overwritten here.
+        string? companion = step.SavesLinkCompanion
+            ? SiteCompanionPath.ForVersion(ifcPath, _application.VersionNumber)
+            : null;
+        if (companion is not null && File.Exists(companion))
+        {
+            companion = null;
+        }
+
+        if (ReadBuildingSolids(step, ifcPath, globalIds, companion) is not { } solids)
         {
             yield break;
         }
@@ -214,7 +226,8 @@ internal sealed partial class RevitBundleImporter
 
     /// <summary>
     /// Converts the site model, clones the solids of every building in <paramref name="globalIds"/>
-    /// out of it, and closes it — or says why it could not be converted.
+    /// out of it, saves it as <paramref name="companion"/> when one is given, and closes it — or says
+    /// why it could not be converted.
     /// </summary>
     /// <returns>
     /// The solids by GlobalId, holding only the buildings Revit's import carried; <c>null</c> when
@@ -238,10 +251,16 @@ internal sealed partial class RevitBundleImporter
     /// solids; a building that came back as anything else is counted as one Revit would not accept.
     /// </para>
     /// </remarks>
+    /// <param name="companion">
+    /// Where the link step of this import will look for the conversion, or <c>null</c> to save
+    /// nothing. A save that fails costs only the second conversion it was saving: the link step
+    /// converts for itself, as it did before.
+    /// </param>
     private Dictionary<string, List<GeometryObject>>? ReadBuildingSolids(
         ImportStep step,
         string ifcPath,
-        IReadOnlyList<string> globalIds)
+        IReadOnlyList<string> globalIds,
+        string? companion)
     {
         HashSet<string> wanted = new(globalIds, StringComparer.Ordinal);
         Dictionary<string, List<GeometryObject>> solids = new(StringComparer.Ordinal);
@@ -250,7 +269,9 @@ internal sealed partial class RevitBundleImporter
         Document? siteModel = null;
         try
         {
+            Stopwatch converting = Stopwatch.StartNew();
             siteModel = _application.OpenIFCDocument(ifcPath);
+            Trace($"  site model: converted {step.EntryName} in {converting.Elapsed.TotalSeconds:0.0} s, to copy its buildings.");
 
             using FilteredElementCollector collector = new(siteModel);
             foreach (Element element in collector.WhereElementIsNotElementType())
@@ -271,6 +292,11 @@ internal sealed partial class RevitBundleImporter
                 solids.Add(globalId, cloned);
             }
 
+            if (companion is not null)
+            {
+                SaveLinkCompanion(siteModel, companion);
+            }
+
             return solids;
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or IOException)
@@ -281,6 +307,26 @@ internal sealed partial class RevitBundleImporter
         finally
         {
             siteModel?.Close(false);
+        }
+    }
+
+    /// <summary>
+    /// Saves the converted site model as the link's companion, or says the link will convert it again.
+    /// </summary>
+    /// <remarks>
+    /// Its own catch, so a refused save never costs the buildings already read out of the model.
+    /// What is saved is the conversion the link step makes, unchanged: the buildings were only read.
+    /// </remarks>
+    private void SaveLinkCompanion(Document siteModel, string companion)
+    {
+        try
+        {
+            siteModel.SaveAs(companion);
+            Trace($"  site model: saved the conversion as {Path.GetFileName(companion)}, so the link step will not convert it again.");
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or IOException)
+        {
+            Trace($"  site model: could not save the conversion for the link ({ex.Message}); the link step will convert it again.");
         }
     }
 

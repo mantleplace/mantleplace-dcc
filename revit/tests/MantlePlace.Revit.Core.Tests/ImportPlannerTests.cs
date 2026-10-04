@@ -1517,7 +1517,7 @@ internal static class ImportPlannerTests
             run.False(location?.LogLine(0.0)?.Contains("daylight", StringComparison.Ordinal) ?? true, "no claim either way");
         });
 
-        run.Case("the context view comes after every step that stamps an element, and before the drape", () =>
+        run.Case("the context view comes after the terrain and before the trees and the drape", () =>
         {
             BundleImportPlan plan = PlanFor(
                 $$"""
@@ -1537,17 +1537,20 @@ internal static class ImportPlannerTests
 
             run.True(view >= 0, "the context view is planned");
             run.True(view > kinds.IndexOf(ImportStepKind.ToposurfaceFromPointsFile), "after the terrain");
-            run.True(view > kinds.IndexOf(ImportStepKind.Vegetation), "after the trees");
-            run.Equal(view, kinds.Count - 2, "second to last");
+            run.True(view < kinds.IndexOf(ImportStepKind.Vegetation), "before the trees: a view costs more over more model");
+            run.True(kinds[^2] == ImportStepKind.AttributionAndProvenance, "the credits after every layer they credit");
             run.True(kinds[^1] == ImportStepKind.ImageryDrape, "the drape stays last");
             run.Equal(kinds.Count(kind => kind == ImportStepKind.SiteContextView), 1, "once");
         });
 
-        run.Case("with no drape, the context view is the last step", () =>
+        run.Case("with no drape, the context view still comes before the layers that build the model", () =>
         {
             BundleImportPlan plan = PlanFor(ParityManifest(MetricGeoreference), ParityBundle);
+            List<ImportStepKind> kinds = [.. plan.Steps.Select(step => step.Kind)];
 
-            run.True(plan.Steps[^1].Kind == ImportStepKind.SiteContextView, "last");
+            run.True(kinds.Contains(ImportStepKind.SiteContextView), "planned");
+            run.True(kinds.IndexOf(ImportStepKind.SiteContextView) < kinds.IndexOf(ImportStepKind.Water), "before the water");
+            run.True(kinds[^1] == ImportStepKind.AttributionAndProvenance, "the credits last");
         });
 
         run.Case("placing the project and naming a view is not an import", () =>

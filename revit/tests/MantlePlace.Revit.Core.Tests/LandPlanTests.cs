@@ -31,7 +31,7 @@ internal static class LandPlanTests
 
     private static void RunPlannerCases(TestRun run)
     {
-        run.Case("both land layers are planned as land plans, land use first, after the trees and before the hazards", () =>
+        run.Case("both land layers are planned as land plans, land use first, before the hazards", () =>
         {
             List<ImportStepKind> kinds = [.. Plan(Manifest()).Steps.Select(step => step.Kind)];
 
@@ -39,7 +39,6 @@ internal static class LandPlanTests
             int landCover = kinds.IndexOf(ImportStepKind.LandCover);
             run.True(landUse >= 0 && landCover >= 0, "both planned");
             run.True(landUse < landCover, "land use first, as the checklist lists them");
-            run.True(kinds.IndexOf(ImportStepKind.Vegetation) < landUse, "after the trees");
             run.True(landCover < kinds.IndexOf(ImportStepKind.FloodZones), "before the hazard plan");
         });
 

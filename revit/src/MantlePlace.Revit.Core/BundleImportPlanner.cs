@@ -82,13 +82,16 @@ public static class BundleImportPlanner
         PlanSiteIfc(manifest, entries, steps, skipped, choice);
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteLocation(manifest, steps, skipped);
-        PlanSiteContext(manifest, entries, steps, skipped, drapePlanned, choice);
 
-        // The drawn plans, after every layer that builds the model: the two land plans, land use
-        // first, then the hazard plan, flood before steep because steep ground is a hatch drawn over
-        // the flood zones' fill. The crop is the drape's, planned above whether or not the curator
-        // keeps the drape, because every plan is cropped to the published rectangle rather than to
-        // whatever this import happened to texture.
+        // The drawn plans, after the terrain and before the road and water subdivisions: the two land
+        // plans, land use first, then the hazard plan, flood before steep because steep ground is a
+        // hatch drawn over the flood zones' fill. Before the subdivisions because in Revit 2027 a plan
+        // made over a terrain costs more the more subdivisions it carries — the flood plan took 4 s
+        // with none and 164 s after the land cuts — and nothing a plan draws depends on one. After the
+        // terrain because the terrain step may make the level a plan is drawn on the lowest of.
+        // The crop is the drape's, planned above whether or not the curator keeps the drape, because
+        // every plan is cropped to the published rectangle rather than to whatever this import
+        // happened to texture.
         FootprintExtent? crop = drapeSteps.FirstOrDefault()?.Drape is { } placed
             ? new FootprintExtent(placed.LeftM, placed.BottomM, placed.RightM, placed.TopM)
             : null;
@@ -96,6 +99,8 @@ public static class BundleImportPlanner
         PlanLandPlan(manifest, entries, steps, skipped, LandLayer.LandCover, crop, choice.LevelOf(ImportLayer.LandCoverPlan));
         PlanHazard(manifest, entries, steps, skipped, HazardLayer.FloodZones, crop, choice.LevelOf(ImportLayer.FloodZones));
         PlanHazard(manifest, entries, steps, skipped, HazardLayer.SteepGround, crop, choice.LevelOf(ImportLayer.SteepGround));
+
+        PlanSiteContext(manifest, entries, steps, skipped, drapePlanned, choice);
 
         // Every import, whatever else it carries: the order and the build are worth recording even
         // when the manifest names no sources, and a record is how the next import finds the note
@@ -128,13 +133,15 @@ public static class BundleImportPlanner
         // on the imagery type. Decided after the checklist has taken out what the curator left out.
         bool canImport = steps.Exists(step => ImportStepKinds.ImportsContent(step.Kind));
 
-        // After every step that stamps an element, so the view filter is made over a document that
-        // already holds what it exists to find — and only when there is something to find. Before
-        // the drape, which stamps nothing and keeps its place at the end.
+        // With the drawn plans, before the layers that build the model, for the plans' reason: in
+        // Revit 2027 making a view over a terrain with subdivisions costs more the more it carries.
+        // Its filter is a rule on Comments, so it finds what later steps stamp as well as what earlier
+        // ones did. Only when there is something to find.
         if (canImport)
         {
-            int drape = steps.FindIndex(step => step.Kind == ImportStepKind.ImageryDrape);
-            steps.Insert(drape < 0 ? steps.Count : drape, new ImportStep { Kind = ImportStepKind.SiteContextView });
+            steps.Insert(
+                steps.FindIndex(step => BuildsAfterTheViews(step.Kind)),
+                new ImportStep { Kind = ImportStepKind.SiteContextView });
         }
 
         return new BundleImportPlan
@@ -151,6 +158,18 @@ public static class BundleImportPlanner
                       + DescribeAbsence(manifest),
         };
     }
+
+    /// <summary>
+    /// Whether a step of <paramref name="kind"/> is planned after the views: the layers
+    /// <see cref="PlanSiteContext"/> plans, and everything after them. The attribution is in every
+    /// plan, so the site context view always finds its place in front of one of these.
+    /// </summary>
+    private static bool BuildsAfterTheViews(ImportStepKind kind) => kind is ImportStepKind.RoadCentrelines
+        or ImportStepKind.Water
+        or ImportStepKind.RoadPolygons
+        or ImportStepKind.Vegetation
+        or ImportStepKind.AttributionAndProvenance
+        or ImportStepKind.ImageryDrape;
 
     /// <summary>
     /// Takes the layers the curator did not choose out of the plan, leaving one skip for each that
@@ -416,6 +435,12 @@ public static class BundleImportPlanner
     /// An absent site model is one skip, under the kind that runs by default. Two lines for one
     /// missing file would read as two problems.
     /// </para>
+    /// <para>
+    /// Both read the site model through one Revit conversion of the IFC, at 30 to 70 s, and each
+    /// used to make its own. When the curator keeps both, the copy, which runs first, saves its
+    /// conversion where the link looks for one (<see cref="ImportStep.SavesLinkCompanion"/>), and the
+    /// link converts nothing.
+    /// </para>
     /// </remarks>
     private static void PlanSiteIfc(
         BundleManifest manifest,
@@ -440,7 +465,18 @@ public static class BundleImportPlanner
             return;
         }
 
-        steps.Add(copy!);
+        steps.Add(new ImportStep
+        {
+            Kind = ImportStepKind.ContextBuildings,
+            EntryName = copy!.EntryName,
+            Units = copy.Units,
+            ExpectedSha256 = copy.ExpectedSha256,
+            CropUnavailable = copy.CropUnavailable,
+            HeightDatum = copy.HeightDatum,
+            Levels = copy.Levels,
+            Level = copy.Level,
+            SavesLinkCompanion = choice.Includes(ImportLayer.SiteModel),
+        });
         steps.Add(new ImportStep
         {
             Kind = ImportStepKind.LinkSiteIfc,

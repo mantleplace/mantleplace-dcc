@@ -248,21 +248,44 @@ internal static class ImportLayerTests
             run.Equal(
                 string.Join(", ", plan.Steps.Select(step => step.Kind)),
                 "ToposurfaceFromPointsFile, ContextBuildings, LinkSiteIfc, SetSharedCoordinates, SetSiteLocation, "
-                    + "RoadCentrelines, Water, RoadPolygons, Vegetation, LandUse, LandCover, "
-                    + "AttributionAndProvenance, SiteContextView, ImageryDrape",
+                    + "LandUse, LandCover, SiteContextView, RoadCentrelines, Water, RoadPolygons, Vegetation, "
+                    + "AttributionAndProvenance, ImageryDrape",
                 "every step");
         });
 
-        run.Case("the land plans are drawn after every layer that builds the model, land use first", () =>
+        run.Case("the land plans are drawn after the terrain and before the subdivisions, land use first", () =>
         {
-            // The hazard plan's place; drawing the plans before the subdivisions is a later change.
             List<ImportStepKind> kinds = [.. PlanFor(Everything, EverythingBundle).Steps.Select(step => step.Kind)];
             run.True(
-                kinds.IndexOf(ImportStepKind.Vegetation) < kinds.IndexOf(ImportStepKind.LandUse),
-                "after the planting");
+                kinds.IndexOf(ImportStepKind.ToposurfaceFromPointsFile) < kinds.IndexOf(ImportStepKind.LandUse),
+                "after the terrain, whose level may be the lowest a plan is drawn on");
+            run.True(
+                kinds.IndexOf(ImportStepKind.LandCover) < kinds.IndexOf(ImportStepKind.Water),
+                "before the first subdivision");
             run.True(
                 kinds.IndexOf(ImportStepKind.LandUse) < kinds.IndexOf(ImportStepKind.LandCover),
                 "land use first");
+        });
+
+        run.Case("the context buildings save the conversion the site model link would make, when both are imported", () =>
+        {
+            BundleImportPlan both = PlanFor(Everything, EverythingBundle);
+            run.True(StepOf(both, ImportStepKind.ContextBuildings)?.SavesLinkCompanion == true, "both imported: the copy saves the companion");
+            List<ImportStepKind> kinds = [.. both.Steps.Select(step => step.Kind)];
+            run.True(
+                kinds.IndexOf(ImportStepKind.ContextBuildings) < kinds.IndexOf(ImportStepKind.LinkSiteIfc),
+                "the copy runs first, so the link finds the companion on disk");
+            run.True(StepOf(both, ImportStepKind.ContextBuildings)?.Lifetime == ExtractionLifetime.Retained,
+                "and extracts the IFC where the link reads it, because the companion sits beside it");
+
+            BundleImportPlan copyOnly = PlanFor(Everything, EverythingBundle, AllBut(ImportLayer.SiteModel));
+            run.True(StepOf(copyOnly, ImportStepKind.ContextBuildings)?.SavesLinkCompanion == false, "no link: nothing is saved");
+            run.True(StepOf(copyOnly, ImportStepKind.ContextBuildings)?.Lifetime == ExtractionLifetime.Transient,
+                "and the IFC is extracted for this import only, as before");
+
+            BundleImportPlan linkOnly = PlanFor(Everything, EverythingBundle, AllBut(ImportLayer.ContextBuildings));
+            run.True(StepOf(linkOnly, ImportStepKind.ContextBuildings) is null, "no copy: the link converts for itself");
+            run.True(StepOf(linkOnly, ImportStepKind.LinkSiteIfc) is { } link && link.Lifetime == ExtractionLifetime.Retained, "as it always did");
         });
 
         run.Case("choosing everything plans what no choice plans", () =>
@@ -582,8 +605,8 @@ internal static class ImportLayerTests
 
             run.Equal(
                 string.Join(", ", plan.Steps.Select(step => step.Kind)),
-                "ToposurfaceFromPointsFile, ContextBuildings, SetSharedCoordinates, SetSiteLocation, RoadCentrelines, "
-                    + "Water, Vegetation, AttributionAndProvenance, SiteContextView, ImageryDrape",
+                "ToposurfaceFromPointsFile, ContextBuildings, SetSharedCoordinates, SetSiteLocation, SiteContextView, "
+                    + "RoadCentrelines, Water, Vegetation, AttributionAndProvenance, ImageryDrape",
                 "the water and the drape stay; the road surfaces, the land plans and the link go");
             foreach (ImportStepKind kind in new[] { ImportStepKind.LandUse, ImportStepKind.LandCover, ImportStepKind.RoadPolygons })
             {
@@ -843,4 +866,7 @@ internal static class ImportLayerTests
 
     private static BundleImportPlan PlanFor(string manifestJson, IReadOnlyList<string> entries, ImportLayerChoice choice)
         => BundleImportPlanner.Plan(BundleManifestReader.Parse(manifestJson), entries, _ => DrapePixels, choice);
+
+    private static ImportStep? StepOf(BundleImportPlan plan, ImportStepKind kind)
+        => plan.Steps.FirstOrDefault(step => step.Kind == kind);
 }
