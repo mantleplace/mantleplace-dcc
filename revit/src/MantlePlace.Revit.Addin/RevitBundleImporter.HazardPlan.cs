@@ -51,15 +51,7 @@ internal sealed partial class RevitBundleImporter
 
         string stem = _archive.Layout.Key.Stem;
         string viewName = HazardPlan.ViewName(facts.Build);
-        View? existing = NamedAs<View>(viewName).OrderBy(candidate => candidate.IsTemplate).FirstOrDefault();
-        PlanViewFound found = existing switch
-        {
-            null => PlanViewFound.None,
-            ViewPlan { IsTemplate: false } => PlanViewFound.PlanView,
-            _ => PlanViewFound.SomethingElse,
-        };
-
-        List<FilledRegion> onPlan = existing is ViewPlan existingPlan ? RegionsIn(existingPlan) : [];
+        (View? existing, PlanViewFound found, List<FilledRegion> onPlan) = FindDrawnPlan(viewName);
         PlanDecision decision = HazardPlan.Decide(found, onPlan.Select(CommentsOf), layer, stem, facts.Build);
         if (!decision.Draw)
         {
@@ -88,43 +80,14 @@ internal sealed partial class RevitBundleImporter
         string stamp = HazardPlan.Stamp(layer, stem, facts.Build);
         Dictionary<string, ElementId> types = [];
 
-        int drawn = 0;
-        int declined = 0;
-        int unstamped = 0;
-        List<SiteFeature> drawnOuters = [];
-        foreach (GroundCut cut in regions.Cuts)
-        {
-            // Every ring or none: a hole that cannot close would leave the region covering ground the
-            // zone does not, which is a repair by another name. The polygon is refused whole instead.
-            List<CurveLoop?> built = [Loop(cut.Outer, z), .. cut.Holes.Select(hole => Loop(hole, z))];
-            if (built.Contains(null))
-            {
-                declined++;
-                continue;
-            }
-
-            List<CurveLoop> loops = [.. built.OfType<CurveLoop>()];
-            RegionStyle style = flood
-                ? HazardStyles.ForFloodZone(cut.Outer.FloodZone, cut.Outer.FloodZoneSubtype)
-                : HazardStyles.SteepGround;
-
-            try
-            {
-                FilledRegion region = FilledRegion.Create(_document, RegionType(style, types), plan.Id, loops);
-                drawn++;
-                drawnOuters.Add(cut.Outer);
-                if (!TryStamp(region, stamp))
-                {
-                    unstamped++;
-                }
-            }
-            catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
-            {
-                // A ring that touches itself is common in outlines traced from a raster. It is one
-                // region lost, counted and said — never repaired into a shape nobody published.
-                declined++;
-            }
-        }
+        DrawnRegions drawn = DrawRegions(
+            plan,
+            regions,
+            z,
+            outer => flood ? HazardStyles.ForFloodZone(outer.FloodZone, outer.FloodZoneSubtype) : HazardStyles.SteepGround,
+            stamp,
+            types);
+        List<SiteFeature> drawnOuters = drawn.Outers;
 
         // The key names only what is on the plan: a zone whose every polygon was refused gets no row.
         IReadOnlyList<KeyRow> rows = drawnOuters.Count == 0
@@ -139,30 +102,118 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        string summary = $"Drew {drawn:N0} {label} region(s) on \"{viewName}\"";
-        if (decision.CreateView)
+        string summary = DescribeDrawnPlan(label, viewName, decision.CreateView, facts.Crop, drawn, regions.StrandedHoles);
+
+        Say(summary + $". The zone key gained {keyRows:N0} row(s). These are context, not a determination.");
+    }
+
+    /// <summary>
+    /// The view named <paramref name="viewName"/>, what kind of view it is, and the filled regions
+    /// already on it when it is a plan — what <see cref="PlanDecision"/> is decided from.
+    /// </summary>
+    private (View? Existing, PlanViewFound Found, List<FilledRegion> OnPlan) FindDrawnPlan(string viewName)
+    {
+        View? existing = NamedAs<View>(viewName).OrderBy(candidate => candidate.IsTemplate).FirstOrDefault();
+        PlanViewFound found = existing switch
         {
-            summary += facts.Crop is null
+            null => PlanViewFound.None,
+            ViewPlan { IsTemplate: false } => PlanViewFound.PlanView,
+            _ => PlanViewFound.SomethingElse,
+        };
+
+        return (existing, found, existing is ViewPlan existingPlan ? RegionsIn(existingPlan) : []);
+    }
+
+    /// <summary>What <see cref="DrawRegions"/> drew, refused and could not stamp.</summary>
+    private sealed record DrawnRegions(int Count, int Declined, int Unstamped, List<SiteFeature> Outers);
+
+    /// <summary>
+    /// Each polygon of <paramref name="regions"/> drawn whole on <paramref name="plan"/> as a filled
+    /// region of the type its outer ring's style names, and stamped — the hazard plan and the land
+    /// plans alike.
+    /// </summary>
+    /// <remarks>
+    /// Every ring or none: a hole that cannot close would leave the region covering ground the
+    /// polygon does not, which is a repair by another name, so the polygon is refused whole instead.
+    /// A polygon Revit refuses — a ring that touches itself is common in outlines traced from a
+    /// raster — is one region lost, counted and said, never repaired into a shape nobody published.
+    /// </remarks>
+    private DrawnRegions DrawRegions(
+        ViewPlan plan,
+        GroundCutPlan regions,
+        double z,
+        Func<SiteFeature, RegionStyle> styleOf,
+        string stamp,
+        Dictionary<string, ElementId> types)
+    {
+        int drawn = 0;
+        int declined = 0;
+        int unstamped = 0;
+        int handled = 0;
+        List<SiteFeature> outers = [];
+        foreach (GroundCut cut in regions.Cuts)
+        {
+            Count(handled++, regions.Cuts.Count);
+
+            List<CurveLoop?> built = [Loop(cut.Outer, z), .. cut.Holes.Select(hole => Loop(hole, z))];
+            if (built.Contains(null))
+            {
+                declined++;
+                continue;
+            }
+
+            List<CurveLoop> loops = [.. built.OfType<CurveLoop>()];
+            try
+            {
+                FilledRegion region = FilledRegion.Create(_document, RegionType(styleOf(cut.Outer), types), plan.Id, loops);
+                drawn++;
+                outers.Add(cut.Outer);
+                if (!TryStamp(region, stamp))
+                {
+                    unstamped++;
+                }
+            }
+            catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
+            {
+                declined++;
+            }
+        }
+
+        Count(regions.Cuts.Count, regions.Cuts.Count);
+        return new DrawnRegions(drawn, declined, unstamped, outers);
+    }
+
+    /// <summary>
+    /// The opening of a drawn plan step's summary: how many regions went on which plan, whether the
+    /// plan is new and how it was cropped, and what was refused, stranded or left unstamped.
+    /// </summary>
+    private static string DescribeDrawnPlan(
+        string label, string viewName, bool createdView, FootprintExtent? crop, DrawnRegions drawn, int strandedHoles)
+    {
+        string summary = $"Drew {drawn.Count:N0} {label} region(s) on \"{viewName}\"";
+        if (createdView)
+        {
+            summary += crop is null
                 ? ", a new plan left uncropped because this import has no imagery rectangle to crop it to"
                 : ", a new plan cropped to the imagery's published rectangle";
         }
 
-        if (declined > 0)
+        if (drawn.Declined > 0)
         {
-            summary += $"; Revit refused {declined:N0} region(s) as published, and they were skipped rather than repaired";
+            summary += $"; Revit refused {drawn.Declined:N0} region(s) as published, and they were skipped rather than repaired";
         }
 
-        if (regions.StrandedHoles > 0)
+        if (strandedHoles > 0)
         {
-            summary += $"; {regions.StrandedHoles:N0} hole(s) belong to a polygon whose outer ring could not be read";
+            summary += $"; {strandedHoles:N0} hole(s) belong to a polygon whose outer ring could not be read";
         }
 
-        if (unstamped > 0)
+        if (drawn.Unstamped > 0)
         {
-            summary += $"; {unstamped:N0} could not be stamped and will not be recognised by a re-import";
+            summary += $"; {drawn.Unstamped:N0} could not be stamped and will not be recognised by a re-import";
         }
 
-        Say(summary + $". The zone key gained {keyRows:N0} row(s). These are context, not a determination.");
+        return summary;
     }
 
     /// <summary>

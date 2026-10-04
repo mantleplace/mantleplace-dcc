@@ -191,9 +191,12 @@ public static class SlowStepNotice
     /// imports differed by about nine minutes in 2025 and 2026 and eleven in 2027.
     /// </para>
     /// <para>
-    /// The land use and land cover have no row from this order: what they were measured at there was
-    /// the cost of cutting them into the terrain, and those rows went with the subdivisions
-    /// (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>).
+    /// The land use and land cover are not from this order: what they were measured at there was the
+    /// cost of cutting them into the terrain, and those rows went with the subdivisions
+    /// (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>). Their rows are each layer
+    /// drawn alone on a new land plan, one import per bundle and version, Revit 2025.4 and 2027.2,
+    /// 2026-10-03, on two imperial reference bundles: one of 28 land-use and 18 land-cover polygons,
+    /// one of 76 and 7. Revit 2026 was not measured.
     /// </para>
     /// </remarks>
     public static StepMeasurement? Measured(ImportStepKind kind) => kind switch
@@ -213,6 +216,8 @@ public static class SlowStepNotice
         ImportStepKind.ImageryDrape => new(new(25.6, 61.6), null, null),
         ImportStepKind.FloodZones => new(new(32.9, 32.9), new(31.7, 31.7), new(43.5, 43.5)),
         ImportStepKind.SteepGround => new(new(0.8, 0.8), new(0.8, 0.8), new(0.9, 0.9)),
+        ImportStepKind.LandUse => new(new(1.5, 1.7), null, new(1.5, 1.8)),
+        ImportStepKind.LandCover => new(new(0.3, 1.0), null, new(0.3, 1.0)),
 
         // The DXF terrain links a CAD file and has never been timed.
         _ => null,

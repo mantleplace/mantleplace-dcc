@@ -455,6 +455,15 @@ internal static class SlowStepNoticeTests
             run.True(SlowStepNotice.ForHazardLayer(ImportStepKind.SteepGround, createsPlan: true, 32) is null, "steep ground stays quiet");
         });
 
+        run.Case("the land plans were measured, at seconds, and are quiet", () =>
+        {
+            // ADR 0015: drawn on a plan, the layers that were most of an import's time as subdivisions.
+            run.True(SlowStepNotice.Measured(ImportStepKind.LandUse) is not null, "the land use has its measurement");
+            run.True(SlowStepNotice.Measured(ImportStepKind.LandCover) is not null, "and so does the land cover");
+            run.True(SlowStepNotice.For(ImportStepKind.LandUse, null, 76) is null, "76 land-use regions are drawn in under two seconds, unannounced");
+            run.True(SlowStepNotice.For(ImportStepKind.LandCover, null, 18) is null, "the land cover too");
+        });
+
         run.Case("smooth shading after the last step announces itself when there are subdivisions to shade", () =>
         {
             // Committed after every row when the drape did not settle it first: 98 to 111 s in Revit

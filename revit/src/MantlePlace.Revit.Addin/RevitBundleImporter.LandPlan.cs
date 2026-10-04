@@ -49,15 +49,7 @@ internal sealed partial class RevitBundleImporter
 
         string stem = _archive.Layout.Key.Stem;
         string viewName = LandPlan.ViewName(layer, facts.Build);
-        View? existing = NamedAs<View>(viewName).OrderBy(candidate => candidate.IsTemplate).FirstOrDefault();
-        PlanViewFound found = existing switch
-        {
-            null => PlanViewFound.None,
-            ViewPlan { IsTemplate: false } => PlanViewFound.PlanView,
-            _ => PlanViewFound.SomethingElse,
-        };
-
-        List<FilledRegion> onPlan = existing is ViewPlan existingPlan ? RegionsIn(existingPlan) : [];
+        (View? existing, PlanViewFound found, List<FilledRegion> onPlan) = FindDrawnPlan(viewName);
         PlanDecision decision = LandPlan.Decide(found, onPlan.Select(CommentsOf), layer, stem, facts.Build);
         if (!decision.Draw)
         {
@@ -86,44 +78,8 @@ internal sealed partial class RevitBundleImporter
         string stamp = LandPlan.Stamp(layer, stem, facts.Build);
         Dictionary<string, ElementId> types = [];
 
-        int drawn = 0;
-        int declined = 0;
-        int unstamped = 0;
-        int handled = 0;
-        List<SiteFeature> drawnOuters = [];
-        foreach (GroundCut cut in regions.Cuts)
-        {
-            Count(handled++, regions.Cuts.Count);
-
-            // Every ring or none: a hole that cannot close would leave the region covering ground the
-            // class does not, which is a repair by another name. The polygon is refused whole instead.
-            List<CurveLoop?> built = [Loop(cut.Outer, z), .. cut.Holes.Select(hole => Loop(hole, z))];
-            if (built.Contains(null))
-            {
-                declined++;
-                continue;
-            }
-
-            List<CurveLoop> loops = [.. built.OfType<CurveLoop>()];
-            try
-            {
-                FilledRegion region = FilledRegion.Create(
-                    _document, RegionType(LandStyles.For(layer, cut.Outer.Subtype), types), plan.Id, loops);
-                drawn++;
-                drawnOuters.Add(cut.Outer);
-                if (!TryStamp(region, stamp))
-                {
-                    unstamped++;
-                }
-            }
-            catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
-            {
-                // One region lost, counted and said — never repaired into a shape nobody published.
-                declined++;
-            }
-        }
-
-        Count(regions.Cuts.Count, regions.Cuts.Count);
+        DrawnRegions drawn = DrawRegions(plan, regions, z, outer => LandStyles.For(layer, outer.Subtype), stamp, types);
+        List<SiteFeature> drawnOuters = drawn.Outers;
 
         // The key names only what is on the plan: a class whose every polygon was refused gets no row.
         IReadOnlyList<KeyRow> rows = drawnOuters.Count == 0
@@ -136,28 +92,7 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        string summary = $"Drew {drawn:N0} {label} region(s) on \"{viewName}\"";
-        if (decision.CreateView)
-        {
-            summary += facts.Crop is null
-                ? ", a new plan left uncropped because this import has no imagery rectangle to crop it to"
-                : ", a new plan cropped to the imagery's published rectangle";
-        }
-
-        if (declined > 0)
-        {
-            summary += $"; Revit refused {declined:N0} region(s) as published, and they were skipped rather than repaired";
-        }
-
-        if (regions.StrandedHoles > 0)
-        {
-            summary += $"; {regions.StrandedHoles:N0} hole(s) belong to a polygon whose outer ring could not be read";
-        }
-
-        if (unstamped > 0)
-        {
-            summary += $"; {unstamped:N0} could not be stamped and will not be recognised by a re-import";
-        }
+        string summary = DescribeDrawnPlan(label, viewName, decision.CreateView, facts.Crop, drawn, regions.StrandedHoles);
 
         Say(summary + $". The key has {Math.Max(0, keyRows - 1):N0} class(es).");
     }
