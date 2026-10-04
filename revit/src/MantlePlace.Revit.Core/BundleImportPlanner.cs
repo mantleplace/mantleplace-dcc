@@ -82,13 +82,16 @@ public static class BundleImportPlanner
         PlanSiteIfc(manifest, entries, steps, skipped, choice);
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteLocation(manifest, steps, skipped);
-        PlanSiteContext(manifest, entries, steps, skipped, drapePlanned, choice);
 
-        // The drawn plans, after every layer that builds the model: the two land plans, land use
-        // first, then the hazard plan, flood before steep because steep ground is a hatch drawn over
-        // the flood zones' fill. The crop is the drape's, planned above whether or not the curator
-        // keeps the drape, because every plan is cropped to the published rectangle rather than to
-        // whatever this import happened to texture.
+        // The drawn plans, after the terrain and before the road and water subdivisions: the two land
+        // plans, land use first, then the hazard plan, flood before steep because steep ground is a
+        // hatch drawn over the flood zones' fill. Before the subdivisions because in Revit 2027 a plan
+        // made over a terrain costs more the more subdivisions it carries, many times more after the
+        // land cuts than over bare ground, and nothing a plan draws depends on one. After the terrain
+        // because the terrain step may make the level a plan is drawn on the lowest of.
+        // The crop is the drape's, planned above whether or not the curator keeps the drape, because
+        // every plan is cropped to the published rectangle rather than to whatever this import
+        // happened to texture.
         FootprintExtent? crop = drapeSteps.FirstOrDefault()?.Drape is { } placed
             ? new FootprintExtent(placed.LeftM, placed.BottomM, placed.RightM, placed.TopM)
             : null;
@@ -96,6 +99,14 @@ public static class BundleImportPlanner
         PlanLandPlan(manifest, entries, steps, skipped, LandLayer.LandCover, crop, choice.LevelOf(ImportLayer.LandCoverPlan));
         PlanHazard(manifest, entries, steps, skipped, HazardLayer.FloodZones, crop, choice.LevelOf(ImportLayer.FloodZones));
         PlanHazard(manifest, entries, steps, skipped, HazardLayer.SteepGround, crop, choice.LevelOf(ImportLayer.SteepGround));
+
+        // With the drawn plans, before the layers that build the model, for the plans' reason. Its
+        // filter is a rule on Comments, so it finds what later steps stamp as well as what earlier
+        // ones did. It has no layer of its own, so the checklist never takes it out; it is taken out
+        // below when nothing else is left for it to find.
+        steps.Add(new ImportStep { Kind = ImportStepKind.SiteContextView });
+
+        PlanSiteContext(manifest, entries, steps, skipped, drapePlanned, choice);
 
         // Every import, whatever else it carries: the order and the build are worth recording even
         // when the manifest names no sources, and a record is how the next import finds the note
@@ -127,14 +138,9 @@ public static class BundleImportPlanner
         // drape, which builds no geometry but does write a material, and retypes ground not already
         // on the imagery type. Decided after the checklist has taken out what the curator left out.
         bool canImport = steps.Exists(step => ImportStepKinds.ImportsContent(step.Kind));
-
-        // After every step that stamps an element, so the view filter is made over a document that
-        // already holds what it exists to find — and only when there is something to find. Before
-        // the drape, which stamps nothing and keeps its place at the end.
-        if (canImport)
+        if (!canImport)
         {
-            int drape = steps.FindIndex(step => step.Kind == ImportStepKind.ImageryDrape);
-            steps.Insert(drape < 0 ? steps.Count : drape, new ImportStep { Kind = ImportStepKind.SiteContextView });
+            steps.RemoveAll(step => step.Kind == ImportStepKind.SiteContextView);
         }
 
         return new BundleImportPlan
@@ -416,6 +422,12 @@ public static class BundleImportPlanner
     /// An absent site model is one skip, under the kind that runs by default. Two lines for one
     /// missing file would read as two problems.
     /// </para>
+    /// <para>
+    /// Both read the site model through a Revit conversion of the IFC, one of the slowest things an
+    /// import does, and each used to make its own. When the curator keeps both, the copy, which runs
+    /// first, saves its conversion where the link looks for one
+    /// (<see cref="ImportStep.SavesLinkCompanion"/>), and the link converts nothing.
+    /// </para>
     /// </remarks>
     private static void PlanSiteIfc(
         BundleManifest manifest,
@@ -434,7 +446,8 @@ public static class BundleImportPlanner
                 out ImportStep? copy,
                 out SkippedImport? skip,
                 out _,
-                level: choice.LevelOf(ImportLayer.ContextBuildings)))
+                level: choice.LevelOf(ImportLayer.ContextBuildings),
+                savesLinkCompanion: choice.Includes(ImportLayer.SiteModel)))
         {
             skipped.Add(skip!);
             return;
@@ -1353,7 +1366,8 @@ public static class BundleImportPlanner
         SurfaceCropWindow? crop = null,
         SiteFrame? frame = null,
         TerrainToposolidType toposolidType = TerrainToposolidType.Project,
-        FidelityLevel level = FidelityLevel.Max)
+        FidelityLevel level = FidelityLevel.Max,
+        bool savesLinkCompanion = false)
     {
         step = null;
         skipped = null;
@@ -1418,6 +1432,7 @@ public static class BundleImportPlanner
             HeightDatum = HeightDatums.For(kind, artifact, manifest),
             Levels = artifact.Levels,
             Level = leveled.Applied,
+            SavesLinkCompanion = savesLinkCompanion,
         };
         return true;
     }

@@ -126,7 +126,8 @@ Revit licence.
   reuse / refuse / create table, so a second import of the same build creates nothing, and buildings
   from an earlier build are refused with the prefix to delete. Linking the site model is still a row
   in the import window's checklist, and it starts unticked; the version-qualified companion `.rvt` is
-  written only when it is linked. See
+  written only when it is linked. With both ticked, Revit converts the IFC once: the copy saves its
+  conversion as the companion, and the link uses it. See
   [ADR 0012](../docs/adr/0012-context-buildings-come-from-the-site-model.md);
 - sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
   this host's own block — falling back to `delivery.local_origin` on a bundle whose own block

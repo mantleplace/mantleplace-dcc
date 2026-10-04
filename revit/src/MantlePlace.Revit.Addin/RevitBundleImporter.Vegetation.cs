@@ -59,7 +59,7 @@ internal sealed partial class RevitBundleImporter
             yield break;
         }
 
-        string csvPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
+        string csvPath = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
         // The vocabulary rides on the step because the manifest owns what the CSV's foliage values
         // mean; the parse maps them, and nothing reads a point's size to decide one.
         TreePointsParse parse = TreePointsReader.Parse(

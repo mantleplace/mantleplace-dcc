@@ -584,6 +584,24 @@ public sealed class ImportStep
     /// </remarks>
     public string? ExpectedSha256 { get; init; }
 
+    /// <summary>
+    /// Populated only for <see cref="ImportStepKind.ContextBuildings"/>: the same import also links the
+    /// site model, so the conversion this step makes of the IFC is saved as the link's companion
+    /// (<see cref="SiteCompanionPath"/>) and the link step finds it there rather than converting the
+    /// IFC a second time.
+    /// </summary>
+    public bool SavesLinkCompanion { get; init; }
+
+    /// <summary>
+    /// How long the file extracted for this step has to survive: its kind's
+    /// (<see cref="ImportStepKinds.LifetimeOf"/>), or as long as the link's for a step that saves the
+    /// link's companion, because the companion is written beside the IFC it was converted from and
+    /// the link reads both from there.
+    /// </summary>
+    public ExtractionLifetime Lifetime => SavesLinkCompanion
+        ? ImportStepKinds.LifetimeOf(ImportStepKind.LinkSiteIfc)
+        : ImportStepKinds.LifetimeOf(Kind);
+
     /// <summary>Populated only for <see cref="ImportStepKind.SetSharedCoordinates"/>.</summary>
     public SurveyPointPlacement? SurveyPoint { get; init; }
 

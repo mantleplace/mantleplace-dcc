@@ -1,4 +1,5 @@
 // UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
+using System.Diagnostics;
 using System.IO;
 using Autodesk.Revit.DB;
 using MantlePlace.Revit.Core;
@@ -21,7 +22,7 @@ internal sealed partial class RevitBundleImporter
 
         // Both the IFC and the companion .rvt are referenced by the link for the life of the
         // project, so the kind's lifetime carries the .rvt written next to it too.
-        string ifcPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
+        string ifcPath = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
 
         // ⛔ Named for THIS Revit. The cache is one per order for the machine, not one per Revit, so
         // a single shared companion meant the second version to import an order upgraded the first
@@ -40,13 +41,21 @@ internal sealed partial class RevitBundleImporter
         // leave that link permanently unresolvable, which is the failure this whole step is about.
         bool companionExists = File.Exists(companionRvt);
         Announce(SlowStepNotice.ForSiteModel(convertedFileExists: companionExists));
-        if (!companionExists)
+        if (companionExists)
         {
-
+            // The context buildings step of this import saves its conversion here when it runs first
+            // (ImportStep.SavesLinkCompanion); an earlier import's is here too. Either way, no second
+            // conversion.
+            Trace($"  site model: {Path.GetFileName(companionRvt)} is already converted, so it was linked without converting {step.EntryName} again.");
+        }
+        else
+        {
             Document? converted = null;
             try
             {
+                Stopwatch converting = Stopwatch.StartNew();
                 converted = _application.OpenIFCDocument(ifcPath);
+                Trace($"  site model: converted {step.EntryName} in {converting.Elapsed.TotalSeconds:0.0} s, to link it.");
                 converted.SaveAs(companionRvt);
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or IOException)

@@ -48,7 +48,7 @@ internal sealed partial class RevitBundleImporter
                 break;
         }
 
-        string path = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
+        string path = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
         IReadOnlyList<PublishedContour>? contours;
         int skippedLabels;
         using (StreamReader reader = File.OpenText(path))

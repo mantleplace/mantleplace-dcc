@@ -127,7 +127,7 @@ internal static class HazardPlanTests
 
     private static void RunPlannerCases(TestRun run)
     {
-        run.Case("both layers are planned, after the trees and before the attribution, flood first", () =>
+        run.Case("both layers are planned, before the attribution, flood first", () =>
         {
             BundleImportPlan plan = Plan(Manifest());
             List<ImportStepKind> kinds = [.. plan.Steps.Select(step => step.Kind)];
@@ -137,6 +137,24 @@ internal static class HazardPlanTests
             run.True(flood >= 0 && steep >= 0, "both planned");
             run.True(flood < steep, "flood before steep, so steep ground is drawn over it");
             run.True(kinds.IndexOf(ImportStepKind.AttributionAndProvenance) > steep, "before the attribution");
+        });
+
+        run.Case("every drawn view comes before the road and water subdivisions, and the drape stays last", () =>
+        {
+            // In 2027 a plan or a 3D view made over a terrain with subdivisions costs more the more
+            // subdivisions there are, so the views are drawn first. Nothing a view draws depends on a
+            // subdivision: the plans are filled regions, and the context view's filter is a rule.
+            string[] layers = ["land_use", "land_cover", "road_splines", "water", "road_polygons", "flood_zones", "steep_slope"];
+            BundleImportPlan plan = BundleImportPlanner.Plan(
+                Parse(Manifest(ownLayers: layers)),
+                ["Metadata/manifest.json", "Imagery/Drape.StatePlane.png", .. layers.Select(OwnPath)],
+                _ => new ImageSize(4000, 3000));
+
+            run.Equal(
+                string.Join(", ", plan.Steps.Select(step => step.Kind)),
+                "SetSharedCoordinates, SetSiteLocation, LandUse, LandCover, FloodZones, SteepGround, SiteContextView, "
+                    + "RoadCentrelines, Water, RoadPolygons, AttributionAndProvenance, ImageryDrape",
+                "the plans and the context view, then the layers that build the model, then the credits and the drape");
         });
 
         run.Case("a hazard step carries the build, the drape's rectangle as its crop, and the published facts", () =>

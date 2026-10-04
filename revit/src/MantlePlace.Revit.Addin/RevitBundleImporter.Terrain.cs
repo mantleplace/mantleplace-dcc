@@ -1,4 +1,5 @@
 // UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
+using System.Diagnostics;
 using System.IO;
 using Autodesk.Revit.DB;
 using MantlePlace.Revit.Core;
@@ -20,7 +21,8 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        string csvPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
+        Stopwatch reading = Stopwatch.StartNew();
+        string csvPath = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
         string? parseError = SurfacePointsReader.TryParse(File.ReadAllText(csvPath), out IReadOnlyList<SurfacePoint> points);
         if (parseError is not null)
         {
@@ -36,6 +38,7 @@ internal sealed partial class RevitBundleImporter
             Say(cleaned.Explanation);
         }
 
+        Trace($"  terrain: extracted, read and cleaned {points.Count:N0} points in {reading.Elapsed.TotalSeconds:0.0} s.");
         BuildTerrain(step.Kind, points, LinearUnits.MetresPerUnit(step.Units), step.EntryName, "points", stamp, step.ToposolidType);
     }
 
@@ -63,7 +66,8 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        string dxfPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
+        Stopwatch reading = Stopwatch.StartNew();
+        string dxfPath = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
 
         SurfaceTin? tin;
         string? parseError;
@@ -94,6 +98,8 @@ internal sealed partial class RevitBundleImporter
         {
             Say(cleaned.Explanation);
         }
+
+        Trace($"  terrain: extracted, read and cleaned {vertices.Count:N0} TIN vertices in {reading.Elapsed.TotalSeconds:0.0} s.");
 
         // 1.0, not step.Units: SurfaceTinFrame consumed the artifact's unit when it subtracted the
         // origin, exactly as TreePointsReader does, so these coordinates are already metres.
@@ -251,6 +257,8 @@ internal sealed partial class RevitBundleImporter
     {
         ImportFailureSwallower swallower = new("Building the terrain");
         using Transaction transaction = BeginTransaction("Mantle Place: terrain from points file", swallower);
+        Stopwatch phase = Stopwatch.StartNew();
+        double? imageryTypeSeconds = null;
 
         ElementId levelId = plan.Strategy == TerrainBaseStrategy.DedicatedLevel
             ? FindOrCreateTerrainLevel(plan.LevelElevation)
@@ -261,11 +269,14 @@ internal sealed partial class RevitBundleImporter
         string? declined = null;
         if (toposolidType == TerrainToposolidType.Imagery)
         {
+            phase.Restart();
             if (ImageryToposolidType(typeId, out declined) is { } imagery)
             {
                 typeId = imagery.Id;
                 typeName = imagery.Name;
             }
+
+            imageryTypeSeconds = phase.Elapsed.TotalSeconds;
         }
 
         // Before the commit, where the time goes: tens of seconds on the imagery type, a few on the default.
@@ -274,7 +285,9 @@ internal sealed partial class RevitBundleImporter
             Announce(SlowStepNotice.ForTerrain(kind, onImageryType: typeId != new ElementId(type.Id), relief.PointCount));
         }
 
+        phase.Restart();
         Toposolid terrain = Toposolid.Create(_document, revitPoints, typeId, levelId);
+        double createSeconds = phase.Elapsed.TotalSeconds;
 
         if (plan.HeightOffset != 0.0)
         {
@@ -296,6 +309,13 @@ internal sealed partial class RevitBundleImporter
 
         // Captured BEFORE the commit: a rolled-back element cannot be asked for its id.
         ElementId built = terrain.Id;
+
+        // Where the time before the commit went; the commit's own seconds follow in its line.
+        string preparing = imageryTypeSeconds is { } prepared
+            ? $"the imagery type took {prepared:0.0} s to prepare"
+            : "no imagery type was prepared";
+        Trace($"  terrain: {preparing}, Toposolid.Create {createSeconds:0.0} s for {revitPoints.Count:N0} points, "
+            + $"the rest before the commit {phase.Elapsed.TotalSeconds - createSeconds:0.0} s.");
 
         if (!CommitAndReport(transaction, swallower))
         {
@@ -583,7 +603,7 @@ internal sealed partial class RevitBundleImporter
     /// </summary>
     private void LinkCadSurface(ImportStep step)
     {
-        string dxfPath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
+        string dxfPath = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
 
         DWGImportOptions options = new()
         {
