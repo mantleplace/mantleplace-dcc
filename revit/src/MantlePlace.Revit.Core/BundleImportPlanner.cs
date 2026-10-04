@@ -1349,9 +1349,9 @@ public static class BundleImportPlanner
     /// </summary>
     private static string? CropUnavailable(ImportStepKind kind, SurfaceCropWindow? crop, BundleManifest manifest)
         => crop is null
-            && kind is ImportStepKind.ToposurfaceFromPointsFile
+            && (kind is ImportStepKind.ToposurfaceFromPointsFile
                 or ImportStepKind.ToposurfaceFromSurfaceTin
-                or ImportStepKind.PublishedContours
+                or ImportStepKind.PublishedContours)
             ? SurfaceCrop.Unavailable(manifest, SiteFrame.For(manifest))
             : null;
 

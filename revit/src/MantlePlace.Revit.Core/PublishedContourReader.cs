@@ -56,7 +56,7 @@ public static class PublishedContourReader
     /// <summary>
     /// The entity kinds skipped rather than refused: labels, which carry no contour geometry.
     /// </summary>
-    public static IReadOnlySet<string> SkippedEntityKinds { get; } = new HashSet<string>(StringComparer.Ordinal) { "TEXT", "MTEXT" };
+    private static readonly HashSet<string> SkippedEntityKinds = new(StringComparer.Ordinal) { "TEXT", "MTEXT" };
 
     /// <summary>Parses the whole file, streaming.</summary>
     /// <returns><c>null</c> on success, or a user-facing reason the file could not be read.</returns>
@@ -64,7 +64,7 @@ public static class PublishedContourReader
         => TryParse(dxf, out contours, out _);
 
     /// <summary>Parses the whole file, streaming, and counts the labels it skipped.</summary>
-    /// <param name="skippedLabels">How many <see cref="SkippedEntityKinds"/> entities were passed over.</param>
+    /// <param name="skippedLabels">How many <c>TEXT</c> and <c>MTEXT</c> labels were passed over.</param>
     /// <returns><c>null</c> on success, or a user-facing reason the file could not be read.</returns>
     public static string? TryParse(TextReader dxf, out IReadOnlyList<PublishedContour>? contours, out int skippedLabels)
     {

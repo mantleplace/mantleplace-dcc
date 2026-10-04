@@ -246,7 +246,7 @@ internal static class SurfaceSanitiserTests
         return manifest;
     }
 
-    /// <summary>The Jackson reference bundle's frame: State Plane EPSG:6616 in US survey feet.</summary>
+    /// <summary>A real imperial reference bundle's frame: State Plane EPSG:6616 in US survey feet.</summary>
     private static string ImperialManifest(bool withBbox)
         => Manifest(
             withBbox ? "\"bbox\": { \"west\": -110.769253195258, \"south\": 43.4681979807655, \"east\": -110.751746804742, \"north\": 43.4809020192345 }," : string.Empty,
