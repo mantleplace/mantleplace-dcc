@@ -117,6 +117,13 @@ public static class SlowStepNotice
         /// </summary>
         public ImportSaving? Saves { get; init; }
 
+        /// <summary>
+        /// What one unit of a fidelity level's cost driver cost this step, or <c>null</c> for a step
+        /// whose levels have not been timed. A level's estimate is its count times this
+        /// (<see cref="EstimateLevel"/>); the manifest never states host time.
+        /// </summary>
+        public UnitCost? PerUnit { get; init; }
+
         /// <summary>The step's own seconds in Revit <paramref name="version"/>, or <c>null</c> where not measured.</summary>
         public SecondsRange? In(int version) => ForVersion(version, Revit2025, Revit2026, Revit2027);
 
@@ -151,6 +158,57 @@ public static class SlowStepNotice
                 ? low.ToString("N0", CultureInfo.InvariantCulture)
                 : string.Format(CultureInfo.InvariantCulture, "{0:N0} to {1:N0}", low, high);
         }
+    }
+
+    /// <summary>
+    /// Seconds one unit of a cost driver cost a step, per Revit version: the fastest and the slowest
+    /// run's step seconds divided by its count; <c>null</c> where it was not measured.
+    /// </summary>
+    /// <param name="Unit">The cost driver's unit these are per; a level counted in another is not estimated.</param>
+    public sealed record UnitCost(CostUnit Unit, SecondsRange? Revit2025, SecondsRange? Revit2026, SecondsRange? Revit2027)
+    {
+        /// <summary>The seconds per unit in Revit <paramref name="version"/>, or <c>null</c> where not measured.</summary>
+        public SecondsRange? In(int version) => ForVersion(version, Revit2025, Revit2026, Revit2027);
+    }
+
+    /// <summary>A level's estimated seconds, and which Revit's measurement it was made from.</summary>
+    /// <param name="Seconds">The cost driver's count times the step's seconds per unit, fastest and slowest.</param>
+    /// <param name="Version">The Revit whose measurement was used.</param>
+    /// <param name="Timed">Whether that is this Revit; when not, it is the newest version measured.</param>
+    public sealed record LevelEstimate(SecondsRange Seconds, int Version, bool Timed);
+
+    /// <summary>
+    /// What importing a level is estimated to take in this Revit: its published cost driver times the
+    /// step's measured seconds per unit (<see cref="StepMeasurement.PerUnit"/>), or <c>null</c> where
+    /// there is no count, no unit cost, or the two are not in the same unit.
+    /// </summary>
+    /// <param name="kind">The step the level is imported by.</param>
+    /// <param name="cost">The level's cost driver as published, or <c>null</c>.</param>
+    /// <param name="revitVersionNumber">
+    /// <c>Application.VersionNumber</c>. A version not timed, or none, is estimated from the newest
+    /// version that was, and the estimate says so — the rule <see cref="ForTickedBox"/> follows.
+    /// </param>
+    /// <remarks>
+    /// An unknown unit is never estimated: the manifest says to show its count without a cost, and a
+    /// count of something else times seconds per subdivision is a number with no meaning.
+    /// </remarks>
+    public static LevelEstimate? EstimateLevel(ImportStepKind kind, CostDriver? cost, string? revitVersionNumber)
+    {
+        if (cost is not { Unit: not CostUnit.Unknown } || Measured(kind)?.PerUnit is not { } perUnit || perUnit.Unit != cost.Unit)
+        {
+            return null;
+        }
+
+        bool timed = int.TryParse(revitVersionNumber, NumberStyles.None, CultureInfo.InvariantCulture, out int version)
+            && perUnit.In(version) is not null;
+        if (!timed && !MeasuredVersions.Any(year => perUnit.In(year) is not null))
+        {
+            return null;
+        }
+
+        int quoted = timed ? version : MeasuredVersions.Last(year => perUnit.In(year) is not null);
+        SecondsRange each = perUnit.In(quoted)!.Value;
+        return new LevelEstimate(new SecondsRange(cost.Count * each.Low, cost.Count * each.High), quoted, timed);
     }
 
     /// <summary>
@@ -198,6 +256,16 @@ public static class SlowStepNotice
     /// 2026-10-03, on two imperial reference bundles: one of 28 land-use and 18 land-cover polygons,
     /// one of 76 and 7. Revit 2026 was not measured.
     /// </para>
+    /// <para>
+    /// The unit costs (<see cref="StepMeasurement.PerUnit"/>) are the first fidelity-level runs: two
+    /// reference orders on State Plane foot deliveries, one of 2 km² and a denser one of 1.96 km², each
+    /// imported unattended in full and as copies cut to their published MED and MIN levels, with the
+    /// land use and land cover left out, by the plugin before it read levels, Revit 2025 and 2027,
+    /// 2026-10-03; one import per level. Each run's step seconds divided by its published count, the range across the runs.
+    /// Trees run from about 3.3 ms each on the largest set to 5.6 ms on the smallest, because the
+    /// family is prepared once whatever the count. Road surfaces run 0.65 to 1.67 s a cut in 2025
+    /// and 1.85 to 2.46 s in 2027, the denser order dearer per cut in both. Revit 2026 was not run.
+    /// </para>
     /// </remarks>
     public static StepMeasurement? Measured(ImportStepKind kind) => kind switch
     {
@@ -209,8 +277,15 @@ public static class SlowStepNotice
         ImportStepKind.SetSharedCoordinates or ImportStepKind.SetSiteLocation or ImportStepKind.RoadCentrelines
             => new(new(1.6, 3.1), new(1.9, 1.9), new(1.6, 2.8)),
         ImportStepKind.Water => new(new(2.1, 2.8), new(5.7, 11.4), new(7.7, 11.1)),
-        ImportStepKind.RoadPolygons => new(new(870, 1_112), new(1_318.6, 1_754.6), new(1_337.0, 1_781.7)) { Saves = new(1_169, 1_888, 1_900) },
-        ImportStepKind.Vegetation => new(new(206, 415), new(266, 275), new(231, 338)),
+        ImportStepKind.RoadPolygons => new(new(870, 1_112), new(1_318.6, 1_754.6), new(1_337.0, 1_781.7))
+        {
+            Saves = new(1_169, 1_888, 1_900),
+            PerUnit = new(CostUnit.Cuts, new(0.65, 1.67), null, new(1.85, 2.46)),
+        },
+        ImportStepKind.Vegetation => new(new(206, 415), new(266, 275), new(231, 338))
+        {
+            PerUnit = new(CostUnit.Elements, new(0.00328, 0.00540), null, new(0.00332, 0.00559)),
+        },
         ImportStepKind.AttributionAndProvenance => new(new(0.1, 0.6), new(0.1, 0.1), new(0.1, 0.2)),
         ImportStepKind.SiteContextView => new(new(1.4, 4.8), new(41.5, 42.4), new(32.7, 52.6)),
         ImportStepKind.ImageryDrape => new(new(25.6, 61.6), null, null),

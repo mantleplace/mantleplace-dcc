@@ -240,6 +240,14 @@ internal sealed class ActiveImport : IDisposable
             _log.Append(skip.Reason);
         }
 
+        foreach (ImportStep step in plan.Steps)
+        {
+            if (FidelityCuts.LevelLogLine(WindowLabels.StepName(step.Kind), step.Level) is { } line)
+            {
+                _log.Append(line);
+            }
+        }
+
         _plan = plan;
         Staged = new StagedImport(plan.Steps, _importer);
     }

@@ -25,6 +25,12 @@ public sealed class TreeDecision
     /// <summary>How many rows an earlier import of this same build already created.</summary>
     public int AlreadyPresent { get; init; }
 
+    /// <summary>
+    /// How many of this build's rows are in the project beyond the rows asked for — trees an earlier
+    /// import at a higher fidelity level placed, which a lower level keeps and never deletes.
+    /// </summary>
+    public int KeptAboveLevel { get; init; }
+
     /// <summary>One line for the log on the refuse arm; empty otherwise.</summary>
     public string Explanation { get; init; } = string.Empty;
 }
@@ -79,7 +85,12 @@ public static class TreeIdentity
     /// Comments of the candidate elements. Anything that is not this bundle's stamp is ignored, so a
     /// caller may pass more than it needs to.
     /// </param>
-    /// <param name="rowCount">How many trees the tree-points file publishes.</param>
+    /// <param name="rowCount">
+    /// How many trees this import places: every row of the tree-points file, or the first rows a
+    /// fidelity level's row cut keeps. The rows are the same file's at every level, so a higher level
+    /// creates only the rows a lower one did not, and a lower level creates nothing and keeps the
+    /// rest (<see cref="TreeDecision.KeptAboveLevel"/>).
+    /// </param>
     public static TreeDecision Decide(
         IEnumerable<string?> existingComments,
         string cacheKeyStem,
@@ -143,11 +154,19 @@ public static class TreeIdentity
             }
         }
 
+        // The rest of this build's rows, beyond the ones asked for: placed by an earlier import at a
+        // higher level, and kept. Read off the stamp's row, so a row this run would not create is
+        // never mistaken for one it did.
+        int keptAbove = present.Count(stamp =>
+            int.TryParse(stamp.AsSpan(thisBuild.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int row)
+            && row > rowCount);
+
         return new TreeDecision
         {
             Disposition = TreeDisposition.Create,
             RowsToCreate = rows,
             AlreadyPresent = alreadyPresent,
+            KeptAboveLevel = keptAbove,
         };
     }
 

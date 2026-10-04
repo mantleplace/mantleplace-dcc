@@ -273,6 +273,16 @@ public enum SkipReasonCode
     /// this one is already on the order. Declared last so every code before it keeps its number.
     /// </remarks>
     PredatesHostCopy,
+
+    /// <summary>
+    /// The fidelity level chosen for this layer is published in a form this host cannot import, so
+    /// the layer was left out rather than imported whole (<see cref="FidelityCuts.Apply"/>).
+    /// </summary>
+    /// <remarks>
+    /// The window never offers such a level, so only a choice made without it meets this. Declared
+    /// last so every code before it keeps its number.
+    /// </remarks>
+    LevelUnavailable,
 }
 
 /// <summary>
@@ -688,6 +698,16 @@ public sealed class ImportStep
     /// the ground it finds (<see cref="HeightDatums.Refusal"/>).
     /// </remarks>
     public StatedDatum? HeightDatum { get; init; }
+
+    /// <summary>
+    /// The fidelity levels the entry this step reads publishes, or <c>null</c> for one that is MAX
+    /// only: what the import window offers for the step's row. The entry's own, even when the step
+    /// reads a pointer level's file.
+    /// </summary>
+    public FidelityLevels? Levels { get; init; }
+
+    /// <summary>The level this step imports, as applied; <c>null</c> for an entry with no levels.</summary>
+    public AppliedLevel? Level { get; init; }
 }
 
 /// <summary>

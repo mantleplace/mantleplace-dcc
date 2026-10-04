@@ -64,12 +64,21 @@ internal sealed partial class RevitBundleImporter
         // existing subdivisions carry, so a re-import creates nothing twice.
         IReadOnlyList<string?> names = GroundCuts.Names(cuts);
         string stem = _archive.Layout.Key.Stem;
-        IReadOnlyList<NewSiteBoundary> newBoundaries = SiteBoundaryIdentity.NewFeatures(
+        IReadOnlyList<NewSiteBoundary> missing = SiteBoundaryIdentity.NewFeatures(
             layer,
             ExistingBoundaryStamps(terrain),
             names,
             stem);
-        int alreadyPresent = cuts.Count - newBoundaries.Count;
+
+        // A field cut is applied only now, after every cut is named over the whole layer, so a
+        // subdivision's stamp is the same at every level and a later import at a higher level cuts
+        // only the rest. Nothing an earlier import cut is deleted, whatever level this one is.
+        LevelCutSubdivisions leveled = FidelityCuts.Subdivisions(
+            [.. cuts.Select(cut => cut.Outer.LowestLevel)],
+            missing,
+            step.Level);
+        IReadOnlyList<NewSiteBoundary> newBoundaries = leveled.ToCut;
+        int alreadyPresent = leveled.AlreadyPresent;
 
         int created = 0;
         int declined = 0;
@@ -259,6 +268,8 @@ internal sealed partial class RevitBundleImporter
         {
             summary += $"; {alreadyPresent:N0} from an earlier import of this bundle were already present and left alone";
         }
+
+        summary += FidelityCuts.LevelClause(step.Level, leveled.LeftOut, leveled.KeptAboveLevel, "subdivisions");
 
         if (declined > 0)
         {

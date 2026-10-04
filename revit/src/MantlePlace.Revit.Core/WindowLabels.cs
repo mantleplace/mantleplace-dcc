@@ -34,7 +34,7 @@ namespace MantlePlace.Revit.Core;
 /// CI, so that collision would surface on one developer's machine and nowhere else.
 /// </para>
 /// </remarks>
-public static class WindowLabels
+public static partial class WindowLabels
 {
     /// <summary>
     /// The vault browser's title bar.
@@ -243,7 +243,8 @@ public static class WindowLabels
                 or SkipReasonCode.NoSurveyPoint
                 or SkipReasonCode.NoGeographicOrigin
                 or SkipReasonCode.GeographicOriginOutOfRange
-                or SkipReasonCode.LeftOutByChoice => null,
+                or SkipReasonCode.LeftOutByChoice
+                or SkipReasonCode.LevelUnavailable => null,
 
             // A code added to the planner and never decided here shows nothing rather than a guess;
             // the test that walks the enum is what makes it get a decision.

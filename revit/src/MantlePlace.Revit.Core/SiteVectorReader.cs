@@ -109,6 +109,12 @@ public sealed class SiteFeature
     /// <c>properties.threshold_deg</c> exactly as the file wrote the number, or empty. Steep ground only.
     /// </summary>
     public string Threshold { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The feature's value in the field a fidelity level's cut names — the lowest level it belongs
+    /// to, verbatim — or <c>null</c> when no cut field was asked for or the feature has none.
+    /// </summary>
+    public string? LowestLevel { get; init; }
 }
 
 /// <summary>
@@ -157,6 +163,10 @@ public static class SiteVectorReader
     /// <param name="accept">Which geometries to take.</param>
     /// <param name="label">What to call the layer in a failure message, in the user's words.</param>
     /// <param name="features">The parsed features; empty on failure.</param>
+    /// <param name="levelField">
+    /// The field a fidelity level's cut names, read into each feature's <see cref="SiteFeature.LowestLevel"/>;
+    /// <c>null</c> for a layer read whole.
+    /// </param>
     /// <returns><c>null</c> on success, or a user-facing reason the layer could not be read.</returns>
     public static string? TryParse(
         string geoJsonText,
@@ -164,7 +174,8 @@ public static class SiteVectorReader
         LayerFrame layer,
         SiteGeometryKinds accept,
         string label,
-        out IReadOnlyList<SiteFeature> features)
+        out IReadOnlyList<SiteFeature> features,
+        string? levelField = null)
     {
         ArgumentNullException.ThrowIfNull(frame);
         Placement placement = new(frame, layer);
@@ -198,7 +209,7 @@ public static class SiteVectorReader
                     continue;
                 }
 
-                AppendFeature(feature, placement, accept, parsed, ref polygons);
+                AppendFeature(feature, placement, accept, levelField, parsed, ref polygons);
             }
         }
 
@@ -209,6 +220,7 @@ public static class SiteVectorReader
         JsonElement feature,
         Placement placement,
         SiteGeometryKinds accept,
+        string? levelField,
         List<SiteFeature> parsed,
         ref int polygons)
     {
@@ -220,7 +232,8 @@ public static class SiteVectorReader
             properties?.Str("subtype") ?? string.Empty,
             properties?.Str("fld_zone") ?? string.Empty,
             properties?.Str("zone_subty") ?? string.Empty,
-            properties?.RawNumber("threshold_deg") ?? string.Empty);
+            properties?.RawNumber("threshold_deg") ?? string.Empty,
+            levelField is null ? null : properties?.OptionalStr(levelField));
 
         if (feature.Object("geometry") is not { } geometry)
         {
@@ -355,6 +368,7 @@ public static class SiteVectorReader
             FloodZone = carried.FloodZone,
             FloodZoneSubtype = carried.FloodZoneSubtype,
             Threshold = carried.Threshold,
+            LowestLevel = carried.LowestLevel,
             IsHole = isHole,
             PolygonOrdinal = polygon,
         });
@@ -368,7 +382,8 @@ public static class SiteVectorReader
         string Subtype,
         string FloodZone,
         string FloodZoneSubtype,
-        string Threshold);
+        string Threshold,
+        string? LowestLevel);
 
     private static bool TryReadPosition(JsonElement position, Placement placement, out SiteVertex vertex)
     {

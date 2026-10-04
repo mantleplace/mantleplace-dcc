@@ -66,7 +66,8 @@ internal sealed partial class RevitBundleImporter
             File.ReadAllText(csvPath),
             frame,
             step.FoliageTypeVocabulary,
-            step.Units);
+            step.Units,
+            rowLimit: step.Level is { Kind: FidelityLevelKind.RowCut } level ? level.Rows : null);
         if (parse.Failure is not null)
         {
             Say(parse.Failure);
@@ -138,6 +139,13 @@ internal sealed partial class RevitBundleImporter
             EmptyFoliageCells = parse.EmptyFoliageCells,
             UnknownFoliageValues = parse.UnknownFoliageValues,
         }));
+
+        // The level read, and what an earlier import at a higher level placed and this one kept.
+        string levelSentence = FidelityCuts.RowCutSentence(step.Level, decision.KeptAboveLevel);
+        if (levelSentence.Length > 0)
+        {
+            Say(levelSentence);
+        }
 
         // Informational: the reused rows are left as they are, and the checklist stays green.
         string mismatches = TreeIdentity.FoliageMismatchNote(

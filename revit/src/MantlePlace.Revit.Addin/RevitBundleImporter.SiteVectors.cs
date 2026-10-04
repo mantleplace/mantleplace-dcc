@@ -29,7 +29,8 @@ internal sealed partial class RevitBundleImporter
             layer,
             accept,
             label,
-            out IReadOnlyList<SiteFeature> features);
+            out IReadOnlyList<SiteFeature> features,
+            levelField: step.Level is { Kind: FidelityLevelKind.FieldCut } level ? level.LowestLevelField : null);
 
         if (parseError is not null)
         {

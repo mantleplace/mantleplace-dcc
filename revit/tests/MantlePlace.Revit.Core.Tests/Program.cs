@@ -27,6 +27,7 @@ exitCode |= FootprintExtentTests.Run();
 exitCode |= TerrainIdentityTests.Run();
 exitCode |= HeightDatumTests.Run();
 exitCode |= TreeIdentityTests.Run();
+exitCode |= FidelityLevelTests.Run();
 exitCode |= TreeFamilyTests.Run();
 exitCode |= ShrubFamilyTests.Run();
 exitCode |= PlantingSummaryTests.Run();
