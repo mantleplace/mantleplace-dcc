@@ -21,7 +21,7 @@ in UE](https://youtu.be/oJJM80M88Rw)**.
 ## What these plugins do
 
 A **Mantle Place Bundle (MPB)** is a zip of pre-derived, host-ready geospatial artifacts — a
-heightmap or terrain mesh, an imagery drape, building geometry, road centrelines, site boundaries,
+heightmap or terrain mesh, an imagery drape, building geometry, road centrelines, land use and land cover,
 tree points — plus a `Metadata/manifest.json` that describes them. The plugins read that manifest
 and place the artifacts correctly in the host's own coordinate system. The format is specified in
 public, in [`spec/`](spec/). Which host does what with each of them — and, where one does not, why —
