@@ -183,6 +183,13 @@ renderer-neutral.
   survives the solid's copy onto a `DirectShape`: a value the site model publishes reaches a building
   only if this step writes it. Which elements are buildings is not in that set —
   `SiteModelReader` reads it from the IFC's text, headlessly ([ADR 0012](../../docs/adr/0012-context-buildings-come-from-the-site-model.md)).
+  When the same import also links the site model, the conversion is saved with `Document.SaveAs` as
+  the link's version-qualified companion before it is closed, and the link step finds it on disk and
+  converts nothing. That ran in Revit 2025 and 2027 through the timing harness on 2026-10-03, on two
+  imperial reference bundles, two runs each: the log said the IFC was converted once, every building
+  (1,317 and 1,672) was copied and the site model was linked, as before, and the two steps fell from 80 to 45 s
+  (Jackson) and from 105–113 to 59–62 s (Savannah). The save costs 8 to 11 s of the 38 to 53 s the link step spent
+  converting.
 
 - **A subdivision cut from an outer loop plus its inner loops has left that set**, in all three
   versions. `Toposolid.CreateSubDivision` takes a list of curve loops and documents nothing about
