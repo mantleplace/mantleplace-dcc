@@ -22,7 +22,7 @@ public static class SiteVectorLayers
 {
     public static readonly SiteVectorLayer RoadSplines = new("road_splines", SiteGeometryKinds.Lines, "road centrelines");
 
-    public static readonly SiteVectorLayer LandUse = new("land_use", SiteGeometryKinds.Areas, "site boundaries");
+    public static readonly SiteVectorLayer LandUse = new("land_use", SiteGeometryKinds.Areas, "land use");
 
     public static readonly SiteVectorLayer LandCover = new("land_cover", SiteGeometryKinds.Areas, "land cover");
 
@@ -38,7 +38,7 @@ public static class SiteVectorLayers
     public static SiteVectorLayer? Of(ImportStepKind kind) => kind switch
     {
         ImportStepKind.RoadCentrelines => RoadSplines,
-        ImportStepKind.SiteBoundaries => LandUse,
+        ImportStepKind.LandUse => LandUse,
         ImportStepKind.LandCover => LandCover,
         ImportStepKind.Water => Water,
         ImportStepKind.RoadPolygons => RoadPolygons,

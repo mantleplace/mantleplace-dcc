@@ -77,7 +77,7 @@ internal sealed partial class RevitBundleImporter
     /// <remarks>
     /// <para>
     /// ⛔ Every transaction this importer opens goes through here, not just the terrain one. Any of
-    /// them can post a warning — the site-boundary step posts one per overlapping ring, the drape's
+    /// them can post a warning — the subdivision step posts one per overlapping ring, the drape's
     /// <c>ChangeTypeId</c> can post a slope warning — and a run driven by
     /// <c>MANTLEPLACE_BUNDLE_ZIP</c> has nobody to dismiss it. Uniformity is the only way to
     /// guarantee that.
@@ -116,7 +116,7 @@ internal sealed partial class RevitBundleImporter
         // Timed separately from the step that owns it. Revit does its element-relation bookkeeping
         // at commit, not at the API call, so "the step took N seconds" and "the commit took N
         // seconds" point at completely different levers — and only the second one was ever the
-        // problem for the site-boundary subdivisions.
+        // problem for the subdivisions.
         //
         // ⛔ Said either side of the call, and the far side in a finally: this is the last thing the
         // import window hears before Revit's thread stops answering, and a commit that throws must

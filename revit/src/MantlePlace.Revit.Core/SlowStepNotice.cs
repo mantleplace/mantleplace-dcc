@@ -20,9 +20,9 @@ namespace MantlePlace.Revit.Core;
 /// <c>Transaction.Commit()</c>, in Revit's own <c>updateElementRelations</c>. Measured on one order —
 /// an 80,372-point toposolid with 17 land-use rings — the site boundaries and the drape took 610.6 s
 /// and 409.1 s on a first import, 247.1 s and 249.6 s on a re-import, with Revit reporting "not
-/// responding" for the whole of each. The polygon layers are now announced against a later
-/// measurement that isolates one subdivision (<see cref="DescribePolygonLayer"/>); the drape is
-/// still announced against this one.
+/// responding" for the whole of each. The polygon layers are now announced against their own rows
+/// of <see cref="Measured"/> (<see cref="DescribePolygonLayer"/>); the drape is still announced
+/// against this one.
 /// </para>
 /// <para>
 /// The drape's half is now paid only on ground that is not already on the imagery type — an
@@ -38,9 +38,11 @@ namespace MantlePlace.Revit.Core;
 /// and skipping the boundaries addresses at most half the cost while putting the first
 /// non-data-driven toggle into <see cref="BundleImportPlanner"/>. What was actually wrong was that a
 /// ten-minute freeze arrived with no warning and read as a crash. So it is announced instead. The
-/// checklist has since started the three slowest subdivision layers unticked, on a whole-import
-/// measurement of every box (<see cref="StepMeasurement.Saves"/>); the planner still takes no toggle
-/// of its own, and what is ticked is still built at the cost said here.
+/// checklist has since started the slowest subdivision layer unticked, on a whole-import
+/// measurement of every box (<see cref="StepMeasurement.Saves"/>), and the land use and land cover
+/// left the terrain for land plans (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>);
+/// the planner still takes no toggle of its own, and what is ticked is still built at the cost said
+/// here.
 /// </para>
 /// <para>
 /// ⛔ <b>What cannot be shown is the inside of one commit.</b> This used to say that a progress bar
@@ -102,9 +104,9 @@ public static class SlowStepNotice
     /// The three ranges are the step's <b>own</b> seconds. <see cref="Saves"/>, where a row has it, is a
     /// different figure, and this is the one place the difference is stated: what leaving the step's
     /// checklist box out saved a whole import, which also counts every later step the box makes
-    /// dearer. The two part company where a box slows what comes after it: the land cover's own step
-    /// was minutes, and leaving it out saved four to ten times that, because the land use and road
-    /// surfaces cut after it took far longer with it.
+    /// dearer. The two part company where a box slows what comes after it: the land cover, while it
+    /// was still cut into the terrain, took minutes of its own, and leaving it out saved four to ten
+    /// times that, because the subdivisions cut after it took far longer with it.
     /// </remarks>
     public sealed record StepMeasurement(SecondsRange? Revit2025, SecondsRange? Revit2026, SecondsRange? Revit2027)
     {
@@ -177,7 +179,7 @@ public static class SlowStepNotice
     /// own (<see cref="For"/>).
     /// </para>
     /// <para>
-    /// The four subdivision steps' 2026 and 2027 ranges are later: the window run and the first and last
+    /// The two subdivision steps' 2026 and 2027 ranges are later: the window run and the first and last
     /// layers runs with every box ticked, Revit 2026.5 and 2027.2, 2026-09-30 and 2026-10-01, after the
     /// subdivisions took their drape types as they were cut, which moved cost into these steps. Their
     /// 2025 ranges stand, because that change does not reach 2025.
@@ -186,9 +188,12 @@ public static class SlowStepNotice
     /// The savings (<see cref="StepMeasurement.Saves"/>) are the layers runs of the same order: per
     /// version, the mean of the first and last full imports minus one import with only that box
     /// unticked; 2025.4 on 2026-09-30, and 2026 and 2027 from the later runs above. Those two full
-    /// imports differed by about nine minutes in 2025 and 2026 and eleven in 2027. Leaving out the land
-    /// use saved 530 s in 2026 and 520 s in 2027, inside that spread, so its row has no saving there and
-    /// its warning quotes its own step.
+    /// imports differed by about nine minutes in 2025 and 2026 and eleven in 2027.
+    /// </para>
+    /// <para>
+    /// The land use and land cover have no row from this order: what they were measured at there was
+    /// the cost of cutting them into the terrain, and those rows went with the subdivisions
+    /// (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>).
     /// </para>
     /// </remarks>
     public static StepMeasurement? Measured(ImportStepKind kind) => kind switch
@@ -200,8 +205,6 @@ public static class SlowStepNotice
         ImportStepKind.LinkSiteIfc => new(new(41.1, 71.2), new(39.3, 39.5), new(43.8, 44.6)),
         ImportStepKind.SetSharedCoordinates or ImportStepKind.SetSiteLocation or ImportStepKind.RoadCentrelines
             => new(new(1.6, 3.1), new(1.9, 1.9), new(1.6, 2.8)),
-        ImportStepKind.LandCover => new(new(274, 471), new(111.0, 140.4), new(111.2, 144.3)) { Saves = new(1_522, 1_170, 1_164) },
-        ImportStepKind.SiteBoundaries => new(new(330, 407), new(153.8, 237.8), new(161.0, 246.2)) { Saves = new(712, null, null) },
         ImportStepKind.Water => new(new(2.1, 2.8), new(5.7, 11.4), new(7.7, 11.1)),
         ImportStepKind.RoadPolygons => new(new(870, 1_112), new(1_318.6, 1_754.6), new(1_337.0, 1_781.7)) { Saves = new(1_169, 1_888, 1_900) },
         ImportStepKind.Vegetation => new(new(206, 415), new(266, 275), new(231, 338)),
@@ -249,6 +252,8 @@ public static class SlowStepNotice
                 "Next: the " + GroundLayerWords.For(layer).Label + " — "
                     + plannedWorkItems.ToString("N0", CultureInfo.InvariantCulture)
                     + " subdivision(s) to cut into the terrain.",
+                layer,
+                measured,
                 terrainPointCount),
 
             ImportStepKind.ImageryDrape => Describe(
@@ -490,12 +495,6 @@ public static class SlowStepNotice
         + "effect when it finishes. It has not crashed; leave it alone.";
 
     /// <summary>
-    /// The point count of the terrain the polygon layers' single-subdivision measurements were taken
-    /// on: the MPB 1.4.0 order of the land-cover investigation (<see cref="DescribePolygonLayer"/>).
-    /// </summary>
-    public const int MeasuredSubDivisionTerrainPointCount = 74_855;
-
-    /// <summary>
     /// The terrain of order <c>4276ef78</c>, the one every whole-import figure here was measured on:
     /// Phase 1, the on/off matrix, and the typed cuts. Its TIN has this many vertices.
     /// </summary>
@@ -507,72 +506,43 @@ public static class SlowStepNotice
     /// <summary>The trees and shrubs that order plants.</summary>
     public const int MeasuredOrderPlantings = 19_755;
 
-    /// <summary>The subdivisions that order cuts: 19 land cover, 40 land use, 2 water and 344 road surfaces.</summary>
+    /// <summary>
+    /// The subdivisions that order cut when it was measured: 19 land cover, 40 land use, 2 water and
+    /// 344 road surfaces. The land layers are drawn on land plans now, so an import of it cuts 346.
+    /// </summary>
     public const int MeasuredOrderSubDivisions = 405;
 
     /// <summary>
-    /// Rounded minutes one land-cover subdivision covering the whole order took to commit on its own
-    /// in Revit 2025, cut first, onto a terrain with nothing else cut into it.
-    /// </summary>
-    /// <remarks>
-    /// 526.5 s, 2026-09-25, Revit 2025.4: a five-vertex grass ring of 199.7 ha, in its own
-    /// transaction. One run.
-    /// </remarks>
-    public const int MeasuredWholeOrderSubDivisionAloneMinutes2025 = 9;
-
-    /// <summary>
-    /// Rounded minutes the same subdivision took to commit on its own in Revit 2025, cut last, onto a
-    /// terrain already carrying 57 subdivisions.
-    /// </summary>
-    /// <remarks>1,210.4 s, 2026-09-25, Revit 2025.4. One run.</remarks>
-    public const int MeasuredWholeOrderSubDivisionLastMinutes2025 = 20;
-
-
-    /// <summary>The land-cover row of <see cref="Measured"/>, its 2026 and 2027 runs only.</summary>
-    private static StepMeasurement LandCoverLayerLater
-        => Measured(ImportStepKind.LandCover) is { } landCover
-            ? new(null, landCover.Revit2026, landCover.Revit2027)
-            : throw new InvalidOperationException("the land cover has no row in Measured");
-
-    /// <summary>
-    /// The body for a polygon layer: what the cost appears to follow in Revit 2025, the one
-    /// subdivision measured on its own, this terrain, and the reassurance.
+    /// The body for a polygon layer: where the time goes, the layer's own measurement on the one order,
+    /// this terrain, and the reassurance.
     /// </summary>
     /// <remarks>
     /// <para>
     /// ⛔ <b>This has been wrong twice, both times by explaining one run.</b> It first promised every
     /// later layer the site boundaries' speed, and the land cover then took fifty times as long. It
-    /// then said the cost grows with the subdivisions already on the terrain, and a probe cut the
-    /// order's whole-order grass ring first, alone, onto a bare terrain: nine minutes. Cut last, onto
-    /// 57 other subdivisions, the same ring took twenty. So in Revit 2025 on this order both matter:
-    /// how much of the terrain a subdivision covers, and how much of that ground other subdivisions
-    /// already cover. Neither has been measured anywhere else, and 2026 and 2027 have only whole-layer
-    /// numbers, so the sentence is scoped to 2025 and says "appears". Those numbers are the land-cover
-    /// row of <see cref="Measured"/>: one earlier pair of runs, cut after the site boundaries, gave 150 s
-    /// and 178 s, and the row's full imports since, cut first and typed as they are cut, replace it.
+    /// then said the cost grows with the subdivisions already on the terrain, and a probe of one
+    /// whole-order land-cover ring took nine minutes alone in Revit 2025 and twenty cut after 57
+    /// others. So it no longer explains: it quotes the layer's own row of <see cref="Measured"/>, with
+    /// how many of that layer's subdivisions the order cut, and says nothing about how the cost grows.
     /// </para>
     /// <para>
     /// The same rule as <see cref="Describe"/>: the measurements and this terrain are stated side by
     /// side, and no duration is predicted from them. It names no other step and no place in the
-    /// order, because the order is the planner's and has changed once already.
+    /// order, because the order is the planner's and has changed more than once.
     /// </para>
     /// </remarks>
-    private static string DescribePolygonLayer(string opening, int? terrainPointCount)
+    private static string DescribePolygonLayer(string opening, GroundLayer layer, StepMeasurement measured, int? terrainPointCount)
         => string.Format(
             CultureInfo.InvariantCulture,
-            "{0} Revit rebuilds the terrain's element relations when the transaction commits. In Revit "
-            + "2025 that cost appears to follow how much of the terrain a new subdivision covers, and "
-            + "to grow when it lands on ground other subdivisions already cover. On the one order this "
-            + "has been measured on ({1:N0} points), a single land-cover subdivision covering the whole "
-            + "order took about {2} minutes on its own in Revit 2025 when nothing else was cut into the "
-            + "terrain, and about {3} minutes when cut after 57 others; in full imports with every box "
-            + "ticked the whole land-cover layer took {4}. How long this layer takes depends on the "
-            + "polygons it carries, and no duration is predicted here. {5}. {6}",
+            "{0} Revit rebuilds the terrain's element relations when the transaction commits. On the one "
+            + "order this has been measured on ({1:N0} points, {2:N0} {3}), in full imports with every box "
+            + "ticked, this layer took {4}. How long it takes depends on the polygons it carries, and no "
+            + "duration is predicted here. {5}. {6}",
             opening,
-            MeasuredSubDivisionTerrainPointCount,
-            MeasuredWholeOrderSubDivisionAloneMinutes2025,
-            MeasuredWholeOrderSubDivisionLastMinutes2025,
-            LandCoverLayerLater.Describe(),
+            MeasuredOrderVertexCount,
+            MeasuredTypeAtCut(layer).SubDivisions,
+            GroundLayerWords.For(layer).Label,
+            measured.Describe(),
             ThisTerrain(terrainPointCount),
             InsideOneCommit);
 
@@ -642,8 +612,6 @@ public static class SlowStepNotice
     /// <remarks>revit/docs/api-record.md's bullet on typed subdivisions records the run.</remarks>
     public static TypeAtCutMeasurement MeasuredTypeAtCut(GroundLayer layer) => layer switch
     {
-        GroundLayer.LandCover => new(3.3, 5.0, 19, 4),
-        GroundLayer.LandUse => new(1.2, 1.6, 40, 4),
         GroundLayer.Water => new(1.0, 1.3, 2, 4),
         GroundLayer.RoadSurface => new(1.2, 1.2, 344, 1),
         _ => throw new ArgumentOutOfRangeException(nameof(layer), layer, "a ground layer with no typing measurement"),
@@ -815,7 +783,7 @@ public static class SlowStepNotice
     /// ticks one box onto the defaults is not the import that was measured. Where the saving is more
     /// than twice the step's own slowest run, the line says most of it was the steps after it. Where
     /// this version has no saving, the step's own seconds, said as its own step's and with what else was
-    /// ticked: alone on the defaults it is cheaper, since the land cover makes it dearer.
+    /// ticked: alone on the defaults it may be cheaper, since the boxes before it can make it dearer.
     /// </para>
     /// <para>
     /// It picks which measurement is quoted and decides nothing in Revit, so reading the version here

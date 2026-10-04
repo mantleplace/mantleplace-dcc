@@ -9,8 +9,8 @@ public enum HazardLayer
     SteepGround,
 }
 
-/// <summary>What the project already has under a hazard plan's name.</summary>
-public enum HazardViewFound
+/// <summary>What the project already has under a drawn plan's name — a hazard plan's or a land plan's.</summary>
+public enum PlanViewFound
 {
     /// <summary>No view by that name.</summary>
     None,
@@ -22,8 +22,12 @@ public enum HazardViewFound
     SomethingElse,
 }
 
-/// <summary>What a hazard step does to its build's plan, and the sentence when it draws nothing.</summary>
-public sealed class HazardPlanDecision
+/// <summary>
+/// What a step that draws on a plan does to its build's plan, and the sentence when it draws nothing.
+/// The hazard plan's rule, which the land plans share (<see cref="HazardPlan.Decide(PlanViewFound, IEnumerable{string?}, HazardLayer, string, string)"/>,
+/// <see cref="LandPlan.Decide"/>).
+/// </summary>
+public sealed class PlanDecision
 {
     /// <summary>Whether the plan has to be made before anything is drawn.</summary>
     public required bool CreateView { get; init; }
@@ -142,35 +146,57 @@ public static class HazardPlan
     /// The Comments of the regions already in that plan. Anything that is not this layer's stamp for
     /// this build is ignored, so a caller may pass more than it needs to.
     /// </param>
-    public static HazardPlanDecision Decide(
-        HazardViewFound found,
+    public static PlanDecision Decide(
+        PlanViewFound found,
         IEnumerable<string?> regionComments,
         HazardLayer layer,
         string cacheKeyStem,
         string build)
     {
+        return Decide(
+            found,
+            regionComments,
+            Stamp(layer, cacheKeyStem, build),
+            ViewName(build),
+            layer == HazardLayer.FloodZones ? "flood zones are" : "steep ground is");
+    }
+
+    /// <summary>
+    /// The never-redraw rule for any plan a build draws on: what the project holds under the plan's
+    /// name, and how many regions on it carry the layer's stamp, decide everything.
+    /// </summary>
+    /// <param name="found">What the project has under <paramref name="viewName"/>.</param>
+    /// <param name="regionComments">The Comments of the regions already in that plan; anything else is ignored.</param>
+    /// <param name="stamp">The stamp this layer's regions carry for this build.</param>
+    /// <param name="viewName">The plan's name, for the sentence.</param>
+    /// <param name="layerIsAlready">The layer and its verb, for the sentence: "flood zones are".</param>
+    internal static PlanDecision Decide(
+        PlanViewFound found,
+        IEnumerable<string?> regionComments,
+        string stamp,
+        string viewName,
+        string layerIsAlready)
+    {
         ArgumentNullException.ThrowIfNull(regionComments);
 
-        string view = ViewName(build);
-        if (found == HazardViewFound.SomethingElse)
+        if (found == PlanViewFound.SomethingElse)
         {
-            return new HazardPlanDecision
+            return new PlanDecision
             {
                 CreateView = false,
                 Draw = false,
-                Explanation = $"A view named \"{view}\" is already in this project and is not a plan this plugin "
+                Explanation = $"A view named \"{viewName}\" is already in this project and is not a plan this plugin "
                     + "can draw into, so nothing was drawn. Rename that view and import again.",
             };
         }
 
-        string stamp = Stamp(layer, cacheKeyStem, build);
-        int present = found == HazardViewFound.PlanView
+        int present = found == PlanViewFound.PlanView
             ? regionComments.Count(comments => string.Equals(comments, stamp, StringComparison.Ordinal))
             : 0;
 
         if (present > 0)
         {
-            return new HazardPlanDecision
+            return new PlanDecision
             {
                 CreateView = false,
                 Draw = false,
@@ -179,13 +205,13 @@ public static class HazardPlan
                     CultureInfo.InvariantCulture,
                     "This build's {0} already on \"{1}\" ({2:N0} region(s)), so it was left alone and nothing "
                         + "was drawn over it.",
-                    layer == HazardLayer.FloodZones ? "flood zones are" : "steep ground is",
-                    view,
+                    layerIsAlready,
+                    viewName,
                     present),
             };
         }
 
-        return new HazardPlanDecision { CreateView = found == HazardViewFound.None, Draw = true };
+        return new PlanDecision { CreateView = found == PlanViewFound.None, Draw = true };
     }
 
     /// <summary>
@@ -265,25 +291,7 @@ public static class HazardPlan
     /// cover. Grouped by the polygon each ring came out of, so a polygon whose outer ring the reader
     /// dropped leaves its holes stranded rather than handing them to its neighbour.
     /// </remarks>
-    public static GroundCutPlan Regions(IReadOnlyList<SiteFeature> rings)
-    {
-        ArgumentNullException.ThrowIfNull(rings);
-
-        List<GroundCut> regions = [];
-        int stranded = 0;
-        foreach (IGrouping<int, SiteFeature> polygon in rings.GroupBy(ring => ring.PolygonOrdinal))
-        {
-            if (polygon.FirstOrDefault(ring => !ring.IsHole) is not { } outer)
-            {
-                stranded += polygon.Count();
-                continue;
-            }
-
-            regions.Add(new GroundCut { Outer = outer, Holes = [.. polygon.Where(ring => ring.IsHole)] });
-        }
-
-        return new GroundCutPlan(regions, stranded);
-    }
+    public static GroundCutPlan Regions(IReadOnlyList<SiteFeature> rings) => GroundCuts.For(rings);
 
     /// <summary>
     /// The plan's crop: the published rectangle, widened east just far enough to hold the zone key's

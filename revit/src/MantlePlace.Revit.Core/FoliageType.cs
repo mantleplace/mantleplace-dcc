@@ -35,9 +35,9 @@ public enum FoliageType
 /// </para>
 /// <para>
 /// ⚠️ <c>shrub</c> means something else elsewhere in this codebase. As a land-cover polygon
-/// <em>subtype</em> it selects the ground material phrase <c>tall grass</c>
-/// (<see cref="RendererKeywords"/>) — a surface under a canopy, not a plant. Both words come from
-/// the platform and neither is ours to rename; see <c>CONTEXT.md</c>.
+/// <em>subtype</em> it is a class of ground cover drawn on the land cover plan
+/// (<see cref="LandStyles"/>) — a surface under a canopy, not a plant. Both words come from the
+/// platform and neither is ours to rename; see <c>CONTEXT.md</c>.
 /// </para>
 /// </remarks>
 public static class FoliageTypes

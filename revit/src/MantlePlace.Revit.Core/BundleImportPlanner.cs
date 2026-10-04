@@ -83,13 +83,16 @@ public static class BundleImportPlanner
         PlanSiteLocation(manifest, steps, skipped);
         PlanSiteContext(manifest, entries, steps, skipped, drapePlanned);
 
-        // After every layer that builds the model, and flood before steep: steep ground is a hatch
-        // drawn over the flood zones' fill. The crop is the drape's, planned above whether or not
-        // the curator keeps the drape, because the plan is cropped to the published rectangle rather
-        // than to whatever this import happened to texture.
+        // The drawn plans, after every layer that builds the model: the two land plans, land use
+        // first, then the hazard plan, flood before steep because steep ground is a hatch drawn over
+        // the flood zones' fill. The crop is the drape's, planned above whether or not the curator
+        // keeps the drape, because every plan is cropped to the published rectangle rather than to
+        // whatever this import happened to texture.
         FootprintExtent? crop = drapeSteps.FirstOrDefault()?.Drape is { } placed
             ? new FootprintExtent(placed.LeftM, placed.BottomM, placed.RightM, placed.TopM)
             : null;
+        PlanLandPlan(manifest, entries, steps, skipped, LandLayer.LandUse, crop);
+        PlanLandPlan(manifest, entries, steps, skipped, LandLayer.LandCover, crop);
         PlanHazard(manifest, entries, steps, skipped, HazardLayer.FloodZones, crop);
         PlanHazard(manifest, entries, steps, skipped, HazardLayer.SteepGround, crop);
 
@@ -104,7 +107,7 @@ public static class BundleImportPlanner
 
         // Last, and last for three reasons. The drape needs the terrain step to have run before it —
         // it writes the photograph into the material that step built the toposolid wearing; it also
-        // drapes the site-boundary subdivisions this import created, which must exist before they
+        // drapes the subdivisions this import created, which must exist before they
         // can be draped; and it is the one kind whose Revit API surface has never executed
         // anywhere, so if any step is going to fail it should be the one with nothing queued behind
         // it. Execute runs a transaction per step and does not catch, so the order of this list is
@@ -548,9 +551,9 @@ public static class BundleImportPlanner
     }
 
     /// <summary>
-    /// The three Forma-parity layers — road centrelines, site boundaries and vegetation — and the
-    /// three layers cut as subdivisions beside the site boundaries: land cover, the water bodies and
-    /// the road surfaces, in that order after them.
+    /// The road centrelines, the two layers cut as subdivisions — the water bodies and the road
+    /// surfaces, in that order — and the trees. The land use and land cover are drawn on land plans,
+    /// planned with the hazard plan (<see cref="PlanLandPlan"/>).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -568,7 +571,7 @@ public static class BundleImportPlanner
     /// </para>
     /// </remarks>
     /// <param name="drapePlanned">
-    /// Whether the plan's drape will run, handed to the four polygon steps
+    /// Whether the plan's drape will run, handed to the two subdivision steps
     /// (<see cref="ImportStep.DrapePlanned"/>).
     /// </param>
     private static void PlanSiteContext(
@@ -590,35 +593,6 @@ public static class BundleImportPlanner
             steps,
             skipped,
             VectorAbsence(manifest, ImportStepKind.RoadCentrelines));
-
-        // The land cover before the site boundaries: in Revit 2025, on one order whose land cover
-        // carries a ring as large as the order, this way round committed the two layers in 873 s
-        // against 999 s the other way. One run each, and two runs of the other order differed by
-        // more than that, so it is a measured preference and not a proven speed-up. What draws is
-        // not decided by cut order (revit/README.md, "Where two subdivisions cover the same ground").
-        PlanPlacedArtifact(
-            manifest,
-            manifest.LandCover,
-            frame,
-            entries,
-            ImportStepKind.LandCover,
-            SiteVectorLayers.LandCover.Label,
-            steps,
-            skipped,
-            VectorAbsence(manifest, ImportStepKind.LandCover),
-            drapePlanned: drapePlanned);
-
-        PlanPlacedArtifact(
-            manifest,
-            manifest.LandUse,
-            frame,
-            entries,
-            ImportStepKind.SiteBoundaries,
-            SiteVectorLayers.LandUse.Label,
-            steps,
-            skipped,
-            VectorAbsence(manifest, ImportStepKind.SiteBoundaries),
-            drapePlanned: drapePlanned);
 
         PlanPlacedArtifact(
             manifest,
@@ -689,6 +663,37 @@ public static class BundleImportPlanner
             skipped,
             VectorAbsence(manifest, ImportStepKind.RoadPolygons),
             drapePlanned: drapePlanned);
+    }
+
+    /// <summary>
+    /// One land layer on its build's land plan, or why it is not in this bundle in a form this host
+    /// can draw (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>).
+    /// </summary>
+    /// <remarks>
+    /// Placed exactly as every polygon layer is, refusals and all (<see cref="PlanPlacedArtifact"/>),
+    /// from this host's own copy first; its absence is the vector set's (<see cref="VectorAbsence"/>).
+    /// Not draped and needing no terrain: a filled region belongs to its plan, not to the ground.
+    /// </remarks>
+    private static void PlanLandPlan(
+        BundleManifest manifest,
+        BundleEntryIndex entries,
+        List<ImportStep> steps,
+        List<SkippedImport> skipped,
+        LandLayer layer,
+        FootprintExtent? crop)
+    {
+        ImportStepKind kind = layer == LandLayer.LandUse ? ImportStepKind.LandUse : ImportStepKind.LandCover;
+        PlanPlacedArtifact(
+            manifest,
+            layer == LandLayer.LandUse ? manifest.LandUse : manifest.LandCover,
+            SiteFrame.For(manifest),
+            entries,
+            kind,
+            SiteVectorLayers.For(kind).Label,
+            steps,
+            skipped,
+            VectorAbsence(manifest, kind),
+            landPlan: new LandPlanFacts { Build = LandPlan.BuildToken(manifest.JobId), Crop = crop });
     }
 
     /// <summary>
@@ -788,6 +793,7 @@ public static class BundleImportPlanner
     /// layer absent (<see cref="SkipReasonCode.DeclaredAbsent"/>), or <c>null</c> for the vault's remedy.
     /// </param>
     /// <param name="hazard">What a hazard step carries beyond its file; <c>null</c> for every other kind.</param>
+    /// <param name="landPlan">What a land plan step carries beyond its file; <c>null</c> for every other kind.</param>
     private static void PlanPlacedArtifact(
         BundleManifest manifest,
         BundleArtifact? artifact,
@@ -801,7 +807,8 @@ public static class BundleImportPlanner
         SurfaceCropWindow? crop = null,
         LinearUnit verticalUnits = LinearUnit.Unspecified,
         HazardPlanFacts? hazard = null,
-        bool drapePlanned = false)
+        bool drapePlanned = false,
+        LandPlanFacts? landPlan = null)
     {
         if (artifact is null)
         {
@@ -894,6 +901,7 @@ public static class BundleImportPlanner
             // in step with it.
             FoliageTypeVocabulary = artifact.FoliageTypeVocabulary,
             Hazard = hazard,
+            LandPlan = landPlan,
             HeightDatum = HeightDatums.For(kind, artifact, manifest),
         });
     }

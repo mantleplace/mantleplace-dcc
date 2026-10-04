@@ -10,7 +10,8 @@ public readonly record struct RgbColour(byte Red, byte Green, byte Blue)
 }
 
 /// <summary>
-/// How one kind of hazard region is drawn: the filled region type it is given, its fill, and the
+/// How one kind of region on a drawn plan is drawn — a hazard zone's (<see cref="HazardStyles"/>) or a
+/// land class's (<see cref="LandStyles"/>): the filled region type it is given, its fill, and the
 /// hatch laid over that fill.
 /// </summary>
 /// <param name="TypeName">
@@ -21,7 +22,7 @@ public readonly record struct RgbColour(byte Red, byte Green, byte Blue)
 /// <param name="Hatch">The hatch's colour, or <c>null</c> for no hatch.</param>
 /// <param name="HatchAngleDeg">The hatch's angle from the view's horizontal, in degrees.</param>
 /// <param name="HatchPatternName">The drafting fill pattern the hatch is, found or made by this name.</param>
-public sealed record HazardStyle(
+public sealed record RegionStyle(
     string TypeName,
     RgbColour? Fill,
     RgbColour? Hatch,
@@ -93,7 +94,7 @@ public static class HazardStyles
     /// Steep ground: a hatch and no fill, drawn after the flood zones so a steep bank inside a flood
     /// zone shows both — at an angle and in a colour the floodway's hatch does not share.
     /// </summary>
-    public static HazardStyle SteepGround { get; } = new(
+    public static RegionStyle SteepGround { get; } = new(
         TypePrefix + "Steep Ground",
         Fill: null,
         Hatch: SteepHatch,
@@ -101,7 +102,7 @@ public static class HazardStyles
         HatchPatternName: TypePrefix + "Steep Ground Hatch");
 
     /// <summary>How a flood zone of this published zone and subtype is drawn.</summary>
-    public static HazardStyle ForFloodZone(string zone, string subtype)
+    public static RegionStyle ForFloodZone(string zone, string subtype)
     {
         ArgumentNullException.ThrowIfNull(zone);
         ArgumentNullException.ThrowIfNull(subtype);
@@ -112,7 +113,7 @@ public static class HazardStyles
 
         // Every floodway FEMA names — FLOODWAY, ADMINISTRATIVE FLOODWAY and their like — is hatched.
         bool floodway = subtype.Contains(FloodwaySubtype, StringComparison.Ordinal);
-        return new HazardStyle(
+        return new RegionStyle(
             LegalName(TypePrefix + "Flood Zone " + ZoneKey.FloodRowText(zone, subtype)),
             fill,
             floodway ? FloodwayHatch : null,

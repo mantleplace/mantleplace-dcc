@@ -308,8 +308,8 @@ below could be meant.
 _Avoid_: bush, scrub, shrub (unqualified, where both senses are in play)
 
 **Shrub (land cover)**:
-A published land-cover polygon whose subtype is `shrub` — a *ground surface*, which a host paints
-with a material named for tall growth. It is scrubby ground, not a plant, and the polygon says
+A published land-cover polygon whose subtype is `shrub` — a *ground surface*, which a host draws as
+a class of ground cover. It is scrubby ground, not a plant, and the polygon says
 nothing about what stands on it: a tree point of either foliage type can sit inside one. Two
 platform vocabularies happened on the same word and neither is ours to rename, which is why both are
 here.

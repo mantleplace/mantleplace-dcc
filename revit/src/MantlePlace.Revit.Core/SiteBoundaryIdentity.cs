@@ -9,17 +9,31 @@ public readonly record struct NewSiteBoundary(int Ordinal, string Stamp);
 
 /// <summary>Which published polygon layer a subdivision was cut from.</summary>
 /// <remarks>
+/// <para>
 /// The layer is the stamp's kind, so it is part of the identity: every layer stamps an unnamed
 /// feature by its position, and without the kind land-use feature 1 would read as land-cover
 /// feature 1 already cut. These are four different Overture layers, not four names for one — a
 /// bundle can carry any of them, all of them or none.
+/// </para>
+/// <para>
+/// Only <see cref="Water"/> and <see cref="RoadSurface"/> are cut today
+/// (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>). <see cref="LandUse"/> and
+/// <see cref="LandCover"/> are kept so the subdivisions an earlier build cut from them are still
+/// recognised as this plugin's, and still draped, rather than read as a curator's own.
+/// </para>
 /// </remarks>
 public enum GroundLayer
 {
-    /// <summary><c>vector.layers[name=="land_use"]</c>. Stamped <c>Mantle Place Site Boundary</c>.</summary>
+    /// <summary>
+    /// <c>vector.layers[name=="land_use"]</c>, as an earlier build cut it. Stamped
+    /// <c>Mantle Place Site Boundary</c>; drawn on a land plan now (<see cref="LandPlan"/>).
+    /// </summary>
     LandUse,
 
-    /// <summary><c>vector.layers[name=="land_cover"]</c>. Stamped <c>Mantle Place Land Cover</c>.</summary>
+    /// <summary>
+    /// <c>vector.layers[name=="land_cover"]</c>, as an earlier build cut it. Stamped
+    /// <c>Mantle Place Land Cover</c>; drawn on a land plan now (<see cref="LandPlan"/>).
+    /// </summary>
     LandCover,
 
     /// <summary>
@@ -47,7 +61,28 @@ public readonly record struct GroundStamp(GroundLayer Layer, string Token);
 /// <param name="MaterialKind">The word a per-subdivision drape material carries before its token.</param>
 /// <param name="Label">The layer in a log sentence, plural: "Skipped the {Label}".</param>
 /// <param name="Noun">The layer as an adjective on "subdivision(s)".</param>
-public sealed record GroundLayerWords(string StampKind, string MaterialKind, string Label, string Noun)
+/// <param name="MaterialWord">
+/// The surface's own name, which a subdivision's drape material carries as its last words, or
+/// <c>null</c> for a layer whose subdivisions name none (<see cref="GroundMaterialNames"/>).
+/// </param>
+/// <remarks>
+/// <para>
+/// ⛔ <b>The material word is a plain name first and a renderer keyword second.</b> Every polygon in
+/// <c>water</c> is water — the subtypes under it (<c>reservoir</c>, <c>pond</c>, <c>human_made</c>
+/// for a swimming pool) are the kind of water body, not a different surface — and every polygon in
+/// <c>road_polygons</c> is a road surface, merged per class before it was published. Enscape's
+/// documentation lists <c>water</c> among the words it reads out of a material name; nothing
+/// documents <c>asphalt</c> to any renderer, and it is here because it is what the surface is
+/// called. No renderer effect is claimed as verified for either — that is a licensed check a human
+/// makes.
+/// </para>
+/// <para>
+/// The two land layers name none. Their per-subtype grass words went with their subdivisions
+/// (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>), so a land subdivision an
+/// earlier build cut is named for its order and token alone when it is draped again.
+/// </para>
+/// </remarks>
+public sealed record GroundLayerWords(string StampKind, string MaterialKind, string Label, string Noun, string? MaterialWord)
 {
     /// <summary>The words for <paramref name="layer"/>.</summary>
     /// <remarks>
@@ -63,10 +98,10 @@ public sealed record GroundLayerWords(string StampKind, string MaterialKind, str
     /// </remarks>
     public static GroundLayerWords For(GroundLayer layer) => layer switch
     {
-        GroundLayer.LandUse => new("Site Boundary", "boundary", SiteVectorLayers.LandUse.Label, "site boundary"),
-        GroundLayer.LandCover => new("Land Cover", "land cover", SiteVectorLayers.LandCover.Label, "land cover"),
-        GroundLayer.Water => new("Water", "water body", SiteVectorLayers.Water.Label, "water"),
-        GroundLayer.RoadSurface => new("Road Surface", "road surface", SiteVectorLayers.RoadPolygons.Label, "road"),
+        GroundLayer.LandUse => new("Site Boundary", "boundary", SiteVectorLayers.LandUse.Label, "site boundary", MaterialWord: null),
+        GroundLayer.LandCover => new("Land Cover", "land cover", SiteVectorLayers.LandCover.Label, "land cover", MaterialWord: null),
+        GroundLayer.Water => new("Water", "water body", SiteVectorLayers.Water.Label, "water", "water"),
+        GroundLayer.RoadSurface => new("Road Surface", "road surface", SiteVectorLayers.RoadPolygons.Label, "road", "asphalt"),
         _ => throw new ArgumentOutOfRangeException(
             nameof(layer),
             layer,

@@ -189,8 +189,8 @@ internal static class WindowLabelsTests
             run.Equal(WindowLabels.StepName(ImportStepKind.ToposurfaceFromPointsFile), "Terrain", "the points path");
             run.Equal(WindowLabels.StepName(ImportStepKind.LinkSiteIfc), "Site Model", "the IFC");
             run.Equal(WindowLabels.StepName(ImportStepKind.ContextBuildings), "Context Buildings", "what the site model's buildings become");
-            run.Equal(WindowLabels.StepName(ImportStepKind.SiteBoundaries), "Land Use Subdivisions", "the land-use polygons, by what they become");
-            run.Equal(WindowLabels.StepName(ImportStepKind.LandCover), "Land Cover Subdivisions", "the land-cover polygons, told apart from the land use");
+            run.Equal(WindowLabels.StepName(ImportStepKind.LandUse), "Land Use Plan", "the land use, by the land plan it is drawn on");
+            run.Equal(WindowLabels.StepName(ImportStepKind.LandCover), "Land Cover Plan", "the land cover, told apart from the land use");
             run.Equal(WindowLabels.StepName(ImportStepKind.Vegetation), "Planting", "the tree points, of every foliage type");
             run.Equal(WindowLabels.StepName(ImportStepKind.SetSiteLocation), "Site Location", "Revit's own dialog's word");
             run.Equal(WindowLabels.StepName(ImportStepKind.SiteContextView), "Site Context View", "the view and its filter");

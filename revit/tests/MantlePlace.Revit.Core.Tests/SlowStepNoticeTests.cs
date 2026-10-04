@@ -22,8 +22,6 @@ internal static class SlowStepNoticeTests
         ImportStepKind.ToposurfaceFromSurfaceTin,
         ImportStepKind.ContextBuildings,
         ImportStepKind.LinkSiteIfc,
-        ImportStepKind.SiteBoundaries,
-        ImportStepKind.LandCover,
         ImportStepKind.RoadPolygons,
         ImportStepKind.Vegetation,
         ImportStepKind.SiteContextView,
@@ -31,21 +29,19 @@ internal static class SlowStepNoticeTests
         ImportStepKind.FloodZones,
     ];
 
-    /// <summary>The steps whose notice is about one commit on the terrain: the polygon layers and the drape.</summary>
+    /// <summary>The steps whose notice is about one commit on the terrain: the slow polygon layer and the drape.</summary>
     private static readonly ImportStepKind[] CommitKinds =
     [
-        ImportStepKind.SiteBoundaries,
-        ImportStepKind.LandCover,
         ImportStepKind.RoadPolygons,
         ImportStepKind.ImageryDrape,
     ];
 
     /// <summary>
-    /// The point count a commit kind's notice quotes: every polygon layer shares one measurement, and
-    /// the drape has its own.
+    /// The point count a commit kind's notice quotes: a polygon layer quotes the order its row was
+    /// measured on, and the drape has its own.
     /// </summary>
     private static string MeasuredTerrainOf(ImportStepKind kind)
-        => GroundCuts.LayerOf(kind) is null ? "80,372" : "74,855";
+        => GroundCuts.LayerOf(kind) is null ? "80,372" : "75,314";
 
     /// <summary>What the site context step decides, for the notice to read.</summary>
     private static SiteContextDecision ContextDecision(NamedElementAction view, NamedElementAction filter) => new()
@@ -60,11 +56,10 @@ internal static class SlowStepNoticeTests
     {
         TestRun run = new();
 
-        run.Case("the site-boundary step announces itself, with this terrain's own count", () =>
+        run.Case("the road-surface step announces itself, with this terrain's own count", () =>
         {
-            // The measured order: an 80,372-point toposolid and 17 land-use rings.
-            string? notice = SlowStepNotice.For(ImportStepKind.SiteBoundaries, 80_372, 17);
-            run.True(notice is not null, "the site boundaries are announced");
+            string? notice = SlowStepNotice.For(ImportStepKind.RoadPolygons, 80_372, 17);
+            run.True(notice is not null, "the road surfaces are announced");
             run.Contains(notice, "80,372", "it names the terrain's point count");
             run.Contains(notice, "17", "it names how many subdivisions are coming");
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
@@ -82,39 +77,32 @@ internal static class SlowStepNoticeTests
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
         });
 
-        run.Case("the land-cover step announces itself, against what was measured", () =>
+        run.Case("a polygon layer quotes its own row of the measurement, and explains nothing", () =>
         {
-            // ⛔ What was measured, in Revit 2025 on one order: a land-cover subdivision covering the
-            // whole order took nine minutes alone on a bare terrain, and twenty when cut after 57
-            // others.
-            string? notice = SlowStepNotice.For(ImportStepKind.LandCover, 74_855, 18);
+            // ⛔ This notice was wrong twice by explaining one run. It now quotes the layer's own
+            // whole-import figures and how many of its subdivisions the order cut, and stops.
+            string? notice = SlowStepNotice.For(ImportStepKind.RoadPolygons, 74_855, 300);
             run.True(notice is not null, "announced");
-            run.Contains(notice, "Next: the land cover — 18", "it names the layer and how many are coming");
-            run.Contains(notice, "how much of the terrain", "it names what the cost appears to follow");
-            run.Contains(notice, "other subdivisions already cover", "and that ground already covered costs more");
-            run.Contains(notice, "In Revit 2025", "a 2025-only observation is scoped to 2025");
-            run.Contains(notice, "appears to", "a cause measured on one order is not stated as settled");
-            run.Contains(
-                notice,
-                $"about {SlowStepNotice.MeasuredWholeOrderSubDivisionAloneMinutes2025} minutes on its own",
-                "it quotes the one subdivision that was measured alone");
-            run.Contains(
-                notice,
-                $"about {SlowStepNotice.MeasuredWholeOrderSubDivisionLastMinutes2025} minutes when cut after 57 others",
-                "and the same subdivision cut last");
+            run.Contains(notice, "Next: the road surfaces — 300", "it names the layer and how many are coming");
+            run.Contains(notice, "(75,314 points, 344 road surfaces)", "the order it was measured on, and its own count there");
+            run.Contains(notice, SlowStepNotice.Measured(ImportStepKind.RoadPolygons)!.Describe(), "its own row");
+            run.Contains(notice, "This terrain has 74,855 points", "this terrain, beside it");
+            run.Contains(notice, "no duration is predicted", "and no duration is made from them");
+            run.False(notice is not null && notice.Contains("appears to", StringComparison.Ordinal), "no cause is offered");
+            run.False(notice is not null && notice.Contains("land cover", StringComparison.Ordinal), "no other layer's figure");
             run.Contains(notice, "not responding", "it says what Revit is about to look like");
             run.Contains(notice, "has not crashed", "it says the freeze is not a crash");
         });
 
         run.Case("the two notices are not the same sentence", () =>
         {
-            string? boundaries = SlowStepNotice.For(ImportStepKind.SiteBoundaries, 80_372, 17);
+            string? roads = SlowStepNotice.For(ImportStepKind.RoadPolygons, 80_372, 17);
             string? drape = SlowStepNotice.For(ImportStepKind.ImageryDrape, 80_372, 1);
             run.False(
-                string.Equals(boundaries, drape, StringComparison.Ordinal),
-                "each step says what IT is about to do — a copy-paste that names the boundaries "
+                string.Equals(roads, drape, StringComparison.Ordinal),
+                "each step says what IT is about to do — a copy-paste that names the road surfaces "
                 + "before the drape is the likely regression");
-            run.Contains(boundaries, "site boundaries", "the boundary notice names the boundaries");
+            run.Contains(roads, "road surfaces", "the road notice names the road surfaces");
             run.Contains(drape, "drape", "the drape notice names the drape");
         });
 
@@ -163,7 +151,6 @@ internal static class SlowStepNoticeTests
             }
 
             run.Equal(SlowStepNotice.MeasuredPointCount, 80_372, "the measured reference count");
-            run.Equal(SlowStepNotice.MeasuredSubDivisionTerrainPointCount, 74_855, "the polygon layers' measured count");
 
             // Order 4276ef78, which every figure of the whole-import measurement is: issue 258's table.
             run.Equal(SlowStepNotice.MeasuredOrderVertexCount, 75_314, "the measured order's terrain");
@@ -250,7 +237,7 @@ internal static class SlowStepNoticeTests
             // The retype the drape used to announce now happens as each subdivision is cut, so the
             // wait moved into the polygon step and the sentence moved with it. Said at the first cut
             // that shows it takes a type, so it names no version.
-            foreach (GroundLayer layer in Enum.GetValues<GroundLayer>().Where(layer => layer != GroundLayer.Water))
+            foreach (GroundLayer layer in (GroundLayer[])[GroundLayer.RoadSurface])
             {
                 string? notice = SlowStepNotice.ForTypesAtCut(layer, SubDivisionMaterialRoute.Type, drapePlanned: true, 40, 12_000);
                 SlowStepNotice.TypeAtCutMeasurement measured = SlowStepNotice.MeasuredTypeAtCut(layer);
@@ -281,17 +268,12 @@ internal static class SlowStepNoticeTests
                 }
             }
 
-            // Land cover's cuts varied most, and the notice gives the range, not the fastest run.
-            run.Contains(
-                SlowStepNotice.ForTypesAtCut(GroundLayer.LandCover, SubDivisionMaterialRoute.Type, true, 19, 74_855),
-                "3.3 to 5.0 s",
-                "land cover's range over four imports");
             run.Contains(
                 SlowStepNotice.ForTypesAtCut(GroundLayer.RoadSurface, SubDivisionMaterialRoute.Type, true, 344, 74_855),
                 "about 1.2 s",
                 "one import gives one figure, not a range");
             run.Contains(
-                SlowStepNotice.ForTypesAtCut(GroundLayer.LandUse, SubDivisionMaterialRoute.Type, true, 5, null),
+                SlowStepNotice.ForTypesAtCut(GroundLayer.RoadSurface, SubDivisionMaterialRoute.Type, true, 5, null),
                 "not known to this run",
                 "an unknown count is said, never invented");
         });
@@ -300,16 +282,16 @@ internal static class SlowStepNoticeTests
         {
             // Revit 2025: a cut reports no type and keeps its instance material.
             run.True(
-                SlowStepNotice.ForTypesAtCut(GroundLayer.LandCover, SubDivisionMaterialRoute.Instance, drapePlanned: true, 40, 74_855) is null,
+                SlowStepNotice.ForTypesAtCut(GroundLayer.RoadSurface, SubDivisionMaterialRoute.Instance, drapePlanned: true, 40, 74_855) is null,
                 "a typeless cut is not typed, so nothing is announced");
             run.True(
-                SlowStepNotice.ForTypesAtCut(GroundLayer.LandCover, SubDivisionMaterialRoute.Type, drapePlanned: false, 40, 74_855) is null,
+                SlowStepNotice.ForTypesAtCut(GroundLayer.RoadSurface, SubDivisionMaterialRoute.Type, drapePlanned: false, 40, 74_855) is null,
                 "no drape, no typing");
             run.True(
-                SlowStepNotice.ForTypesAtCut(GroundLayer.LandCover, SubDivisionMaterialRoute.Refused, drapePlanned: true, 40, 74_855) is null,
+                SlowStepNotice.ForTypesAtCut(GroundLayer.RoadSurface, SubDivisionMaterialRoute.Refused, drapePlanned: true, 40, 74_855) is null,
                 "a cut whose route could not be read, so the next one that can announces it");
             run.True(
-                SlowStepNotice.ForTypesAtCut(GroundLayer.LandCover, SubDivisionMaterialRoute.Type, drapePlanned: true, 0, 74_855) is null,
+                SlowStepNotice.ForTypesAtCut(GroundLayer.RoadSurface, SubDivisionMaterialRoute.Type, drapePlanned: true, 0, 74_855) is null,
                 "a re-import that cuts nothing");
         });
 
@@ -529,8 +511,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("each polygon layer's notice is in that layer's own words", () =>
         {
-            run.Contains(SlowStepNotice.For(ImportStepKind.SiteBoundaries, 80_372, 10), "Next: the site boundaries — 10", "site boundaries");
-            run.Contains(SlowStepNotice.For(ImportStepKind.LandCover, 80_372, 10), "Next: the land cover — 10", "land cover");
             run.Contains(SlowStepNotice.For(ImportStepKind.RoadPolygons, 80_372, 4), "Next: the road surfaces — 4", "road surfaces");
         });
 
@@ -539,7 +519,7 @@ internal static class SlowStepNoticeTests
             // The order is the planner's to change, and it has changed once. A notice that ranked the
             // steps, or compared one with another, went stale when it did.
             foreach (ImportStepKind kind in (ImportStepKind[])
-                [ImportStepKind.SiteBoundaries, ImportStepKind.LandCover, ImportStepKind.RoadPolygons])
+                [ImportStepKind.RoadPolygons])
             {
                 string? notice = SlowStepNotice.For(kind, 80_372, 2);
                 foreach (string claim in (string[])["as slow as", "slowest", "the layer before", "the first layer", "site boundaries were"])
@@ -549,7 +529,7 @@ internal static class SlowStepNoticeTests
                         $"{kind} does not say \"{claim}\"");
                 }
 
-                run.Contains(notice, "74,855", $"{kind} quotes the polygon layers' measured terrain");
+                run.Contains(notice, "75,314", $"{kind} quotes the order its row was measured on");
                 run.Contains(notice, "80,372", $"{kind} still names this terrain");
             }
         });

@@ -530,7 +530,7 @@ public sealed class BundleManifest
 
     /// <summary>
     /// The <c>land_cover</c> layer this host places — the physical ground cover, whose
-    /// <c>subtype</c> names the renderer keyword a subdivision's material carries.
+    /// <c>subtype</c> is the class its land plan draws each polygon in.
     /// </summary>
     public BundleArtifact? LandCover { get; internal set; }
 

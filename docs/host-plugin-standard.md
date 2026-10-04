@@ -1044,7 +1044,7 @@ twice. Ten actions are shared, and each carries one set of words:
 | Say what a bundle holds that an import cannot offer, and why, before its steps run | `Unavailable` over the list; each entry is the row's name and one sentence from the table below — never a box | the import window, below its checklist | nothing yet; these are the words when it grows one |
 
 **A row in that list is named for what it builds, and a step is named the same.** The glossary's
-word where it has one — `Terrain`, `Site Model`, and names built on it, as `Land Use Subdivisions`
+word where it has one — `Terrain`, `Site Model`, and names built on it, as `Water Subdivisions`
 and `Imagery Drape` are on *subdivision* and *drape* — and the host's own noun only for a host
 construct the glossary does not name. The list and
 the steps that follow it are one surface, so a curator who ticked `Planting` watches `Planting` import. **Every row starts checked** unless a host has a

@@ -285,7 +285,7 @@ internal sealed partial class RevitBundleImporter
     /// <c>false</c> when the type carries no layer to split, or when splitting it would leave a
     /// degenerate structure. Refusal is asymmetric on purpose: the parent failing means no drape
     /// happened and the caller rolls the whole transaction back, while a subdivision failing is one
-    /// un-draped land-use patch — counted, not fatal, the same call <see cref="ImportSiteBoundaries"/>
+    /// un-draped patch — counted, not fatal, the same call <see cref="CutSubdivisions"/>
     /// makes for a ring Revit declines.
     /// </returns>
     /// <param name="layering">

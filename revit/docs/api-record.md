@@ -216,6 +216,9 @@ renderer-neutral.
   drawing nothing. The regions and the key's swatches are clipped by the crop and the key's text is
   not, which is why the crop is widened to take the swatches in ([ADR 0014](../../docs/adr/0014-revit-hazards-are-drawn-on-a-hazard-plan.md)).
   Which regions, colours, key rows and names is `HazardPlan`, `HazardStyles` and `ZoneKey`, headless.
+  The land plans make the same calls in the same order, one plan per land layer and one solid
+  filled region type per published class ([ADR 0015](../../docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md));
+  theirs is `LandPlan`, `LandStyles` and `LandKey`.
 
 - **A toposolid subdivision is a different element in 2025 than in 2026 and 2027**, and one build has
   to drape both. In 2025 it is typeless and takes its material as an instance parameter. From 2026
@@ -343,7 +346,7 @@ renderer-neutral.
   else — `PublishedContourReader`, `PublishedContours` and `ContourIdentity`.
 - **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
   issue and reaches for their storage.** It writes Revit elements sized as published, with names a
-  renderer recognises (`RendererKeywords`), and leaves a renderer's own storage to the curator —
+  renderer recognises (a water body's and a road surface's layer word, `GroundLayerWords`), and leaves a renderer's own storage to the curator —
   see [`README.md`](../README.md) on the tree family. Writing Twinmotion's substitution entity at
   import was declined: it saves one click per project by coupling the add-in to an
   ExtensibleStorage schema Autodesk owns and an asset GUID from Epic's library. Writing it later is

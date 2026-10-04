@@ -21,7 +21,7 @@ internal static class HostFramePlacementTests
     private static readonly ImportStepKind[] VectorKinds =
     [
         ImportStepKind.RoadCentrelines,
-        ImportStepKind.SiteBoundaries,
+        ImportStepKind.LandUse,
         ImportStepKind.LandCover,
         ImportStepKind.Water,
         ImportStepKind.RoadPolygons,
@@ -335,8 +335,8 @@ internal static class HostFramePlacementTests
             run.False(water?.Reason?.Contains("mantle.place/vault", StringComparison.Ordinal) ?? true, "with no re-download a vault cannot answer");
 
             // The curator reads the step's own words, never the manifest's key for the layer.
-            SkippedImport? boundaries = Skip(plan, ImportStepKind.SiteBoundaries);
-            run.Contains(boundaries?.Reason, "No site boundaries", "the step is named in words");
+            SkippedImport? boundaries = Skip(plan, ImportStepKind.LandUse);
+            run.Contains(boundaries?.Reason, "No land use", "the step is named in words");
             run.False(boundaries?.Reason?.Contains("land_use", StringComparison.Ordinal) ?? true, "not by the layer's key");
         });
 

@@ -34,8 +34,8 @@ internal static class ImportLayerTests
             run.True(ImportLayers.Of(ImportStepKind.ContextBuildings) == ImportLayer.ContextBuildings, "the buildings copied from the IFC");
             run.True(ImportLayers.Of(ImportStepKind.LinkSiteIfc) == ImportLayer.SiteModel, "the IFC, linked");
             run.True(ImportLayers.Of(ImportStepKind.RoadCentrelines) == ImportLayer.RoadCentrelines, "the roads");
-            run.True(ImportLayers.Of(ImportStepKind.SiteBoundaries) == ImportLayer.LandUseSubdivisions, "the land-use polygons");
-            run.True(ImportLayers.Of(ImportStepKind.LandCover) == ImportLayer.LandCoverSubdivisions, "the land-cover polygons");
+            run.True(ImportLayers.Of(ImportStepKind.LandUse) == ImportLayer.LandUsePlan, "the land use, on its plan");
+            run.True(ImportLayers.Of(ImportStepKind.LandCover) == ImportLayer.LandCoverPlan, "the land cover, on its plan");
             run.True(ImportLayers.Of(ImportStepKind.Water) == ImportLayer.WaterSubdivisions, "the water bodies");
             run.True(ImportLayers.Of(ImportStepKind.RoadPolygons) == ImportLayer.RoadSubdivisions, "the road surfaces");
             run.True(ImportLayers.Of(ImportStepKind.Vegetation) == ImportLayer.Planting, "the tree points");
@@ -62,9 +62,7 @@ internal static class ImportLayerTests
 
         run.Case("the subdivisions and the drape need the terrain, and nothing else needs anything", () =>
         {
-            run.True(ImportLayers.PrerequisiteOf(ImportLayer.LandUseSubdivisions) == ImportLayer.Terrain, "land-use subdivisions are cut into the ground");
-            run.True(ImportLayers.PrerequisiteOf(ImportLayer.LandCoverSubdivisions) == ImportLayer.Terrain, "and so are land-cover ones");
-            run.True(ImportLayers.PrerequisiteOf(ImportLayer.WaterSubdivisions) == ImportLayer.Terrain, "and the water bodies");
+            run.True(ImportLayers.PrerequisiteOf(ImportLayer.WaterSubdivisions) == ImportLayer.Terrain, "the water bodies are cut into the ground");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.RoadSubdivisions) == ImportLayer.Terrain, "and the road surfaces");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.ImageryDrape) == ImportLayer.Terrain, "the drape is worn by the ground");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.Terrain) is null, "the terrain");
@@ -72,15 +70,17 @@ internal static class ImportLayerTests
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.ContextBuildings) is null, "context buildings carry their own Z");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.RoadCentrelines) is null, "roads carry their own Z");
             run.True(ImportLayers.PrerequisiteOf(ImportLayer.Planting) is null, "trees carry their own Z");
+            run.True(ImportLayers.PrerequisiteOf(ImportLayer.LandUsePlan) is null, "a land plan is drawn on a level");
+            run.True(ImportLayers.PrerequisiteOf(ImportLayer.LandCoverPlan) is null, "and so is the other");
         });
 
-        run.Case("every layer but the site model's link, the published contours, the hazard layers and the three slow subdivision layers is on by default", () =>
+        run.Case("every layer but the site model's link, the published contours, the drawn plans and the slow road surfaces is on by default", () =>
         {
             // The reasons HPS-51 asks for before a row starts unchecked: the site model's buildings are
             // already copied in, and a link as well shows each one twice; the toposolid already draws
-            // contours of its own (ADR 0013); the hazard plan is for the curator planning the site,
-            // not the visualiser this import is made for; and the land use, land cover and road
-            // surfaces were measured at most of a full import's time.
+            // contours of its own (ADR 0013); the land plans and the hazard plan are for the curator
+            // planning the site, not the visualiser this import is made for; and the road surfaces
+            // were measured at most of a full import's time.
             foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
             {
                 run.Equal(ImportLayers.OnByDefault(layer), !StartsUnchecked(layer), $"{layer}'s box");
@@ -100,8 +100,8 @@ internal static class ImportLayerTests
             run.Equal(WindowLabels.LayerName(ImportLayer.Terrain), "Terrain", "the glossary's word, not the host's");
             run.Equal(WindowLabels.LayerName(ImportLayer.SiteModel), "Site Model", "the site model");
             run.Equal(WindowLabels.LayerName(ImportLayer.ContextBuildings), "Context Buildings", "the glossary's context buildings");
-            run.Equal(WindowLabels.LayerName(ImportLayer.LandUseSubdivisions), "Land Use Subdivisions", "the glossary's subdivision, told apart by its layer");
-            run.Equal(WindowLabels.LayerName(ImportLayer.LandCoverSubdivisions), "Land Cover Subdivisions", "the other layer's subdivisions");
+            run.Equal(WindowLabels.LayerName(ImportLayer.LandUsePlan), "Land Use Plan", "the glossary's land plan, told apart by its layer");
+            run.Equal(WindowLabels.LayerName(ImportLayer.LandCoverPlan), "Land Cover Plan", "the other layer's plan");
             run.Equal(WindowLabels.LayerName(ImportLayer.WaterSubdivisions), "Water Subdivisions", "the water bodies (HPS-51)");
             run.Equal(
                 WindowLabels.LayerName(ImportLayer.RoadSubdivisions),
@@ -126,8 +126,8 @@ internal static class ImportLayerTests
 
             run.Equal(
                 string.Join(", ", checklist.Layers),
-                "Terrain, ContextBuildings, SiteModel, RoadCentrelines, LandUseSubdivisions, LandCoverSubdivisions, "
-                    + "WaterSubdivisions, RoadSubdivisions, Planting, ImageryDrape",
+                "Terrain, ContextBuildings, SiteModel, RoadCentrelines, WaterSubdivisions, RoadSubdivisions, "
+                    + "Planting, LandUsePlan, LandCoverPlan, ImageryDrape",
                 "every layer the plan has a step for, and no other");
         });
 
@@ -139,7 +139,7 @@ internal static class ImportLayerTests
             run.False(checklist.IsChecked(ImportLayer.SiteModel), "a layer that is not offered is never chosen");
         });
 
-        run.Case("everything but the link, the contours, the hazard layers and the slow subdivisions starts checked, all of it enabled, and can be imported", () =>
+        run.Case("everything but the link, the contours, the drawn plans and the slow road surfaces starts checked, all of it enabled, and can be imported", () =>
         {
             ImportChecklist checklist = new(Enum.GetValues<ImportLayer>());
 
@@ -160,8 +160,6 @@ internal static class ImportLayerTests
 
             foreach (ImportLayer dependent in new[]
                      {
-                         ImportLayer.LandUseSubdivisions,
-                         ImportLayer.LandCoverSubdivisions,
                          ImportLayer.WaterSubdivisions,
                          ImportLayer.RoadSubdivisions,
                          ImportLayer.ImageryDrape,
@@ -175,6 +173,7 @@ internal static class ImportLayerTests
 
             run.True(checklist.IsEnabled(ImportLayer.Planting), "trees need no terrain");
             run.True(checklist.Choice.Includes(ImportLayer.Planting), "and are still imported");
+            run.True(checklist.IsEnabled(ImportLayer.LandUsePlan), "nor does a land plan");
         });
 
         run.Case("checking the terrain again gives back what the curator had chosen", () =>
@@ -192,9 +191,9 @@ internal static class ImportLayerTests
         {
             ImportChecklist checklist = new(Enum.GetValues<ImportLayer>());
             checklist.Set(ImportLayer.Terrain, false);
-            checklist.Set(ImportLayer.LandUseSubdivisions, true);
+            checklist.Set(ImportLayer.RoadSubdivisions, true);
 
-            run.False(checklist.Choice.Includes(ImportLayer.LandUseSubdivisions), "subdivisions without the terrain are not chosen");
+            run.False(checklist.Choice.Includes(ImportLayer.RoadSubdivisions), "subdivisions without the terrain are not chosen");
         });
 
         run.Case("a write to a disabled box does not change what the curator had chosen", () =>
@@ -232,7 +231,7 @@ internal static class ImportLayerTests
 
         run.Case("only the dependents checked, under an unchecked terrain, is nothing to import", () =>
         {
-            ImportChecklist checklist = new([ImportLayer.Terrain, ImportLayer.LandUseSubdivisions]);
+            ImportChecklist checklist = new([ImportLayer.Terrain, ImportLayer.WaterSubdivisions]);
             checklist.Set(ImportLayer.Terrain, false);
 
             run.False(checklist.CanImport, "a checked box that is disabled imports nothing");
@@ -249,21 +248,21 @@ internal static class ImportLayerTests
             run.Equal(
                 string.Join(", ", plan.Steps.Select(step => step.Kind)),
                 "ToposurfaceFromPointsFile, ContextBuildings, LinkSiteIfc, SetSharedCoordinates, SetSiteLocation, "
-                    + "RoadCentrelines, LandCover, SiteBoundaries, Water, RoadPolygons, Vegetation, "
+                    + "RoadCentrelines, Water, RoadPolygons, Vegetation, LandUse, LandCover, "
                     + "AttributionAndProvenance, SiteContextView, ImageryDrape",
                 "every step");
         });
 
-        run.Case("the land cover is cut before the site boundaries", () =>
+        run.Case("the land plans are drawn after every layer that builds the model, land use first", () =>
         {
-            // The planner's measured preference: see the comment where it plans the two.
+            // The hazard plan's place; drawing the plans before the subdivisions is a later change.
             List<ImportStepKind> kinds = [.. PlanFor(Everything, EverythingBundle).Steps.Select(step => step.Kind)];
             run.True(
-                kinds.IndexOf(ImportStepKind.LandCover) < kinds.IndexOf(ImportStepKind.SiteBoundaries),
-                "land cover first");
+                kinds.IndexOf(ImportStepKind.Vegetation) < kinds.IndexOf(ImportStepKind.LandUse),
+                "after the planting");
             run.True(
-                kinds.IndexOf(ImportStepKind.SiteBoundaries) < kinds.IndexOf(ImportStepKind.Water),
-                "the water still follows both");
+                kinds.IndexOf(ImportStepKind.LandUse) < kinds.IndexOf(ImportStepKind.LandCover),
+                "land use first");
         });
 
         run.Case("choosing everything plans what no choice plans", () =>
@@ -485,7 +484,7 @@ internal static class ImportLayerTests
             UnavailableLayers? group = checklist.Unavailable.FirstOrDefault();
             run.Equal(
                 string.Join(", ", group?.Layers ?? []),
-                "RoadCentrelines, LandUseSubdivisions, LandCoverSubdivisions, WaterSubdivisions, RoadSubdivisions, ImageryDrape",
+                "RoadCentrelines, WaterSubdivisions, RoadSubdivisions, LandUsePlan, LandCoverPlan, ImageryDrape",
                 "every withheld row, in the order the steps run");
             run.Equal(
                 group?.Reason,
@@ -560,19 +559,22 @@ internal static class ImportLayerTests
         "This bundle was built before Revit could receive this. Download the bundle again from your vault to get it.";
 
     /// <summary>
-    /// The land use, land cover and road surfaces start unticked for their time, and say what it was
-    /// measured at when a curator ticks one. Everything that imports without a curator is unchanged.
+    /// The road surfaces start unticked for their time, and say what they were measured at when a
+    /// curator ticks them. Everything that imports without a curator is unchanged.
     /// </summary>
     private static void RunSlowLayerCases(TestRun run)
     {
-        run.Case("the default plan leaves out exactly the land use, land cover and road surfaces beyond the rows that already started unticked", () =>
+        run.Case("the default plan leaves out exactly the road surfaces beyond the rows that start unticked for another reason", () =>
         {
             ImportLayer[] alreadyUnticked =
-                [ImportLayer.SiteModel, ImportLayer.PublishedContours, ImportLayer.FloodZones, ImportLayer.SteepGround];
+            [
+                ImportLayer.SiteModel, ImportLayer.PublishedContours, ImportLayer.LandUsePlan, ImportLayer.LandCoverPlan,
+                ImportLayer.FloodZones, ImportLayer.SteepGround,
+            ];
             run.Equal(
                 string.Join(", ", Enum.GetValues<ImportLayer>().Where(layer => !ImportLayers.OnByDefault(layer) && !alreadyUnticked.Contains(layer))),
-                "LandUseSubdivisions, LandCoverSubdivisions, RoadSubdivisions",
-                "the slow three, and no other");
+                "RoadSubdivisions",
+                "the slow one, and no other");
 
             ImportChecklist checklist = ImportChecklist.For(PlanFor(Everything, EverythingBundle), "2025");
             BundleImportPlan plan = PlanFor(Everything, EverythingBundle, checklist.Choice);
@@ -581,8 +583,8 @@ internal static class ImportLayerTests
                 string.Join(", ", plan.Steps.Select(step => step.Kind)),
                 "ToposurfaceFromPointsFile, ContextBuildings, SetSharedCoordinates, SetSiteLocation, RoadCentrelines, "
                     + "Water, Vegetation, AttributionAndProvenance, SiteContextView, ImageryDrape",
-                "the water and the drape stay; the slow three and the link go");
-            foreach (ImportStepKind kind in new[] { ImportStepKind.SiteBoundaries, ImportStepKind.LandCover, ImportStepKind.RoadPolygons })
+                "the water and the drape stay; the road surfaces, the land plans and the link go");
+            foreach (ImportStepKind kind in new[] { ImportStepKind.LandUse, ImportStepKind.LandCover, ImportStepKind.RoadPolygons })
             {
                 run.True(
                     plan.Skipped.SingleOrDefault(skip => skip.Kind == kind)?.ReasonCode == SkipReasonCode.LeftOutByChoice,
@@ -592,7 +594,7 @@ internal static class ImportLayerTests
             run.Equal(checklist.SlowLayerWarnings.Count, 0, "nothing ticked by default warns");
         });
 
-        run.Case("the slow three warn in every version measured, and no other box warns", () =>
+        run.Case("the slow box warns in every version measured, and no other box warns", () =>
         {
             foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
             {
@@ -617,29 +619,6 @@ internal static class ImportLayerTests
             }
         });
 
-        run.Case("the land cover's saving is several times its own step, and the road surfaces' is not", () =>
-        {
-            // Saves is the whole import's difference; the ranges are the step's own seconds. They part
-            // company where a box makes the steps after it dearer.
-            SlowStepNotice.StepMeasurement landCover = SlowStepNotice.Measured(ImportStepKind.LandCover)!;
-            SlowStepNotice.StepMeasurement roads = SlowStepNotice.Measured(ImportStepKind.RoadPolygons)!;
-            foreach (int version in new[] { 2025, 2026, 2027 })
-            {
-                run.True(landCover.Saves!.Value.In(version) > 2 * landCover.In(version)!.Value.High, $"land cover in {version}");
-                run.False(roads.Saves!.Value.In(version) > 2 * roads.In(version)!.Value.High, $"road surfaces in {version}");
-            }
-        });
-
-        run.Case("the land cover's step notice quotes the same row its box warns from", () =>
-        {
-            SlowStepNotice.StepMeasurement landCover = SlowStepNotice.Measured(ImportStepKind.LandCover)!;
-            string expected = new SlowStepNotice.StepMeasurement(null, landCover.Revit2026, landCover.Revit2027).Describe();
-            run.Contains(
-                SlowStepNotice.For(ImportStepKind.LandCover, 75_314, 19),
-                "in full imports with every box ticked the whole land-cover layer took " + expected + ".",
-                "one source for the 2026 and 2027 land-cover figure");
-        });
-
         run.Case("one list of versions answers every per-version lookup, and a version outside it has nothing", () =>
         {
             SlowStepNotice.StepMeasurement row = new(new(1, 2), null, new(5, 6)) { Saves = new(10, null, 30) };
@@ -659,15 +638,6 @@ internal static class ImportLayerTests
                 [(ImportLayer.RoadSubdivisions, "2025")] = "Road Subdivisions" + Measured + "with every other box ticked, it added about 19 minutes to the import in Revit 2025.",
                 [(ImportLayer.RoadSubdivisions, "2026")] = "Road Subdivisions" + Measured + "with every other box ticked, it added about 31 minutes to the import in Revit 2026.",
                 [(ImportLayer.RoadSubdivisions, "2027")] = "Road Subdivisions" + Measured + "with every other box ticked, it added about 32 minutes to the import in Revit 2027.",
-                [(ImportLayer.LandCoverSubdivisions, "2025")] = "Land Cover Subdivisions" + Measured + "with every other box ticked, it added about 25 minutes to the import in Revit 2025, most of it by making the steps after it take longer.",
-                [(ImportLayer.LandCoverSubdivisions, "2026")] = "Land Cover Subdivisions" + Measured + "with every other box ticked, it added about 20 minutes to the import in Revit 2026, most of it by making the steps after it take longer.",
-                [(ImportLayer.LandCoverSubdivisions, "2027")] = "Land Cover Subdivisions" + Measured + "with every other box ticked, it added about 19 minutes to the import in Revit 2027, most of it by making the steps after it take longer.",
-                [(ImportLayer.LandUseSubdivisions, "2025")] = "Land Use Subdivisions" + Measured + "with every other box ticked, it added about 12 minutes to the import in Revit 2025.",
-
-                // What leaving it out saved was inside the spread between two full imports in these two,
-                // so the figure is the step's own.
-                [(ImportLayer.LandUseSubdivisions, "2026")] = "Land Use Subdivisions" + Measured + "with every other box ticked, its own step took about 3 to 4 minutes in Revit 2026.",
-                [(ImportLayer.LandUseSubdivisions, "2027")] = "Land Use Subdivisions" + Measured + "with every other box ticked, its own step took about 3 to 4 minutes in Revit 2027.",
             };
 
             foreach (((ImportLayer layer, string version), string warning) in expected)
@@ -682,17 +652,6 @@ internal static class ImportLayerTests
                 checklist.Set(layer, false);
                 run.Equal(checklist.SlowLayerWarnings.Count, 0, $"{layer} unticked again says nothing");
             }
-        });
-
-        run.Case("each ticked slow box says its own line, in the order the rows run", () =>
-        {
-            ImportChecklist checklist = new(Enum.GetValues<ImportLayer>(), [], "2027");
-            checklist.Set(ImportLayer.RoadSubdivisions, true);
-            checklist.Set(ImportLayer.LandUseSubdivisions, true);
-
-            run.Equal(checklist.SlowLayerWarnings.Count, 2, "two boxes, two lines");
-            run.True(checklist.SlowLayerWarnings[0].StartsWith("Land Use Subdivisions:", StringComparison.Ordinal), "the land use first, as its row is");
-            run.True(checklist.SlowLayerWarnings[1].StartsWith("Road Subdivisions:", StringComparison.Ordinal), "then the road surfaces");
         });
 
         run.Case("unticking the terrain takes a slow box's warning with it, and ticking it again gives back both", () =>
@@ -741,7 +700,7 @@ internal static class ImportLayerTests
             }
         });
 
-        run.Case("the unattended path, ImportLayerChoice.Only and RunToEnd import the slow three as before", () =>
+        run.Case("the unattended path, ImportLayerChoice.Only and RunToEnd import the unticked rows as before", () =>
         {
             foreach (ImportLayer layer in SlowLayers)
             {
@@ -749,7 +708,7 @@ internal static class ImportLayerTests
             }
 
             BundleImportPlan all = PlanFor(Everything, EverythingBundle, ImportLayerChoice.All);
-            foreach (ImportStepKind kind in new[] { ImportStepKind.SiteBoundaries, ImportStepKind.LandCover, ImportStepKind.RoadPolygons })
+            foreach (ImportStepKind kind in new[] { ImportStepKind.LandUse, ImportStepKind.LandCover, ImportStepKind.RoadPolygons })
             {
                 run.True(all.Steps.Any(step => step.Kind == kind), $"an import nobody chooses for plans {kind}");
             }
@@ -760,12 +719,12 @@ internal static class ImportLayerTests
             run.Equal(
                 string.Join(", ", runner.Ran),
                 string.Join(", ", all.Steps.Select(step => step.Kind)),
-                "RunToEnd runs every planned step, the slow three included");
+                "RunToEnd runs every planned step, the unticked rows included");
 
-            BundleImportPlan only = PlanFor(Everything, EverythingBundle, ImportLayerChoice.Only([ImportLayer.Terrain, ImportLayer.LandCoverSubdivisions]));
+            BundleImportPlan only = PlanFor(Everything, EverythingBundle, ImportLayerChoice.Only([ImportLayer.Terrain, ImportLayer.RoadSubdivisions]));
             run.Equal(
                 string.Join(", ", only.Steps.Select(step => ImportLayers.Of(step.Kind)).OfType<ImportLayer>().Distinct()),
-                "Terrain, LandCoverSubdivisions",
+                "Terrain, RoadSubdivisions",
                 "Only plans exactly what it names, an unticked-by-default layer included");
         });
     }
@@ -788,13 +747,12 @@ internal static class ImportLayerTests
 
     /// <summary>The rows a host has stated a reason to start unchecked (<c>HPS-51</c>).</summary>
     private static bool StartsUnchecked(ImportLayer layer)
-        => layer is ImportLayer.SiteModel or ImportLayer.PublishedContours or ImportLayer.FloodZones
-            or ImportLayer.SteepGround
+        => layer is ImportLayer.SiteModel or ImportLayer.PublishedContours or ImportLayer.LandUsePlan
+            or ImportLayer.LandCoverPlan or ImportLayer.FloodZones or ImportLayer.SteepGround
             || SlowLayers.Contains(layer);
 
     /// <summary>The rows that start unchecked for their time, and warn of it when ticked.</summary>
-    private static readonly ImportLayer[] SlowLayers =
-        [ImportLayer.LandUseSubdivisions, ImportLayer.LandCoverSubdivisions, ImportLayer.RoadSubdivisions];
+    private static readonly ImportLayer[] SlowLayers = [ImportLayer.RoadSubdivisions];
 
     /// <summary>A host with no Revit that runs every step it is handed and records which.</summary>
     private sealed class RecordingRunner : IImportStepRunner

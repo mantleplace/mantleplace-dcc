@@ -1,7 +1,7 @@
 namespace MantlePlace.Revit.Core;
 
-/// <summary>One line of a zone key: its text, and the swatch beside it, or none for a heading.</summary>
-public sealed record ZoneKeyRow(string Text, HazardStyle? Style);
+/// <summary>One line of a key on a drawn plan — a zone key or a land plan's: its text, and the swatch beside it, or none for a heading.</summary>
+public sealed record KeyRow(string Text, RegionStyle? Style);
 
 /// <summary>
 /// What the zone key inside a hazard plan says: a row for each zone and threshold the plan shows, in
@@ -45,7 +45,7 @@ public static class ZoneKey
     /// </summary>
     /// <param name="drawn">The rings drawn, holes included; a hole claims nothing.</param>
     /// <param name="map">The flood map's facts, for its zone order, or <c>null</c>.</param>
-    public static IReadOnlyList<ZoneKeyRow> FloodRows(IEnumerable<SiteFeature> drawn, FloodMap? map)
+    public static IReadOnlyList<KeyRow> FloodRows(IEnumerable<SiteFeature> drawn, FloodMap? map)
     {
         ArgumentNullException.ThrowIfNull(drawn);
 
@@ -68,7 +68,7 @@ public static class ZoneKey
                 .Select((pair, drawnAt) => (pair, drawnAt))
                 .OrderBy(entry => Rank(entry.pair.Zone))
                 .ThenBy(entry => entry.drawnAt)
-                .Select(entry => new ZoneKeyRow(
+                .Select(entry => new KeyRow(
                     FloodRowText(entry.pair.Zone, entry.pair.Subtype),
                     HazardStyles.ForFloodZone(entry.pair.Zone, entry.pair.Subtype))),
         ];
@@ -115,7 +115,7 @@ public static class ZoneKey
     /// <param name="manifestThreshold">
     /// <c>elevation.steep_slope.threshold_deg</c> as written, for a feature that states none.
     /// </param>
-    public static IReadOnlyList<ZoneKeyRow> SteepRows(IEnumerable<SiteFeature> drawn, string? manifestThreshold)
+    public static IReadOnlyList<KeyRow> SteepRows(IEnumerable<SiteFeature> drawn, string? manifestThreshold)
     {
         ArgumentNullException.ThrowIfNull(drawn);
 
@@ -129,7 +129,7 @@ public static class ZoneKey
             }
         }
 
-        return [.. thresholds.Select(threshold => new ZoneKeyRow(SteepRowText(threshold), HazardStyles.SteepGround))];
+        return [.. thresholds.Select(threshold => new KeyRow(SteepRowText(threshold), HazardStyles.SteepGround))];
     }
 
     private static int IndexOf(this IReadOnlyList<string> list, string value)

@@ -52,15 +52,15 @@ internal sealed partial class RevitBundleImporter
         string stem = _archive.Layout.Key.Stem;
         string viewName = HazardPlan.ViewName(facts.Build);
         View? existing = NamedAs<View>(viewName).OrderBy(candidate => candidate.IsTemplate).FirstOrDefault();
-        HazardViewFound found = existing switch
+        PlanViewFound found = existing switch
         {
-            null => HazardViewFound.None,
-            ViewPlan { IsTemplate: false } => HazardViewFound.PlanView,
-            _ => HazardViewFound.SomethingElse,
+            null => PlanViewFound.None,
+            ViewPlan { IsTemplate: false } => PlanViewFound.PlanView,
+            _ => PlanViewFound.SomethingElse,
         };
 
         List<FilledRegion> onPlan = existing is ViewPlan existingPlan ? RegionsIn(existingPlan) : [];
-        HazardPlanDecision decision = HazardPlan.Decide(found, onPlan.Select(CommentsOf), layer, stem, facts.Build);
+        PlanDecision decision = HazardPlan.Decide(found, onPlan.Select(CommentsOf), layer, stem, facts.Build);
         if (!decision.Draw)
         {
             Say(decision.Explanation);
@@ -75,7 +75,7 @@ internal sealed partial class RevitBundleImporter
         ImportFailureSwallower swallower = new($"Drawing the {label}");
         using Transaction transaction = BeginTransaction($"Mantle Place: {label}", swallower);
 
-        ViewPlan? plan = decision.CreateView ? CreateHazardPlan(viewName, facts.Crop ?? drawnExtent) : existing as ViewPlan;
+        ViewPlan? plan = decision.CreateView ? CreateDrawnPlan(viewName, facts.Crop ?? drawnExtent) : existing as ViewPlan;
         if (plan is null)
         {
             transaction.RollBack();
@@ -104,7 +104,7 @@ internal sealed partial class RevitBundleImporter
             }
 
             List<CurveLoop> loops = [.. built.OfType<CurveLoop>()];
-            HazardStyle style = flood
+            RegionStyle style = flood
                 ? HazardStyles.ForFloodZone(cut.Outer.FloodZone, cut.Outer.FloodZoneSubtype)
                 : HazardStyles.SteepGround;
 
@@ -127,12 +127,12 @@ internal sealed partial class RevitBundleImporter
         }
 
         // The key names only what is on the plan: a zone whose every polygon was refused gets no row.
-        IReadOnlyList<ZoneKeyRow> rows = drawnOuters.Count == 0
+        IReadOnlyList<KeyRow> rows = drawnOuters.Count == 0
             ? []
             : flood
-                ? [.. ZoneKey.FloodHeading(facts.FloodMap).Select(line => new ZoneKeyRow(line, null)), .. ZoneKey.FloodRows(drawnOuters, facts.FloodMap)]
+                ? [.. ZoneKey.FloodHeading(facts.FloodMap).Select(line => new KeyRow(line, null)), .. ZoneKey.FloodRows(drawnOuters, facts.FloodMap)]
                 : ZoneKey.SteepRows(drawnOuters, facts.Threshold);
-        int keyRows = DrawKeyRows(plan, rows, stem, facts, drawnExtent, z, types);
+        int keyRows = DrawKeyRows(plan, rows, HazardPlan.KeyStamp(stem, facts.Build), facts.Crop, drawnExtent, z, types);
 
         if (!CommitAndReport(transaction, swallower))
         {
@@ -172,9 +172,10 @@ internal sealed partial class RevitBundleImporter
     /// <remarks>
     /// The lowest level because an import that leaves the terrain out makes no level choice of its
     /// own, and a plan cannot borrow one that was never made. The filled regions belong to the view,
-    /// so the level sets only the plan's name in the browser and its view range.
+    /// so the level sets only the plan's name in the browser and its view range. The hazard plan and
+    /// the land plans are made alike.
     /// </remarks>
-    private ViewPlan? CreateHazardPlan(string name, FootprintExtent? crop)
+    private ViewPlan? CreateDrawnPlan(string name, FootprintExtent? crop)
     {
         Level? lowest = new FilteredElementCollector(_document)
             .OfClass(typeof(Level))
@@ -202,12 +203,19 @@ internal sealed partial class RevitBundleImporter
     }
 
     /// <summary>The key's rows for this layer, added below any the plan already holds.</summary>
+    /// <param name="plan">The plan the key is drawn in.</param>
+    /// <param name="rows">The rows, swatch and text.</param>
+    /// <param name="keyStamp">What this build's swatches on this plan are stamped with, and found by.</param>
+    /// <param name="crop">The published rectangle the plan is cropped to, or <c>null</c>.</param>
+    /// <param name="drawnExtent">The box around what was drawn, the key's anchor when there is no crop.</param>
+    /// <param name="z">The plan's level elevation.</param>
+    /// <param name="types">The region types already found or made this step.</param>
     /// <returns>How many rows were added.</returns>
     private int DrawKeyRows(
         ViewPlan plan,
-        IReadOnlyList<ZoneKeyRow> rows,
-        string stem,
-        HazardPlanFacts facts,
+        IReadOnlyList<KeyRow> rows,
+        string keyStamp,
+        FootprintExtent? crop,
         FootprintExtent? drawnExtent,
         double z,
         Dictionary<string, ElementId> types)
@@ -217,12 +225,11 @@ internal sealed partial class RevitBundleImporter
             return 0;
         }
 
-        string keyStamp = HazardPlan.KeyStamp(stem, facts.Build);
         FootprintExtent? existingKey = HazardPlan.Around(RegionsIn(plan)
             .Where(region => string.Equals(CommentsOf(region), keyStamp, StringComparison.Ordinal))
             .Select(region => ExtentOf(region, plan)));
 
-        KeyAnchor anchor = HazardPlan.KeyAnchorFor(facts.Crop, drawnExtent, existingKey, plan.Scale);
+        KeyAnchor anchor = HazardPlan.KeyAnchorFor(crop, drawnExtent, existingKey, plan.Scale);
         IReadOnlyList<KeyRowPlacement> placements = HazardPlan.LayoutKey(anchor, rows.Count, plan.Scale);
         ElementId textType = _document.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);
 
@@ -240,7 +247,7 @@ internal sealed partial class RevitBundleImporter
                 }
                 catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
                 {
-                    Trace($"  hazard plan: a key swatch for \"{rows[index].Text}\" was refused.");
+                    Trace($"  {plan.Name}: a key swatch for \"{rows[index].Text}\" was refused.");
                 }
             }
 
@@ -256,9 +263,9 @@ internal sealed partial class RevitBundleImporter
         }
 
         // The crop takes the swatches in, or the crop region would hide the key that explains it.
-        if (facts.Crop is { } crop && plan.CropBoxActive)
+        if (crop is { } published && plan.CropBoxActive)
         {
-            SetCrop(plan, HazardPlan.CropWithKey(crop, HazardPlan.Around(swatches)));
+            SetCrop(plan, HazardPlan.CropWithKey(published, HazardPlan.Around(swatches)));
         }
 
         return rows.Count;
@@ -284,7 +291,7 @@ internal sealed partial class RevitBundleImporter
     /// The filled region type a style names, found by name or made from the project's first — so a
     /// curator who recoloured one keeps their colour on the next import.
     /// </summary>
-    private ElementId RegionType(HazardStyle style, Dictionary<string, ElementId> cache)
+    private ElementId RegionType(RegionStyle style, Dictionary<string, ElementId> cache)
     {
         if (cache.TryGetValue(style.TypeName, out ElementId? known))
         {
@@ -338,7 +345,7 @@ internal sealed partial class RevitBundleImporter
             ?? ElementId.InvalidElementId;
 
     /// <summary>A style's drafting hatch, found by name or made.</summary>
-    private ElementId Hatch(HazardStyle style)
+    private ElementId Hatch(RegionStyle style)
     {
         if (FillPatternElement.GetFillPatternElementByName(_document, FillPatternTarget.Drafting, style.HatchPatternName) is { } found)
         {

@@ -5,7 +5,7 @@ using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// What more than one vector step shares — roads, site boundaries, vegetation: reading a layer,
+// What more than one vector step shares — roads, polygon layers, vegetation: reading a layer,
 // naming a feature, and turning geometry into a DirectShape.
 internal sealed partial class RevitBundleImporter
 {
