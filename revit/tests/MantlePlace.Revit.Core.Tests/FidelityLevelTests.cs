@@ -297,6 +297,9 @@ internal static class FidelityLevelTests
             run.Equal(trees.EntryName, "Landcover/TreePoints.RAW.csv", "RAW's own file");
             run.Equal(trees.ExpectedSha256, LevelSha, "verified by RAW's hash");
             run.Equal(trees.Level?.Kind ?? FidelityLevelKind.Unavailable, FidelityLevelKind.Pointer, "a pointer");
+            run.True(
+                trees.LevelFiles.Contains(TreeSha) && trees.LevelFiles.Contains(LevelSha) && trees.LevelFiles.Count == 2,
+                "the step knows every file the entry publishes: MAX's own and RAW's");
         });
 
         run.Case("a pointer level in another frame is refused like any other file, never swapped for MAX", () =>
@@ -385,6 +388,24 @@ internal static class FidelityLevelTests
             run.Equal(decision.AlreadyPresent, 5134, "MIN's rows are there");
             run.Equal(decision.KeptAboveLevel, 15400, "and the rest are kept, counted for the summary");
         });
+        run.Case("trees from another level's own file are refused as that, not as an earlier build", () =>
+        {
+            List<string?> atMax = [.. Enumerable.Range(1, 3).Select(row => (string?)TreeIdentity.Stamp(Stem, TreeSha, row))];
+            TreeDecision decision = TreeIdentity.Decide(atMax, Stem, LevelSha, 5, [TreeSha, LevelSha]);
+
+            run.True(decision.Disposition == TreeDisposition.RefuseOtherLevel, "refused: two files' rows cannot be matched");
+            run.Equal(decision.RowsToCreate.Count, 0, "nothing created");
+            run.True(decision.Explanation.Contains("another fidelity level", StringComparison.Ordinal), "the refusal names the level, not a rebuild");
+            run.False(decision.Explanation.Contains("EARLIER build", StringComparison.Ordinal), "and never calls them stale");
+        });
+
+        run.Case("trees from a build outside the entry's level files are still an earlier build", () =>
+        {
+            List<string?> old = [TreeIdentity.Stamp(Stem, OwnSha, 1)];
+            TreeDecision decision = TreeIdentity.Decide(old, Stem, LevelSha, 5, [TreeSha, LevelSha]);
+            run.True(decision.Disposition == TreeDisposition.RefuseStale, "stale");
+        });
+
         run.Case("the planting step says the rows its level read and the trees it kept", () =>
         {
             AppliedLevel atMed = new(FidelityLevel.Med, FidelityLevel.Med, FidelityLevelKind.RowCut, Rows: 10267);
@@ -426,14 +447,14 @@ internal static class FidelityLevelTests
         run.Case("a level's estimate is its count times this Revit's measured cost per unit", () =>
         {
             SlowStepNotice.LevelEstimate? trees = SlowStepNotice.EstimateLevel(
-                ImportStepKind.Vegetation, new CostDriver(CostUnit.Elements, "elements", 20534, null), "2025");
+                ImportStepKind.Vegetation, new CostDriver(CostUnit.Elements, "elements", 20534), "2025");
             run.True(trees is not null, "trees are estimated");
             run.Within(trees!.Seconds.Low, 20534 * 0.00328, 1e-9, "fastest");
             run.Within(trees.Seconds.High, 20534 * 0.00540, 1e-9, "slowest");
             run.True(trees.Timed && trees.Version == 2025, "from this Revit's own measurement");
 
             SlowStepNotice.LevelEstimate? roads = SlowStepNotice.EstimateLevel(
-                ImportStepKind.RoadPolygons, new CostDriver(CostUnit.Cuts, "cuts", 342, 1000.0), "2027");
+                ImportStepKind.RoadPolygons, new CostDriver(CostUnit.Cuts, "cuts", 342), "2027");
             run.Within(roads!.Seconds.Low, 342 * 1.85, 1e-9, "roads, 2027, fastest");
             run.Within(roads.Seconds.High, 342 * 2.46, 1e-9, "roads, 2027, slowest");
         });
@@ -441,7 +462,7 @@ internal static class FidelityLevelTests
         run.Case("a Revit never timed is estimated from the newest one that was, and says so", () =>
         {
             SlowStepNotice.LevelEstimate? roads = SlowStepNotice.EstimateLevel(
-                ImportStepKind.RoadPolygons, new CostDriver(CostUnit.Cuts, "cuts", 342, null), "2026");
+                ImportStepKind.RoadPolygons, new CostDriver(CostUnit.Cuts, "cuts", 342), "2026");
             run.False(roads!.Timed, "not this Revit's");
             run.Equal(roads.Version, 2027, "the newest measured");
             run.Equal(
@@ -449,7 +470,7 @@ internal static class FidelityLevelTests
                     FidelityLevel.Max,
                     Parse(Fixture()).RoadPolygons!.Levels![FidelityLevel.Max],
                     true,
-                    new CostDriver(CostUnit.Cuts, "cuts", 342, null),
+                    new CostDriver(CostUnit.Cuts, "cuts", 342),
                     roads),
                 "MAX — 342 subdivisions, about 11 to 14 minutes (as timed in Revit 2027)",
                 "the window says which Revit it was timed in");
@@ -458,10 +479,10 @@ internal static class FidelityLevelTests
         run.Case("a count in another unit than the step was measured in is not estimated", () =>
         {
             run.True(
-                SlowStepNotice.EstimateLevel(ImportStepKind.Vegetation, new CostDriver(CostUnit.Cuts, "cuts", 10, null), "2025") is null,
+                SlowStepNotice.EstimateLevel(ImportStepKind.Vegetation, new CostDriver(CostUnit.Cuts, "cuts", 10), "2025") is null,
                 "cuts are not trees");
             run.True(
-                SlowStepNotice.EstimateLevel(ImportStepKind.RoadCentrelines, new CostDriver(CostUnit.Elements, "elements", 10, null), "2025") is null,
+                SlowStepNotice.EstimateLevel(ImportStepKind.RoadCentrelines, new CostDriver(CostUnit.Elements, "elements", 10), "2025") is null,
                 "a step with no unit cost is not estimated");
             run.True(SlowStepNotice.EstimateLevel(ImportStepKind.Vegetation, null, "2025") is null, "nor a level with no count");
         });
@@ -469,10 +490,10 @@ internal static class FidelityLevelTests
         run.Case("the window says seconds under two minutes and minutes above", () =>
         {
             SlowStepNotice.LevelEstimate trees = SlowStepNotice.EstimateLevel(
-                ImportStepKind.Vegetation, new CostDriver(CostUnit.Elements, "elements", 20534, null), "2025")!;
+                ImportStepKind.Vegetation, new CostDriver(CostUnit.Elements, "elements", 20534), "2025")!;
             PublishedLevel max = Parse(Fixture()).TreePoints!.Levels![FidelityLevel.Max];
             run.Equal(
-                WindowLabels.LevelOption(FidelityLevel.Max, max, true, new CostDriver(CostUnit.Elements, "elements", 20534, null), trees),
+                WindowLabels.LevelOption(FidelityLevel.Max, max, true, new CostDriver(CostUnit.Elements, "elements", 20534), trees),
                 "MAX — 20,534 elements, about 67 to 111 seconds",
                 "seconds");
 

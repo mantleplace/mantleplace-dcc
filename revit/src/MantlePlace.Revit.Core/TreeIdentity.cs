@@ -12,6 +12,13 @@ public enum TreeDisposition
     /// This order's trees are here from a DIFFERENT build. Create nothing, and delete nothing.
     /// </summary>
     RefuseStale,
+
+    /// <summary>
+    /// This order's trees are here from the same build at another fidelity level whose file is its
+    /// own — a pointer level, or MAX beside one. Two files' rows cannot be matched by row number, so
+    /// create nothing, and delete nothing.
+    /// </summary>
+    RefuseOtherLevel,
 }
 
 /// <summary>The tree step's decision, and the sentence a curator gets when it refuses.</summary>
@@ -91,11 +98,17 @@ public static class TreeIdentity
     /// creates only the rows a lower one did not, and a lower level creates nothing and keeps the
     /// rest (<see cref="TreeDecision.KeptAboveLevel"/>).
     /// </param>
+    /// <param name="levelFiles">
+    /// The sha256 of every file the entry publishes at any level (<see cref="ImportStep.LevelFiles"/>).
+    /// Trees from one of them that is not this import's file are this build at another level, and
+    /// are refused as that rather than as an earlier build.
+    /// </param>
     public static TreeDecision Decide(
         IEnumerable<string?> existingComments,
         string cacheKeyStem,
         string? artifactSha256,
-        int rowCount)
+        int rowCount,
+        IReadOnlyCollection<string>? levelFiles = null)
     {
         ArgumentNullException.ThrowIfNull(existingComments);
         ArgumentNullException.ThrowIfNull(cacheKeyStem);
@@ -107,7 +120,10 @@ public static class TreeIdentity
         string thisBuild = BuildPrefix(cacheKeyStem, artifactSha256);
 
         HashSet<string> present = new(StringComparer.Ordinal);
+        HashSet<string> otherLevels = [.. (levelFiles ?? []).Select(sha => BuildPrefix(cacheKeyStem, sha))];
+        otherLevels.Remove(thisBuild);
         int stale = 0;
+        int otherLevel = 0;
         foreach (string? comments in existingComments)
         {
             if (comments is null || !comments.StartsWith(ours, StringComparison.Ordinal))
@@ -119,10 +135,30 @@ public static class TreeIdentity
             {
                 present.Add(comments);
             }
+            else if (otherLevels.Any(prefix => comments.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                otherLevel++;
+            }
             else
             {
                 stale++;
             }
+        }
+
+        if (otherLevel > 0 && stale == 0)
+        {
+            return new TreeDecision
+            {
+                Disposition = TreeDisposition.RefuseOtherLevel,
+                Explanation = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "The trees in this project are this bundle's at another fidelity level ({0:N0} of them), "
+                        + "published as a file of its own, and its rows cannot be matched to this level's — so no "
+                        + "second set was created on top of them, and they were not deleted. To change level, "
+                        + "delete the elements whose Comments begin \"{1}\" and import again.",
+                    otherLevel,
+                    ours),
+            };
         }
 
         if (stale > 0)

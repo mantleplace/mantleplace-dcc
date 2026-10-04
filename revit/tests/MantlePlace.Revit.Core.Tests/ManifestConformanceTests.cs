@@ -458,10 +458,10 @@ internal static partial class ManifestConformanceTests
             run.Equal(manifest.RevitDrape?.Path ?? string.Empty, revitDrapePath, "revitDrapePath");
         }
 
-        // The published contours are placed from this pointer alone (ADR 0013), and their heights'
-        // unit is read from it, never from the drawing's one $INSUNITS.
         AssertRevitLevels(run, corpusCase, manifest);
 
+        // The published contours are placed from this pointer alone (ADR 0013), and their heights'
+        // unit is read from it, never from the drawing's one $INSUNITS.
         if (ConformanceCorpus.WantsString(corpusCase, "revitContoursPath", out string revitContoursPath))
         {
             run.Equal(manifest.RevitContours?.Path ?? string.Empty, revitContoursPath, "revitContoursPath");

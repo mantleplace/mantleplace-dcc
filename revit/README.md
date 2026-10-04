@@ -331,15 +331,16 @@ four levels of a deliverable — `RAW`, `MAX`, `MED` and `MIN` — and every che
 category publishes them gets a dropdown under `Fidelity Level`, with one `Set All To` control above
 the rows. Every row starts at `MAX`, the deliverable as every earlier bundle had it. Each level says
 what the bundle publishes it as, and its count where the bundle states one: a level that is another
-reads `Same as MAX` and the reason, and on the trees and the road surfaces the count comes with an
-estimate measured in the Revit you are running. The level is applied as published and never
-computed: the trees take the first rows of their ranked file, the road surfaces and other
-subdivisions the features the bundle marks as belonging to that level, and a level with a file of
+reads `Same as MAX` and the reason, and where the step has a measured cost per unit the count comes
+with an estimate for the Revit you are running ([which rows](../docs/import-inventory.md)). The level is applied as published and never
+computed: the trees take the first rows of their ranked file, the road surfaces and water bodies
+the features the bundle marks as belonging to that level, and a level with a file of
 its own is that file, refused under the same frame rules as any other. A level this version cannot
 import is listed, says `not available in this version of Mantle Place`, and cannot be chosen;
 `Set All To` leaves that row where it was. Importing the same build again at a higher level adds
 only what the lower one left out; at a lower level it creates nothing and deletes nothing, and the
-log says how many it kept. The unattended path imports `MAX`.
+log says how many it kept. Trees from a level with a file of its own are not matched to another
+level's rows: that import creates no trees, deletes none, and says which to delete to change level. The unattended path imports `MAX`.
 
 **An import is staged, and shows itself.** Once `Import` is pressed the window lists the chosen
 steps, marks each one `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts

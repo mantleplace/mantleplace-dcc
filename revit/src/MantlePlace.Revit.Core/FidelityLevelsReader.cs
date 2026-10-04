@@ -192,6 +192,6 @@ internal static class FidelityLevelsReader
             _ => CostUnit.Unknown,
         };
 
-        return new CostDriver(unit, raw, value, element.OptionalDouble("area_m2"));
+        return new CostDriver(unit, raw, value);
     }
 }

@@ -85,8 +85,8 @@ internal sealed partial class RevitBundleImporter
         string stem = _archive.Layout.Key.Stem;
         List<ExistingTreePoint> existing = ExistingTreePoints();
         TreeDecision decision = TreeIdentity.Decide(
-            existing.Select(element => element.Comments), stem, step.ExpectedSha256, points.Count);
-        if (decision.Disposition == TreeDisposition.RefuseStale)
+            existing.Select(element => element.Comments), stem, step.ExpectedSha256, points.Count, step.LevelFiles);
+        if (decision.Disposition != TreeDisposition.Create)
         {
             Say(decision.Explanation);
             yield break;

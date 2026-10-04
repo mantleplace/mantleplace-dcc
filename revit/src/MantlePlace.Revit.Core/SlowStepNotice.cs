@@ -199,14 +199,11 @@ public static class SlowStepNotice
             return null;
         }
 
-        bool timed = int.TryParse(revitVersionNumber, NumberStyles.None, CultureInfo.InvariantCulture, out int version)
-            && perUnit.In(version) is not null;
-        if (!timed && !MeasuredVersions.Any(year => perUnit.In(year) is not null))
+        if (QuotedVersion(revitVersionNumber, year => perUnit.In(year) is not null) is not (int quoted, bool timed))
         {
             return null;
         }
 
-        int quoted = timed ? version : MeasuredVersions.Last(year => perUnit.In(year) is not null);
         SecondsRange each = perUnit.In(quoted)!.Value;
         return new LevelEstimate(new SecondsRange(cost.Count * each.Low, cost.Count * each.High), quoted, timed);
     }
@@ -877,15 +874,11 @@ public static class SlowStepNotice
             return null;
         }
 
-        bool Timed(int version) => saves.In(version) is not null || measured.In(version) is not null;
-        bool timed = int.TryParse(revitVersionNumber, NumberStyles.None, CultureInfo.InvariantCulture, out int version)
-            && Timed(version);
-        if (!timed && !MeasuredVersions.Any(Timed))
+        if (QuotedVersion(revitVersionNumber, version => saves.In(version) is not null || measured.In(version) is not null)
+            is not (int quoted, bool timed))
         {
             return null;
         }
-
-        int quoted = timed ? version : MeasuredVersions.Last(Timed);
 
         string figure;
         if (saves.In(quoted) is { } saved)
@@ -921,4 +914,18 @@ public static class SlowStepNotice
     /// <summary>Seconds as whole minutes, rounded half away from zero.</summary>
     private static string Minutes(double seconds)
         => Math.Round(seconds / 60.0, MidpointRounding.AwayFromZero).ToString("N0", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Which version's measurement is quoted: this Revit's where it was timed, else the latest version
+    /// that was, said as that version's (<c>Timed</c> false); <c>null</c> where none was.
+    /// </summary>
+    private static (int Quoted, bool Timed)? QuotedVersion(string? revitVersionNumber, Func<int, bool> wasTimed)
+    {
+        if (int.TryParse(revitVersionNumber, NumberStyles.None, CultureInfo.InvariantCulture, out int version) && wasTimed(version))
+        {
+            return (version, true);
+        }
+
+        return MeasuredVersions.Any(wasTimed) ? (MeasuredVersions.Last(wasTimed), false) : null;
+    }
 }

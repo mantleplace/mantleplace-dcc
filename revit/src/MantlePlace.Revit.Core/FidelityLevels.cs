@@ -100,8 +100,8 @@ public enum SameAsReason
 /// <param name="Unit">The unit, or <see cref="CostUnit.Unknown"/> for a word this host does not know.</param>
 /// <param name="RawUnit">The unit as published.</param>
 /// <param name="Count">The count.</param>
-/// <param name="AreaM2">The cuts' total area, published only with <see cref="CostUnit.Cuts"/>.</param>
-public sealed record CostDriver(CostUnit Unit, string RawUnit, long Count, double? AreaM2);
+/// <remarks>The cuts' published <c>area_m2</c> is not read: no unit cost here is per square metre.</remarks>
+public sealed record CostDriver(CostUnit Unit, string RawUnit, long Count);
 
 /// <summary>One of an entry's four levels, as published.</summary>
 public sealed class PublishedLevel
@@ -217,6 +217,27 @@ public static class FidelityCuts
         FidelityLevelKind.FieldCut => kind is ImportStepKind.RoadPolygons or ImportStepKind.Water,
         _ => false,
     };
+
+    /// <summary>
+    /// The sha256 of every file <paramref name="entry"/> publishes at any level: its own, which is
+    /// MAX, then each pointer level's. Empty for an entry with no levels.
+    /// </summary>
+    public static IReadOnlyList<string> LevelFiles(BundleArtifact entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (entry.Levels is not { } levels)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. new[] { entry.Sha256 }
+                .Concat(levels.All.Where(level => level.Kind == FidelityLevelKind.Pointer).Select(level => level.File?.Sha256))
+                .OfType<string>()
+                .Distinct(StringComparer.Ordinal),
+        ];
+    }
 
     /// <summary>Whether <paramref name="level"/> of an entry can be imported by a step of <paramref name="kind"/>.</summary>
     public static bool IsAvailable(FidelityLevels levels, FidelityLevel level, ImportStepKind kind)
@@ -350,15 +371,16 @@ public static class FidelityCuts
         string clause = leftOut > 0
             ? string.Format(CultureInfo.InvariantCulture, "; {0:N0} {1} above the {2} level were left out", leftOut, noun, level)
             : string.Empty;
-        return keptAboveLevel > 0
-            ? clause + string.Format(
-                CultureInfo.InvariantCulture,
-                "; {0:N0} {1} above the {2} level, from an earlier import of this bundle, were kept, because a lower level never deletes",
-                keptAboveLevel,
-                noun,
-                level)
-            : clause;
+        return keptAboveLevel > 0 ? clause + "; " + KeptAbove(keptAboveLevel, noun, level) : clause;
     }
+
+    /// <summary>What a lower level kept of an earlier import's higher one, for a summary or a sentence.</summary>
+    private static string KeptAbove(int kept, string noun, string level) => string.Format(
+        CultureInfo.InvariantCulture,
+        "{0:N0} {1} above the {2} level, from an earlier import of this bundle, were kept, because a lower level never deletes",
+        kept,
+        noun,
+        level);
 
     /// <summary>
     /// The log's line for a step imported at a level other than MAX, or <c>null</c> at MAX and for an
@@ -404,13 +426,7 @@ public static class FidelityCuts
                 level,
                 rows)
             : string.Empty;
-        string kept = keptAboveLevel > 0
-            ? string.Format(
-                CultureInfo.InvariantCulture,
-                "{0:N0} trees above the {1} level, from an earlier import of this bundle, were kept, because a lower level never deletes.",
-                keptAboveLevel,
-                level)
-            : string.Empty;
+        string kept = keptAboveLevel > 0 ? KeptAbove(keptAboveLevel, "trees", level) + "." : string.Empty;
         return string.Join(" ", new[] { read, kept }.Where(part => part.Length > 0));
     }
 }

@@ -449,10 +449,11 @@ public static class BundleImportPlanner
             ExpectedSha256 = copy.ExpectedSha256,
             HeightDatum = HeightDatums.For(ImportStepKind.LinkSiteIfc, manifest.SiteIfc, manifest),
 
-            // The same file, so the same levels. Only MAX, and a level naming it, reaches a site model
-            // step (FidelityCuts.CanTake), so the link is the file in full at whichever its row shows.
+            // The same file, so the same levels, applied once: a level the copy refused never reaches
+            // here, and only MAX, or a level naming it, reaches a site model step
+            // (FidelityCuts.CanTake), so the link is the file in full at whichever its row shows.
             Levels = copy.Levels,
-            Level = FidelityCuts.Apply(manifest.SiteIfc!, ImportStepKind.LinkSiteIfc, choice.LevelOf(ImportLayer.SiteModel), "IFC site model").Applied,
+            Level = copy.Level,
         });
     }
 
@@ -857,6 +858,7 @@ public static class BundleImportPlanner
             return;
         }
 
+        IReadOnlyList<string> levelFiles = FidelityCuts.LevelFiles(artifact);
         artifact = file;
 
         string? entry = entries.Resolve(artifact.Path);
@@ -942,6 +944,7 @@ public static class BundleImportPlanner
             HeightDatum = HeightDatums.For(kind, artifact, manifest),
             Levels = published,
             Level = leveled.Applied,
+            LevelFiles = levelFiles,
         });
     }
 

@@ -6,8 +6,8 @@ namespace MantlePlace.Revit.Core;
 public static partial class WindowLabels
 {
     /// <summary>
-    /// The heading over the level column: the glossary's term (<c>CONTEXT.md</c>), never
-    /// <c>Quality</c>, <c>Detail Level</c> or <c>Resolution</c>, which it rules out.
+    /// The heading over the level column: the glossary's term, with the words it rules out
+    /// (<c>CONTEXT.md</c>).
     /// </summary>
     public const string LevelHeading = "Fidelity Level";
 

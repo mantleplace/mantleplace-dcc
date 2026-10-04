@@ -708,6 +708,14 @@ public sealed class ImportStep
 
     /// <summary>The level this step imports, as applied; <c>null</c> for an entry with no levels.</summary>
     public AppliedLevel? Level { get; init; }
+
+    /// <summary>
+    /// The sha256 of every file a placed artifact's entry publishes at any level — its own, which is
+    /// MAX, and each pointer level's — whichever of them this step reads. Empty for an entry with no
+    /// levels. How the tree step tells this build at another level from an earlier build
+    /// (<see cref="TreeIdentity.Decide"/>).
+    /// </summary>
+    public IReadOnlyList<string> LevelFiles { get; init; } = [];
 }
 
 /// <summary>
