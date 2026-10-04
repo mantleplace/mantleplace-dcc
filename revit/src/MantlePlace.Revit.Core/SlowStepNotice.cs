@@ -223,8 +223,8 @@ public static class SlowStepNotice
     /// builds it. Exceptions are named. The site model is the step that converts the IFC: the full
     /// imports' cold runs in 2025 and 2026 with the layer-alone pairs, and the layer-alone pair in 2027,
     /// whose full imports reused a converted file. The flood zones are one hand-made bundle's 65 zones
-    /// on a new hazard plan, one import each, 2026-09-24; steep ground the same bundle's 32 polygons
-    /// added to that plan. Coordinates, location and centrelines were timed together.
+    /// on a new hazard plan, one import each, 2026-09-24. Coordinates, location and centrelines were
+    /// timed together.
     /// </para>
     /// <para>
     /// The drape is 2025's alone: the 2026 and 2027 runs predate its typed cuts, which took most of its
@@ -246,55 +246,71 @@ public static class SlowStepNotice
     /// imports differed by about nine minutes in 2025 and 2026 and eleven in 2027.
     /// </para>
     /// <para>
+    /// <b>The gate.</b> Spec issue 300's gate imported every box ticked at its default level
+    /// (<see cref="ImportLayers.DefaultLevel"/>) through the import window, two runs per bundle and
+    /// version, one Revit at a time, Revit 2025.4, 2026.5 and 2027.2, 2026-10-03, on two imperial
+    /// reference bundles regenerated that day: a 2 km² mountain order of 75,091 TIN vertices, 1,317
+    /// buildings and 725 steep-ground polygons, and a denser 1.96 km² flat one of 1,672 buildings. Where
+    /// a row below names it, the gate's runs are folded into the row's range.
+    /// </para>
+    /// <para>
+    /// The terrain and the context buildings fold in the mountain order's gate runs, which is the same
+    /// site as order <c>4276ef78</c>: the buildings step now also saves the site model's conversion for
+    /// the link, which is why 2026's slowest run rose. Steep ground is the mountain order's gate runs
+    /// alone: the hand-made bundle it was first measured on drew 32 polygons in under a second, and 725
+    /// take most of half a minute.
+    /// </para>
+    /// <para>
     /// The land use and land cover are not from this order: what they were measured at there was the
     /// cost of cutting them into the terrain, and those rows went with the subdivisions
     /// (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>). Their rows are each layer
     /// drawn alone on a new land plan, one import per bundle and version, Revit 2025.4 and 2027.2,
     /// 2026-10-03, on two imperial reference bundles: one of 28 land-use and 18 land-cover polygons,
-    /// one of 76 and 7. Revit 2026 was not measured.
+    /// one of 76 and 7; with the gate's runs, of 28 and 19 and of 76 and 7, folded in.
     /// </para>
     /// <para>
     /// The unit costs (<see cref="StepMeasurement.PerUnit"/>) are the first fidelity-level runs: two
     /// reference orders on State Plane foot deliveries, one of 2 km² and a denser one of 1.96 km², each
     /// imported unattended in full and as copies cut to their published MED and MIN levels, with the
     /// land use and land cover left out, by the plugin before it read levels, Revit 2025 and 2027,
-    /// 2026-10-03; one import per level. Each run's step seconds divided by its published count, the range across the runs.
-    /// Trees run from about 3.3 ms each on the largest set to 5.6 ms on the smallest, because the
-    /// family is prepared once whatever the count. Road surfaces run 0.65 to 1.67 s a cut in 2025
-    /// and 1.85 to 2.46 s in 2027, the denser order dearer per cut in both. Revit 2026 was not run.
+    /// 2026-10-03; one import per level. The gate's runs, at MIN, are folded in, and are Revit 2026's
+    /// only figures. Each run's step seconds divided by its published count, the range across the runs.
+    /// Trees run from about 3.3 ms each on the largest set to 5.8 ms on the smallest, because the
+    /// family is prepared once whatever the count. A road surface costs more the more subdivisions
+    /// the terrain already holds, so an estimate at MAX from these is low on a dense order.
     /// </para>
     /// <para>
     /// The site context view is not from this order either: that order made it after the subdivisions,
     /// where in Revit 2026 and 2027 a view over a cut terrain costs tens of seconds, and it is now made
     /// before them. Its row is every box ticked, two imports per bundle and version, Revit 2025.4 and
-    /// 2027.2, 2026-10-03, on the same two imperial reference bundles. Revit 2026 was not measured.
+    /// 2027.2, 2026-10-03, on the same two imperial reference bundles, with the gate's runs folded in.
     /// </para>
     /// </remarks>
     public static StepMeasurement? Measured(ImportStepKind kind) => kind switch
     {
         ImportStepKind.ToposurfaceFromPointsFile or ImportStepKind.ToposurfaceFromSurfaceTin
-            => new(new(25.9, 41.9), new(57.3, 57.4), new(60.1, 79.1)),
+            => new(new(25.9, 41.9), new(57.3, 58.2), new(59.6, 79.1)),
         ImportStepKind.PublishedContours => new(new(2.1, 3.1), new(2.2, 2.2), new(2.2, 3.3)),
-        ImportStepKind.ContextBuildings => new(new(33.6, 57.4), new(32.4, 33.7), new(35.9, 59.2)),
+        ImportStepKind.ContextBuildings => new(new(33.6, 57.4), new(32.4, 41.3), new(35.9, 59.2)),
         ImportStepKind.LinkSiteIfc => new(new(41.1, 71.2), new(39.3, 39.5), new(43.8, 44.6)),
         ImportStepKind.SetSharedCoordinates or ImportStepKind.SetSiteLocation or ImportStepKind.RoadCentrelines
             => new(new(1.6, 3.1), new(1.9, 1.9), new(1.6, 2.8)),
         ImportStepKind.Water => new(new(2.1, 2.8), new(5.7, 11.4), new(7.7, 11.1)),
         ImportStepKind.RoadPolygons => new(new(870, 1_112), new(1_318.6, 1_754.6), new(1_337.0, 1_781.7))
         {
-            PerUnit = new(CostUnit.Cuts, new(0.65, 1.67), null, new(1.85, 2.46)),
+            PerUnit = new(CostUnit.Cuts, new(0.65, 1.67), new(1.90, 2.49), new(1.85, 2.46)),
         },
         ImportStepKind.Vegetation => new(new(206, 415), new(266, 275), new(231, 338))
         {
-            PerUnit = new(CostUnit.Elements, new(0.00328, 0.00540), null, new(0.00332, 0.00559)),
+            PerUnit = new(CostUnit.Elements, new(0.00328, 0.00561), new(0.00334, 0.00565), new(0.00332, 0.00580)),
         },
         ImportStepKind.AttributionAndProvenance => new(new(0.1, 0.6), new(0.1, 0.1), new(0.1, 0.2)),
-        ImportStepKind.SiteContextView => new(new(0.5, 0.6), null, new(0.8, 1.0)),
+        ImportStepKind.SiteContextView => new(new(0.5, 0.6), new(0.8, 1.0), new(0.8, 1.0)),
         ImportStepKind.ImageryDrape => new(new(25.6, 61.6), null, null),
         ImportStepKind.FloodZones => new(new(32.9, 32.9), new(31.7, 31.7), new(43.5, 43.5)),
-        ImportStepKind.SteepGround => new(new(0.8, 0.8), new(0.8, 0.8), new(0.9, 0.9)),
-        ImportStepKind.LandUse => new(new(1.5, 1.7), null, new(1.5, 1.8)),
-        ImportStepKind.LandCover => new(new(0.3, 1.0), null, new(0.3, 1.0)),
+        ImportStepKind.SteepGround => new(new(26.4, 26.8), new(25.2, 26.3), new(27.3, 27.5)),
+        ImportStepKind.LandUse => new(new(1.5, 2.1), new(1.6, 2.0), new(1.5, 2.2)),
+        ImportStepKind.LandCover => new(new(0.3, 1.2), new(0.6, 1.2), new(0.3, 1.3)),
 
         // The DXF terrain links a CAD file and has never been timed.
         _ => null,
@@ -496,7 +512,7 @@ public static class SlowStepNotice
     /// <summary>A hazard layer's line, from whether it makes the hazard plan and how many regions it draws.</summary>
     /// <remarks>
     /// The flood zones were measured making a new plan; drawn onto a plan that is already there, they
-    /// are not the work that was measured, and steep ground was measured in under a second.
+    /// are not the work that was measured, and steep ground was measured under the announcement line.
     /// </remarks>
     public static string? ForHazardLayer(ImportStepKind kind, bool createsPlan, int regions)
         => createsPlan ? For(kind, null, regions) : null;

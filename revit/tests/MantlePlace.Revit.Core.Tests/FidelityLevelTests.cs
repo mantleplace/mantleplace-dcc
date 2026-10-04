@@ -450,7 +450,7 @@ internal static class FidelityLevelTests
                 ImportStepKind.Vegetation, new CostDriver(CostUnit.Elements, "elements", 20534), "2025");
             run.True(trees is not null, "trees are estimated");
             run.Within(trees!.Seconds.Low, 20534 * 0.00328, 1e-9, "fastest");
-            run.Within(trees.Seconds.High, 20534 * 0.00540, 1e-9, "slowest");
+            run.Within(trees.Seconds.High, 20534 * 0.00561, 1e-9, "slowest");
             run.True(trees.Timed && trees.Version == 2025, "from this Revit's own measurement");
 
             SlowStepNotice.LevelEstimate? roads = SlowStepNotice.EstimateLevel(
@@ -462,7 +462,7 @@ internal static class FidelityLevelTests
         run.Case("a Revit never timed is estimated from the newest one that was, and says so", () =>
         {
             SlowStepNotice.LevelEstimate? roads = SlowStepNotice.EstimateLevel(
-                ImportStepKind.RoadPolygons, new CostDriver(CostUnit.Cuts, "cuts", 342), "2026");
+                ImportStepKind.RoadPolygons, new CostDriver(CostUnit.Cuts, "cuts", 342), "2028");
             run.False(roads!.Timed, "not this Revit's");
             run.Equal(roads.Version, 2027, "the newest measured");
             run.Equal(
@@ -494,7 +494,7 @@ internal static class FidelityLevelTests
             PublishedLevel max = Parse(Fixture()).TreePoints!.Levels![FidelityLevel.Max];
             run.Equal(
                 WindowLabels.LevelOption(FidelityLevel.Max, max, true, new CostDriver(CostUnit.Elements, "elements", 20534), trees),
-                "MAX — 20,534 elements, about 67 to 111 seconds",
+                "MAX — 20,534 elements, about 67 to 115 seconds",
                 "seconds");
 
             PublishedLevel med = Parse(Fixture()).TreePoints!.Levels![FidelityLevel.Min];

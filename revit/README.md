@@ -269,16 +269,12 @@ the project displays lengths in the other unit system, and it changes nothing: P
 yours. Then the checklist: one box for each
 layer the bundle carries (`Terrain`, `Published Contours`, `Context Buildings`, `Site Model`,
 `Road Centrelines`, `Water Subdivisions`, `Road Subdivisions`, `Planting`, `Land Use Plan`,
-`Land Cover Plan`, `Flood Zones`, `Steep Ground`, `Imagery Drape`), all ticked but
-seven. `Site Model` links the site model, whose buildings `Context Buildings` has already copied in,
-and ticking both shows every building twice. `Published Contours` is for a curator who wants the
-order's own linework: the toposolid already draws contours of its own. `Land Use Plan`,
-`Land Cover Plan`, `Flood Zones` and `Steep Ground` draw plans, which are for planning the site
-rather than rendering it, so they wait to be asked for. `Road Subdivisions` is most of a full
-import's time: on the order it was measured on, leaving it out alone saved about 19 to 32 minutes
-across Revit 2025, 2026 and 2027. Ticking it says below the list what it was measured to cost in
-the Revit you are running, and with what else ticked. Nothing remembers a tick from one import to
-the next, so a box you ticked last time starts unticked again.
+`Land Cover Plan`, `Flood Zones`, `Steep Ground`, `Imagery Drape`), all ticked but one.
+`Site Model` links the site model, whose buildings `Context Buildings` has already copied in, and
+ticking both shows every building twice. Every other box starts ticked because, with everything
+ticked at the levels the rows open on, a 2 km² order imports in under five minutes in Revit 2025,
+2026 and 2027 ([the costs](../docs/import-inventory.md)). Nothing remembers a tick or a level from
+one import to the next, so a box you ticked last time starts unticked again.
 Nothing runs until `Import` is pressed. Both kinds of subdivision and the drape need the terrain, so unticking `Terrain` disables
 them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
 out creates nothing, and the log says it was left out by choice. The shared coordinates, the site
@@ -330,7 +326,9 @@ extra. The unattended path is unchanged: it imports everything it can and logs t
 **Each category comes in at the fidelity level you choose.** A bundle from MPB 1.9.0 on publishes
 four levels of a deliverable — `RAW`, `MAX`, `MED` and `MIN` — and every checklist row whose
 category publishes them gets a dropdown under `Fidelity Level`, with one `Set All To` control above
-the rows. Every row starts at `MAX`, the deliverable as every earlier bundle had it. Each level says
+the rows. `Planting` and `Road Subdivisions` open on `MIN`, and every other row on `MAX`, the
+deliverable as every earlier bundle had it: one level up on either took the whole import past five
+minutes on a dense order. A row whose `MIN` this version cannot import opens on `MAX`. Each level says
 what the bundle publishes it as, and its count where the bundle states one: a level that is another
 reads `Same as MAX` and the reason, and where the step has a measured cost per unit the count comes
 with an estimate for the Revit you are running ([which rows](../docs/import-inventory.md)). The level is applied as published and never

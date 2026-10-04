@@ -63,9 +63,16 @@ and `pids\`.
   `PublishedContours`, `ContextBuildings`, ...; spaces ignored), `All`, or `Default` (the layers
   `ImportLayers.OnByDefault` ticks, which is what a curator who changes nothing imports). The driver checks
   the names against that enum before launching.
+- **Levels, layers phase only** (`-Levels ...`): the fidelity level each layer imports at. `Default` is
+  `ImportLayers.DefaultLevel`, what the window opens on; `All=Min` puts every layer at one level; and a
+  list such as `'All=Min,Planting=Med'` is read left to right, so a later entry wins. Empty means every
+  layer at `MAX`, except with `-Layers Default`, which takes the default levels too. A level the bundle
+  publishes in a form the step cannot take is refused by the planner and logged, as the window would
+  never offer it.
 - **Window phase** (`-Phase window -Boxes ...`): the real import window. `-Boxes` takes `All` (every box
   the bundle offers), `Default` (the boxes as the window opens them, untouched), or a comma list of the
-  checklist's row names (`'Published Contours,Terrain'`); boxes not named are unticked.
+  checklist's row names (`'Published Contours,Terrain'`); boxes not named are unticked. The levels are
+  the ones the window opens on; the driver does not change them.
 
 Pass a comma list quoted (`-Layers 'Terrain,PublishedContours'`) when calling from a PowerShell session; an
 unquoted list arrives as an array and is refused.
