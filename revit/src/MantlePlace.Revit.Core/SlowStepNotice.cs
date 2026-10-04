@@ -263,6 +263,12 @@ public static class SlowStepNotice
     /// family is prepared once whatever the count. Road surfaces run 0.65 to 1.67 s a cut in 2025
     /// and 1.85 to 2.46 s in 2027, the denser order dearer per cut in both. Revit 2026 was not run.
     /// </para>
+    /// <para>
+    /// The site context view is not from this order either: that order made it after the subdivisions,
+    /// where in Revit 2026 and 2027 a view over a cut terrain costs tens of seconds, and it is now made
+    /// before them. Its row is every box ticked, two imports per bundle and version, Revit 2025.4 and
+    /// 2027.2, 2026-10-03, on the same two imperial reference bundles. Revit 2026 was not measured.
+    /// </para>
     /// </remarks>
     public static StepMeasurement? Measured(ImportStepKind kind) => kind switch
     {
@@ -284,7 +290,7 @@ public static class SlowStepNotice
             PerUnit = new(CostUnit.Elements, new(0.00328, 0.00540), null, new(0.00332, 0.00559)),
         },
         ImportStepKind.AttributionAndProvenance => new(new(0.1, 0.6), new(0.1, 0.1), new(0.1, 0.2)),
-        ImportStepKind.SiteContextView => new(new(1.4, 4.8), new(41.5, 42.4), new(32.7, 52.6)),
+        ImportStepKind.SiteContextView => new(new(0.5, 0.6), null, new(0.8, 1.0)),
         ImportStepKind.ImageryDrape => new(new(25.6, 61.6), null, null),
         ImportStepKind.FloodZones => new(new(32.9, 32.9), new(31.7, 31.7), new(43.5, 43.5)),
         ImportStepKind.SteepGround => new(new(0.8, 0.8), new(0.8, 0.8), new(0.9, 0.9)),
@@ -463,7 +469,10 @@ public static class SlowStepNotice
     public static string? ForSiteModel(bool convertedFileExists)
         => convertedFileExists ? null : For(ImportStepKind.LinkSiteIfc, null, 1);
 
-    /// <summary>The site context view's line, from what the step will make; <c>null</c> when it makes nothing.</summary>
+    /// <summary>
+    /// The site context view's line, from what the step will make; <c>null</c> when it makes nothing, or
+    /// when it is measured under <see cref="AnnouncedFromSeconds"/>.
+    /// </summary>
     /// <remarks>
     /// The figure is for making both, and the line says so when only one is made: how the time divides
     /// between the view and the filter has not been measured.
@@ -480,7 +489,7 @@ public static class SlowStepNotice
             _ => null,
         };
 
-        return making is null || Measured(ImportStepKind.SiteContextView) is not { } measured
+        return making is null || !IsAnnounced(ImportStepKind.SiteContextView) || Measured(ImportStepKind.SiteContextView) is not { } measured
             ? null
             : SiteContextViewNotice(making, measured);
     }
@@ -530,7 +539,7 @@ public static class SlowStepNotice
         => string.Format(
             CultureInfo.InvariantCulture,
             "Next: the site context view, making {0}: the view is a 3D view, and the filter finds what an import "
-            + "stamped across every model category. On the one order this has been measured on, making both took "
+            + "stamped across every model category. On the bundles this has been measured on, making both took "
             + "{1}. {2}",
             making,
             measured.Describe(),

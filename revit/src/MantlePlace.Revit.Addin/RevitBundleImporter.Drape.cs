@@ -63,7 +63,7 @@ internal sealed partial class RevitBundleImporter
 
         // Retained, not scratch: the appearance asset stores this PATH and re-reads it every time the
         // project is opened (ImportStepKinds.LifetimeOf).
-        string imagePath = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
+        string imagePath = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
         string name = DrapeLayering.ImageryName(_archive.Layout.Key.Stem);
 
         // Whether the terrain step already built this ground on the imagery type — which decides

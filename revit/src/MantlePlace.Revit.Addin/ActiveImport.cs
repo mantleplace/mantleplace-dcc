@@ -315,7 +315,7 @@ internal sealed class ActiveImport : IDisposable
             // copied rather than linked by default, so an import can leave nothing linked at all.
             // An entry-less step extracts nothing, whatever its kind's lifetime defaults to.
             bool linksFiles = _plan.Steps.Any(step => step.EntryName.Length > 0
-                && ImportStepKinds.LifetimeOf(step.Kind) == ExtractionLifetime.Retained);
+                && step.Lifetime == ExtractionLifetime.Retained);
             Close(Summarise(_plan, _importer.Log)
                 + (linksFiles
                     ? Environment.NewLine

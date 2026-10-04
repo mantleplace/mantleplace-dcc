@@ -24,7 +24,6 @@ internal static class SlowStepNoticeTests
         ImportStepKind.LinkSiteIfc,
         ImportStepKind.RoadPolygons,
         ImportStepKind.Vegetation,
-        ImportStepKind.SiteContextView,
         ImportStepKind.ImageryDrape,
         ImportStepKind.FloodZones,
     ];
@@ -351,29 +350,21 @@ internal static class SlowStepNoticeTests
             run.True(SlowStepNotice.ForSiteModel(convertedFileExists: true) is null, "and the core decides that one there means nothing to say");
         });
 
-        run.Case("making the site context view announces itself, and reusing it does not", () =>
+        run.Case("the site context view, made before the subdivisions, is quiet whatever it makes", () =>
         {
-            string? notice = SlowStepNotice.For(ImportStepKind.SiteContextView, null, 2);
-            run.Contains(notice, "Next: the site context view", "it names the step");
-            run.Contains(
-                notice,
-                "about 1 to 5 seconds in Revit 2025, 42 seconds in Revit 2026 and 33 to 53 seconds in Revit 2027",
-                "what it measured at");
-            run.Contains(notice, "not responding", "it says what Revit is about to look like");
-            run.True(SlowStepNotice.For(ImportStepKind.SiteContextView, null, 0) is null, "an earlier import's view and filter, reused, are not announced");
-
-            run.Contains(
-                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Create, NamedElementAction.Create)),
-                "making the view and its filter",
-                "both made");
-            string? filterOnly = SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Reuse, NamedElementAction.Create));
-            run.Contains(filterOnly, "making the filter", "only the filter made");
-            run.False(filterOnly is not null && filterOnly.Contains("making the view", StringComparison.Ordinal), "and it does not say the view is made");
-            run.Contains(
-                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Create, NamedElementAction.Reuse)),
-                "making the view",
-                "only the view made");
-            run.Contains(filterOnly, "making both took", "the figure is for making both, and says so");
+            // Made after the subdivisions it took 33 to 53 s in Revit 2027; made before them, about a
+            // second, so nothing is announced.
+            run.False(SlowStepNotice.IsAnnounced(ImportStepKind.SiteContextView), "it is measured under the line");
+            run.True(SlowStepNotice.For(ImportStepKind.SiteContextView, null, 2) is null, "making both is not announced");
+            run.True(
+                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Create, NamedElementAction.Create)) is null,
+                "both made: nothing");
+            run.True(
+                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Reuse, NamedElementAction.Create)) is null,
+                "only the filter made: nothing");
+            run.True(
+                SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Create, NamedElementAction.Reuse)) is null,
+                "only the view made: nothing");
             run.True(
                 SlowStepNotice.ForSiteContextView(ContextDecision(NamedElementAction.Reuse, NamedElementAction.Reuse)) is null,
                 "both reused: nothing");

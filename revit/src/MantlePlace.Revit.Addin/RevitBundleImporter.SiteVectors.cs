@@ -22,7 +22,7 @@ internal sealed partial class RevitBundleImporter
             return null;
         }
 
-        string path = _archive.Extract(step.EntryName, ImportStepKinds.LifetimeOf(step.Kind), step.ExpectedSha256);
+        string path = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
         string? parseError = SiteVectorReader.TryParse(
             File.ReadAllText(path),
             frame,
