@@ -98,17 +98,6 @@ internal static class MaterializeJobTests
             run.False(start.WillBuild, "nothing will be built");
         });
 
-        run.Case("202 queued: the picks are parked until the core build finishes", () =>
-        {
-            string? error = MaterializeJobs.TryParseStart(
-                """{"queued":true,"pendingTokens":["buildings.ifc","elevation.landxml"]}""",
-                out MaterializeStart start);
-
-            run.Equal(error, null, "a queued pick is not an error");
-            run.True(start.Outcome == MaterializeStartOutcome.Queued, "outcome is Queued");
-            run.Equal(start.Tokens.Count, 2, "pending tokens are carried");
-        });
-
         run.Case("an error body still refuses, in the platform's own words", () =>
         {
             string? error = MaterializeJobs.TryParseStart("""{"error":"Internal error"}""", out _);
@@ -118,7 +107,7 @@ internal static class MaterializeJobTests
         run.Case("an unrecognised object still names no job to poll", () =>
         {
             // The original message keeps its job — but now it means only what it says: a body that
-            // is none of the five known shapes.
+            // is none of the four known shapes.
             string? error = MaterializeJobs.TryParseStart("""{"ok":true}""", out _);
             run.Contains(error, "named no job to poll", "the unrecognised-shape refusal");
         });

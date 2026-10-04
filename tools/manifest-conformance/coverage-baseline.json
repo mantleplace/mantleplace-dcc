@@ -324,7 +324,6 @@
       "unreal"
     ],
     "vault.materialize.queued": [
-      "revit",
       "unreal"
     ],
     "vault.materialize.startNoJobId": [

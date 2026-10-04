@@ -136,6 +136,15 @@ public sealed class CacheSidecar
 
     /// <summary>Whether a hash comparison was performed at download time (<c>HPS-27</c>).</summary>
     public bool IntegrityChecked { get; init; }
+
+    /// <summary>Whether the zip is Revit's download view of a complete order rather than the whole archive.</summary>
+    /// <remarks>
+    /// The vault listing's size and digest describe the whole archive, so they never describe a
+    /// view: a cache that compared a view against them would call every view the wrong size and
+    /// download it again on each import. A view is checked against what was recorded when it
+    /// arrived instead, and the files inside it against the manifest's own digests at import.
+    /// </remarks>
+    public bool HoldsView { get; init; }
 }
 
 /// <summary>The four names a bundle's cache directory holds. Corpus <c>cache.keySanitisation.fileNames</c>.</summary>
@@ -162,7 +171,15 @@ public static class CacheSidecars
         json.Append("  \"manifestVersion\": ")
             .Append(sidecar.ManifestVersion is null ? "null" : Quote(sidecar.ManifestVersion)).Append(",\n");
         json.Append("  \"downloadedAtUtc\": ").Append(Quote(sidecar.DownloadedAtUtc)).Append(",\n");
-        json.Append("  \"integrityChecked\": ").Append(sidecar.IntegrityChecked ? "true" : "false").Append('\n');
+        json.Append("  \"integrityChecked\": ").Append(sidecar.IntegrityChecked ? "true" : "false");
+
+        // Written only for a view, so a whole-archive sidecar reads exactly as it always has.
+        if (sidecar.HoldsView)
+        {
+            json.Append(",\n  \"view\": true");
+        }
+
+        json.Append('\n');
         json.Append("}\n");
         return json.ToString();
     }
@@ -210,6 +227,7 @@ public static class CacheSidecars
                     ?? root.OptionalInt("manifestVersion")?.ToString(CultureInfo.InvariantCulture),
                 DownloadedAtUtc = root.Str("downloadedAtUtc"),
                 IntegrityChecked = root.Bool("integrityChecked"),
+                HoldsView = root.Bool("view"),
             };
         }
         catch (JsonException)

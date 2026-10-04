@@ -1187,7 +1187,8 @@
       "group": "vault",
       "file": "vault/materialize-start-queued.json",
       "expect": "accept",
-      "reason": "The order's core build has not finished, so the picks are parked and fire on their own when it does. Also a success with no job: there is nothing to poll YET, and telling the curator to retry would queue nothing and explain less.",
+      "appliesTo": "unreal",
+      "reason": "Scoped to unreal because the Revit host no longer reads the retired queued marker (HPS-24 v1.17); the case goes when the unreal host drops it too. The order's core build has not finished, so the picks are parked and fire on their own when it does. Also a success with no job: there is nothing to poll YET, and telling the curator to retry would queue nothing and explain less.",
       "expectations": {
         "outcome": "Queued",
         "jobId": "",

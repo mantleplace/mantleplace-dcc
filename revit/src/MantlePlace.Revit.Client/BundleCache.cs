@@ -125,9 +125,12 @@ public sealed class BundleCache
         }
 
         // Fall back to what the sidecar recorded when the caller has no live listing — the offline
-        // case, where the facts the vault would have supplied are not available.
-        string? expectedHash = expectedSha256 ?? sidecar?.Sha256;
-        long? expectedSize = expectedSizeBytes ?? sidecar?.SizeBytes;
+        // case, where the facts the vault would have supplied are not available. A view is never
+        // described by the listing, which states the whole archive, so a view is checked against its
+        // own record whatever the caller holds (CacheSidecar.HoldsView).
+        bool holdsView = sidecar?.HoldsView == true;
+        string? expectedHash = holdsView ? sidecar!.Sha256 : expectedSha256 ?? sidecar?.Sha256;
+        long? expectedSize = holdsView ? sidecar!.SizeBytes : expectedSizeBytes ?? sidecar?.SizeBytes;
         string? expectedVersion = manifestVersion ?? sidecar?.ManifestVersion;
 
         string computed = hashTheFile ? ComputeSha256(layout.BundleZipPath) : string.Empty;
@@ -152,6 +155,14 @@ public sealed class BundleCache
     /// race the UI back into a "done" state.
     /// </para>
     /// </remarks>
+    /// <param name="holdsView">
+    /// Whether the body is Revit's download view rather than the whole archive; recorded, so later
+    /// inspections check it against this record rather than the listing (<see cref="CacheSidecar.HoldsView"/>).
+    /// </param>
+    /// <param name="expectedManifestSha256">
+    /// For a view, the digest the platform stated for its manifest member — the root every per-file
+    /// digest is trusted from. Checked before the rename; <c>null</c> when none was stated.
+    /// </param>
     /// <returns><c>null</c> on success; the entry is then valid and the sidecar written.</returns>
     public async Task<string?> PromoteAsync(
         string orderId,
@@ -160,7 +171,9 @@ public sealed class BundleCache
         string? expectedSha256,
         string? manifestVersion,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool holdsView = false,
+        string? expectedManifestSha256 = null)
     {
         ArgumentNullException.ThrowIfNull(writeBody);
 
@@ -215,6 +228,13 @@ public sealed class BundleCache
             };
         }
 
+        if (!string.IsNullOrWhiteSpace(expectedManifestSha256)
+            && !Sha256Digest.Equal(LocalBundleArchive.ManifestSha256(partial), expectedManifestSha256))
+        {
+            TryDelete(partial);
+            return "The download's manifest did not match its checksum and was discarded. Try again.";
+        }
+
         // Only now. File.Move with overwrite is atomic enough for this: the rename either happened
         // or it did not, and a reader never sees a half-written bundle.zip.
         File.Move(partial, layout.BundleZipPath, overwrite: true);
@@ -227,6 +247,7 @@ public sealed class BundleCache
             ManifestVersion = manifestVersion,
             DownloadedAtUtc = now.UtcDateTime.ToString("O", CultureInfo.InvariantCulture),
             IntegrityChecked = verdict.IntegrityChecked,
+            HoldsView = holdsView,
         });
 
         return null;

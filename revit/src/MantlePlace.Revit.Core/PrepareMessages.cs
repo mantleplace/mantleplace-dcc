@@ -19,13 +19,11 @@ public static class PrepareMessages
     public static string AlreadyPreparing(string label)
         => $"Already preparing {label} — following that rather than starting it again.";
 
-    /// <summary>What the platform said to the start, for the three outcomes that poll.</summary>
+    /// <summary>What the platform said to the start, for the two outcomes that poll.</summary>
     public static string Began(MaterializeStart start) => start.Outcome switch
     {
         MaterializeStartOutcome.Joined =>
             "This bundle was already being prepared — following that job rather than starting a second.",
-        MaterializeStartOutcome.Queued =>
-            "Your order is still being built. Your Revit deliverables are queued and start on their own as soon as it finishes.",
         _ => "Preparing your Revit deliverables…",
     };
 
