@@ -1,0 +1,1112 @@
+{
+  "version": "1.10.0",
+  "location": {
+    "time_zone": {
+      "iana": "America/Denver",
+      "utc_offset_standard_h": -7,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    }
+  },
+  "delivery": {
+    "unit_system": "metric",
+    "tier": "metric",
+    "horizontal_epsg": 32613,
+    "linear_unit": "m",
+    "label": "WGS 84 / UTM zone 13N"
+  },
+  "elevation": {
+    "steep_slope": {
+      "path": "Elevation/SteepSlope.gpkg",
+      "layer": "SteepSlope",
+      "crs": "EPSG:32613",
+      "horizontal_units": "m",
+      "threshold_deg": 35,
+      "feature_count": 2,
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "dem": {
+      "units": "m",
+      "horizontal_units": "m",
+      "surface_model": "dtm",
+      "void_fraction_in_aoi": 0.0125,
+      "sources": [
+        {
+          "id": "usgs3dep19",
+          "name": "USGS 3DEP 1/9 arc-second",
+          "producer": "U.S. Geological Survey",
+          "license": "public-domain",
+          "resolution_m": 3.42,
+          "surface_model": "dtm",
+          "acquired": {
+            "start": "2010-03",
+            "end": "2010-11-30"
+          },
+          "projects": [
+            "Example_Lidar_2010"
+          ]
+        }
+      ],
+      "vertical_datum": "NAVD88 (GEOID18)",
+      "navd88_minus_egm2008_m": 0.62,
+      "provenance": [
+        "usgs-3dep"
+      ],
+      "source_tier": "usgs3dep_19",
+      "ladder": [
+        {
+          "rung": "1m",
+          "outcome": "not_covered",
+          "reason": "The 3DEP 1 m footprint misses part of the AOI."
+        },
+        {
+          "rung": "19",
+          "outcome": "shipped",
+          "reason": "The 1/9 arc-second DEM covers the whole AOI and its pull margin."
+        }
+      ],
+      "failover": null,
+      "effective_gsd_m": 8.1,
+      "resolution_confidence": "conservative_smooth_terrain",
+      "levels": {
+        "RAW": {
+          "same_as": "MAX",
+          "reason": "no_reduction"
+        },
+        "MAX": {
+          "cost_driver": {
+            "unit": "posts",
+            "count": 1018081
+          },
+          "effective_gsd_m": 8.1
+        },
+        "MED": {
+          "path": "Elevation/DEM_MED.tif",
+          "sha256": "823d75f92fe4fd158279c134fc8e13c438d35163c0e84514dad826935be4b657",
+          "size_bytes": 1048576,
+          "crs": "EPSG:32613",
+          "units": "m",
+          "horizontal_units": "m",
+          "vertical_datum": "NAVD88 (GEOID18)",
+          "effective_gsd_m": 6.84,
+          "cost_driver": {
+            "unit": "posts",
+            "count": 254521
+          },
+          "deviation": {
+            "against": "elevation.dem",
+            "max": 0.41,
+            "rms": 0.07,
+            "units": "m"
+          }
+        },
+        "MIN": {
+          "path": "Elevation/DEM_MIN.tif",
+          "sha256": "e687b5766307c50d40ac7864c25bebcc1a87f00647f8c580a60fd20507fada30",
+          "size_bytes": 262144,
+          "crs": "EPSG:32613",
+          "units": "m",
+          "horizontal_units": "m",
+          "vertical_datum": "NAVD88 (GEOID18)",
+          "effective_gsd_m": 13.68,
+          "cost_driver": {
+            "unit": "posts",
+            "count": 63631
+          },
+          "deviation": {
+            "against": "elevation.dem",
+            "max": 0.93,
+            "rms": 0.16,
+            "units": "m"
+          }
+        }
+      }
+    },
+    "hillshade": {
+      "path": "Elevation/Hillshade.tif",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000004",
+      "gsd_m": 1.0,
+      "units": "m",
+      "horizontal_units": "m",
+      "value_units": "none",
+      "derived_from_datum": "NAVD88 (GEOID18)"
+    },
+    "slope": {
+      "path": "Elevation/Slope.tif",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000005",
+      "crs": "EPSG:32613",
+      "gsd_m": 1.0,
+      "units": "m",
+      "horizontal_units": "m",
+      "value_units": "deg",
+      "width": 1425,
+      "height": 1400,
+      "derived_from_datum": "NAVD88 (GEOID18)"
+    },
+    "contours": {
+      "units": "m",
+      "vertical_datum": "NAVD88 (GEOID18)",
+      "interval_m": 2,
+      "major_interval_m": 10,
+      "interval_rule": {
+        "governed_by": "relief",
+        "relief_floor": 2,
+        "accuracy_floor": null,
+        "detail_floor": null,
+        "accuracy_factor": 3.29,
+        "rmse_z_m": null,
+        "accuracy_basis": null,
+        "effective_gsd_m": 8.1,
+        "median_slope_deg": 12.5
+      },
+      "levels": {
+        "RAW": {
+          "same_as": "MAX",
+          "reason": "max_only"
+        },
+        "MAX": {},
+        "MED": {
+          "same_as": "MAX",
+          "reason": "max_only"
+        },
+        "MIN": {
+          "same_as": "MAX",
+          "reason": "max_only"
+        }
+      }
+    },
+    "landxml": {
+      "units": "m",
+      "vertical_datum": "NAVD88 (GEOID18)"
+    },
+    "points_csv": {
+      "units": "m",
+      "vertical_datum": "NAVD88 (GEOID18)"
+    },
+    "surface_dxf": {
+      "units": "m",
+      "vertical_datum": "NAVD88 (GEOID18)"
+    }
+  },
+  "landcover": {
+    "tree_points": {
+      "path": "Landcover/TreePoints.csv",
+      "crs": "EPSG:32613",
+      "units": "m",
+      "horizontal_units": "m",
+      "point_count": 2,
+      "min_height_m": 3,
+      "columns": [
+        "x",
+        "y",
+        "ground_z",
+        "height_m",
+        "crown_radius_m",
+        "foliage_type"
+      ],
+      "foliage_type_vocabulary": "1",
+      "vertical_datum": "NAVD88 (GEOID18)",
+      "uncapped_point_count": 5,
+      "point_cap": 2,
+      "rank": {
+        "version": "1",
+        "thinning_radius_m": 4.0
+      },
+      "levels": {
+        "RAW": {
+          "path": "Landcover/TreePoints_RAW.csv",
+          "sha256": "52beb912164b15bc9e4280619a3314bbcff9a12cdc352c6f486246847580395e",
+          "crs": "EPSG:32613",
+          "units": "m",
+          "horizontal_units": "m",
+          "vertical_datum": "NAVD88 (GEOID18)",
+          "point_count": 5,
+          "columns": [
+            "x",
+            "y",
+            "ground_z",
+            "height_m",
+            "crown_radius_m",
+            "foliage_type"
+          ],
+          "cost_driver": {
+            "unit": "elements",
+            "count": 5
+          }
+        },
+        "MAX": {
+          "cost_driver": {
+            "unit": "elements",
+            "count": 2
+          }
+        },
+        "MED": {
+          "cut": {
+            "rows": 1
+          },
+          "cost_driver": {
+            "unit": "elements",
+            "count": 1
+          }
+        },
+        "MIN": {
+          "same_as": "MED",
+          "reason": "smallest_valid_size"
+        }
+      }
+    }
+  },
+  "vector": {
+    "crs": "EPSG:4326",
+    "layers": [
+      {
+        "name": "building",
+        "feature_count": 12,
+        "field_units": {
+          "height": "m"
+        },
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/Building.geojson",
+            "sha256": "8888888888888888888888888888888888888888888888888888888888888888"
+          }
+        ]
+      },
+      {
+        "name": "water",
+        "feature_count": 7,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/Water_line.geojson",
+            "sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+            "geometry_family": "line"
+          },
+          {
+            "format": "geojson",
+            "path": "Vector/Water_polygon.geojson",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "geometry_family": "polygon"
+          },
+          {
+            "format": "gpkg",
+            "path": "Vector/Water.gpkg",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000003",
+            "tables": [
+              "Water_line",
+              "Water_polygon"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "road_splines",
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/RoadSplines.geojson",
+            "sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+          }
+        ],
+        "vertical_datum": "NAVD88 (GEOID18)",
+        "levels": {
+          "RAW": {
+            "same_as": "MAX",
+            "reason": "no_reduction"
+          },
+          "MAX": {
+            "cost_driver": {
+              "unit": "elements",
+              "count": 3
+            }
+          },
+          "MED": {
+            "cut": {
+              "lowest_level_field": "mp_level"
+            },
+            "cost_driver": {
+              "unit": "elements",
+              "count": 2
+            }
+          },
+          "MIN": {
+            "cut": {
+              "lowest_level_field": "mp_level"
+            },
+            "cost_driver": {
+              "unit": "elements",
+              "count": 1
+            }
+          }
+        }
+      }
+    ]
+  },
+  "buildings": {
+    "present": true,
+    "footprint_count": 12,
+    "ifc": {
+      "schema": "IFC4",
+      "vertical_datum": "NAVD88 (GEOID18)"
+    }
+  },
+  "mesh": {
+    "vertex_z_datum": "EGM2008-orthometric",
+    "vertical_datum": "EGM2008-orthometric"
+  },
+  "flood": {
+    "nfhl": {
+      "path": "Flood/FloodZones.gpkg",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "source": "FEMA NFHL",
+      "license": "public-domain",
+      "feature_count": 2,
+      "zones": [
+        "AE",
+        "X"
+      ],
+      "dfirm_ids": [
+        "35055C"
+      ],
+      "panels": [
+        {
+          "firm_pan": "35055C0275D",
+          "dfirm_id": "35055C",
+          "effective_date": "2011-08-16",
+          "panel_type": "Countywide, Panel Printed"
+        },
+        {
+          "firm_pan": "35055C0300D",
+          "dfirm_id": "35055C",
+          "effective_date": null,
+          "panel_type": null
+        }
+      ]
+    }
+  },
+  "job_id": "revit-fidelity-levels-unknown",
+  "order_id": "ord-revit-fidelity-levels-unknown-1",
+  "attribution": {
+    "job_id": "revit-fidelity-levels-unknown",
+    "order_id": "ord-revit-fidelity-levels-unknown-1",
+    "sources": [
+      {
+        "provider_id": "usgs-3dep",
+        "attribution_text": "U.S. Geological Survey, 3D Elevation Program",
+        "license": "public-domain"
+      }
+    ]
+  },
+  "hosts": {
+    "unreal": {
+      "engine_min_version": "5.7",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "origin": {
+          "lon": -105.6462,
+          "lat": 36.2725,
+          "utm": {
+            "epsg": 32613,
+            "easting_m": 441959.5,
+            "northing_m": 4014372.5
+          },
+          "ground_orthometric_h_m": 2640.9
+        },
+        "planet_shape": "Flat",
+        "is_projected": true
+      },
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:32613",
+        "horizontal_unit": "m",
+        "vertical_unit": "m"
+      },
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb",
+        "up_axis": "y",
+        "nanite_recommended": true,
+        "note": "First-class terrain option; import via Interchange glTF (Y-up->Z-up auto).",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "levels": {
+          "RAW": {
+            "same_as": "MAX",
+            "reason": "not_derived"
+          },
+          "MAX": {
+            "cost_driver": {
+              "unit": "triangles",
+              "count": 2000000
+            },
+            "triangle_budget": 2000000,
+            "texture": {
+              "width": 4096,
+              "height": 4096
+            }
+          },
+          "MED": {
+            "path": "Mesh/Terrain_MED.glb",
+            "sha256": "a9320fad01dedb2c8c131426f500e0cda2095a9445116316d8ccd723eaed7047",
+            "format": "glb",
+            "up_axis": "y",
+            "vertex_count": 500000,
+            "triangle_count": 1000000,
+            "triangle_budget": 1000000,
+            "texture": {
+              "width": 2048,
+              "height": 2048
+            },
+            "cost_driver": {
+              "unit": "triangles",
+              "count": 1000000
+            },
+            "deviation": {
+              "against": "elevation.dem",
+              "max": 0.62,
+              "rms": 0.11,
+              "units": "m",
+              "posts": 1018081
+            }
+          },
+          "MIN": {
+            "path": "Mesh/Terrain_MIN.glb",
+            "sha256": "e906f2edaf9ab3e90f006b5b758121d104cf9f7c80908184995ab95776f0d30a",
+            "format": "glb",
+            "up_axis": "y",
+            "vertex_count": 125000,
+            "triangle_count": 250000,
+            "triangle_budget": 250000,
+            "texture": {
+              "width": 1024,
+              "height": 1024
+            },
+            "cost_driver": {
+              "unit": "triangles",
+              "count": 250000
+            },
+            "deviation": {
+              "against": "elevation.dem",
+              "max": 1.48,
+              "rms": 0.27,
+              "units": "m",
+              "posts": 1018081
+            }
+          }
+        }
+      },
+      "foliage_points": {
+        "path": "Landcover/TreePointsMetric.csv",
+        "crs": "EPSG:32613",
+        "units": "m",
+        "horizontal_units": "m",
+        "vertical_datum": "EGM2008-orthometric",
+        "columns": [
+          "x",
+          "y",
+          "ground_z",
+          "height_m",
+          "crown_radius_m",
+          "foliage_type"
+        ],
+        "point_count": 2,
+        "uncapped_point_count": 5,
+        "point_cap": 2,
+        "rank": {
+          "version": "1",
+          "thinning_radius_m": 4.0
+        },
+        "levels": {
+          "RAW": {
+            "path": "Landcover/TreePointsMetric_RAW.csv",
+            "sha256": "9888d4b2387506fb4531e3cd3b04364072f4905185526e07ff8954d7493f521c",
+            "crs": "EPSG:32613",
+            "units": "m",
+            "horizontal_units": "m",
+            "vertical_datum": "EGM2008-orthometric",
+            "point_count": 5,
+            "columns": [
+              "x",
+              "y",
+              "ground_z",
+              "height_m",
+              "crown_radius_m",
+              "foliage_type"
+            ],
+            "cost_driver": {
+              "unit": "elements",
+              "count": 5
+            }
+          },
+          "MAX": {
+            "cost_driver": {
+              "unit": "elements",
+              "count": 2
+            }
+          },
+          "MED": {
+            "cut": {
+              "rows": 1
+            },
+            "cost_driver": {
+              "unit": "elements",
+              "count": 1
+            }
+          },
+          "MIN": {
+            "same_as": "MED",
+            "reason": "smallest_valid_size"
+          }
+        }
+      },
+      "readiness": {
+        "landscape": {
+          "present": true
+        },
+        "mesh_terrain": {
+          "present": true,
+          "tile_count": 4
+        },
+        "mesh_import": {
+          "present": true
+        }
+      }
+    },
+    "revit": {
+      "host_min_version": "2025",
+      "units_note": "Apply georeference.origin verbatim as the survey point; every artifact's Z is absolute orthometric height in NAVD88 (GEOID18). Engine content is EGM2008.",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "vertical_datum": "NAVD88 (GEOID18)",
+        "grid_rotation_deg": 0.0,
+        "is_projected": true,
+        "origin": {
+          "lon": -105.6462,
+          "lat": 36.2725,
+          "projected": {
+            "epsg": 32613,
+            "easting": 441959.5,
+            "northing": 4014372.5,
+            "linear_unit": "m"
+          }
+        }
+      },
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:32613",
+        "horizontal_unit": "m",
+        "vertical_unit": "m"
+      },
+      "vectors": {
+        "format": "geojson",
+        "layers": [
+          {
+            "name": "road_splines",
+            "path": "Site/Vector/RoadSplines.geojson",
+            "horizontal_frame": "absolute_projected",
+            "units": "m",
+            "vertical_reference": "absolute",
+            "feature_count": 1,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "levels": {
+              "RAW": {
+                "same_as": "MAX",
+                "reason": "max_only"
+              },
+              "MAX": {
+                "cost_driver": {
+                  "unit": "elements",
+                  "count": 1
+                }
+              },
+              "MED": {
+                "same_as": "MAX",
+                "reason": "reason_from_a_later_minor"
+              },
+              "MIN": {
+                "same_as": "MAX",
+                "reason": "max_only"
+              }
+            }
+          },
+          {
+            "name": "water",
+            "path": "Site/Vector/Water.geojson",
+            "horizontal_frame": "absolute_projected",
+            "units": "m",
+            "feature_count": 7,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000007",
+            "levels": {
+              "RAW": {
+                "same_as": "MAX",
+                "reason": "max_only"
+              },
+              "MAX": {
+                "cost_driver": {
+                  "unit": "hectares",
+                  "count": 3
+                }
+              },
+              "MED": {
+                "same_as": "MAX",
+                "reason": "max_only"
+              },
+              "MIN": {
+                "same_as": "MAX",
+                "reason": "max_only"
+              }
+            }
+          },
+          {
+            "name": "steep_slope",
+            "path": "Site/Vector/SteepSlope.geojson",
+            "horizontal_frame": "absolute_projected",
+            "units": "m",
+            "vertical_reference": "absolute",
+            "feature_count": 2,
+            "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+            "levels": {
+              "RAW": {
+                "same_as": "MAX",
+                "reason": "max_only"
+              },
+              "MAX": {},
+              "MED": {
+                "cut": {
+                  "every_nth": 2
+                }
+              },
+              "MIN": {
+                "cut": {
+                  "lowest_level_field": "lowest_level"
+                }
+              }
+            }
+          },
+          {
+            "name": "flood_zones",
+            "path": "Site/Vector/FloodZones.geojson",
+            "horizontal_frame": "absolute_projected",
+            "units": "m",
+            "vertical_reference": "absolute",
+            "feature_count": 2,
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+            "levels": {
+              "RAW": {
+                "same_as": "MAX",
+                "reason": "max_only"
+              },
+              "MAX": {},
+              "MED": {
+                "same_as": "MAX",
+                "reason": "max_only"
+              },
+              "MIN": {
+                "same_as": "ULTRA",
+                "reason": "max_only"
+              }
+            }
+          }
+        ],
+        "gpkg": {
+          "path": "Site/Vector/SiteVectors.gpkg",
+          "tables": [
+            "RoadSplines",
+            "Water_line",
+            "Water_polygon",
+            "SteepSlope",
+            "FloodZones"
+          ],
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000006",
+          "size_bytes": 1048576,
+          "levels": {
+            "RAW": {
+              "same_as": "MAX",
+              "reason": "max_only"
+            },
+            "MAX": {},
+            "MED": {
+              "same_as": "MAX",
+              "reason": "max_only"
+            },
+            "MIN": {
+              "same_as": "MAX",
+              "reason": "max_only"
+            }
+          }
+        }
+      },
+      "drape": {
+        "path": "Imagery/Drape.png",
+        "format": "png-rgb-8bit",
+        "extent": [
+          441247.1,
+          4013672.8,
+          442671.9,
+          4015072.5
+        ],
+        "extent_crs": "EPSG:32613",
+        "units": "m",
+        "width": 2375,
+        "height": 2333,
+        "effective_gsd_m": 0.6,
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "levels": {
+          "RAW": {
+            "same_as": "MAX",
+            "reason": "no_reduction"
+          },
+          "MAX": {
+            "cost_driver": {
+              "unit": "pixels",
+              "count": 5540875
+            },
+            "width": 2375,
+            "height": 2333,
+            "effective_gsd_m": 0.6
+          },
+          "MED": {
+            "path": "Imagery/Drape_MED.png",
+            "sha256": "b1512c603ae634932bba733977c0b8ea403575172e4512cfdfd8fb605ee19259",
+            "format": "png-rgb-8bit",
+            "extent": [
+              441247.1,
+              4013672.8,
+              442671.9,
+              4015072.5
+            ],
+            "extent_crs": "EPSG:32613",
+            "units": "m",
+            "width": 1188,
+            "height": 1167,
+            "effective_gsd_m": 1.2,
+            "cost_driver": {
+              "unit": "pixels",
+              "count": 1386396
+            }
+          },
+          "MIN": {
+            "same_as": "MED",
+            "reason": "smallest_valid_size"
+          }
+        }
+      },
+      "contours": {
+        "path": "Surface/Contours.dxf",
+        "horizontal_frame": "absolute_projected",
+        "vertical_reference": "absolute",
+        "units": "m",
+        "horizontal_units": "m",
+        "vertical_units": "m",
+        "vertical_datum": "NAVD88 (GEOID18)",
+        "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "levels": {
+          "RAW": {
+            "same_as": "MAX",
+            "reason": "max_only"
+          },
+          "MAX": {},
+          "MED": {
+            "same_as": "MAX",
+            "reason": "max_only"
+          },
+          "MIN": {
+            "same_as": "MED",
+            "reason": "smallest_valid_size"
+          }
+        }
+      },
+      "readiness": {
+        "toposurface_points": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "ifc_site": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "surface_dxf": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "vectors": {
+          "present": true
+        },
+        "steep_slope": {
+          "present": true
+        },
+        "flood_zones": {
+          "present": true
+        },
+        "contours": {
+          "present": true
+        }
+      }
+    }
+  },
+  "layout": {
+    "readme": "README.md",
+    "manifest": "Metadata/manifest.json",
+    "basemap": "Basemap/Basemap.mbtiles",
+    "basemap_cog": "Basemap/Basemap.tif",
+    "basemap_drape": "Basemap/Drape.png"
+  },
+  "basemap": {
+    "present": true,
+    "file": "Basemap/Basemap.mbtiles",
+    "flavor": "mp-vibrant",
+    "basemap_vintage": "2026-09-01",
+    "cog": {
+      "path": "Basemap/Basemap.tif",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "extent": [
+        499000.0,
+        4399000.0,
+        501000.0,
+        4401000.0
+      ],
+      "extent_crs": "EPSG:32613",
+      "gsd_m": 1.19,
+      "flavor": "mp-vibrant",
+      "basemap_vintage": "2026-09-01",
+      "render_zoom": 17,
+      "labels": false,
+      "hillshade": false
+    },
+    "drape": {
+      "source": "Basemap/Drape.png",
+      "format": "png",
+      "extent": [
+        499000.0,
+        4399000.0,
+        501000.0,
+        4401000.0
+      ],
+      "extent_crs": "EPSG:32613",
+      "effective_gsd_m": 0.6,
+      "flavor": "a-flavor-no-reader-knows",
+      "basemap_vintage": "2026-09-01",
+      "render_zoom": 17,
+      "labels": false,
+      "hillshade": false,
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  },
+  "site_brief": {
+    "path": "Brief/SiteBrief.pdf",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+    "size_bytes": 4194304
+  },
+  "packaging": {
+    "selected": [
+      "buildings.ifc",
+      "elevation.landxml",
+      "flood.nfhl_gpkg",
+      "imagery.drape_png",
+      "landcover.tree_points_csv",
+      "mesh.glb",
+      "vector.geojson"
+    ],
+    "source": "order",
+    "default_applied": false,
+    "delivered": [
+      "buildings.ifc",
+      "elevation.landxml",
+      "flood.nfhl_gpkg",
+      "imagery.drape_png",
+      "landcover.tree_points_csv",
+      "mesh.glb",
+      "vector.geojson"
+    ],
+    "not_delivered": []
+  },
+  "completeness": {
+    "mode": "blocking",
+    "state": "complete",
+    "satisfied": true,
+    "failed": [],
+    "expected": [
+      "imagery.drape_png",
+      "mesh.glb"
+    ],
+    "missing": [],
+    "produced_but_not_packaged": [],
+    "delivered_checked": 7,
+    "delivered_missing": []
+  },
+  "files": {
+    "Basemap/Basemap.mbtiles": {
+      "part": "other",
+      "size_bytes": 65536,
+      "sha256": "85d6b606b60fbf8025b7faa587454fcea85277e73db9fc517bea683bbe407fb3"
+    },
+    "Basemap/Basemap.tif": {
+      "part": "other",
+      "size_bytes": 65536,
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "Brief/SiteBrief.pdf": {
+      "part": "site_brief",
+      "size_bytes": 4194304,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    "Elevation/DEM_MED.tif": {
+      "part": "other",
+      "size_bytes": 1048576,
+      "sha256": "823d75f92fe4fd158279c134fc8e13c438d35163c0e84514dad826935be4b657"
+    },
+    "Elevation/DEM_MIN.tif": {
+      "part": "other",
+      "size_bytes": 262144,
+      "sha256": "e687b5766307c50d40ac7864c25bebcc1a87f00647f8c580a60fd20507fada30"
+    },
+    "Elevation/Hillshade.tif": {
+      "part": "other",
+      "size_bytes": 65536,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000004"
+    },
+    "Elevation/Slope.tif": {
+      "part": "other",
+      "size_bytes": 65536,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000005"
+    },
+    "Elevation/SteepSlope.gpkg": {
+      "part": "other",
+      "size_bytes": 65536,
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "Flood/FloodZones.gpkg": {
+      "part": "flood.nfhl_gpkg@MAX",
+      "size_bytes": 65536,
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "Imagery/Drape.png": {
+      "part": "imagery.drape_png@MAX",
+      "size_bytes": 65536,
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "Imagery/Drape_MED.png": {
+      "part": "imagery.drape_png@MED",
+      "size_bytes": 65536,
+      "sha256": "b1512c603ae634932bba733977c0b8ea403575172e4512cfdfd8fb605ee19259"
+    },
+    "Landcover/TreePoints.csv": {
+      "part": "landcover.tree_points_csv@MAX",
+      "size_bytes": 65536,
+      "sha256": "b2b7256db9e909f1fbb1e13c6ad3b510967bc15fa0d6713b3f6ded2eef2f89e7"
+    },
+    "Landcover/TreePointsMetric.csv": {
+      "part": "landcover.tree_points_csv@MAX",
+      "size_bytes": 65536,
+      "sha256": "fff4267e337a69035674fdb5e21c544c75033b2d1ae3df9144ae9cbd8daa9f72"
+    },
+    "Landcover/TreePointsMetric_RAW.csv": {
+      "part": "landcover.tree_points_csv@RAW",
+      "size_bytes": 65536,
+      "sha256": "9888d4b2387506fb4531e3cd3b04364072f4905185526e07ff8954d7493f521c"
+    },
+    "Landcover/TreePoints_RAW.csv": {
+      "part": "landcover.tree_points_csv@RAW",
+      "size_bytes": 65536,
+      "sha256": "52beb912164b15bc9e4280619a3314bbcff9a12cdc352c6f486246847580395e"
+    },
+    "Mesh/Terrain.glb": {
+      "part": "mesh.glb@MAX",
+      "size_bytes": 65536,
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "Mesh/Terrain_MED.glb": {
+      "part": "mesh.glb@MED",
+      "size_bytes": 65536,
+      "sha256": "a9320fad01dedb2c8c131426f500e0cda2095a9445116316d8ccd723eaed7047"
+    },
+    "Mesh/Terrain_MIN.glb": {
+      "part": "mesh.glb@MIN",
+      "size_bytes": 65536,
+      "sha256": "e906f2edaf9ab3e90f006b5b758121d104cf9f7c80908184995ab95776f0d30a"
+    },
+    "README.md": {
+      "part": "readme",
+      "size_bytes": 65536,
+      "sha256": "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+    },
+    "Site/Vector/FloodZones.geojson": {
+      "part": "revit_vectors",
+      "size_bytes": 65536,
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "Site/Vector/RoadSplines.geojson": {
+      "part": "revit_vectors",
+      "size_bytes": 65536,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "Site/Vector/SiteVectors.gpkg": {
+      "part": "revit_vectors",
+      "size_bytes": 1048576,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000006"
+    },
+    "Site/Vector/SteepSlope.geojson": {
+      "part": "revit_vectors",
+      "size_bytes": 65536,
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "Site/Vector/Water.geojson": {
+      "part": "revit_vectors",
+      "size_bytes": 65536,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000007"
+    },
+    "Surface/Contours.dxf": {
+      "part": "other",
+      "size_bytes": 65536,
+      "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    "Vector/Building.geojson": {
+      "part": "vector.geojson@MAX",
+      "size_bytes": 65536,
+      "sha256": "8888888888888888888888888888888888888888888888888888888888888888"
+    },
+    "Vector/RoadSplines.geojson": {
+      "part": "vector.geojson@MAX",
+      "size_bytes": 65536,
+      "sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    "Vector/Water.gpkg": {
+      "part": "other",
+      "size_bytes": 65536,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000003"
+    },
+    "Vector/Water_line.geojson": {
+      "part": "vector.geojson@MAX",
+      "size_bytes": 65536,
+      "sha256": "9999999999999999999999999999999999999999999999999999999999999999"
+    },
+    "Vector/Water_polygon.geojson": {
+      "part": "vector.geojson@MAX",
+      "size_bytes": 65536,
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  "view": {
+    "kind": "everything",
+    "partial": false,
+    "snapshot": 1,
+    "parts": [
+      "other",
+      "site_brief",
+      "flood.nfhl_gpkg@MAX",
+      "imagery.drape_png@MAX",
+      "imagery.drape_png@MED",
+      "landcover.tree_points_csv@MAX",
+      "landcover.tree_points_csv@RAW",
+      "mesh.glb@MAX",
+      "mesh.glb@MED",
+      "mesh.glb@MIN",
+      "readme",
+      "revit_vectors",
+      "vector.geojson@MAX"
+    ],
+    "missing": [],
+    "file_count": 31
+  }
+}

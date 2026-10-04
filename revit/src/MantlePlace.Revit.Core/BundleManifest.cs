@@ -124,6 +124,12 @@ public sealed class BundleArtifact
     /// carries Z, and <c>null</c> on a planar one.
     /// </summary>
     public string? VerticalReference { get; init; }
+
+    /// <summary>
+    /// The entry's four fidelity levels (MPB 1.9.0), or <c>null</c> for an entry that is MAX only —
+    /// every entry before 1.9.0, and a pointer level's own file.
+    /// </summary>
+    public FidelityLevels? Levels { get; init; }
 }
 
 /// <summary>One <c>hosts.&lt;hostId&gt;.readiness.&lt;path&gt;</c> entry.</summary>

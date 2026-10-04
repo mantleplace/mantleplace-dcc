@@ -12,7 +12,7 @@ using CorpusCase = ConformanceCorpus.CorpusCase;
 /// literals (HPS-40). Transcribed vectors are how two hosts come to disagree about one contract
 /// while both suites stay green — editing a case here must turn this red, and it does.
 /// </remarks>
-internal static class ManifestConformanceTests
+internal static partial class ManifestConformanceTests
 {
     /// <summary>
     /// Expectation keys this host knows how to assert. The list no longer proves coverage by
@@ -38,6 +38,8 @@ internal static class ManifestConformanceTests
         "revitDrapePath",
         "revitContoursPath",
         "revitContoursVerticalUnits",
+        "revitLevels",
+        "revitLevelsAbsent",
         "toposurfacePointsSha256",
         "surfaceDxfSha256",
         "ifcSiteSha256",
@@ -142,6 +144,13 @@ internal static class ManifestConformanceTests
         foreach (string problem in ConformanceCorpus.UnassertedExpectations(corpusCase, ConsumedExpectationKeys))
         {
             run.Fail($"{problem} (HPS-46).");
+        }
+
+        // One level down: every leaf of a row-valued expectation is read, or the row was only reached
+        // (HPS-46b). The fidelity-level rows are the first in this group to nest.
+        foreach (string problem in ConformanceCorpus.UnassertedNestedExpectations(corpusCase))
+        {
+            run.Fail(problem);
         }
     }
 
@@ -448,6 +457,8 @@ internal static class ManifestConformanceTests
         {
             run.Equal(manifest.RevitDrape?.Path ?? string.Empty, revitDrapePath, "revitDrapePath");
         }
+
+        AssertRevitLevels(run, corpusCase, manifest);
 
         // The published contours are placed from this pointer alone (ADR 0013), and their heights'
         // unit is read from it, never from the drawing's one $INSUNITS.

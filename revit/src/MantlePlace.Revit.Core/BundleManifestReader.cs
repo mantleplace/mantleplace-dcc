@@ -889,22 +889,32 @@ public static class BundleManifestReader
                 continue;
             }
 
-            string path = layer.Str("path");
-            return string.IsNullOrWhiteSpace(path)
-                ? null
-                : new BundleArtifact
-                {
-                    Path = path,
-                    Sha256 = layer.OptionalStr("sha256"),
-                    Format = "geojson",
-                    HorizontalFrame = layer.Str("horizontal_frame"),
-                    Units = layer.Str("units"),
-                    VerticalReference = layer.OptionalStr("vertical_reference"),
-                    FromOwnBlock = true,
-                };
+            return OwnLayerFile(layer, FidelityLevelsReader.Read(layer.Object("levels"), level => OwnLayerFile(level)));
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// One file of an own vector layer — the layer's own, or a pointer level's, which states its frame
+    /// with the same keys — or <c>null</c> when it names no path.
+    /// </summary>
+    private static BundleArtifact? OwnLayerFile(JsonElement pointer, FidelityLevels? levels = null)
+    {
+        string path = pointer.Str("path");
+        return string.IsNullOrWhiteSpace(path)
+            ? null
+            : new BundleArtifact
+            {
+                Path = path,
+                Sha256 = pointer.OptionalStr("sha256"),
+                Format = "geojson",
+                HorizontalFrame = pointer.Str("horizontal_frame"),
+                Units = pointer.Str("units"),
+                VerticalReference = pointer.OptionalStr("vertical_reference"),
+                FromOwnBlock = true,
+                Levels = levels,
+            };
     }
 
     private static ReadinessPath ReadReadinessPath(JsonElement host, string key)
@@ -1061,7 +1071,8 @@ public static class BundleManifestReader
                 Path = string.Empty,
                 Format = detail?.OptionalStr("format"),
                 HorizontalFrame = detail?.OptionalStr("extent_crs"),
-            });
+            },
+            levelExtent: DrapeLevelExtent);
 
         manifest.ImageryDrapeExtent = ReadGroundExtent(drape, "extent", "extent_crs");
         manifest.DemBounds = ReadGroundExtent(elevation?.Object("dem"), "bounds_target_crs", "crs");
@@ -1072,15 +1083,9 @@ public static class BundleManifestReader
         if (RevitHostBlock(root)?.Object("drape") is { } own
             && own.Str("path") is { Length: > 0 } ownPath)
         {
-            manifest.RevitDrape = new BundleArtifact
-            {
-                Path = ownPath,
-                Sha256 = own.OptionalStr("sha256"),
-                Format = own.OptionalStr("format"),
-                Units = own.Str("units"),
-                HorizontalFrame = own.OptionalStr("extent_crs"),
-                FromOwnBlock = true,
-            };
+            manifest.RevitDrape = OwnDrapeFile(
+                own,
+                FidelityLevelsReader.Read(own.Object("levels"), level => OwnDrapeFile(level), DrapeLevelExtent));
             manifest.RevitDrapeExtent = ReadGroundExtent(own, "extent", "extent_crs");
         }
 
@@ -1090,20 +1095,50 @@ public static class BundleManifestReader
         if (RevitHostBlock(root)?.Object(RevitContours) is { } contours
             && contours.Str("path") is { Length: > 0 } contoursPath)
         {
-            manifest.RevitContours = new BundleArtifact
-            {
-                Path = contoursPath,
-                Sha256 = contours.OptionalStr("sha256"),
-                Units = contours.Str("units"),
-                HorizontalUnits = contours.OptionalStr("horizontal_units"),
-                VerticalUnits = contours.OptionalStr("vertical_units"),
-                HorizontalFrame = contours.Str("horizontal_frame"),
-                VerticalReference = contours.OptionalStr("vertical_reference"),
-                VerticalDatum = contours.OptionalStr("vertical_datum"),
-                FromOwnBlock = true,
-            };
+            manifest.RevitContours = OwnContoursFile(
+                contours,
+                FidelityLevelsReader.Read(contours.Object("levels"), level => OwnContoursFile(level)));
         }
     }
+
+    /// <summary>
+    /// The own drape's file — its own, or a pointer level's, which states its frame with the same
+    /// keys — or <c>null</c> when it names no path.
+    /// </summary>
+    private static BundleArtifact? OwnDrapeFile(JsonElement pointer, FidelityLevels? levels = null)
+        => pointer.Str("path") is { Length: > 0 } path
+            ? new BundleArtifact
+            {
+                Path = path,
+                Sha256 = pointer.OptionalStr("sha256"),
+                Format = pointer.OptionalStr("format"),
+                Units = pointer.Str("units"),
+                HorizontalFrame = pointer.OptionalStr("extent_crs"),
+                FromOwnBlock = true,
+                Levels = levels,
+            }
+            : null;
+
+    /// <summary>A drape level's own extent: a smaller image covers the same ground, and says so itself.</summary>
+    private static GroundExtent? DrapeLevelExtent(JsonElement pointer) => ReadGroundExtent(pointer, "extent", "extent_crs");
+
+    /// <summary>The published contours' file — its own, or a pointer level's — or <c>null</c> when it names no path.</summary>
+    private static BundleArtifact? OwnContoursFile(JsonElement pointer, FidelityLevels? levels = null)
+        => pointer.Str("path") is { Length: > 0 } path
+            ? new BundleArtifact
+            {
+                Path = path,
+                Sha256 = pointer.OptionalStr("sha256"),
+                Units = pointer.Str("units"),
+                HorizontalUnits = pointer.OptionalStr("horizontal_units"),
+                VerticalUnits = pointer.OptionalStr("vertical_units"),
+                HorizontalFrame = pointer.Str("horizontal_frame"),
+                VerticalReference = pointer.OptionalStr("vertical_reference"),
+                VerticalDatum = pointer.OptionalStr("vertical_datum"),
+                FromOwnBlock = true,
+                Levels = levels,
+            }
+            : null;
 
     /// <summary>
     /// A <c>[left, bottom, right, top]</c> array plus the CRS field naming its coordinates, or
@@ -1181,7 +1216,8 @@ public static class BundleManifestReader
         string layoutKey,
         JsonElement? detail,
         Func<JsonElement?, BundleArtifact> shape,
-        JsonElement? hostDetail = null)
+        JsonElement? hostDetail = null,
+        Func<JsonElement, GroundExtent?>? levelExtent = null)
     {
         string layoutPath = manifest.Layout.GetValueOrDefault(layoutKey, string.Empty);
         string detailPath = detail?.Str("path") ?? string.Empty;
@@ -1205,6 +1241,41 @@ public static class BundleManifestReader
         // the generic detail blocks are empty, and the block's own `units_note` says each artifact's
         // `units` describes that file (HPS-33, HPS-36).
         BundleArtifact template = shape(detail);
+
+        // The levels are the describing block's: this host's when it names the file, otherwise the
+        // detail block that still describes it. A detail block discarded above describes another
+        // file, and so do its levels.
+        JsonElement? levelsOwner = hostDetail ?? detail;
+
+        // A pointer level is a file of this entry's kind, stating its frame with the entry's own keys
+        // and inheriting none of them. The foliage vocabulary is not a frame: it names what the
+        // values of a column mean, and a level is the same columns.
+        BundleArtifact? Pointer(JsonElement level)
+        {
+            string levelPath = level.Str("path");
+            if (string.IsNullOrWhiteSpace(levelPath))
+            {
+                return null;
+            }
+
+            BundleArtifact own = shape(level);
+            return new BundleArtifact
+            {
+                Path = levelPath,
+                Sha256 = level.OptionalStr("sha256"),
+                Format = own.Format,
+                Units = level.OptionalStr("units") ?? own.Units,
+                VerticalDatum = own.VerticalDatum,
+                HorizontalFrame = hostDetail is null ? own.HorizontalFrame : level.OptionalStr("horizontal_frame") ?? own.HorizontalFrame,
+                Georeference = own.Georeference,
+                TriangleCount = own.TriangleCount,
+                FootprintCount = own.FootprintCount,
+                FoliageTypeVocabulary = own.FoliageTypeVocabulary ?? template.FoliageTypeVocabulary,
+                HorizontalUnits = own.HorizontalUnits,
+                NamedByOwnBlock = hostDetail is not null,
+            };
+        }
+
         return new BundleArtifact
         {
             Path = path,
@@ -1219,6 +1290,7 @@ public static class BundleManifestReader
             FoliageTypeVocabulary = template.FoliageTypeVocabulary,
             HorizontalUnits = template.HorizontalUnits,
             NamedByOwnBlock = hostDetail is not null,
+            Levels = FidelityLevelsReader.Read(levelsOwner?.Object("levels"), Pointer, levelExtent),
         };
     }
 

@@ -209,6 +209,15 @@
     "manifest.revitContoursPointer": [
       "revit"
     ],
+    "manifest.revitFidelityLevels": [
+      "revit"
+    ],
+    "manifest.revitFidelityLevelsAbsent": [
+      "revit"
+    ],
+    "manifest.revitFidelityLevelsUnknown": [
+      "revit"
+    ],
     "manifest.revitHeightDatum": [
       "revit"
     ],
