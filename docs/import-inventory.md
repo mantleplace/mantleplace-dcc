@@ -7,8 +7,11 @@ description: What each host plugin imports from a bundle, per category — the m
 
 What each host plugin brings in from a bundle, one row per category: where it reads it, what it
 makes, when, at what cost, and what that cost grows with. It is the inventory that
-[issue 283](https://github.com/mantleplace/mantleplace-dcc/issues/283) (published scales) is decided
-from, and the "Scale axis?" column is that issue's to settle: every entry in it is a hypothesis.
+fidelity levels were decided from in
+[issue 283](https://github.com/mantleplace/mantleplace-dcc/issues/283). Revit's levels are settled;
+the "Scale axis?" column of the Unreal rows is
+[issue 316](https://github.com/mantleplace/mantleplace-dcc/issues/316)'s to settle, and every entry
+in it is a hypothesis.
 
 **What lives where.** Whether a host supports a feature at all is the
 [host support matrix](host-support.md)'s, and how a feature behaves is the host's own README
