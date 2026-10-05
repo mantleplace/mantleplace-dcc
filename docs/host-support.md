@@ -61,7 +61,7 @@ A `declined` cell with no ADR may carry one line of reason instead. No cell desc
 | Refuse a bundle whose bytes do not match its published digest | supported | supported |
 | Say the bundle's unit system and delivery CRS | supported | supported |
 | Choose what an import brings in, before it runs | planned — [issue 93](https://github.com/mantleplace/mantleplace-dcc/issues/93) | supported |
-| Choose a fidelity level for each category, before it runs | planned — [issue 283](https://github.com/mantleplace/mantleplace-dcc/issues/283) | supported |
+| Choose a fidelity level for each category, before it runs | planned — [issue 316](https://github.com/mantleplace/mantleplace-dcc/issues/316) | supported |
 | Say what a bundle holds that an import cannot place, and why | partial — [issue 266](https://github.com/mantleplace/mantleplace-dcc/issues/266) | supported |
 | Show an import step by step, and stop it | planned — [issue 269](https://github.com/mantleplace/mantleplace-dcc/issues/269) | supported |
 | Import the same order again | supported — [ADR 0002](adr/0002-import-identity.md) | supported — [ADR 0004](adr/0004-revit-terrain-identity.md) |
