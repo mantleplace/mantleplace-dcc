@@ -51,6 +51,11 @@ and the one cited only through Markdown links is renumbered. Links are updated m
 loudly; a bare `ADR 0002` in a code comment is updated by hand or not at all, and a stale one points
 silently at the wrong record.
 
+## When an ADR is worth writing
+
+Write one only for a decision hard to reverse, surprising without the context, and the result of a
+real trade-off. An ADR is not a design document.
+
 ## Use the glossary's vocabulary
 
 When your output names a domain concept — an issue title, a type name, a log line a curator will
