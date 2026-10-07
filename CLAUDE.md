@@ -36,9 +36,7 @@ tools/brand-assets/            renders the mark for both hosts; its input is pri
 tools/local-install/           the session-start check that a host's local install is the tree
 docs/adr/                      architecture decision records, numbered and cross-host
 docs/agents/                   how agents work this repo — tracker, labels, domain, CI, public text
-docs/platform-auth-contract.md sign-in and tokens — the one contract both hosts implement
-docs/host-support.md           which host does what with each feature, and why a gap exists
-docs/import-inventory.md       what each host imports, when, and what it was measured to cost
+docs/*.md                      the cross-host contracts and matrices — see "Where knowledge lives"
 .githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
 .github/workflows/             the five public CI gates, plus the stale and tracker-hygiene jobs
 LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
@@ -51,8 +49,7 @@ real content: the triad every layer is built as (an impure host shim, a pure log
 test of that core — [CONTRIBUTING.md](CONTRIBUTING.md#style-and-shape)), the host's local-install
 tool and check script (`HPS-50`), and its own `<host>/CLAUDE.md`. **That rule governs this
 repository's code** — paths, folders, modules, symbols — **not the strings a plugin writes into a
-user's project.** Unreal abbreviates on actor labels, and only there
-([ADR 0003](docs/adr/0003-naming-authority-and-mp-prefix.md)). Do not "fix" one by citing the other.
+user's project** ([`unreal/CLAUDE.md`](unreal/CLAUDE.md#naming)).
 
 ## The three rules
 
@@ -100,11 +97,9 @@ relocated beside `main`; everything else about worktrees is the agent standard's
 ## Releases
 
 **One release track per host**, tagged `<host>-<version>` with no `v` (`revit-0.1.0`,
-`unreal-0.4.0`), so tag-matches-artifact is a string equality; `v0.1.0`–`v0.3.0` are Unreal's
-pre-history, never renamed. The release body is the changelog and the provenance record; there is no
-changelog file. **No release is built or gated in public CI, ever** — both hosts need a licensed
-install (an engine; `RevitAPI.dll` from Revit 2025), so packaging runs privately. Revit's gate is the
-ribbon loading and one real import completing in 2025, 2026 and 2027.
+`unreal-0.4.0`), so tag-matches-artifact is a string equality. The release body is the changelog and
+the provenance record; there is no changelog file. **No release is built or gated in public CI,
+ever** — both hosts need a licensed install, so packaging runs privately.
 [ADR 0001](docs/adr/0001-per-host-release-tracks.md) and
 [`revit/README.md` ▸ Packaging a release](revit/README.md#packaging-a-release) hold the rest.
 
@@ -137,22 +132,20 @@ That bounds *logic*. Which repository a piece of *work* belongs to is
 
 - **At session start, run `./tools/local-install/Check-LocalInstall.ps1`.** `current` and `preview`
   need nothing; `stale` or `unverified` means a bug seen in the host is not yet evidence about the
-  code. Unreal says `not configured` without `MANTLEPLACE_CONSUMING_PROJECT_ROOT`, which is fine.
+  code.
 - **A session that merges a PR touching `revit/` or `unreal/` deploys from `main` before it
   finishes**: pull `main`, run `revit/tools/Deploy-MantlePlaceRevit.ps1` and
-  `unreal/tools/Refresh-UnrealInstall.ps1`, and report each stamp. Revit refuses while Revit is open;
-  report that as a leftover, never skip it silently. A new Revit build's first launch is a human's
-  ([`revit/README.md`](revit/README.md#loading-it-into-revit)).
+  `unreal/tools/Refresh-UnrealInstall.ps1`, and report each stamp. A refused deploy is reported as a
+  leftover, never skipped silently (the host files say when one refuses).
 - **A preview from a branch happens only when the founder asks in that session.** It is stamped as a
   preview, and the next post-merge deploy returns the slot to `main`.
 
 ## CI
 
-Five workflows gate every pull request on free hosted runners: `ci-manifest-conformance`,
-`ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming`, `ci-brand-assets`. **No workflow may
-carry a `paths:` filter on `pull_request`**, and **never attach a self-hosted runner** — a fork's
-pull request would execute on the build machine, which is why the Unreal compile is private and a
-green PR here can still break it. The required checks, the jobs behind them, what is not required,
+Five workflows gate every pull request on free hosted runners. **No workflow may carry a `paths:`
+filter on `pull_request`**, and **never attach a self-hosted runner** — a fork's pull request would
+execute on the build machine, which is why the Unreal compile is private and a green PR here can
+still break it. The workflows, the required checks and the jobs behind them, what is not required,
 and C++ formatting are in [`docs/agents/ci.md`](docs/agents/ci.md).
 
 ## Where knowledge lives
@@ -182,23 +175,17 @@ Most facts already have exactly one home. Find it before writing a fact down any
   **0012** Revit context buildings are **the site model's own extrusions, copied** · **0013** Revit
   **published contours** are DirectShapes · **0014** Revit draws hazards **on a hazard plan** ·
   **0015** Revit **subdivides only roads and water**; land use and land cover go **on land plans**.
-  Write one only for a decision hard to reverse, surprising without the context, and the result of a
-  real trade-off; an ADR is not a design document. Adding one is two edits
-  ([`docs/agents/domain.md`](docs/agents/domain.md)).
+  When to write one, and the two edits it takes: [`docs/agents/domain.md`](docs/agents/domain.md).
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
   authority; never restate a value it owns or hardcode a version in prose — each host's verified
   version lives in
   [`tools/manifest-conformance/verified-against.json`](tools/manifest-conformance/verified-against.json),
   where CI checks it.
 - **The bundle format, in public prose** → [`spec/`](spec/), descriptive — it never restates a field,
-  enum, constraint or version. [`format.md`](spec/format.md): the zip layout, the pointer doctrine
-  (find every file by a manifest pointer, never by folder name), the `hosts.<hostId>` boundary,
-  sha256 present / absent / required-and-missing, apply-placement-verbatim.
-  [`compatibility.md`](spec/compatibility.md): MAJOR/MINOR/PATCH, and an unknown field, enum value or
-  higher major. [`conformance.md`](spec/conformance.md): what claiming a corpus group obliges; the
-  corpus is maintainer-owned and a case is proposed by pull request, never forked
+  enum, constraint or version; [`spec/README.md`](spec/README.md) says what each file holds, and
+  [`changelog.md`](spec/changelog.md) is the one place versions appear. The conformance corpus is
+  maintainer-owned: a case is proposed by pull request, never forked
   ([`corpus/README.md`](tools/manifest-conformance/corpus/README.md)).
-  [`changelog.md`](spec/changelog.md): the one place versions appear.
 - **Cross-host normative rules** → [`docs/host-plugin-standard.md`](docs/host-plugin-standard.md),
   cited by `HPS-NN` id. A public file may cite only a rule whose text is published there
   ([ADR 0007](docs/adr/0007-publicly-cited-standard-rules-are-published-here.md)), and
@@ -223,7 +210,6 @@ How the engineering skills work *this* repo:
 - **Issue tracker** → [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). GitHub issues
   on `mantleplace/mantleplace-dcc`, via `gh`; external PRs are not a triage surface.
 - **Triage labels** → [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md): five states
-  and two categories, each label string equal to its own name; the `spec` parent label; and the
-  orthogonal stale-exemption, `wayfinder:` and repeatable `host:` labels.
+  and two categories, each label string equal to its own name, plus the other label families.
 - **Domain docs** → [`docs/agents/domain.md`](docs/agents/domain.md). Single-context: one
   [`CONTEXT.md`](CONTEXT.md) and one [`docs/adr/`](docs/adr/), both cross-host.

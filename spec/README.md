@@ -29,13 +29,16 @@ schema has two contracts and no way to tell which one a producer honoured.
 
 ## Contents
 
-- **[`format.md`](format.md)** — the format itself: what a bundle contains, the modality-folder
-  vocabulary, the pointer doctrine, the manifest's structure, integrity, and how placement values
-  are meant to be consumed.
+- **[`format.md`](format.md)** — the format itself: what a bundle contains (the zip layout), the
+  modality-folder vocabulary, the pointer doctrine (find every file by a manifest pointer, never by
+  folder name), the manifest's structure and the `hosts.<hostId>` boundary, integrity (sha256
+  present, absent, or required and missing), and how placement values are meant to be consumed
+  (applied verbatim).
 - **[`compatibility.md`](compatibility.md)** — the versioning and compatibility policy: semver
-  semantics, freeze-on-publish immutability, what a consumer must do with fields and versions it
-  does not recognise.
-- **[`conformance.md`](conformance.md)** — what "a conforming reader" means, and how to prove it.
+  semantics (MAJOR/MINOR/PATCH), freeze-on-publish immutability, what a consumer must do with fields,
+  enum values and versions it does not recognise, a higher major included.
+- **[`conformance.md`](conformance.md)** — what "a conforming reader" means, how to prove it, and
+  what claiming a corpus group obliges.
 - **[`changelog.md`](changelog.md)** — the consolidated version history, including the integer
   pre-history that predates this spec.
 

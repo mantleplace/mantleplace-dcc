@@ -29,6 +29,10 @@ here in a line, and its detail lives in the document it links.
   its own frame, and the planner places those first (`HPS-52`).
 - **Role:** host #2, and the Host Plugin Standard's debugger. Where the four-layer shape does not
   fit .NET, that is a finding to file against the standard, not a thing to quietly work around.
+- **Releases:** their own track, tagged `revit-<version>` with no `v`
+  ([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)); packaging needs `RevitAPI.dll` from
+  Revit 2025, so it runs privately. The gate is the ribbon loading and one real import completing in
+  2025, 2026 and 2027.
 
 ## The standard binds this folder
 
@@ -73,8 +77,10 @@ CI runs both — the cheapest honest test of the three-versions-from-one-build b
 - **Quote paths with spaces** — `C:\Program Files\Autodesk\...`.
 - **The Revit on this machine is a copy of the tree** (`HPS-50`): `tools/Check-RevitInstall.ps1`
   says whether it is `main`, a preview or stale; `tools/Deploy-MantlePlaceRevit.ps1` makes it `main`,
-  and `-Launch` starts Revit 2027 for Hot Reload. The loop, and the first launch's *Always Load*
-  click no script can make → [`README.md` ▸ Loading it into Revit](./README.md#loading-it-into-revit).
+  and `-Launch` starts Revit 2027 for Hot Reload. **The deploy refuses while Revit is open** — the
+  root `CLAUDE.md`'s post-merge deploy reports that as a leftover, never skips it silently. The loop,
+  and a new build's first launch, a human's *Always Load* click no script can make →
+  [`README.md` ▸ Loading it into Revit](./README.md#loading-it-into-revit).
 - **The cross-host contract gate:** `python ../tools/manifest-conformance/check_manifest_conformance.py`.
 - **Timing any commit in a real Revit** → [`tools/timing/README.md`](./tools/timing/README.md): a quiet
   Revit beside the install slot, one Revit at a time, a per-step table of where the seconds went.

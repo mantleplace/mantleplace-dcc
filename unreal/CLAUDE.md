@@ -25,6 +25,8 @@ here in a line, and its detail lives in the document it links.
   shows what it meant, so an expedient shortcut here costs more than elsewhere.
 - **Releases:** their own track, tagged `unreal-<version>` with no `v`
   ([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)); the release body is the changelog.
+  `v0.1.0`–`v0.3.0` are this track's pre-history, never renamed. Packaging needs an engine install,
+  so it runs privately.
 
 ## The standard binds this folder
 
@@ -129,7 +131,7 @@ The rest is [`docs/generated-content.md`](docs/generated-content.md):
   single slot that is `main` by default and moves only by `tools/Refresh-UnrealInstall.ps1`
   (`origin/main` after a merge, `origin/<branch>` for a preview you were asked for);
   `tools/Check-UnrealInstall.ps1` says which it holds. Both need `MANTLEPLACE_CONSUMING_PROJECT_ROOT`
-  or `-ConsumingProjectRoot`, else `not configured`. Editing inside that checkout is root rule 3's
+  or `-ConsumingProjectRoot`, else `not configured` — which the session-start check treats as fine. Editing inside that checkout is root rule 3's
   orphan-commit hazard: edit in a worktree here, push, preview from origin. Live Coding picks up
   `.cpp` bodies; a changed header or asset needs a restart. The consumer documents its pin bump.
 - **Nothing the importer generates is ever saved.** No `SavePackage`; every task sets
