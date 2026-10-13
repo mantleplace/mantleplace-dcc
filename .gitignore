@@ -30,3 +30,6 @@ Thumbs.db
 # Scratch written by ci-tracker-hygiene inside the runner workspace
 /findings.txt
 /redacted.txt
+
+# Worktrees the desktop app makes under the checkout
+.claude/worktrees/
