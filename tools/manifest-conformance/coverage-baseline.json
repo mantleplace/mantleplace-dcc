@@ -135,6 +135,14 @@
     "manifest.planetShapeSphere": [
       "unreal"
     ],
+    "manifest.recordPointersIgnored": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.recordsFolderIgnored": [
+      "revit",
+      "unreal"
+    ],
     "manifest.reject.drapeAlignmentContradiction": [
       "unreal"
     ],

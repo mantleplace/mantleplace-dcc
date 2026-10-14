@@ -19,6 +19,45 @@ history, not contract.
 
 ## Semver era
 
+### 1.12.0 — the public-record layers move under `Records/` (additive minor; published and frozen 2026-10-08)
+
+Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under
+[compatibility](compatibility.md) §2, and every host floor at 1.0.0 reads it.
+
+- **Where the files are.** A bundle built from 1.12.0 on carries flood zones, parcels and zoning under
+  one `Records/` folder: `Records/Flood/FloodZones.gpkg`, `Records/Parcels/Parcels.{gpkg,dxf}` and
+  `Records/Zoning/Zoning.{gpkg,dxf}`. A bundle built earlier keeps `Flood/`, `Parcels/` and `Zoning/`
+  at its root. No key is renamed: only the values of `layout.flood_zones` and of each layer entry's
+  `path` change, and the schema now declares the layout keys `parcels_gpkg`, `parcels_dxf`,
+  `zoning_gpkg` and `zoning_dxf`, which 1.11.0 left to the open-members rule.
+- **A reader locates a file through its manifest path and never by folder.** One that hard-codes
+  `Flood/`, `Parcels/` or `Zoning/` is wrong for both layouts.
+
+Both hosts re-pin to 1.12.0 on the corpus case `manifest.recordsFolderIgnored`. Neither host reads a
+parcel or zoning layer, and both locate flood zones through the manifest.
+
+### 1.11.0 — record pointers, for the public records a bundle does not deliver (additive minor; published and frozen 2026-10-08)
+
+Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under
+[compatibility](compatibility.md) §2, and every host floor at 1.0.0 reads it.
+
+- **A record pointer** says who holds a public record this bundle does not deliver for part of its
+  extent, where the holder publishes it, and why nothing ships from it: `record_holder`,
+  `jurisdiction`, `state`, `link` (null where none is known) and a `reason` of `no_open_source`,
+  `terms_restrict_commercial_use` or `down_at_build_time`, with `basis`, `screened_on` and
+  `source_id` where they apply. It names a holder, never a parcel or a district; it carries no
+  geometry and no value, and it is never a fallback layer. An unknown reason reads as `no_open_source`.
+- **Where pointers appear.** The optional `parcels` and `zoning` layer families, now declared, gain
+  `record_pointers`, present even where no file of the layer shipped, and `completeness.record_pointers`
+  lists every pointer of the bundle with its `layer`. A pointer never changes `completeness.state`.
+- **`completeness.skipped_sources`**, now declared: each public-record source that covers the extent
+  and delivered nothing (`layer`, `source_id`, `record_holder` and a `reason` of `source_down`,
+  `source_failed` or `source_timeout`). It leaves the bundle partial; the same source also stands as
+  a `down_at_build_time` pointer.
+
+Both hosts re-pin to 1.11.0 on the corpus case `manifest.recordPointersIgnored`. Neither host reads a
+record pointer.
+
 ### 1.10.0 — a bundle stored as parts, and the archive that holds some of them (additive minor; published and frozen 2026-10-03)
 
 Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under
