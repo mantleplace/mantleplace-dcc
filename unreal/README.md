@@ -80,5 +80,38 @@ import mantleplace_cesium_stream as mp
 mp.stream_into_cesium()                             # newest cached vault bundle (the one just imported)
 ```
 
+## Packaging a release
+
+Packaging needs a licensed Unreal Engine 5.8 install, so it runs privately and never in public CI
+([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)). A release is cut from a merged commit on
+`main` whose `.uplugin` already carries the new version:
+
+1. **Bump the descriptor** in its own pull request — `Version` and `VersionName` in
+   [`MantlePlace.uplugin`](MantlePlace/MantlePlace.uplugin), the only place the version lives.
+2. **Build and run the suite** at the merged commit (the command is in [`CLAUDE.md`](CLAUDE.md#commands)),
+   and run the naming and conformance gates beside it.
+3. **Export, then build from the export.** Build from a short path, not from a checkout: Unreal's
+   build tool fails past Windows' 260-character path limit, and `BuildPlugin` writes a stray
+   `FilterPlugin.ini` into whatever tree it is pointed at.
+
+   ```powershell
+   git archive --format=zip -o D:\mp-pkg\src.zip <sha> unreal/MantlePlace LICENSE TRADEMARK.md
+   Expand-Archive D:\mp-pkg\src.zip D:\mp-pkg\src
+   & "<UE_5.8>\Engine\Build\BatchFiles\RunUAT.bat" BuildPlugin `
+       -Plugin=D:\mp-pkg\src\unreal\MantlePlace\MantlePlace.uplugin `
+       -Package=D:\mp-pkg\out\MantlePlace -TargetPlatforms=Win64 -Rocket
+   ```
+
+4. **Assemble the zip.** Delete `Intermediate/` and every `*.pdb` from the package, copy `LICENSE`
+   and `TRADEMARK.md` into it, and zip it with `MantlePlace/` at the root as
+   `MantlePlace-UE5.8-Win64-<version>.zip`. Diffing its file list against the previous release's
+   asset is a cheap sanity check.
+5. **Compile it in a consuming project.** Point a consuming project's submodule at the same commit
+   and let that project's own compile and live-import check run; the local suite skips the live
+   import, so this is the gate that exercises a real bundle.
+6. **Publish** the tag `unreal-<version>` at that commit, with the zip as its asset. The release body
+   is the changelog: what changed, what a user on the previous release should know, and the result
+   of a smoke run against the published asset.
+
 For anything deeper — building, testing, naming, what a change here must not do — read
 [`CLAUDE.md`](CLAUDE.md) in this folder and the root [`README.md`](../README.md).
