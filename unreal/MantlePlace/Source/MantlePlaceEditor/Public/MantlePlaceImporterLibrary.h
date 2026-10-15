@@ -8,6 +8,7 @@
 #include "MantlePlaceImporterLibrary.generated.h"
 
 struct FMantlePlaceVaultManifest; // MantlePlaceImportManifest.h (out-param of ReadVaultManifest)
+struct FMantlePlaceImportSelection; // MantlePlaceArtifactHandler.h (editor-internal)
 
 /**
  * Entry point for the local-zip vault-package importer. The Editor Utility Widget calls
@@ -32,6 +33,14 @@ public:
 	static FMantlePlaceImportResult ImportVaultPackage(
 		const FString& ZipPath,
 		EMantlePlaceImportMode Mode = EMantlePlaceImportMode::Landscape);
+
+	/**
+	 * The same import, driven by an explicit selection of artifacts rather than the three-way Mode:
+	 * the entry point a per-layer selection UI calls. ImportVaultPackage is this with
+	 * FMantlePlaceImportSelection::FromMode(Mode). Not a UFUNCTION - the selection is a plain struct.
+	 */
+	static FMantlePlaceImportResult ImportVaultPackageWithSelection(
+		const FString& ZipPath, const FMantlePlaceImportSelection& Selection);
 
 	/**
 	 * Read + parse a bundle .zip's Metadata/manifest.json WITHOUT importing anything. Lets the local

@@ -22,22 +22,22 @@ namespace
 FMantlePlaceVaultManifest MakeManifest(double DrapeNorthM, double DrapeEastM)
 {
 	FMantlePlaceVaultManifest M;
-	M.bHasHeightmap = true;
-	M.SectionSizeQuads = 63;
-	M.SectionsPerComponent = 2;
-	M.ComponentCountX = 4;
-	M.ComponentCountY = 4;
+	M.Heightmap.bPresent = true;
+	M.Heightmap.SectionSizeQuads = 63;
+	M.Heightmap.SectionsPerComponent = 2;
+	M.Heightmap.ComponentCountX = 4;
+	M.Heightmap.ComponentCountY = 4;
 	// 4 components x 126 quads = 504 quads per axis; 1000 m / 504 quads = 198.412... cm per quad.
-	M.ScaleXPercent = 100000.0 / 504.0; // easting axis (manifest naming) -> UE Y
-	M.ScaleYPercent = 100000.0 / 504.0; // northing axis -> UE X
+	M.Heightmap.ScaleXPercent = 100000.0 / 504.0; // easting axis (manifest naming) -> UE Y
+	M.Heightmap.ScaleYPercent = 100000.0 / 504.0; // northing axis -> UE X
 
-	M.bHasDrape = true;
-	M.OriginEastingM = 500000.0;
-	M.OriginNorthingM = 4000000.0;
-	M.DrapeLeftM = M.OriginEastingM - DrapeEastM / 2.0;
-	M.DrapeRightM = M.OriginEastingM + DrapeEastM / 2.0;
-	M.DrapeBottomM = M.OriginNorthingM - DrapeNorthM / 2.0;
-	M.DrapeTopM = M.OriginNorthingM + DrapeNorthM / 2.0;
+	M.Drape.bPresent = true;
+	M.Georef.OriginEastingM = 500000.0;
+	M.Georef.OriginNorthingM = 4000000.0;
+	M.Drape.LeftM = M.Georef.OriginEastingM - DrapeEastM / 2.0;
+	M.Drape.RightM = M.Georef.OriginEastingM + DrapeEastM / 2.0;
+	M.Drape.BottomM = M.Georef.OriginNorthingM - DrapeNorthM / 2.0;
+	M.Drape.TopM = M.Georef.OriginNorthingM + DrapeNorthM / 2.0;
 	return M;
 }
 } // namespace
@@ -167,13 +167,13 @@ bool FMantlePlaceDrapeAlignmentLogicTest::RunTest(const FString& Parameters)
 		// Nothing to compare against is not a contradiction: a mesh-only bundle with a drape is a
 		// legitimate import, and so is a bundle whose transform has no components.
 		FMantlePlaceVaultManifest NoHeightmap = MakeManifest(600.0, 600.0);
-		NoHeightmap.bHasHeightmap = false;
+		NoHeightmap.Heightmap.bPresent = false;
 		Error.Reset();
 		TestTrue(TEXT("no heightmap, nothing to contradict"),
 			FLogic::CheckAgainstExtents(NoHeightmap, Matches, Error));
 
 		FMantlePlaceVaultManifest NoDrape = MakeManifest(600.0, 600.0);
-		NoDrape.bHasDrape = false;
+		NoDrape.Drape.bPresent = false;
 		Error.Reset();
 		TestTrue(TEXT("no drape, nothing to contradict"),
 			FLogic::CheckAgainstExtents(NoDrape, Matches, Error));

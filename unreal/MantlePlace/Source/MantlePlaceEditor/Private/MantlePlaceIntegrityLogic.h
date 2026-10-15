@@ -34,9 +34,9 @@ struct FMantlePlaceDeclaredArtifact
 struct FMantlePlaceIntegrityLogic
 {
 	/**
-	 * Every payload this bundle declares, in the order the pre-check reads them: the heightmap and
-	 * the drape first (the two the schema makes hash-required), then the optional geometry, then
-	 * the landscape layers with their UE-ready companions.
+	 * Every payload this bundle declares, in the order the pre-check reads them: the registry's
+	 * (MantlePlaceArtifacts::MakeAll), each handler contributing its own. The drape and the heightmap
+	 * come first (the two the schema makes hash-required), then the layers, then the optional geometry.
 	 *
 	 * Payloads with no published digest are INCLUDED, carrying an empty Sha256. They are what
 	 * "valid but unverified" is reported from, and dropping them here would make the two states

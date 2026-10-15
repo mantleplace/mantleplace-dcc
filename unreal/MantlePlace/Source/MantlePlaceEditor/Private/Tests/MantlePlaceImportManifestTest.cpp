@@ -248,7 +248,7 @@ void AssertLandscapeLayers(FAutomationTestBase& T, const FCase& Case, const FMan
 	{
 		return;
 	}
-	T.TestEqual(Case.What(TEXT("landscape layer count")), M.LandscapeLayers.Num(), Rows.Num());
+	T.TestEqual(Case.What(TEXT("landscape layer count")), M.LandscapeLayers.Layers.Num(), Rows.Num());
 
 	for (int32 Index = 0; Index < Rows.Num(); ++Index)
 	{
@@ -258,7 +258,7 @@ void AssertLandscapeLayers(FAutomationTestBase& T, const FCase& Case, const FMan
 
 		// Order is the parser's promise (sorted by name), so the row index IS the layer index.
 		const FMantlePlaceLandscapeLayer* Layer =
-			M.LandscapeLayers.IsValidIndex(Index) ? &M.LandscapeLayers[Index] : nullptr;
+			M.LandscapeLayers.Layers.IsValidIndex(Index) ? &M.LandscapeLayers.Layers[Index] : nullptr;
 
 		if (ExpectRowString(Case, RowPath, Row, TEXT("name"), Text))
 		{
@@ -421,47 +421,47 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 	AssertStringExpectation(T, Case, TEXT("jobId"), M.JobId);
 	AssertStringExpectation(T, Case, TEXT("orderId"), M.OrderId);
 	AssertStringExpectation(T, Case, TEXT("deliveryModel"), M.DeliveryModel);
-	AssertStringExpectation(T, Case, TEXT("planetShape"), M.PlanetShape);
-	AssertStringExpectation(T, Case, TEXT("meshAbsentReason"), M.MeshAbsentReason);
-	AssertStringExpectation(T, Case, TEXT("heightmapPath"), M.HeightmapPath);
-	AssertStringExpectation(T, Case, TEXT("heightmapSha256"), M.HeightmapSha256);
-	AssertStringExpectation(T, Case, TEXT("drapePath"), M.DrapePath);
-	AssertStringExpectation(T, Case, TEXT("drapeSha256"), M.DrapeSha256);
-	AssertStringExpectation(T, Case, TEXT("meshPath"), M.MeshPath);
-	AssertStringExpectation(T, Case, TEXT("meshUpAxis"), M.MeshUpAxis);
-	AssertStringExpectation(T, Case, TEXT("meshSha256"), M.MeshSha256);
-	AssertStringExpectation(T, Case, TEXT("buildingsPath"), M.BuildingsPath);
-	AssertStringExpectation(T, Case, TEXT("buildingsUpAxis"), M.BuildingsUpAxis);
-	AssertStringExpectation(T, Case, TEXT("buildingsSha256"), M.BuildingsSha256);
-	AssertStringExpectation(T, Case, TEXT("roadSplinesPath"), M.RoadSplinesPath);
-	AssertStringExpectation(T, Case, TEXT("roadSplinesSha256"), M.RoadSplinesSha256);
-	AssertStringExpectation(T, Case, TEXT("foliagePointsPath"), M.FoliagePointsPath);
-	AssertStringExpectation(T, Case, TEXT("foliagePointsSha256"), M.FoliagePointsSha256);
-	AssertStringExpectation(T, Case, TEXT("drapeAlignment"), M.DrapeAlignment);
-	AssertStringExpectation(T, Case, TEXT("cesiumTerrainPath"), M.CesiumTerrainPath);
+	AssertStringExpectation(T, Case, TEXT("planetShape"), M.Georef.PlanetShape);
+	AssertStringExpectation(T, Case, TEXT("meshAbsentReason"), M.Mesh.AbsentReason);
+	AssertStringExpectation(T, Case, TEXT("heightmapPath"), M.Heightmap.Path);
+	AssertStringExpectation(T, Case, TEXT("heightmapSha256"), M.Heightmap.Sha256);
+	AssertStringExpectation(T, Case, TEXT("drapePath"), M.Drape.Path);
+	AssertStringExpectation(T, Case, TEXT("drapeSha256"), M.Drape.Sha256);
+	AssertStringExpectation(T, Case, TEXT("meshPath"), M.Mesh.Path);
+	AssertStringExpectation(T, Case, TEXT("meshUpAxis"), M.Mesh.UpAxis);
+	AssertStringExpectation(T, Case, TEXT("meshSha256"), M.Mesh.Sha256);
+	AssertStringExpectation(T, Case, TEXT("buildingsPath"), M.Buildings.Path);
+	AssertStringExpectation(T, Case, TEXT("buildingsUpAxis"), M.Buildings.UpAxis);
+	AssertStringExpectation(T, Case, TEXT("buildingsSha256"), M.Buildings.Sha256);
+	AssertStringExpectation(T, Case, TEXT("roadSplinesPath"), M.RoadSplines.Path);
+	AssertStringExpectation(T, Case, TEXT("roadSplinesSha256"), M.RoadSplines.Sha256);
+	AssertStringExpectation(T, Case, TEXT("foliagePointsPath"), M.Foliage.Path);
+	AssertStringExpectation(T, Case, TEXT("foliagePointsSha256"), M.Foliage.Sha256);
+	AssertStringExpectation(T, Case, TEXT("drapeAlignment"), M.Drape.Alignment);
+	AssertStringExpectation(T, Case, TEXT("cesiumTerrainPath"), M.Cesium.TerrainPath);
 	AssertStringExpectation(
 		T, Case, TEXT("cesiumTerrainPrefix"),
-		MantlePlaceImportManifest::DeriveCesiumTerrainPrefix(M.CesiumTerrainPath));
+		MantlePlaceImportManifest::DeriveCesiumTerrainPrefix(M.Cesium.TerrainPath));
 
-	AssertBoolExpectation(T, Case, TEXT("hasHeightmap"), M.bHasHeightmap);
-	AssertBoolExpectation(T, Case, TEXT("hasDrape"), M.bHasDrape);
-	AssertBoolExpectation(T, Case, TEXT("hasMesh"), M.bHasMesh);
-	AssertBoolExpectation(T, Case, TEXT("hasBuildings"), M.bHasBuildings);
-	AssertBoolExpectation(T, Case, TEXT("hasRoadSplines"), M.bHasRoadSplines);
-	AssertBoolExpectation(T, Case, TEXT("hasFoliagePoints"), M.bHasFoliagePoints);
-	AssertBoolExpectation(T, Case, TEXT("hasLandscapeLayers"), M.bHasLandscapeLayers);
-	AssertBoolExpectation(T, Case, TEXT("row0IsNorth"), M.bRow0IsNorth);
+	AssertBoolExpectation(T, Case, TEXT("hasHeightmap"), M.Heightmap.bPresent);
+	AssertBoolExpectation(T, Case, TEXT("hasDrape"), M.Drape.bPresent);
+	AssertBoolExpectation(T, Case, TEXT("hasMesh"), M.Mesh.bPresent);
+	AssertBoolExpectation(T, Case, TEXT("hasBuildings"), M.Buildings.bPresent);
+	AssertBoolExpectation(T, Case, TEXT("hasRoadSplines"), M.RoadSplines.bPresent);
+	AssertBoolExpectation(T, Case, TEXT("hasFoliagePoints"), M.Foliage.bPresent);
+	AssertBoolExpectation(T, Case, TEXT("hasLandscapeLayers"), M.LandscapeLayers.bPresent);
+	AssertBoolExpectation(T, Case, TEXT("row0IsNorth"), M.Heightmap.bRow0IsNorth);
 	// An empty mesh sha means the manifest declared none, so the integrity check is skipped —
 	// "valid but unverified", never "verified".
-	AssertBoolExpectation(T, Case, TEXT("integrityCheckedMesh"), !M.MeshSha256.IsEmpty());
+	AssertBoolExpectation(T, Case, TEXT("integrityCheckedMesh"), !M.Mesh.Sha256.IsEmpty());
 
-	AssertIntExpectation(T, Case, TEXT("epsg"), M.Epsg);
+	AssertIntExpectation(T, Case, TEXT("epsg"), M.Georef.Epsg);
 	AssertIntExpectation(T, Case, TEXT("quadsPerComponent"), M.GetQuadsPerComponent());
-	AssertIntExpectation(T, Case, TEXT("resolution"), M.Resolution);
-	AssertIntExpectation(T, Case, TEXT("sectionSizeQuads"), M.SectionSizeQuads);
-	AssertIntExpectation(T, Case, TEXT("sectionsPerComponent"), M.SectionsPerComponent);
-	AssertIntExpectation(T, Case, TEXT("componentCountX"), M.ComponentCountX);
-	AssertIntExpectation(T, Case, TEXT("componentCountY"), M.ComponentCountY);
+	AssertIntExpectation(T, Case, TEXT("resolution"), M.Heightmap.Resolution);
+	AssertIntExpectation(T, Case, TEXT("sectionSizeQuads"), M.Heightmap.SectionSizeQuads);
+	AssertIntExpectation(T, Case, TEXT("sectionsPerComponent"), M.Heightmap.SectionsPerComponent);
+	AssertIntExpectation(T, Case, TEXT("componentCountX"), M.Heightmap.ComponentCountX);
+	AssertIntExpectation(T, Case, TEXT("componentCountY"), M.Heightmap.ComponentCountY);
 
 	const FVector Scale = M.GetLandscapeScale();
 	AssertTupleExpectation(T, Case, TEXT("landscapeScale"), TEXT("landscapeScaleTolerance"),
@@ -483,7 +483,7 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 		{ DrapeSize.X, DrapeSize.Y });
 
 	TArray<FString> LayerNames;
-	for (const FMantlePlaceLandscapeLayer& Layer : M.LandscapeLayers)
+	for (const FMantlePlaceLandscapeLayer& Layer : M.LandscapeLayers.Layers)
 	{
 		LayerNames.Add(Layer.Name);
 	}
@@ -495,9 +495,9 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 	// An empty digest means the manifest declared none, so the check is SKIPPED — "valid but
 	// unverified", never "verified" and never "corrupt". Same shape as integrityCheckedMesh, and
 	// deliberately so: this payload used to be the one that had no such state at all.
-	AssertIntExpectation(T, Case, TEXT("foliagePointsPointCount"), M.FoliagePointsCount);
+	AssertIntExpectation(T, Case, TEXT("foliagePointsPointCount"), M.Foliage.Count);
 	AssertBoolExpectation(
-		T, Case, TEXT("integrityCheckedFoliagePoints"), !M.FoliagePointsSha256.IsEmpty());
+		T, Case, TEXT("integrityCheckedFoliagePoints"), !M.Foliage.Sha256.IsEmpty());
 
 	// And the list itself, so "the tree points are in the integrity chain" is an assertion rather
 	// than a claim about a boolean expression nobody can walk.
@@ -506,7 +506,7 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 
 	// --- The drape's alignment descriptor ---------------------------------------------------
 	const FMantlePlaceDrapeAlignment Alignment =
-		FMantlePlaceDrapeAlignmentLogic::Classify(M.DrapeAlignment);
+		FMantlePlaceDrapeAlignmentLogic::Classify(M.Drape.Alignment);
 	AssertStringExpectation(
 		T, Case, TEXT("drapeAlignmentShape"), FString(AlignmentShapeName(Alignment.Shape)));
 	AssertBoolExpectation(T, Case, TEXT("drapeAlignmentWarns"), Alignment.ShouldWarn());
@@ -849,7 +849,7 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
 		for (const TSharedPtr<FJsonObject>& Row : Vectors)
 		{
-			AssertTreePointsRow(*this, *Case, Row, M.OriginEastingM, M.OriginNorthingM, Frame, M.GetAoiSizeUeCm());
+			AssertTreePointsRow(*this, *Case, Row, M.Georef.OriginEastingM, M.Georef.OriginNorthingM, Frame, M.GetAoiSizeUeCm());
 		}
 	}
 	else
@@ -874,7 +874,7 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 				ManifestWithOverlays(*Case, Row), ManifestError);
 			TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": embedded manifest parses (%s)"),
 				*RowString(Row, TEXT("name")), *ManifestError)), M.bValid);
-			AssertTreePointsRow(*this, *Case, Row, M.OriginEastingM, M.OriginNorthingM,
+			AssertTreePointsRow(*this, *Case, Row, M.Georef.OriginEastingM, M.Georef.OriginNorthingM,
 				M.GetFoliagePointsFrame(), M.GetAoiSizeUeCm());
 		}
 	}
@@ -903,7 +903,7 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 			const FString Parses = FString::Printf(TEXT("\"%s\": embedded manifest parses (%s)"), *Name, *ManifestError);
 			TestTrue(Case->What(*Parses), M.bValid);
 			const FString Selected = FString::Printf(TEXT("\"%s\": the road layer is selected"), *Name);
-			TestTrue(Case->What(*Selected), M.bHasRoadSplines);
+			TestTrue(Case->What(*Selected), M.RoadSplines.bPresent);
 
 			FString Reason;
 			const bool bPlaceable = FMantlePlaceRoadSplinesLogic::CanPlaceHeights(M.GetRoadSplinesDatum(), Reason);
@@ -1023,8 +1023,8 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		                TEXT("\"terrain\":{\"cesiumTerrainTileCount\":42},")
 		                    TEXT("\"hosts\":{\"unreal\":{\"mesh_alternative\":{\"path\":\"Mesh/Terrain.glb\"}}}}"),
 		    Error);
-		TestEqual(TEXT("tile count"), M.CesiumTerrainTileCount, 1287);
-		TestTrue(TEXT("bundle has cesium terrain"), M.bHasCesiumTerrain);
+		TestEqual(TEXT("tile count"), M.Cesium.TerrainTileCount, 1287);
+		TestTrue(TEXT("bundle has cesium terrain"), M.Cesium.bHasTerrain);
 
 		// The retired `terrain` block is doubly dead at 1.0.0: the key map deletes the block
 		// outright, and this host had already deleted its fallback to the key inside it. Kept as a
@@ -1037,7 +1037,7 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		            TEXT("\"terrain\":{\"cesiumTerrainTileCount\":42},")
 		                TEXT("\"hosts\":{\"unreal\":{\"mesh_alternative\":{\"path\":\"Mesh/Terrain.glb\"}}}}"),
 		    Error);
-		TestEqual(TEXT("retired pre-v13 tile-count key is ignored"), Legacy.CesiumTerrainTileCount, 0);
+		TestEqual(TEXT("retired pre-v13 tile-count key is ignored"), Legacy.Cesium.TerrainTileCount, 0);
 	}
 
 	// --- The version gate, both directions --------------------------------------------------

@@ -3,60 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MantlePlaceManifestBlocks.h"
 
 class FJsonObject;
 struct FMantlePlaceRoadSplinesDatum;
 struct FMantlePlaceTreePointsFrame;
-
-/**
- * How to read a UE-ready raster's pixels back as data (`ue_ready[].value_mapping`). The shape
- * follows the raster's `encoding`, so only the fields that encoding uses are ever populated:
- *   png-16bit-grayscale -> MinValue/MaxValue/ToValueFormula, optional Units and NodataValue
- *   png-8bit-mask       -> TrueValue/FalseValue
- *   png-8bit-indexed    -> Classes (the class codes ARE the legend and are never rescaled)
- *   png-8bit-rgba       -> Bands, naming the four channels in order
- *   png-8bit-grayscale  -> bIdentity (an already-8-bit raster copied through verbatim)
- * Without this a 16-bit grayscale PNG is an arbitrary 0-65535 ramp rather than metres or degrees,
- * which is why the contract makes it required rather than decorative.
- */
-struct FMantlePlaceRasterValueMapping
-{
-	double MinValue = 0.0;
-	double MaxValue = 0.0;
-	FString ToValueFormula;   // e.g. "value = min + (u16/65535)*(max - min)"
-	FString Units;            // e.g. "m", "degrees"; empty when the layer is unitless
-	bool bHasNodata = false;
-	double NodataValue = 0.0;
-	double TrueValue = 0.0;
-	double FalseValue = 0.0;
-	TArray<int32> Classes;    // e.g. the ESA WorldCover codes 10/20/30/50/60/80
-	TArray<FString> Bands;    // e.g. { water, grass, forest, dirt }
-	bool bIdentity = false;
-};
-
-/** One UE-ready PNG companion of a landscape layer. UE imports textures, not Float32 GeoTIFFs, so
- *  the pipeline pre-converts and this plugin stays a dumb consumer of the result. */
-struct FMantlePlaceUeReadyRaster
-{
-	FString Path;      // in-zip path, e.g. "Landcover/MaterialWeights_1_4.png"
-	FString Sha256;    // verified fail-closed before any actor spawns
-	FString Encoding;  // one of the png-* encodings the value mapping above is keyed by
-	int32 Width = 0;
-	int32 Height = 0;
-	int64 SizeBytes = 0;
-	FMantlePlaceRasterValueMapping ValueMapping;
-};
-
-/** One entry of `unreal.landscape_layers`: a Landscape-paintable raster, its hash, its band legend
- *  (material_weights only) and its UE-ready PNG companions. */
-struct FMantlePlaceLandscapeLayer
-{
-	FString Name;               // the block's own key, e.g. "material_weights", "water_mask"
-	FString Path;               // the source GeoTIFF's in-zip path
-	FString Sha256;
-	TArray<FString> Materials;  // frozen band legend, material_weights only; empty elsewhere
-	TArray<FMantlePlaceUeReadyRaster> UeReady;
-};
 
 /**
  * The manifest's top-level `delivery` block: which unit system the order asked for, which linear unit
@@ -120,31 +71,9 @@ struct FMantlePlaceVaultManifest
 	                                 // Pick-and-Process); empty if absent
 	FMantlePlaceDeliveryFacts Delivery; // the top-level `delivery` block, for DISPLAY only -- see the type
 
-	// --- Heightmap (-> Landscape) ------------------------------------------------------
-	bool bHasHeightmap = false;
-	FString HeightmapPath;          // in-zip path, e.g. "Elevation/Heightmap.png"
-	int32 Resolution = 0;           // vertices per edge (e.g. 505)
-	int32 SectionSizeQuads = 0;     // e.g. 63
-	int32 SectionsPerComponent = 0; // e.g. 2
-	int32 ComponentCountX = 0;      // e.g. 4
-	int32 ComponentCountY = 0;      // e.g. 4
-	double ScaleXPercent = 0.0;     // DrawScale3D.X (cm per quad)
-	double ScaleYPercent = 0.0;     // DrawScale3D.Y
-	double ScaleZPercent = 0.0;     // DrawScale3D.Z (100 == 512 m over full uint16)
-	double LocationZOffsetCm = 0.0; // actor Z so mid-height (uint16 32768) sits at mean elevation
-	double ZMinM = 0.0;
-	double ZMaxM = 0.0;
-	bool bRow0IsNorth = true;       // PNG row 0 is the northern edge
-	FString HeightmapSha256;        // sha256 of the raw heightmap PNG bytes; empty if the manifest omits it
-
-	// --- Georeference (flat planet, single UTM zone) -----------------------------------
-	int32 Epsg = 0;
-	FString CrsProjected;           // georeference.crs_projected verbatim ("EPSG:32613"): this host's frame,
-	                                // the one a pointer's stated `crs` is compared against (HPS-53)
-	double OriginEastingM = 0.0;
-	double OriginNorthingM = 0.0;
-	double GroundOrthometricHM = 0.0; // elevation at the centroid (= mesh ground z=0 reference)
-	FString PlanetShape;            // contract: "Flat" only; Parse rejects any other value
+	// --- Core blocks: not artifacts, read by Parse itself -------------------------------
+	FMantlePlaceGeoreferenceBlock Georef;
+	FMantlePlaceCesiumBlock Cesium;
 
 	// `elevation.dem.bounds_target_crs` is DECLINED by this host, not overlooked — see
 	// docs/adr/0006-unreal-declines-elevation-bounds-target-crs.md. It is the delivered DEM grid's
@@ -155,97 +84,16 @@ struct FMantlePlaceVaultManifest
 	// (HPS-33). There is deliberately no field for it: a parsed field with no reader is exactly the
 	// "published and ignored" state that record exists to close.
 
-	// --- Imagery drape (-> Texture2D + drape material) ---------------------------------
-	bool bHasDrape = false;
-	FString DrapePath;              // in-zip path, e.g. "Imagery/Imagery.png"
-	double DrapeLeftM = 0.0;        // UTM extent (same CRS as the georeference origin)
-	double DrapeBottomM = 0.0;
-	double DrapeRightM = 0.0;
-	double DrapeTopM = 0.0;
-	FString DrapeSha256;            // sha256 of the raw imagery PNG bytes; empty if the manifest omits it
-	FString DrapeAlignment;         // `alignment` verbatim: the ETL's truthful drape-vs-heightmap extent
-	                                 // descriptor. A FREE STRING by contract, matched on its prefix and
-	                                 // never on the whole value -- the divergent shape embeds measured
-	                                 // numbers. Classified by FMantlePlaceDrapeAlignmentLogic; a "matches"
-	                                 // claim the extents below refute is refused by Parse.
-
-	// --- Mesh alternative (-> static mesh) ---------------------------------------------
-	bool bHasMesh = false;
-	FString MeshPath;               // in-zip path, e.g. "Mesh/Terrain.glb"
-	FString MeshUpAxis;             // contract: "y" only (Interchange converts Y-up -> Z-up
-	                                 // unconditionally); Parse rejects any other declared value
-	bool bNaniteRecommended = false;
-	FString MeshSha256;             // sha256 of the glb bytes (v17 emits it; schema keeps it optional,
-	                                // so empty = check skipped)
-	FString MeshAbsentReason;       // hosts.unreal.readiness.mesh_import.reason when the ETL produced no mesh
-	                                // (e.g. "mesh_not_produced"); empty when a mesh is present
-
-	// --- Foliage points (-> DataTable scatter input; HPS-32) ---------------------------
-	// This host's own tree-points pointer. Absent means the bundle simply has no tree points, not
-	// an error — do not fall back to `layout.tree_points` or `landcover.tree_points` (HPS-33).
-	bool bHasFoliagePoints = false;
-	FString FoliagePointsPath;   // in-zip path, e.g. "Landcover/TreePoints.csv" (unreal.foliage_points.path)
-	FString FoliagePointsSha256; // sha256 of the CSV bytes (unreal.foliage_points.sha256). OPTIONAL in the
-	                              // schema -- the facts come from a best-effort sidecar -- so empty means
-	                              // "valid but unverified", never corrupt. Taken off THIS host's block:
-	                              // `landcover.tree_points` carries the same digest addressed to someone
-	                              // else, and reading it would be crossing a block boundary (HPS-33).
-	int32 FoliagePointsCount = 0; // unreal.foliage_points.point_count; 0 when the manifest omits it. The
-	                              // parsed row count is checked against this after the CSV is read -- a
-	                              // digest proves the bytes, and only the count proves the ROWS survived.
-	FString FoliagePointsCrs;             // unreal.foliage_points.crs, verbatim; empty when not stated.
-	FString FoliagePointsUnits;           // unreal.foliage_points.units (ground_z), verbatim.
-	FString FoliagePointsHorizontalUnits; // unreal.foliage_points.horizontal_units (x, y), verbatim.
-	                                      // All three are REQUIRED from MPB 1.3.0 and absent before it;
-	                                      // FMantlePlaceTreePointsLogic decides what they mean.
-
-	// --- Landscape layers (-> Landscape weightmap layers; unreal.landscape_layers) ------
-	// Landscape-paintable rasters this host is addressed by name. All of them are parsed and
-	// exposed; only `material_weights` is applied today (it is the one that changes what the
-	// Landscape IS — the other seven need a material that consumes them, which is product design,
-	// not contract repair). Absent when the ETL shipped none; never part of bValid, since a bundle
-	// with a heightmap and no landcover is a perfectly good import.
-	bool bHasLandscapeLayers = false;
-	TArray<FMantlePlaceLandscapeLayer> LandscapeLayers; // sorted by Name, so the order is stable
-
-	// --- Buildings mesh (-> static mesh; ALL/"Unreal" scope) --------------
-	// Extruded building massing that shares the terrain's Local Projected Frame (centroid ground at
-	// z=0), so it imports with the same GetMeshLocation() transform as the terrain mesh. Present only
-	// when the ETL emitted Mesh/Buildings.glb; absent for base bundles and building-less AOIs.
-	bool bHasBuildings = false;
-	FString BuildingsPath;          // in-zip path, e.g. "Mesh/Buildings.glb" (unreal.buildings_mesh.path)
-	FString BuildingsUpAxis;        // "y" only, same fail-closed rule as MeshUpAxis
-	FString BuildingsSha256;        // sha256 from the top-level `buildings.formats[]` entry matching the
-	                                 // path; empty if the manifest omits it (integrity check then skipped)
-
-	// --- Road splines (-> spline actors; Wave-2 pipeline layers) ------------------------
-	// Z-draped road centerlines shipped INSIDE the ODbL Vector/ set as the derived
-	// "road_splines" layer. The manifest's top-level `vector.layers[]` carries the per-format
-	// entries; the importer consumes the GeoJSON one (WGS84 lon/lat + orthometric Z, plus
-	// width_m_estimated / class / name attributes). Absent on base bundles (gpkg-only) and
-	// road-less AOIs.
-	bool bHasRoadSplines = false;
-	FString RoadSplinesPath;   // in-zip path, e.g. "Vector/RoadSplines.geojson"
-	FString RoadSplinesSha256; // from the matching vector.layers[].formats[] entry; empty = skip check
-	FString RoadSplinesVerticalDatum; // vector.layers[road_splines].vertical_datum, verbatim; empty when
-	                                  // not stated (MPB 1.8.0 states it). Judged nowhere here:
-	                                  // FMantlePlaceRoadSplinesLogic::CanPlaceHeights decides.
-
-	// --- Native Cesium streaming (v8: the bundle's own Cesium-ready artifacts) ----------
-	// These let Cesium for Unreal stream the bundle from a local server, alongside the native-asset
-	// import. Top-level siblings of `unreal` (so present even when the `unreal` block is too).
-	bool bHasCesiumTerrain = false;
-	FString CesiumTerrainPath;       // layout.cesiumTerrain, e.g. "Terrain/layer.json" (quantized-mesh root)
-	int32 CesiumTerrainTileCount = 0; // cesiumTerrain.tileCount
-	// NB: `layout.imagery` (the Imagery.pmtiles pointer) is deliberately NOT carried here. Cesium
-	// for Unreal has no PMTiles raster overlay, so nothing could consume it without a tile-server
-	// shim that does not exist; the streaming path advertises the drape PNG instead. A parsed field
-	// with no reader advertises support this plugin does not have.
-	bool bHasBbox = false;           // top-level AOI bbox in WGS84 degrees (for the raster-overlay rect)
-	double BboxWestDeg = 0.0;
-	double BboxSouthDeg = 0.0;
-	double BboxEastDeg = 0.0;
-	double BboxNorthDeg = 0.0;
+	// --- One sub-struct per artifact: each is parsed by its own handler ------------------
+	// (MantlePlaceArtifactHandler.h). A new artifact adds its block here and nothing else in this
+	// struct; Parse walks the handler registry, so it does not change.
+	FMantlePlaceHeightmapBlock Heightmap;             // -> Landscape
+	FMantlePlaceDrapeBlock Drape;                     // -> Texture2D + drape material
+	FMantlePlaceMeshBlock Mesh;                       // -> static mesh
+	FMantlePlaceFoliagePointsBlock Foliage;           // -> DataTable scatter input (HPS-32)
+	FMantlePlaceLandscapeLayersBlock LandscapeLayers; // -> coverage-raster data textures
+	FMantlePlaceBuildingsBlock Buildings;             // -> static mesh
+	FMantlePlaceRoadSplinesBlock RoadSplines;         // -> spline actors
 
 	// --- Placement helpers (apply the contract verbatim) -------------------------------
 
@@ -314,7 +162,7 @@ struct FMantlePlaceVaultManifest
 	void GetDrapeUvTransform(FVector2D& OutScale, FVector2D& OutOffset) const;
 
 	/** Quads per component = SectionsPerComponent * SectionSizeQuads. */
-	int32 GetQuadsPerComponent() const { return SectionsPerComponent * SectionSizeQuads; }
+	int32 GetQuadsPerComponent() const { return Heightmap.GetQuadsPerComponent(); }
 
 	/** The named `unreal.landscape_layers` entry, or nullptr when this bundle ships none. */
 	const FMantlePlaceLandscapeLayer* FindLandscapeLayer(const TCHAR* Name) const;

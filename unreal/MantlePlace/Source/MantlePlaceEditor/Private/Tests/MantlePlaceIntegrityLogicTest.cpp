@@ -36,24 +36,24 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 	// --- Every declared payload is in the chain ------------------------------------------------
 	{
 		FMantlePlaceVaultManifest M;
-		M.bHasHeightmap = true;
-		M.HeightmapPath = TEXT("Elevation/Heightmap.png");
-		M.HeightmapSha256 = TEXT("aa");
-		M.bHasDrape = true;
-		M.DrapePath = TEXT("Imagery/Drape.png");
-		M.DrapeSha256 = TEXT("bb");
-		M.bHasMesh = true;
-		M.MeshPath = TEXT("Mesh/Terrain.glb");
-		M.MeshSha256 = TEXT("cc");
-		M.bHasBuildings = true;
-		M.BuildingsPath = TEXT("Mesh/Buildings.glb");
-		M.BuildingsSha256 = TEXT("dd");
-		M.bHasRoadSplines = true;
-		M.RoadSplinesPath = TEXT("Vector/RoadSplines.geojson");
-		M.RoadSplinesSha256 = TEXT("ee");
-		M.bHasFoliagePoints = true;
-		M.FoliagePointsPath = TEXT("Landcover/TreePoints.csv");
-		M.FoliagePointsSha256 = TEXT("ff");
+		M.Heightmap.bPresent = true;
+		M.Heightmap.Path = TEXT("Elevation/Heightmap.png");
+		M.Heightmap.Sha256 = TEXT("aa");
+		M.Drape.bPresent = true;
+		M.Drape.Path = TEXT("Imagery/Drape.png");
+		M.Drape.Sha256 = TEXT("bb");
+		M.Mesh.bPresent = true;
+		M.Mesh.Path = TEXT("Mesh/Terrain.glb");
+		M.Mesh.Sha256 = TEXT("cc");
+		M.Buildings.bPresent = true;
+		M.Buildings.Path = TEXT("Mesh/Buildings.glb");
+		M.Buildings.Sha256 = TEXT("dd");
+		M.RoadSplines.bPresent = true;
+		M.RoadSplines.Path = TEXT("Vector/RoadSplines.geojson");
+		M.RoadSplines.Sha256 = TEXT("ee");
+		M.Foliage.bPresent = true;
+		M.Foliage.Path = TEXT("Landcover/TreePoints.csv");
+		M.Foliage.Sha256 = TEXT("ff");
 
 		FMantlePlaceLandscapeLayer Layer;
 		Layer.Name = TEXT("material_weights");
@@ -63,8 +63,8 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 		Companion.Path = TEXT("Landcover/MaterialWeights_1_4.png");
 		Companion.Sha256 = TEXT("22");
 		Layer.UeReady.Add(Companion);
-		M.bHasLandscapeLayers = true;
-		M.LandscapeLayers.Add(Layer);
+		M.LandscapeLayers.bPresent = true;
+		M.LandscapeLayers.Layers.Add(Layer);
 
 		const TArray<FMantlePlaceDeclaredArtifact> Artifacts =
 			FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(M);
@@ -91,11 +91,11 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 	// the third state is the whole point (spec/format.md section 5).
 	{
 		FMantlePlaceVaultManifest M;
-		M.bHasHeightmap = true;
-		M.HeightmapPath = TEXT("Elevation/Heightmap.png");
-		M.HeightmapSha256 = TEXT("aa");
-		M.bHasFoliagePoints = true;
-		M.FoliagePointsPath = TEXT("Landcover/TreePoints.csv");
+		M.Heightmap.bPresent = true;
+		M.Heightmap.Path = TEXT("Elevation/Heightmap.png");
+		M.Heightmap.Sha256 = TEXT("aa");
+		M.Foliage.bPresent = true;
+		M.Foliage.Path = TEXT("Landcover/TreePoints.csv");
 		// No FoliagePointsSha256: the schema keeps it optional, and the facts come from a
 		// best-effort sidecar.
 
@@ -116,11 +116,11 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 	// chain would abort every import of a bundle that simply has no tree points.
 	{
 		FMantlePlaceVaultManifest M;
-		M.bHasHeightmap = true;
-		M.HeightmapPath = TEXT("Elevation/Heightmap.png");
-		M.HeightmapSha256 = TEXT("aa");
-		M.bHasFoliagePoints = true; // claimed, but with no pointer to read
-		M.FoliagePointsSha256 = TEXT("ff");
+		M.Heightmap.bPresent = true;
+		M.Heightmap.Path = TEXT("Elevation/Heightmap.png");
+		M.Heightmap.Sha256 = TEXT("aa");
+		M.Foliage.bPresent = true; // claimed, but with no pointer to read
+		M.Foliage.Sha256 = TEXT("ff");
 
 		const TArray<FMantlePlaceDeclaredArtifact> Artifacts =
 			FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(M);
