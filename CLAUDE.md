@@ -9,6 +9,37 @@ Read that line before running any write command. Both halves matter — see "The
 standard, loaded by the maintainers' tooling at session start. This file holds only what is specific
 to this repository; nothing a contributor needs lives only in that standard.
 
+<!-- content-law -->
+## Content law
+
+The card a workflow agent reads in place of this file. `mantleplace/mantleplace-dcc` is git, Apache 2.0,
+and everything in it is world-readable.
+
+- **Editable:** `unreal/`, `revit/`, `spec/`, `tools/`, `docs/`, `.githooks/`, `.github/workflows/` and the
+  root files, as a pull request. New top-level paths are a DCC host or a cross-host concern, nothing else;
+  names are spelled out (`mantleplace`, never `mp`).
+- **Not editable:** the auth flow (PKCE, loopback listener, token grant, auth state machine) and the secret
+  stores are closed to outside patches. The conformance corpus is maintainer-owned. ADRs under `docs/adr/`
+  are append-only. No logic that derives a placement value (CRS, datum, mosaic, licence gating) belongs
+  here. No engine binaries, compiled plugins, test bundles or sample assets, ever; ask before any
+  `git add` of a binary. No `paths:` filter on `pull_request`, no self-hosted runner.
+- **Gate:** all five CI workflows green (`ci-manifest-conformance`, `ci-revit-tests`, `ci-public-hygiene`,
+  `ci-unreal-naming`, `ci-brand-assets`); the required checks are `conformance`, `pure-core`,
+  `pure-core-windows`, `references`. Catch the public-hygiene gate early with
+  `git config core.hooksPath .githooks`. Behaviour the conformance suite pins changes only with a case.
+- **Merge:** squash by default, once the gate is green; commit with `-s` (DCO). Branches are
+  `type/short-description`, never an issue number.
+- **Rule 1, everything here is public.** Commit messages, PR titles and bodies, branch names, tracked files
+  and issue text land in a world-readable repo, permanently. No internal tracker, document or repository by
+  URL, path or issue number; no credentials, `.uasset` files included. Read
+  [`docs/agents/public-surface.md`](docs/agents/public-surface.md) before writing on any surface.
+- **Rule 2, confirm the repo before any write.** `git remote -v` must show `mantleplace-dcc`; sibling
+  checkouts sit beside this one.
+- **Rule 3, branch first inside a submodule.** `HEAD detached at <sha>` means a consumer's submodule: run
+  `git fetch origin && git switch -c <type>/<short-description> origin/main` before the first edit, and push
+  the branch before touching the consuming project.
+<!-- /content-law -->
+
 ## Identity
 
 | | |
