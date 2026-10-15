@@ -20,6 +20,7 @@ TUniquePtr<IMantlePlaceArtifactHandler> MakeTerrainMesh();
 TUniquePtr<IMantlePlaceArtifactHandler> MakeBuildings();
 TUniquePtr<IMantlePlaceArtifactHandler> MakeRoadSplines();
 TUniquePtr<IMantlePlaceArtifactHandler> MakeFoliagePoints();
+TUniquePtr<IMantlePlaceArtifactHandler> MakePublicRecords();
 
 FHandlers MakeAll()
 {
@@ -32,6 +33,8 @@ FHandlers MakeAll()
 	Handlers.Add(MakeBuildings());
 	Handlers.Add(MakeRoadSplines());
 	Handlers.Add(MakeFoliagePoints());
+	// The public-record overlays last: they lie on the ground the geometry above has just made.
+	Handlers.Add(MakePublicRecords());
 	return Handlers;
 }
 }

@@ -195,3 +195,85 @@ struct FMantlePlaceRoadSplinesBlock
 	FString VerticalDatum;          // vector.layers[road_splines].vertical_datum, verbatim (MPB 1.8.0);
 	                                // FMantlePlaceRoadSplinesLogic::CanPlaceHeights decides
 };
+
+/**
+ * The public-record layers a bundle carries (parcels, zoning, flood zones and the families that
+ * follow them), read from the manifest's top level and not from `hosts.unreal`: the files are the
+ * public record passed through unchanged, addressed to every host alike. A layer is one family
+ * block (`parcels`, `zoning`, `flood`, ... or a family this reader has not met); each file in it is
+ * located by the `path` its own entry states, or by its `layout` key, and never by folder -- a
+ * bundle built before the `Records/` folder keeps `Parcels/`, `Zoning/` and `Flood/` at its root
+ * and is read by the same code. Everything here is the manifest's, verbatim (HPS-33).
+ */
+
+/**
+ * The frame a record file states for itself: the same object as `hosts.unreal.file_frame`. Read when
+ * a file's entry carries one; no published manifest version declares it for these files yet, so
+ * today it is usually absent, and a file that states none cannot be shown to be in this host's frame
+ * (HPS-53). FMantlePlacePublicRecordsLogic::CanPlaceFrame decides what a stated one means.
+ */
+struct FMantlePlaceRecordFrame
+{
+	bool bStated = false;           // the entry carried a `file_frame` object at all
+	FString Type;                   // "projected" | "local", verbatim
+	FString Crs;                    // verbatim, e.g. "EPSG:32613"; empty when not stated
+	FString HorizontalUnit;         // verbatim; empty when not stated
+	FString VerticalUnit;           // verbatim; empty when not stated
+};
+
+/** One file of a record layer: a GeoPackage or DXF linework. */
+struct FMantlePlaceRecordFile
+{
+	FString Kind;                   // the entry's own key under the family block: "gpkg", "dxf", "nfhl"
+	FString Path;                   // in-zip path, from the entry's `path` or the family's layout key
+	FString Sha256;                 // empty = valid but unverified, never corrupt
+	FString Source;                 // the entry's `source`, verbatim; empty when absent
+	FString License;                // the entry's `license`, verbatim; empty when absent
+	FMantlePlaceRecordFrame Frame;
+	bool IsDxf() const { return Path.EndsWith(TEXT(".dxf"), ESearchCase::IgnoreCase); }
+};
+
+/**
+ * A record pointer (MPB 1.11.0): who holds a public record the bundle does not deliver for part of its
+ * extent, and where the holder publishes it. A pointer to a page, never data.
+ */
+struct FMantlePlaceRecordPointer
+{
+	FString RecordHolder;
+	FString Jurisdiction;
+	FString State;
+	FString Link;                   // empty where the holder's page is not known (null in the manifest)
+	FString Reason;                 // verbatim: no_open_source | terms_restrict_commercial_use | down_at_build_time
+	FString Basis;
+	FString SourceId;
+};
+
+/** One family of public records: the block's own key, its files, and what the manifest says about it. */
+struct FMantlePlaceRecordLayer
+{
+	FString Family;                 // the family block's key, verbatim: "parcels", "wetlands", a new one
+	TArray<FMantlePlaceRecordFile> Files;
+	TArray<FMantlePlaceRecordPointer> Pointers;
+	// The text the manifest carries for the layer, verbatim and shown as published. Empty = absent.
+	// No published schema version declares these keys yet; they are read by these provisional names
+	// and the standing notice (FMantlePlacePublicRecordsLogic::StandingNotice) is shown regardless.
+	FString Credit;
+	FString Disclaimer;
+	FString Notice;
+};
+
+/** `completeness.skipped_sources[]` (MPB 1.11.0): a record source that covers the extent and delivered nothing. */
+struct FMantlePlaceSkippedSource
+{
+	FString Layer;                  // "parcels" | "zoning"; empty for a layer this reader does not name
+	FString SourceId;
+	FString RecordHolder;
+	FString Reason;                 // verbatim: source_down | source_failed | source_timeout
+};
+
+struct FMantlePlacePublicRecordsBlock
+{
+	bool bPresent = false;          // at least one layer, or at least one source that delivered nothing
+	TArray<FMantlePlaceRecordLayer> Layers; // in the order FMantlePlacePublicRecordsLogic::OrderLayers gives
+	TArray<FMantlePlaceSkippedSource> SkippedSources;
+};

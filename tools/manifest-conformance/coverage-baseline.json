@@ -263,6 +263,12 @@
     "manifest.treePointsStatedFrame": [
       "unreal"
     ],
+    "manifest.unrealPublicRecordsFolder": [
+      "unreal"
+    ],
+    "manifest.unrealPublicRecordsLegacyLayout": [
+      "unreal"
+    ],
     "manifest.vectorLayerUnknownName": [
       "revit",
       "unreal"
