@@ -128,6 +128,11 @@ The rest is [`docs/generated-content.md`](docs/generated-content.md):
 - **One place, not every call site** — every generated name and path comes from
   `MantlePlaceImportNaming`; `MantlePlace.Import.Naming` and the drift gate check it, and a line that
   needs an exception carries `// naming-gate: allow <reason>`.
+- **Two imported artifacts are typed, with a documented contract** — a road is an `AMantlePlaceRoadSpline`
+  whose class, name and width are properties ([`docs/road-spline-actor-contract.md`](docs/road-spline-actor-contract.md)),
+  never tag strings; the tree points are a table whose property names are the columns a PCG graph binds
+  by ([`docs/foliage-table-contract.md`](docs/foliage-table-contract.md)). Both list what the platform
+  does not publish yet, which is a manifest request and never a local derivation.
 - **Re-import replaces, behind two guards** — a provenance record under `Saved` holding the full
   identity, and the `mantleplace_import=<identity>` actor tag the sweep matches.
 

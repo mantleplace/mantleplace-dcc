@@ -121,6 +121,16 @@ struct FMantlePlaceTreePointsLogic
 	 * matched, the file is placed (a mesh-only bundle brings its trees), and behind an unstated
 	 * one it is refused, because an unstated frame is never assumed to match. The check runs
 	 * before the count: whether every row survived is a question about a file this host places.
+	 *
+	 * `FoliageTypeVocabulary` is `landcover.tree_points.foliage_type_vocabulary`, or empty when the
+	 * manifest names none. A manifest that names one has a `foliage_type` column (appended by MPB
+	 * 1.2.0) and the rows read it; one that names none has no column to read, and every row is a
+	 * tree (`spec/format.md` section 4.4). The vocabulary id itself is never judged: a vocabulary
+	 * this build was not taught still has its known values mapped, because dropping the column would
+	 * silently lose every shrub the platform did publish in a value this build understands. See
+	 * ReadFoliageType for the mapping. Each row's decoded fields (the foliage type, the engine-unit
+	 * twins of the metre columns, whether the ground height was measured) are the column contract
+	 * documented in `unreal/docs/foliage-table-contract.md`.
 	 */
 	static EMantlePlaceTreePointsOutcome ParseCsv(
 	    const FString& CsvText,
@@ -130,5 +140,23 @@ struct FMantlePlaceTreePointsLogic
 	    const FVector2D& LandscapeSpanUeCm,
 	    int32 DeclaredPointCount,
 	    TArray<FMantlePlaceTreePointRow>& OutRows,
-	    FString& OutError);
+	    FString& OutError,
+	    const FString& FoliageTypeVocabulary = FString());
+
+	/**
+	 * One `foliage_type` cell -> the type it names. Values are matched EXACTLY (`Shrub` and
+	 * `shrubland` are not `shrub`) and a value that is not in the vocabulary, an empty cell
+	 * included, is a Tree: a plant this build has no meaning for is still a point of the layer,
+	 * and losing it would thin the forest for a reason no one can see. Never derived from a
+	 * height or a crown (`spec/format.md` section 4.4).
+	 */
+	static EMantlePlaceFoliageType ReadFoliageType(const FString& Cell);
+
+	/**
+	 * The names of the table's columns, in declaration order: the contract a PCG graph binds by.
+	 * Held against the row struct's own properties by the test, so a column added or renamed in
+	 * one place and not the other fails there; held against the prose in
+	 * `unreal/docs/foliage-table-contract.md` by review.
+	 */
+	static const TArray<FName>& ColumnContract();
 };

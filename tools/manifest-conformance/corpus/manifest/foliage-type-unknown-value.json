@@ -39,8 +39,9 @@
     "columns that make geometry, and losing a point over it is the layer thinning itself for a",
     "reason no one can see.",
     "",
-    "Scoped to `revit` because it is the first host to read the column; Unreal's counterpart takes",
-    "the scope off. Nothing in the rules above is Revit's."
+    "Applies to every host that reads the column: Revit first, and Unreal now. Nothing in the rules",
+    "above is either host's, and `foliageTypes` is in the vocabulary's own words so each host maps it",
+    "to its own type."
   ],
   "rows": [
     {

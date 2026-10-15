@@ -159,6 +159,11 @@ struct FMantlePlaceFoliagePointsBlock
 	FString Units;                  // units (ground_z), verbatim.
 	FString HorizontalUnits;        // horizontal_units (x, y), verbatim. All three are REQUIRED from
 	                                // MPB 1.3.0; FMantlePlaceTreePointsLogic decides what they mean.
+	FString FoliageTypeVocabulary;  // landcover.tree_points.foliage_type_vocabulary, verbatim; empty when the
+	                                // manifest names none (MPB 1.2.0). It describes the VALUES of the CSV's
+	                                // foliage_type column, which the shared tree-points block is the only
+	                                // place to publish: it is read for that and for nothing else, and the
+	                                // path and digest stay this block's own (HPS-33).
 };
 
 /** `unreal.landscape_layers`: Landscape-paintable rasters this host is addressed by name. All are

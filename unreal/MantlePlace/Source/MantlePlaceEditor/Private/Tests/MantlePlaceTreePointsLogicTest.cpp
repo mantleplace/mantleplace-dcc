@@ -254,6 +254,101 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("and names the CRS it was given"), Error.Contains(TEXT("\"EPSG:32613\"")));
 	}
 
+	// --- Decoded with meaning: a size in the engine's unit, and whether the ground was measured ---
+	// The metre columns stay as published; the centimetre twins are the unit a scatter places in.
+	// `ground_z` is empty where the DEM had no data, and Z = 0 there is sea level rather than a
+	// measurement, so the row says so instead of passing a 0 off as an elevation.
+	{
+		const FString Csv =
+		    TEXT("x,y,ground_z,height_m,crown_radius_m\n")
+		        TEXT("441959.50,4014372.50,2640.96,12.40,4.34\n")
+		    TEXT("442059.50,4014272.50,,8.00,2.80\n");
+		TArray<FMantlePlaceTreePointRow> Rows;
+		FString Error;
+		TestTrue(TEXT("csv parses"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(
+		        Csv, OriginEastingM, OriginNorthingM, Unstated, LandscapeSpanUeCm, 0, Rows, Error)
+		        == EMantlePlaceTreePointsOutcome::Parsed);
+		if (TestEqual(TEXT("two rows"), Rows.Num(), 2))
+		{
+			TestEqual(TEXT("height in metres is as published"), Rows[0].HeightM, 12.4f, 1e-4f);
+			TestEqual(TEXT("height in centimetres is the same height in the engine's unit"), Rows[0].HeightCm, 1240.0f, 1e-2f);
+			TestEqual(TEXT("crown radius in centimetres"), Rows[0].CrownRadiusCm, 434.0f, 1e-2f);
+			TestTrue(TEXT("a measured ground height is known"), Rows[0].bGroundKnown);
+			TestFalse(TEXT("an empty ground_z is not a measured ground height"), Rows[1].bGroundKnown);
+			TestEqual(TEXT("and its Z is the documented 0"), Rows[1].Position.Z, 0.0, 1e-9);
+			TestTrue(TEXT("no vocabulary, no column: every row is a tree"),
+			    Rows[0].FoliageType == EMantlePlaceFoliageType::Tree && Rows[1].FoliageType == EMantlePlaceFoliageType::Tree);
+		}
+	}
+
+	// --- The foliage type: read where the manifest names the vocabulary, never from the dimensions ---
+	// The shared rules are the corpus' (manifest.foliageTypeUnknownValue); what stays here is what that
+	// case cannot say: that the column is ignored when no vocabulary is named, and the cell reader.
+	{
+		const FString Csv =
+		    TEXT("x,y,ground_z,height_m,crown_radius_m,foliage_type\n")
+		        TEXT("441959.50,4014372.50,2640.96,4.10,1.40,shrub\n")  // taller than the tree beside it
+		    TEXT("442059.50,4014272.50,2638.00,3.20,1.05,tree\n");
+
+		TArray<FMantlePlaceTreePointRow> Rows;
+		FString Error;
+		TestTrue(TEXT("csv parses with a vocabulary"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(
+		        Csv, OriginEastingM, OriginNorthingM, Unstated, LandscapeSpanUeCm, 2, Rows, Error, TEXT("1"))
+		        == EMantlePlaceTreePointsOutcome::Parsed);
+		if (TestEqual(TEXT("both rows kept"), Rows.Num(), 2))
+		{
+			TestTrue(TEXT("a shrub is a shrub"), Rows[0].FoliageType == EMantlePlaceFoliageType::Shrub);
+			TestTrue(TEXT("a tree is a tree"), Rows[1].FoliageType == EMantlePlaceFoliageType::Tree);
+		}
+
+		// The column is described by the manifest. A header that carries one the manifest does not name
+		// is not trusted to mean it, so nothing becomes a shrub.
+		TestTrue(TEXT("csv parses without a vocabulary"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(
+		        Csv, OriginEastingM, OriginNorthingM, Unstated, LandscapeSpanUeCm, 2, Rows, Error)
+		        == EMantlePlaceTreePointsOutcome::Parsed);
+		if (TestEqual(TEXT("both rows kept without a vocabulary"), Rows.Num(), 2))
+		{
+			TestTrue(TEXT("without a vocabulary the column is not read"),
+			    Rows[0].FoliageType == EMantlePlaceFoliageType::Tree);
+		}
+
+		// The cell reader: exact matching, and a tree for anything else.
+		TestTrue(TEXT("shrub"), FMantlePlaceTreePointsLogic::ReadFoliageType(TEXT("shrub")) == EMantlePlaceFoliageType::Shrub);
+		TestTrue(TEXT("CSV padding is not part of the value"),
+		    FMantlePlaceTreePointsLogic::ReadFoliageType(TEXT(" shrub ")) == EMantlePlaceFoliageType::Shrub);
+		TestTrue(TEXT("Shrub is not shrub"), FMantlePlaceTreePointsLogic::ReadFoliageType(TEXT("Shrub")) == EMantlePlaceFoliageType::Tree);
+		TestTrue(TEXT("shrubland is not shrub"), FMantlePlaceTreePointsLogic::ReadFoliageType(TEXT("shrubland")) == EMantlePlaceFoliageType::Tree);
+		TestTrue(TEXT("an unknown value is a tree"), FMantlePlaceTreePointsLogic::ReadFoliageType(TEXT("hedgerow")) == EMantlePlaceFoliageType::Tree);
+		TestTrue(TEXT("an empty cell is a tree"), FMantlePlaceTreePointsLogic::ReadFoliageType(FString()) == EMantlePlaceFoliageType::Tree);
+	}
+
+	// --- The column contract: the row struct's properties ARE the table's columns -------------------
+	// A PCG graph binds by property name. A column added to or renamed on the struct without the
+	// contract (and its prose in unreal/docs/foliage-table-contract.md) fails here, and so does one
+	// listed in the contract that the struct no longer has.
+	{
+		TArray<FName> Actual;
+		for (TFieldIterator<FProperty> It(FMantlePlaceTreePointRow::StaticStruct()); It; ++It)
+		{
+			Actual.Add(It->GetFName());
+			TestTrue(FString::Printf(TEXT("column %s is readable from a Blueprint"), *It->GetName()),
+			    It->HasAnyPropertyFlags(CPF_BlueprintVisible));
+		}
+		const auto Join = [](const TArray<FName>& Names) {
+			TArray<FString> Strings;
+			for (const FName& Name : Names)
+			{
+				Strings.Add(Name.ToString());
+			}
+			return FString::Join(Strings, TEXT(", "));
+		};
+		TestEqual(TEXT("the contract lists exactly the struct's columns, in order"),
+		    Join(FMantlePlaceTreePointsLogic::ColumnContract()), Join(Actual));
+	}
+
 	return true;
 }
 

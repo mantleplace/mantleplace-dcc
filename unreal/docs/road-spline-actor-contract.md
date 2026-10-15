@@ -1,0 +1,37 @@
+# The road-spline actor: its property contract
+
+An import of a bundle that ships the shared `road_splines` layer spawns one `AMantlePlaceRoadSpline`
+per road line, labelled `MP_RoadSpline_<shortIdentity>_<index>` (from `MantlePlaceImportNaming`). The
+class is in the Runtime module, so a saved level that holds one loads in a cooked build.
+
+It replaces a bare actor that carried the road's width, class and name as tag strings. **Nothing in
+the plugin reads a road attribute from a tag, and the importer writes none.** The only tag on the
+actor is the import tag, `mantleplace_import=<identity>`, which a re-import matches on whatever the
+actor's class: a re-import replaces the road actors and never stacks them. There is no migration; a
+bare-actor road from an earlier import carries the same tag and goes with them.
+
+## Properties
+
+| Property | Type | Meaning |
+| --- | --- | --- |
+| `Spline` | `USplineComponent`, the actor's root | The centerline, as world-space points in the Local Projected Frame, heights included |
+| `RoadClass` | `FName` | `class` from the layer, verbatim; `None` where the feature carries none |
+| `RoadName` | `FString` | `name` from the layer, verbatim; empty where the feature carries none |
+| `EstimatedWidthM` | `float`, metres | `width_m_estimated` from the layer; 0 where the feature publishes none |
+
+All are readable from a Blueprint. `RoadClass` is the platform's string and not a vocabulary this
+plugin owns, so a graph filters on the values it sees rather than on a list written here.
+
+**Geometry only.** A road mesh or a decal built from the spline is a later feature.
+
+## What is not a property, because the platform does not publish it
+
+Each is a request against the bundle manifest, and none is derived here. The layer publishes a class,
+a name and an estimated width per line, and nothing else.
+
+- A lane count, a surface type or a one-way flag.
+- A measured width, or a tolerance beside the estimate.
+- A stable identifier for a road, so a re-import could tell a road that moved from one that is new.
+  The actor's index is its position in the file, which the platform does not promise to keep.
+- The source way a line was cut from, and which part of it, where a way was split into the parts of
+  a MultiLineString.

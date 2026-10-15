@@ -12,7 +12,8 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
     const FVector2D& LandscapeSpanUeCm,
     int32 DeclaredPointCount,
     TArray<FMantlePlaceTreePointRow>& OutRows,
-    FString& OutError)
+    FString& OutError,
+    const FString& FoliageTypeVocabulary)
 {
 	OutRows.Reset();
 
@@ -48,6 +49,14 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		}
 		WidestIndex = FMath::Max(WidestIndex, ColumnIndex[Required]);
 	}
+	// The optional sixth column. Read only where the manifest names the vocabulary its values come
+	// from: a manifest that names none has no such column, so a header that carries one anyway is
+	// not trusted to mean it. The vocabulary id itself is not judged (see the header).
+	const int32 FoliageColumn = HeaderFields.IndexOfByPredicate([](const FString& Field) {
+		return Field.TrimStartAndEnd().Equals(TEXT("foliage_type"), ESearchCase::IgnoreCase);
+	});
+	const bool bReadFoliageType = FoliageColumn != INDEX_NONE && !FoliageTypeVocabulary.IsEmpty();
+
 	if (Missing.Num() > 0)
 	{
 		OutError = FString::Printf(
@@ -136,7 +145,16 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		    UtmX - OriginEastingM, UtmY - OriginNorthingM, GroundZM);
 		Row.HeightM = FCString::Atof(*Fields[ColumnIndex[ColumnHeight]]);
 		Row.CrownRadiusM = FCString::Atof(*Fields[ColumnIndex[ColumnCrown]]);
+		// Metres -> the engine's centimetres: the unit change Position already makes, so a scatter
+		// reads a size in the unit it places in. A unit, not a derived value.
+		Row.HeightCm = Row.HeightM * 100.0f;
+		Row.CrownRadiusCm = Row.CrownRadiusM * 100.0f;
 		Row.GroundZM = static_cast<float>(GroundZM);
+		Row.bGroundKnown = !GroundField.IsEmpty();
+		if (bReadFoliageType && FoliageColumn < Fields.Num())
+		{
+			Row.FoliageType = ReadFoliageType(Fields[FoliageColumn]);
+		}
 		OutRows.Add(Row);
 
 		// The landscape is centred on the origin, so its extent in this frame is +/- half its span.
@@ -183,4 +201,24 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		return EMantlePlaceTreePointsOutcome::CountMismatch;
 	}
 	return EMantlePlaceTreePointsOutcome::Parsed;
+}
+
+EMantlePlaceFoliageType FMantlePlaceTreePointsLogic::ReadFoliageType(const FString& Cell)
+{
+	// Exact and case-sensitive, trimmed only of the CSV's own padding: the vocabulary's values are the
+	// platform's words, and a case-fold or a prefix match invents members it never published.
+	if (Cell.TrimStartAndEnd().Equals(TEXT("shrub"), ESearchCase::CaseSensitive))
+	{
+		return EMantlePlaceFoliageType::Shrub;
+	}
+	return EMantlePlaceFoliageType::Tree;
+}
+
+const TArray<FName>& FMantlePlaceTreePointsLogic::ColumnContract()
+{
+	static const TArray<FName> Columns = {
+	    FName(TEXT("Position")),     FName(TEXT("FoliageType")),   FName(TEXT("HeightM")),
+	    FName(TEXT("HeightCm")),     FName(TEXT("CrownRadiusM")),  FName(TEXT("CrownRadiusCm")),
+	    FName(TEXT("GroundZM")),     FName(TEXT("bGroundKnown"))};
+	return Columns;
 }
