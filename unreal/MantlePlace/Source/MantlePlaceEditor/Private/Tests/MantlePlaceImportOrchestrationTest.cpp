@@ -84,7 +84,7 @@ bool FMantlePlaceOrchestrationFanOutTest::RunTest(const FString& Parameters)
 	TArray<FString> AllIds = IdsIn(Registry, FMantlePlaceImportSelection::Everything());
 	const TArray<FString> ExpectedAll = {
 		TEXT("drape"), TEXT("landscape"), TEXT("coverage_rasters"), TEXT("terrain_mesh"),
-		TEXT("buildings"), TEXT("road_splines"), TEXT("foliage_points") };
+		TEXT("buildings"), TEXT("road_splines"), TEXT("foliage_points"), TEXT("public_records") };
 	TestEqual(TEXT("registry: every artifact, in import order"), FString::Join(AllIds, TEXT(",")), FString::Join(ExpectedAll, TEXT(",")));
 
 	// Mode fan-out. Landscape and Mesh are alternatives for the terrain; the rest is content that

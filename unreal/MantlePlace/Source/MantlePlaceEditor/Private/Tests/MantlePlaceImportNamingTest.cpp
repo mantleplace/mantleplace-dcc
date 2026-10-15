@@ -268,6 +268,17 @@ bool FMantlePlaceImportNamingTest::RunTest(const FString& Parameters)
 				RoadSplineLabel(Identity, Index).StartsWith(Prefix, ESearchCase::CaseSensitive));
 		}
 
+		// A public-record overlay: one actor per family, the family read as words in PascalCase. A
+		// family this plugin has never met still gets a valid label, and an unnameable one a fallback.
+		TestEqual(TEXT("public record label"),
+			PublicRecordLabel(Identity, TEXT("parcels")), FString(TEXT("MP_Record_Parcels_a1b2c3d4")));
+		TestEqual(TEXT("public record label, a family with words"),
+			PublicRecordLabel(Identity, TEXT("protected_areas")), FString(TEXT("MP_Record_ProtectedAreas_a1b2c3d4")));
+		TestEqual(TEXT("public record label, punctuation dropped"),
+			PublicRecordLabel(Identity, TEXT("land-use/2")), FString(TEXT("MP_Record_LandUse2_a1b2c3d4")));
+		TestEqual(TEXT("public record label, no family"),
+			PublicRecordLabel(Identity, FString()), FString(TEXT("MP_Record_Records_a1b2c3d4")));
+
 		// The three single-actor labels are distinct from each other and none is a prefix of
 		// another — the stale-actor sweep compares two of them by equality and one by StartsWith,
 		// so an accidental prefix relationship would make it delete the wrong actor.

@@ -256,6 +256,27 @@ namespace MantlePlaceImportNaming
 		return FString::Printf(TEXT("%s%03d"), *RoadSplineLabelPrefix(Identity), Index);
 	}
 
+	FString PublicRecordLabel(const FString& Identity, const FString& Family)
+	{
+		FString Words;
+		bool bWordStart = true;
+		for (const TCHAR Ch : Family)
+		{
+			if (!FChar::IsAlnum(Ch))
+			{
+				bWordStart = true;
+				continue;
+			}
+			Words.AppendChar(bWordStart ? FChar::ToUpper(Ch) : Ch);
+			bWordStart = false;
+		}
+		if (Words.IsEmpty())
+		{
+			Words = TEXT("Records");
+		}
+		return FString::Printf(TEXT("%sRecord_%s_%s"), ActorLabelPrefix, *Words, *ShortIdentity(Identity));
+	}
+
 	void RenameToConvention(UObject* Asset)
 	{
 		if (Asset == nullptr)

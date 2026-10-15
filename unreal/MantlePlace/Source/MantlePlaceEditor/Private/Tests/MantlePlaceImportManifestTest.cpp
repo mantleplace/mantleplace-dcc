@@ -86,6 +86,12 @@ const TCHAR* const ConsumedExpectationKeys[] = {
 	TEXT("drapeWorldRectMinToleranceCm"),
 	TEXT("drapeWorldRectSize"),
 	TEXT("drapeWorldRectSizeToleranceCm"),
+	TEXT("publicRecordFamilies"),
+	TEXT("publicRecordPaths"),
+	TEXT("publicRecordVerifiedPaths"),
+	TEXT("publicRecordPointers"),
+	TEXT("publicRecordSkippedSources"),
+	TEXT("publicRecordFrames"),
 };
 
 void AssertStringExpectation(
@@ -503,6 +509,49 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 	// than a claim about a boolean expression nobody can walk.
 	AssertStringArrayExpectation(
 		T, Case, TEXT("integrityVerifiedPaths"), FMantlePlaceIntegrityLogic::VerifiablePaths(M));
+
+	// --- The public-record layers ------------------------------------------------------------
+	// Found by the shape of their block and located by the path each entry states, so the same
+	// reader takes `Records/<Family>/` and the legacy root folders, and a family it has never met.
+	{
+		TArray<FString> Families, Paths, Pointers, Skipped, Frames;
+		for (const FMantlePlaceRecordLayer& Layer : M.PublicRecords.Layers)
+		{
+			Families.Add(Layer.Family);
+			for (const FMantlePlaceRecordFile& File : Layer.Files)
+			{
+				Paths.Add(File.Path);
+				if (File.Frame.bStated)
+				{
+					Frames.Add(FString::Printf(
+						TEXT("%s.%s=%s %s"), *Layer.Family, *File.Kind, *File.Frame.Crs, *File.Frame.HorizontalUnit));
+				}
+			}
+			for (const FMantlePlaceRecordPointer& Pointer : Layer.Pointers)
+			{
+				Pointers.Add(FString::Printf(TEXT("%s:%s:%s"), *Layer.Family, *Pointer.RecordHolder, *Pointer.Reason));
+			}
+		}
+		for (const FMantlePlaceSkippedSource& Source : M.PublicRecords.SkippedSources)
+		{
+			Skipped.Add(FString::Printf(TEXT("%s:%s:%s"), *Source.Layer, *Source.RecordHolder, *Source.Reason));
+		}
+		// The integrity chain's view of them: every record file the manifest pins is in it.
+		TArray<FString> Verified;
+		for (const FString& Path : FMantlePlaceIntegrityLogic::VerifiablePaths(M))
+		{
+			if (Paths.Contains(Path))
+			{
+				Verified.Add(Path);
+			}
+		}
+		AssertStringArrayExpectation(T, Case, TEXT("publicRecordFamilies"), Families);
+		AssertStringArrayExpectation(T, Case, TEXT("publicRecordPaths"), Paths);
+		AssertStringArrayExpectation(T, Case, TEXT("publicRecordVerifiedPaths"), Verified);
+		AssertStringArrayExpectation(T, Case, TEXT("publicRecordPointers"), Pointers);
+		AssertStringArrayExpectation(T, Case, TEXT("publicRecordSkippedSources"), Skipped);
+		AssertStringArrayExpectation(T, Case, TEXT("publicRecordFrames"), Frames);
+	}
 
 	// --- The drape's alignment descriptor ---------------------------------------------------
 	const FMantlePlaceDrapeAlignment Alignment =

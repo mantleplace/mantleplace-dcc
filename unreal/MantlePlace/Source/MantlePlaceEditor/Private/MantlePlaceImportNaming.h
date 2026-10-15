@@ -222,6 +222,14 @@ namespace MantlePlaceImportNaming
 	/** `MP_RoadSpline_<shortIdentity>_<000>`. */
 	FString RoadSplineLabel(const FString& Identity, int32 Index);
 
+	/**
+	 * `MP_Record_<Family>_<shortIdentity>` -- the one actor of a public-record family's overlay.
+	 * `Family` is the manifest's key for it (`parcels`, a family this plugin has not met), read as
+	 * words and joined in PascalCase with anything that is not a letter or digit dropped, so the
+	 * label is valid whatever a producer calls a family. An empty family reads as `Records`.
+	 */
+	FString PublicRecordLabel(const FString& Identity, const FString& Family);
+
 	// --- The fallback -------------------------------------------------------------------------
 
 	/**

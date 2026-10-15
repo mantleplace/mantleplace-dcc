@@ -935,6 +935,128 @@
       }
     },
     {
+      "id": "manifest.unrealPublicRecordsLegacyLayout",
+      "group": "manifest",
+      "file": "manifest/public-records-legacy-layout.json",
+      "expect": "accept",
+      "manifestVersion": "1.11.0",
+      "appliesTo": "unreal",
+      "reason": "The Unreal host brings in the public-record layers of a bundle built before the `Records/` folder (MPB 1.11.0 and earlier): `Parcels/`, `Zoning/` and `Flood/` at the bundle root. It reads each layer through the path its own manifest entry states and never by folder, so the same reader that takes the 1.12.0 layout takes this one, and it holds the integrity chain: every file the layers point at is hashed before anything is imported. The two record-pointer rows the fixture carries are the holders that delivered no record, and the reader shows them, so a layer is never silently missing. The fixture is the 1.11.0 record-pointers case with the four parcel and zoning files added beside the flood zones, each listed in `files` under the part `other` and counted in the view. A reader that hard-codes `Records/` fails here, and so does one that finds `Flood/` and ignores `Parcels/` and `Zoning/`. Unreal-scoped because the layers it lists are this host's reading of them; the host-invariant `manifest.recordPointersIgnored` and `manifest.recordsFolderIgnored` still hold every reader to accepting the blocks.",
+      "expectations": {
+        "jobId": "public-records-legacy",
+        "orderId": "ord-public-records-legacy-1",
+        "publicRecordFamilies": [
+          "parcels",
+          "zoning",
+          "flood"
+        ],
+        "publicRecordPaths": [
+          "Parcels/Parcels.gpkg",
+          "Parcels/Parcels.dxf",
+          "Zoning/Zoning.gpkg",
+          "Zoning/Zoning.dxf",
+          "Flood/FloodZones.gpkg"
+        ],
+        "publicRecordVerifiedPaths": [
+          "Parcels/Parcels.gpkg",
+          "Parcels/Parcels.dxf",
+          "Zoning/Zoning.gpkg",
+          "Zoning/Zoning.dxf",
+          "Flood/FloodZones.gpkg"
+        ],
+        "publicRecordPointers": [
+          "parcels:Example County:no_open_source",
+          "parcels:Sample County:terms_restrict_commercial_use",
+          "zoning:Example City:no_open_source"
+        ],
+        "publicRecordSkippedSources": [],
+        "publicRecordFrames": []
+      }
+    },
+    {
+      "id": "manifest.unrealPublicRecordsFolder",
+      "group": "manifest",
+      "file": "manifest/public-records-folder.json",
+      "expect": "accept",
+      "manifestVersion": "1.12.0",
+      "appliesTo": "unreal",
+      "reason": "The Unreal host brings in every public-record family of a bundle in the `Records/` layout (MPB 1.12.0): parcels, zoning and flood zones, the seven families that follow them (wetlands, soils, protected areas, hydrography, habitat, contamination and historic) and one family no host has seen, `easements`. A reader finds a family by the shape of its block -- file entries under `gpkg` and `dxf`, or record pointers -- and the file by the `path` the entry states, falling back to the layout key; it never builds a path from a folder, so a family it has not seen imports through the same code. Every file joins the integrity chain, in the family order the host brings them in: parcels, zoning, flood, then the rest in the order they are listed here, then any unknown family by name. Flood zones ship as a GeoPackage only, as the published layout has them, so that family has one file and the host reports there is no linework for it. The parcels linework states its frame (`file_frame`, the same object as the host block's, provisional until a manifest minor declares one) and is the only layer the host can show to be in its frame; every other layer states none and is a named skip, never an assumption (HPS-53). `completeness.skipped_sources` carries the zoning source that was down, and the record pointers carry the holders that delivered nothing, and the host reports each. The parcels block also carries the credit, disclaimer and notice text the host shows (provisional keys, `credit`, `disclaimer`, `notice`, until a manifest minor declares them). The fixture is the 1.12.0 records-folder case with the seven families and the extra one added in the same layout, and every block validates against the published 1.12.0 schema. A reader that locates a layer by folder fails here, and so does one that knows only the three families the schema declares.",
+      "expectations": {
+        "jobId": "public-records-folder",
+        "orderId": "ord-public-records-folder-1",
+        "publicRecordFamilies": [
+          "parcels",
+          "zoning",
+          "flood",
+          "wetlands",
+          "soils",
+          "protected",
+          "hydrography",
+          "habitat",
+          "contamination",
+          "historic",
+          "easements"
+        ],
+        "publicRecordPaths": [
+          "Records/Parcels/Parcels.gpkg",
+          "Records/Parcels/Parcels.dxf",
+          "Records/Zoning/Zoning.gpkg",
+          "Records/Zoning/Zoning.dxf",
+          "Records/Flood/FloodZones.gpkg",
+          "Records/Wetlands/Wetlands.gpkg",
+          "Records/Wetlands/Wetlands.dxf",
+          "Records/Soils/Soils.gpkg",
+          "Records/Soils/Soils.dxf",
+          "Records/Protected/Protected.gpkg",
+          "Records/Protected/Protected.dxf",
+          "Records/Hydrography/Hydrography.gpkg",
+          "Records/Hydrography/Hydrography.dxf",
+          "Records/Habitat/Habitat.gpkg",
+          "Records/Habitat/Habitat.dxf",
+          "Records/Contamination/Contamination.gpkg",
+          "Records/Contamination/Contamination.dxf",
+          "Records/Historic/Historic.gpkg",
+          "Records/Historic/Historic.dxf",
+          "Records/Easements/Easements.gpkg",
+          "Records/Easements/Easements.dxf"
+        ],
+        "publicRecordVerifiedPaths": [
+          "Records/Parcels/Parcels.gpkg",
+          "Records/Parcels/Parcels.dxf",
+          "Records/Zoning/Zoning.gpkg",
+          "Records/Zoning/Zoning.dxf",
+          "Records/Flood/FloodZones.gpkg",
+          "Records/Wetlands/Wetlands.gpkg",
+          "Records/Wetlands/Wetlands.dxf",
+          "Records/Soils/Soils.gpkg",
+          "Records/Soils/Soils.dxf",
+          "Records/Protected/Protected.gpkg",
+          "Records/Protected/Protected.dxf",
+          "Records/Hydrography/Hydrography.gpkg",
+          "Records/Hydrography/Hydrography.dxf",
+          "Records/Habitat/Habitat.gpkg",
+          "Records/Habitat/Habitat.dxf",
+          "Records/Contamination/Contamination.gpkg",
+          "Records/Contamination/Contamination.dxf",
+          "Records/Historic/Historic.gpkg",
+          "Records/Historic/Historic.dxf",
+          "Records/Easements/Easements.gpkg",
+          "Records/Easements/Easements.dxf"
+        ],
+        "publicRecordPointers": [
+          "parcels:Example County:no_open_source",
+          "parcels:Sample County:terms_restrict_commercial_use",
+          "zoning:Example City:no_open_source"
+        ],
+        "publicRecordSkippedSources": [
+          "zoning:Example City:source_down"
+        ],
+        "publicRecordFrames": [
+          "parcels.dxf=EPSG:32613 m"
+        ]
+      }
+    },
+    {
       "id": "manifest.revitFidelityLevels",
       "group": "manifest",
       "file": "manifest/revit-fidelity-levels.json",

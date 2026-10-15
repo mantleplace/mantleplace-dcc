@@ -94,6 +94,7 @@ struct FMantlePlaceVaultManifest
 	FMantlePlaceLandscapeLayersBlock LandscapeLayers; // -> coverage-raster data textures
 	FMantlePlaceBuildingsBlock Buildings;             // -> static mesh
 	FMantlePlaceRoadSplinesBlock RoadSplines;         // -> spline actors
+	FMantlePlacePublicRecordsBlock PublicRecords;     // -> one toggleable overlay per record family
 
 	// --- Placement helpers (apply the contract verbatim) -------------------------------
 

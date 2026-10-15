@@ -70,8 +70,8 @@ RULES: list[tuple[str, re.Pattern[str], str]] = [
     (
         "actor-label",
         re.compile(r'TEXT\(\s*"MP_'),
-        'an "MP_" actor label - build it with MantlePlaceImportNaming::ActorLabel() '
-        "or RoadSplineLabel()",
+        'an "MP_" actor label - build it with MantlePlaceImportNaming::ActorLabel(), '
+        "RoadSplineLabel() or PublicRecordLabel()",
     ),
     (
         "asset-prefix",
