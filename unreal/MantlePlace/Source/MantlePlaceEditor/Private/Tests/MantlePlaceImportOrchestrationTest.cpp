@@ -8,17 +8,20 @@
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportOrchestration.h"
+#include "MantlePlaceImportProvenance.h"
 #include "MantlePlaceImportTiming.h"
 
 #include "Editor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
+#include "HAL/FileManager.h"
+#include "Subsystems/EditorAssetSubsystem.h"
 
 // The import's orchestration, with no bundle: which artifacts a Mode fans out to, the order the
 // registry runs them in, that a selection of artifacts gates each step, the refusal that must come
-// BEFORE the destructive wipe, and that a re-import REPLACES the prior actors rather than stacking
-// them. This is the safety net under ImportVaultPackage's shrink to orchestration: the per-artifact
+// BEFORE the destructive wipe, the provenance-guarded asset wipe itself, and that a re-import
+// REPLACES the prior actors rather than stacking them. This is the safety net under ImportVaultPackage's shrink to orchestration: the per-artifact
 // work is the handlers' and is covered where it always was (the Logic units, the live-bundle test);
 // what this covers is the wiring between them.
 
@@ -247,6 +250,69 @@ bool FMantlePlaceOrchestrationActorReplacementTest::RunTest(const FString& Param
 	TestEqual(TEXT("three re-imports in a row leave one generation, not three"), CountTagged(IdentityA), 1);
 
 	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceOrchestrationAssetWipeTest,
+	"MantlePlace.Import.Orchestration.AssetWipe",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceOrchestrationAssetWipeTest::RunTest(const FString& Parameters)
+{
+	UEditorAssetSubsystem* Assets = GEditor ? GEditor->GetEditorSubsystem<UEditorAssetSubsystem>() : nullptr;
+	if (Assets == nullptr)
+	{
+		AddInfo(TEXT("No editor asset subsystem: the asset wipe needs one. Skipped."));
+		return true;
+	}
+
+	// A throwaway folder and record, under names no real order can have, removed on the way out.
+	const FString IdentityA = TEXT("zwipe001-aaaa");
+	const FString IdentityB = TEXT("zwipe001-bbbb"); // same eight characters, so the same folder
+	const FString Folder = FString(TEXT("/Game/MantlePlaceOrchestrationTest")) / MantlePlaceImportNaming::ShortIdentity(IdentityA);
+	const auto Cleanup = [&]()
+	{
+		Assets->DeleteDirectory(Folder);
+		IFileManager::Get().Delete(*MantlePlaceImportProvenance::RecordPath(IdentityA), false, true, true);
+	};
+	const auto WriteRecord = [](const FString& Identity)
+	{
+		MantlePlaceImportProvenance::FRecord Record;
+		Record.Identity = Identity;
+		Record.SchemeVersion = MantlePlaceImportProvenance::CurrentSchemeVersion;
+		return MantlePlaceImportProvenance::Write(Record);
+	};
+	Cleanup();
+
+	MantlePlaceImportTiming::FTimeline Timeline;
+	Timeline.Start();
+
+	// Nothing there: import freely, nothing to refuse.
+	TestTrue(TEXT("no prior import: no refusal"),
+		MantlePlaceImportOrchestration::WipePriorAssets(IdentityA, Folder, Timeline).IsEmpty());
+
+	// Content with no record (0.3.0 or earlier): refused, and left alone.
+	TestTrue(TEXT("fixture: a content folder"), Assets->MakeDirectory(Folder));
+	TestFalse(TEXT("content with no record is refused"),
+		MantlePlaceImportOrchestration::WipePriorAssets(IdentityA, Folder, Timeline).IsEmpty());
+	TestTrue(TEXT("a refusal leaves the folder"), Assets->DoesDirectoryExist(Folder));
+
+	// Another order's folder (same truncated name): refused, and left alone.
+	TestTrue(TEXT("fixture: order B's record"), WriteRecord(IdentityB));
+	TestFalse(TEXT("another order's folder is refused"),
+		MantlePlaceImportOrchestration::WipePriorAssets(IdentityA, Folder, Timeline).IsEmpty());
+	TestTrue(TEXT("the refusal on another order's folder leaves it"), Assets->DoesDirectoryExist(Folder));
+
+	// Same identity: the folder is replaced, and a second wipe finds nothing to do.
+	TestTrue(TEXT("fixture: order A's record"), WriteRecord(IdentityA));
+	TestTrue(TEXT("same identity: no refusal"),
+		MantlePlaceImportOrchestration::WipePriorAssets(IdentityA, Folder, Timeline).IsEmpty());
+	TestFalse(TEXT("same identity: the prior folder is wiped"), Assets->DoesDirectoryExist(Folder));
+	TestTrue(TEXT("a second wipe is a no-op"),
+		MantlePlaceImportOrchestration::WipePriorAssets(IdentityA, Folder, Timeline).IsEmpty());
+
+	Cleanup();
 	return true;
 }
 
