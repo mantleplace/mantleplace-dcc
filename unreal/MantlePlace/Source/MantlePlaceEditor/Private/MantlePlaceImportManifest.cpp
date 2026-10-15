@@ -2,7 +2,8 @@
 
 #include "MantlePlaceImportManifest.h"
 
-#include "MantlePlaceDrapeAlignmentLogic.h" // the `alignment` descriptor is classified, not skimmed
+#include "MantlePlaceArtifactHandler.h"
+#include "MantlePlaceManifestJson.h"
 #include "MantlePlaceRoadSplinesLogic.h"    // FMantlePlaceRoadSplinesDatum
 #include "MantlePlaceTreePointsLogic.h"     // FMantlePlaceTreePointsFrame
 #include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion (the MPB clean-break floor)
@@ -33,8 +34,8 @@ FVector2D FMantlePlaceVaultManifest::GetAoiSizeUeCm() const
 	// ships 141.369 vs 138.988), so a half-done swap survives as a quiet aspect-ratio error
 	// rather than an obvious one -- hence one accessor rather than the arithmetic inline.
 	return FVector2D(
-		ComponentCountY * GetQuadsPerComponent() * ScaleYPercent,   // North span
-		ComponentCountX * GetQuadsPerComponent() * ScaleXPercent);  // East span
+		Heightmap.ComponentCountY * GetQuadsPerComponent() * Heightmap.ScaleYPercent,   // North span
+		Heightmap.ComponentCountX * GetQuadsPerComponent() * Heightmap.ScaleXPercent);  // East span
 }
 
 FRotator FMantlePlaceVaultManifest::GetMeshRotation()
@@ -49,7 +50,7 @@ FVector FMantlePlaceVaultManifest::GetLandscapeScale() const
 	// The *_percent values ARE the DrawScale3D (100 == 1 m/quad, 512 m full uint16 range),
 	// swapped into UE axis order: landscape-local X indexes the heightmap's ROWS (northing) and
 	// local Y its COLUMNS (easting), per the transpose in MantlePlaceLandscapeImporter.
-	return FVector(ScaleYPercent, ScaleXPercent, ScaleZPercent);
+	return FVector(Heightmap.ScaleYPercent, Heightmap.ScaleXPercent, Heightmap.ScaleZPercent);
 }
 
 FVector FMantlePlaceVaultManifest::GetLandscapeSpawnLocation() const
@@ -58,21 +59,21 @@ FVector FMantlePlaceVaultManifest::GetLandscapeSpawnLocation() const
 	// by half the (scaled) quad span so the AOI centre lands on world (0,0). Identity rotation,
 	// so TransformVector(scale) is a component-wise multiply.
 	const FVector2D AoiSize = GetAoiSizeUeCm();
-	return FVector(-AoiSize.X / 2.0, -AoiSize.Y / 2.0, LocationZOffsetCm);
+	return FVector(-AoiSize.X / 2.0, -AoiSize.Y / 2.0, Heightmap.LocationZOffsetCm);
 }
 
 FVector FMantlePlaceVaultManifest::GetMeshLocation() const
 {
 	// The glb is centroid-local with z=0 at centroid ground; place that at true elevation so it
 	// overlays the Landscape (which encodes true orthometric Z too). XY centroid -> world (0,0).
-	return FVector(0.0, 0.0, GroundOrthometricHM * 100.0);
+	return FVector(0.0, 0.0, Georef.GroundOrthometricHM * 100.0);
 }
 
 void FMantlePlaceVaultManifest::GetDrapeWorldRect(FVector2D& OutMin, FVector2D& OutSize) const
 {
 	// UTM -> UE world cm relative to the georeference origin (North -> +X, East -> +Y).
-	const FVector Min = ProjectedToUeCm(DrapeLeftM - OriginEastingM, DrapeBottomM - OriginNorthingM, 0.0);
-	const FVector Size = ProjectedToUeCm(DrapeRightM - DrapeLeftM, DrapeTopM - DrapeBottomM, 0.0);
+	const FVector Min = ProjectedToUeCm(Drape.LeftM - Georef.OriginEastingM, Drape.BottomM - Georef.OriginNorthingM, 0.0);
+	const FVector Size = ProjectedToUeCm(Drape.RightM - Drape.LeftM, Drape.TopM - Drape.BottomM, 0.0);
 	OutMin = FVector2D(Min.X, Min.Y);
 	OutSize = FVector2D(Size.X, Size.Y);
 }
@@ -114,7 +115,7 @@ void FMantlePlaceVaultManifest::GetDrapeUvTransform(FVector2D& OutScale, FVector
 
 const FMantlePlaceLandscapeLayer* FMantlePlaceVaultManifest::FindLandscapeLayer(const TCHAR* Name) const
 {
-	return LandscapeLayers.FindByPredicate(
+	return LandscapeLayers.Layers.FindByPredicate(
 		[Name](const FMantlePlaceLandscapeLayer& Layer) { return Layer.Name == Name; });
 }
 
@@ -126,10 +127,10 @@ FMantlePlaceTreePointsFrame FMantlePlaceVaultManifest::GetFoliagePointsFrame() c
 	static const FString FirstVersionStatingTreePointsFrame = TEXT("1.3.0");
 
 	FMantlePlaceTreePointsFrame Frame;
-	Frame.Crs = FoliagePointsCrs;
-	Frame.Units = FoliagePointsUnits;
-	Frame.HorizontalUnits = FoliagePointsHorizontalUnits;
-	Frame.HostCrs = CrsProjected;
+	Frame.Crs = Foliage.Crs;
+	Frame.Units = Foliage.Units;
+	Frame.HorizontalUnits = Foliage.HorizontalUnits;
+	Frame.HostCrs = Georef.CrsProjected;
 	Frame.bRequired = !MantlePlaceIsManifestVersionBelowFloor(Version, FirstVersionStatingTreePointsFrame);
 	return Frame;
 }
@@ -141,126 +142,17 @@ FMantlePlaceRoadSplinesDatum FMantlePlaceVaultManifest::GetRoadSplinesDatum() co
 	static const FString FirstVersionStatingHeightDatum = TEXT("1.8.0");
 
 	FMantlePlaceRoadSplinesDatum Datum;
-	Datum.Stated = RoadSplinesVerticalDatum;
+	Datum.Stated = RoadSplines.VerticalDatum;
 	Datum.bRequired = !MantlePlaceIsManifestVersionBelowFloor(Version, FirstVersionStatingHeightDatum);
 	return Datum;
 }
 
 // ── Parsing ────────────────────────────────────────────────────────────────
 
-namespace
-{
-	const TSharedPtr<FJsonObject>* GetObject(const TSharedPtr<FJsonObject>& Parent, const TCHAR* Field)
-	{
-		if (!Parent.IsValid())
-		{
-			return nullptr;
-		}
-		const TSharedPtr<FJsonObject>* Out = nullptr;
-		return Parent->TryGetObjectField(Field, Out) ? Out : nullptr;
-	}
-
-	double GetNumber(const TSharedPtr<FJsonObject>& Obj, const TCHAR* Field, double Default = 0.0)
-	{
-		double Value = Default;
-		if (Obj.IsValid())
-		{
-			Obj->TryGetNumberField(Field, Value);
-		}
-		return Value;
-	}
-
-	int32 GetInt(const TSharedPtr<FJsonObject>& Obj, const TCHAR* Field, int32 Default = 0)
-	{
-		return static_cast<int32>(FMath::RoundToDouble(GetNumber(Obj, Field, static_cast<double>(Default))));
-	}
-
-	FString GetString(const TSharedPtr<FJsonObject>& Obj, const TCHAR* Field)
-	{
-		FString Value;
-		if (Obj.IsValid())
-		{
-			Obj->TryGetStringField(Field, Value);
-		}
-		return Value;
-	}
-
-	bool GetBool(const TSharedPtr<FJsonObject>& Obj, const TCHAR* Field, bool Default)
-	{
-		bool Value = Default;
-		if (Obj.IsValid())
-		{
-			Obj->TryGetBoolField(Field, Value);
-		}
-		return Value;
-	}
-
-	TArray<FString> GetStrings(const TSharedPtr<FJsonObject>& Obj, const TCHAR* Field)
-	{
-		TArray<FString> Values;
-		if (Obj.IsValid())
-		{
-			Obj->TryGetStringArrayField(Field, Values);
-		}
-		return Values;
-	}
-
-	/**
-	 * Enforce the one glTF orientation this importer supports, the way planet_shape enforces "Flat".
-	 * Interchange converts Y-up to Z-up unconditionally, so a bundle declaring anything else would
-	 * import silently wrong — geometry in the world at a plausible-looking transform, rotated 90
-	 * degrees, with no error anywhere. Absent (empty) is tolerated: that is a bundle that never
-	 * declared an axis, not one declaring a different one. Returns false with OutError filled.
-	 */
-	bool CheckUpAxis(const TCHAR* Block, const FString& UpAxis, FString& OutError)
-	{
-		if (UpAxis.IsEmpty() || UpAxis.Equals(TEXT("y"), ESearchCase::IgnoreCase))
-		{
-			return true;
-		}
-		OutError = FString::Printf(
-			TEXT("Unsupported up_axis \"%s\" on hosts.unreal.%s: this importer converts Y-up glTF only "
-			     "(Interchange applies that conversion unconditionally, so any other axis would import "
-			     "rotated with no error)."),
-			*UpAxis, Block);
-		return false;
-	}
-
-	/** `ue_ready[].value_mapping` — every shape the five encodings use, read into one struct. Absent
-	 *  keys simply stay at their defaults: the mapping's shape follows the encoding, so reading by
-	 *  key rather than branching on the encoding means a new encoding is inert rather than lossy. */
-	FMantlePlaceRasterValueMapping ParseValueMapping(const TSharedPtr<FJsonObject>& Mapping)
-	{
-		FMantlePlaceRasterValueMapping Out;
-		if (!Mapping.IsValid())
-		{
-			return Out;
-		}
-		Out.MinValue = GetNumber(Mapping, TEXT("min"));
-		Out.MaxValue = GetNumber(Mapping, TEXT("max"));
-		Out.ToValueFormula = GetString(Mapping, TEXT("to_value"));
-		Out.Units = GetString(Mapping, TEXT("units"));
-		Out.bHasNodata = Mapping->HasField(TEXT("nodata_value"));
-		Out.NodataValue = GetNumber(Mapping, TEXT("nodata_value"));
-		Out.TrueValue = GetNumber(Mapping, TEXT("true_value"));
-		Out.FalseValue = GetNumber(Mapping, TEXT("false_value"));
-		Out.bIdentity = GetBool(Mapping, TEXT("identity"), false);
-		Out.Bands = GetStrings(Mapping, TEXT("bands"));
-
-		const TArray<TSharedPtr<FJsonValue>>* Classes = nullptr;
-		if (Mapping->TryGetArrayField(TEXT("classes"), Classes) && Classes != nullptr)
-		{
-			for (const TSharedPtr<FJsonValue>& Value : *Classes)
-			{
-				if (Value.IsValid())
-				{
-					Out.Classes.Add(static_cast<int32>(FMath::RoundToDouble(Value->AsNumber())));
-				}
-			}
-		}
-		return Out;
-	}
-}
+using MantlePlaceManifestJson::GetInt;
+using MantlePlaceManifestJson::GetNumber;
+using MantlePlaceManifestJson::GetObject;
+using MantlePlaceManifestJson::GetString;
 
 int32 MantlePlaceImportManifest::ParseEpsg(const FString& CrsString)
 {
@@ -320,6 +212,95 @@ bool MantlePlaceImportManifest::IsBundleMaterialized(const TSharedPtr<FJsonObjec
 	return false;
 }
 
+namespace
+{
+/** `hosts.unreal.georeference`: this host's frame. Not an artifact, so Parse reads it itself. */
+bool ParseGeoreference(const TSharedPtr<FJsonObject>& Unreal, FMantlePlaceGeoreferenceBlock& Georef, FString& OutError)
+{
+	const TSharedPtr<FJsonObject>* GeoPtr = GetObject(Unreal, TEXT("georeference"));
+	if (GeoPtr == nullptr)
+	{
+		return true;
+	}
+	const TSharedPtr<FJsonObject> Geo = *GeoPtr;
+	// EPSG is provenance-only on the consumer side: the contract places the AOI in a flat frame at world
+	// origin and deliberately instantiates no AGeoReferencingSystem / no LWC in v1, so "EPSG parsed
+	// but otherwise unused" is by design, not a bug.
+	Georef.CrsProjected = GetString(Geo, TEXT("crs_projected"));
+	Georef.Epsg = MantlePlaceImportManifest::ParseEpsg(Georef.CrsProjected);
+	if (const TSharedPtr<FJsonObject>* OriginPtr = GetObject(Geo, TEXT("origin")))
+	{
+		const TSharedPtr<FJsonObject> Origin = *OriginPtr;
+		Georef.GroundOrthometricHM = GetNumber(Origin, TEXT("ground_orthometric_h_m"));
+		if (const TSharedPtr<FJsonObject>* UtmPtr = GetObject(Origin, TEXT("utm")))
+		{
+			Georef.OriginEastingM = GetNumber(*UtmPtr, TEXT("easting_m"));
+			Georef.OriginNorthingM = GetNumber(*UtmPtr, TEXT("northing_m"));
+			if (Georef.Epsg == 0)
+			{
+				Georef.Epsg = GetInt(*UtmPtr, TEXT("epsg"));
+			}
+		}
+	}
+
+	// Enforce the v1 contract: the importer supports only the flat planet shape. Reject any
+	// other declared value fail-closed (absent => legacy bundle, defaults to Flat).
+	Georef.PlanetShape = GetString(Geo, TEXT("planet_shape"));
+	if (!Georef.PlanetShape.IsEmpty() && !Georef.PlanetShape.Equals(TEXT("Flat")))
+	{
+		OutError = FString::Printf(
+			TEXT("Unsupported planet_shape \"%s\": the v1 importer supports only \"Flat\"."),
+			*Georef.PlanetShape);
+		return false;
+	}
+	return true;
+}
+
+/** The bundle's native Cesium artifacts + AOI bbox (top-level siblings of `hosts`). The bundle ships a
+ *  Cesium-ready quantized-mesh tileset (layout.cesium_terrain); the local tile server hosts it so
+ *  Cesium for Unreal can stream the bundle. Optional — absent on bundles that predate the stage. */
+void ParseCesium(const TSharedPtr<FJsonObject>& Root, FMantlePlaceCesiumBlock& Cesium)
+{
+	if (const TSharedPtr<FJsonObject>* BboxPtr = GetObject(Root, TEXT("bbox")))
+	{
+		const TSharedPtr<FJsonObject> Bbox = *BboxPtr;
+		Cesium.BboxWestDeg = GetNumber(Bbox, TEXT("west"));
+		Cesium.BboxSouthDeg = GetNumber(Bbox, TEXT("south"));
+		Cesium.BboxEastDeg = GetNumber(Bbox, TEXT("east"));
+		Cesium.BboxNorthDeg = GetNumber(Bbox, TEXT("north"));
+		Cesium.bHasBbox = (Cesium.BboxEastDeg > Cesium.BboxWestDeg) && (Cesium.BboxNorthDeg > Cesium.BboxSouthDeg);
+	}
+	if (const TSharedPtr<FJsonObject>* LayoutPtr = GetObject(Root, TEXT("layout")))
+	{
+		Cesium.TerrainPath = GetString(*LayoutPtr, TEXT("cesium_terrain"));
+	}
+	if (const TSharedPtr<FJsonObject>* CesiumTerrainPtr = GetObject(Root, TEXT("cesium_terrain")))
+	{
+		Cesium.TerrainTileCount = GetInt(*CesiumTerrainPtr, TEXT("tile_count"));
+	}
+	Cesium.bHasTerrain = !Cesium.TerrainPath.IsEmpty();
+}
+
+/** `delivery`: display only (see FMantlePlaceDeliveryFacts). Verbatim, never validated -- nothing
+ *  reads it to place, so an unknown value is a word the user is shown, not a refusal. */
+void ParseDelivery(const TSharedPtr<FJsonObject>& Root, FMantlePlaceDeliveryFacts& Delivery)
+{
+	const TSharedPtr<FJsonObject>* DeliveryPtr = GetObject(Root, TEXT("delivery"));
+	if (DeliveryPtr == nullptr)
+	{
+		return;
+	}
+	Delivery.bDeclared = true;
+	Delivery.UnitSystem = GetString(*DeliveryPtr, TEXT("unit_system"));
+	Delivery.LinearUnit = GetString(*DeliveryPtr, TEXT("linear_unit"));
+	Delivery.Label = GetString(*DeliveryPtr, TEXT("label"));
+	double HorizontalEpsg = 0.0;
+	// A JSON null reads as no number, which is what the `local_ft` tier means by it.
+	Delivery.bHasHorizontalEpsg = (*DeliveryPtr)->TryGetNumberField(TEXT("horizontal_epsg"), HorizontalEpsg);
+	Delivery.HorizontalEpsg = Delivery.bHasHorizontalEpsg ? FMath::RoundToInt(HorizontalEpsg) : 0;
+}
+}
+
 FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonText, FString& OutError)
 {
 	FMantlePlaceVaultManifest M;
@@ -374,123 +355,44 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		return M;
 	}
 
-	// The pipeline's own readiness report (top-level sibling of `unreal`). When the mesh stage
-	// produced nothing it records why (e.g. "mesh_not_produced"); surface that so a Mesh request
-	// can explain the absence instead of dead-ending. `reason` rides only the absent paths — the
-	// schema requires it whenever `present` is false and forbids it otherwise, so an empty string
-	// here means "the mesh is present" rather than "the bundle forgot to say".
-	//
-	// MPB 1.0.0 folded readiness into the host block: the per-host `dcc_readiness.unreal` of the
-	// integer era now lives at `hosts.unreal.readiness`, inside the one subtree this host reads
-	// (HPS-33). The retired top-level `dcc_readiness` is NOT consulted in either of its old shapes
-	// — a fallback there is how a clean break quietly becomes dual-parsing, and the version gate
-	// above has already refused every bundle that would carry one.
-	if (const TSharedPtr<FJsonObject>* HostsPtr = GetObject(Root, TEXT("hosts")))
-	{
-		if (const TSharedPtr<FJsonObject>* UnrealHostPtr = GetObject(*HostsPtr, TEXT("unreal")))
-		{
-			if (const TSharedPtr<FJsonObject>* ReadinessPtr = GetObject(*UnrealHostPtr, TEXT("readiness")))
-			{
-				if (const TSharedPtr<FJsonObject>* MeshImportPtr = GetObject(*ReadinessPtr, TEXT("mesh_import")))
-				{
-					M.MeshAbsentReason = GetString(*MeshImportPtr, TEXT("reason"));
-				}
-			}
-		}
-	}
-
-	// Native Cesium artifacts + AOI bbox (top-level siblings of `hosts`). The bundle ships a
-	// Cesium-ready quantized-mesh tileset (layout.cesium_terrain) + tiled imagery (layout.imagery); the
-	// local tile server hosts them so Cesium for Unreal can stream the bundle. Optional — absent on
-	// bundles that predate the Cesium-terrain stage.
-	if (const TSharedPtr<FJsonObject>* BboxPtr = GetObject(Root, TEXT("bbox")))
-	{
-		const TSharedPtr<FJsonObject> Bbox = *BboxPtr;
-		M.BboxWestDeg = GetNumber(Bbox, TEXT("west"));
-		M.BboxSouthDeg = GetNumber(Bbox, TEXT("south"));
-		M.BboxEastDeg = GetNumber(Bbox, TEXT("east"));
-		M.BboxNorthDeg = GetNumber(Bbox, TEXT("north"));
-		M.bHasBbox = (M.BboxEastDeg > M.BboxWestDeg) && (M.BboxNorthDeg > M.BboxSouthDeg);
-	}
-	if (const TSharedPtr<FJsonObject>* LayoutPtr = GetObject(Root, TEXT("layout")))
-	{
-		const TSharedPtr<FJsonObject> Layout = *LayoutPtr;
-		M.CesiumTerrainPath = GetString(Layout, TEXT("cesium_terrain"));
-	}
-	if (const TSharedPtr<FJsonObject>* CesiumTerrainPtr = GetObject(Root, TEXT("cesium_terrain")))
-	{
-		M.CesiumTerrainTileCount = GetInt(*CesiumTerrainPtr, TEXT("tile_count"));
-	}
-	M.bHasCesiumTerrain = !M.CesiumTerrainPath.IsEmpty();
-
+	// Top-level facts, read whether or not the bundle has been materialized for this host (HPS-37).
+	ParseCesium(Root, M.Cesium);
 	// Vault pick-and-process: a base_on_demand marker bundle ships no `unreal` block yet —
 	// its Unreal formats generate later, on demand.
 	if (const TSharedPtr<FJsonObject>* PackagingPtr = GetObject(Root, TEXT("packaging")))
 	{
 		M.DeliveryModel = GetString(*PackagingPtr, TEXT("delivery_model"));
 	}
-
-	// `delivery`: display only (see FMantlePlaceDeliveryFacts). Verbatim, never validated -- nothing
-	// below reads it, so an unknown value is a word the user is shown, not a refusal.
-	if (const TSharedPtr<FJsonObject>* DeliveryPtr = GetObject(Root, TEXT("delivery")))
-	{
-		M.Delivery.bDeclared = true;
-		M.Delivery.UnitSystem = GetString(*DeliveryPtr, TEXT("unit_system"));
-		M.Delivery.LinearUnit = GetString(*DeliveryPtr, TEXT("linear_unit"));
-		M.Delivery.Label = GetString(*DeliveryPtr, TEXT("label"));
-		double HorizontalEpsg = 0.0;
-		// A JSON null reads as no number, which is what the `local_ft` tier means by it.
-		M.Delivery.bHasHorizontalEpsg = (*DeliveryPtr)->TryGetNumberField(TEXT("horizontal_epsg"), HorizontalEpsg);
-		M.Delivery.HorizontalEpsg = M.Delivery.bHasHorizontalEpsg ? FMath::RoundToInt(HorizontalEpsg) : 0;
-	}
-
-	// Road splines: the derived "road_splines" layer of the ODbL Vector/ set (top-level sibling of
-	// `unreal`). The importer consumes the GeoJSON format only; a gpkg-only bundle (base tier) is
-	// treated as not shipping splines. Read before the unreal-presence check so streaming-adjacent
-	// data survives on unmaterialized bundles, mirroring the Cesium fields above.
-	if (const TSharedPtr<FJsonObject>* VectorPtr = GetObject(Root, TEXT("vector")))
-	{
-		const TArray<TSharedPtr<FJsonValue>>* Layers = nullptr;
-		if ((*VectorPtr)->TryGetArrayField(TEXT("layers"), Layers) && Layers != nullptr)
-		{
-			for (const TSharedPtr<FJsonValue>& LayerValue : *Layers)
-			{
-				const TSharedPtr<FJsonObject> Layer = LayerValue->AsObject();
-				if (!Layer.IsValid() || GetString(Layer, TEXT("name")) != TEXT("road_splines"))
-				{
-					continue;
-				}
-				// The datum of the layer's heights (MPB 1.8.0), verbatim. Whether it is this host's
-				// is FMantlePlaceRoadSplinesLogic's call: a datum that is not refuses the layer by
-				// name at import, never the manifest.
-				M.RoadSplinesVerticalDatum = GetString(Layer, TEXT("vertical_datum"));
-				const TArray<TSharedPtr<FJsonValue>>* Formats = nullptr;
-				if (Layer->TryGetArrayField(TEXT("formats"), Formats) && Formats != nullptr)
-				{
-					for (const TSharedPtr<FJsonValue>& FormatValue : *Formats)
-					{
-						const TSharedPtr<FJsonObject> Format = FormatValue->AsObject();
-						if (Format.IsValid() && GetString(Format, TEXT("format")) == TEXT("geojson"))
-						{
-							M.RoadSplinesPath = GetString(Format, TEXT("path"));
-							M.RoadSplinesSha256 = GetString(Format, TEXT("sha256"));
-							break;
-						}
-					}
-				}
-				break;
-			}
-		}
-	}
-	M.bHasRoadSplines = !M.RoadSplinesPath.IsEmpty();
+	ParseDelivery(Root, M.Delivery);
 
 	// `hosts.unreal` — the one subtree this host reads, and never a sibling's (HPS-33).
-	const TSharedPtr<FJsonObject>* UnrealPtr = nullptr;
+	TSharedPtr<FJsonObject> Unreal;
 	if (const TSharedPtr<FJsonObject>* HostsRootPtr = GetObject(Root, TEXT("hosts")))
 	{
-		UnrealPtr = GetObject(*HostsRootPtr, TEXT("unreal"));
+		if (const TSharedPtr<FJsonObject>* UnrealPtr = GetObject(*HostsRootPtr, TEXT("unreal")))
+		{
+			Unreal = *UnrealPtr;
+		}
 	}
-	if (UnrealPtr == nullptr)
+
+	// Each artifact reads its own block. The handlers that read only top-level siblings (road
+	// splines) run whether or not `hosts.unreal` exists, as they always have; the rest find no
+	// block and leave theirs absent.
+	const MantlePlaceArtifacts::FHandlers Handlers = MantlePlaceArtifacts::MakeAll();
+	const FMantlePlaceParseInput Input{ Root, Unreal };
+	if (!ParseGeoreference(Unreal, M.Georef, OutError))
+	{
+		return M; // bValid stays false
+	}
+	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
+	{
+		if (!Handler->ParseFields(Input, M, OutError))
+		{
+			return M; // bValid stays false
+		}
+	}
+
+	if (!Unreal.IsValid())
 	{
 		// A missing `hosts.unreal` block does NOT mean "unmaterialized" — web can materialize a
 		// bundle for another host only (a `hosts.revit` block, vector layers) and this
@@ -509,278 +411,17 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 			       "You can still preview it now with \"Stream into Cesium\" (this bundle ships Cesium terrain).");
 		return M;
 	}
-	const TSharedPtr<FJsonObject> Unreal = *UnrealPtr;
 
-	// --- Heightmap ---------------------------------------------------------------------
-	if (const TSharedPtr<FJsonObject>* HeightmapPtr = GetObject(Unreal, TEXT("heightmap")))
+	// Checks that need more than one block, once every block is read.
+	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
 	{
-		const TSharedPtr<FJsonObject> H = *HeightmapPtr;
-		M.HeightmapPath = GetString(H, TEXT("path"));
-		M.Resolution = GetInt(H, TEXT("resolution"));
-		M.bRow0IsNorth = GetBool(H, TEXT("row0_is_north"), true);
-		M.HeightmapSha256 = GetString(H, TEXT("sha256")); // verified against the extracted bytes at import
-
-		if (const TSharedPtr<FJsonObject>* MapPtr = GetObject(H, TEXT("uint16_mapping")))
-		{
-			M.ZMinM = GetNumber(*MapPtr, TEXT("z_min_m"));
-			M.ZMaxM = GetNumber(*MapPtr, TEXT("z_max_m"));
-		}
-
-		if (const TSharedPtr<FJsonObject>* XformPtr = GetObject(H, TEXT("landscape_transform")))
-		{
-			const TSharedPtr<FJsonObject> X = *XformPtr;
-			M.ScaleXPercent = GetNumber(X, TEXT("scale_x_percent"));
-			M.ScaleYPercent = GetNumber(X, TEXT("scale_y_percent"));
-			M.ScaleZPercent = GetNumber(X, TEXT("z_scale_percent"));
-			M.LocationZOffsetCm = GetNumber(X, TEXT("location_z_offset_cm"));
-			M.SectionSizeQuads = GetInt(X, TEXT("section_size_quads"));
-			M.SectionsPerComponent = GetInt(X, TEXT("sections_per_component"));
-			M.ComponentCountX = GetInt(X, TEXT("component_count_x"));
-			M.ComponentCountY = GetInt(X, TEXT("component_count_y"));
-		}
-
-		M.bHasHeightmap = !M.HeightmapPath.IsEmpty() && M.Resolution > 0
-			&& M.SectionSizeQuads > 0 && M.SectionsPerComponent > 0
-			&& M.ComponentCountX > 0 && M.ComponentCountY > 0;
-
-		// The schema requires heightmap.sha256, so an absent hash is a malformed manifest, not a
-		// legacy bundle — fail closed rather than silently skip the check.
-		if (M.bHasHeightmap && M.HeightmapSha256.IsEmpty())
-		{
-			OutError = TEXT("manifest hosts.unreal.heightmap has no sha256 (schema-required); refusing to import unverifiable bytes.");
-			return M;
-		}
-	}
-
-	// --- Georeference ------------------------------------------------------------------
-	if (const TSharedPtr<FJsonObject>* GeoPtr = GetObject(Unreal, TEXT("georeference")))
-	{
-		const TSharedPtr<FJsonObject> Geo = *GeoPtr;
-		// EPSG is provenance-only on the consumer side: the contract places the AOI in a flat frame at world
-		// origin and deliberately instantiates no AGeoReferencingSystem / no LWC in v1, so "EPSG parsed
-		// but otherwise unused" is by design, not a bug.
-		M.CrsProjected = GetString(Geo, TEXT("crs_projected"));
-		M.Epsg = ParseEpsg(M.CrsProjected);
-		if (const TSharedPtr<FJsonObject>* OriginPtr = GetObject(Geo, TEXT("origin")))
-		{
-			const TSharedPtr<FJsonObject> Origin = *OriginPtr;
-			M.GroundOrthometricHM = GetNumber(Origin, TEXT("ground_orthometric_h_m"));
-			if (const TSharedPtr<FJsonObject>* UtmPtr = GetObject(Origin, TEXT("utm")))
-			{
-				M.OriginEastingM = GetNumber(*UtmPtr, TEXT("easting_m"));
-				M.OriginNorthingM = GetNumber(*UtmPtr, TEXT("northing_m"));
-				if (M.Epsg == 0)
-				{
-					M.Epsg = GetInt(*UtmPtr, TEXT("epsg"));
-				}
-			}
-		}
-
-		// Enforce the v1 contract: the importer supports only the flat planet shape. Reject any
-		// other declared value fail-closed (absent => legacy bundle, defaults to Flat).
-		M.PlanetShape = GetString(Geo, TEXT("planet_shape"));
-		if (!M.PlanetShape.IsEmpty() && !M.PlanetShape.Equals(TEXT("Flat")))
-		{
-			OutError = FString::Printf(
-				TEXT("Unsupported planet_shape \"%s\": the v1 importer supports only \"Flat\"."),
-				*M.PlanetShape);
-			return M; // bValid stays false
-		}
-	}
-
-	// --- Imagery drape -----------------------------------------------------------------
-	if (const TSharedPtr<FJsonObject>* DrapePtr = GetObject(Unreal, TEXT("imagery_drape")))
-	{
-		const TSharedPtr<FJsonObject> D = *DrapePtr;
-		M.DrapePath = GetString(D, TEXT("source"));
-		M.DrapeSha256 = GetString(D, TEXT("sha256")); // verified against the extracted bytes at import
-		// Kept verbatim; the prefix match that gives it meaning lives in the logic unit, and the
-		// self-consistency gate that can refuse it runs at the end of Parse, once the heightmap's
-		// AOI rectangle is known.
-		M.DrapeAlignment = GetString(D, TEXT("alignment"));
-		const TArray<TSharedPtr<FJsonValue>>* Extent = nullptr;
-		if (D->TryGetArrayField(TEXT("extent"), Extent) && Extent != nullptr && Extent->Num() == 4)
-		{
-			M.DrapeLeftM = (*Extent)[0]->AsNumber();
-			M.DrapeBottomM = (*Extent)[1]->AsNumber();
-			M.DrapeRightM = (*Extent)[2]->AsNumber();
-			M.DrapeTopM = (*Extent)[3]->AsNumber();
-			M.bHasDrape = !M.DrapePath.IsEmpty() && (M.DrapeRightM > M.DrapeLeftM) && (M.DrapeTopM > M.DrapeBottomM);
-		}
-
-		// imagery_drape.sha256 is likewise schema-required — same fail-closed rule as the heightmap.
-		if (M.bHasDrape && M.DrapeSha256.IsEmpty())
-		{
-			OutError = TEXT("manifest hosts.unreal.imagery_drape has no sha256 (schema-required); refusing to import unverifiable bytes.");
-			return M;
-		}
-	}
-
-	// --- Mesh alternative --------------------------------------------------------------
-	if (const TSharedPtr<FJsonObject>* MeshPtr = GetObject(Unreal, TEXT("mesh_alternative")))
-	{
-		const TSharedPtr<FJsonObject> Mesh = *MeshPtr;
-		M.MeshPath = GetString(Mesh, TEXT("path"));
-		M.MeshUpAxis = GetString(Mesh, TEXT("up_axis"));
-		M.bNaniteRecommended = GetBool(Mesh, TEXT("nanite_recommended"), false);
-		// The schema keeps mesh_alternative.sha256 optional (unlike heightmap/drape), so absent =
-		// integrity check skipped rather than a parse failure.
-		M.MeshSha256 = GetString(Mesh, TEXT("sha256"));
-		M.bHasMesh = !M.MeshPath.IsEmpty();
-
-		if (!CheckUpAxis(TEXT("mesh_alternative"), M.MeshUpAxis, OutError))
+		if (!Handler->CrossCheck(M, OutError))
 		{
 			return M; // bValid stays false
 		}
 	}
 
-	// --- Foliage points (-> DataTable scatter input; HPS-32) ----------------------------
-	// The tree-points layer's OWN pointer block. The manifest also carries `layout.tree_points` (a
-	// bare string) and `landcover.tree_points` (richer, with a sha256) — HPS-33 says read your own
-	// block regardless, so neither of those is a fallback for a missing
-	// hosts.unreal.foliage_points; an absent pointer means the bundle simply has no tree points,
-	// not a parse failure.
-	if (const TSharedPtr<FJsonObject>* FoliagePointsPtr = GetObject(Unreal, TEXT("foliage_points")))
-	{
-		M.FoliagePointsPath = GetString(*FoliagePointsPtr, TEXT("path"));
-		// Both OPTIONAL in the schema, on purpose: the facts come from a best-effort sidecar, so
-		// requiring them would refuse bundles that are perfectly importable. Absent therefore means
-		// "unknown" and never "corrupt" (spec/format.md section 5) — the digest is skipped and the
-		// row count is not cross-checked, and the importer says which of the two it did.
-		M.FoliagePointsSha256 = GetString(*FoliagePointsPtr, TEXT("sha256"));
-		M.FoliagePointsCount = GetInt(*FoliagePointsPtr, TEXT("point_count"));
-		// The file's frame, as stated (MPB 1.3.0). Read verbatim and judged nowhere here: whether
-		// it is this host's frame is FMantlePlaceTreePointsLogic's call, and a frame that is not
-		// refuses the layer by name rather than the manifest (HPS-53).
-		M.FoliagePointsCrs = GetString(*FoliagePointsPtr, TEXT("crs"));
-		M.FoliagePointsUnits = GetString(*FoliagePointsPtr, TEXT("units"));
-		M.FoliagePointsHorizontalUnits = GetString(*FoliagePointsPtr, TEXT("horizontal_units"));
-	}
-	M.bHasFoliagePoints = !M.FoliagePointsPath.IsEmpty();
-
-	// --- Landscape layers ---------------------------------------------------------------
-	// The whole block, not just the one entry the importer applies. It is addressed to this host by
-	// name, so leaving parts unparsed is how "published and ignored" happens a second time.
-	// Keys are read off the object and sorted: the block is `additionalProperties: true`, so a
-	// future ninth layer arrives without a code change, and JSON object order is not a contract.
-	if (const TSharedPtr<FJsonObject>* LandscapeLayersPtr = GetObject(Unreal, TEXT("landscape_layers")))
-	{
-		TArray<FString> LayerNames;
-		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*LandscapeLayersPtr)->Values)
-		{
-			LayerNames.Add(Pair.Key);
-		}
-		LayerNames.Sort();
-
-		for (const FString& LayerName : LayerNames)
-		{
-			const TSharedPtr<FJsonObject>* EntryPtr = GetObject(*LandscapeLayersPtr, *LayerName);
-			if (EntryPtr == nullptr)
-			{
-				continue; // not an object; the schema says it must be, so there is nothing to read
-			}
-			const TSharedPtr<FJsonObject> Entry = *EntryPtr;
-
-			FMantlePlaceLandscapeLayer Layer;
-			Layer.Name = LayerName;
-			Layer.Path = GetString(Entry, TEXT("path"));
-			Layer.Sha256 = GetString(Entry, TEXT("sha256"));
-			Layer.Materials = GetStrings(Entry, TEXT("materials"));
-
-			const TArray<TSharedPtr<FJsonValue>>* UeReady = nullptr;
-			if (Entry->TryGetArrayField(TEXT("ue_ready"), UeReady) && UeReady != nullptr)
-			{
-				for (const TSharedPtr<FJsonValue>& Value : *UeReady)
-				{
-					const TSharedPtr<FJsonObject> RasterObject = Value.IsValid() ? Value->AsObject() : nullptr;
-					if (!RasterObject.IsValid())
-					{
-						continue;
-					}
-					FMantlePlaceUeReadyRaster Raster;
-					Raster.Path = GetString(RasterObject, TEXT("path"));
-					Raster.Sha256 = GetString(RasterObject, TEXT("sha256"));
-					Raster.Encoding = GetString(RasterObject, TEXT("encoding"));
-					Raster.Width = GetInt(RasterObject, TEXT("width"));
-					Raster.Height = GetInt(RasterObject, TEXT("height"));
-					Raster.SizeBytes = static_cast<int64>(GetNumber(RasterObject, TEXT("size_bytes")));
-					if (const TSharedPtr<FJsonObject>* MappingPtr = GetObject(RasterObject, TEXT("value_mapping")))
-					{
-						Raster.ValueMapping = ParseValueMapping(*MappingPtr);
-					}
-					Layer.UeReady.Add(MoveTemp(Raster));
-				}
-			}
-			M.LandscapeLayers.Add(MoveTemp(Layer));
-		}
-	}
-	M.bHasLandscapeLayers = M.LandscapeLayers.Num() > 0;
-
-	// --- Buildings mesh ----------------------------------------------------------------
-	// unreal.buildings_mesh is present iff the ETL emitted Mesh/Buildings.glb (extruded massing that
-	// shares the terrain's Local Projected Frame). It carries the path + up_axis but no hash; the
-	// integrity hash lives in the top-level `buildings.formats[]` entry (matched by path below).
-	if (const TSharedPtr<FJsonObject>* BuildingsMeshPtr = GetObject(Unreal, TEXT("buildings_mesh")))
-	{
-		const TSharedPtr<FJsonObject> B = *BuildingsMeshPtr;
-		M.BuildingsPath = GetString(B, TEXT("path"));
-		M.BuildingsUpAxis = GetString(B, TEXT("up_axis"));
-		M.bHasBuildings = !M.BuildingsPath.IsEmpty();
-
-		if (!CheckUpAxis(TEXT("buildings_mesh"), M.BuildingsUpAxis, OutError))
-		{
-			return M; // bValid stays false
-		}
-	}
-	if (M.bHasBuildings)
-	{
-		// Optional: an absent/empty hash makes the importer skip the buildings integrity check (as with
-		// legacy bundles), rather than fail-closing.
-		if (const TSharedPtr<FJsonObject>* BuildingsPtr = GetObject(Root, TEXT("buildings")))
-		{
-			const TArray<TSharedPtr<FJsonValue>>* Formats = nullptr;
-			if ((*BuildingsPtr)->TryGetArrayField(TEXT("formats"), Formats) && Formats != nullptr)
-			{
-				for (const TSharedPtr<FJsonValue>& Entry : *Formats)
-				{
-					const TSharedPtr<FJsonObject> Obj = Entry->AsObject();
-					if (Obj.IsValid() && GetString(Obj, TEXT("path")) == M.BuildingsPath)
-					{
-						M.BuildingsSha256 = GetString(Obj, TEXT("sha256"));
-						break;
-					}
-				}
-			}
-		}
-	}
-
-	// Consistency: the recommended-size formula must reproduce the stated resolution.
-	if (M.bHasHeightmap)
-	{
-		const int32 Derived = M.ComponentCountX * M.GetQuadsPerComponent() + 1;
-		if (Derived != M.Resolution)
-		{
-			OutError = FString::Printf(
-				TEXT("Heightmap resolution %d != component_count_x(%d)*quads_per_component(%d)+1 = %d."),
-				M.Resolution, M.ComponentCountX, M.GetQuadsPerComponent(), Derived);
-			return M;
-		}
-	}
-
-	// The drape's alignment descriptor against the two rectangles the manifest publishes for
-	// itself. Nothing is re-derived here: both rectangles are published values, and this only asks
-	// whether the bundle's own claim about them is true. A "matches" claim they refute is refused,
-	// because that bundle imports looking correct and is silently mis-draped.
-	{
-		const FMantlePlaceDrapeAlignment Alignment =
-			FMantlePlaceDrapeAlignmentLogic::Classify(M.DrapeAlignment);
-		if (!FMantlePlaceDrapeAlignmentLogic::CheckAgainstExtents(M, Alignment, OutError))
-		{
-			return M; // bValid stays false
-		}
-	}
-
-	M.bValid = M.bHasHeightmap || M.bHasMesh;
+	M.bValid = M.Heightmap.bPresent || M.Mesh.bPresent;
 	if (!M.bValid)
 	{
 		// An empty-but-present `unreal` block on a base_on_demand bundle means the same thing as an

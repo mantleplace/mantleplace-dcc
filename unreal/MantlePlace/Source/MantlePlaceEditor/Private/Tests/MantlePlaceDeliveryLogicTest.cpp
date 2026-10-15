@@ -177,7 +177,7 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("parse: linear unit verbatim"), Imperial.Delivery.LinearUnit, FString(TEXT("ftUS")));
 		TestTrue(TEXT("parse: has a CRS"), Imperial.Delivery.bHasHorizontalEpsg);
 		TestEqual(TEXT("parse: the CRS"), Imperial.Delivery.HorizontalEpsg, 6543);
-		TestEqual(TEXT("parse: the georeference is still this block's own"), Imperial.Epsg, 32613);
+		TestEqual(TEXT("parse: the georeference is still this block's own"), Imperial.Georef.Epsg, 32613);
 		TestEqual(TEXT("parse: no label before 1.3.0"), Imperial.Delivery.Label, FString());
 
 		const FMantlePlaceVaultManifest Labelled = ParseReferenceWith(*this,

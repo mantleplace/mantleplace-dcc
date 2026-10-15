@@ -164,8 +164,8 @@ namespace MantlePlaceLandscapeImporter
 			return nullptr;
 		}
 
-		const int32 SizeX = Manifest.Resolution;
-		const int32 SizeY = Manifest.Resolution;
+		const int32 SizeX = Manifest.Heightmap.Resolution;
+		const int32 SizeY = Manifest.Heightmap.Resolution;
 
 		// Every phase below is FScopedCurrentPhase rather than FScopedPhase, for the reason that form
 		// exists: this is a different translation unit from the one that owns the import's timeline,
@@ -204,7 +204,7 @@ namespace MantlePlaceLandscapeImporter
 				for (int32 X = 0; X < SizeX; ++X)
 				{
 					// Landscape X=0 is the south edge; PNG row 0 is the north edge when the bundle says so.
-					const int32 SrcRow = Manifest.bRow0IsNorth ? (SrcHeight - 1 - X) : X;
+					const int32 SrcRow = Manifest.Heightmap.bRow0IsNorth ? (SrcHeight - 1 - X) : X;
 					HeightData[X + static_cast<int64>(Y) * SizeX] =
 						Samples[static_cast<int64>(SrcRow) * SrcWidth + Y];
 				}
@@ -296,7 +296,7 @@ namespace MantlePlaceLandscapeImporter
 			Landscape->Import(
 				FGuid::NewGuid(),
 				0, 0, SizeX - 1, SizeY - 1,
-				Manifest.SectionsPerComponent, Manifest.SectionSizeQuads,
+				Manifest.Heightmap.SectionsPerComponent, Manifest.Heightmap.SectionSizeQuads,
 				HeightDataPerLayers, *HeightmapFile,
 				MaterialLayerDataPerLayers, ELandscapeImportAlphamapType::Additive,
 				TArrayView<const FLandscapeLayer>());

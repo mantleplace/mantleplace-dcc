@@ -130,7 +130,7 @@ bool FMantlePlaceDrapeAlignmentLogic::CheckAgainstExtents(
 	{
 		return true; // only a "matches" claim is a claim about these two rectangles
 	}
-	if (!Manifest.bHasDrape || !Manifest.bHasHeightmap)
+	if (!Manifest.Drape.bPresent || !Manifest.Heightmap.bPresent)
 	{
 		return true; // nothing to compare it against
 	}

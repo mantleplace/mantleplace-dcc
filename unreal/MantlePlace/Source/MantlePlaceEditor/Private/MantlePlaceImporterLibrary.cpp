@@ -2,28 +2,19 @@
 
 #include "MantlePlaceImporterLibrary.h"
 
-#include "MantlePlaceCoverageRasterLogic.h"
+#include "MantlePlaceArtifactHandler.h"
 #include "MantlePlaceCesiumAvailabilityLogic.h"
-#include "MantlePlaceCoverageRasters.h"
 #include "MantlePlaceDeliveryLogic.h"
-#include "MantlePlaceDrape.h"
-#include "MantlePlaceDrapeAlignmentLogic.h"
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceEditorSettings.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportProvenance.h"
+#include "MantlePlaceImportOrchestration.h"
 #include "MantlePlaceImportTiming.h"
-#include "MantlePlaceIntegrityLogic.h"
-#include "MantlePlaceLandscapeImporter.h"
-#include "MantlePlaceLandscapeWeightsLogic.h"
 #include "MantlePlaceLocalTileServer.h"
-#include "MantlePlaceMeshImporter.h"
-#include "MantlePlaceRoadSplinesLogic.h"
 #include "MantlePlaceScopedRestore.h"
 #include "MantlePlaceStreamStaging.h"
 #include "MantlePlaceSha256.h"
-#include "MantlePlaceTreePointsLogic.h"
-#include "MantlePlaceLandcoverTypes.h" // runtime: FMantlePlaceTreePointRow
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Components/SplineComponent.h"
@@ -57,118 +48,8 @@
 
 #define LOCTEXT_NAMESPACE "MantlePlaceImporter"
 
-DEFINE_LOG_CATEGORY_STATIC(LogMantlePlaceImport, Log, All);
-
 namespace
 {
-	/** Read one entry out of the open zip and write it under TempDir; returns the on-disk path. */
-	bool ExtractEntry(
-		const FZipArchiveReader& Reader,
-		const FString& InZipPath,
-		const FString& TempDir,
-		FString& OutDiskPath,
-		FString& OutError)
-	{
-		TArray<uint8> Bytes;
-		if (!Reader.TryReadFile(InZipPath, Bytes))
-		{
-			OutError = FString::Printf(TEXT("Bundle is missing expected entry: %s"), *InZipPath);
-			return false;
-		}
-
-		OutDiskPath = TempDir / FPaths::GetCleanFilename(InZipPath);
-		if (!FFileHelper::SaveArrayToFile(Bytes, *OutDiskPath))
-		{
-			OutError = FString::Printf(TEXT("Could not write temp file: %s"), *OutDiskPath);
-			return false;
-		}
-		return true;
-	}
-
-	/**
-	 * The integrity pre-check's cost, split into the two halves that have different remedies: getting
-	 * a payload's bytes out of the zip, and hashing them. Both are totals over the declared chain, so
-	 * neither has a scope to put an ordinary guard on.
-	 *
-	 * One type rather than two accumulators passed side by side, because they are never apart: they
-	 * are created together, handed down together, and — the part that made this worth a type —
-	 * RECORDED together, in the order they ran, on every path out of the loop. That last one was two
-	 * pairs of lines at two call sites before it was a method, which is one copy away from a failed
-	 * import printing its rows in a different order from a successful one.
-	 *
-	 * ⛔ Read `Read` as read-and-inflate. `TryReadFile` is a disk read AND a zlib inflate, so it is
-	 * not "the I/O half" and a large number there could be either.
-	 */
-	struct FIntegrityTiming
-	{
-		explicit FIntegrityTiming(MantlePlaceImportTiming::FTimeline& Timeline)
-			: Read(Timeline, MantlePlaceImportTiming::Phase::IntegrityEntryRead)
-			, Digest(Timeline, MantlePlaceImportTiming::Phase::IntegrityDigest)
-		{
-		}
-
-		/**
-		 * Both rows, in the order they ran.
-		 *
-		 * Called rather than left to the destructors, which fire in reverse declaration order and
-		 * would print the hashing row above the reading row that fed it. Idempotent underneath, so
-		 * the destructors add nothing after this.
-		 */
-		void Record()
-		{
-			Read.Record();
-			Digest.Record();
-		}
-
-		MantlePlaceImportTiming::FAccumulatedPhase Read;
-		MantlePlaceImportTiming::FAccumulatedPhase Digest;
-	};
-
-	/**
-	 * Fail-closed integrity check: hash one zip entry's bytes and compare to the manifest's declared
-	 * sha256. Returns true (skip) when ExpectedHex is empty (legacy bundle that predates the hash); on a
-	 * read failure or a mismatch it fills OutError and returns false so the caller can abort the import.
-	 *
-	 * `Timing` is taken as a parameter rather than reached for through the running import because the
-	 * caller's loop is what makes these totals: this function measures one payload's two spans and
-	 * adds them, and owning no row of its own is what stops the row count becoming a property of the
-	 * bundle.
-	 */
-	bool VerifyEntrySha256(
-		const FZipArchiveReader& Reader,
-		const FString& InZipPath,
-		const FString& ExpectedHex,
-		FIntegrityTiming& Timing,
-		FString& OutError)
-	{
-		if (ExpectedHex.IsEmpty())
-		{
-			return true; // nothing declared to verify against
-		}
-		TArray<uint8> Bytes;
-		{
-			const MantlePlaceImportTiming::FAccumulatedPhase::FSpan ReadSpan(Timing.Read);
-			if (!Reader.TryReadFile(InZipPath, Bytes))
-			{
-				OutError = FString::Printf(TEXT("Integrity check could not read entry: %s"), *InZipPath);
-				return false;
-			}
-		}
-		FString Actual;
-		{
-			const MantlePlaceImportTiming::FAccumulatedPhase::FSpan DigestSpan(Timing.Digest);
-			Actual = MantlePlaceSha256::HexDigest(Bytes);
-		}
-		if (!Actual.Equals(ExpectedHex, ESearchCase::IgnoreCase))
-		{
-			OutError = FString::Printf(
-				TEXT("Integrity check failed for %s: manifest sha256 %s != computed %s."),
-				*InZipPath, *ExpectedHex, *Actual);
-			return false;
-		}
-		return true;
-	}
-
 	/**
 	 * Extract every zip entry the staging record selects into `TempDir`, preserving the in-zip subpath
 	 * (CesiumTerrain/14/5615/11520.terrain -> TempDir/CesiumTerrain/14/5615/11520.terrain). Which
@@ -381,28 +262,16 @@ namespace
 	};
 }
 
-namespace
-{
-	/**
-	 * Label an actor, mark it as this import's, and file it in the outliner. One function, called
-	 * for every actor an import creates, so a new actor type cannot be added and forget one of the
-	 * three -- and in particular cannot forget the tag, which is what re-import matches on.
-	 */
-	void ClaimImportedActor(AActor* Actor, const FString& Identity, const FString& Label)
-	{
-		if (Actor == nullptr)
-		{
-			return;
-		}
-		Actor->SetActorLabel(Label);
-		Actor->Tags.AddUnique(FName(*MantlePlaceImportNaming::ImportTag(Identity)));
-		Actor->SetFolderPath(FName(*MantlePlaceImportNaming::OutlinerFolder(Identity)));
-	}
-}
-
 FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	const FString& ZipPath,
 	EMantlePlaceImportMode Mode)
+{
+	return ImportVaultPackageWithSelection(ZipPath, FMantlePlaceImportSelection::FromMode(Mode));
+}
+
+FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSelection(
+	const FString& ZipPath,
+	const FMantlePlaceImportSelection& Selection)
 {
 	FMantlePlaceImportResult Result;
 	TArray<FString> Log;
@@ -509,62 +378,13 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 
 	ZipPhase.Reset();
 
-	// --- Fail-closed integrity check: the downloaded bytes must match the manifest's declared sha256
-	// before anything is imported. A corrupt/truncated/tampered download aborts here, creating nothing.
-	// WHICH payloads are in the chain is decided in the pure logic unit and walked here, rather than
-	// being a boolean expression written out at this call site. That expression is how the tree-points
-	// CSV came to be the one artifact imported unverified while the manifest had been publishing a
-	// digest for it: a payload left out of a hand-written chain is invisible, and nothing fails.
+	// --- Verify all: the downloaded bytes must match the manifest's declared sha256 before anything
+	// is imported. A corrupt/truncated/tampered download aborts here, creating nothing.
+	FString IntegrityError;
+	if (!MantlePlaceImportOrchestration::VerifyAll(Manifest, Reader, Timeline, IntegrityError))
 	{
-		const MantlePlaceImportTiming::FScopedPhase IntegrityPhase(
-			Timeline, MantlePlaceImportTiming::Phase::IntegrityPrecheck);
-
-		// The pre-check's two halves, summed across every payload rather than recorded per payload:
-		// the row count would otherwise depend on the bundle, and nothing could ask "how long was
-		// spent hashing" without knowing to add them up. Declared here, inside the phase that
-		// encloses them, so the rows land nested under it rather than beside it.
-		FIntegrityTiming IntegrityTiming(Timeline);
-
-		const TArray<FMantlePlaceDeclaredArtifact> Declared =
-			FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(Manifest);
-		int32 VerifiedCount = 0;
-		int32 UnverifiableCount = 0;
-		for (const FMantlePlaceDeclaredArtifact& Artifact : Declared)
-		{
-			FString IntegrityError;
-			if (!VerifyEntrySha256(Reader, Artifact.Path, Artifact.Sha256, IntegrityTiming, IntegrityError))
-			{
-				// Recorded on this path too, so a failed pre-check's two rows come out in the same
-				// order as a successful one's. A timeline you cannot line up against another
-				// timeline is the one thing this file exists to prevent.
-				IntegrityTiming.Record();
-				Result.Message = FString::Printf(TEXT("Integrity check failed: %s"), *IntegrityError);
-				return Result;
-			}
-			// A payload the manifest published no digest for is skipped, not passed: "valid but
-			// unverified" is a third state, and collapsing it into "verified" is a lie the log then
-			// tells the user (spec/format.md section 5).
-			if (Artifact.IsVerifiable())
-			{
-				++VerifiedCount;
-			}
-			else
-			{
-				++UnverifiableCount;
-			}
-		}
-
-		IntegrityTiming.Record();
-
-		// The verification gate is a product claim ("verified before anything is written"), so its
-		// PASSING is narrated, not only its failure — log followers should see the gate clear before
-		// the first actor spawns. It counts both states, because a bundle whose payloads are half
-		// unverifiable is a fact about that bundle, not about this check.
-		UE_LOG(LogMantlePlaceImport, Log,
-			TEXT("Integrity verified: %d of %d declared payload(s) matched their manifest sha256, "
-				 "%d carried no digest and are valid but unverified (jobId %s)."),
-			VerifiedCount, Declared.Num(), UnverifiableCount,
-			*MantlePlaceImportNaming::ShortIdentity(Manifest.JobId));
+		Result.Message = FString::Printf(TEXT("Integrity check failed: %s"), *IntegrityError);
+		return Result;
 	}
 
 	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
@@ -597,41 +417,24 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	Result.Identity = Identity;
 	Result.ContentPath = DestPackagePath;
 
+	// Decide up-front whether anything requested can be produced. If NOTHING can be (e.g. a Mesh
+	// import of a Cesium-terrain-only v8 bundle that ships no Terrain.glb), bail BEFORE the destructive
+	// idempotent wipe below — otherwise we would force-delete a prior import's still-referenced
+	// drape assets (greying out an already-imported Landscape) only to produce nothing.
+	const MantlePlaceArtifacts::FHandlers Handlers = MantlePlaceArtifacts::MakeAll();
+	const FString NothingToImport =
+		MantlePlaceImportOrchestration::ExplainNothingToImport(Handlers, Manifest, Selection);
+	if (!NothingToImport.IsEmpty())
+	{
+		Result.Message = NothingToImport;
+		return Result;
+	}
+
 	// Keyed on the identity rather than the raw job id, which is an unvalidated string out of
 	// bundle JSON being used as a directory name.
 	const FString TempDir = FPaths::ProjectSavedDir() / TEXT("MantlePlace") / TEXT("ImportTmp")
 		/ MantlePlaceImportNaming::ShortIdentity(Identity);
 	PlatformFile.CreateDirectoryTree(*TempDir);
-
-	// Decide up-front what each requested representation needs. If NOTHING requested can be produced
-	// (e.g. a Mesh import of a Cesium-terrain-only v8 bundle that ships no Terrain.glb), bail BEFORE the
-	// destructive idempotent wipe below — otherwise we would force-delete a prior import's still-
-	// referenced drape assets (greying out an already-imported Landscape) only to produce nothing.
-	const bool bWantLandscape = (Mode == EMantlePlaceImportMode::Landscape || Mode == EMantlePlaceImportMode::Both);
-	const bool bWantMesh = (Mode == EMantlePlaceImportMode::Mesh || Mode == EMantlePlaceImportMode::Both);
-	const bool bCanLandscape = bWantLandscape && Manifest.bHasHeightmap;
-	const bool bCanMesh = bWantMesh && Manifest.bHasMesh;
-	if (!bCanLandscape && !bCanMesh)
-	{
-		TArray<FString> Reasons;
-		if (bWantMesh && !Manifest.bHasMesh)
-		{
-			Reasons.Add(Manifest.MeshAbsentReason.IsEmpty()
-				? TEXT("this bundle has no static mesh (Terrain.glb)")
-				: FString::Printf(
-					TEXT("this bundle has no static mesh (pipeline: %s) — the ETL did not generate a mesh for this AOI"),
-					*Manifest.MeshAbsentReason));
-		}
-		if (bWantLandscape && !Manifest.bHasHeightmap)
-		{
-			Reasons.Add(TEXT("this bundle has no heightmap"));
-		}
-		Result.Message = FString::Printf(
-			TEXT("Nothing to import: %s. (Existing assets left untouched.) This bundle ships Cesium "
-				 "quantized-mesh terrain — use a Landscape import or \"Stream into Cesium\" instead."),
-			*FString::Join(Reasons, TEXT("; ")));
-		return Result;
-	}
 
 	// Nothing this import creates should steal the viewport. See FScopedNoContentBrowserSync.
 	const FScopedNoContentBrowserSync NoBrowserSync;
@@ -641,59 +444,32 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// connected SCC provider with checkouts of files that aren't under source control.
 	//
 	// The override is EDITOR-WIDE and outlives this function, so restoring it is not optional and is
-	// not this function's to forget. It used to be a Set here and a Reset before each return, which
-	// is correct only for the exit paths that existed when it was written -- everything below this
-	// line returns from several places, and the next one added would have leaked the override into
-	// the rest of the session with nothing to notice it. The guard makes "restored on every exit
-	// path" a property of the scope instead of a thing to remember; see FMantlePlaceScopedRestore
-	// and MantlePlace.Import.ScopedRestore.
+	// not this function's to forget. The guard makes "restored on every exit path" a property of the
+	// scope instead of a thing to remember; see FMantlePlaceScopedRestore and
+	// MantlePlace.Import.ScopedRestore.
 	UEditorLoadingSavingSettings* LoadSaveSettings = GetMutableDefault<UEditorLoadingSavingSettings>();
 	LoadSaveSettings->SetAutomaticallyCheckoutOnAssetModificationOverride(false);
 	const FMantlePlaceScopedRestore RestoreAutoCheckout(
 		[LoadSaveSettings] { LoadSaveSettings->ResetAutomaticallyCheckoutOnAssetModificationOverride(); });
 
-	// Idempotent re-import: wipe any prior content for THIS order so reimported assets land on
-	// clean names (Interchange re-creates source-named assets that the importer then renames).
-	//
-	// Guarded, because the folder is named by the TRUNCATED identity and the delete is a force-
-	// delete. Two identities sharing eight characters name the same folder, and without the
-	// provenance record this would silently destroy a different order's imported content. The
-	// record is read from outside the content tree on purpose — reading an asset inside a folder
-	// we are about to force-delete is the hazard described at the delete itself.
-	if (UEditorAssetSubsystem* AssetSubsystem = GEditor->GetEditorSubsystem<UEditorAssetSubsystem>())
+	// --- Wipe, assets: a prior import of THIS order goes, a different order's content is refused. ---
+	const FString Refusal = MantlePlaceImportOrchestration::WipePriorAssets(Identity, DestPackagePath, Timeline);
+	if (!Refusal.IsEmpty())
 	{
-		const bool bFolderExists = AssetSubsystem->DoesDirectoryExist(DestPackagePath);
-		MantlePlaceImportProvenance::FRecord Prior;
-		const bool bHasRecord = MantlePlaceImportProvenance::Read(Identity, Prior);
-		const MantlePlaceImportProvenance::EVerdict Verdict =
-			MantlePlaceImportProvenance::Classify(bFolderExists, bHasRecord, Prior, Identity);
-
-		const FString Refusal =
-			MantlePlaceImportProvenance::ExplainRefusal(Verdict, Prior, DestPackagePath);
-		if (!Refusal.IsEmpty())
-		{
-			// Before the transaction opens and before anything is created, so a refusal changes
-			// nothing at all -- including the auto-checkout override, which RestoreAutoCheckout
-			// puts back on the way out of this return.
-			Result.Message = Refusal;
-			return Result;
-		}
-
-		if (Verdict == MantlePlaceImportProvenance::EVerdict::SameIdentity)
-		{
-			// Clear the editor selection first: DeleteDirectory force-deletes, and force-deleting a
-			// selected/referenced asset drives UpdatePivotLocationForSelection over a now-stale typed-
-			// element selection, tripping the "Element type ID 0 not registered" ensure. An empty
-			// selection makes that path a no-op.
-			GEditor->SelectNone(/*bNoteSelectionChange*/ false, /*bDeselectBSPSurfs*/ true, /*bWarnAboutManyActors*/ false);
-			const MantlePlaceImportTiming::FScopedPhase WipePhase(
-				Timeline, MantlePlaceImportTiming::Phase::Wipe, TEXT("assets"));
-			AssetSubsystem->DeleteDirectory(DestPackagePath);
-		}
+		// Before the transaction opens and before anything is created, so a refusal changes
+		// nothing at all -- including the auto-checkout override, which RestoreAutoCheckout
+		// puts back on the way out of this return.
+		Result.Message = Refusal;
+		return Result;
 	}
 
-	// glTF asset imports run BEFORE the transaction opens, and everything below this line is either
-	// an actor operation or an asset creation that deletes nothing.
+	FMantlePlaceImportContext Context(World, Manifest, &Reader, Selection, Timeline, Result, Log);
+	Context.Identity = Identity;
+	Context.TempDir = TempDir;
+	Context.DestPackagePath = DestPackagePath;
+
+	// glTF asset imports run BEFORE the transaction opens, and everything after it is either an
+	// actor operation or an asset creation that deletes nothing.
 	//
 	// A .glb brings embedded textures and materials with it, named after the source (Terrain_texture_0),
 	// and naming those to the project standard means a rename. Renaming a freshly-imported asset
@@ -702,33 +478,9 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// (see MantlePlaceImportNaming::ImportNameFor). Measured 2026-08-30 on a Both-mode import:
 	// Terrain.glb's texture rename purged the buffer and Ctrl+Z then moved nothing at all.
 	//
-	// The one thing that must still precede this is the idempotent wipe above: it force-deletes a
-	// prior import's assets, and doing it AFTER would delete what we just imported.
-	UStaticMesh* TerrainMesh = nullptr;
-	FString TerrainMeshError, TerrainMeshDisk;
-	if (bWantMesh && Manifest.bHasMesh)
-	{
-		const MantlePlaceImportTiming::FScopedPhase MeshPhase(
-			Timeline, MantlePlaceImportTiming::Phase::Artifact, TEXT("terrain mesh (glTF, Nanite)"));
-		if (ExtractEntry(Reader, Manifest.MeshPath, TempDir, TerrainMeshDisk, TerrainMeshError))
-		{
-			TerrainMesh = MantlePlaceMeshImporter::ImportMeshAsset(
-				Manifest, TerrainMeshDisk, DestPackagePath, /*bEnableNanite*/ true, TerrainMeshError);
-		}
-	}
-
-	UStaticMesh* BuildingsMesh = nullptr;
-	FString BuildingsMeshError, BuildingsMeshDisk;
-	if (Manifest.bHasBuildings)
-	{
-		const MantlePlaceImportTiming::FScopedPhase BuildingsPhase(
-			Timeline, MantlePlaceImportTiming::Phase::Artifact, TEXT("buildings mesh (glTF)"));
-		if (ExtractEntry(Reader, Manifest.BuildingsPath, TempDir, BuildingsMeshDisk, BuildingsMeshError))
-		{
-			BuildingsMesh = MantlePlaceMeshImporter::ImportMeshAsset(
-				Manifest, BuildingsMeshDisk, DestPackagePath, /*bEnableNanite*/ false, BuildingsMeshError);
-		}
-	}
+	// The one thing that must still precede this is the asset wipe above: it force-deletes a prior
+	// import's assets, and doing it AFTER would delete what we just imported.
+	MantlePlaceImportOrchestration::RunPrepare(Handlers, Context);
 
 	FScopedTransaction Transaction(LOCTEXT("ImportVaultPackage", "Import Mantle Place Vault Package"));
 
@@ -738,542 +490,25 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	// nothing.
 	//
 	// It is an ENCLOSING phase, and the summary prints it as one: it is a function-scope local, so
-	// it spans every artifact imported below rather than the gap before the commit. It was named
-	// "transaction close" for exactly as long as it took to read one off a runner, where its rows
-	// summed to 144%. The commit itself is still unmeasured — sizing it needs a guard inside
-	// FScopedTransaction, which is engine code — so the row is named for the span it does cover.
+	// it spans every artifact imported below rather than the gap before the commit. The commit
+	// itself is still unmeasured — sizing it needs a guard inside FScopedTransaction, which is
+	// engine code — so the row is named for the span it does cover.
 	const MantlePlaceImportTiming::FScopedPhase TransactionPhase(
 		Timeline, MantlePlaceImportTiming::Phase::InsideTransaction);
 
-	TArray<AActor*> DrapeTargets;
-	bool bAllRequestedSucceeded = true;
-
-	// Idempotent re-import (actors): remove the actors a PRIOR import of this same ORDER spawned,
-	// so re-importing replaces them instead of stacking duplicate (coincident) actors.
-	//
-	// Matched on the import TAG rather than the label. A label is a thing a user edits: renaming an
-	// actor in the outliner used to break that user's own next re-import, silently, and then stack a
-	// second landscape on top of the first. A tag is not surfaced for editing, carries the FULL
-	// identity rather than its truncation, and survives the actor being dragged elsewhere.
-	//
-	// Its absence is also the legacy signal: an actor from 0.3.0 or earlier has an MP_* label and no
-	// tag, so it is not matched here — and the content guard above has already refused the import
-	// rather than leaving those actors orphaned beside new ones.
+	// --- Wipe, actors: re-importing replaces them instead of stacking duplicate (coincident) actors. ---
+	const int32 Replaced = MantlePlaceImportOrchestration::ReplacePriorActors(World, Identity, Timeline);
+	if (Replaced > 0)
 	{
-		const MantlePlaceImportTiming::FScopedPhase WipeActorsPhase(
-			Timeline, MantlePlaceImportTiming::Phase::Wipe, TEXT("actors"));
-		const FName ImportTagName(*MantlePlaceImportNaming::ImportTag(Identity));
-		TArray<AActor*> StaleActors;
-		for (TActorIterator<AActor> It(World); It; ++It)
-		{
-			if (It->Tags.Contains(ImportTagName))
-			{
-				StaleActors.Add(*It);
-			}
-		}
-		for (AActor* Stale : StaleActors)
-		{
-			World->EditorDestroyActor(Stale, /*bShouldModifyLevel*/ true);
-		}
-		if (StaleActors.Num() > 0)
-		{
-			Log.Add(FString::Printf(
-				TEXT("Replaced %d actor(s) from a prior import of this bundle."), StaleActors.Num()));
-		}
+		Log.Add(FString::Printf(TEXT("Replaced %d actor(s) from a prior import of this bundle."), Replaced));
 	}
 
-	// Build the drape material up front: it depends only on the manifest + imagery texture, not the
-	// geometry, so the Landscape can be created with it already assigned (a landscape only adopts its
-	// material cleanly when it is set before ALandscape::Import builds the components). Non-fatal.
-	UMaterialInstanceConstant* DrapeMic = nullptr;
-	if (Manifest.bHasDrape)
-	{
-		const MantlePlaceImportTiming::FScopedPhase DrapePhase(
-			Timeline, MantlePlaceImportTiming::Phase::Artifact, TEXT("drape texture + material"));
-		FString Err, ImageryDisk;
-		if (ExtractEntry(Reader, Manifest.DrapePath, TempDir, ImageryDisk, Err))
-		{
-			if (UTexture2D* Texture = MantlePlaceDrape::ImportTexture(ImageryDisk, DestPackagePath, Err))
-			{
-				DrapeMic = MantlePlaceDrape::CreateDrapeMaterial(Manifest, Texture, DestPackagePath, Err);
-			}
-		}
-		if (DrapeMic == nullptr)
-		{
-			// Geometry still imports; it just won't get the auto-assigned imagery.
-			Log.Add(Err);
-		}
-	}
+	// --- Import: every included artifact, in registry order; then the report that needs them all. ---
+	MantlePlaceImportOrchestration::RunImport(Handlers, Context);
+	MantlePlaceImportOrchestration::RunFinalize(Handlers, Context);
 
-	// --- Landscape ---
-	if (bWantLandscape)
-	{
-		if (!Manifest.bHasHeightmap)
-		{
-			Log.Add(TEXT("Landscape requested but the bundle has no heightmap."));
-			bAllRequestedSucceeded = false;
-		}
-		else
-		{
-			// Material-weight layers, if the bundle published them. Non-fatal: a landscape with the
-			// drape and no weight layers is what every bundle produced before this, so a decode
-			// failure degrades to that rather than failing the import.
-			TArray<FMantlePlaceWeightPlane> WeightPlanes;
-			FIntPoint WeightRasterSize(0, 0); // what the planes were resampled FROM, for the log
-			if (const FMantlePlaceLandscapeLayer* Weights = Manifest.FindLandscapeLayer(TEXT("material_weights")))
-			{
-				FString WeightsErr;
-				TArray<FMantlePlaceRgbaImage> Images;
-				bool bDecoded = true;
-				for (const FMantlePlaceUeReadyRaster& Raster : Weights->UeReady)
-				{
-					WeightRasterSize = FIntPoint(Raster.Width, Raster.Height);
-					FString RasterDisk;
-					FMantlePlaceRgbaImage Image;
-					if (!ExtractEntry(Reader, Raster.Path, TempDir, RasterDisk, WeightsErr)
-						|| !MantlePlaceLandscapeImporter::DecodeRgbaPng(RasterDisk, Raster.Path, Image, WeightsErr))
-					{
-						bDecoded = false;
-						break;
-					}
-					Images.Add(MoveTemp(Image));
-				}
-				if (bDecoded)
-				{
-					// ⛔ Hotspot: nearest-neighbour resampling of every weight plane. Measured on
-					// its own rather than inside the landscape phase, because the point of the
-					// baseline is to size this against the shader stall it shares a phase with.
-					const MantlePlaceImportTiming::FScopedPhase ResamplePhase(
-						Timeline, MantlePlaceImportTiming::Phase::WeightResample,
-						FString::Printf(TEXT("%d plane(s)"), Images.Num()));
-					bDecoded = FMantlePlaceLandscapeWeightsLogic::BuildWeightPlanes(
-						*Weights, Images, Manifest.Resolution, Manifest.bRow0IsNorth, WeightPlanes, WeightsErr);
-				}
-				if (!bDecoded)
-				{
-					WeightPlanes.Reset();
-					Log.Add(FString::Printf(TEXT("Landscape material layers skipped: %s"), *WeightsErr));
-				}
-			}
-
-			const MantlePlaceImportTiming::FScopedPhase LandscapePhase(
-				Timeline, MantlePlaceImportTiming::Phase::Artifact,
-				FString::Printf(TEXT("landscape %dx%d"), Manifest.Resolution, Manifest.Resolution));
-			FString Err, HeightmapDisk;
-
-			// Inside the landscape phase and measured on its own: laying the heightmap on disk is
-			// an inflate plus a write of the same bytes the decode below then reads back, and it is
-			// the one step of the landscape artifact that happens before control leaves this file.
-			bool bHeightmapOnDisk = false;
-			{
-				const MantlePlaceImportTiming::FScopedPhase HeightmapExtractPhase(
-					Timeline, MantlePlaceImportTiming::Phase::LandscapeHeightmapExtract);
-				bHeightmapOnDisk = ExtractEntry(Reader, Manifest.HeightmapPath, TempDir, HeightmapDisk, Err);
-			}
-
-			if (bHeightmapOnDisk)
-			{
-				if (ALandscape* Landscape = MantlePlaceLandscapeImporter::Import(
-						World, Manifest, HeightmapDisk, DrapeMic, WeightPlanes, DestPackagePath, Err))
-				{
-					ClaimImportedActor(Landscape, Identity, MantlePlaceImportNaming::ActorLabel(
-						MantlePlaceImportNaming::EActorKind::Landscape, Identity));
-					DrapeTargets.Add(Landscape);
-					Result.CreatedActors.Add(Landscape->GetActorLabel());
-					Log.Add(FString::Printf(TEXT("Landscape created (%dx%d)."), Manifest.Resolution, Manifest.Resolution));
-					if (WeightPlanes.Num() > 0)
-					{
-						// The weight rasters are on the DEM's grid, not the Landscape's, so say what
-						// was resampled onto what rather than letting the numbers look identical.
-						Log.Add(FString::Printf(
-							TEXT("Painted %d material weight layer(s), resampled from %dx%d onto the %dx%d grid."),
-							WeightPlanes.Num(), WeightRasterSize.X, WeightRasterSize.Y,
-							Manifest.Resolution, Manifest.Resolution));
-					}
-				}
-				else
-				{
-					Log.Add(FString::Printf(TEXT("Landscape failed: %s"), *Err));
-					bAllRequestedSucceeded = false;
-				}
-			}
-			else
-			{
-				Log.Add(Err);
-				bAllRequestedSucceeded = false;
-			}
-		}
-	}
-
-	// --- Coverage rasters ---
-	// The `unreal.landscape_layers` sub-blocks other than material_weights: water_mask, worldcover,
-	// hillshade, ndvi, slope, aspect, canopy_height. Each becomes a UTexture2D carrying its decoded
-	// value_mapping and provenance, so a material or PCG graph can read real metres and degrees
-	// rather than a 0-65535 ramp. Nothing in this plugin samples them — what they LOOK like is
-	// product design, and the contract's obligation is that they are reachable with meaning.
-	//
-	// Independent of Mode: they describe the ground rather than being a terrain representation, so
-	// like the buildings and road splines they import whenever the bundle ships them. Per-raster
-	// warn-and-skip, deliberately unlike the fail-closed weights path — a missing analysis channel
-	// costs a texture, not a wrong Landscape. (Their bytes are still fail-closed: a sha256 mismatch
-	// aborted in the integrity pre-check above, before any actor.)
-	{
-		int32 RastersImported = 0;
-		TArray<FString> SkippedLayers;
-		for (const FMantlePlaceLandscapeLayer& Layer : Manifest.LandscapeLayers)
-		{
-			if (!FMantlePlaceCoverageRasterLogic::IsCoverageRaster(Layer.Name))
-			{
-				continue;
-			}
-			for (const FMantlePlaceUeReadyRaster& Raster : Layer.UeReady)
-			{
-				FString Err, RasterDisk;
-				UTexture2D* Texture = nullptr;
-				if (ExtractEntry(Reader, Raster.Path, TempDir, RasterDisk, Err))
-				{
-					Texture = MantlePlaceCoverageRasters::ImportRaster(
-						Layer, Raster, RasterDisk, Manifest.JobId, DestPackagePath, Err);
-				}
-				if (Texture != nullptr)
-				{
-					++RastersImported;
-				}
-				else
-				{
-					SkippedLayers.Add(Layer.Name);
-					Log.Add(FString::Printf(TEXT("Coverage raster \"%s\" skipped: %s"), *Layer.Name, *Err));
-				}
-			}
-		}
-		if (RastersImported > 0)
-		{
-			Log.Add(FString::Printf(
-				TEXT("Imported %d coverage raster(s) as data textures with their value mappings attached."),
-				RastersImported));
-		}
-		if (SkippedLayers.Num() > 0)
-		{
-			// Name the skipped set as a set, not only one line each: a reader scanning the log for
-			// what they got needs the gap to be as visible as the success count.
-			Log.Add(FString::Printf(TEXT("Coverage rasters not imported: %s."), *FString::Join(SkippedLayers, TEXT(", "))));
-		}
-	}
-
-	// --- Mesh ---
-	if (bWantMesh)
-	{
-		if (!Manifest.bHasMesh)
-		{
-			// v8 bundles ship Cesium quantized-mesh terrain (Terrain/) instead of a glb, so the
-			// Landscape is the primary representation. In Both mode an absent mesh is informational,
-			// not a failure; only an explicit Mesh-only request treats it as a failure.
-			if (Mode == EMantlePlaceImportMode::Both)
-			{
-				Log.Add(TEXT("No static mesh in this bundle (Cesium terrain only) — imported the Landscape."));
-			}
-			else if (!Manifest.MeshAbsentReason.IsEmpty())
-			{
-				// The pipeline told us why it shipped no mesh — relay it so the failure points back
-				// at the ETL (e.g. "mesh_not_produced") rather than reading as an importer fault.
-				Log.Add(FString::Printf(
-					TEXT("Mesh requested but this bundle has no static mesh (pipeline: %s). The ETL did "
-						 "not generate a mesh for this AOI — re-export once the mesh stage is producing it."),
-					*Manifest.MeshAbsentReason));
-				bAllRequestedSucceeded = false;
-			}
-			else
-			{
-				Log.Add(TEXT("Mesh requested but the bundle has no static mesh."));
-				bAllRequestedSucceeded = false;
-			}
-		}
-		else
-		{
-			// The asset was imported above, before the transaction; this only spawns for it.
-			FString Err = TerrainMeshError;
-			AStaticMeshActor* MeshActor = TerrainMesh != nullptr
-				? MantlePlaceMeshImporter::Import(World, Manifest, TerrainMesh, Err)
-				: nullptr;
-			if (MeshActor != nullptr)
-			{
-				DrapeTargets.Add(MeshActor);
-				if (DrapeMic != nullptr && !MantlePlaceDrape::AssignMaterial(MeshActor, DrapeMic))
-				{
-					// The mesh imported and is in the level; only the imagery is missing. Said in
-					// the import log rather than only in the output log, because "the terrain is
-					// grey" is what the user actually sees and this is the sentence that explains
-					// it. AssignMaterial has already logged which of its refusals this was.
-					Log.Add(TEXT("WARNING: the imagery drape could not be assigned to the terrain "
-								 "mesh — see the output log for which engine property is missing."));
-					bAllRequestedSucceeded = false;
-				}
-				ClaimImportedActor(MeshActor, Identity, MantlePlaceImportNaming::ActorLabel(
-					MantlePlaceImportNaming::EActorKind::Mesh, Identity));
-				Result.CreatedActors.Add(MeshActor->GetActorLabel());
-				Log.Add(TEXT("Mesh (Terrain.glb) created."));
-			}
-			else
-			{
-				Log.Add(FString::Printf(TEXT("Mesh failed: %s"), *Err));
-				bAllRequestedSucceeded = false;
-			}
-		}
-	}
-
-	// --- Buildings ---
-	// Extruded building massing (ALL / "Unreal" scope). It is content, not a terrain representation, so
-	// it auto-imports whenever present regardless of Mode — alongside the Landscape and/or terrain mesh.
-	// It shares the terrain's Local Projected Frame (GetMeshLocation) so it rests on the ground, and it
-	// takes no imagery drape. A buildings failure here is non-fatal (mirrors the drape): the terrain is
-	// the primary deliverable, so we log it rather than failing the whole import. (A buildings sha256
-	// mismatch is still fail-closed — it aborts in the integrity pre-check above, before any actor.)
-	if (Manifest.bHasBuildings)
-	{
-		// The asset was imported above, before the transaction; this only spawns for it.
-		FString Err = BuildingsMeshError;
-		AStaticMeshActor* BuildingsActor = BuildingsMesh != nullptr
-			? MantlePlaceMeshImporter::ImportBuildings(World, Manifest, BuildingsMesh, Err)
-			: nullptr;
-		if (BuildingsActor != nullptr)
-		{
-			ClaimImportedActor(BuildingsActor, Identity, MantlePlaceImportNaming::ActorLabel(
-				MantlePlaceImportNaming::EActorKind::Buildings, Identity));
-			Result.CreatedActors.Add(BuildingsActor->GetActorLabel());
-			Log.Add(TEXT("Buildings (Buildings.glb) created."));
-		}
-		else
-		{
-			Log.Add(FString::Printf(TEXT("Buildings import skipped: %s"), *Err));
-		}
-	}
-
-	// --- Road splines ---
-	// Z-draped road centerlines -> one spline actor per road (Wave-2 pipeline layers). Like the
-	// buildings, this is content, not a terrain representation: it auto-imports whenever the bundle
-	// ships the layer, regardless of Mode, and a failure is non-fatal. Width/class/name land as
-	// actor tags so PCG or a road tool can consume them without re-reading the bundle.
-	if (Manifest.bHasRoadSplines)
-	{
-		TArray<uint8> GeoJsonBytes;
-		FString GeoJsonText, SplinesError;
-		TArray<FMantlePlaceRoadSpline> Splines;
-		int32 LinesSeen = 0;
-		bool bParsed = false;
-		// The layer's heights are placed only in this host's datum, the landscape's. A layer stating
-		// another is a named skip, as HPS-53 skips a file in another frame, and is never shifted
-		// (HPS-33). The skip comes after the integrity pre-check, which hashes every declared payload
-		// whether or not it is placed, so a refused layer's bytes are still verified and a bad digest
-		// still stops the import; what the skip spares is reading the file for placement.
-		FString DatumRefusal;
-		if (!FMantlePlaceRoadSplinesLogic::CanPlaceHeights(Manifest.GetRoadSplinesDatum(), DatumRefusal))
-		{
-			Log.Add(FString::Printf(TEXT("Road splines skipped: %s"), *DatumRefusal));
-		}
-		else if (!Reader.TryReadFile(Manifest.RoadSplinesPath, GeoJsonBytes))
-		{
-			Log.Add(FString::Printf(TEXT("Road splines skipped: bundle is missing %s."), *Manifest.RoadSplinesPath));
-		}
-		else
-		{
-			FFileHelper::BufferToString(GeoJsonText, GeoJsonBytes.GetData(), GeoJsonBytes.Num());
-			bParsed = FMantlePlaceRoadSplinesLogic::ParseGeoJson(
-			    GeoJsonText, Manifest.OriginEastingM, Manifest.OriginNorthingM, Manifest.Epsg, Splines, LinesSeen, SplinesError);
-			if (!bParsed)
-			{
-				Log.Add(FString::Printf(TEXT("Road splines skipped: %s"), *SplinesError));
-			}
-		}
-		if (bParsed)
-		{
-			int32 SplineIndex = 0;
-			for (const FMantlePlaceRoadSpline& Spline : Splines)
-			{
-				AActor* SplineActor = World->SpawnActor<AActor>();
-				if (SplineActor == nullptr)
-				{
-					continue;
-				}
-				USplineComponent* SplineComponent = NewObject<USplineComponent>(
-				    SplineActor, USplineComponent::StaticClass(), TEXT("RoadSpline"), RF_Transactional);
-				SplineActor->SetRootComponent(SplineComponent);
-				SplineActor->AddInstanceComponent(SplineComponent);
-				SplineComponent->RegisterComponent();
-
-				SplineComponent->ClearSplinePoints(/*bUpdateSpline*/ false);
-				for (const FVector& Point : Spline.PointsUeCm)
-				{
-					SplineComponent->AddSplinePoint(Point, ESplineCoordinateSpace::World, /*bUpdateSpline*/ false);
-				}
-				SplineComponent->UpdateSpline();
-
-				ClaimImportedActor(SplineActor, Identity,
-				    MantlePlaceImportNaming::RoadSplineLabel(Identity, SplineIndex++));
-				SplineActor->Tags.Add(FName(*FString::Printf(TEXT("width_m=%.1f"), Spline.WidthMEstimated)));
-				if (!Spline.RoadClass.IsEmpty())
-				{
-					SplineActor->Tags.Add(FName(*FString::Printf(TEXT("class=%s"), *Spline.RoadClass)));
-				}
-				if (!Spline.Name.IsEmpty())
-				{
-					SplineActor->Tags.Add(FName(*FString::Printf(TEXT("name=%s"), *Spline.Name)));
-				}
-				Result.CreatedActors.Add(SplineActor->GetActorLabel());
-			}
-			// A layer whose roads all failed to place must not read like an AOI with no roads. The
-			// outcome is about the parse (what could be placed); a spawn failure is a different
-			// cause and gets its own line rather than borrowing the projection reason.
-			Log.Add(FMantlePlaceRoadSplinesLogic::DescribeOutcome(LinesSeen, Splines.Num()));
-			if (SplineIndex < Splines.Num())
-			{
-				Log.Add(FString::Printf(
-				    TEXT("Road splines: %d spline actor(s) could not be spawned."), Splines.Num() - SplineIndex));
-			}
-		}
-	}
-
-	// --- Tree points ---
-	// Resolved from the bundle's own unreal.foliage_points.path pointer (HPS-32/HPS-33) — never
-	// layout.tree_points or landcover.tree_points, which are other blocks' pointers to the same
-	// layer. Absence means the bundle simply doesn't ship the layer (base tier / treeless AOI), not
-	// an error. Rows land in a UDataTable under the bundle's content folder: PCG-ready scatter
-	// input, no actors spawned.
-	//
-	// The bytes reaching here have already been through the integrity pre-check above, so this
-	// layer is no longer the unverified exception in the chain. What is still checked HERE is the
-	// row count — the digest proves the bytes, the count proves the rows this reader made of them —
-	// and the frame (HPS-53): the CRS and units the pointer states must be this host's, and the rows
-	// are held against the landscape extent this block publishes as the backstop — the whole of the
-	// check on a bundle older than MPB 1.3.0, whose pointer states no frame. Either way a file not in
-	// this frame is refused by name.
-	if (Manifest.bHasFoliagePoints)
-	{
-		TArray<uint8> CsvBytes;
-		if (!Reader.TryReadFile(Manifest.FoliagePointsPath, CsvBytes))
-		{
-			Log.Add(FString::Printf(TEXT("Tree points skipped: bundle is missing %s."), *Manifest.FoliagePointsPath));
-		}
-		else
-		{
-			FString CsvText, TreesError;
-			FFileHelper::BufferToString(CsvText, CsvBytes.GetData(), CsvBytes.Num());
-			TArray<FMantlePlaceTreePointRow> Rows;
-			const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
-			    CsvText, Manifest.OriginEastingM, Manifest.OriginNorthingM, Manifest.GetFoliagePointsFrame(),
-			    Manifest.GetAoiSizeUeCm(), // zero when the block publishes no landscape transform
-			    Manifest.FoliagePointsCount, Rows, TreesError);
-			if (Outcome == EMantlePlaceTreePointsOutcome::CountMismatch)
-			{
-				// A count that disagrees with the payload FAILS the import rather than skipping the
-				// layer: the rows that did parse are a silent subset, and a scatter built from a
-				// subset reads as a sparse forest rather than as an error.
-				Log.Add(FString::Printf(
-					TEXT("Tree points FAILED (%s): %s"), *Manifest.FoliagePointsPath, *TreesError));
-				bAllRequestedSucceeded = false;
-			}
-			else if (Outcome != EMantlePlaceTreePointsOutcome::Parsed)
-			{
-				// A drifted column contract stays a SKIP, as it always has been. It says the ETL
-				// changed this payload's shape, which is not a reason to report the terrain, the
-				// imagery and the buildings beside it as failed. A file that is not in this host's
-				// frame is the same news (HPS-53): a NAMED skip, no table made, so nothing downstream
-				// scatters a forest a thousand kilometres off site.
-				Log.Add(FString::Printf(
-					TEXT("Tree points skipped (%s): %s"), *Manifest.FoliagePointsPath, *TreesError));
-			}
-			else
-			{
-				const FString AssetName = MantlePlaceImportNaming::TreePointsTableName();
-				const FString PackageName =
-					MantlePlaceImportNaming::SubfolderPath(
-						DestPackagePath, MantlePlaceImportNaming::ESubfolder::Landcover)
-					/ AssetName;
-				UPackage* Package = CreatePackage(*PackageName);
-				// RF_Transactional is set AFTER RowStruct, not passed to NewObject. A transactional
-				// object constructed while a transaction is open is serialized into the undo buffer
-				// there and then, and UDataTable::Serialize logs an Error when it is written with no
-				// RowStruct -- which is precisely its state on the line between these two. Latent
-				// until the import's transaction started surviving to the end (see
-				// MantlePlaceImportNaming::ImportNameFor); before that the buffer was purged out
-				// from under it and the snapshot never happened.
-				UDataTable* Table = NewObject<UDataTable>(Package, FName(*AssetName), RF_Public | RF_Standalone);
-				Table->RowStruct = FMantlePlaceTreePointRow::StaticStruct();
-				Table->SetFlags(RF_Transactional);
-				for (int32 RowIndex = 0; RowIndex < Rows.Num(); ++RowIndex)
-				{
-					Table->AddRow(
-						FName(*MantlePlaceImportNaming::TreePointsRowName(RowIndex)), Rows[RowIndex]);
-				}
-				FAssetRegistryModule::AssetCreated(Table);
-				Table->MarkPackageDirty();
-				// Three states, said out loud. A payload the platform published no digest for is
-				// VALID BUT UNVERIFIED — reporting it as verified is a lie and reporting it as
-				// corrupt makes every sidecar-less bundle un-importable (spec/format.md section 5).
-				Log.Add(FString::Printf(
-					TEXT("Tree points imported (%d rows -> %s, %s)."),
-					Rows.Num(), *AssetName,
-					Manifest.FoliagePointsSha256.IsEmpty()
-						? TEXT("valid but unverified: the manifest publishes no digest for it")
-						: TEXT("verified against the manifest's sha256")));
-			}
-		}
-	}
-
-	// --- Drape status + coverage sanity check ---
-	// The Landscape adopted DrapeMic at creation (set before ALandscape::Import, above) and meshes
-	// were assigned it right after their import, so there is nothing left to assign here — just
-	// report the outcome and sanity-check coverage.
-	if (DrapeTargets.Num() > 0)
-	{
-		if (!Manifest.bHasDrape)
-		{
-			Log.Add(TEXT("No imagery drape in this bundle (geometry only)."));
-		}
-		else if (DrapeMic != nullptr)
-		{
-			Log.Add(TEXT("Imagery draped onto its geographic footprint."));
-
-			// The manifest's own alignment descriptor, branched on rather than skimmed past. Until
-			// this line the string was opaque, so a partially-covering drape imported silently
-			// misaligned and the failure looked like nothing at all. The divergent shape carries
-			// the ETL's measured figures and produces a warning; the other shapes produce a note.
-			// A "matches" claim the extents refute never reaches here — Parse refuses it.
-			const FString AlignmentLine = FMantlePlaceDrapeAlignmentLogic::DescribeForLog(
-				FMantlePlaceDrapeAlignmentLogic::Classify(Manifest.DrapeAlignment));
-			if (!AlignmentLine.IsEmpty())
-			{
-				Log.Add(AlignmentLine);
-			}
-
-			// Sanity-check imagery coverage against the terrain. The drape is placed at its true
-			// geographic footprint; if the bundle's imagery spans only part of the AOI it will not
-			// blanket the terrain (a web-ETL data issue, not an import fault). Surface it here so the
-			// mismatch is visible rather than silently mis-scaled.
-			if (Manifest.bHasHeightmap)
-			{
-				// Both spans in UE axis order (X = North, Y = East) — GetAoiSizeUeCm owns the swap
-				// between the manifest's grid-axis naming and UE's, so this must not open-code it.
-				const FVector2D AoiSize = Manifest.GetAoiSizeUeCm();
-				const double SpanXcm = AoiSize.X;
-				const double SpanYcm = AoiSize.Y;
-				FVector2D DrapeMin, DrapeSize;
-				Manifest.GetDrapeWorldRect(DrapeMin, DrapeSize);
-				if (SpanXcm > 0.0 && SpanYcm > 0.0
-					&& (DrapeSize.X < SpanXcm * 0.99 || DrapeSize.Y < SpanYcm * 0.99))
-				{
-					Log.Add(FString::Printf(
-						TEXT("WARNING: imagery footprint (%.0f x %.0f m) covers only %.0f%% x %.0f%% of the "
-							 "terrain (%.0f x %.0f m) — bundle imagery does not span the AOI (web ETL issue)."),
-						DrapeSize.X / 100.0, DrapeSize.Y / 100.0,
-						100.0 * DrapeSize.X / SpanXcm, 100.0 * DrapeSize.Y / SpanYcm,
-						SpanXcm / 100.0, SpanYcm / 100.0));
-				}
-			}
-		}
-		// else: a drape was requested but the material failed to build — the error was logged above.
-	}
-
-	Result.bSuccess = bAllRequestedSucceeded && Result.CreatedActors.Num() > 0;
+	// --- Report ---
+	Result.bSuccess = Context.bAllRequestedSucceeded && Result.CreatedActors.Num() > 0;
 	if (Result.bSuccess)
 	{
 		// Said in the message the user reads, not only in this file's comments: nothing this
@@ -1381,7 +616,7 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 	const FMantlePlaceVaultManifest Manifest = MantlePlaceImportManifest::Parse(ManifestText, ParseError);
 	Info.JobId = Manifest.JobId;
 
-	if (!Manifest.bHasCesiumTerrain)
+	if (!Manifest.Cesium.bHasTerrain)
 	{
 		Info.Message = TEXT("This bundle ships no Cesium quantized-mesh terrain (layout.cesiumTerrain is "
 			"absent). Re-export from a v8+ pipeline that produces Cesium terrain tiles.");
@@ -1390,7 +625,7 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 
 	// Zip-entry prefix derived from the manifest so this keeps working as the bundle layout renames
 	// the terrain folder across versions (v13+: CesiumTerrain/; legacy: Terrain/).
-	const FString TerrainPrefix = MantlePlaceImportManifest::DeriveCesiumTerrainPrefix(Manifest.CesiumTerrainPath);
+	const FString TerrainPrefix = MantlePlaceImportManifest::DeriveCesiumTerrainPrefix(Manifest.Cesium.TerrainPath);
 	if (TerrainPrefix.IsEmpty())
 	{
 		Info.Message = TEXT("Bundle's layout.cesiumTerrain has no directory component; refusing to "
@@ -1418,17 +653,17 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 	// that does not match exactly re-stages, because this directory is scratch and rebuilding it
 	// costs an extraction while serving a stale one serves the wrong terrain.
 	const FString StageDir = MantlePlaceStreamStaging::StagingDir(Identity);
-	const FString TerrainRootOnDisk = FPaths::Combine(StageDir, Manifest.CesiumTerrainPath);
+	const FString TerrainRootOnDisk = FPaths::Combine(StageDir, Manifest.Cesium.TerrainPath);
 
 	MantlePlaceStreamStaging::FRecord Incoming;
 	Incoming.Identity = Identity;
 	Incoming.ManifestSha256 = ManifestSha256;
 	Incoming.TerrainPrefix = TerrainPrefix;
-	Incoming.CesiumTerrainPath = Manifest.CesiumTerrainPath;
+	Incoming.CesiumTerrainPath = Manifest.Cesium.TerrainPath;
 	// The one imagery file this stream serves, by the same pointer and the same condition that build
 	// Info.ImageryUrl below — the only imagery the Python helper reads. Empty when the stream serves
 	// none, and then none is extracted.
-	Incoming.DrapePath = (Manifest.bHasDrape && !Manifest.DrapePath.IsEmpty()) ? Manifest.DrapePath : FString();
+	Incoming.DrapePath = (Manifest.Drape.bPresent && !Manifest.Drape.Path.IsEmpty()) ? Manifest.Drape.Path : FString();
 	Incoming.SchemeVersion = MantlePlaceStreamStaging::CurrentSchemeVersion;
 
 	MantlePlaceStreamStaging::FRecord Staged;
@@ -1523,19 +758,19 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 
 	Info.bSuccess = true;
 	Info.BaseUrl = BaseUrl;
-	Info.CesiumTerrainUrl = BaseUrl / Manifest.CesiumTerrainPath;
+	Info.CesiumTerrainUrl = BaseUrl / Manifest.Cesium.TerrainPath;
 	if (!Incoming.DrapePath.IsEmpty())
 	{
 		Info.ImageryUrl = BaseUrl / Incoming.DrapePath;
 	}
-	Info.bHasBbox = Manifest.bHasBbox;
-	Info.BboxWestDeg = Manifest.BboxWestDeg;
-	Info.BboxSouthDeg = Manifest.BboxSouthDeg;
-	Info.BboxEastDeg = Manifest.BboxEastDeg;
-	Info.BboxNorthDeg = Manifest.BboxNorthDeg;
+	Info.bHasBbox = Manifest.Cesium.bHasBbox;
+	Info.BboxWestDeg = Manifest.Cesium.BboxWestDeg;
+	Info.BboxSouthDeg = Manifest.Cesium.BboxSouthDeg;
+	Info.BboxEastDeg = Manifest.Cesium.BboxEastDeg;
+	Info.BboxNorthDeg = Manifest.Cesium.BboxNorthDeg;
 	Info.Message = FString::Printf(
 		TEXT("Streaming bundle %s on %s (%d Cesium terrain tiles). Cesium3DTileset Url -> %s"),
-		*MantlePlaceImportNaming::ShortIdentity(Manifest.JobId), *BaseUrl, Manifest.CesiumTerrainTileCount, *Info.CesiumTerrainUrl);
+		*MantlePlaceImportNaming::ShortIdentity(Manifest.JobId), *BaseUrl, Manifest.Cesium.TerrainTileCount, *Info.CesiumTerrainUrl);
 	return Info;
 }
 

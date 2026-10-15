@@ -87,7 +87,7 @@ namespace MantlePlaceMeshImporter
 			return nullptr;
 		}
 
-		if (bEnableNanite && Manifest.bNaniteRecommended)
+		if (bEnableNanite && Manifest.Mesh.bNaniteRecommended)
 		{
 			// Through the accessors: UStaticMesh::NaniteSettings is UE_DEPRECATED(5.7) and goes
 			// private in the next release, so touching the member directly is a compile error there

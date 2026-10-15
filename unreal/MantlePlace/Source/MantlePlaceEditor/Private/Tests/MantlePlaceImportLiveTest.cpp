@@ -285,7 +285,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 	}
 
 	// New-layer assertions fire only when the bundle actually ships the layer.
-	if (Manifest.bHasRoadSplines)
+	if (Manifest.RoadSplines.bPresent)
 	{
 		int32 NumSplineActors = 0;
 		for (const FString& Label : Result.CreatedActors)
@@ -351,7 +351,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 	// source format and the actual bytes.
 	{
 		TArray<FString> ExpectedLayers;
-		for (const FMantlePlaceLandscapeLayer& Layer : Manifest.LandscapeLayers)
+		for (const FMantlePlaceLandscapeLayer& Layer : Manifest.LandscapeLayers.Layers)
 		{
 			if (FMantlePlaceCoverageRasterLogic::IsCoverageRaster(Layer.Name) && Layer.UeReady.Num() > 0)
 			{
@@ -500,7 +500,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 	// what makes it a gate: on near-symmetric terrain a merely-high identity score can sit underneath
 	// an even higher mirrored one, so "identity wins" is the assertion, and the runner-up is logged.
 	// ---------------------------------------------------------------------------------------------
-	if (Landscape != nullptr && !Manifest.HeightmapPath.IsEmpty())
+	if (Landscape != nullptr && !Manifest.Heightmap.Path.IsEmpty())
 	{
 		using namespace MantlePlaceImportLiveTest;
 		constexpr int32 GridN = 8; // 64 probes: enough to discriminate, cheap to read back
@@ -511,10 +511,10 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		{
 			FZipArchiveReader Reader(Handle); // takes ownership of the handle
 			TArray<uint8> Png;
-			if (!Reader.TryReadFile(Manifest.HeightmapPath, Png))
+			if (!Reader.TryReadFile(Manifest.Heightmap.Path, Png))
 			{
 				AddError(FString::Printf(TEXT("Orientation gate: bundle has no entry \"%s\"."),
-					*Manifest.HeightmapPath));
+					*Manifest.Heightmap.Path));
 			}
 			else
 			{
@@ -540,7 +540,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 						{
 							// I counts southward from the north edge; flip when row 0 is the SOUTH edge.
 							const int32 FromNorth = CellCentre(I, GridN, Height);
-							const int32 Row = Manifest.bRow0IsNorth ? FromNorth : (Height - 1 - FromNorth);
+							const int32 Row = Manifest.Heightmap.bRow0IsNorth ? FromNorth : (Height - 1 - FromNorth);
 							const int32 Col = CellCentre(J, GridN, Width);
 							Source[I * GridN + J] =
 								static_cast<double>(Pixels[static_cast<int64>(Row) * Width + Col]);

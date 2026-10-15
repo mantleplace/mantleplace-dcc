@@ -125,8 +125,8 @@ namespace MantlePlaceDrape
 		Mic->SetVectorParameterValueEditorOnly(
 			FMaterialParameterInfo(TEXT("LandscapeQuadsXY")),
 			FLinearColor(
-				static_cast<float>(Manifest.ComponentCountY * Manifest.GetQuadsPerComponent()), // North
-				static_cast<float>(Manifest.ComponentCountX * Manifest.GetQuadsPerComponent()), // East
+				static_cast<float>(Manifest.Heightmap.ComponentCountY * Manifest.GetQuadsPerComponent()), // North
+				static_cast<float>(Manifest.Heightmap.ComponentCountX * Manifest.GetQuadsPerComponent()), // East
 				0.0f, 0.0f));
 		Mic->SetVectorParameterValueEditorOnly(
 			FMaterialParameterInfo(TEXT("DrapeUvScale")),

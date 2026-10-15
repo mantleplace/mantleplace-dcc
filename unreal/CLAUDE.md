@@ -59,6 +59,15 @@ test beside it. The importer *executes*; the Logic unit *decides*. If asserting 
 editor and a real bundle, it is in the wrong unit — and since **CI never compiles this plugin**,
 logic in the importer is covered by review alone.
 
+**The importer is a registry of per-artifact handlers.** `ImportVaultPackage` runs the steps in
+`MantlePlaceImportOrchestration` (verify, the nothing-to-import gate, the wipe, `Prepare`, `Import`,
+`Finalize`) over the list in `MantlePlaceArtifactRegistry.cpp`; each artifact type is one
+`MantlePlaceArtifact<Name>.cpp` that reads its own manifest block, declares its payloads for the
+integrity chain, and imports them. **Adding an artifact type** is exactly: one handler file, one
+sub-struct in `MantlePlaceManifestBlocks.h` held as a member of `FMantlePlaceVaultManifest`, and one
+entry in `MakeAll`. `Parse`, the integrity chain and the orchestration do not change. The registry is
+an explicit ordered list on purpose: no discovery, no reflection.
+
 ## Commands
 
 The tests are Unreal automation tests under a `MantlePlace.` prefix; drive them unattended with:
