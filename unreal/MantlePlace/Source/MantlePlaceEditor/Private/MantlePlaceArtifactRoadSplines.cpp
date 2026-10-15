@@ -3,14 +3,16 @@
 // The derived "road_splines" layer of the ODbL Vector/ set (a top-level sibling of `unreal`):
 // Z-draped road centerlines -> one spline actor per road (Wave-2 pipeline layers). Like the
 // buildings, this is content, not a terrain representation: it imports whenever the bundle ships the
-// layer, regardless of Mode, and a failure is non-fatal. Width/class/name land as actor tags so PCG
-// or a road tool can consume them without re-reading the bundle.
+// layer, regardless of Mode, and a failure is non-fatal. Each road is an AMantlePlaceRoadSpline whose
+// width, class and name are real properties, so PCG, a Blueprint or a road tool read them by name
+// without re-reading the bundle and without parsing anything.
 
 #include "MantlePlaceArtifactHandler.h"
 
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceManifestJson.h"
+#include "MantlePlaceRoadSpline.h" // runtime: AMantlePlaceRoadSpline
 #include "MantlePlaceRoadSplinesLogic.h"
 
 #include "Components/SplineComponent.h"
@@ -122,36 +124,32 @@ public:
 		}
 
 		int32 SplineIndex = 0;
-		for (const FMantlePlaceRoadSpline& Spline : Splines)
+		for (const FMantlePlaceRoadSpline& Road : Splines)
 		{
-			AActor* SplineActor = Ctx.World->SpawnActor<AActor>();
+			AMantlePlaceRoadSpline* SplineActor = Ctx.World->SpawnActor<AMantlePlaceRoadSpline>();
 			if (SplineActor == nullptr)
 			{
 				continue;
 			}
-			USplineComponent* SplineComponent = NewObject<USplineComponent>(
-				SplineActor, USplineComponent::StaticClass(), TEXT("RoadSpline"), RF_Transactional);
-			SplineActor->SetRootComponent(SplineComponent);
-			SplineActor->AddInstanceComponent(SplineComponent);
-			SplineComponent->RegisterComponent();
-
+			// The actor made its own spline as its root; the published points go in as the world-space
+			// positions they already are.
+			USplineComponent* SplineComponent = SplineActor->Spline;
 			SplineComponent->ClearSplinePoints(/*bUpdateSpline*/ false);
-			for (const FVector& Point : Spline.PointsUeCm)
+			for (const FVector& Point : Road.PointsUeCm)
 			{
 				SplineComponent->AddSplinePoint(Point, ESplineCoordinateSpace::World, /*bUpdateSpline*/ false);
 			}
 			SplineComponent->UpdateSpline();
 
+			// What the platform published, as the actor's own properties: no tag carries any of it.
+			SplineActor->EstimatedWidthM = static_cast<float>(Road.WidthMEstimated);
+			SplineActor->RoadClass = Road.RoadClass.IsEmpty() ? NAME_None : FName(*Road.RoadClass);
+			SplineActor->RoadName = Road.Name;
+
+			// Claim is the whole of the wipe registration: it files the actor under this import's tag,
+			// which is what the stale-actor sweep matches whatever the actor's class (an actor of any
+			// type, this one included, is replaced on re-import and never stacked).
 			Ctx.Claim(SplineActor, MantlePlaceImportNaming::RoadSplineLabel(Ctx.Identity, SplineIndex++));
-			SplineActor->Tags.Add(FName(*FString::Printf(TEXT("width_m=%.1f"), Spline.WidthMEstimated)));
-			if (!Spline.RoadClass.IsEmpty())
-			{
-				SplineActor->Tags.Add(FName(*FString::Printf(TEXT("class=%s"), *Spline.RoadClass)));
-			}
-			if (!Spline.Name.IsEmpty())
-			{
-				SplineActor->Tags.Add(FName(*FString::Printf(TEXT("name=%s"), *Spline.Name)));
-			}
 			Ctx.Result.CreatedActors.Add(SplineActor->GetActorLabel());
 		}
 		// A layer whose roads all failed to place must not read like an AOI with no roads. The

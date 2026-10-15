@@ -883,6 +883,47 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		AddError(TEXT("corpus case manifest.treePointsStatedFrame has gone missing"));
 	}
 
+	// --- The foliage type (MPB 1.2.0): a value this build does not know is a tree -------------------
+	// The two rules spec/format.md section 4.4 states and nothing bound until a second host read the
+	// column. Each row is the payload verbatim beside the vocabulary the manifest names (or none), and
+	// the answer is the type each row it produced reads as, in the vocabulary's own words. The
+	// origin and span are the reference fixture's, as for the row-count table: this one is about the
+	// column, not the frame.
+	if (const FCase* Case = FindCase(Cases, TEXT("manifest.foliageTypeUnknownValue")))
+	{
+		Driven.Add(Case->Id);
+		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("rows"));
+		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
+		for (const TSharedPtr<FJsonObject>& Row : Vectors)
+		{
+			const FString Name = RowString(Row, TEXT("name"));
+			// A JSON null reads as empty: the manifest names no vocabulary, so there is no column.
+			const FString Vocabulary = RowString(Row, TEXT("foliageTypeVocabulary"));
+			TArray<FMantlePlaceTreePointRow> Parsed;
+			FString Error;
+			const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
+				RowString(Row, TEXT("csv")), 441959.5, 4014372.5, FMantlePlaceTreePointsFrame(),
+				FVector2D(140100.0, 142500.0), /*DeclaredPointCount*/ 0, Parsed, Error, Vocabulary);
+			TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": parses (%s)"), *Name, *Error)),
+				Outcome == EMantlePlaceTreePointsOutcome::Parsed);
+
+			const TArray<FString> Expected = RowStrings(Row, TEXT("foliageTypes"));
+			TestEqual(Case->What(*FString::Printf(TEXT("\"%s\": no point is dropped for its type"), *Name)),
+				Parsed.Num(), Expected.Num());
+			for (int32 Index = 0; Index < FMath::Min(Parsed.Num(), Expected.Num()); ++Index)
+			{
+				const TCHAR* Actual =
+					Parsed[Index].FoliageType == EMantlePlaceFoliageType::Shrub ? TEXT("shrub") : TEXT("tree");
+				TestEqual(Case->What(*FString::Printf(TEXT("\"%s\": row %d type"), *Name, Index)),
+					FString(Actual), Expected[Index]);
+			}
+		}
+	}
+	else
+	{
+		AddError(TEXT("corpus case manifest.foliageTypeUnknownValue has gone missing"));
+	}
+
 	// --- The datum the road layer states is read, and must be this host's (MPB 1.8.0) ----------
 	// Each row lays its members over the one embedded manifest — the layer's datum, and where it
 	// matters the version — and the manifest is parsed again per row, so what is proven is the

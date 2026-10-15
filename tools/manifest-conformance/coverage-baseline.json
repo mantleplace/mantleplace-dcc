@@ -91,7 +91,8 @@
       "unreal"
     ],
     "manifest.foliageTypeUnknownValue": [
-      "revit"
+      "revit",
+      "unreal"
     ],
     "manifest.foliageVocabularyIgnored": [
       "revit",

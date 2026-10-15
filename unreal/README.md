@@ -12,7 +12,7 @@ dependency is Epic's built-in Interchange.
 
 One import produces **one `ALandscape`** with the bundle's imagery draped onto its geographic
 footprint, plus whatever else the bundle ships: the buildings as a static mesh, the road centrelines
-as one spline actor per road, the coverage rasters (water, land cover and their like) as data
+as one typed spline actor per road, the coverage rasters (water, land cover and their like) as data
 textures with their value mappings attached, and the landcover material weights painted as landscape
 layers. The tree points land as a data table, PCG-ready scatter input. Importing a local bundle
 needs no account and no sign-in.

@@ -7,7 +7,8 @@
 /**
  * One Z-draped road centerline from the bundle's Vector/RoadSplines.geojson, converted to the
  * Local Projected Frame (AOI centroid at world origin, East -> +X, North -> +Y, 1 uu = 1 cm).
- * WidthMEstimated / RoadClass / Name ride along for the spawned actor's metadata tags.
+ * WidthMEstimated / RoadClass / Name ride along to become the properties of the spawned
+ * AMantlePlaceRoadSpline (verbatim; none is derived here).
  */
 struct FMantlePlaceRoadSpline
 {

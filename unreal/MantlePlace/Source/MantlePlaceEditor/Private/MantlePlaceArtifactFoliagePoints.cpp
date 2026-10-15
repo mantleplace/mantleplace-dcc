@@ -4,7 +4,9 @@
 // never layout.tree_points or landcover.tree_points, which are other blocks' pointers to the same
 // layer. Absence means the bundle simply doesn't ship the layer (base tier / treeless AOI), not an
 // error. Rows land in a UDataTable under the bundle's content folder: PCG-ready scatter input, no
-// actors spawned.
+// actors spawned. The table's columns are a documented contract (unreal/docs/foliage-table-contract.md):
+// a row carries the platform's foliage type, its sizes in the engine's unit as well as the published
+// metres, and whether the ground height was measured -- decoded where the CSV is read, not left raw.
 //
 // The bytes reaching Import have already been through the integrity pre-check. What is still checked
 // HERE is the row count — the digest proves the bytes, the count proves the rows this reader made of
@@ -53,6 +55,17 @@ public:
 			M.Foliage.Units = GetString(*FoliagePointsPtr, TEXT("units"));
 			M.Foliage.HorizontalUnits = GetString(*FoliagePointsPtr, TEXT("horizontal_units"));
 		}
+		// The vocabulary the CSV's `foliage_type` values come from (MPB 1.2.0). Published once, on the
+		// shared tree-points block, so this is the one read from outside `unreal`; it is the meaning of
+		// a column in this block's own file, not a second pointer to it. Verbatim, and judged nowhere:
+		// a vocabulary this build was not taught still has its known values mapped.
+		if (const TSharedPtr<FJsonObject>* LandcoverPtr = GetObject(In.Root, TEXT("landcover")))
+		{
+			if (const TSharedPtr<FJsonObject>* TreePointsPtr = GetObject(*LandcoverPtr, TEXT("tree_points")))
+			{
+				M.Foliage.FoliageTypeVocabulary = GetString(*TreePointsPtr, TEXT("foliage_type_vocabulary"));
+			}
+		}
 		M.Foliage.bPresent = !M.Foliage.Path.IsEmpty();
 		return true;
 	}
@@ -90,7 +103,7 @@ public:
 		const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
 			CsvText, Manifest.Georef.OriginEastingM, Manifest.Georef.OriginNorthingM, Manifest.GetFoliagePointsFrame(),
 			Manifest.GetAoiSizeUeCm(), // zero when the block publishes no landscape transform
-			Manifest.Foliage.Count, Rows, TreesError);
+			Manifest.Foliage.Count, Rows, TreesError, Manifest.Foliage.FoliageTypeVocabulary);
 		if (Outcome == EMantlePlaceTreePointsOutcome::CountMismatch)
 		{
 			// A count that disagrees with the payload FAILS the import rather than skipping the
@@ -136,12 +149,18 @@ public:
 		}
 		FAssetRegistryModule::AssetCreated(Table);
 		Table->MarkPackageDirty();
+		int32 ShrubCount = 0, GroundUnknownCount = 0;
+		for (const FMantlePlaceTreePointRow& Row : Rows)
+		{
+			ShrubCount += Row.FoliageType == EMantlePlaceFoliageType::Shrub ? 1 : 0;
+			GroundUnknownCount += Row.bGroundKnown ? 0 : 1;
+		}
 		// Three states, said out loud. A payload the platform published no digest for is
 		// VALID BUT UNVERIFIED — reporting it as verified is a lie and reporting it as
 		// corrupt makes every sidecar-less bundle un-importable (spec/format.md section 5).
 		Ctx.Log.Add(FString::Printf(
-			TEXT("Tree points imported (%d rows -> %s, %s)."),
-			Rows.Num(), *AssetName,
+			TEXT("Tree points imported (%d rows -> %s: %d shrub, %d without a measured ground height, %s)."),
+			Rows.Num(), *AssetName, ShrubCount, GroundUnknownCount,
 			Manifest.Foliage.Sha256.IsEmpty()
 				? TEXT("valid but unverified: the manifest publishes no digest for it")
 				: TEXT("verified against the manifest's sha256")));
