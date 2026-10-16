@@ -51,13 +51,10 @@ MantlePlace/Content/                     shipped assets: the drape material, the
 MantlePlace/Content/Python/              the Cesium streaming helper. Spawns actors; imports no assets.
 ```
 
-**Put the decision in a `*Logic` translation unit** — `MantlePlaceLandscapeWeightsLogic`,
-`MantlePlaceCoverageRasterLogic`, `MantlePlaceRoadSplinesLogic`, `MantlePlaceTreePointsLogic`,
-`MantlePlaceDrapeAlignmentLogic`, `MantlePlaceDeliveryLogic`, `MantlePlaceIntegrityLogic`,
-`MantlePlaceVaultLogic`, `MantlePlaceAuthLogic`, `MantlePlaceBundleCacheLogic`, each with a headless
-test beside it. The importer *executes*; the Logic unit *decides*. If asserting it needs a running
-editor and a real bundle, it is in the wrong unit — and since **CI never compiles this plugin**,
-logic in the importer is covered by review alone.
+**Put the decision in a `*Logic` translation unit** (`MantlePlace<Name>Logic.cpp`, one per
+decision), each with a headless test beside it. The importer *executes*; the Logic unit *decides*.
+If asserting it needs a running editor and a real bundle, it is in the wrong unit: logic in the
+importer is covered by review alone.
 
 **The importer is a registry of per-artifact handlers.** `ImportVaultPackage` runs the steps in
 `MantlePlaceImportOrchestration` (verify, the nothing-to-import gate, the wipe, `Prepare`, `Import`,
@@ -77,7 +74,10 @@ UnrealEditor-Cmd.exe <YourProject>.uproject -ExecCmds="Automation RunTests Mantl
 ```
 
 `MantlePlace.Import.LiveFreeTier` wants a real bundle and credentials, so it is not part of an
-offline sweep.
+offline sweep. **To compile a branch**, use a scratch project outside every repository, with this
+worktree's `MantlePlace/` in its `Plugins/` (never the install slot below):
+`Engine/Build/BatchFiles/Build.bat <Name>Editor Win64 Development -Project=<scratch>.uproject -WaitMutex -NoHotReloadFromIDE`.
+The last flag gets past an open editor's Live Coding refusal. A syntax-only pass is not a compile.
 
 ```bash
 python ../tools/manifest-conformance/check_manifest_conformance.py   # contract gate: Python 3.12, stdlib, offline corpus half
@@ -119,10 +119,8 @@ transaction is the hazardous path, a fallback only for assets a glTF brings with
 
 The rest is [`docs/generated-content.md`](docs/generated-content.md):
 
-- **Where content lands** — `<ContentRoot>/<identity>/{Imagery,Mesh,Buildings,CoverageRasters,Landcover}`;
-  the content root is a **project** setting, never per-user; the identity names the *order*
-  ([ADR 0002](../docs/adr/0002-import-identity.md)) and does not repeat in leaf names; the outliner
-  folder is fixed.
+- **Where content lands** — under the order's identity
+  ([ADR 0002](../docs/adr/0002-import-identity.md)), in a content root set per project.
 - **Paint layers are not ours to name** — the layer's name is the platform's material name verbatim
   (`HPS-33`); only the asset is `LI_<material>`.
 - **One place, not every call site** — every generated name and path comes from
@@ -138,9 +136,9 @@ The rest is [`docs/generated-content.md`](docs/generated-content.md):
 
 ## Things that will bite you
 
-- **CI never compiles this plugin** — a licensed engine is needed, and a self-hosted runner would
-  run a fork's code. Build it locally before you claim it works, and distrust a type widening: it
-  compiles at some call sites and silently rots others.
+- **CI never compiles this plugin** ([why](../docs/agents/ci.md)). Build it locally (the recipe is
+  under Commands) before you claim it works, and distrust a type widening: it compiles at some
+  call sites and silently rots others.
 - **The editor compiles the consuming project's submodule checkout, not this tree** (`HPS-50`), a
   single slot that is `main` by default and moves only by `tools/Refresh-UnrealInstall.ps1`
   (`origin/main` after a merge, `origin/<branch>` for a preview you were asked for);

@@ -63,6 +63,22 @@ The mechanical checks — required fields, unique ids, files present and parseab
 agreeing, no orphans — run offline in CI. `check_manifest_conformance.py` owns that list; it is not
 restated here (`DOC-02`).
 
+In practice a case is one pull request with these edits:
+
+1. The fixture, under its group's folder: JSON, two-space indent. The index stores LF, so on a
+   Windows checkout a re-dumped file differs byte-for-byte from the committed one on line endings
+   alone.
+2. Its entry in `index.json`, with its `reason`.
+3. Each claiming host's assertions. Revit refuses an expectation key it does not consume, so a new
+   key goes into `ConsumedExpectationKeys` in
+   [`ManifestConformanceTests.cs`](../../../revit/tests/MantlePlace.Revit.Core.Tests/ManifestConformanceTests.cs)
+   beside the assertion that reads it (`HPS-46`).
+4. When the checker reports changed coverage, `check_manifest_conformance.py --update-baseline`, with
+   the `coverage-baseline.json` diff committed for review.
+
+A coverage **drop** is a lost assertion. Retiring a case is a deliberate edit with its reason in the
+pull request body, never a baseline update made to turn the gate green.
+
 ## The self-test corpus (`self-test/`)
 
 `self-test/` holds deliberately broken index and case fixtures that every host's corpus **reader**

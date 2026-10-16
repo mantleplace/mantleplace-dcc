@@ -40,6 +40,29 @@ regression cannot currently block a merge.
   so a green pull request here can still break the engine build — an accepted, published lag
   ([README](../../README.md#ci-and-what-it-does-not-cover)).
 
+## Running the gates locally
+
+The same commands the workflows run, from the repository root, Python 3.12, offline except where a
+checker says otherwise. Run them before you push, not after review finds what they would have:
+
+```bash
+python tools/manifest-conformance/check_manifest_conformance.py
+python -m unittest discover -s tools/manifest-conformance
+python tools/public-hygiene/check_public_references.py
+python tools/public-hygiene/check_docs_integrity.py
+python tools/unreal-naming/check_generated_names.py
+(cd tools/public-hygiene && python -m unittest discover -p "test_*.py")
+(cd tools/unreal-naming && python -m unittest discover -p "test_*.py")
+(cd tools/brand-assets && python -m unittest discover -p "test_*.py")
+python tools/public-hygiene/check_public_references.py --stdin --label "PR body" < pr-body.md
+```
+
+The last line checks a pull request body before it is published; the same `--stdin` takes a
+title or a commit message. The Revit suite's build and run lines live in
+[`revit/README.md` ▸ Build and test](../../revit/README.md#build-and-test). On Windows, a one-off
+`json.load` over the corpus needs `encoding="utf-8"` (or `PYTHONUTF8=1`); the checkers already
+pass it.
+
 ## C++ formatting
 
 [`unreal/.clang-format`](../../unreal/.clang-format) is for new code only. Nothing in CI checks it,
