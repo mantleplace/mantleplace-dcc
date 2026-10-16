@@ -173,11 +173,9 @@ That bounds *logic*. Which repository a piece of *work* belongs to is
 
 ## CI
 
-Five workflows gate every pull request on free hosted runners. **No workflow may carry a `paths:`
-filter on `pull_request`**, and **never attach a self-hosted runner** — a fork's pull request would
-execute on the build machine, which is why the Unreal compile is private and a green PR here can
-still break it. The workflows, the required checks and the jobs behind them, what is not required,
-and C++ formatting are in [`docs/agents/ci.md`](docs/agents/ci.md).
+Five workflows gate every pull request, under the content-law card's CI rules. The jobs, required
+checks, why the Unreal compile is private, and **the commands that run every gate locally** are in
+[`docs/agents/ci.md`](docs/agents/ci.md).
 
 ## Where knowledge lives
 
