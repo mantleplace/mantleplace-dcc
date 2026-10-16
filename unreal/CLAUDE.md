@@ -75,14 +75,13 @@ UnrealEditor-Cmd.exe <YourProject>.uproject -ExecCmds="Automation RunTests Mantl
 
 `MantlePlace.Import.LiveFreeTier` wants a real bundle and credentials, so it is not part of an
 offline sweep. **To compile a branch**, use a scratch project outside every repository, with this
-worktree's `MantlePlace/` in its `Plugins/` (never the install slot below):
+worktree's `MantlePlace/` in its `Plugins/` and one C++ module, so it has an Editor target (never
+the install slot below):
 `Engine/Build/BatchFiles/Build.bat <Name>Editor Win64 Development -Project=<scratch>.uproject -WaitMutex -NoHotReloadFromIDE`.
 The last flag gets past an open editor's Live Coding refusal. A syntax-only pass is not a compile.
 
-```bash
-python ../tools/manifest-conformance/check_manifest_conformance.py   # contract gate: Python 3.12, stdlib, offline corpus half
-python ../tools/unreal-naming/check_generated_names.py              # name drift gate: text-only, no engine — run before you push
-```
+The contract gate and the name-drift gate (text-only, no engine) run before you push:
+[`docs/agents/ci.md` ▸ Running the gates locally](../docs/agents/ci.md#running-the-gates-locally).
 
 ## Naming
 

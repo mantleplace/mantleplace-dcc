@@ -1,6 +1,6 @@
 ---
 name: ci
-description: The pull-request gates this repository runs, the jobs behind them, which of those jobs are required checks on main and which are not, and the workflow rules that keep a required check from hanging — no paths filter on pull_request, no self-hosted runner. Read before adding or renaming a workflow or job, before reading a red or pending check, or when a green pull request might still break the Unreal build.
+description: The pull-request gates this repository runs, the jobs behind them, which of those jobs are required checks on main and which are not, and the workflow rules that keep a required check from hanging — no paths filter on pull_request, no self-hosted runner — and the commands that run every gate locally. Read before pushing, adding or renaming a workflow or job, before reading a red or pending check, or when a green pull request might still break the Unreal build.
 ---
 
 # CI
@@ -42,7 +42,7 @@ regression cannot currently block a merge.
 
 ## Running the gates locally
 
-The same commands the workflows run, from the repository root, Python 3.12, offline except where a
+The commands the workflows run over the tree, from the repository root, Python 3.12, offline except where a
 checker says otherwise. Run them before you push, not after review finds what they would have:
 
 ```bash
@@ -58,7 +58,8 @@ python tools/public-hygiene/check_public_references.py --stdin --label "PR body"
 ```
 
 The last line checks a pull request body before it is published; the same `--stdin` takes a
-title or a commit message. The Revit suite's build and run lines live in
+title or a commit message. The branch-name and commit-range runs are the opt-in pre-push hook's
+(`git config core.hooksPath .githooks`). The Revit suite's build and run lines live in
 [`revit/README.md` ▸ Build and test](../../revit/README.md#build-and-test). On Windows, a one-off
 `json.load` over the corpus needs `encoding="utf-8"` (or `PYTHONUTF8=1`); the checkers already
 pass it.

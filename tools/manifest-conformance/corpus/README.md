@@ -65,9 +65,8 @@ restated here (`DOC-02`).
 
 In practice a case is one pull request with these edits:
 
-1. The fixture, under its group's folder: JSON, two-space indent. The index stores LF, so on a
-   Windows checkout a re-dumped file differs byte-for-byte from the committed one on line endings
-   alone.
+1. The fixture, under its group's folder: JSON, two-space indent. Compare a re-dumped file with
+   git, not byte-for-byte: a Windows checkout holds CRLF where git stores LF.
 2. Its entry in `index.json`, with its `reason`.
 3. Each claiming host's assertions. Revit refuses an expectation key it does not consume, so a new
    key goes into `ConsumedExpectationKeys` in
