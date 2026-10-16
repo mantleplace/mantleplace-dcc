@@ -42,8 +42,9 @@ regression cannot currently block a merge.
 
 ## Running the gates locally
 
-The commands the workflows run over the tree, from the repository root, Python 3.12, offline except where a
-checker says otherwise. Run them before you push, not after review finds what they would have:
+The commands the workflows run over the tree, from the repository root, Python 3.12, offline
+except where a checker says otherwise. Run them before you push, not after review finds what they
+would have:
 
 ```bash
 python tools/manifest-conformance/check_manifest_conformance.py
