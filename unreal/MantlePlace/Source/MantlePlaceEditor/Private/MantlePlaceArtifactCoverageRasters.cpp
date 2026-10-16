@@ -1,4 +1,4 @@
-// Copyright Mantle Place. All Rights Reserved.
+// Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 // `unreal.landscape_layers`: the sub-blocks other than material_weights (water_mask, worldcover,
 // hillshade, ndvi, slope, aspect, canopy_height). Each becomes a UTexture2D carrying its decoded

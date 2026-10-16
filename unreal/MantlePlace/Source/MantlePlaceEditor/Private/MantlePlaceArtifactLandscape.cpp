@@ -1,4 +1,4 @@
-// Copyright Mantle Place. All Rights Reserved.
+// Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 // The heightmap: the headline path, a native Landscape built from the pre-baked heightmap PNG, with
 // the bundle's material-weight layers painted on it when it ships them.

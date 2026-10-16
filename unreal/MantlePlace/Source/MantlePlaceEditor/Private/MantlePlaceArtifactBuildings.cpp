@@ -1,4 +1,4 @@
-// Copyright Mantle Place. All Rights Reserved.
+// Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 // `unreal.buildings_mesh`: extruded building massing (ALL / "Unreal" scope). It is content, not a
 // terrain representation, so it imports whenever present regardless of Mode — alongside the

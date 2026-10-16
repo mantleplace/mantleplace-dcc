@@ -1,4 +1,4 @@
-// Copyright Mantle Place. All Rights Reserved.
+// Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 // THE LIST. Every artifact type the importer knows is one entry in MakeAll, in import order. There is
 // no discovery and no reflection scan: what imports, and in what order, is what this file says, and a

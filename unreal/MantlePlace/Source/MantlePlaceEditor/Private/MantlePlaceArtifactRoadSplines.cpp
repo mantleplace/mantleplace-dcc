@@ -1,4 +1,4 @@
-// Copyright Mantle Place. All Rights Reserved.
+// Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 // The derived "road_splines" layer of the ODbL Vector/ set (a top-level sibling of `unreal`):
 // Z-draped road centerlines -> one spline actor per road (Wave-2 pipeline layers). Like the

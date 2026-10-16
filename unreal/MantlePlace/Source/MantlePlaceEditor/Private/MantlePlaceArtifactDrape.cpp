@@ -1,4 +1,4 @@
-// Copyright Mantle Place. All Rights Reserved.
+// Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 // The imagery drape: the aerial PNG as a texture and the drape material built from it. It runs
 // FIRST, because the landscape adopts the material only if it is set before ALandscape::Import

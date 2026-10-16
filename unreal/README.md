@@ -94,8 +94,8 @@ Packaging needs a licensed Unreal Engine 5.8 install, so it runs privately and n
 2. **Build and run the suite** at the merged commit (the command is in [`CLAUDE.md`](CLAUDE.md#commands)),
    and run the naming and conformance gates beside it.
 3. **Export, then build from the export.** Build from a short path, not from a checkout: Unreal's
-   build tool fails past Windows' 260-character path limit, and `BuildPlugin` writes a stray
-   `FilterPlugin.ini` into whatever tree it is pointed at.
+   build tool fails past Windows' 260-character path limit. The tree carries its own
+   `Config/FilterPlugin.ini`, which names the two root files the package carries.
 
    ```powershell
    git archive --format=zip -o D:\mp-pkg\src.zip <sha> unreal/MantlePlace LICENSE TRADEMARK.md
@@ -109,6 +109,9 @@ Packaging needs a licensed Unreal Engine 5.8 install, so it runs privately and n
    and `TRADEMARK.md` into it, and zip it with `MantlePlace/` at the root as
    `MantlePlace-UE5.8-Win64-<version>.zip`. Diffing its file list against the previous release's
    asset is a cheap sanity check.
+   **The Fab upload is source only**: Epic compiles it. Zip the exported `unreal/MantlePlace/` with
+   `LICENSE` and `TRADEMARK.md` copied into it, with no `Binaries/` or `Intermediate/`, as
+   `MantlePlace-UE5.8-Source-<version>.zip`.
 5. **Compile it in a consuming project.** Point a consuming project's submodule at the same commit
    and let that project's own compile and live-import check run; the local suite skips the live
    import, so this is the gate that exercises a real bundle.

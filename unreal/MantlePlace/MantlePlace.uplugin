@@ -10,6 +10,7 @@
 	"CreatedByURL": "https://mantle.place",
 	"DocsURL": "https://github.com/mantleplace/mantleplace-dcc",
 	"MarketplaceURL": "",
+	"FabURL": "com.epicgames.launcher://ue/Fab/product/14b86e16-d4e5-44d9-943a-88980c7dec5e",
 	"SupportURL": "mailto:support@mantle.place",
 	"CanContainContent": true,
 	"IsBetaVersion": true,
@@ -19,12 +20,14 @@
 		{
 			"Name": "MantlePlaceRuntime",
 			"Type": "Runtime",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64" ]
 		},
 		{
 			"Name": "MantlePlaceEditor",
 			"Type": "Editor",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64" ]
 		}
 	],
 	"Plugins": [
