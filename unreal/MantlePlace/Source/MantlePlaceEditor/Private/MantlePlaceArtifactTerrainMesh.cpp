@@ -1,4 +1,4 @@
-// Copyright Mantle Place. All Rights Reserved.
+// Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 // `unreal.mesh_alternative`: Terrain.glb as a static mesh, the alternative to the Landscape (or its
 // overlay, in Both mode). Its glTF asset import runs in Prepare, before the undo transaction opens;

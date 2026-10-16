@@ -1,4 +1,4 @@
-// Copyright Mantle Place. All Rights Reserved.
+// Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 // `unreal.foliage_points` (HPS-32/HPS-33): tree points. Resolved from the bundle's own pointer —
 // never layout.tree_points or landcover.tree_points, which are other blocks' pointers to the same

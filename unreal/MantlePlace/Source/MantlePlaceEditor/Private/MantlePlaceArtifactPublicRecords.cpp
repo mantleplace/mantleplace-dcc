@@ -1,4 +1,4 @@
-// Copyright Mantle Place. All Rights Reserved.
+// Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 // The public-record layers of the bundle's top level (parcels, zoning, flood zones, and the families
 // that follow them in the `Records/` folder), as one overlay per family: a single actor holding one
