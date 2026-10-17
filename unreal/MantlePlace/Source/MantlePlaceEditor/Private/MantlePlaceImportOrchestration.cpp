@@ -345,8 +345,70 @@ FString MantlePlaceImportOrchestration::WipePriorAssets(
 		const MantlePlaceImportTiming::FScopedPhase WipePhase(
 			Timeline, MantlePlaceImportTiming::Phase::Wipe, TEXT("assets"));
 		AssetSubsystem->DeleteDirectory(DestPackagePath);
+		RetireDeletedLeftovers(DestPackagePath);
 	}
 	return FString();
+}
+
+namespace
+{
+/** Every package in memory under Folder, the folder's own path excluded. */
+TArray<UPackage*> PackagesUnder(const FString& Folder)
+{
+	const FString Prefix = Folder / TEXT("");
+	TArray<UPackage*> Packages;
+	ForEachObjectOfClass(UPackage::StaticClass(), [&Prefix, &Packages](UObject* Object)
+	{
+		if (Object->GetName().StartsWith(Prefix))
+		{
+			Packages.Add(CastChecked<UPackage>(Object));
+		}
+	});
+	return Packages;
+}
+}
+
+int32 MantlePlaceImportOrchestration::RetireDeletedLeftovers(const FString& DestPackagePath)
+{
+	// dcc #349. The force-delete clears RF_Public and RF_Standalone on each asset and leaves freeing
+	// it to garbage collection; anything holding a counted reference keeps it in memory, at its own
+	// path, in its own package. The live editor did exactly that to a saved SM_Buildings
+	// (LogReferenceChain: "not currently reachable but it does have 1 refcount set"). The glTF
+	// import that follows finds the object there and imports INTO it, flags still cleared, so the
+	// new buildings actor references a private object: Save All refuses its package ("Illegal
+	// reference to private object") and the mesh's own package saves no asset, and after a reopen
+	// the buildings are gone. Moved to the transient package instead, the path is free and the
+	// import creates a fresh public asset; whatever held the old one still holds a valid object.
+	//
+	// Only what the delete deleted: a top-level object it left public it did not delete, and the
+	// import replaces that in place as it always has. Outside the import's transaction, and not
+	// transacted itself: it deletes nothing, so it leaves the undo buffer alone.
+	TArray<UObject*> Leftovers;
+	for (UPackage* Package : PackagesUnder(DestPackagePath))
+	{
+		ForEachObjectWithPackage(Package, [&Leftovers](UObject* Object)
+		{
+			if (!Object->HasAnyFlags(RF_Public))
+			{
+				Leftovers.Add(Object);
+			}
+			return true;
+		}, /*bIncludeNestedObjects*/ false);
+	}
+
+	UPackage* Transient = GetTransientPackage();
+	for (UObject* Leftover : Leftovers)
+	{
+		const FName Retired = MakeUniqueObjectName(Transient, Leftover->GetClass(),
+			FName(*FString::Printf(TEXT("%s_Deleted"), *Leftover->GetName())));
+		UE_LOG(LogMantlePlaceImport, Log,
+			TEXT("Re-import: %s was deleted but is still held in memory; moved aside so the import "
+				 "creates a new asset at its path."),
+			*Leftover->GetPathName());
+		Leftover->Rename(*Retired.ToString(), Transient, REN_DontCreateRedirectors | REN_NonTransactional | REN_DoNotDirty);
+		Leftover->SetFlags(RF_Transient);
+	}
+	return Leftovers.Num();
 }
 
 namespace
