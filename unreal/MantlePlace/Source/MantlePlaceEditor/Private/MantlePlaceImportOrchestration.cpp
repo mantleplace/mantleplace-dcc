@@ -4,6 +4,7 @@
 
 #include "MantlePlaceDataLayers.h"
 #include "MantlePlaceFoliageScatter.h"
+#include "MantlePlaceFoliageVolume.h"
 #include "MantlePlaceHLODLogic.h"
 #include "MantlePlaceHLODs.h"
 #include "MantlePlaceImportManifest.h"
@@ -14,10 +15,12 @@
 #include "MantlePlaceSha256.h"
 #include "MantlePlaceWorldPartitionLogic.h"
 
+#include "Components/BoxComponent.h"
 #include "Editor.h"
 #include "EngineUtils.h"
 #include "FileUtilities/ZipArchiveReader.h"
 #include "GameFramework/Actor.h"
+#include "Grid/PCGPartitionActor.h"
 #include "Landscape.h"
 #include "LandscapeInfo.h"
 #include "LandscapeStreamingProxy.h"
@@ -347,6 +350,7 @@ int32 MantlePlaceImportOrchestration::ReplacePriorActors(
 
 	// A foliage scatter's generated instances live on PCG partition actors, which carry no tag and
 	// are shared per cell: swept before its volume goes, and each destroyed once nothing else uses it.
+	// The sweep reaches loaded ones only; an unloaded one is ExplainUnloadedPriorActors' to refuse.
 	const TArray<AActor*> PartitionActors = MantlePlaceFoliageScatter::CleanupGenerated(World, StaleActors);
 
 	// A non-partitioned level is wiped exactly as it always was: no proxies, iteration order.
@@ -418,18 +422,42 @@ FString MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(UWorld* World
 		}
 	}
 
+	// The prior import's foliage scatters, by footprint: their instances live on PCG partition
+	// actors, untagged and spatially loaded per cell. The volume itself is kept always loaded; were
+	// it unloaded, its own tag counts it below.
+	TArray<FBox2D> PriorScatters;
+	for (TActorIterator<AMantlePlaceFoliageVolume> It(World); It; ++It)
+	{
+		if (It->Tags.Contains(ImportTagName) && It->Bounds != nullptr)
+		{
+			const FBox Box = It->Bounds->Bounds.GetBox();
+			PriorScatters.Add(FBox2D(FVector2D(Box.Min), FVector2D(Box.Max)));
+		}
+	}
+
 	// A read of the level's actor descriptors, which exist for loaded and unloaded actors alike and
 	// record each one's tags. Nothing is loaded and nothing is destroyed here; loading and
 	// destroying through this walk is the v2 upgrade, not this.
 	int32 Unloaded = 0;
 	FWorldPartitionHelpers::ForEachActorDescInstance(WorldPartition, AActor::StaticClass(),
-		[&Unloaded, &ImportTagName, &PriorLandscapes](const FWorldPartitionActorDescInstance* Desc)
+		[&Unloaded, &ImportTagName, &PriorLandscapes, &PriorScatters](const FWorldPartitionActorDescInstance* Desc)
 		{
 			if (Desc == nullptr || Desc->IsLoaded())
 			{
 				return true;
 			}
 			bool bPrior = Desc->GetTags().Contains(ImportTagName);
+			if (!bPrior && PriorScatters.Num() > 0)
+			{
+				const UClass* NativeClass = Desc->GetActorNativeClass();
+				if (NativeClass != nullptr && NativeClass->IsChildOf(APCGPartitionActor::StaticClass()))
+				{
+					const FBox Cell = Desc->GetEditorBounds();
+					bPrior = Cell.IsValid != 0
+						&& MantlePlaceWorldPartitionLogic::CellHoldsPriorScatter(
+							FBox2D(FVector2D(Cell.Min), FVector2D(Cell.Max)), PriorScatters);
+				}
+			}
 			if (!bPrior && PriorLandscapes.Num() > 0)
 			{
 				const UClass* NativeClass = Desc->GetActorNativeClass();

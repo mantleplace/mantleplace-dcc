@@ -126,8 +126,11 @@ Layer.
 - **The wipe sweeps what it generated.** Before the volume is destroyed its generated instances are
   cleaned up, and every partition actor that held them and now holds nothing else is destroyed. A
   partition actor another PCG component still generates on is left to it.
-- **Unloaded cells are not swept.** Like any other loaded-only sweep, a partition actor in an unloaded
-  region keeps what it held; load the region before re-importing a saved level.
+- **An unloaded cell refuses the re-import.** The sweep reaches loaded partition actors only, and a
+  partition actor carries no import tag, so a re-import counts every unloaded one whose cell
+  overlaps the prior volume's footprint (a cell that only touches its edge does not count) and
+  refuses, changing nothing, exactly as for any other unloaded actor of the prior import. Loading
+  the regions that hold the foliage, then importing again, is the remedy.
 
 ### HLODs, for terrain and buildings
 

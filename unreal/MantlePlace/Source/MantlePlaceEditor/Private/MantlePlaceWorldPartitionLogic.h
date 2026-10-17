@@ -57,4 +57,14 @@ bool ShouldForceNonSpatiallyLoaded(bool bPartitioned, bool bStreamedFamily);
  * those actors behind as orphans beside the new import; refusing changes nothing.
  */
 FString ExplainUnloadedPriorActors(int32 UnloadedCount);
+
+/**
+ * Whether an unloaded PCG partition actor, by its cell's footprint, may hold instances a prior
+ * foliage scatter generated: the cell overlaps one of the prior scatter volumes' footprints by a
+ * positive area. A partition actor carries no import tag and is shared by every partitioned
+ * component on its cell, so the footprint is all that ties it to the order; a wipe cannot clean an
+ * unloaded one, so it counts towards the refusal. A cell that only touches a volume's edge holds
+ * none of it, and a cell with no bounds cannot be placed, so neither counts.
+ */
+bool CellHoldsPriorScatter(const FBox2D& Cell, const TArray<FBox2D>& ScatterFootprints);
 }
