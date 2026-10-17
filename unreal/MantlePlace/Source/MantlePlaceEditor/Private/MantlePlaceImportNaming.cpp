@@ -61,6 +61,7 @@ namespace MantlePlaceImportNaming
 			case EActorKind::Landscape: return TEXT("Landscape");
 			case EActorKind::Mesh:      return TEXT("Mesh");
 			case EActorKind::Buildings: return TEXT("Buildings");
+			case EActorKind::Foliage:   return TEXT("Foliage");
 			}
 			checkNoEntry();
 			return TEXT("Actor");
@@ -258,6 +259,11 @@ namespace MantlePlaceImportNaming
 	FString TreePointsTableName()
 	{
 		return TEXT("DT_TreePoints");
+	}
+
+	FString FoliageGraphName()
+	{
+		return TEXT("PCG_TreeScatter");
 	}
 
 	FString TreePointsRowName(int32 RowIndex)

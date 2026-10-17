@@ -1,8 +1,8 @@
 # Mantle Place for Unreal
 
 The Unreal plugin — host #1, and the reference host. One `.uplugin` with two modules,
-`MantlePlaceRuntime` and `MantlePlaceEditor`, for **Unreal Engine 5.8**, editor-side. Its only engine
-dependency is Epic's built-in Interchange.
+`MantlePlaceRuntime` and `MantlePlaceEditor`, for **Unreal Engine 5.8**, editor-side. Its engine
+dependencies are Epic's built-in Interchange and PCG (the foliage scatter).
 
 **Status:** pre-1.0. Releases are tagged `unreal-<version>`
 ([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)); the version lives in
@@ -14,7 +14,7 @@ One import produces **one `ALandscape`** with the bundle's imagery draped onto i
 footprint, plus whatever else the bundle ships: the buildings as a static mesh, the road centrelines
 as one typed spline actor per road, the coverage rasters (water, land cover and their like) as data
 textures with their value mappings attached, and the landcover material weights painted as landscape
-layers. The tree points land as a data table, PCG-ready scatter input. The public-record layers a bundle carries
+layers. The tree points land as a data table, PCG-ready scatter input, and on request (a project setting) as a PCG foliage scatter that keeps off water, follows the canopy height and streams per World Partition cell. The public-record layers a bundle carries
 (parcels, zoning, flood zones and the families that follow them) are credited in the import log, and their
 DXF linework is drawn as one toggleable overlay per family where the file states a frame that is this
 host's. Importing a local bundle

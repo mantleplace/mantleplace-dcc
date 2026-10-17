@@ -16,6 +16,8 @@ UMantlePlaceEditorSettings::UMantlePlaceEditorSettings()
 	, MaxConsecutivePollFailures(DefaultMaxConsecutivePollFailures)
 	, WorldPartitionGridSize(DefaultWorldPartitionGridSize)
 {
+	FoliageTreeMeshes.Add(FSoftObjectPath(DefaultFoliageTreeMesh()));
+	FoliageShrubMeshes.Add(FSoftObjectPath(DefaultFoliageShrubMesh()));
 }
 
 int32 UMantlePlaceEditorSettings::UsableLocalTileServerFirstPort(int32 Configured)

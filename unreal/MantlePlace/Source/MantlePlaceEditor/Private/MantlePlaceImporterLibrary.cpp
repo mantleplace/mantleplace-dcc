@@ -268,7 +268,10 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 	const FString& ZipPath,
 	EMantlePlaceImportMode Mode)
 {
-	return ImportVaultPackageWithSelection(ZipPath, FMantlePlaceImportSelection::FromMode(Mode));
+	// The foliage scatter is opt-in, by the project setting: generated content the bundle did not ship.
+	const UMantlePlaceEditorSettings* Settings = GetDefault<UMantlePlaceEditorSettings>();
+	return ImportVaultPackageWithSelection(ZipPath,
+		FMantlePlaceImportSelection::FromMode(Mode, Settings != nullptr && Settings->bGenerateFoliageScatter));
 }
 
 FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSelection(

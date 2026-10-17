@@ -41,6 +41,34 @@ migration.
 - **`bGroundKnown` exists because 0 is a real elevation.** A graph that snaps trees to the ground
   should do it for the rows where `bGroundKnown` is false rather than plant them at sea level.
 
+## The scatter that binds it
+
+The plugin ships one consumer of the contract: the foliage scatter, opt-in through **Project
+Settings → Plugins → Mantle Place → Foliage → Generate a foliage scatter on import**. With it on, an
+import builds `<ContentRoot>/<identity>/Landcover/PCG_TreeScatter`, a three-node PCG graph: Load Data
+Table on this table, the plugin's **Mantle Place Tree Scatter** node, and a Static Mesh Spawner that
+picks each point's mesh by the `Mesh` attribute the scatter node writes. The graph is built in code
+at import rather than shipped as an asset, so every order's graph carries that order's own table and
+rasters.
+
+The scatter node reads `Position`, `FoliageType`, `HeightCm`, `CrownRadiusCm` and `bGroundKnown` by
+these names (`MantlePlaceTreeScatterColumns`, which `MantlePlace.Import.FoliageScatter.Columns` holds
+to `ColumnContract()`), and the decoded coverage rasters the same import made:
+
+- **`water_mask` and `worldcover` exclude.** A point on a water texel, or on a land-cover class the
+  node's excluded list names (built-up, snow and ice, permanent water by default), is dropped.
+- **`canopy_height` modulates trees, not shrubs.** A tree where the canopy reads at or below the
+  node's minimum is dropped, the keep chance ramps to one at its full-density height, and a row with
+  no `HeightCm` takes the canopy's height. The ramp's heights are node settings, not published
+  values; a graph a user edits can change them.
+- **The mesh set is the user's.** The Tree meshes and Shrub meshes project settings, defaulting to
+  the engine's own basic cone and sphere so the default ships no third-party asset. Each instance is
+  scaled to its row's height and crown and stood on the ground: `Position.Z` where `bGroundKnown`,
+  else a trace down onto the terrain.
+
+A raster the bundle does not ship filters nothing, and the import log says which. Where it lands and
+how a re-import removes it is [`generated-content.md`](generated-content.md).
+
 ## What is not a column, because the platform does not publish it
 
 The plugin applies published values and never derives them, so a graph that wants any of these cannot

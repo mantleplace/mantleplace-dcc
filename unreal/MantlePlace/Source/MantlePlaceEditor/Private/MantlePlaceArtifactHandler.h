@@ -9,6 +9,8 @@
 
 class AActor;
 class FJsonObject;
+class UDataTable;
+class UTexture2D;
 class FZipArchiveReader;
 class UMaterialInstanceConstant;
 class UWorld;
@@ -26,7 +28,8 @@ class FTimeline;
  *
  * Only an artifact that is a choice between alternatives is ever excluded by Mode: the terrain
  * Landscape and the terrain Mesh. Everything else describes the ground rather than representing it
- * and imports whenever the bundle ships it.
+ * and imports whenever the bundle ships it -- except the foliage scatter, which is generated content
+ * rather than the bundle's, and is opt-in: FromMode leaves it out unless asked.
  */
 struct FMantlePlaceImportSelection
 {
@@ -37,15 +40,17 @@ struct FMantlePlaceImportSelection
 	/** Every artifact the bundle ships. */
 	static FMantlePlaceImportSelection Everything() { return FMantlePlaceImportSelection(); }
 
-	/** The selection the three-way Mode implies. */
-	static FMantlePlaceImportSelection FromMode(EMantlePlaceImportMode Mode);
+	/** The selection the three-way Mode implies, with the foliage scatter only when opted in. */
+	static FMantlePlaceImportSelection FromMode(EMantlePlaceImportMode Mode, bool bFoliageScatter = false);
 };
 
-/** The two ids Mode can exclude. Every other artifact's id is private to its own handler. */
+/** The ids a selection is built from. Every other artifact's id is private to its own handler. */
 namespace MantlePlaceArtifactId
 {
 FName Landscape();
 FName TerrainMesh();
+/** The PCG foliage scatter: opt-in, so FromMode excludes it unless asked. */
+FName FoliageScatter();
 }
 
 /** What a handler's ParseFields is given: the manifest's root and its `hosts.unreal` block. */
@@ -98,6 +103,11 @@ struct FMantlePlaceImportContext
 	// geometry that follows; every geometry handler leaves its actor for the drape's coverage report.
 	UMaterialInstanceConstant* DrapeMic = nullptr;
 	TArray<AActor*> DrapeTargets;
+
+	// The foliage scatter reads what the coverage rasters and the tree points left: the textures by
+	// their manifest layer key (`canopy_height`, `water_mask`, `worldcover`), and the table.
+	TMap<FString, UTexture2D*> CoverageTextures;
+	UDataTable* TreePointsTable = nullptr;
 
 	/** False once any requested artifact failed. Optional artifacts never clear it. */
 	bool bAllRequestedSucceeded = true;

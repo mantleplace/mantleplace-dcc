@@ -20,6 +20,7 @@ TUniquePtr<IMantlePlaceArtifactHandler> MakeTerrainMesh();
 TUniquePtr<IMantlePlaceArtifactHandler> MakeBuildings();
 TUniquePtr<IMantlePlaceArtifactHandler> MakeRoadSplines();
 TUniquePtr<IMantlePlaceArtifactHandler> MakeFoliagePoints();
+TUniquePtr<IMantlePlaceArtifactHandler> MakeFoliageScatter();
 TUniquePtr<IMantlePlaceArtifactHandler> MakePublicRecords();
 
 FHandlers MakeAll()
@@ -33,6 +34,8 @@ FHandlers MakeAll()
 	Handlers.Add(MakeBuildings());
 	Handlers.Add(MakeRoadSplines());
 	Handlers.Add(MakeFoliagePoints());
+	// The scatter after the table and the coverage rasters it reads, which it finds in the context.
+	Handlers.Add(MakeFoliageScatter());
 	// The public-record overlays last: they lie on the ground the geometry above has just made.
 	Handlers.Add(MakePublicRecords());
 	return Handlers;
@@ -41,8 +44,9 @@ FHandlers MakeAll()
 
 FName MantlePlaceArtifactId::Landscape() { return FName(TEXT("landscape")); }
 FName MantlePlaceArtifactId::TerrainMesh() { return FName(TEXT("terrain_mesh")); }
+FName MantlePlaceArtifactId::FoliageScatter() { return FName(TEXT("foliage_scatter")); }
 
-FMantlePlaceImportSelection FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode Mode)
+FMantlePlaceImportSelection FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode Mode, bool bFoliageScatter)
 {
 	// Landscape and Mesh are alternatives for the terrain itself; everything else is content that
 	// describes the ground and imports whenever the bundle ships it, whatever the Mode.
@@ -54,6 +58,11 @@ FMantlePlaceImportSelection FMantlePlaceImportSelection::FromMode(EMantlePlaceIm
 	else if (Mode == EMantlePlaceImportMode::Landscape)
 	{
 		Selection.Excluded.Add(MantlePlaceArtifactId::TerrainMesh());
+	}
+	// Generated content, not the bundle's: opt-in, whatever the Mode.
+	if (!bFoliageScatter)
+	{
+		Selection.Excluded.Add(MantlePlaceArtifactId::FoliageScatter());
 	}
 	return Selection;
 }

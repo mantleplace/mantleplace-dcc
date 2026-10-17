@@ -13,7 +13,8 @@ of what that file's Naming section used to.
 <ContentRoot>/<identity>/Mesh             the terrain static mesh
 <ContentRoot>/<identity>/Buildings        the buildings static mesh
 <ContentRoot>/<identity>/CoverageRasters  slope, water, canopy and their like, as textures
-<ContentRoot>/<identity>/Landcover        one layer info per paint layer, plus the tree points table
+<ContentRoot>/<identity>/Landcover        one layer info per paint layer, the tree points table, and
+                                          the foliage scatter's PCG graph when one was asked for
 <ContentRoot>/Layers                      one Data Layer asset per layer family, and one HLOD layer for
                                           terrain and one for buildings, shared by every import
 ```
@@ -107,6 +108,26 @@ actor of its family, so no empty layer appears; a non-partitioned level gets non
 - **Runtime layers, initially Activated.** A game run loads and shows the import exactly as before
   layers existed, and a game can stream a family by changing the layer's runtime state.
 - Like everything else here, the asset is never saved by the importer; saving the level offers it.
+
+### The foliage scatter, partitioned per cell
+
+The scatter ([`foliage-table-contract.md`](foliage-table-contract.md)) is opt-in: an import that did
+not ask for it spawns nothing for it. When asked, it spawns one PCG volume over the AOI, labelled
+`MP_Foliage_<identity>`, tagged and claimed like every other imported actor, in the foliage Data
+Layer.
+
+- **In a World Partition level its PCG component is partitioned** on the PCG grid, so generation runs
+  per cell into PCG partition actors, and those take the volume's Data Layer: the foliage family
+  shows, hides and streams with its layer. The volume is claimed before its graph is assigned,
+  because a partition actor takes the layer the volume has when the actor is made.
+- **A non-partitioned level generates on the volume itself**, with the same graph, and gets no
+  partition actor. That is the decided behaviour, not a fallback: the scatter is the same either way,
+  and only its streaming differs.
+- **The wipe sweeps what it generated.** Before the volume is destroyed its generated instances are
+  cleaned up, and every partition actor that held them and now holds nothing else is destroyed. A
+  partition actor another PCG component still generates on is left to it.
+- **Unloaded cells are not swept.** Like any other loaded-only sweep, a partition actor in an unloaded
+  region keeps what it held; load the region before re-importing a saved level.
 
 ### HLODs, for terrain and buildings
 

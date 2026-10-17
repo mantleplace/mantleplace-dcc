@@ -38,6 +38,8 @@ namespace MantlePlaceImportNaming
 		Landscape,
 		Mesh,
 		Buildings,
+		/** The foliage scatter's PCG volume. */
+		Foliage,
 	};
 
 	// --- Identity -----------------------------------------------------------------------------
@@ -232,6 +234,12 @@ namespace MantlePlaceImportNaming
 
 	/** `DT_TreePoints` — the foliage-point data table. The folder carries the identity. */
 	FString TreePointsTableName();
+
+	/**
+	 * `PCG_TreeScatter` — the foliage scatter's PCG graph, built at import beside the table it reads.
+	 * The folder carries the identity, so a re-import's wipe takes the graph with the rest.
+	 */
+	FString FoliageGraphName();
 
 	/** `Tree_<index>` — one row of that table. */
 	FString TreePointsRowName(int32 RowIndex);

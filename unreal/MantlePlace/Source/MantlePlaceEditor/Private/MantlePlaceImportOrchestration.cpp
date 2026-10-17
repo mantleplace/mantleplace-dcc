@@ -3,6 +3,7 @@
 #include "MantlePlaceImportOrchestration.h"
 
 #include "MantlePlaceDataLayers.h"
+#include "MantlePlaceFoliageScatter.h"
 #include "MantlePlaceHLODLogic.h"
 #include "MantlePlaceHLODs.h"
 #include "MantlePlaceImportManifest.h"
@@ -344,6 +345,10 @@ int32 MantlePlaceImportOrchestration::ReplacePriorActors(
 		}
 	}
 
+	// A foliage scatter's generated instances live on PCG partition actors, which carry no tag and
+	// are shared per cell: swept before its volume goes, and each destroyed once nothing else uses it.
+	const TArray<AActor*> PartitionActors = MantlePlaceFoliageScatter::CleanupGenerated(World, StaleActors);
+
 	// A non-partitioned level is wiped exactly as it always was: no proxies, iteration order.
 	if (!UWorld::IsPartitionedWorld(World))
 	{
@@ -351,7 +356,7 @@ int32 MantlePlaceImportOrchestration::ReplacePriorActors(
 		{
 			World->EditorDestroyActor(Stale, /*bShouldModifyLevel*/ true);
 		}
-		return StaleActors.Num();
+		return StaleActors.Num() + MantlePlaceFoliageScatter::DestroyEmptyPartitionActors(World, PartitionActors);
 	}
 
 	// A split landscape's proxies go with it, tagged or not: a proxy the landscape tools added
@@ -390,7 +395,7 @@ int32 MantlePlaceImportOrchestration::ReplacePriorActors(
 	{
 		World->EditorDestroyActor(StaleActors[Index], /*bShouldModifyLevel*/ true);
 	}
-	return StaleActors.Num();
+	return StaleActors.Num() + MantlePlaceFoliageScatter::DestroyEmptyPartitionActors(World, PartitionActors);
 }
 
 FString MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(UWorld* World, const FString& Identity)
