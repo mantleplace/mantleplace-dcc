@@ -14,7 +14,8 @@ of what that file's Naming section used to.
 <ContentRoot>/<identity>/Buildings        the buildings static mesh
 <ContentRoot>/<identity>/CoverageRasters  slope, water, canopy and their like, as textures
 <ContentRoot>/<identity>/Landcover        one layer info per paint layer, plus the tree points table
-<ContentRoot>/Layers                      one Data Layer asset per layer family, shared by every import
+<ContentRoot>/Layers                      one Data Layer asset per layer family, and one HLOD layer for
+                                          terrain and one for buildings, shared by every import
 ```
 
 - `<ContentRoot>` defaults to `/Game/MantlePlace` and is a **project** setting —
@@ -82,7 +83,9 @@ not split and imports exactly as before.
 - **Every proxy carries the import tag**, and the sweep also takes every proxy the parent landscape
   holds, tagged or not, destroying proxies before their parent.
 - **Every other imported actor is kept always loaded** (not spatially loaded), so the sweep, which can
-  only see loaded actors, always sees it. The cost is that those actors do not stream.
+  only see loaded actors, always sees it. The cost is that those actors do not stream. The terrain
+  mesh and the buildings are the exception: they stream, because an always-loaded actor is never
+  represented by an HLOD, and the refusal below keeps the sweep from leaving one behind.
 - **A re-import refuses, changing nothing, when any actor of the prior import is in an unloaded
   region.** Loading the regions that hold it, then importing again, is the remedy; a sweep that went
   ahead would leave the unloaded actors behind beside the new import.
@@ -104,3 +107,26 @@ actor of its family, so no empty layer appears; a non-partitioned level gets non
 - **Runtime layers, initially Activated.** A game run loads and shows the import exactly as before
   layers existed, and a game can stream a family by changing the layer's runtime state.
 - Like everything else here, the asset is never saved by the importer; saving the level offers it.
+
+### HLODs, for terrain and buildings
+
+In a World Partition level the landscape's streaming proxies and the terrain mesh are put in the
+`HLOD_Terrain` layer and the buildings in `HLOD_Buildings`, so a distant view of a large import
+shows simplified stand-ins for the cells that are not loaded. Roads, foliage, coverage and records
+get no HLOD layer: at the distance an HLOD stands in, they read as noise.
+
+- **Per family, shared across orders**, like the Data Layers, and beside them in `<ContentRoot>/Layers`.
+  Both are simplified-mesh layers: a bundle's terrain and buildings are a few large unique meshes,
+  which instancing and merging do not reduce. A landscape builds through its own HLOD builder.
+- **The level streams them.** Since 5.8 an HLOD layer counts only when a runtime partition's HLOD
+  setup lists it, so the import adds both to the main partition's first HLOD setup (World Settings
+  → Runtime Partitions → HLOD Partitions), making one from the main partition when the level has none.
+- **The import never builds HLODs; building is a prompted step.** The engine's HLOD build reads the
+  saved level and leaves out every unsaved actor, and the importer saves nothing, so a build run by
+  the import would include none of it. The import log says so and names the two ways to build, after
+  File → Save All: the editor's **Build → Build HLODs**, or `MantlePlaceImporterLibrary.BuildHLODs`
+  (`build_hlods` from Python), which refuses an unsaved level, runs the engine's builder with no
+  dialog, saves nothing, and reports the HLOD actor count and the build's cost in the import log.
+  Offline, the documented invocation is
+  `UnrealEditor-Cmd.exe <project> <map> -run=WorldPartitionBuilderCommandlet -Builder=WorldPartitionHLODsBuilder -AllowCommandletRendering`.
+- **Measured cost.** MEASUREMENT_PLACEHOLDER

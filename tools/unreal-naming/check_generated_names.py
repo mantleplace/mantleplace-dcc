@@ -20,8 +20,8 @@ So this gate enforces the "nowhere else" half, which is the half a reviewer cann
   * A `TEXT("MP_...")` actor-label literal. Re-import finds prior actors by matching these; a label
     built somewhere else drifts out of agreement with the matcher and re-import silently stops
     replacing, then starts stacking duplicates.
-  * A bare asset-prefix literal -- `SM_`, `T_`, `M_`, `MI_`, `LI_`, `DT_`, `DL_`, `BP_`. Use the typed
-    helper, so the prefix table has one row per type and one home.
+  * A bare asset-prefix literal -- `SM_`, `T_`, `M_`, `MI_`, `LI_`, `DT_`, `DL_`, `HLOD_`, `BP_`. Use the
+    typed helper, so the prefix table has one row per type and one home.
   * A subfolder name used as a path segment (`/ TEXT("Imagery")`). Matched only next to the path
     operator, because the same words are legitimate UI strings elsewhere.
   * `.Left(8)` on a job or order id. The truncation is what makes two identities collide in one
@@ -58,7 +58,7 @@ TEST_DIR_PART = "Tests"
 ALLOW_RE = re.compile(r"//\s*naming-gate:\s*allow\s+\S")
 BARE_ALLOW_RE = re.compile(r"//\s*naming-gate:\s*allow\s*$")
 
-ASSET_PREFIXES = ("SM_", "MI_", "LI_", "DT_", "DL_", "BP_", "M_", "T_")
+ASSET_PREFIXES = ("SM_", "MI_", "LI_", "DT_", "DL_", "HLOD_", "BP_", "M_", "T_")
 SUBFOLDERS = ("Imagery", "Mesh", "Buildings", "CoverageRasters", "Landcover", "Layers")
 
 RULES: list[tuple[str, re.Pattern[str], str]] = [

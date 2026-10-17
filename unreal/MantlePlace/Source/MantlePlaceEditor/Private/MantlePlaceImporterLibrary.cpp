@@ -11,6 +11,8 @@
 #include "MantlePlaceImportProvenance.h"
 #include "MantlePlaceImportOrchestration.h"
 #include "MantlePlaceImportTiming.h"
+#include "MantlePlaceHLODLogic.h"
+#include "MantlePlaceHLODs.h"
 #include "MantlePlaceLocalTileServer.h"
 #include "MantlePlaceScopedRestore.h"
 #include "MantlePlaceStreamStaging.h"
@@ -517,6 +519,14 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	MantlePlaceImportOrchestration::RunImport(Handlers, Context);
 	MantlePlaceImportOrchestration::RunFinalize(Handlers, Context);
 
+	// --- HLODs: configured by Claim, never built here (MantlePlaceHLODLogic says why); say how. ---
+	const FString HLODNote = MantlePlaceHLODLogic::PostImportNote(
+		UWorld::IsPartitionedWorld(World), MantlePlaceHLODs::CountAssigned(World, ContentRoot));
+	if (!HLODNote.IsEmpty())
+	{
+		Log.Add(HLODNote);
+	}
+
 	// --- Report ---
 	Result.bSuccess = Context.bAllRequestedSucceeded && Result.CreatedActors.Num() > 0;
 	if (Result.bSuccess)
@@ -790,6 +800,12 @@ void UMantlePlaceImporterLibrary::StopBundleStream()
 	{
 		GBundleStreamServer->Stop();
 	}
+}
+
+FString UMantlePlaceImporterLibrary::BuildHLODs()
+{
+	UWorld* World = GEditor != nullptr ? GEditor->GetEditorWorldContext().World() : nullptr;
+	return MantlePlaceHLODs::Build(World).Message;
 }
 
 #undef LOCTEXT_NAMESPACE

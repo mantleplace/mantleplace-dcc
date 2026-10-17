@@ -167,6 +167,9 @@ namespace MantlePlaceImportNaming
 	/** `<ContentRoot>/Layers/DL_<family>` — the package of one family's Data Layer asset. */
 	FString DataLayerPackageName(const FString& ContentRoot, const FString& FamilyName);
 
+	/** `<ContentRoot>/Layers/HLOD_<family>` — the package of one family's HLOD layer asset. */
+	FString HLODLayerPackageName(const FString& ContentRoot, const FString& FamilyName);
+
 	/** `<PackagePath>/<AssetName>.<AssetName>` — an asset addressed inside a package directory. */
 	FString ObjectPathIn(const FString& PackagePath, const FString& AssetName);
 
@@ -220,6 +223,12 @@ namespace MantlePlaceImportNaming
 	 * across orders (MantlePlaceDataLayerLogic records why), so no identity, in the leaf or the folder.
 	 */
 	FString DataLayerAssetName(const FString& FamilyName);
+
+	/**
+	 * `HLOD_<family>` — one layer family's World Partition HLOD layer asset. Shared across orders like
+	 * the Data Layer, for the same reason (MantlePlaceHLODLogic), so no identity either.
+	 */
+	FString HLODLayerAssetName(const FString& FamilyName);
 
 	/** `DT_TreePoints` — the foliage-point data table. The folder carries the identity. */
 	FString TreePointsTableName();

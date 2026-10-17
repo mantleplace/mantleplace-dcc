@@ -3,6 +3,8 @@
 #include "MantlePlaceImportOrchestration.h"
 
 #include "MantlePlaceDataLayers.h"
+#include "MantlePlaceHLODLogic.h"
+#include "MantlePlaceHLODs.h"
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportProvenance.h"
@@ -74,9 +76,14 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 	// One Data Layer per layer family, shared across orders: the actor joins its handler's family.
 	MantlePlaceDataLayers::Assign(Actor, ContentRoot, Family);
 
-	// v1 unloaded-actor policy: kept always loaded, so the tag-matched wipe always sees it.
-	const bool bLandscapeFamily = Actor->IsA<ALandscapeProxy>();
-	if (MantlePlaceWorldPartitionLogic::ShouldForceNonSpatiallyLoaded(/*bPartitioned*/ true, bLandscapeFamily)
+	// One HLOD layer per HLOD family (Terrain, Buildings), shared across orders like the Data Layer.
+	MantlePlaceHLODs::Assign(Actor, ContentRoot, Family);
+
+	// v1 unloaded-actor policy: kept always loaded, so the tag-matched wipe always sees it. A
+	// landscape and the HLOD families stream instead: an always-loaded actor is never in an HLOD, and
+	// ExplainUnloadedPriorActors refuses a re-import while any of them is unloaded.
+	const bool bStreamedFamily = Actor->IsA<ALandscapeProxy>() || MantlePlaceHLODLogic::HasHLOD(Family);
+	if (MantlePlaceWorldPartitionLogic::ShouldForceNonSpatiallyLoaded(/*bPartitioned*/ true, bStreamedFamily)
 		&& Actor->CanChangeIsSpatiallyLoadedFlag())
 	{
 		Actor->SetIsSpatiallyLoaded(false);
@@ -95,6 +102,7 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 					Proxy->Tags.AddUnique(Tag);
 					Proxy->SetFolderPath(Folder);
 					MantlePlaceDataLayers::Assign(Proxy.Get(), ContentRoot, Family);
+					MantlePlaceHLODs::Assign(Proxy.Get(), ContentRoot, Family);
 				}
 			}
 		}
