@@ -41,6 +41,19 @@ namespace MantlePlaceLandscapeImporter
 		FString& OutError);
 
 	/**
+	 * In a World Partition level, split a freshly imported landscape into ALandscapeStreamingProxy
+	 * actors of GridSizeInComponents components per axis, the way the engine's New Landscape tool
+	 * does (ULandscapeSubsystem::ChangeGridSize, after Import). Returns true when it split; false,
+	 * having touched nothing, in a non-partitioned level, which is how that level's import stays
+	 * exactly what it was. Import() calls it with the project's grid-size setting; the World
+	 * Partition test calls it directly.
+	 *
+	 * The proxies inherit the parent's LandscapeMaterial (SynchronizeSharedProperties) and their
+	 * components keep the material they were built with; the parent keeps no components at all.
+	 */
+	bool SplitForWorldPartition(ALandscape* Landscape, int32 GridSizeInComponents);
+
+	/**
 	 * Decode an 8-bit RGBA PNG (already extracted to disk) into an FMantlePlaceRgbaImage tagged with
 	 * the in-zip path it came from. The impure half of the weights path; the pure half decides what
 	 * the channels mean.

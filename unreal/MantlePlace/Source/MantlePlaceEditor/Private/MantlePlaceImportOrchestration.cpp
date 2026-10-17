@@ -8,14 +8,22 @@
 #include "MantlePlaceImportTiming.h"
 #include "MantlePlaceIntegrityLogic.h"
 #include "MantlePlaceSha256.h"
+#include "MantlePlaceWorldPartitionLogic.h"
 
 #include "Editor.h"
 #include "EngineUtils.h"
 #include "FileUtilities/ZipArchiveReader.h"
 #include "GameFramework/Actor.h"
+#include "Landscape.h"
+#include "LandscapeInfo.h"
+#include "LandscapeStreamingProxy.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Subsystems/EditorAssetSubsystem.h"
+#include "WorldPartition/ActorPartition/PartitionActorDesc.h"
+#include "WorldPartition/WorldPartition.h"
+#include "WorldPartition/WorldPartitionActorDescInstance.h"
+#include "WorldPartition/WorldPartitionHelpers.h"
 
 DEFINE_LOG_CATEGORY(LogMantlePlaceImport);
 
@@ -50,9 +58,42 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 	{
 		return;
 	}
+	const FName Tag(*MantlePlaceImportNaming::ImportTag(Identity));
+	const FName Folder(*MantlePlaceImportNaming::OutlinerFolder(Identity));
 	Actor->SetActorLabel(Label);
-	Actor->Tags.AddUnique(FName(*MantlePlaceImportNaming::ImportTag(Identity)));
-	Actor->SetFolderPath(FName(*MantlePlaceImportNaming::OutlinerFolder(Identity)));
+	Actor->Tags.AddUnique(Tag);
+	Actor->SetFolderPath(Folder);
+
+	// World Partition only; a non-partitioned level's actors are claimed exactly as before.
+	if (!UWorld::IsPartitionedWorld(Actor->GetWorld()))
+	{
+		return;
+	}
+
+	// v1 unloaded-actor policy: kept always loaded, so the tag-matched wipe always sees it.
+	const bool bLandscapeFamily = Actor->IsA<ALandscapeProxy>();
+	if (MantlePlaceWorldPartitionLogic::ShouldForceNonSpatiallyLoaded(/*bPartitioned*/ true, bLandscapeFamily)
+		&& Actor->CanChangeIsSpatiallyLoadedFlag())
+	{
+		Actor->SetIsSpatiallyLoaded(false);
+	}
+
+	// A split landscape's streaming proxies are this import's too. They keep their engine-generated
+	// names (the label is cosmetic; the tag is what the wipe matches) and stay spatially loaded.
+	if (const ALandscape* Landscape = Cast<ALandscape>(Actor))
+	{
+		if (const ULandscapeInfo* Info = Landscape->GetLandscapeInfo())
+		{
+			for (const TWeakObjectPtr<ALandscapeStreamingProxy>& Proxy : Info->GetSortedStreamingProxies())
+			{
+				if (Proxy.IsValid())
+				{
+					Proxy->Tags.AddUnique(Tag);
+					Proxy->SetFolderPath(Folder);
+				}
+			}
+		}
+	}
 }
 
 namespace
@@ -286,14 +327,105 @@ int32 MantlePlaceImportOrchestration::ReplacePriorActors(
 	{
 		if (It->Tags.Contains(ImportTagName))
 		{
-			StaleActors.Add(*It);
+			StaleActors.AddUnique(*It);
 		}
 	}
-	for (AActor* Stale : StaleActors)
+
+	// A non-partitioned level is wiped exactly as it always was: no proxies, iteration order.
+	if (!UWorld::IsPartitionedWorld(World))
 	{
-		World->EditorDestroyActor(Stale, /*bShouldModifyLevel*/ true);
+		for (AActor* Stale : StaleActors)
+		{
+			World->EditorDestroyActor(Stale, /*bShouldModifyLevel*/ true);
+		}
+		return StaleActors.Num();
+	}
+
+	// A split landscape's proxies go with it, tagged or not: a proxy the landscape tools added
+	// after the import never got the tag. Resolved from the parent's landscape info, which holds
+	// every loaded proxy; an unloaded one is ExplainUnloadedPriorActors' to refuse, before this.
+	const int32 TaggedCount = StaleActors.Num();
+	for (int32 Index = 0; Index < TaggedCount; ++Index)
+	{
+		const ALandscape* Landscape = Cast<ALandscape>(StaleActors[Index]);
+		const ULandscapeInfo* Info = Landscape != nullptr ? Landscape->GetLandscapeInfo() : nullptr;
+		if (Info == nullptr)
+		{
+			continue;
+		}
+		for (const TWeakObjectPtr<ALandscapeStreamingProxy>& Proxy : Info->GetSortedStreamingProxies())
+		{
+			if (Proxy.IsValid())
+			{
+				StaleActors.AddUnique(Proxy.Get());
+			}
+		}
+	}
+
+	// Proxies before their parent: destroying the parent first leaves its proxies registered to a
+	// landscape info with no owner.
+	using MantlePlaceWorldPartitionLogic::EWipeRank;
+	TArray<EWipeRank> Ranks;
+	Ranks.Reserve(StaleActors.Num());
+	for (const AActor* Stale : StaleActors)
+	{
+		Ranks.Add(Stale->IsA<ALandscapeStreamingProxy>() ? EWipeRank::StreamingProxy
+			: Stale->IsA<ALandscape>()                   ? EWipeRank::LandscapeParent
+			                                             : EWipeRank::Other);
+	}
+	for (const int32 Index : MantlePlaceWorldPartitionLogic::WipeOrder(Ranks))
+	{
+		World->EditorDestroyActor(StaleActors[Index], /*bShouldModifyLevel*/ true);
 	}
 	return StaleActors.Num();
+}
+
+FString MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(UWorld* World, const FString& Identity)
+{
+	UWorldPartition* WorldPartition = World != nullptr ? World->GetWorldPartition() : nullptr;
+	if (WorldPartition == nullptr)
+	{
+		// Not partitioned: every actor is loaded, and there is nothing to refuse.
+		return FString();
+	}
+
+	// The prior import's landscapes, by GUID: their proxies may be unloaded AND untagged.
+	const FName ImportTagName(*MantlePlaceImportNaming::ImportTag(Identity));
+	TSet<FGuid> PriorLandscapes;
+	for (TActorIterator<ALandscape> It(World); It; ++It)
+	{
+		if (It->Tags.Contains(ImportTagName))
+		{
+			PriorLandscapes.Add(It->GetLandscapeGuid());
+		}
+	}
+
+	// A read of the level's actor descriptors, which exist for loaded and unloaded actors alike and
+	// record each one's tags. Nothing is loaded and nothing is destroyed here; loading and
+	// destroying through this walk is the v2 upgrade, not this.
+	int32 Unloaded = 0;
+	FWorldPartitionHelpers::ForEachActorDescInstance(WorldPartition, AActor::StaticClass(),
+		[&Unloaded, &ImportTagName, &PriorLandscapes](const FWorldPartitionActorDescInstance* Desc)
+		{
+			if (Desc == nullptr || Desc->IsLoaded())
+			{
+				return true;
+			}
+			bool bPrior = Desc->GetTags().Contains(ImportTagName);
+			if (!bPrior && PriorLandscapes.Num() > 0)
+			{
+				const UClass* NativeClass = Desc->GetActorNativeClass();
+				if (NativeClass != nullptr && NativeClass->IsChildOf(ALandscapeProxy::StaticClass()))
+				{
+					const FPartitionActorDesc* PartitionDesc =
+						static_cast<const FPartitionActorDesc*>(Desc->GetActorDesc());
+					bPrior = PartitionDesc != nullptr && PriorLandscapes.Contains(PartitionDesc->GridGuid);
+				}
+			}
+			Unloaded += bPrior ? 1 : 0;
+			return true;
+		});
+	return MantlePlaceWorldPartitionLogic::ExplainUnloadedPriorActors(Unloaded);
 }
 
 void MantlePlaceImportOrchestration::RunPrepare(const FHandlers& Handlers, FMantlePlaceImportContext& Context)

@@ -58,8 +58,21 @@ FString WipePriorAssets(
  * re-importing replaces them instead of stacking duplicate (coincident) actors. Matched on the
  * import TAG, which carries the full identity and survives being renamed or dragged elsewhere --
  * never on the label, which a user edits. Returns how many were removed; a second call returns 0.
+ *
+ * A tagged landscape's streaming proxies go with it, tagged or not, and before it: proxies first,
+ * the parent landscape last.
  */
 int32 ReplacePriorActors(UWorld* World, const FString& Identity, MantlePlaceImportTiming::FTimeline& Timeline);
+
+/**
+ * The refusal for a re-import into a World Partition level when any actor of the prior import of
+ * this ORDER is in an unloaded region, or empty when the import can go ahead (always, in a
+ * non-partitioned level). ReplacePriorActors can only destroy what is loaded, so going ahead would
+ * leave the unloaded ones behind as orphans beside the new import. Called before either wipe, so a
+ * refusal changes nothing. A prior landscape's streaming proxies count whether or not they carry
+ * the tag, matched by the landscape's GUID.
+ */
+FString ExplainUnloadedPriorActors(UWorld* World, const FString& Identity);
 
 /** Each included handler's Prepare / Import / Finalize, in registry order. */
 void RunPrepare(const FHandlers& Handlers, FMantlePlaceImportContext& Context);

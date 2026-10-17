@@ -70,3 +70,18 @@ refused, with its path, rather than adopted or silently replaced.
 is what the stale-actor sweep matches. Labels are user-editable, and matching on them meant a user
 who renamed an actor in the outliner broke their own next re-import and got a second landscape on
 top of the first.
+
+## World Partition levels
+
+In a World Partition level the landscape is split, after it is built, into `ALandscapeStreamingProxy`
+actors on the grid the **Landscape grid size** project setting names (components per proxy per axis,
+the engine's default of 2), as the engine's own New Landscape tool does. A non-partitioned level is
+not split and imports exactly as before.
+
+- **Every proxy carries the import tag**, and the sweep also takes every proxy the parent landscape
+  holds, tagged or not, destroying proxies before their parent.
+- **Every other imported actor is kept always loaded** (not spatially loaded), so the sweep, which can
+  only see loaded actors, always sees it. The cost is that those actors do not stream.
+- **A re-import refuses, changing nothing, when any actor of the prior import is in an unloaded
+  region.** Loading the regions that hold it, then importing again, is the remedy; a sweep that went
+  ahead would leave the unloaded actors behind beside the new import.

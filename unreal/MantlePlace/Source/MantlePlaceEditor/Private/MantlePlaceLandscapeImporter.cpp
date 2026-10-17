@@ -6,6 +6,7 @@
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportTiming.h"
 #include "MantlePlaceLandscapeWeightsLogic.h"
+#include "MantlePlaceEditorSettings.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/World.h"
@@ -15,6 +16,7 @@
 #include "LandscapeProxy.h"
 #include "LandscapeInfo.h"
 #include "LandscapeLayerInfoObject.h"
+#include "LandscapeSubsystem.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/FileHelper.h"
@@ -64,6 +66,31 @@ namespace MantlePlaceLandscapeImporter
 
 		OutSamples.SetNumUninitialized(Width * Height);
 		FMemory::Memcpy(OutSamples.GetData(), Raw.GetData(), Raw.Num());
+		return true;
+	}
+
+	bool SplitForWorldPartition(ALandscape* Landscape, int32 GridSizeInComponents)
+	{
+		if (Landscape == nullptr || GridSizeInComponents <= 0)
+		{
+			return false;
+		}
+		UWorld* World = Landscape->GetWorld();
+		ULandscapeSubsystem* Subsystem = World != nullptr ? World->GetSubsystem<ULandscapeSubsystem>() : nullptr;
+		ULandscapeInfo* Info = Landscape->GetLandscapeInfo();
+		// ChangeGridSize is itself a no-op outside World Partition; the check is repeated here so the
+		// caller knows which material rebuild to run, and so a non-partitioned import records no
+		// split phase at all.
+		if (Subsystem == nullptr || Info == nullptr || !Subsystem->IsGridBased())
+		{
+			return false;
+		}
+		const MantlePlaceImportTiming::FScopedCurrentPhase SplitPhase(
+			MantlePlaceImportTiming::Phase::LandscapeWorldPartitionSplit);
+		Subsystem->ChangeGridSize(Info, static_cast<uint32>(GridSizeInComponents));
+		UE_LOG(LogMantlePlaceLandscape, Log,
+			TEXT("World Partition: landscape split into %d streaming prox(ies) of %d component(s) per axis."),
+			Info->GetSortedStreamingProxies().Num(), GridSizeInComponents);
 		return true;
 	}
 
@@ -311,6 +338,17 @@ namespace MantlePlaceLandscapeImporter
 			}
 		}
 
+		// World Partition: split into streaming proxies HERE, after Import() has built the
+		// components with the drape and BEFORE the drape sequence below. The order is the engine's
+		// (the New Landscape tool calls ChangeGridSize after Import) and it is what the sequence
+		// below needs: each proxy copies LandscapeMaterial from the parent as it is created, its
+		// components keep the material they were built with, and the rebuild below then has to
+		// reach every proxy -- after the split the parent holds no components at all, so the
+		// parent-only rebuild this sequence used before would rebuild nothing. A non-partitioned
+		// level does not split, and keeps the parent-only rebuild exactly as it was.
+		const bool bSplit = SplitForWorldPartition(
+			Landscape, UMantlePlaceEditorSettings::ResolveWorldPartitionGridSize());
+
 		// Make the drape render on the import frame — no manual "re-apply material" / level refresh.
 		//
 		// Import() already built each component's combination material instance from LandscapeMaterial
@@ -373,7 +411,16 @@ namespace MantlePlaceLandscapeImporter
 			ShaderTask.EnterProgressFrame(1.0f, NSLOCTEXT("MantlePlaceImporter", "RebuildingMaterialInstances",
 				"Mantle Place: rebuilding landscape material instances..."));
 			const double RebuildStart = FPlatformTime::Seconds();
-			Landscape->UpdateAllComponentMaterialInstances(/*bInInvalidateCombinationMaterials*/ true);
+			ULandscapeInfo* SplitInfo = bSplit ? Landscape->GetLandscapeInfo() : nullptr;
+			if (SplitInfo != nullptr)
+			{
+				// Every proxy's components, the parent's (now none) included.
+				SplitInfo->UpdateAllComponentMaterialInstances(/*bInInvalidateCombinationMaterials*/ true);
+			}
+			else
+			{
+				Landscape->UpdateAllComponentMaterialInstances(/*bInInvalidateCombinationMaterials*/ true);
+			}
 			const double RebuildSeconds = FPlatformTime::Seconds() - RebuildStart;
 			MantlePlaceImportTiming::RecordOnCurrent(
 				MantlePlaceImportTiming::Phase::LandscapeMaterialRebuild, RebuildSeconds);
