@@ -60,6 +60,7 @@ exitCode |= InstalledBuildTests.Run();
 exitCode |= AuthConformanceTests.Run();
 exitCode |= AuthClientTests.Run();
 exitCode |= AccountRibbonTests.Run();
+exitCode |= HelpLinksTests.Run();
 exitCode |= RibbonImageryTests.Run();
 exitCode |= WindowLabelsTests.Run();
 exitCode |= ImportWindowStackingTests.Run();
