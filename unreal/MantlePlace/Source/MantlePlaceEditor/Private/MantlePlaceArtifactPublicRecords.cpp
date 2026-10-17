@@ -225,6 +225,7 @@ class FPublicRecordsHandler final : public IMantlePlaceArtifactHandler
 {
 public:
 	FName Id() const override { return FName(TEXT("public_records")); }
+	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::PublicRecords; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactPublicRecords", "Public records"); }
 
 	// Read from the manifest's top level, before the `unreal`-presence check, as the road splines are:

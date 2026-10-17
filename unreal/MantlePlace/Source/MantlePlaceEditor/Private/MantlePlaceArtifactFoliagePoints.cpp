@@ -34,6 +34,7 @@ class FFoliagePointsHandler final : public IMantlePlaceArtifactHandler
 {
 public:
 	FName Id() const override { return FName(TEXT("foliage_points")); }
+	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Foliage; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactFoliagePoints", "Tree points"); }
 
 	bool ParseFields(const FMantlePlaceParseInput& In, FMantlePlaceVaultManifest& M, FString& OutError) const override

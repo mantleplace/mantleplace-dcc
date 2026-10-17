@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MantlePlaceDataLayerLogic.h"
 #include "MantlePlaceImportTypes.h"
 #include "MantlePlaceIntegrityLogic.h"
 
@@ -83,6 +84,15 @@ struct FMantlePlaceImportContext
 	FString Identity;
 	FString TempDir;
 	FString DestPackagePath;
+	/** The resolved content root; the shared Data Layer assets live beneath it. Empty means the default. */
+	FString ContentRoot;
+
+	/**
+	 * The layer family of the handler running now, set by the orchestration before each Prepare,
+	 * Import and Finalize, so Claim files every actor a handler spawns under that handler's family
+	 * without a single call site having to say so.
+	 */
+	EMantlePlaceLayerFamily Family = EMantlePlaceLayerFamily::None;
 
 	// Shared between handlers by ORDER: the drape handler runs first and leaves its material for the
 	// geometry that follows; every geometry handler leaves its actor for the drape's coverage report.
@@ -102,6 +112,9 @@ struct FMantlePlaceImportContext
 	 * Label an actor, mark it as this import's, and file it in the outliner. One function, called
 	 * for every actor an import creates, so a new actor type cannot be added and forget one of the
 	 * three -- and in particular cannot forget the tag, which is what re-import matches on.
+	 *
+	 * In a World Partition level it also assigns the actor (and a landscape's streaming proxies) to
+	 * the Data Layer of the current Family; in a non-partitioned level it does not.
 	 */
 	void Claim(AActor* Actor, const FString& Label) const;
 };
@@ -144,6 +157,12 @@ public:
 
 	/** The integrity terms: every payload this artifact declares, digest or no digest (see FMantlePlaceIntegrityLogic). */
 	virtual void CollectDeclared(const FMantlePlaceVaultManifest& Manifest, TArray<FMantlePlaceDeclaredArtifact>& Out) const = 0;
+
+	/**
+	 * The layer family this artifact's actors belong to, and so the World Partition Data Layer they
+	 * are assigned to. Declared by every handler, None for one that spawns no actor of its own.
+	 */
+	virtual EMantlePlaceLayerFamily LayerFamily() const = 0;
 
 	/** True for the artifacts that ARE a terrain representation, of which an import must produce at least one. */
 	virtual bool IsTerrainRepresentation() const { return false; }

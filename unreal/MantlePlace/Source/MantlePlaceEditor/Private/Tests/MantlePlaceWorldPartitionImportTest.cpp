@@ -5,6 +5,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "MantlePlaceArtifactHandler.h"
+#include "MantlePlaceDataLayers.h"
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportOrchestration.h"
@@ -20,6 +21,10 @@
 #include "LandscapeInfo.h"
 #include "LandscapeStreamingProxy.h"
 #include "Materials/Material.h"
+#include "DataLayer/DataLayerEditorSubsystem.h"
+#include "WorldPartition/DataLayer/DataLayerAsset.h"
+#include "WorldPartition/DataLayer/DataLayerInstance.h"
+#include "WorldPartition/DataLayer/WorldDataLayers.h"
 
 // The World Partition round trip, without a bundle: a landscape built the way the importer builds
 // one, in a partitioned throwaway world, split by the importer's own split, claimed by the import
@@ -251,13 +256,243 @@ bool FMantlePlaceNonPartitionedSplitTest::RunTest(const FString& Parameters)
 		const FMantlePlaceImportSelection Selection = FMantlePlaceImportSelection::Everything();
 		FMantlePlaceImportContext Context(World, Manifest, nullptr, Selection, Timeline, Result, Log);
 		Context.Identity = TEXT("dddddddd-4444");
+		Context.ContentRoot = TEXT("/Temp/MantlePlaceNonPartitionedTest");
+		Context.Family = EMantlePlaceLayerFamily::Buildings;
 		AStaticMeshActor* Mesh = World->SpawnActor<AStaticMeshActor>();
 		const bool bLoadedBefore = Mesh != nullptr && Mesh->GetIsSpatiallyLoaded();
 		Context.Claim(Mesh, TEXT("MP_NonPartitionedTestMesh"));
 		TestEqual(TEXT("Claim leaves spatial loading alone outside World Partition"),
 			Mesh != nullptr && Mesh->GetIsSpatiallyLoaded(), bLoadedBefore);
+		TestTrue(TEXT("Claim assigns no Data Layer outside World Partition"),
+			Mesh != nullptr && Mesh->GetDataLayerAssets().Num() == 0);
+		TestNull(TEXT("and creates no Data Layer asset"),
+			MantlePlaceDataLayers::FindAsset(Context.ContentRoot, EMantlePlaceLayerFamily::Buildings));
 	}
 
+	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	return true;
+}
+
+// The Data Layer round trip: two orders imported into one partitioned world, each actor claimed by
+// the import context's own Claim under its handler's family, then one order wiped by the
+// orchestration's own wipe and imported again.
+//
+// What it pins:
+//  - an import yields one populated Data Layer per family it spawned actors for, and no empty ones;
+//  - every importer-spawned actor, a landscape's streaming proxies included, is in its family's layer;
+//  - the layers are shared: two orders' buildings sit in the one Buildings layer;
+//  - hiding a layer, as the Data Layers outliner does, hides exactly its family;
+//  - a wipe takes its order's actors out of the shared layers, leaves the layer assets and instances
+//    intact, and leaves zero dangling members; a re-import reuses the same layers.
+
+namespace MantlePlaceWorldPartitionImportTest
+{
+int32 CountMembers(UWorld* World, const UDataLayerInstance* Instance)
+{
+	int32 Count = 0;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		Count += (Instance != nullptr && IsValid(*It) && It->ContainsDataLayer(Instance)) ? 1 : 0;
+	}
+	return Count;
+}
+
+int32 CountTaggedMembers(UWorld* World, const UDataLayerInstance* Instance, const FString& Identity)
+{
+	const FName Tag(*MantlePlaceImportNaming::ImportTag(Identity));
+	int32 Count = 0;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		Count += (Instance != nullptr && It->Tags.Contains(Tag) && It->ContainsDataLayer(Instance)) ? 1 : 0;
+	}
+	return Count;
+}
+
+int32 CountInstances(UWorld* World)
+{
+	int32 Count = 0;
+	if (AWorldDataLayers* WorldDataLayers = World->GetWorldDataLayers())
+	{
+		WorldDataLayers->ForEachDataLayerInstance([&Count](UDataLayerInstance*) { ++Count; return true; });
+	}
+	return Count;
+}
+
+/** What the Data Layers outliner does on a visibility toggle, applied to this world's actors. */
+void SetLayerVisible(UWorld* World, UDataLayerInstance* Instance, bool bVisible)
+{
+	UDataLayerEditorSubsystem* Subsystem = UDataLayerEditorSubsystem::Get();
+	Subsystem->SetDataLayerVisibility(Instance, bVisible);
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		bool bSelectionChanged = false;
+		bool bActorModified = false;
+		Subsystem->UpdateActorVisibility(*It, bSelectionChanged, bActorModified, false, false);
+	}
+}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceWorldPartitionDataLayersTest,
+	"MantlePlace.Import.WorldPartition.DataLayers",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceWorldPartitionDataLayersTest::RunTest(const FString& Parameters)
+{
+	using namespace MantlePlaceWorldPartitionImportTest;
+	using Family = EMantlePlaceLayerFamily;
+
+	if (GEditor == nullptr || UDataLayerEditorSubsystem::Get() == nullptr)
+	{
+		AddInfo(TEXT("No editor: the Data Layer round trip needs an editor world. Skipped."));
+		return true;
+	}
+
+	UWorld::InitializationValues IVS;
+	IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
+		FName(TEXT("MantlePlaceDataLayersTestWorld")), /*InWorldPackage*/ nullptr, /*bAddToRoot*/ true,
+		ERHIFeatureLevel::Num, &IVS);
+	if (!TestNotNull(TEXT("a throwaway partitioned world"), World))
+	{
+		return false;
+	}
+
+	// Under /Temp, so the shared layer assets this makes are never offered for saving.
+	const FString ContentRoot = TEXT("/Temp/MantlePlaceDataLayerTest");
+	UMaterialInterface* Material = UMaterial::GetDefaultMaterial(MD_Surface);
+	const int32 ExpectedProxies = MantlePlaceWorldPartitionLogic::ProxyCount(ComponentsPerAxis, ComponentsPerAxis, GridSize);
+
+	FMantlePlaceVaultManifest Manifest;
+	FMantlePlaceImportResult Result;
+	TArray<FString> Log;
+	MantlePlaceImportTiming::FTimeline Timeline;
+	Timeline.Start();
+	const FMantlePlaceImportSelection Selection = FMantlePlaceImportSelection::Everything();
+	FMantlePlaceImportContext OrderA(World, Manifest, nullptr, Selection, Timeline, Result, Log);
+	OrderA.Identity = TEXT("aaaaaaaa-1111");
+	OrderA.ContentRoot = ContentRoot;
+	FMantlePlaceImportContext OrderB(World, Manifest, nullptr, Selection, Timeline, Result, Log);
+	OrderB.Identity = TEXT("bbbbbbbb-2222");
+	OrderB.ContentRoot = ContentRoot;
+
+	// Order A: a split landscape (Terrain) and a mesh (Buildings), each claimed under its family as
+	// the orchestration sets it before the handler runs. Returns every actor the order spawned.
+	TArray<TWeakObjectPtr<AActor>> TerrainA;
+	TWeakObjectPtr<AActor> BuildingsA;
+	const auto ImportOrderA = [&]()
+	{
+		TerrainA.Reset();
+		OrderA.Family = Family::Terrain;
+		ALandscape* Landscape = BuildFlatLandscape(World, Material);
+		MantlePlaceLandscapeImporter::SplitForWorldPartition(Landscape, GridSize);
+		OrderA.Claim(Landscape, MantlePlaceImportNaming::ActorLabel(MantlePlaceImportNaming::EActorKind::Landscape, OrderA.Identity));
+		TerrainA.Add(Landscape);
+		if (ULandscapeInfo* Info = Landscape != nullptr ? Landscape->GetLandscapeInfo() : nullptr)
+		{
+			for (const TWeakObjectPtr<ALandscapeStreamingProxy>& Proxy : Info->GetSortedStreamingProxies())
+			{
+				TerrainA.Add(Proxy.Get());
+			}
+		}
+		OrderA.Family = Family::Buildings;
+		AStaticMeshActor* Mesh = World->SpawnActor<AStaticMeshActor>();
+		OrderA.Claim(Mesh, TEXT("MP_DataLayerTestBuildingsA"));
+		BuildingsA = Mesh;
+	};
+
+	ImportOrderA();
+	OrderB.Family = Family::Buildings;
+	AStaticMeshActor* BuildingsB = World->SpawnActor<AStaticMeshActor>();
+	OrderB.Claim(BuildingsB, TEXT("MP_DataLayerTestBuildingsB"));
+
+	// --- One populated layer per family, shared, and no empty ones ---------------------------------
+	UDataLayerInstance* Terrain = MantlePlaceDataLayers::Find(World, ContentRoot, Family::Terrain);
+	UDataLayerInstance* Buildings = MantlePlaceDataLayers::Find(World, ContentRoot, Family::Buildings);
+	UDataLayerAsset* TerrainAsset = MantlePlaceDataLayers::FindAsset(ContentRoot, Family::Terrain);
+	UDataLayerAsset* BuildingsAsset = MantlePlaceDataLayers::FindAsset(ContentRoot, Family::Buildings);
+	if (!TestNotNull(TEXT("the import made the Terrain layer"), Terrain)
+		|| !TestNotNull(TEXT("the import made the Buildings layer"), Buildings))
+	{
+		World->DestroyWorld(false);
+		return false;
+	}
+	TestNull(TEXT("no layer for a family that spawned nothing"), MantlePlaceDataLayers::Find(World, ContentRoot, Family::Roads));
+	TestEqual(TEXT("one instance per family in the world"), CountInstances(World), 2);
+	TestTrue(TEXT("a family layer is a Runtime layer"), Terrain->IsRuntime());
+	TestTrue(TEXT("which a game run starts Activated, as the import was before layers"),
+		Terrain->GetInitialRuntimeState() == EDataLayerRuntimeState::Activated);
+
+	int32 TerrainAssigned = 0;
+	for (const TWeakObjectPtr<AActor>& Actor : TerrainA)
+	{
+		TerrainAssigned += (Actor.IsValid() && Actor->ContainsDataLayer(Terrain) && !Actor->ContainsDataLayer(Buildings)) ? 1 : 0;
+	}
+	TestEqual(TEXT("the landscape and every proxy are in Terrain, and only Terrain"), TerrainAssigned, 1 + ExpectedProxies);
+	TestTrue(TEXT("order A's mesh is in Buildings"), BuildingsA.IsValid() && BuildingsA->ContainsDataLayer(Buildings));
+	TestTrue(TEXT("order B's mesh is in the SAME Buildings layer"), BuildingsB->ContainsDataLayer(Buildings));
+	TestEqual(TEXT("Terrain holds exactly order A's terrain"), CountMembers(World, Terrain), 1 + ExpectedProxies);
+	TestEqual(TEXT("Buildings holds both orders' buildings"), CountMembers(World, Buildings), 2);
+
+	// --- Toggling a layer hides and shows exactly its family -------------------------------------
+	SetLayerVisible(World, Terrain, false);
+	int32 TerrainHidden = 0;
+	for (const TWeakObjectPtr<AActor>& Actor : TerrainA)
+	{
+		TerrainHidden += (Actor.IsValid() && Actor->IsHiddenEd()) ? 1 : 0;
+	}
+	TestEqual(TEXT("hiding Terrain hides every terrain actor"), TerrainHidden, 1 + ExpectedProxies);
+	TestFalse(TEXT("and not order A's buildings"), BuildingsA.IsValid() && BuildingsA->IsHiddenEd());
+	TestFalse(TEXT("nor order B's"), BuildingsB->IsHiddenEd());
+	SetLayerVisible(World, Terrain, true);
+	TerrainHidden = 0;
+	for (const TWeakObjectPtr<AActor>& Actor : TerrainA)
+	{
+		TerrainHidden += (Actor.IsValid() && Actor->IsHiddenEd()) ? 1 : 0;
+	}
+	TestEqual(TEXT("showing Terrain again shows every terrain actor"), TerrainHidden, 0);
+
+	// --- Wipe order A: out of the shared layers, layers intact, zero dangling members --------------
+	MantlePlaceImportOrchestration::ReplacePriorActors(World, OrderA.Identity, Timeline);
+	int32 Surviving = BuildingsA.IsValid() ? 1 : 0;
+	for (const TWeakObjectPtr<AActor>& Actor : TerrainA)
+	{
+		Surviving += Actor.IsValid() ? 1 : 0;
+	}
+	TestEqual(TEXT("wipe: none of order A's actors survives"), Surviving, 0);
+	TestEqual(TEXT("wipe: zero dangling members of order A in Terrain"), CountTaggedMembers(World, Terrain, OrderA.Identity), 0);
+	TestEqual(TEXT("wipe: zero dangling members of order A in Buildings"), CountTaggedMembers(World, Buildings, OrderA.Identity), 0);
+	TestEqual(TEXT("wipe: Terrain is empty"), CountMembers(World, Terrain), 0);
+	TestEqual(TEXT("wipe: Buildings keeps order B's mesh, and only it"), CountMembers(World, Buildings), 1);
+	TestTrue(TEXT("wipe: the Terrain asset is intact"), MantlePlaceDataLayers::FindAsset(ContentRoot, Family::Terrain) == TerrainAsset);
+	TestTrue(TEXT("wipe: the Buildings asset is intact"), MantlePlaceDataLayers::FindAsset(ContentRoot, Family::Buildings) == BuildingsAsset);
+	TestTrue(TEXT("wipe: the Terrain instance is intact"), MantlePlaceDataLayers::Find(World, ContentRoot, Family::Terrain) == Terrain);
+	TestEqual(TEXT("wipe: no instance removed"), CountInstances(World), 2);
+
+	// --- Re-import order A: the same layers, reused -----------------------------------------------
+	ImportOrderA();
+	TestTrue(TEXT("re-import: reuses the Terrain instance"), MantlePlaceDataLayers::Find(World, ContentRoot, Family::Terrain) == Terrain);
+	TestTrue(TEXT("re-import: reuses the Buildings asset"), MantlePlaceDataLayers::FindAsset(ContentRoot, Family::Buildings) == BuildingsAsset);
+	TestEqual(TEXT("re-import: still one instance per family"), CountInstances(World), 2);
+	TestEqual(TEXT("re-import: Terrain populated again"), CountMembers(World, Terrain), 1 + ExpectedProxies);
+	TestEqual(TEXT("re-import: Buildings holds both orders again"), CountMembers(World, Buildings), 2);
+
+	// --- Wipe both: every layer empty, every layer intact ----------------------------------------
+	MantlePlaceImportOrchestration::ReplacePriorActors(World, OrderA.Identity, Timeline);
+	MantlePlaceImportOrchestration::ReplacePriorActors(World, OrderB.Identity, Timeline);
+	TestEqual(TEXT("both wiped: Terrain has no members"), CountMembers(World, Terrain), 0);
+	TestEqual(TEXT("both wiped: Buildings has no members"), CountMembers(World, Buildings), 0);
+	TestEqual(TEXT("both wiped: the layers stay"), CountInstances(World), 2);
+
+	// Let the in-memory test assets go with the world rather than linger in the editor session.
+	for (UDataLayerAsset* Asset : { TerrainAsset, BuildingsAsset })
+	{
+		if (Asset != nullptr)
+		{
+			Asset->GetPackage()->SetDirtyFlag(false);
+			Asset->ClearFlags(RF_Public | RF_Standalone);
+		}
+	}
 	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
 	return true;
 }

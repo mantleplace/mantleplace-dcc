@@ -476,6 +476,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	Context.Identity = Identity;
 	Context.TempDir = TempDir;
 	Context.DestPackagePath = DestPackagePath;
+	Context.ContentRoot = ContentRoot;
 
 	// glTF asset imports run BEFORE the transaction opens, and everything after it is either an
 	// actor operation or an asset creation that deletes nothing.
