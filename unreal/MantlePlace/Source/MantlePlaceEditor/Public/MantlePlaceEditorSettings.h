@@ -93,6 +93,20 @@ public:
 		meta = (DisplayName = "Tolerated consecutive poll failures", ClampMin = "0", ClampMax = "1000"))
 	int32 MaxConsecutivePollFailures;
 
+	// --- World Partition --------------------------------------------------------------------------
+
+	/**
+	 * Landscape components per streaming proxy, per axis, when an import lands in a World Partition
+	 * level. The importer splits the landscape into ALandscapeStreamingProxy actors on this grid
+	 * after building it, as the engine's New Landscape tool does; a non-partitioned level ignores it.
+	 *
+	 * A plugin setting, not a manifest value: how a level streams is the project's decision, not the
+	 * bundle's. Defaults to the engine's own default and takes the engine's own range.
+	 */
+	UPROPERTY(EditAnywhere, config, Category = "World Partition",
+		meta = (DisplayName = "Landscape grid size (components per proxy)", ClampMin = "1", ClampMax = "16"))
+	int32 WorldPartitionGridSize;
+
 	// --- The defaults, named once ----------------------------------------------------------------
 	//
 	// Each is exactly the literal the code used to hardcode. Named here rather than repeated at the
@@ -104,6 +118,8 @@ public:
 	static constexpr float DefaultMaterializePollIntervalSeconds = 3.0f;
 	static constexpr int32 DefaultMaterializeMaxPolls = 200;
 	static constexpr int32 DefaultMaxConsecutivePollFailures = 5;
+	/** The engine's New Landscape default (ULandscapeEditorObject::WorldPartitionGridSize). */
+	static constexpr int32 DefaultWorldPartitionGridSize = 2;
 
 	// --- Usability, as pure functions --------------------------------------------------------------
 	//
@@ -127,12 +143,16 @@ public:
 	/** A non-negative failure tolerance, or the default. */
 	static int32 UsableMaxConsecutivePollFailures(int32 Configured);
 
+	/** A grid size in the engine's 1-16 range, or the default. */
+	static int32 UsableWorldPartitionGridSize(int32 Configured);
+
 	// --- The configured values if usable, the defaults otherwise. What callers call. ---------------
 
 	static void ResolveLocalTileServerPortScan(int32& OutFirstPort, int32& OutPortCount);
 	static float ResolveMaterializePollIntervalSeconds();
 	static int32 ResolveMaterializeMaxPolls();
 	static int32 ResolveMaxConsecutivePollFailures();
+	static int32 ResolveWorldPartitionGridSize();
 
 	//~ Begin UDeveloperSettings interface
 	virtual FName GetCategoryName() const override;

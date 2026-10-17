@@ -14,6 +14,7 @@ UMantlePlaceEditorSettings::UMantlePlaceEditorSettings()
 	, MaterializePollIntervalSeconds(DefaultMaterializePollIntervalSeconds)
 	, MaterializeMaxPolls(DefaultMaterializeMaxPolls)
 	, MaxConsecutivePollFailures(DefaultMaxConsecutivePollFailures)
+	, WorldPartitionGridSize(DefaultWorldPartitionGridSize)
 {
 }
 
@@ -61,6 +62,13 @@ int32 UMantlePlaceEditorSettings::UsableMaxConsecutivePollFailures(int32 Configu
 	return Configured >= 0 ? Configured : DefaultMaxConsecutivePollFailures;
 }
 
+int32 UMantlePlaceEditorSettings::UsableWorldPartitionGridSize(int32 Configured)
+{
+	// The engine's own clamp for the New Landscape tool's grid size. Outside it the split either
+	// asserts (zero) or builds proxies the landscape tools were never tested against.
+	return (Configured >= 1 && Configured <= 16) ? Configured : DefaultWorldPartitionGridSize;
+}
+
 void UMantlePlaceEditorSettings::ResolveLocalTileServerPortScan(int32& OutFirstPort, int32& OutPortCount)
 {
 	const UMantlePlaceEditorSettings* Settings = GetDefault<UMantlePlaceEditorSettings>();
@@ -94,6 +102,13 @@ int32 UMantlePlaceEditorSettings::ResolveMaxConsecutivePollFailures()
 	const UMantlePlaceEditorSettings* Settings = GetDefault<UMantlePlaceEditorSettings>();
 	return UsableMaxConsecutivePollFailures(
 		Settings != nullptr ? Settings->MaxConsecutivePollFailures : DefaultMaxConsecutivePollFailures);
+}
+
+int32 UMantlePlaceEditorSettings::ResolveWorldPartitionGridSize()
+{
+	const UMantlePlaceEditorSettings* Settings = GetDefault<UMantlePlaceEditorSettings>();
+	return UsableWorldPartitionGridSize(
+		Settings != nullptr ? Settings->WorldPartitionGridSize : DefaultWorldPartitionGridSize);
 }
 
 FString UMantlePlaceEditorSettings::ResolveGeneratedContentRoot()

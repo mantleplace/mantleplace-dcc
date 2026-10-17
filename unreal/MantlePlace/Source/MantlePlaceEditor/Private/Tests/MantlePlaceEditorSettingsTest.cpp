@@ -40,6 +40,23 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 			FSettings::DefaultMaterializeMaxPolls, 200);
 		TestEqual(TEXT("the failure tolerance is still five"),
 			FSettings::DefaultMaxConsecutivePollFailures, 5);
+		// Not a literal the code used to hardcode, but the engine's own: the New Landscape tool's
+		// World Partition Grid Size defaults to 2 components per proxy per axis.
+		TestEqual(TEXT("the World Partition grid size is the engine's default of two"),
+			FSettings::DefaultWorldPartitionGridSize, 2);
+	}
+
+	// --- World Partition grid size ---------------------------------------------------------------
+	// The engine's own clamp is 1-16 components per proxy per axis; outside it, the engine default.
+	{
+		TestEqual(TEXT("a usable grid size is honoured"), FSettings::UsableWorldPartitionGridSize(4), 4);
+		TestEqual(TEXT("one component per proxy is usable"), FSettings::UsableWorldPartitionGridSize(1), 1);
+		TestEqual(TEXT("sixteen is the engine's ceiling and usable"), FSettings::UsableWorldPartitionGridSize(16), 16);
+		TestEqual(TEXT("zero falls back"), FSettings::UsableWorldPartitionGridSize(0), 2);
+		TestEqual(TEXT("past the engine's ceiling falls back"), FSettings::UsableWorldPartitionGridSize(17), 2);
+		TestEqual(TEXT("a negative grid size falls back"), FSettings::UsableWorldPartitionGridSize(-3), 2);
+		const int32 Resolved = FSettings::ResolveWorldPartitionGridSize();
+		TestTrue(TEXT("the resolved grid size is in the engine's range"), Resolved >= 1 && Resolved <= 16);
 	}
 
 	// --- Ports ------------------------------------------------------------------------------------

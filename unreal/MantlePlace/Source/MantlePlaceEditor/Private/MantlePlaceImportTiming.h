@@ -103,6 +103,8 @@ inline const TCHAR* const LandscapeActorSpawn = TEXT("landscape actor spawn");
 inline const TCHAR* const LandscapeLayerInfoAssets = TEXT("landscape layer info assets");
 inline const TCHAR* const LandscapeEngineImport = TEXT("landscape engine import");
 inline const TCHAR* const LandscapeLayerInfoMap = TEXT("landscape layer info map");
+/** World Partition only: ULandscapeSubsystem::ChangeGridSize, the split into streaming proxies. */
+inline const TCHAR* const LandscapeWorldPartitionSplit = TEXT("landscape world partition split");
 
 /** ⛔ Hotspot 1: the in-transaction shader-compile stall the editor blocks on. */
 inline const TCHAR* const ShaderStall = TEXT("shader FinishAllCompilation stall");
