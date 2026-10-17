@@ -154,17 +154,22 @@ TArray<AActor*> CleanupGenerated(UWorld* World, const TArray<AActor*>& Actors)
 	return PartitionActors;
 }
 
+bool HoldsNothing(const AActor* Actor)
+{
+	const APCGPartitionActor* PartitionActor = Cast<APCGPartitionActor>(Actor);
+	return IsValid(PartitionActor) && !PartitionActor->HasLocalPCGComponents() && !PartitionActor->HasGraphInstances();
+}
+
 int32 DestroyEmptyPartitionActors(UWorld* World, const TArray<AActor*>& PartitionActors)
 {
 	int32 Destroyed = 0;
 	for (AActor* Actor : PartitionActors)
 	{
-		APCGPartitionActor* PartitionActor = Cast<APCGPartitionActor>(Actor);
-		if (!IsValid(PartitionActor) || PartitionActor->HasLocalPCGComponents() || PartitionActor->HasGraphInstances())
+		if (!HoldsNothing(Actor))
 		{
 			continue; // another component still generates on this cell
 		}
-		World->EditorDestroyActor(PartitionActor, /*bShouldModifyLevel*/ true);
+		World->EditorDestroyActor(Actor, /*bShouldModifyLevel*/ true);
 		++Destroyed;
 	}
 	return Destroyed;

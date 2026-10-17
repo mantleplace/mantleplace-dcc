@@ -512,7 +512,10 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 		Timeline, MantlePlaceImportTiming::Phase::InsideTransaction);
 
 	// --- Wipe, actors: re-importing replaces them instead of stacking duplicate (coincident) actors. ---
-	const int32 Replaced = MantlePlaceImportOrchestration::ReplacePriorActors(World, Identity, Timeline);
+	// A prior scatter's emptied PCG partition actors are kept for this import's scatter to generate on,
+	// and released once it has (ReplacePriorActors says why).
+	TArray<TWeakObjectPtr<AActor>> KeptPartitionActors;
+	const int32 Replaced = MantlePlaceImportOrchestration::ReplacePriorActors(World, Identity, Timeline, &KeptPartitionActors);
 	if (Replaced > 0)
 	{
 		Log.Add(FString::Printf(TEXT("Replaced %d actor(s) from a prior import of this bundle."), Replaced));
@@ -521,6 +524,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	// --- Import: every included artifact, in registry order; then the report that needs them all. ---
 	MantlePlaceImportOrchestration::RunImport(Handlers, Context);
 	MantlePlaceImportOrchestration::RunFinalize(Handlers, Context);
+	MantlePlaceImportOrchestration::ReleaseKeptPartitionActors(World, KeptPartitionActors);
 
 	// --- HLODs: configured by Claim, never built here (MantlePlaceHLODLogic says why); say how. ---
 	const FString HLODNote = MantlePlaceHLODLogic::PostImportNote(

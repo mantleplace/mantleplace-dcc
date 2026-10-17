@@ -61,8 +61,24 @@ FString WipePriorAssets(
  *
  * A tagged landscape's streaming proxies go with it, tagged or not, and before it: proxies first,
  * the parent landscape last.
+ *
+ * A prior foliage scatter's PCG partition actors are emptied, and counted among the replaced. Given
+ * OutKeptPartitionActors, the ones left holding nothing are KEPT there for the import that follows
+ * to generate on, and ReleaseKeptPartitionActors destroys the rest after it: in a saved World
+ * Partition level, a destroyed partition actor's cell stays recorded with the PCG subsystem until the
+ * next save, and the subsystem neither creates nor generates on a recorded cell with no loaded actor,
+ * so destroying them first loses the re-import's scatter (dcc #347). Without it, a wipe that imports
+ * nothing in its place, they are destroyed here.
  */
-int32 ReplacePriorActors(UWorld* World, const FString& Identity, MantlePlaceImportTiming::FTimeline& Timeline);
+int32 ReplacePriorActors(UWorld* World, const FString& Identity, MantlePlaceImportTiming::FTimeline& Timeline,
+	TArray<TWeakObjectPtr<AActor>>* OutKeptPartitionActors = nullptr);
+
+/**
+ * After the import that followed ReplacePriorActors: destroy the kept partition actors it did not
+ * generate on, so a re-import that leaves the scatter out, or covers fewer cells, leaves no empty
+ * partition actor behind. Returns how many it destroyed.
+ */
+int32 ReleaseKeptPartitionActors(UWorld* World, const TArray<TWeakObjectPtr<AActor>>& KeptPartitionActors);
 
 /**
  * The refusal for a re-import into a World Partition level when any actor of the prior import of

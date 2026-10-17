@@ -126,6 +126,13 @@ Layer.
 - **The wipe sweeps what it generated.** Before the volume is destroyed its generated instances are
   cleaned up, and every partition actor that held them and now holds nothing else is destroyed. A
   partition actor another PCG component still generates on is left to it.
+- **A re-import regenerates on the same partition actors.** The emptied ones are kept until the new
+  scatter has claimed its cells, and only those it did not claim are destroyed, after the import. In
+  a saved level, PCG keeps a destroyed partition actor's cell on record until the next save, and
+  makes no partition actor on a recorded cell, so destroying them first left the re-import with no
+  scatter at all. The same record means one sequence still loses it: a re-import without the scatter
+  destroys them, and a re-import with it before the level is next saved makes no scatter. Saving,
+  then importing again, brings it back.
 - **An unloaded cell refuses the re-import.** The sweep reaches loaded partition actors only, and a
   partition actor carries no import tag, so a re-import counts every unloaded one whose cell
   overlaps the prior volume's footprint (a cell that only touches its edge does not count) and
