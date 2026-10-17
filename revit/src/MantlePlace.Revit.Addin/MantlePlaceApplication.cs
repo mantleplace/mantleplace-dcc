@@ -188,6 +188,17 @@ public sealed class MantlePlaceApplication : IExternalApplication
     }
 
     /// <summary>
+    /// Points F1 over <paramref name="item"/> at the plugin's help page.
+    /// </summary>
+    /// <remarks>
+    /// Every button on the tab gets this, split-button rows included: one that is missed falls
+    /// through to Revit's own help, which knows nothing about it. The address is
+    /// <see cref="HelpLinks.RibbonHelpUrl"/>, held once so a moved page is one edit.
+    /// </remarks>
+    private static void GiveHelp(RibbonItem item) =>
+        item.SetContextualHelp(new ContextualHelp(ContextualHelpType.Url, HelpLinks.RibbonHelpUrl));
+
+    /// <summary>
     /// The Account panel: one split button whose face is the auth session.
     /// </summary>
     /// <remarks>
@@ -248,6 +259,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         // rather than on anything drawn for the occasion. RibbonImagery keeps the reference and
         // repaints it when Revit changes theme; the mark itself has no theme, and says why.
         RibbonImagery.GiveMark(_accountFace);
+        GiveHelp(_accountFace);
 
         // The address, shown only while there is one. Disabled for its whole life: it is a line of
         // text that happens to live in a control that can only hold buttons.
@@ -262,6 +274,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _accountIdentity.Enabled = false;
         _accountIdentity.Visible = false;
         RibbonImagery.GiveMark(_accountIdentity);
+        GiveHelp(_accountIdentity);
 
         _signOutButton = _accountButton.AddPushButton(new PushButtonData(
             "MantlePlaceSignOut",
@@ -276,6 +289,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "again afterwards; a bundle import still does not.",
         });
         RibbonImagery.GiveMark(_signOutButton);
+        GiveHelp(_signOutButton);
 
         PushButton openSite = _accountButton.AddPushButton(new PushButtonData(
             "MantlePlaceOpenSite",
@@ -286,6 +300,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
             ToolTip = "Open the Mantle Place website in your browser.",
         });
         RibbonImagery.GiveMark(openSite);
+        GiveHelp(openSite);
 
         PushButton about = _accountButton.AddPushButton(new PushButtonData(
             "MantlePlaceAbout",
@@ -296,6 +311,11 @@ public sealed class MantlePlaceApplication : IExternalApplication
             ToolTip = "Which build this is, and which Revit it is running in.",
         });
         RibbonImagery.GiveMark(about);
+        GiveHelp(about);
+
+        // The split button itself too: F1 over the face is F1 over whichever row it adopted, but
+        // over the dropdown arrow it is F1 over the split button, and that must not fall through.
+        GiveHelp(_accountButton);
 
         _accountButton.IsSynchronizedWithCurrentItem = false;
     }
@@ -575,6 +595,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         });
         RibbonImagery.Give(vault, RibbonGlyph.Vault);
         RibbonImagery.GiveVignette(vault, Vignette.Vault);
+        GiveHelp(vault);
 
         // Read when a notice is shown, not now: Revit's main window is not guaranteed to exist while
         // OnStartup runs.
@@ -595,6 +616,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         });
         RibbonImagery.Give(importLocal, RibbonGlyph.ImportBundle);
         RibbonImagery.GiveVignette(importLocal, Vignette.ImportBundle);
+        GiveHelp(importLocal);
 
         // Everything after this call lands in the slide-out rather than on the panel face, and the
         // panel grows the small unfold arrow at its foot that opens it. The two buttons above are
@@ -617,6 +639,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "import is refused and the log does not say enough.",
         });
         RibbonImagery.Give(probe, RibbonGlyph.ProbeTerrain);
+        GiveHelp(probe);
 
         PushButton logs = (PushButton)panel.AddItem(new PushButtonData(
             "MantlePlaceOpenLogs",
@@ -632,6 +655,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "of them. The About dialog on the Account button goes to the same place.",
         });
         RibbonImagery.Give(logs, RibbonGlyph.OpenLogs);
+        GiveHelp(logs);
 
         // ⛔ Subscribed for the life of the add-in, and unsubscribed in OnShutdown. Revit has run a
         // light and a dark UI theme since 2024, a curator switches between them from Options while

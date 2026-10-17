@@ -28,7 +28,8 @@ clicking the face opens About Mantle Place; the dropdown carries your address, `
 `Open mantle.place`, and that About dialog, which names the build you are running, the Revit it is
 running in, and where each import wrote its log. `Sign Out` is offered only when there is a session
 to drop — including a stored one you are not currently signed in to, because both hosts share one
-credential per Windows user.
+credential per Windows user. F1 over any button on the tab opens this README on GitHub
+(`HelpLinks.RibbonHelpUrl`, set on every button, the split button's rows included).
 
 `Mantle Place ▸ Bundles ▸ Vault` lists the bundles you own, prepares their Revit deliverables,
 downloads them and imports. It is **modeless**: a build can take ten minutes and Revit stays usable
@@ -666,9 +667,16 @@ script and a button that is silently blank.
 ```
 
 Builds `Release`, assembles `MantlePlace-Revit-<version>.zip` into `dist/`, and prints its sha256.
-Inside: a `Contents` folder holding everything Revit loads, with `README.txt`, `Install.cmd` and
-`Deploy-MantlePlaceRevit.ps1` above it. `Contents` is Autodesk's own bundle folder name, so shipping
-this as a `.bundle` later is adding a `PackageContents.xml` rather than rearranging the archive.
+Inside: a `Contents` folder holding everything Revit loads, with `README.txt`, `Install.cmd`,
+`Uninstall.cmd` and their two scripts above it. `Contents` is Autodesk's own bundle folder name, so
+shipping this as a `.bundle` later is adding a `PackageContents.xml` rather than rearranging the archive.
+
+`Uninstall.cmd` removes `MantlePlace.addin` and every `MantlePlace.*` file from each year folder under
+`%APPDATA%\Autodesk\Revit\Addins`, refuses while Revit is open, and asks before also deleting the
+bundle cache, the family files and the machine records under `%LOCALAPPDATA%\MantlePlace`. It never
+deletes `auth` there: the stored sign-in is shared with the Unreal plugin. Its script is
+[`Uninstall-MantlePlaceRevit.ps1`](./tools/Uninstall-MantlePlaceRevit.ps1), and the manual delete in
+`README.txt` stays as the fallback for a machine that blocks scripts.
 
 `Deploy-MantlePlaceRevit.ps1` ships in the zip **verbatim** — one script, two callers, reached with
 `-PayloadDirectory`. That is deliberate and it is the only test coverage an installer can have here:

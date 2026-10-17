@@ -4,7 +4,8 @@
 
 .DESCRIPTION
     Produces MantlePlace-Revit-<version>.zip: a Contents folder holding everything Revit loads, with
-    README.txt, Install.cmd and Deploy-MantlePlaceRevit.ps1 above it.
+    README.txt, Install.cmd, Uninstall.cmd, Deploy-MantlePlaceRevit.ps1 and
+    Uninstall-MantlePlaceRevit.ps1 above it.
 
     Contents is not an arbitrary name. It is the folder name Autodesk's Application Plugin Bundle
     format uses, so if this ever ships as a .bundle for the Autodesk App Store, that is adding a
@@ -119,7 +120,9 @@ if ($payload.Count -eq 0) {
 $topLevel = @(
     (Join-Path $packagingDir 'README.txt'),
     (Join-Path $packagingDir 'Install.cmd'),
-    (Join-Path $PSScriptRoot 'Deploy-MantlePlaceRevit.ps1')
+    (Join-Path $packagingDir 'Uninstall.cmd'),
+    (Join-Path $PSScriptRoot 'Deploy-MantlePlaceRevit.ps1'),
+    (Join-Path $PSScriptRoot 'Uninstall-MantlePlaceRevit.ps1')
 )
 foreach ($file in $topLevel) {
     if (-not (Test-Path -LiteralPath $file)) {

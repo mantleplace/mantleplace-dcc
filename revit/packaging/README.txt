@@ -60,9 +60,30 @@ problem you need to solve -- the copy above is the whole install, and it always 
 UNINSTALL
 -------------------------------------------------------------------------------
 
-Close Revit, then delete MantlePlace.addin and the MantlePlace.* files from each year folder
-under %APPDATA%\Autodesk\Revit\Addins. Nothing is written anywhere else except a cached copy
-of bundles you download, under your local application data, which you can delete too.
+Double-click Uninstall.cmd. It refuses to run while Revit is open, so close Revit first. It
+removes MantlePlace.addin and every MantlePlace.* file from each year folder under
+%APPDATA%\Autodesk\Revit\Addins, and prints what it removed. Other add-ins in those folders
+are left alone.
+
+It then asks whether to delete the plugin's own data too, under %LOCALAPPDATA%\MantlePlace: the
+bundles you downloaded (bundles), the planting family files (families) and two small records of
+what the plugin has already told you (announced-orders.json, interrupted-prepares.json). Answer
+n to keep them; they cost disk space and nothing else.
+
+It does NOT delete your stored sign-in, the "auth" folder in that same place. The Unreal plugin
+uses the same sign-in, so removing it here would sign you out of a product you are keeping. To
+forget it, choose "Mantle Place > Account > Sign Out" in Revit before you uninstall. A
+config.json you wrote yourself in that folder is left too.
+
+If your workplace blocks scripts, Uninstall.cmd will refuse to start and say so. The manual
+steps always work:
+
+  1. Close Revit.
+  2. Delete MantlePlace.addin and the MantlePlace.* files from each year folder under
+     %APPDATA%\Autodesk\Revit\Addins.
+  3. Optionally delete the bundles, families, announced-orders.json and
+     interrupted-prepares.json items under %LOCALAPPDATA%\MantlePlace. Leave "auth" alone
+     unless you want to be signed out of Mantle Place everywhere on this machine.
 
 
 -------------------------------------------------------------------------------
