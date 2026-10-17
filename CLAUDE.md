@@ -204,7 +204,8 @@ Most facts already have exactly one home. Find it before writing a fact down any
   drawn**, capped at 355 px · **0011** the Revit provenance **schema GUID is permanent** ·
   **0012** Revit context buildings are **the site model's own extrusions, copied** · **0013** Revit
   **published contours** are DirectShapes · **0014** Revit draws hazards **on a hazard plan** ·
-  **0015** Revit **subdivides only roads and water**; land use and land cover go **on land plans**.
+  **0015** Revit **subdivides only roads and water**; land use and land cover go **on land plans** ·
+  **0016** Unreal **Mesh Terrain is parked** until UE 5.9; the Landscape stays the only terrain target.
   When to write one, and the two edits it takes: [`docs/agents/domain.md`](docs/agents/domain.md).
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
   authority; never restate a value it owns or hardcode a version in prose — each host's verified
