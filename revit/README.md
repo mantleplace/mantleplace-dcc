@@ -690,7 +690,8 @@ before "fixing" that, because it contradicts the deploy script's own advice on p
 three-host check above, run against *that zip* rather than a `bin/` folder, plus `ci-revit-tests`
 green on both target frameworks. `MANTLEPLACE_BUNDLE_ZIP` skips the file picker, so each leg can be
 driven unattended rather than clicked. The release track is `revit-<version>` — no `v`, and not
-Unreal's number ([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)).
+Unreal's number ([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)); the release is titled and
+written to [`docs/releases.md`](../docs/releases.md).
 
 A release published with paths that failed the gate says so in its body, precisely, rather than
 quietly. The floor below which there is no release at all: the ribbon loads in all three, and one
