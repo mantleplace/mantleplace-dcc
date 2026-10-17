@@ -307,8 +307,12 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		else
 		{
 			TestEqual(TEXT("a road layer skipped for its datum produced no spline actors"), NumSplineActors, 0);
-			TestTrue(TEXT("the datum skip is named in the import result"),
-				Result.Message.Contains(TEXT("Road splines skipped"), ESearchCase::CaseSensitive));
+			// The importer writes this same "Road splines skipped" prefix for a missing file and for a
+			// parse error, so the prefix alone would pass for the wrong reason. Match the datum reason
+			// CanPlaceHeights returned, the exact entry the importer logs for this skip.
+			TestTrue(TEXT("the datum skip is named in the import result, with its datum reason"),
+				Result.Message.Contains(
+					FString::Printf(TEXT("Road splines skipped: %s"), *DatumRefusal), ESearchCase::CaseSensitive));
 		}
 	}
 
