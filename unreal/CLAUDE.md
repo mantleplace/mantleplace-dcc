@@ -14,7 +14,9 @@ here in a line, and its detail lives in the document it links.
   [`MantlePlace/`](MantlePlace/) — PascalCase within; a consuming project's plugin discovery is a
   recursive scan of `Plugins/`.
 - **Engine dependency:** Epic's built-in **Interchange**, and nothing else. A new engine plugin
-  dependency is a new thing a stranger's project has to have enabled.
+  dependency is a new thing a stranger's project has to have enabled. Mesh Partition (UE 5.8's
+  Experimental Mesh Terrain) is deliberately not one
+  ([ADR 0016](../docs/adr/0016-unreal-mesh-terrain-is-parked-until-5-9.md)).
 - **Modules:** `MantlePlaceRuntime` (Runtime) and `MantlePlaceEditor` (Editor). The version lives in
   the `.uplugin` and nowhere else.
 - **Frame:** Unreal is a **fixed-frame host** (`HPS-54`) — one native unit, so its frame does not
