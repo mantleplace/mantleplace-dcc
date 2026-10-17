@@ -107,7 +107,36 @@ public:
 		meta = (DisplayName = "Landscape grid size (components per proxy)", ClampMin = "1", ClampMax = "16"))
 	int32 WorldPartitionGridSize;
 
-	// --- The defaults, named once ----------------------------------------------------------------
+	// --- Foliage ----------------------------------------------------------------------------------
+
+	/**
+	 * Generate a PCG foliage scatter from the bundle's tree points when importing. Off by default:
+	 * the scatter is opt-in, because it spawns content (a PCG volume and, in a World Partition level,
+	 * PCG partition actors) a user who only wanted the terrain did not ask for. In a World Partition
+	 * level the scatter is partitioned on the PCG grid and streams per cell; in a non-partitioned
+	 * level it generates on the volume itself. Either way a re-import or wipe removes it.
+	 */
+	UPROPERTY(EditAnywhere, config, Category = "Foliage",
+		meta = (DisplayName = "Generate a foliage scatter on import"))
+	bool bGenerateFoliageScatter = false;
+
+	/**
+	 * The meshes a tree point is drawn with, one picked per point. Any static mesh the project has;
+	 * each is scaled to the point's published height and crown, its base on the ground. Defaults to
+	 * the engine's own cone, which every project has and which carries no licence beyond the engine's.
+	 */
+	UPROPERTY(EditAnywhere, config, Category = "Foliage", meta = (DisplayName = "Tree meshes", AllowedClasses = "/Script/Engine.StaticMesh"))
+	TArray<FSoftObjectPath> FoliageTreeMeshes;
+
+	/** The meshes a shrub point is drawn with. Empty falls back to the tree meshes. Defaults to the engine's sphere. */
+	UPROPERTY(EditAnywhere, config, Category = "Foliage", meta = (DisplayName = "Shrub meshes", AllowedClasses = "/Script/Engine.StaticMesh"))
+	TArray<FSoftObjectPath> FoliageShrubMeshes;
+
+	/** The engine meshes the two lists above default to: engine content, so licence-clean in every project. */
+	static const TCHAR* DefaultFoliageTreeMesh() { return TEXT("/Engine/BasicShapes/Cone.Cone"); }
+	static const TCHAR* DefaultFoliageShrubMesh() { return TEXT("/Engine/BasicShapes/Sphere.Sphere"); }
+
+	// --- The defaults, named once----------------------------------------------------------------
 	//
 	// Each is exactly the literal the code used to hardcode. Named here rather than repeated at the
 	// constructor, the fallback and the call site, because three spellings of one number is how two

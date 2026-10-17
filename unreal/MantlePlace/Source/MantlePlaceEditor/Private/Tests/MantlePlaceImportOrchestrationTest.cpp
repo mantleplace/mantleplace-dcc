@@ -85,14 +85,17 @@ bool FMantlePlaceOrchestrationFanOutTest::RunTest(const FString& Parameters)
 	TArray<FString> AllIds = IdsIn(Registry, FMantlePlaceImportSelection::Everything());
 	const TArray<FString> ExpectedAll = {
 		TEXT("drape"), TEXT("landscape"), TEXT("coverage_rasters"), TEXT("terrain_mesh"),
-		TEXT("buildings"), TEXT("road_splines"), TEXT("foliage_points"), TEXT("public_records") };
+		TEXT("buildings"), TEXT("road_splines"), TEXT("foliage_points"), TEXT("foliage_scatter"), TEXT("public_records") };
 	TestEqual(TEXT("registry: every artifact, in import order"), FString::Join(AllIds, TEXT(",")), FString::Join(ExpectedAll, TEXT(",")));
 
 	// Mode fan-out. Landscape and Mesh are alternatives for the terrain; the rest is content that
-	// imports whenever the bundle ships it, whichever Mode was asked for.
-	TArray<FString> NoMesh = ExpectedAll;
+	// imports whenever the bundle ships it, whichever Mode was asked for -- except the foliage
+	// scatter, generated content that is opt-in.
+	TArray<FString> NoScatter = ExpectedAll;
+	NoScatter.Remove(TEXT("foliage_scatter"));
+	TArray<FString> NoMesh = NoScatter;
 	NoMesh.Remove(TEXT("terrain_mesh"));
-	TArray<FString> NoLandscape = ExpectedAll;
+	TArray<FString> NoLandscape = NoScatter;
 	NoLandscape.Remove(TEXT("landscape"));
 
 	TestEqual(TEXT("Landscape mode: everything but the terrain mesh"),
@@ -101,8 +104,11 @@ bool FMantlePlaceOrchestrationFanOutTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Mesh mode: everything but the landscape"),
 		FString::Join(IdsIn(Registry, FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode::Mesh)), TEXT(",")),
 		FString::Join(NoLandscape, TEXT(",")));
-	TestEqual(TEXT("Both mode: everything"),
+	TestEqual(TEXT("Both mode: everything but the opt-in scatter"),
 		FString::Join(IdsIn(Registry, FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode::Both)), TEXT(",")),
+		FString::Join(NoScatter, TEXT(",")));
+	TestEqual(TEXT("Both mode, scatter opted in: everything"),
+		FString::Join(IdsIn(Registry, FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode::Both, true)), TEXT(",")),
 		FString::Join(ExpectedAll, TEXT(",")));
 
 	// Per-layer gating is DATA: any subset, and an artifact nobody named stays in by default.

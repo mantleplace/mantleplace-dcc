@@ -150,6 +150,7 @@ public:
 		}
 		FAssetRegistryModule::AssetCreated(Table);
 		Table->MarkPackageDirty();
+		Ctx.TreePointsTable = Table;
 		int32 ShrubCount = 0, GroundUnknownCount = 0;
 		for (const FMantlePlaceTreePointRow& Row : Rows)
 		{

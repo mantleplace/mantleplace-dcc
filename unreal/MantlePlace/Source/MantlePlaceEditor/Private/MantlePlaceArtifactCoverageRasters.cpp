@@ -174,6 +174,7 @@ public:
 				if (Texture != nullptr)
 				{
 					++RastersImported;
+					Ctx.CoverageTextures.Add(Layer.Name, Texture);
 				}
 				else
 				{

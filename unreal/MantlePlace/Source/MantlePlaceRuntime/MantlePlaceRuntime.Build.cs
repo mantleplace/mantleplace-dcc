@@ -28,6 +28,7 @@ public class MantlePlaceRuntime : ModuleRules
 				"Core",
 				"CoreUObject", // USTRUCT row types in public headers (MantlePlaceLandcoverTypes.h)
 				"Engine",      // FTableRowBase in MantlePlaceLandcoverTypes.h (tree-points DataTable rows)
+				"PCG",         // UPCGSettings + UPCGComponent: the foliage scatter node and its volume (public headers)
 			}
 			);
 

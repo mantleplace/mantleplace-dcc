@@ -31,6 +31,7 @@ bool FMantlePlaceDataLayerLogicTest::RunTest(const FString& Parameters)
 		Expected.Add(FName(TEXT("buildings")), EMantlePlaceLayerFamily::Buildings);
 		Expected.Add(FName(TEXT("road_splines")), EMantlePlaceLayerFamily::Roads);
 		Expected.Add(FName(TEXT("foliage_points")), EMantlePlaceLayerFamily::Foliage);
+		Expected.Add(MantlePlaceArtifactId::FoliageScatter(), EMantlePlaceLayerFamily::Foliage);
 		Expected.Add(FName(TEXT("public_records")), EMantlePlaceLayerFamily::PublicRecords);
 
 		const MantlePlaceArtifacts::FHandlers Handlers = MantlePlaceArtifacts::MakeAll();

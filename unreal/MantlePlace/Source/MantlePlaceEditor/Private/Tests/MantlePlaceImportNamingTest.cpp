@@ -211,6 +211,7 @@ bool FMantlePlaceImportNamingTest::RunTest(const FString& Parameters)
 			DrapeMaterialName(), FString(TEXT("MI_Drape")));
 		TestEqual(TEXT("tree points table"),
 			TreePointsTableName(), FString(TEXT("DT_TreePoints")));
+		TestEqual(TEXT("foliage graph"), FoliageGraphName(), FString(TEXT("PCG_TreeScatter")));
 		TestEqual(TEXT("tree points row"), TreePointsRowName(0), FString(TEXT("Tree_0")));
 		TestEqual(TEXT("tree points row, later"), TreePointsRowName(1234), FString(TEXT("Tree_1234")));
 	}
@@ -248,6 +249,8 @@ bool FMantlePlaceImportNamingTest::RunTest(const FString& Parameters)
 			ActorLabel(EActorKind::Mesh, Identity), FString(TEXT("MP_Mesh_a1b2c3d4")));
 		TestEqual(TEXT("buildings label"),
 			ActorLabel(EActorKind::Buildings, Identity), FString(TEXT("MP_Buildings_a1b2c3d4")));
+		TestEqual(TEXT("foliage label"),
+			ActorLabel(EActorKind::Foliage, Identity), FString(TEXT("MP_Foliage_a1b2c3d4")));
 
 		TestEqual(TEXT("road spline prefix"),
 			RoadSplineLabelPrefix(Identity), FString(TEXT("MP_RoadSpline_a1b2c3d4_")));
@@ -279,15 +282,16 @@ bool FMantlePlaceImportNamingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("public record label, no family"),
 			PublicRecordLabel(Identity, FString()), FString(TEXT("MP_Record_Records_a1b2c3d4")));
 
-		// The three single-actor labels are distinct from each other and none is a prefix of
+		// The single-actor labels are distinct from each other and none is a prefix of
 		// another — the stale-actor sweep compares two of them by equality and one by StartsWith,
 		// so an accidental prefix relationship would make it delete the wrong actor.
 		const FString Labels[] = { ActorLabel(EActorKind::Landscape, Identity),
 		                           ActorLabel(EActorKind::Mesh, Identity),
-		                           ActorLabel(EActorKind::Buildings, Identity) };
-		for (int32 I = 0; I < 3; ++I)
+		                           ActorLabel(EActorKind::Buildings, Identity),
+		                           ActorLabel(EActorKind::Foliage, Identity) };
+		for (int32 I = 0; I < UE_ARRAY_COUNT(Labels); ++I)
 		{
-			for (int32 J = I + 1; J < 3; ++J)
+			for (int32 J = I + 1; J < UE_ARRAY_COUNT(Labels); ++J)
 			{
 				TestNotEqual(TEXT("actor labels are distinct"), Labels[I], Labels[J]);
 				TestFalse(TEXT("no actor label prefixes another"), Labels[J].StartsWith(Labels[I]));
