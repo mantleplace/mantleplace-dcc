@@ -131,8 +131,9 @@ relocated beside `main`; everything else about worktrees is the agent standard's
 `unreal-0.4.0`), so tag-matches-artifact is a string equality. The release body is the changelog and
 the provenance record; there is no changelog file. **No release is built or gated in public CI,
 ever** — both hosts need a licensed install, so packaging runs privately.
-[ADR 0001](docs/adr/0001-per-host-release-tracks.md) and
-[`revit/README.md` ▸ Packaging a release](revit/README.md#packaging-a-release) hold the rest.
+[ADR 0001](docs/adr/0001-per-host-release-tracks.md) holds why; [`docs/releases.md`](docs/releases.md) holds
+the cut order, the title and the body template every release follows; each host's README holds its
+packaging.
 
 ## Binaries
 

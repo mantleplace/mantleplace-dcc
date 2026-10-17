@@ -69,7 +69,7 @@ a change to the shared spec or the conformance corpus lands on several hosts at 
 
 | Label | Host |
 | --- | --- |
-| `host:unreal` | Mantle Place for Unreal Engine |
+| `host:unreal` | Mantle Place for Unreal |
 | `host:revit` | Mantle Place for Revit |
 | `host:rhino` | Mantle Place for Rhino |
 | `host:blender` | Mantle Place for Blender |

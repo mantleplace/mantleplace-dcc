@@ -1,4 +1,4 @@
-# Mantle Place for Unreal Engine
+# Mantle Place for Unreal
 
 The Unreal plugin — host #1, and the reference host. One `.uplugin` with two modules,
 `MantlePlaceRuntime` and `MantlePlaceEditor`, for **Unreal Engine 5.8**, editor-side. Its only engine
@@ -115,9 +115,8 @@ Packaging needs a licensed Unreal Engine 5.8 install, so it runs privately and n
 5. **Compile it in a consuming project.** Point a consuming project's submodule at the same commit
    and let that project's own compile and live-import check run; the local suite skips the live
    import, so this is the gate that exercises a real bundle.
-6. **Publish** the tag `unreal-<version>` at that commit, with the zip as its asset. The release body
-   is the changelog: what changed, what a user on the previous release should know, and the result
-   of a smoke run against the published asset.
+6. **Publish** the tag `unreal-<version>` at that commit, with the zip as its asset, titled and
+   written to [`docs/releases.md`](../docs/releases.md).
 
 For anything deeper — building, testing, naming, what a change here must not do — read
 [`CLAUDE.md`](CLAUDE.md) in this folder and the root [`README.md`](../README.md).
