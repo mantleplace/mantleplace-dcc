@@ -8,7 +8,8 @@
 
 // The decisions an import into a World Partition level makes, asserted without a world: how many
 // streaming proxies a split yields, the order a wipe destroys in, which actors are kept always
-// loaded, and when a re-import must refuse rather than leave part of the prior import behind.
+// loaded, and when a re-import must refuse rather than leave part of the prior import behind,
+// including the foliage a prior scatter generated onto PCG partition actors in cells now unloaded.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceWorldPartitionLogicTest,
@@ -67,6 +68,23 @@ bool FMantlePlaceWorldPartitionLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("one unloaded actor refuses"), One.IsEmpty());
 		TestTrue(TEXT("the refusal says how many"), ExplainUnloadedPriorActors(7).Contains(TEXT("7")));
 		TestTrue(TEXT("and what to do about it"), One.Contains(TEXT("Load")));
+	}
+
+	// --- Unloaded PCG cells: a prior scatter's instances live on untagged partition actors ---------
+	{
+		// A 400 m AOI about the origin, and 256 m PCG cells: the four cells about the origin hold it.
+		const TArray<FBox2D> Scatter = { FBox2D(FVector2D(-20000.0, -20000.0), FVector2D(20000.0, 20000.0)) };
+		const FBox2D Inside(FVector2D(0.0, 0.0), FVector2D(25600.0, 25600.0));
+		const FBox2D Beyond(FVector2D(25600.0, 0.0), FVector2D(51200.0, 25600.0));
+		const FBox2D Touching(FVector2D(20000.0, -5000.0), FVector2D(45600.0, 5000.0));
+		TestTrue(TEXT("a cell overlapping the scatter's volume holds part of it"), CellHoldsPriorScatter(Inside, Scatter));
+		TestFalse(TEXT("a cell beyond the volume holds none of it"), CellHoldsPriorScatter(Beyond, Scatter));
+		TestFalse(TEXT("a cell that only touches the volume's edge holds none of it"), CellHoldsPriorScatter(Touching, Scatter));
+		TestFalse(TEXT("no prior scatter, so no cell holds one"), CellHoldsPriorScatter(Inside, TArray<FBox2D>()));
+		TestFalse(TEXT("a cell with no bounds cannot be placed, so it is not counted"),
+			CellHoldsPriorScatter(FBox2D(ForceInit), Scatter));
+		const TArray<FBox2D> Two = { FBox2D(FVector2D(90000.0, 90000.0), FVector2D(91000.0, 91000.0)), Scatter[0] };
+		TestTrue(TEXT("any one of several prior scatters is enough"), CellHoldsPriorScatter(Inside, Two));
 	}
 
 	return true;

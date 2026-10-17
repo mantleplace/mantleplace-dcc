@@ -70,7 +70,9 @@ int32 ReplacePriorActors(UWorld* World, const FString& Identity, MantlePlaceImpo
  * non-partitioned level). ReplacePriorActors can only destroy what is loaded, so going ahead would
  * leave the unloaded ones behind as orphans beside the new import. Called before either wipe, so a
  * refusal changes nothing. A prior landscape's streaming proxies count whether or not they carry
- * the tag, matched by the landscape's GUID.
+ * the tag, matched by the landscape's GUID. So does a PCG partition actor whose cell overlaps a
+ * prior foliage scatter's volume (MantlePlaceWorldPartitionLogic::CellHoldsPriorScatter): it holds
+ * that scatter's generated instances untagged, and the wipe's cleanup reaches loaded ones only.
  */
 FString ExplainUnloadedPriorActors(UWorld* World, const FString& Identity);
 
