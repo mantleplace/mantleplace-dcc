@@ -9,6 +9,7 @@
 #include "MantlePlaceImportNaming.h"   // subfolder layout, so this asserts the standard not a copy of it
 #include "MantlePlaceVaultTypes.h"     // MantlePlaceMinSupportedManifestVersion (stale-fixture skip)
 #include "MantlePlaceImportTypes.h"
+#include "MantlePlaceRoadSplinesLogic.h" // the importer's own datum decision, asked not recomputed
 #include "MantlePlaceCoverageRasterLogic.h"  // IsCoverageRaster (which layers to expect)
 #include "MantlePlaceCoverageRasterTypes.h"  // runtime: UMantlePlaceCoverageRasterData
 
@@ -295,7 +296,24 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 				++NumSplineActors;
 			}
 		}
-		TestTrue(TEXT("road-splines bundle produced at least one spline actor"), NumSplineActors >= 1);
+		// Assert on what the importer decided, not on the layer being present: a layer whose heights
+		// are not in this landscape's datum is a named skip (#278), never shifted, so it places nothing.
+		// The decision is asked of the importer's own predicate, not re-derived here.
+		FString DatumRefusal;
+		if (FMantlePlaceRoadSplinesLogic::CanPlaceHeights(Manifest.GetRoadSplinesDatum(), DatumRefusal))
+		{
+			TestTrue(TEXT("road-splines bundle produced at least one spline actor"), NumSplineActors >= 1);
+		}
+		else
+		{
+			TestEqual(TEXT("a road layer skipped for its datum produced no spline actors"), NumSplineActors, 0);
+			// The importer writes this same "Road splines skipped" prefix for a missing file and for a
+			// parse error, so the prefix alone would pass for the wrong reason. Match the datum reason
+			// CanPlaceHeights returned, the exact entry the importer logs for this skip.
+			TestTrue(TEXT("the datum skip is named in the import result, with its datum reason"),
+				Result.Message.Contains(
+					FString::Printf(TEXT("Road splines skipped: %s"), *DatumRefusal), ESearchCase::CaseSensitive));
+		}
 	}
 
 	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
