@@ -90,7 +90,10 @@ run reporting any `No editor` skip is not green.**
   a copy of the plugin) beneath a directory that has `tools/manifest-conformance/corpus/`, or copy
   that `corpus/` folder to `tools/manifest-conformance/corpus/` in a directory above the plugin.
 - **`MantlePlace.Import.LiveFreeTier`** runs offline against a local bundle zip: set
-  `MP_LIVETEST_BUNDLE` to it (otherwise it uses the in-tree live-test copy, and fails if none).
+  `MP_LIVETEST_BUNDLE` to it (otherwise it falls back to
+  `<ProjectSaved>/MantlePlace/livetest/download.zip`). With no bundle, or one below the manifest
+  floor, it warns and passes locally; it errors only when `CI` is set. A "Sample bundle not present"
+  (or "below the floor") warning therefore means the run is not green, whatever the count says.
 - **Scratch hygiene.** Set `EditorStartupMap` and `GameDefaultMap` to a `/Game` map or
   `/Engine/Maps/Templates/Template_Default`, never `/Engine/Maps/Entry`; never save an `/Engine`
   package (one such save overwrote an install's `Entry.umap` and broke other projects' tests). In Git
