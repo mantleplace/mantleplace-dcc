@@ -89,7 +89,10 @@ not split and imports exactly as before.
   represented by an HLOD, and the refusal below keeps the sweep from leaving one behind.
 - **A re-import refuses, changing nothing, when any actor of the prior import is in an unloaded
   region.** Loading the regions that hold it, then importing again, is the remedy; a sweep that went
-  ahead would leave the unloaded actors behind beside the new import.
+  ahead would leave the unloaded actors behind beside the new import. An actor a re-import destroyed
+  is not one of them: its World Partition descriptor lingers, reading as unloaded, until the next save
+  deletes its package, so the check skips a descriptor whose package is in memory, dirty and holds no
+  live actor. A second re-import before saving is therefore allowed.
 
 ### Data Layers, one per layer family
 

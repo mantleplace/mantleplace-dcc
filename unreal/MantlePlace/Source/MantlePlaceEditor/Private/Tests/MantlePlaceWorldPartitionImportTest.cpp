@@ -21,6 +21,12 @@
 #include "LandscapeInfo.h"
 #include "LandscapeStreamingProxy.h"
 #include "Materials/Material.h"
+#include "UObject/ObjectSaveContext.h"
+#include "WorldPartition/ActorDescContainer.h"
+#include "WorldPartition/ActorDescContainerInstance.h"
+#include "WorldPartition/WorldPartition.h"
+#include "WorldPartition/WorldPartitionActorDescInstance.h"
+#include "WorldPartition/WorldPartitionHelpers.h"
 #include "DataLayer/DataLayerEditorSubsystem.h"
 #include "WorldPartition/DataLayer/DataLayerAsset.h"
 #include "WorldPartition/DataLayer/DataLayerInstance.h"
@@ -493,6 +499,113 @@ bool FMantlePlaceWorldPartitionDataLayersTest::RunTest(const FString& Parameters
 			Asset->ClearFlags(RF_Public | RF_Standalone);
 		}
 	}
+	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	return true;
+}
+
+// The stale descriptor: a saved level keeps a World Partition descriptor for every actor a wipe
+// destroyed until the next save deletes its package, and that descriptor reads as unloaded. A
+// second re-import before the save must not count it as a prior actor in an unloaded region.
+//
+// The save is stood in for by the one engine event that gives an actor its descriptor, the
+// container's pre-save hook, so nothing is written to disk.
+
+namespace MantlePlaceWorldPartitionImportTest
+{
+int32 CountTaggedDescriptors(UWorld* World, const FString& Identity, bool bLoaded)
+{
+	UWorldPartition* WorldPartition = World->GetWorldPartition();
+	if (WorldPartition == nullptr)
+	{
+		return 0;
+	}
+	const FName Tag(*MantlePlaceImportNaming::ImportTag(Identity));
+	int32 Count = 0;
+	FWorldPartitionHelpers::ForEachActorDescInstance(WorldPartition, AActor::StaticClass(),
+		[&Count, &Tag, bLoaded](const FWorldPartitionActorDescInstance* Desc)
+		{
+			Count += (Desc != nullptr && Desc->GetTags().Contains(Tag) && Desc->IsLoaded() == bLoaded) ? 1 : 0;
+			return true;
+		});
+	return Count;
+}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceWorldPartitionStaleDescriptorTest,
+	"MantlePlace.Import.WorldPartition.StaleDescriptor",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceWorldPartitionStaleDescriptorTest::RunTest(const FString& Parameters)
+{
+	using namespace MantlePlaceWorldPartitionImportTest;
+
+	if (GEditor == nullptr)
+	{
+		AddInfo(TEXT("No editor: the stale-descriptor check needs an editor world. Skipped."));
+		return true;
+	}
+
+	UWorld::InitializationValues IVS;
+	IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
+		FName(TEXT("MantlePlaceStaleDescriptorTestWorld")), /*InWorldPackage*/ nullptr, /*bAddToRoot*/ true,
+		ERHIFeatureLevel::Num, &IVS);
+	if (!TestNotNull(TEXT("a throwaway partitioned world"), World))
+	{
+		return false;
+	}
+	UWorldPartition* WorldPartition = World->GetWorldPartition();
+	UActorDescContainerInstance* ContainerInstance =
+		WorldPartition != nullptr ? WorldPartition->GetActorDescContainerInstance() : nullptr;
+	UActorDescContainer* Container = ContainerInstance != nullptr ? ContainerInstance->GetContainer() : nullptr;
+	if (!TestNotNull(TEXT("fixture: the world has an actor descriptor container"), Container))
+	{
+		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		return false;
+	}
+
+	const FString Identity = TEXT("eeeeeeee-5555");
+	FMantlePlaceVaultManifest Manifest;
+	FMantlePlaceImportResult Result;
+	TArray<FString> Log;
+	MantlePlaceImportTiming::FTimeline Timeline;
+	Timeline.Start();
+	const FMantlePlaceImportSelection Selection = FMantlePlaceImportSelection::Everything();
+	FMantlePlaceImportContext Context(World, Manifest, /*Reader*/ nullptr, Selection, Timeline, Result, Log);
+	Context.Identity = Identity;
+
+	// --- The prior import, as a save leaves it: a claimed actor with a descriptor -----------------
+	AStaticMeshActor* Mesh = World->SpawnActor<AStaticMeshActor>();
+	Context.Claim(Mesh, TEXT("MP_StaleDescriptorTestMesh"));
+	if (!TestTrue(TEXT("fixture: the actor has its own package, as every actor in a partitioned level does"),
+		Mesh != nullptr && Mesh->IsPackageExternal()))
+	{
+		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		return false;
+	}
+	FObjectSaveContextData SaveData;
+	Container->OnObjectPreSave(Mesh, FObjectPreSaveContext(SaveData));
+	if (!TestEqual(TEXT("fixture: the stand-in save gives the actor a loaded descriptor"),
+		CountTaggedDescriptors(World, Identity, /*bLoaded*/ true), 1))
+	{
+		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		return false;
+	}
+	TestTrue(TEXT("a loaded prior actor is no refusal"),
+		MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(World, Identity).IsEmpty());
+
+	// --- The first re-import's wipe: the actor goes, its descriptor stays until a save -------------
+	TestEqual(TEXT("the wipe destroys the prior actor"),
+		MantlePlaceImportOrchestration::ReplacePriorActors(World, Identity, Timeline), 1);
+	TestEqual(TEXT("fixture: its descriptor outlives it and reads as unloaded"),
+		CountTaggedDescriptors(World, Identity, /*bLoaded*/ false), 1);
+
+	// --- The second re-import, before any save --------------------------------------------------
+	const FString Refusal = MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(World, Identity);
+	TestTrue(*FString::Printf(TEXT("a destroyed actor's stale descriptor is no refusal (got: %s)"), *Refusal),
+		Refusal.IsEmpty());
+
 	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
 	return true;
 }

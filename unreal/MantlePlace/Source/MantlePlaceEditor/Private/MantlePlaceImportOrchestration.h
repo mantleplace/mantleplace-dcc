@@ -73,6 +73,9 @@ int32 ReplacePriorActors(UWorld* World, const FString& Identity, MantlePlaceImpo
  * the tag, matched by the landscape's GUID. So does a PCG partition actor whose cell overlaps a
  * prior foliage scatter's volume (MantlePlaceWorldPartitionLogic::CellHoldsPriorScatter): it holds
  * that scatter's generated instances untagged, and the wipe's cleanup reaches loaded ones only.
+ * A descriptor an earlier wipe this session left behind does not count: the actor is destroyed,
+ * not unloaded, and the next save deletes the descriptor
+ * (MantlePlaceWorldPartitionLogic::IsDestroyedThisSession).
  */
 FString ExplainUnloadedPriorActors(UWorld* World, const FString& Identity);
 

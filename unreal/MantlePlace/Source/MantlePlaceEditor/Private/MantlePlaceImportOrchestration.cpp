@@ -27,6 +27,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Subsystems/EditorAssetSubsystem.h"
+#include "UObject/Package.h"
 #include "WorldPartition/ActorPartition/PartitionActorDesc.h"
 #include "WorldPartition/WorldPartition.h"
 #include "WorldPartition/WorldPartitionActorDescInstance.h"
@@ -197,6 +198,24 @@ bool VerifyEntrySha256(
 		return false;
 	}
 	return true;
+}
+
+/**
+ * What memory holds of an unloaded descriptor's package, read without loading anything. A package
+ * not in memory reads as all false: its actor was never loaded this session, so it is unloaded.
+ */
+MantlePlaceWorldPartitionLogic::FDescriptorPackage ReadDescriptorPackage(const FWorldPartitionActorDescInstance& Desc)
+{
+	MantlePlaceWorldPartitionLogic::FDescriptorPackage State;
+	UPackage* Package = FindPackage(nullptr, *Desc.GetActorPackage().ToString());
+	if (Package == nullptr)
+	{
+		return State;
+	}
+	State.bInMemory = true;
+	State.bDirty = Package->IsDirty();
+	State.bHoldsLiveActor = AActor::FindActorInPackage(Package, /*bEvenIfPendingKill*/ false) != nullptr;
+	return State;
 }
 }
 
@@ -443,6 +462,12 @@ FString MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(UWorld* World
 		[&Unloaded, &ImportTagName, &PriorLandscapes, &PriorScatters](const FWorldPartitionActorDescInstance* Desc)
 		{
 			if (Desc == nullptr || Desc->IsLoaded())
+			{
+				return true;
+			}
+			// A wipe earlier this session destroyed it: the descriptor reads as unloaded until the
+			// save that deletes its package, and the actor is gone, not in an unloaded region.
+			if (MantlePlaceWorldPartitionLogic::IsDestroyedThisSession(ReadDescriptorPackage(*Desc)))
 			{
 				return true;
 			}
