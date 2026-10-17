@@ -61,6 +61,12 @@ Re-importing an order **replaces** its content: the destination directory is for
 rebuilt, because Interchange re-creates source-named assets. Two things stand in front of that
 delete, and neither is optional.
 
+One thing follows it. The force-delete leaves freeing each asset to garbage collection, and an asset
+something still holds stays in memory at its own path, no longer public. The import would import
+into it, and the level could not save the actor that references it: in a saved level the buildings
+were gone after a reopen. So whatever the delete leaves behind is moved into the transient
+package before the import runs (`RetireDeletedLeftovers`).
+
 **A provenance record**, written outside the content tree under the project's `Saved` directory. The
 folder is named by the *truncated* identity, so two orders sharing eight characters name one folder;
 the record holds the full identity, and a mismatch refuses instead of deleting. It lives outside the

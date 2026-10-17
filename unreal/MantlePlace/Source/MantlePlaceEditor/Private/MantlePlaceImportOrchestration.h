@@ -54,6 +54,15 @@ FString WipePriorAssets(
 	const FString& Identity, const FString& DestPackagePath, MantlePlaceImportTiming::FTimeline& Timeline);
 
 /**
+ * The second half of the asset wipe, which WipePriorAssets runs after its delete: anything the
+ * delete deleted but could not free, because something still held it, is moved out of the folder's
+ * paths into the transient package. Left there, the re-import would import into it and keep its
+ * cleared flags, and the level could no longer save the actor that references it (dcc #349).
+ * Returns how many it moved; 0 when the delete freed everything.
+ */
+int32 RetireDeletedLeftovers(const FString& DestPackagePath);
+
+/**
  * Idempotent re-import, actors: remove the actors a PRIOR import of this same ORDER spawned, so
  * re-importing replaces them instead of stacking duplicate (coincident) actors. Matched on the
  * import TAG, which carries the full identity and survives being renamed or dragged elsewhere --
