@@ -330,8 +330,32 @@ FString MantlePlaceImportOrchestration::WipePriorAssets(
 	return FString();
 }
 
+namespace
+{
+// The prior scatter's emptied partition actors: kept for the import that follows when the caller
+// takes them (ReplacePriorActors says why), destroyed now when it does not. Returns how many.
+int32 KeepOrDestroyEmptied(UWorld* World, const TArray<AActor*>& PartitionActors, TArray<TWeakObjectPtr<AActor>>* OutKept)
+{
+	if (OutKept == nullptr)
+	{
+		return MantlePlaceFoliageScatter::DestroyEmptyPartitionActors(World, PartitionActors);
+	}
+	int32 Kept = 0;
+	for (AActor* PartitionActor : PartitionActors)
+	{
+		if (MantlePlaceFoliageScatter::HoldsNothing(PartitionActor))
+		{
+			OutKept->AddUnique(PartitionActor);
+			++Kept;
+		}
+	}
+	return Kept;
+}
+}
+
 int32 MantlePlaceImportOrchestration::ReplacePriorActors(
-	UWorld* World, const FString& Identity, MantlePlaceImportTiming::FTimeline& Timeline)
+	UWorld* World, const FString& Identity, MantlePlaceImportTiming::FTimeline& Timeline,
+	TArray<TWeakObjectPtr<AActor>>* OutKeptPartitionActors)
 {
 	// Its absence is also the legacy signal: an actor from 0.3.0 or earlier has an MP_* label and no
 	// tag, so it is not matched here — and the content guard (WipePriorAssets) has already refused
@@ -349,7 +373,8 @@ int32 MantlePlaceImportOrchestration::ReplacePriorActors(
 	}
 
 	// A foliage scatter's generated instances live on PCG partition actors, which carry no tag and
-	// are shared per cell: swept before its volume goes, and each destroyed once nothing else uses it.
+	// are shared per cell: swept before its volume goes, and each destroyed once nothing else uses it,
+	// or kept for the re-import to generate on (KeepOrDestroyEmptied).
 	// The sweep reaches loaded ones only; an unloaded one is ExplainUnloadedPriorActors' to refuse.
 	const TArray<AActor*> PartitionActors = MantlePlaceFoliageScatter::CleanupGenerated(World, StaleActors);
 
@@ -360,7 +385,7 @@ int32 MantlePlaceImportOrchestration::ReplacePriorActors(
 		{
 			World->EditorDestroyActor(Stale, /*bShouldModifyLevel*/ true);
 		}
-		return StaleActors.Num() + MantlePlaceFoliageScatter::DestroyEmptyPartitionActors(World, PartitionActors);
+		return StaleActors.Num() + KeepOrDestroyEmptied(World, PartitionActors, OutKeptPartitionActors);
 	}
 
 	// A split landscape's proxies go with it, tagged or not: a proxy the landscape tools added
@@ -399,7 +424,21 @@ int32 MantlePlaceImportOrchestration::ReplacePriorActors(
 	{
 		World->EditorDestroyActor(StaleActors[Index], /*bShouldModifyLevel*/ true);
 	}
-	return StaleActors.Num() + MantlePlaceFoliageScatter::DestroyEmptyPartitionActors(World, PartitionActors);
+	return StaleActors.Num() + KeepOrDestroyEmptied(World, PartitionActors, OutKeptPartitionActors);
+}
+
+int32 MantlePlaceImportOrchestration::ReleaseKeptPartitionActors(
+	UWorld* World, const TArray<TWeakObjectPtr<AActor>>& KeptPartitionActors)
+{
+	TArray<AActor*> Live;
+	for (const TWeakObjectPtr<AActor>& PartitionActor : KeptPartitionActors)
+	{
+		if (PartitionActor.IsValid())
+		{
+			Live.Add(PartitionActor.Get());
+		}
+	}
+	return MantlePlaceFoliageScatter::DestroyEmptyPartitionActors(World, Live);
 }
 
 FString MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(UWorld* World, const FString& Identity)

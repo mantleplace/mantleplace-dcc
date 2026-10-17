@@ -21,14 +21,21 @@
 #include "DataLayer/DataLayerEditorSubsystem.h"
 #include "Editor.h"
 #include "Engine/DataTable.h"
+#include "Engine/Level.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Grid/PCGPartitionActor.h"
+#include "HAL/FileManager.h"
+#include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 #include "PCGComponent.h"
 #include "Subsystems/PCGSubsystem.h"
 #include "UObject/Package.h"
+#include "UObject/SavePackage.h"
 #include "WorldPartition/DataLayer/DataLayerAsset.h"
+#include "WorldPartition/WorldPartition.h"
+#include "WorldPartition/WorldPartitionHelpers.h"
 
 // The World Partition round trip for the foliage scatter, without a bundle: a tree-points table and
 // three coverage rasters made the way the importer makes them, handed to the scatter's own handler
@@ -72,7 +79,8 @@ bool IsWaterTexel(int32 Column, int32 Row) { return (Row == 1 && Column >= 4) ||
 UTexture2D* MakeRaster(UObject* Outer, const TCHAR* Name, ETextureSourceFormat Format, EMantlePlaceCoverageMapping Mapping,
 	TFunctionRef<uint16(int32, int32)> Sample)
 {
-	UTexture2D* Texture = NewObject<UTexture2D>(Outer, FName(Name), RF_Transient);
+	// A unique name: a second import in one test must not reconstruct the first one's raster in place.
+	UTexture2D* Texture = NewObject<UTexture2D>(Outer, MakeUniqueObjectName(Outer, UTexture2D::StaticClass(), FName(Name)), RF_Transient);
 	const int32 BytesPerSample = Format == TSF_G16 ? 2 : 1;
 	TArray<uint8> Bytes;
 	Bytes.SetNumZeroed(RasterSize * RasterSize * BytesPerSample);
@@ -104,7 +112,7 @@ UTexture2D* MakeRaster(UObject* Outer, const TCHAR* Name, ETextureSourceFormat F
 // A tree every 25 m across the AOI, offset half a step from the texel edges, ground measured at 0.
 UDataTable* MakeTable(UObject* Outer)
 {
-	UDataTable* Table = NewObject<UDataTable>(Outer, FName(TEXT("DT_TreePointsFoliageTest")), RF_Transient);
+	UDataTable* Table = NewObject<UDataTable>(Outer, MakeUniqueObjectName(Outer, UDataTable::StaticClass(), FName(TEXT("DT_TreePointsFoliageTest"))), RF_Transient);
 	Table->RowStruct = FMantlePlaceTreePointRow::StaticStruct();
 	int32 Index = 0;
 	for (double North = -AoiCm / 2 + 1250.0; North < AoiCm / 2; North += 2500.0)
@@ -218,6 +226,42 @@ namespace MantlePlaceArtifacts
 TUniquePtr<IMantlePlaceArtifactHandler> MakeFoliageScatter();
 }
 
+namespace MantlePlaceWorldPartitionFoliageTest
+{
+/** The fixture's scatter, imported into World through the scatter's own handler, as the importer runs it. */
+AMantlePlaceFoliageVolume* ImportScatter(UWorld* World, const FString& DestPackagePath, TArray<FString>& Log)
+{
+	UPackage* Outer = GetTransientPackage();
+	FMantlePlaceVaultManifest Manifest;
+	SetAoi(Manifest);
+	FMantlePlaceImportResult Result;
+	MantlePlaceImportTiming::FTimeline Timeline;
+	Timeline.Start();
+	const FMantlePlaceImportSelection Selection = FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode::Landscape, true);
+	FMantlePlaceImportContext Context(World, Manifest, nullptr, Selection, Timeline, Result, Log);
+	Context.Identity = Identity;
+	Context.ContentRoot = ContentRoot;
+	Context.DestPackagePath = DestPackagePath;
+	Context.Family = EMantlePlaceLayerFamily::Foliage;
+	Context.TreePointsTable = MakeTable(Outer);
+	Context.CoverageTextures.Add(TEXT("water_mask"), MakeRaster(Outer, TEXT("T_WaterMaskFoliageTest"), TSF_G8,
+		EMantlePlaceCoverageMapping::Mask, [](int32 Column, int32 Row) -> uint16 { return IsWaterTexel(Column, Row) ? 255 : 0; }));
+	Context.CoverageTextures.Add(TEXT("worldcover"), MakeRaster(Outer, TEXT("T_WorldCoverFoliageTest"), TSF_G8,
+		EMantlePlaceCoverageMapping::Legend, [](int32 Column, int32 Row) -> uint16 { return (Column == 0 && Row == 0) ? 50 : 10; }));
+	Context.CoverageTextures.Add(TEXT("canopy_height"), MakeRaster(Outer, TEXT("T_CanopyHeightFoliageTest"), TSF_G16,
+		EMantlePlaceCoverageMapping::Scale, [](int32, int32) -> uint16 { return 40000; }));
+
+	TUniquePtr<IMantlePlaceArtifactHandler> Handler = MantlePlaceArtifacts::MakeFoliageScatter();
+	Handler->Import(Context);
+	AMantlePlaceFoliageVolume* Volume = nullptr;
+	for (TActorIterator<AMantlePlaceFoliageVolume> It(World); It; ++It)
+	{
+		Volume = *It;
+	}
+	return Volume;
+}
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceFoliageScatterColumnsTest,
 	"MantlePlace.Import.FoliageScatter.Columns",
@@ -274,35 +318,11 @@ bool FMantlePlaceWorldPartitionFoliageTest::RunTest(const FString& Parameters)
 			return false;
 		}
 
-		UPackage* Outer = GetTransientPackage();
-		FMantlePlaceVaultManifest Manifest;
-		SetAoi(Manifest);
-		FMantlePlaceImportResult Result;
+		// --- Import, through the importer seam ------------------------------------------------------
 		TArray<FString> Log;
 		MantlePlaceImportTiming::FTimeline Timeline;
 		Timeline.Start();
-		const FMantlePlaceImportSelection Selection = FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode::Landscape, true);
-		FMantlePlaceImportContext Context(World, Manifest, nullptr, Selection, Timeline, Result, Log);
-		Context.Identity = Identity;
-		Context.ContentRoot = ContentRoot;
-		Context.DestPackagePath = MantlePlaceImportNaming::ImportRoot(ContentRoot, Identity);
-		Context.Family = EMantlePlaceLayerFamily::Foliage;
-		Context.TreePointsTable = MakeTable(Outer);
-		Context.CoverageTextures.Add(TEXT("water_mask"), MakeRaster(Outer, TEXT("T_WaterMaskFoliageTest"), TSF_G8,
-			EMantlePlaceCoverageMapping::Mask, [](int32 Column, int32 Row) -> uint16 { return IsWaterTexel(Column, Row) ? 255 : 0; }));
-		Context.CoverageTextures.Add(TEXT("worldcover"), MakeRaster(Outer, TEXT("T_WorldCoverFoliageTest"), TSF_G8,
-			EMantlePlaceCoverageMapping::Legend, [](int32 Column, int32 Row) -> uint16 { return (Column == 0 && Row == 0) ? 50 : 10; }));
-		Context.CoverageTextures.Add(TEXT("canopy_height"), MakeRaster(Outer, TEXT("T_CanopyHeightFoliageTest"), TSF_G16,
-			EMantlePlaceCoverageMapping::Scale, [](int32, int32) -> uint16 { return 40000; }));
-
-		// --- Import, through the importer seam ------------------------------------------------------
-		TUniquePtr<IMantlePlaceArtifactHandler> Handler = MantlePlaceArtifacts::MakeFoliageScatter();
-		Handler->Import(Context);
-		AMantlePlaceFoliageVolume* Volume = nullptr;
-		for (TActorIterator<AMantlePlaceFoliageVolume> It(World); It; ++It)
-		{
-			Volume = *It;
-		}
+		AMantlePlaceFoliageVolume* Volume = ImportScatter(World, MantlePlaceImportNaming::ImportRoot(ContentRoot, Identity), Log);
 		if (!TestNotNull(*FString::Printf(TEXT("%s: the scatter spawns its volume (log: %s)"), *Pass, *FString::Join(Log, TEXT(" | "))), Volume))
 		{
 			World->DestroyWorld(false);
@@ -377,6 +397,155 @@ bool FMantlePlaceWorldPartitionFoliageTest::RunTest(const FString& Parameters)
 
 		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
 	}
+	return true;
+}
+
+namespace MantlePlaceWorldPartitionFoliageTest
+{
+/**
+ * Save every PCG partition actor's own package to disk, as File > Save All does. World Partition then
+ * describes each one, and the PCG subsystem records its cell: the state a saved level is in.
+ */
+int32 SavePartitionActors(UWorld* World)
+{
+	int32 Saved = 0;
+	for (TActorIterator<APCGPartitionActor> It(World); It; ++It)
+	{
+		UPackage* Package = It->GetExternalPackage();
+		if (Package == nullptr)
+		{
+			continue;
+		}
+		FSavePackageArgs Args;
+		Args.TopLevelFlags = RF_Standalone;
+		Args.SaveFlags = SAVE_NoError;
+		const FString Filename = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+		Saved += UPackage::SavePackage(Package, nullptr, *Filename, Args) ? 1 : 0;
+	}
+	return Saved;
+}
+
+/** How many PCG partition actors World Partition describes, loaded or not. */
+int32 CountPartitionDescriptors(UWorld* World)
+{
+	int32 Count = 0;
+	if (UWorldPartition* WorldPartition = World->GetWorldPartition())
+	{
+		FWorldPartitionHelpers::ForEachActorDescInstance<APCGPartitionActor>(WorldPartition,
+			[&Count](const FWorldPartitionActorDescInstance*) { ++Count; return true; });
+	}
+	return Count;
+}
+
+/** Partition actors that do not hold this component's generation: a leftover, or a cell it never reached. */
+int32 CountPartitionActorsWithout(UWorld* World, UPCGComponent* Component)
+{
+	int32 Count = 0;
+	for (TActorIterator<APCGPartitionActor> It(World); It; ++It)
+	{
+		Count += It->GetLocalComponent(Component) != nullptr ? 0 : 1;
+	}
+	return Count;
+}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceWorldPartitionFoliageReimportTest,
+	"MantlePlace.Import.WorldPartition.FoliageScatterReimport",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceWorldPartitionFoliageReimportTest::RunTest(const FString& Parameters)
+{
+	using namespace MantlePlaceWorldPartitionFoliageTest;
+
+	// dcc #347: a re-import into a SAVED World Partition level regenerated no scatter at all. The
+	// unsaved round trip above cannot see it: a saved partition actor leaves a record of its cell
+	// with the PCG subsystem until the next save, and a cell with a record and no loaded actor is
+	// taken for an unloaded one, so nothing is created or generated on it.
+	if (GEditor == nullptr || UDataLayerEditorSubsystem::Get() == nullptr)
+	{
+		AddInfo(TEXT("No editor: the foliage re-import needs an editor world. Skipped."));
+		return true;
+	}
+
+	// A level with a package of its own, so its actors have packages to save; they are written under
+	// Saved and deleted again at the end.
+	const FString LevelPackageName = TEXT("/Temp/MantlePlaceFoliageReimportTest");
+	const FString SavedActorsDir = FPaths::ConvertRelativePathToFull(
+		FPackageName::LongPackageNameToFilename(ULevel::GetExternalActorsPath(LevelPackageName)));
+	IFileManager::Get().DeleteDirectory(*SavedActorsDir, /*RequireExists*/ false, /*Tree*/ true);
+
+	UWorld::InitializationValues IVS;
+	IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false, FName(TEXT("MantlePlaceFoliageReimportTest")),
+		CreatePackage(*LevelPackageName), /*bAddToRoot*/ true, ERHIFeatureLevel::Num, &IVS);
+	if (!TestNotNull(TEXT("a throwaway partitioned world with a package"), World))
+	{
+		return false;
+	}
+
+	// --- First import, generated and saved --------------------------------------------------------
+	TArray<FString> Log;
+	MantlePlaceImportTiming::FTimeline Timeline;
+	Timeline.Start();
+	AMantlePlaceFoliageVolume* First = ImportScatter(World, ContentRoot / TEXT("ReimportFirst"), Log);
+	if (!TestNotNull(*FString::Printf(TEXT("the first import spawns its volume (log: %s)"), *FString::Join(Log, TEXT(" | "))), First))
+	{
+		World->DestroyWorld(false);
+		return false;
+	}
+	TestTrue(TEXT("the first import's generation finishes"), PumpUntilGenerated(World, First->Pcg));
+	const int32 FirstPartitionActors = CountPartitionActors(World);
+	const int32 FirstInstances = InstanceLocations(World).Num();
+	TestTrue(*FString::Printf(TEXT("the first import spans more than one cell (%d partition actors)"), FirstPartitionActors), FirstPartitionActors > 1);
+	TestTrue(*FString::Printf(TEXT("the first import scatters instances (%d)"), FirstInstances), FirstInstances > 0);
+
+	TestEqual(TEXT("every partition actor is saved"), SavePartitionActors(World), FirstPartitionActors);
+	TestEqual(TEXT("the saved level describes every partition actor"), CountPartitionDescriptors(World), FirstPartitionActors);
+
+	// --- Re-import of the same order, everything loaded, wiped and released as the importer does ---
+	TArray<TWeakObjectPtr<AActor>> Kept;
+	MantlePlaceImportOrchestration::ReplacePriorActors(World, Identity, Timeline, &Kept);
+	AMantlePlaceFoliageVolume* Second = ImportScatter(World, ContentRoot / TEXT("ReimportSecond"), Log);
+	MantlePlaceImportOrchestration::ReleaseKeptPartitionActors(World, Kept);
+	if (!TestNotNull(TEXT("the re-import spawns its volume"), Second))
+	{
+		World->DestroyWorld(false);
+		IFileManager::Get().DeleteDirectory(*SavedActorsDir, false, true);
+		return false;
+	}
+	TestTrue(TEXT("the re-import's generation finishes"), PumpUntilGenerated(World, Second->Pcg));
+	TestEqual(TEXT("the re-import leaves one volume, its own"), CountTagged(World), 1);
+	TestEqual(TEXT("the re-import regenerates on as many partition actors as the first import"), CountPartitionActors(World), FirstPartitionActors);
+	TestEqual(TEXT("the re-import regenerates as many instances as the first import"), InstanceLocations(World).Num(), FirstInstances);
+	TestEqual(TEXT("every partition actor holds the re-import's scatter: no leftover, no cell missed"),
+		CountPartitionActorsWithout(World, Second->Pcg), 0);
+	const UDataLayerAsset* Foliage = MantlePlaceDataLayers::FindAsset(ContentRoot, EMantlePlaceLayerFamily::Foliage);
+	int32 OutOfLayer = 0;
+	for (TActorIterator<APCGPartitionActor> It(World); It; ++It)
+	{
+		OutOfLayer += It->GetDataLayerAssets().Contains(Foliage) ? 0 : 1;
+	}
+	TestEqual(TEXT("every partition actor is still in the foliage Data Layer"), OutOfLayer, 0);
+
+	// --- Saved again: still one scatter's worth -----------------------------------------------------
+	TestEqual(TEXT("every partition actor saves again"), SavePartitionActors(World), FirstPartitionActors);
+	PumpUntilGenerated(World, Second->Pcg);
+	TestEqual(TEXT("after the save, the level describes one scatter's partition actors"), CountPartitionDescriptors(World), FirstPartitionActors);
+	TestEqual(TEXT("after the save, the partition actors are unchanged"), CountPartitionActors(World), FirstPartitionActors);
+	TestEqual(TEXT("after the save, the instances are unchanged"), InstanceLocations(World).Num(), FirstInstances);
+
+	// --- A re-import that leaves the scatter out leaves nothing of it ------------------------------
+	TArray<TWeakObjectPtr<AActor>> KeptAgain;
+	MantlePlaceImportOrchestration::ReplacePriorActors(World, Identity, Timeline, &KeptAgain);
+	TestEqual(TEXT("the wipe keeps every emptied partition actor for the import that follows"), KeptAgain.Num(), FirstPartitionActors);
+	MantlePlaceImportOrchestration::ReleaseKeptPartitionActors(World, KeptAgain);
+	TestEqual(TEXT("the wipe leaves no tagged actor"), CountTagged(World), 0);
+	TestEqual(TEXT("the wipe leaves no partition actor"), CountPartitionActors(World), 0);
+	TestEqual(TEXT("the wipe leaves no instance"), InstanceLocations(World).Num(), 0);
+
+	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	IFileManager::Get().DeleteDirectory(*SavedActorsDir, /*RequireExists*/ false, /*Tree*/ true);
 	return true;
 }
 

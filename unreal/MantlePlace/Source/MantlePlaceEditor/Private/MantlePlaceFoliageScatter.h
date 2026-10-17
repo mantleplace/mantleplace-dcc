@@ -62,6 +62,9 @@ void Generate(AMantlePlaceFoliageVolume* Volume, UPCGGraph* Graph);
  */
 TArray<AActor*> CleanupGenerated(UWorld* World, const TArray<AActor*>& Actors);
 
+/** Whether this is a PCG partition actor that holds nothing: no local component, no graph instance. */
+bool HoldsNothing(const AActor* Actor);
+
 /** Destroy the partition actors among these that no longer hold anything. Returns how many. */
 int32 DestroyEmptyPartitionActors(UWorld* World, const TArray<AActor*>& PartitionActors);
 }
