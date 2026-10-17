@@ -9,7 +9,8 @@
 // The decisions an import into a World Partition level makes, asserted without a world: how many
 // streaming proxies a split yields, the order a wipe destroys in, which actors are kept always
 // loaded, and when a re-import must refuse rather than leave part of the prior import behind,
-// including the foliage a prior scatter generated onto PCG partition actors in cells now unloaded.
+// including the foliage a prior scatter generated onto PCG partition actors in cells now unloaded,
+// and not when the only "unloaded" actors are ones this session destroyed and has not saved since.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceWorldPartitionLogicTest,
@@ -85,6 +86,29 @@ bool FMantlePlaceWorldPartitionLogicTest::RunTest(const FString& Parameters)
 			CellHoldsPriorScatter(FBox2D(ForceInit), Scatter));
 		const TArray<FBox2D> Two = { FBox2D(FVector2D(90000.0, 90000.0), FVector2D(91000.0, 91000.0)), Scatter[0] };
 		TestTrue(TEXT("any one of several prior scatters is enough"), CellHoldsPriorScatter(Inside, Two));
+	}
+
+	// --- Stale descriptors: an actor this session destroyed is not an unloaded one ----------------
+	{
+		FDescriptorPackage Destroyed;
+		Destroyed.bInMemory = true;
+		Destroyed.bDirty = true;
+		Destroyed.bHoldsLiveActor = false;
+		TestTrue(TEXT("a dirty package in memory with no live actor is a destroyed actor's, awaiting the save that deletes it"),
+			IsDestroyedThisSession(Destroyed));
+
+		TestFalse(TEXT("a package not in memory is a really unloaded actor's"),
+			IsDestroyedThisSession(FDescriptorPackage()));
+
+		FDescriptorPackage Unloaded = Destroyed;
+		Unloaded.bDirty = false;
+		TestFalse(TEXT("an unchanged package in memory is an actor unloaded with its region, not destroyed"),
+			IsDestroyedThisSession(Unloaded));
+
+		FDescriptorPackage Live = Destroyed;
+		Live.bHoldsLiveActor = true;
+		TestFalse(TEXT("a package still holding a live actor was not emptied by a destroy"),
+			IsDestroyedThisSession(Live));
 	}
 
 	return true;

@@ -67,4 +67,24 @@ FString ExplainUnloadedPriorActors(int32 UnloadedCount);
  * none of it, and a cell with no bounds cannot be placed, so neither counts.
  */
 bool CellHoldsPriorScatter(const FBox2D& Cell, const TArray<FBox2D>& ScatterFootprints);
+
+/** What memory holds of the package behind an actor descriptor that reads as unloaded. */
+struct FDescriptorPackage
+{
+	/** The package is in memory: its actor was loaded at some point this session. */
+	bool bInMemory = false;
+	/** The package has unsaved changes. */
+	bool bDirty = false;
+	/** The package still holds a live actor, one not destroyed. */
+	bool bHoldsLiveActor = false;
+};
+
+/**
+ * Whether an actor descriptor that reads as unloaded belongs to an actor this session destroyed:
+ * its package is in memory, dirty, and holds no live actor, so the next save deletes the package
+ * and the descriptor with it. Until that save the descriptor outlives the actor, and counting it
+ * would refuse a re-import while every region is loaded. An actor in a region that is really
+ * unloaded has no package in memory, or an unchanged one, so it still counts.
+ */
+bool IsDestroyedThisSession(const FDescriptorPackage& Package);
 }

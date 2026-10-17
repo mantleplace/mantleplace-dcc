@@ -65,3 +65,8 @@ bool MantlePlaceWorldPartitionLogic::CellHoldsPriorScatter(const FBox2D& Cell, c
 	}
 	return false;
 }
+
+bool MantlePlaceWorldPartitionLogic::IsDestroyedThisSession(const FDescriptorPackage& Package)
+{
+	return Package.bInMemory && Package.bDirty && !Package.bHoldsLiveActor;
+}
