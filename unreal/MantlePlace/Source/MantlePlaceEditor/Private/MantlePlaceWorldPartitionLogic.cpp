@@ -29,9 +29,9 @@ TArray<int32> MantlePlaceWorldPartitionLogic::WipeOrder(const TArray<EWipeRank>&
 	return Order;
 }
 
-bool MantlePlaceWorldPartitionLogic::ShouldForceNonSpatiallyLoaded(bool bPartitioned, bool bLandscapeFamily)
+bool MantlePlaceWorldPartitionLogic::ShouldForceNonSpatiallyLoaded(bool bPartitioned, bool bStreamedFamily)
 {
-	return bPartitioned && !bLandscapeFamily;
+	return bPartitioned && !bStreamedFamily;
 }
 
 FString MantlePlaceWorldPartitionLogic::ExplainUnloadedPriorActors(int32 UnloadedCount)

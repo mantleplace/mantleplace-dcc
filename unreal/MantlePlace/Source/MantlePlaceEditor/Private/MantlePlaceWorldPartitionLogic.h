@@ -42,11 +42,14 @@ TArray<int32> WipeOrder(const TArray<EWipeRank>& Ranks);
 
 /**
  * The v1 unloaded-actor policy: in a partitioned level every actor the importer spawns is kept
- * always loaded, so the tag-matched wipe always sees it. The landscape family is the exception:
- * the parent ALandscape is non-spatially loaded by its own constructor, and its streaming proxies
- * have to stay spatially loaded for the level to stream at all.
+ * always loaded, so the tag-matched wipe always sees it. The streamed families are the exception.
+ * A landscape: the parent ALandscape is non-spatially loaded by its own constructor, and its
+ * streaming proxies have to stay spatially loaded for the level to stream at all. The HLOD families
+ * (MantlePlaceHLODLogic::HasHLOD): an always-loaded actor is never represented by an HLOD. A
+ * re-import while any of them is unloaded is refused (ExplainUnloadedPriorActors), so the wipe
+ * still never leaves one behind.
  */
-bool ShouldForceNonSpatiallyLoaded(bool bPartitioned, bool bLandscapeFamily);
+bool ShouldForceNonSpatiallyLoaded(bool bPartitioned, bool bStreamedFamily);
 
 /**
  * The refusal for a re-import whose prior actors include some in unloaded World Partition regions,

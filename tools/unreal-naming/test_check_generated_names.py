@@ -54,7 +54,7 @@ class RefusedTests(GateTestCase):
         self.assertIn("[actor-label]", out)
 
     def test_each_asset_prefix_is_refused(self) -> None:
-        for prefix in ("SM_", "T_", "M_", "MI_", "LI_", "DT_", "DL_", "BP_"):
+        for prefix in ("SM_", "T_", "M_", "MI_", "LI_", "DT_", "DL_", "HLOD_", "BP_"):
             with self.subTest(prefix=prefix):
                 self.write("Importer.cpp", f'Name = TEXT("{prefix}Thing");\n')
                 code, out = self.run_gate()

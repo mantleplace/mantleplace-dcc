@@ -53,10 +53,10 @@ bool FMantlePlaceWorldPartitionLogicTest::RunTest(const FString& Parameters)
 	// --- Spatial loading, v1: everything we spawn stays loaded, except the landscape family ------
 	{
 		TestFalse(TEXT("a non-partitioned level is left alone"),
-			ShouldForceNonSpatiallyLoaded(/*bPartitioned*/ false, /*bLandscapeFamily*/ false));
+			ShouldForceNonSpatiallyLoaded(/*bPartitioned*/ false, /*bStreamedFamily*/ false));
 		TestTrue(TEXT("a mesh, spline or record actor in a partitioned level is kept loaded"),
 			ShouldForceNonSpatiallyLoaded(true, false));
-		TestFalse(TEXT("a landscape or its proxies keep the engine's own loading, so the proxies stream"),
+		TestFalse(TEXT("a landscape, its proxies and the HLOD families stream, so the proxies stream and HLODs stand in"),
 			ShouldForceNonSpatiallyLoaded(true, true));
 	}
 

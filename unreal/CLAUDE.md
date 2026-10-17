@@ -103,16 +103,17 @@ They live inline in `SMantlePlaceVaultPanel.cpp`, which CI never compiles, so re
 Asset names take a type prefix. This table is the standard — reproduced here rather than deferred to
 a document a reader of this repository cannot open:
 
-| Prefix | Asset type                   |
-| ------ | ---------------------------- |
-| `SM_`  | Static mesh                  |
-| `T_`   | Texture                      |
-| `M_`   | Material                     |
-| `MI_`  | Material instance (constant) |
-| `LI_`  | Landscape layer info         |
-| `DT_`  | Data table                   |
-| `DL_`  | Data Layer                   |
-| `BP_`  | Blueprint                    |
+| Prefix  | Asset type                   |
+| ------- | ---------------------------- |
+| `SM_`   | Static mesh                  |
+| `T_`    | Texture                      |
+| `M_`    | Material                     |
+| `MI_`   | Material instance (constant) |
+| `LI_`   | Landscape layer info         |
+| `DT_`   | Data table                   |
+| `DL_`   | Data Layer                   |
+| `HLOD_` | HLOD layer                   |
+| `BP_`   | Blueprint                    |
 
 An imported asset is *given* its name so it lands conforming; renaming inside the import
 transaction is the hazardous path, a fallback only for assets a glTF brings with it.

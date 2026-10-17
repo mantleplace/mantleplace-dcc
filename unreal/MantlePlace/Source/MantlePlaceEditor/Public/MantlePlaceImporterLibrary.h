@@ -80,4 +80,15 @@ public:
 	/** Stop the local bundle server started by StreamBundleIntoCesium (safe to call when not running). */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Cesium")
 	static void StopBundleStream();
+
+	/**
+	 * Build the World Partition HLODs of the current editor level, after an import has been saved:
+	 * the explicit post-import step, since the import itself never builds them. Runs the engine's own
+	 * HLOD builder with no dialog and saves nothing.
+	 *
+	 * @return  The line the import log gets: the HLOD actor count and what the build cost, or why it
+	 *          was refused (not World Partition, or not saved yet) and built nothing.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Import", meta = (ScriptName = "BuildHlods"))
+	static FString BuildHLODs();
 };
