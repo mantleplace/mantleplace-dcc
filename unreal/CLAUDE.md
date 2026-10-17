@@ -70,14 +70,33 @@ an explicit ordered list on purpose: no discovery, no reflection.
 
 ## Commands
 
-The tests are Unreal automation tests under a `MantlePlace.` prefix; drive them unattended with:
+The tests are Unreal automation tests under a `MantlePlace.` prefix. Run the whole suite with the
+full editor, offscreen, opened on a `/Game` partitioned World Partition level:
 
 ```
-UnrealEditor-Cmd.exe <YourProject>.uproject -ExecCmds="Automation RunTests MantlePlace." -unattended -nopause -nosplash -testexit="Automation Test Queue Empty" -log
+UnrealEditor.exe <scratch>.uproject /Game/<a partitioned World Partition level> -ExecCmds="Automation RunTests MantlePlace." -unattended -nopause -nosplash -RenderOffscreen -testexit="Automation Test Queue Empty" -log
 ```
 
-`MantlePlace.Import.LiveFreeTier` wants a real bundle and credentials, so it is not part of an
-offline sweep. **To compile a branch**, use a scratch project outside every repository, with this
+Not `UnrealEditor-Cmd.exe`, and not `-nullrhi` (it crashes in the engine's HLOD build). The
+editor-world tests (`WorldPartition.DataLayers`, `WorldPartition.FoliageScatter`, the foliage
+re-import test and others) skip with `No editor: ... needs an editor world. Skipped.` whenever the
+startup level is not a partitioned World Partition level, and a skipped run still reports green. **A
+run reporting any `No editor` skip is not green.**
+
+- **Corpus.** The conformance tests walk up (at most eight levels) from the plugin directory looking
+  for `tools/manifest-conformance/corpus/index.json`
+  (`FindCorpusDir` in `MantlePlaceConformanceCorpus.h`) and fail if they do not find it. A scratch
+  project holding only `MantlePlace/` under `Plugins/` cannot reach it: place the scratch project (or
+  a copy of the plugin) beneath a directory that has `tools/manifest-conformance/corpus/`, or copy
+  that `corpus/` folder to `tools/manifest-conformance/corpus/` in a directory above the plugin.
+- **`MantlePlace.Import.LiveFreeTier`** runs offline against a local bundle zip: set
+  `MP_LIVETEST_BUNDLE` to it (otherwise it uses the in-tree live-test copy, and fails if none).
+- **Scratch hygiene.** Set `EditorStartupMap` and `GameDefaultMap` to a `/Game` map or
+  `/Engine/Maps/Templates/Template_Default`, never `/Engine/Maps/Entry`; never save an `/Engine`
+  package (one such save overwrote an install's `Entry.umap` and broke other projects' tests). In Git
+  Bash set `MSYS_NO_PATHCONV=1` when you pass `/Game` paths.
+
+**To compile a branch**, use a scratch project outside every repository, with this
 worktree's `MantlePlace/` in its `Plugins/` and one C++ module, so it has an Editor target (never
 the install slot below):
 `Engine/Build/BatchFiles/Build.bat <Name>Editor Win64 Development -Project=<scratch>.uproject -WaitMutex -NoHotReloadFromIDE`.
