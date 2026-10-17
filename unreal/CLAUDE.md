@@ -111,6 +111,7 @@ a document a reader of this repository cannot open:
 | `MI_`  | Material instance (constant) |
 | `LI_`  | Landscape layer info         |
 | `DT_`  | Data table                   |
+| `DL_`  | Data Layer                   |
 | `BP_`  | Blueprint                    |
 
 An imported asset is *given* its name so it lands conforming; renaming inside the import

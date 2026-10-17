@@ -193,6 +193,16 @@ namespace MantlePlaceImportNaming
 		return ImportRootPath / SubfolderName(Subfolder);
 	}
 
+	FString SharedLayersPath(const FString& ContentRoot)
+	{
+		return ContentRoot / TEXT("Layers");
+	}
+
+	FString DataLayerPackageName(const FString& ContentRoot, const FString& FamilyName)
+	{
+		return SharedLayersPath(ContentRoot) / DataLayerAssetName(FamilyName);
+	}
+
 	FString ObjectPathIn(const FString& PackagePath, const FString& AssetName)
 	{
 		return ObjectPathOf(PackagePath / AssetName, AssetName);
@@ -228,6 +238,11 @@ namespace MantlePlaceImportNaming
 	FString LayerInfoName(const FString& Material)
 	{
 		return FString::Printf(TEXT("LI_%s"), *Material);
+	}
+
+	FString DataLayerAssetName(const FString& FamilyName)
+	{
+		return FString::Printf(TEXT("DL_%s"), *FamilyName);
 	}
 
 	FString TreePointsTableName()

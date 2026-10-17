@@ -14,6 +14,7 @@ of what that file's Naming section used to.
 <ContentRoot>/<identity>/Buildings        the buildings static mesh
 <ContentRoot>/<identity>/CoverageRasters  slope, water, canopy and their like, as textures
 <ContentRoot>/<identity>/Landcover        one layer info per paint layer, plus the tree points table
+<ContentRoot>/Layers                      one Data Layer asset per layer family, shared by every import
 ```
 
 - `<ContentRoot>` defaults to `/Game/MantlePlace` and is a **project** setting —
@@ -85,3 +86,21 @@ not split and imports exactly as before.
 - **A re-import refuses, changing nothing, when any actor of the prior import is in an unloaded
   region.** Loading the regions that hold it, then importing again, is the remedy; a sweep that went
   ahead would leave the unloaded actors behind beside the new import.
+
+### Data Layers, one per layer family
+
+Every artifact handler declares its layer family (terrain, coverage, buildings, roads, foliage,
+public records), and in a World Partition level every actor it spawns, a landscape's streaming
+proxies included, is assigned to that family's Data Layer. The Data Layers outliner then shows and
+hides, loads and unloads, a whole family at once. A layer is made the first time an import spawns an
+actor of its family, so no empty layer appears; a non-partitioned level gets none and is unchanged.
+
+- **Per family, shared across orders, not per order.** Hiding `Buildings` hides every imported
+  area's buildings, so two areas toggle together, and the outliner holds one row per family however
+  many orders the level holds. The asset is `DL_<family>` in `<ContentRoot>/Layers`, beside the order
+  folders and never inside one, so no re-import's force-delete can reach a layer another order uses.
+- **A wipe leaves the layers.** It destroys its order's actors, which takes them out of every layer;
+  the assets and the level's instances of them stay for the next import.
+- **Runtime layers, initially Activated.** A game run loads and shows the import exactly as before
+  layers existed, and a game can stream a family by changing the layer's runtime state.
+- Like everything else here, the asset is never saved by the importer; saving the level offers it.

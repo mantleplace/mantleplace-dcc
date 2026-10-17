@@ -25,6 +25,7 @@ class FRoadSplinesHandler final : public IMantlePlaceArtifactHandler
 {
 public:
 	FName Id() const override { return FName(TEXT("road_splines")); }
+	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Roads; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactRoadSplines", "Road splines"); }
 
 	// The importer consumes the GeoJSON format only; a gpkg-only bundle (base tier) is treated as not

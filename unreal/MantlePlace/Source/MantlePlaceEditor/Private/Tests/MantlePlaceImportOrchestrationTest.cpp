@@ -37,6 +37,7 @@ public:
 	}
 
 	FName Id() const override { return IdValue; }
+	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::None; }
 	FText DisplayName() const override { return FText::FromName(IdValue); }
 	bool ParseFields(const FMantlePlaceParseInput&, FMantlePlaceVaultManifest&, FString&) const override { return true; }
 	bool IsPresent(const FMantlePlaceVaultManifest&) const override { return bPresent; }

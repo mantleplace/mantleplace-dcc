@@ -24,6 +24,7 @@ class FBuildingsHandler final : public IMantlePlaceArtifactHandler
 {
 public:
 	FName Id() const override { return FName(TEXT("buildings")); }
+	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Buildings; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactBuildings", "Buildings"); }
 
 	// unreal.buildings_mesh is present iff the ETL emitted Mesh/Buildings.glb. It carries the path +

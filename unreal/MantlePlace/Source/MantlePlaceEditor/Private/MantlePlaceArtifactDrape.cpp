@@ -22,6 +22,7 @@ class FDrapeHandler final : public IMantlePlaceArtifactHandler
 {
 public:
 	FName Id() const override { return FName(TEXT("drape")); }
+	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Terrain; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactDrape", "Imagery drape"); }
 
 	bool ParseFields(const FMantlePlaceParseInput& In, FMantlePlaceVaultManifest& M, FString& OutError) const override

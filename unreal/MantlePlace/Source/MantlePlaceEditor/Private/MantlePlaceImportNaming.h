@@ -157,6 +157,16 @@ namespace MantlePlaceImportNaming
 	/** `<ImportRoot>/<Subfolder>`. */
 	FString SubfolderPath(const FString& ImportRootPath, ESubfolder Subfolder);
 
+	/**
+	 * `<ContentRoot>/Layers` — what every import SHARES: the per-family World Partition Data Layer
+	 * assets. A sibling of the order folders, never inside one, because a re-import force-deletes
+	 * its order's folder and a layer another order still uses must survive that.
+	 */
+	FString SharedLayersPath(const FString& ContentRoot);
+
+	/** `<ContentRoot>/Layers/DL_<family>` — the package of one family's Data Layer asset. */
+	FString DataLayerPackageName(const FString& ContentRoot, const FString& FamilyName);
+
 	/** `<PackagePath>/<AssetName>.<AssetName>` — an asset addressed inside a package directory. */
 	FString ObjectPathIn(const FString& PackagePath, const FString& AssetName);
 
@@ -204,6 +214,12 @@ namespace MantlePlaceImportNaming
 	 * bind to, so it stays the platform's material name verbatim (`HPS-33`).
 	 */
 	FString LayerInfoName(const FString& Material);
+
+	/**
+	 * `DL_<family>` — one layer family's World Partition Data Layer asset. Per family and shared
+	 * across orders (MantlePlaceDataLayerLogic records why), so no identity, in the leaf or the folder.
+	 */
+	FString DataLayerAssetName(const FString& FamilyName);
 
 	/** `DT_TreePoints` — the foliage-point data table. The folder carries the identity. */
 	FString TreePointsTableName();

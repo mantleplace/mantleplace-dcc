@@ -58,6 +58,7 @@ class FCoverageRastersHandler final : public IMantlePlaceArtifactHandler
 {
 public:
 	FName Id() const override { return FName(TEXT("coverage_rasters")); }
+	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Coverage; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactCoverageRasters", "Coverage rasters"); }
 
 	// The whole block, not just the one entry the importer applies. It is addressed to this host by

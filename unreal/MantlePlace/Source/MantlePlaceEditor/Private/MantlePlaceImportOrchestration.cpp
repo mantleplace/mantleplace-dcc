@@ -2,6 +2,7 @@
 
 #include "MantlePlaceImportOrchestration.h"
 
+#include "MantlePlaceDataLayers.h"
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportProvenance.h"
@@ -70,6 +71,9 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 		return;
 	}
 
+	// One Data Layer per layer family, shared across orders: the actor joins its handler's family.
+	MantlePlaceDataLayers::Assign(Actor, ContentRoot, Family);
+
 	// v1 unloaded-actor policy: kept always loaded, so the tag-matched wipe always sees it.
 	const bool bLandscapeFamily = Actor->IsA<ALandscapeProxy>();
 	if (MantlePlaceWorldPartitionLogic::ShouldForceNonSpatiallyLoaded(/*bPartitioned*/ true, bLandscapeFamily)
@@ -90,6 +94,7 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 				{
 					Proxy->Tags.AddUnique(Tag);
 					Proxy->SetFolderPath(Folder);
+					MantlePlaceDataLayers::Assign(Proxy.Get(), ContentRoot, Family);
 				}
 			}
 		}
@@ -434,6 +439,7 @@ void MantlePlaceImportOrchestration::RunPrepare(const FHandlers& Handlers, FMant
 	{
 		if (Context.Selection.Includes(Handler->Id()))
 		{
+			Context.Family = Handler->LayerFamily();
 			Handler->Prepare(Context);
 		}
 	}
@@ -445,6 +451,7 @@ void MantlePlaceImportOrchestration::RunImport(const FHandlers& Handlers, FMantl
 	{
 		if (Context.Selection.Includes(Handler->Id()))
 		{
+			Context.Family = Handler->LayerFamily();
 			Handler->Import(Context);
 		}
 	}
@@ -456,6 +463,7 @@ void MantlePlaceImportOrchestration::RunFinalize(const FHandlers& Handlers, FMan
 	{
 		if (Context.Selection.Includes(Handler->Id()))
 		{
+			Context.Family = Handler->LayerFamily();
 			Handler->Finalize(Context);
 		}
 	}
