@@ -129,4 +129,9 @@ get no HLOD layer: at the distance an HLOD stands in, they read as noise.
   dialog, saves nothing, and reports the HLOD actor count and the build's cost in the import log.
   Offline, the documented invocation is
   `UnrealEditor-Cmd.exe <project> <map> -run=WorldPartitionBuilderCommandlet -Builder=WorldPartitionHLODsBuilder -AllowCommandletRendering`.
-- **Measured cost.** MEASUREMENT_PLACEHOLDER
+- **Measured cost.** On a reference bundle (a 491 MB order: a 1009 x 1009 landscape split into 16
+  proxies, a buildings mesh and 8 paint layers), on a Ryzen 9 5900X with 128 GB and an RTX 3080 Ti
+  shared with another editor run, the import took 24.9 s and the HLOD build 393.6 s for 17 HLOD
+  actors: about 15 s for the 16 terrain HLODs and 379 s for the one buildings HLOD, which simplifies
+  and bakes the whole buildings mesh. At sixteen times the import, the build is too slow to run
+  unasked even once the level is saved; it stays a step the user chooses.

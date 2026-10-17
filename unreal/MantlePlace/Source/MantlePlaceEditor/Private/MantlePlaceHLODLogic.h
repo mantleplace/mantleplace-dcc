@@ -20,7 +20,8 @@
  * Build: prompted, never run by the import. The engine's HLOD build reads the level's saved actor
  * descriptors and leaves out every actor whose package is unsaved; the importer saves nothing, so a
  * build run straight after an import would include none of the imported actors. Its measured cost
- * (unreal/docs/generated-content.md) is a second reason: minutes, not seconds, on a reference bundle.
+ * (unreal/docs/generated-content.md) is a second reason: six and a half minutes on a reference bundle
+ * whose import takes 25 s.
  * The import says how to build in its log; the explicit step, MantlePlaceHLODs::Build, refuses an
  * unsaved level and reports what the build cost.
  */
