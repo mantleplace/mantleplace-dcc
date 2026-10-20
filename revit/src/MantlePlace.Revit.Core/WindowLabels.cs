@@ -150,7 +150,15 @@ public static partial class WindowLabels
     /// A layer's row in the checklist, and the name of the step that builds it — one word for one
     /// thing, before the import and during it.
     /// </summary>
-    public static string LayerName(ImportLayer layer) => layer switch
+    public static string LayerName(ImportLayer layer) => KnownLayerName(layer) ?? layer.ToString();
+
+    /// <summary>
+    /// A layer's row label, or <c>null</c> for a layer nobody named — which <see cref="LayerName"/> covers
+    /// with the enum's name rather than a throw on Revit's thread. The test that walks the layers reads
+    /// this, so a layer added without a label fails there and names itself; <c>Terrain</c> and
+    /// <c>Planting</c> read the same as their enum names, so the fallback alone could not tell.
+    /// </summary>
+    public static string? KnownLayerName(ImportLayer layer) => layer switch
     {
         ImportLayer.Terrain => "Terrain",
         ImportLayer.PublishedContours => "Published Contours",
@@ -165,7 +173,7 @@ public static partial class WindowLabels
         ImportLayer.FloodZones => "Flood Zones",
         ImportLayer.SteepGround => "Steep Ground",
         ImportLayer.ImageryDrape => "Imagery Drape",
-        _ => layer.ToString(),
+        _ => null,
     };
 
     /// <summary>

@@ -74,6 +74,7 @@ CI runs both — the cheapest honest test of the three-versions-from-one-build b
 
 - **Build and test** → [`README.md` ▸ Build and test](./README.md#build-and-test), the one home. A
   `dotnet run` on the suite without `-f` cannot choose a framework and fails outright.
+- **Adding or renaming an import layer** → [`README.md` ▸ Adding or renaming an import layer](./README.md#adding-or-renaming-an-import-layer).
 - **Quote paths with spaces** — `C:\Program Files\Autodesk\...`.
 - **The Revit on this machine is a copy of the tree** (`HPS-50`): `tools/Check-RevitInstall.ps1`
   says whether it is `main`, a preview or stale; `tools/Deploy-MantlePlaceRevit.ps1` makes it `main`,

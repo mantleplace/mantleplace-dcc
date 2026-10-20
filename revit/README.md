@@ -507,6 +507,38 @@ Neither shows in the Family Editor and both are public once pushed. The run refu
 family ready when the folder is under a user profile, or when it was saved by any Revit but 2025; the user name — for a Revit signed in to an
 Autodesk account, that account's name — it reports, for whoever commits the file to judge.
 
+## Adding or renaming an import layer
+
+A layer is one row of the import window's checklist (`ImportLayer`), built by one or more step kinds
+(`ImportStepKind`). A new one touches about ten files; work down this list rather than grepping.
+
+**Checked for you.** `ImportLayerLinksTests` fails, naming the layer or kind, when a layer has no step
+kind (`ImportLayers.Of`), no label (`WindowLabels.KnownLayerName`) or no `SlowStepNotice.Measured` row,
+and from the other end when a step kind belongs to no layer, or has no row, without being named as
+an exception in that test. Run the suite on both runtimes ([Build and test](#build-and-test)).
+
+**In code, not checked.** Edit these by hand; a rename edits the same places:
+
+- `BundleImportPlanner` emits the step, in the order it runs, with its skip reasons; its plan types
+  are in `BundleImportPlan.cs`, the enum's home. Declare a new kind last, so each kind keeps its number.
+- `RevitBundleImporter` runs it. The shim is not built in CI, and its default arm fails the import
+  loudly, so build it locally.
+- `ImportStepKinds.LifetimeOf` (an unclassified kind is `Retained` without a word) and
+  `ImportsContent`; `ImportLayers.PrerequisiteOf`, `DefaultLevel` and `OnByDefault` where they apply.
+- `FidelityLevels.CanTake` and `SiteVectorLayers.Of`, when the layer publishes levels or reads a
+  vector layer.
+
+**In prose, not checked** (a fact has one home; edit that home, and link from the rest):
+
+- [`docs/import-inventory.md`](../docs/import-inventory.md): the layer's row, its default and the
+  measured minutes quoted from `SlowStepNotice.Measured`.
+- [`docs/host-support.md`](../docs/host-support.md): the Revit column, and only that column.
+- This file: the checklist's row names in [What it does today](#what-it-does-today), and a paragraph
+  where the layer behaves in a way its row cannot say.
+- [`docs/api-record.md`](docs/api-record.md): what has run in a real Revit, and which calls are
+  compiled and never executed.
+- [`CONTEXT.md`](../CONTEXT.md): the term, when the layer introduces a word.
+
 ## Layout
 
 ```
