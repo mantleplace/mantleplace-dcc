@@ -10,6 +10,18 @@ It is a developer tool for this machine's Revit, not part of the plugin and not 
 runner has Revit, and none may (see the root `CLAUDE.md`). Only `test_summarise_runs.py` runs without
 Revit.
 
+**Before you run, set `MANTLEPLACE_TIMING_ROOT`** to a folder outside the repository that a launched Revit can
+reach (or pass `-WorkRoot` on every run). `Invoke-TimingRun.ps1` refuses, before it builds or launches
+anything, when neither is set or the folder's drive does not exist or cannot be written to. A run that fell
+back to a folder under `%LOCALAPPDATA%` is a run whose Revit never started the harness.
+
+**Measure committed code only.** A run is evidence about a commit, so pass `-Commit <sha>`. A source tree
+with uncommitted changes under `revit/` is refused; `-AllowDirty` measures it anyway, and the record says so
+(`dirtyTree` in `meta.json`, `-dirty` on the commit).
+
+**Input rules.** A ladder `--name` is a lowercase slug (`a-z`, `0-9`, `-`); anything else is rejected.
+`queue.sh` takes absolute paths only.
+
 | File | What it does |
 |---|---|
 | `Export-TimingSource.ps1` | `git archive` of `revit/` at one commit into the work root, with a `COMMIT` file |
@@ -119,7 +131,7 @@ unquoted list arrives as an array and is refused.
 ```
 
 `Invoke-TimingRun.ps1 -Commit` does both when the tag has no build yet. `-SourceRoot` may also be a git
-worktree; the commit is read from it, with `-dirty` appended when `revit/` has changes. The commit is
+worktree; the commit is read from it, with `-dirty` appended when `revit/` has changes (the driver refuses that unless `-AllowDirty`). The commit is
 recorded in `build.json`, `meta.json`, `driver.txt`, `timings.md` and, because the informational version
 carries it, the plugin log's first line. The tag is compiled into the assembly as a constant, read back out
 of the finished DLL, and the build is refused if it differs.
