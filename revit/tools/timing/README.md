@@ -47,8 +47,8 @@ $env:MANTLEPLACE_TIMING_BUNDLE = 'C:\path\to\bundle.zip'      # or pass -Bundle 
 # every box, through the import window a curator gets, in Revit 2027
 ./Invoke-TimingRun.ps1 -Phase window -Tag base-d4f3453 -Year 2027 -Boxes All -TimeoutSeconds 7200
 
-python summarise_runs.py "$env:LOCALAPPDATA\MantlePlaceTiming\runs\base-d4f3453-2025" `
-                         "$env:LOCALAPPDATA\MantlePlaceTiming\runs\base-d4f3453-2027"
+python summarise_runs.py "$env:MANTLEPLACE_TIMING_ROOT\runs\base-d4f3453-2025" `
+                         "$env:MANTLEPLACE_TIMING_ROOT\runs\base-d4f3453-2027"
 ```
 
 ### Pointing it at things
