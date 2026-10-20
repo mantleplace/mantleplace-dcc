@@ -56,7 +56,7 @@ python summarise_runs.py "$env:LOCALAPPDATA\MantlePlaceTiming\runs\base-d4f3453-
 | What | Parameter | Environment variable | Default |
 |---|---|---|---|
 | The bundle zip to import | `-Bundle` | `MANTLEPLACE_TIMING_BUNDLE` | none: one is required |
-| Where everything it makes goes | `-WorkRoot` | `MANTLEPLACE_TIMING_ROOT` | `%LOCALAPPDATA%\MantlePlaceTiming` |
+| Where everything it makes goes | `-WorkRoot` | `MANTLEPLACE_TIMING_ROOT` | none: a run refuses without one |
 | The Revit year to run | `-Year` (2025, 2026, 2027) | | required |
 | The code to time | `-Commit <sha>`, or `-SourceRoot <dir with revit\src>` | | needed the first time a tag is built |
 | Where Revit is installed | `-RevitRoot` (holds `Revit <year>\Revit.exe`) | | `%ProgramFiles%\Autodesk` |
