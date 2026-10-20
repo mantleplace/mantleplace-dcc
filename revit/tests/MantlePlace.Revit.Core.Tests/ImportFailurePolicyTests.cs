@@ -150,6 +150,33 @@ internal static class ImportFailurePolicyTests
             run.Contains(text, "Nothing was deleted", "and what it did not do");
         });
 
+        run.Case("a refused site-model conversion names Revit's error and what it cost the curator", () =>
+        {
+            // The conversion is Revit's own IFC importer, which opens a transaction of its own. When
+            // that transaction is refused ("Can't keep elements joined", with no resolution) the
+            // curator used to read only the exception text, "Transaction committing failed", which
+            // names neither the cause nor the loss.
+            string text = ImportFailurePolicy.ExplainSiteModelRefused(
+                "Site/Site.ifc",
+                "Can't keep elements joined.",
+                "6650b20b-592d-41a0-9f52-51f5f26e3fc3",
+                "the context buildings were not imported");
+
+            run.Contains(text, "Site/Site.ifc", "which file");
+            run.Contains(text, "\"Can't keep elements joined.\"", "Revit's own words, quoted");
+            run.Contains(text, "(id 6650b20b-592d-41a0-9f52-51f5f26e3fc3)", "and the failure id");
+            run.Contains(text, "could not get past", "and that the import had no way round it");
+            run.Contains(text, "the context buildings were not imported", "and the loss, plainly");
+        });
+
+        run.Case("a refused site-model conversion with no text from Revit still says something", () =>
+        {
+            run.Contains(
+                ImportFailurePolicy.ExplainSiteModelRefused("Site/Site.ifc", "  ", "6650b20b", "the site model was not linked"),
+                "no reason given",
+                "an empty description is stated rather than rendered as empty quotes");
+        });
+
         run.Case("the eight overlaps read as an explanation, not as a failure", () =>
         {
             // The real case: site context imported into a project that already contained a building.

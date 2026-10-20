@@ -267,6 +267,7 @@ internal sealed partial class RevitBundleImporter
         Options options = new() { DetailLevel = ViewDetailLevel.Fine };
 
         Document? siteModel = null;
+        int errorsBefore = SessionErrorCount;
         try
         {
             Stopwatch converting = Stopwatch.StartNew();
@@ -301,7 +302,14 @@ internal sealed partial class RevitBundleImporter
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or IOException)
         {
+            // The exception says only that a transaction failed to commit; the error that made it
+            // fail, and so why there are no context buildings, is the one the session hook caught.
             Say($"Could not open the site model to copy its buildings ({step.EntryName}): {ex.Message}");
+            if (SiteModelRefusal(step.EntryName, errorsBefore, "the context buildings were not imported") is { } why)
+            {
+                Say(why);
+            }
+
             return null;
         }
         finally

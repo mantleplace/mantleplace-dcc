@@ -212,6 +212,19 @@ renderer-neutral.
   names is one of them, be answered with `FailuresAccessor.DeleteElements` instead of a rollback:
   the feature is counted as declined and named in the log, in the same single commit.
 
+- **A silent rollback from the session hook is compiled, not executed.** Revit's IFC importer opens
+  a transaction of its own, and its "Can't keep elements joined" error can arrive with no
+  resolution, in all three versions (order of 6,148 buildings, 2026-10-15): the hook returned
+  `ProceedWithRollBack` and Revit still showed its modal. Revit's own documentation for
+  `FailureProcessingResult.ProceedWithRollBack` is the reason: a rollback is silent only when the
+  failure handling options also clear after rollback, which a transaction this plugin opens sets
+  and the importer's never did. `ImportFailureSwallower` now sets it through
+  `FailuresAccessor.GetFailureHandlingOptions`/`SetFailureHandlingOptions` before it returns the
+  rollback, and the two steps that convert the site model say, in the words of the error the hook
+  caught, why a refused conversion cost the context buildings or the link
+  (`ImportFailurePolicy.ExplainSiteModelRefused`). Whether that is enough to keep the modal away in
+  Revit 2025, 2026 and 2027 is unobserved until the order is re-imported unattended in each.
+
 - **The hazard plan's calls have left that set**, in all three versions. `ViewPlan.Create` on the
   lowest level, a plan's `CropBox` set in model coordinates with its annotation crop off,
   `FilledRegionType.Duplicate` with a solid fill, a hatch over a fill and a hatch alone,
