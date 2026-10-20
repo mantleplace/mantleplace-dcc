@@ -525,7 +525,7 @@ an exception in that test. Run the suite on both runtimes ([Build and test](#bui
   loudly, so build it locally.
 - `ImportStepKinds.LifetimeOf` (an unclassified kind is `Retained` without a word) and
   `ImportsContent`; `ImportLayers.PrerequisiteOf`, `DefaultLevel` and `OnByDefault` where they apply.
-- `FidelityLevels.CanTake` and `SiteVectorLayers.Of`, when the layer publishes levels or reads a
+- `FidelityCuts.CanTake` and `SiteVectorLayers.Of`, when the layer publishes levels or reads a
   vector layer.
 
 **In prose, not checked** (a fact has one home; edit that home, and link from the rest):
