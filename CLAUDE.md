@@ -121,9 +121,11 @@ Mantle Place project tree mounts this repo at `Plugins/MantlePlaceDcc/` and docu
 
 ## Worktrees
 
-Beside the checkout, never inside the repository: a worktree under the repo root puts a second
-`MantlePlace.uplugin` inside the consumer's recursive plugin scan. Harness-made worktrees are
-relocated beside `main`; everything else about worktrees is the agent standard's.
+Worktrees live under `.claude/worktrees/<type>-<slug>` inside the checkout, on branch
+`<type>/<slug>`, per the agent standard; do not create them beside the checkout or with `../<dir>`.
+Make them from a standalone clone of this repo, never from a consumer's submodule mount under
+`Plugins/`: a worktree there puts a second `MantlePlace.uplugin` inside the consumer's recursive
+plugin scan. Everything else about worktrees is the agent standard's.
 
 ## Releases
 
