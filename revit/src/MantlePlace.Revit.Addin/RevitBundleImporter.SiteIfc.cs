@@ -51,6 +51,7 @@ internal sealed partial class RevitBundleImporter
         else
         {
             Document? converted = null;
+            int errorsBefore = SessionErrorCount;
             try
             {
                 Stopwatch converting = Stopwatch.StartNew();
@@ -61,6 +62,11 @@ internal sealed partial class RevitBundleImporter
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or IOException)
             {
                 Say($"Could not convert the IFC site model for linking ({step.EntryName}): {ex.Message}");
+                if (SiteModelRefusal(step.EntryName, errorsBefore, "the site model was not linked") is { } why)
+                {
+                    Say(why);
+                }
+
                 return;
             }
             finally

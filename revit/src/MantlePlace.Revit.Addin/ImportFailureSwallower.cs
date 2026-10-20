@@ -194,6 +194,7 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
         // resolutions we just applied rather than asking again.
         if (SawError)
         {
+            ClearAfterRollback(failuresAccessor);
             return FailureProcessingResult.ProceedWithRollBack;
         }
 
@@ -202,6 +203,39 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
         return _resolved.Count > 0 || deletedNow
             ? FailureProcessingResult.ProceedWithCommit
             : FailureProcessingResult.Continue;
+    }
+
+    /// <summary>
+    /// Tells Revit to drop the failures when it rolls the transaction back, so the rollback is
+    /// silent.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <c>ProceedWithRollBack</c> alone is not silent. Revit's own text for it: without the
+    /// clear-after-rollback flag, "default failure processing will continue, and failures may be
+    /// delivered to the user even though the transaction will be rolled back". A transaction this
+    /// plugin opens carries the flag in its <c>FailureHandlingOptions</c>; one it did not open —
+    /// Revit's IFC importer's own, reached only through <see cref="OnFailuresProcessing"/> — carried
+    /// none, so an error with no resolution ("Can't keep elements joined") was rolled back and then
+    /// shown anyway, as a modal whose only button is Cancel.
+    /// </para>
+    /// <para>
+    /// Failing to set it must not fail the handler: an exception thrown here aborts the transaction
+    /// outright, and the rollback this was about to ask for is already the outcome.
+    /// </para>
+    /// </remarks>
+    private static void ClearAfterRollback(FailuresAccessor failuresAccessor)
+    {
+        try
+        {
+            FailureHandlingOptions options = failuresAccessor.GetFailureHandlingOptions();
+            options.SetClearAfterRollback(true);
+            failuresAccessor.SetFailureHandlingOptions(options);
+        }
+        catch (Autodesk.Revit.Exceptions.ApplicationException)
+        {
+            // Revit refused to hand over or accept the options; the rollback is still returned.
+        }
     }
 
     /// <summary>Handles failures posted by transactions this plugin did not open.</summary>

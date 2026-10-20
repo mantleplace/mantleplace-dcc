@@ -175,6 +175,7 @@ internal sealed partial class RevitBundleImporter(
         ArgumentNullException.ThrowIfNull(slice);
 
         ImportFailureSwallower session = new("The import");
+        _sessionFailures = session;
         _application.FailuresProcessing += session.OnFailuresProcessing;
         try
         {
@@ -183,9 +184,33 @@ internal sealed partial class RevitBundleImporter(
         finally
         {
             _application.FailuresProcessing -= session.OnFailuresProcessing;
+            _sessionFailures = null;
             SayAll(session.Lines);
         }
     }
+
+    /// <summary>The hook <see cref="InSlice"/> has attached, so a step can read what it caught; <c>null</c> between slices.</summary>
+    private ImportFailureSwallower? _sessionFailures;
+
+    /// <summary>How many errors the session hook has caught so far, to tell a step's own from an earlier one's.</summary>
+    private int SessionErrorCount => _sessionFailures?.Errors.Count ?? 0;
+
+    /// <summary>
+    /// Why Revit's IFC conversion of the site model was refused, in the words of the error the
+    /// session hook caught since <paramref name="errorsBefore"/>, or <c>null</c> when it caught none.
+    /// </summary>
+    /// <param name="entryName">The site model's entry in the bundle.</param>
+    /// <param name="errorsBefore"><see cref="SessionErrorCount"/> read before the conversion began.</param>
+    /// <param name="lost">What the curator does not have as a result, as a clause.</param>
+    /// <remarks>
+    /// The exception a refused conversion throws says only "Transaction committing failed". The
+    /// reason is the error Revit posted from the importer's own transaction, which only the session
+    /// hook sees.
+    /// </remarks>
+    private string? SiteModelRefusal(string entryName, int errorsBefore, string lost)
+        => _sessionFailures is { } session && session.Errors.Count > errorsBefore
+            ? ImportFailurePolicy.ExplainSiteModelRefused(entryName, session.Errors[errorsBefore].Text, session.Errors[errorsBefore].Id, lost)
+            : null;
 
     /// <summary>What every import does once its steps are over, however they ended.</summary>
     /// <remarks>

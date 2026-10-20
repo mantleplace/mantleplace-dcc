@@ -285,6 +285,24 @@ public static class ImportFailurePolicy
             + $"\"{Quoted(revitText)}\" (id {failureId}, element {elementId}). That feature was left out as published; "
             + $"the rest of the layer was kept.");
 
+    /// <summary>
+    /// What to say when Revit's own IFC conversion of the site model was refused by an error, so the
+    /// step that needed the conversion has nothing to work from.
+    /// </summary>
+    /// <param name="entryName">The site model's entry in the bundle.</param>
+    /// <param name="revitText">Revit's own text for the error, quoted verbatim.</param>
+    /// <param name="failureId">Revit's id for the failure.</param>
+    /// <param name="lost">What the curator does not have as a result, as a clause ("the context buildings were not imported").</param>
+    /// <remarks>
+    /// The exception the conversion throws says only that a transaction failed to commit. This is the
+    /// sentence that connects it to the error Revit posted and to what it cost, so a curator is not
+    /// left to join the two lines of the log themselves.
+    /// </remarks>
+    public static string ExplainSiteModelRefused(string entryName, string revitText, string failureId, string lost)
+        => $"Revit's own IFC conversion of the site model ({entryName}) was refused with \"{Quoted(revitText)}\" "
+            + $"(id {failureId}), which the import could not get past, so {lost}. Nothing from the conversion was left "
+            + "in the project.";
+
     /// <summary>Revit's own text, trimmed, or a statement that it gave none.</summary>
     private static string Quoted(string revitText)
         => string.IsNullOrWhiteSpace(revitText) ? "no reason given" : revitText.Trim();
