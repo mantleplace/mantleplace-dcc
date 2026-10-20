@@ -57,6 +57,9 @@ param(
     # window phase: seconds between readings of the window.
     [int]$SampleSeconds = 5,
     [switch]$Rebuild,
+    # Measure a source tree with uncommitted changes under revit/. Refused without this: a run is evidence about a
+    # commit. With it the record says so (meta.json dirtyTree, and -dirty on sourceCommit).
+    [switch]$AllowDirty,
     # window phase: minimise Revit's main window (and with it the import window) once Import is pressed.
     [switch]$Minimize,
     # Keep the bundle copy, the project copy and the harness copy in the run dir afterwards.
@@ -98,6 +101,7 @@ $StopBefore = ($StopBefore -replace '\s', '')
 if ($SourceRoot -and $Commit) { throw 'pass -SourceRoot or -Commit, not both.' }
 if (-not $Bundle) { throw 'no bundle: pass -Bundle <zip> or set MANTLEPLACE_TIMING_BUNDLE.' }
 if (-not (Test-Path -LiteralPath $Bundle)) { throw "no bundle at $Bundle" }
+Assert-TimingRootReachable $WorkRoot
 $work = Resolve-TimingRoot $WorkRoot
 $exe = Join-Path $RevitRoot "Revit $Year\Revit.exe"
 if (-not (Test-Path -LiteralPath $exe)) { throw "no Revit $Year at $exe (see -RevitRoot)" }
@@ -120,6 +124,12 @@ if ($SaveCheckpoint) {
     New-Item -ItemType Directory -Force (Split-Path $savePath) | Out-Null
 }
 
+# A dirty source tree is not a commit; refuse it unless -AllowDirty says the run is knowingly not one.
+if ($SourceRoot -and (Test-Path -LiteralPath (Join-Path $SourceRoot '.git')) -and -not $AllowDirty) {
+    $dirtyFiles = @(& git -C $SourceRoot status --porcelain --untracked-files=all -- revit 2>$null)
+    if ($dirtyFiles.Count -gt 0) { throw "$SourceRoot has uncommitted changes under revit/ ($($dirtyFiles.Count) paths). Commit them and time the commit (-Commit), or pass -AllowDirty to stamp the record as dirty." }
+}
+
 # ---- the build ---------------------------------------------------------------------------------------
 $buildDir = Join-Path $work "builds\$Tag"
 $buildJson = Join-Path $buildDir 'build.json'
@@ -129,6 +139,8 @@ if ($Rebuild -or -not (Test-Path $buildJson)) {
     & (Join-Path $root 'Build-TimingHarness.ps1') -Tag $Tag -SourceRoot $SourceRoot -SourceCommit $SourceCommit -WorkRoot $work -Force:$Rebuild
 }
 $build = Get-Content $buildJson -Raw | ConvertFrom-Json
+$dirtyTree = [string]$build.sourceCommit -like '*-dirty'
+if ($dirtyTree -and -not $AllowDirty) { throw "tag '$Tag' was built from a dirty tree ($($build.sourceCommit)). Rebuild from a commit, or pass -AllowDirty to stamp the record as dirty." }
 if ($SourceRoot -and (Resolve-Path -LiteralPath $SourceRoot).Path.TrimEnd('\') -ne $build.sourceRoot) {
     throw "tag '$Tag' is built from $($build.sourceRoot), not $SourceRoot. Use another tag, or -Rebuild if the tag is yours alone."
 }
@@ -559,7 +571,7 @@ Stamp "Revit $Year pid $($revit.Id), minimized; parking at $($spot.X),$($spot.Y)
 $doneFile = Join-Path $runDir 'done.txt'
 $meta = [ordered]@{
     tag = $Tag; year = $Year; phase = $Phase
-    sourceRoot = $build.sourceRoot; sourceCommit = $build.sourceCommit; dllSha256 = $build.dllSha256
+    sourceRoot = $build.sourceRoot; sourceCommit = $build.sourceCommit; dirtyTree = $dirtyTree; dllSha256 = $build.dllSha256
     layers = $Layers; levels = $Levels; boxes = $(if ($Phase -eq 'window') { $Boxes } else { $null }); stopBefore = $StopBefore
     openCheckpoint = $openPath; saveCheckpoint = $savePath
     bundleSource = $Bundle; bundleBytes = $sourceInfo.Length; bundleSha256 = $bundleSha

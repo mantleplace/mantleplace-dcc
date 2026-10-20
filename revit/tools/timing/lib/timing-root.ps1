@@ -18,3 +18,21 @@ function Resolve-TimingRoot([string]$WorkRoot) {
     New-Item -ItemType Directory -Force $full | Out-Null
     $full
 }
+
+# The driver's preflight, run before anything is built or launched. A launched Revit finds the harness through
+# the work root, so a root the run only fell back to (the %LOCALAPPDATA% default) or one that cannot be written
+# costs a failed live run that is slow to diagnose. Refuses, naming MANTLEPLACE_TIMING_ROOT, when neither
+# -WorkRoot nor the variable is set, when the root's drive does not exist, or when a folder cannot be made there.
+function Assert-TimingRootReachable([string]$WorkRoot) {
+    $chosen = if ($WorkRoot) { $WorkRoot } else { $env:MANTLEPLACE_TIMING_ROOT }
+    if (-not $chosen) {
+        throw 'MANTLEPLACE_TIMING_ROOT is not set and no -WorkRoot was given. Set MANTLEPLACE_TIMING_ROOT (or pass -WorkRoot) to a folder outside the repository that a launched Revit can reach; the %LOCALAPPDATA% default is not used for a run.'
+    }
+    $full = [IO.Path]::GetFullPath($chosen, (Get-Location).ProviderPath)
+    $driveRoot = [IO.Path]::GetPathRoot($full)
+    if (-not $driveRoot -or -not (Test-Path -LiteralPath $driveRoot)) {
+        throw "the work root $full is unreachable: its drive ($driveRoot) does not exist. Point MANTLEPLACE_TIMING_ROOT (or -WorkRoot) at a folder that does."
+    }
+    try { New-Item -ItemType Directory -Force $full -ErrorAction Stop | Out-Null }
+    catch { throw "the work root $full is unreachable: a folder cannot be made there ($($_.Exception.Message)). Point MANTLEPLACE_TIMING_ROOT (or -WorkRoot) at a folder that can be written." }
+}

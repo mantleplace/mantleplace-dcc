@@ -10,6 +10,18 @@ It is a developer tool for this machine's Revit, not part of the plugin and not 
 runner has Revit, and none may (see the root `CLAUDE.md`). Only `test_summarise_runs.py` runs without
 Revit.
 
+**Before you run, set `MANTLEPLACE_TIMING_ROOT`** to a folder outside the repository that a launched Revit can
+reach (or pass `-WorkRoot` on every run). `Invoke-TimingRun.ps1` refuses, before it builds or launches
+anything, when neither is set or the folder's drive does not exist or cannot be written to. A run that fell
+back to a folder under `%LOCALAPPDATA%` is a run whose Revit never started the harness.
+
+**Measure committed code only.** A run is evidence about a commit, so pass `-Commit <sha>`. A source tree
+with uncommitted changes under `revit/` is refused; `-AllowDirty` measures it anyway, and the record says so
+(`dirtyTree` in `meta.json`, `-dirty` on the commit).
+
+**Input rules.** A ladder `--name` is a lowercase slug (`a-z`, `0-9`, `-`); anything else is rejected.
+`queue.sh` takes absolute paths only.
+
 | File | What it does |
 |---|---|
 | `Export-TimingSource.ps1` | `git archive` of `revit/` at one commit into the work root, with a `COMMIT` file |
@@ -35,8 +47,8 @@ $env:MANTLEPLACE_TIMING_BUNDLE = 'C:\path\to\bundle.zip'      # or pass -Bundle 
 # every box, through the import window a curator gets, in Revit 2027
 ./Invoke-TimingRun.ps1 -Phase window -Tag base-d4f3453 -Year 2027 -Boxes All -TimeoutSeconds 7200
 
-python summarise_runs.py "$env:LOCALAPPDATA\MantlePlaceTiming\runs\base-d4f3453-2025" `
-                         "$env:LOCALAPPDATA\MantlePlaceTiming\runs\base-d4f3453-2027"
+python summarise_runs.py "$env:MANTLEPLACE_TIMING_ROOT\runs\base-d4f3453-2025" `
+                         "$env:MANTLEPLACE_TIMING_ROOT\runs\base-d4f3453-2027"
 ```
 
 ### Pointing it at things
@@ -44,7 +56,7 @@ python summarise_runs.py "$env:LOCALAPPDATA\MantlePlaceTiming\runs\base-d4f3453-
 | What | Parameter | Environment variable | Default |
 |---|---|---|---|
 | The bundle zip to import | `-Bundle` | `MANTLEPLACE_TIMING_BUNDLE` | none: one is required |
-| Where everything it makes goes | `-WorkRoot` | `MANTLEPLACE_TIMING_ROOT` | `%LOCALAPPDATA%\MantlePlaceTiming` |
+| Where everything it makes goes | `-WorkRoot` | `MANTLEPLACE_TIMING_ROOT` | none: a run refuses without one |
 | The Revit year to run | `-Year` (2025, 2026, 2027) | | required |
 | The code to time | `-Commit <sha>`, or `-SourceRoot <dir with revit\src>` | | needed the first time a tag is built |
 | Where Revit is installed | `-RevitRoot` (holds `Revit <year>\Revit.exe`) | | `%ProgramFiles%\Autodesk` |
@@ -119,7 +131,7 @@ unquoted list arrives as an array and is refused.
 ```
 
 `Invoke-TimingRun.ps1 -Commit` does both when the tag has no build yet. `-SourceRoot` may also be a git
-worktree; the commit is read from it, with `-dirty` appended when `revit/` has changes. The commit is
+worktree; the commit is read from it, with `-dirty` appended when `revit/` has changes (the driver refuses that unless `-AllowDirty`). The commit is
 recorded in `build.json`, `meta.json`, `driver.txt`, `timings.md` and, because the informational version
 carries it, the plugin log's first line. The tag is compiled into the assembly as a constant, read back out
 of the finished DLL, and the build is refused if it differs.
