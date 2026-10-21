@@ -222,8 +222,15 @@ renderer-neutral.
   `FailuresAccessor.GetFailureHandlingOptions`/`SetFailureHandlingOptions` before it returns the
   rollback, and the two steps that convert the site model say, in the words of the error the hook
   caught, why a refused conversion cost the context buildings or the link
-  (`ImportFailurePolicy.ExplainSiteModelRefused`). Whether that is enough to keep the modal away in
-  Revit 2025, 2026 and 2027 is unobserved until the order is re-imported unattended in each.
+  (`ImportFailurePolicy.ExplainSiteModelRefused`). Re-imported unattended in Revit 2025 on
+  2026-10-21, the modal was gone, but both conversions were still refused, so the order had no
+  context buildings and no link.
+- **The site model is converted with reference intent and no auto-join.** Both site-model steps
+  call `OpenIFCDocument(path, IFCImportOptions)` with `Intent = IFCImportIntent.Reference` and
+  `AutoJoin = false` (`OpenSiteModel`), which is how Link IFC converts. The defaults are Open IFC's,
+  parametric with auto-join on, and on the 6,148-building order they posted "Can't keep elements
+  joined" with no resolution. Turning auto-join off alone was still refused in Revit 2025 on
+  2026-10-21. With reference intent the same order converted in 41 s.
 
 - **The hazard plan's calls have left that set**, in all three versions. `ViewPlan.Create` on the
   lowest level, a plan's `CropBox` set in model coordinates with its annotation crop off,
