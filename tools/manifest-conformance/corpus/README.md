@@ -141,8 +141,9 @@ a case carrying its own `manifestVersion` — `manifest.locationBlockIgnored` is
 `manifest.siteBriefIgnored` the sixth, `manifest.partialDeliveryIgnored` the seventh,
 `manifest.verticalDatumsIgnored` the eighth, `manifest.fidelityLevelsIgnored` the ninth,
 `manifest.bundlePartsIgnored` the tenth, `manifest.recordPointersIgnored` the eleventh,
-`manifest.recordsFolderIgnored` the twelfth and `manifest.sourcePointersIgnored` the thirteenth. Stamping a newer version onto a fixture that lacks
-what that version requires would make the fixture untrue.
+`manifest.recordsFolderIgnored` the twelfth and `manifest.sourcePointersIgnored` the thirteenth.
+Stamping a newer version onto a fixture that lacks what that version requires would make the
+fixture untrue.
 
 **The reject set waits for the slowest host.** It is host-invariant (no case carries `appliesTo`),
 so it may only name versions below the _lowest_ floor among registered hosts. v18 and v19 could

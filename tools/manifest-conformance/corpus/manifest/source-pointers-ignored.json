@@ -388,8 +388,8 @@
   "job_id": "source-pointers",
   "order_id": "ord-source-pointers-1",
   "attribution": {
-    "job_id": "records-folder",
-    "order_id": "ord-records-folder-1",
+    "job_id": "source-pointers",
+    "order_id": "ord-source-pointers-1",
     "sources": [
       {
         "provider_id": "usgs-3dep",
