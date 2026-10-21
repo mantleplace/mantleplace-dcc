@@ -98,3 +98,20 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: python tools/public-hygiene/check_public_references.py --commit-range "$HEAD_SHA" --not "$BASE_SHA" origin/main
+
+  # A broken .ps1 used to reach a real Revit or an install check before anything noticed. This job
+  # only parses (nothing runs), on the hosted runner's own pwsh, and names each file, line and
+  # message. It is a job in this workflow, not a new one, and carries no paths: filter.
+  powershell-parse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The case first: the gate must refuse the deliberately broken script, or it proves nothing.
+      - name: Check the gate refuses the broken case
+        shell: pwsh
+        run: ./tools/public-hygiene/Test-PowerShellParses.ps1 -Case -Path tools/public-hygiene/cases/powershell/broken.ps1
+
+      - name: Parse every tracked PowerShell script
+        shell: pwsh
+        run: ./tools/public-hygiene/Test-PowerShellParses.ps1
