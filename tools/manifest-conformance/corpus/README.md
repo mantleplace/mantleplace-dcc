@@ -140,8 +140,8 @@ a case carrying its own `manifestVersion` — `manifest.locationBlockIgnored` is
 `manifest.hazardLayersIgnored` the fourth, `manifest.basemapFilesIgnored` the fifth,
 `manifest.siteBriefIgnored` the sixth, `manifest.partialDeliveryIgnored` the seventh,
 `manifest.verticalDatumsIgnored` the eighth, `manifest.fidelityLevelsIgnored` the ninth,
-`manifest.bundlePartsIgnored` the tenth, `manifest.recordPointersIgnored` the eleventh and
-`manifest.recordsFolderIgnored` the twelfth. Stamping a newer version onto a fixture that lacks
+`manifest.bundlePartsIgnored` the tenth, `manifest.recordPointersIgnored` the eleventh,
+`manifest.recordsFolderIgnored` the twelfth and `manifest.sourcePointersIgnored` the thirteenth. Stamping a newer version onto a fixture that lacks
 what that version requires would make the fixture untrue.
 
 **The reject set waits for the slowest host.** It is host-invariant (no case carries `appliesTo`),

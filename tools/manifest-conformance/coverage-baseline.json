@@ -254,6 +254,10 @@
       "revit",
       "unreal"
     ],
+    "manifest.sourcePointersIgnored": [
+      "revit",
+      "unreal"
+    ],
     "manifest.treePointsFrame": [
       "unreal"
     ],
