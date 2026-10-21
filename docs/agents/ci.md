@@ -52,6 +52,7 @@ python -m unittest discover -s tools/manifest-conformance
 python tools/public-hygiene/check_public_references.py
 python tools/public-hygiene/check_docs_integrity.py
 python tools/unreal-naming/check_generated_names.py
+pwsh -NoProfile -File tools/public-hygiene/Test-PowerShellParses.ps1
 (cd tools/public-hygiene && python -m unittest discover -p "test_*.py")
 (cd tools/unreal-naming && python -m unittest discover -p "test_*.py")
 (cd tools/brand-assets && python -m unittest discover -p "test_*.py")
