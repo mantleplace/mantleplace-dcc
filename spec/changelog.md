@@ -19,6 +19,25 @@ history, not contract.
 
 ## Semver era
 
+### 1.13.0 — source pointers, for the indexed sources a bundle does not deliver (additive minor; published and frozen 2026-10-21)
+
+Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under
+[compatibility](compatibility.md) §2, and every host floor at 1.0.0 reads it.
+
+- **A source pointer** names an indexed source of the source registry that covers the extent where no
+  brokered source of its theme does: `source_id`, `publisher`, `theme`, `link` (the publisher's
+  landing page), `access_class` and a `reason` of `not_brokered` or `licence_not_cleared`. It carries
+  no geometry and no value, and it is never a fallback layer. An unknown reason reads as `not_brokered`.
+- **Where pointers appear.** The optional top-level `source_pointers` lists them, at most three per
+  theme. `source_pointers_unavailable` is true when the registry could not be read in time; the
+  bundle then ships without pointers, and the order never waits on them.
+- **A record pointer's `reason`** gains `not_brokered` and `licence_not_cleared`. An unknown reason
+  still reads as `no_open_source`.
+
+Both hosts re-pin to 1.13.0 on the corpus case `manifest.sourcePointersIgnored`. Neither host reads a
+source pointer; Unreal shows a record pointer whose reason it does not name as `no_open_source`, as
+the schema says.
+
 ### 1.12.0 — the public-record layers move under `Records/` (additive minor; published and frozen 2026-10-08)
 
 Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under

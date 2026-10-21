@@ -935,6 +935,20 @@
       }
     },
     {
+      "id": "manifest.sourcePointersIgnored",
+      "group": "manifest",
+      "file": "manifest/source-pointers-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 1.13.0 adds source pointers and two record-pointer reasons. `source_pointers` lists, for each theme, the indexed sources of the source registry that cover the extent where no brokered source of that theme does: each names its `source_id`, `publisher`, `theme`, the publisher's `link`, its `access_class` and a `reason` of `not_brokered` or `licence_not_cleared`, and carries no geometry and no value. `source_pointers_unavailable` is true when the registry could not be read in time, and the bundle then ships without pointers. A record pointer's `reason` gains `not_brokered` and `licence_not_cleared`, and an unknown reason still reads as `no_open_source`. The fixture is versioned 1.13.0 and is the 1.12.0 case's bundle with two source pointers, one per new reason, `source_pointers_unavailable` false, and a zoning record pointer whose reason is `not_brokered` on the layer and in `completeness.record_pointers`. Every new block validates against the published 1.13.0 schema. A reader MUST accept it and still read everything around the new members. Two readers fail here while every earlier case stays green: one that gates the version on equality with its floor or with the last minor it saw, and one that refuses a record-pointer reason it does not know. Host-invariant on purpose: ignoring an unknown member and reading an unknown reason as the schema says is every reader's obligation, not one host's.",
+      "manifestVersion": "1.13.0",
+      "expectations": {
+        "jobId": "source-pointers",
+        "orderId": "ord-source-pointers-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "7777777777777777777777777777777777777777777777777777777777777777"
+      }
+    },
+    {
       "id": "manifest.unrealPublicRecordsLegacyLayout",
       "group": "manifest",
       "file": "manifest/public-records-legacy-layout.json",
