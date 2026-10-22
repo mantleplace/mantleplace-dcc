@@ -161,6 +161,18 @@ The rest is [`docs/generated-content.md`](docs/generated-content.md):
 - **Re-import replaces, behind two guards** — a provenance record under `Saved` holding the full
   identity, and the `mantleplace_import=<identity>` actor tag the sweep matches.
 
+## Third-party content
+
+Third-party content in this plugin lives **only under `MantlePlace/Source/ThirdParty/`**, directly
+under `Source/`: Fab's technical review requires it, and a plugin that ships any must also file Fab's
+Third Party Software form. Today that is the three editor-panel fonts and their SIL Open Font License
+texts in `Source/ThirdParty/Fonts/`; the editor style loads them from there
+(`FMantlePlaceEditorStyle::GetFontFilePath`), and `Resources/` holds only our own icons. The gate
+enforces it: `tools/unreal-naming/check_third_party_layout.py`, run by `ci-unreal-naming`, fails any
+licence text (an `OFL*`, `LICENSE*`, `COPYING*` or `NOTICE*` file, or a text file naming the SIL Open
+Font License, MIT, BSD or GPL) that sits in the plugin folder outside `Source/ThirdParty/`. The
+Fab pre-submit list is in [`README.md`](README.md#packaging-a-release).
+
 ## Things that will bite you
 
 - **CI never compiles this plugin** ([why](../docs/agents/ci.md)). Build it locally (the recipe is

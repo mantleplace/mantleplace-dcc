@@ -12,7 +12,7 @@ class ISlateStyle;
 /**
  * Slate style set + design tokens for the Mantle Place editor tooling. Beyond the Window-menu / tab
  * logo icon it now carries the vault panel's small design system - the embedded brand fonts
- * (Montserrat + Geist Mono, from Resources/Fonts) and the rounded/hairline card + pill + logo brushes
+ * (Montserrat + Geist Mono, from Source/ThirdParty/Fonts) and the rounded/hairline card + pill + logo brushes
  * that reproduce the website's vault aesthetic. Colors live in MantlePlacePalette.h. Mirrors Cesium's
  * CesiumStyleSet: Initialize() in StartupModule, Shutdown() in ShutdownModule.
  */
@@ -65,6 +65,9 @@ public:
 
 	/** A brand font at the given role (embedded Montserrat / Geist Mono). */
 	static FSlateFontInfo GetFont(EFont Role);
+
+	/** Absolute path of the font file behind a role, under the plugin's Source/ThirdParty/Fonts. */
+	static FString GetFontFilePath(EFont Role);
 
 private:
 	static TSharedRef<FSlateStyleSet> Create();

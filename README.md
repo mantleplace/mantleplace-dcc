@@ -276,6 +276,6 @@ asks of its own changes, and the ones it will ask of yours.
 
 ## Third-party notices
 
-The fonts under `unreal/MantlePlace/Resources/Fonts/` are licensed under the SIL Open Font License;
-their licence texts sit beside them. Autodesk, Revit, Epic Games, Unreal Engine and Cesium are marks
+The fonts under `unreal/MantlePlace/Source/ThirdParty/Fonts/` are licensed under the SIL Open Font
+License; their licence texts sit beside them. Autodesk, Revit, Epic Games, Unreal Engine and Cesium are marks
 of their respective owners.
