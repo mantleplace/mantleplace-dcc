@@ -355,14 +355,14 @@ bool FMantlePlaceWorldPartitionFoliageTest::RunTest(const FString& Parameters)
 		}
 
 		// --- AOI bounds and the water mask, at every instance and every water texel ---------------
-		const MantlePlaceFoliageScatterLogic::FRaster Water = WaterRaster();
+		const MantlePlaceFoliageScatterLogic::FRaster WaterMask = WaterRaster();
 		const FVector2D Aoi(AoiCm, AoiCm);
 		int32 OutsideAoi = 0, OnWater = 0;
 		for (const FVector& Location : Instances)
 		{
 			OutsideAoi += (FMath::Abs(Location.X) > AoiCm / 2 || FMath::Abs(Location.Y) > AoiCm / 2) ? 1 : 0;
 			uint16 Sample = 0;
-			OnWater += (MantlePlaceFoliageScatterLogic::RawAt(Water, Aoi, FVector(Location.X, Location.Y, 0.0), Sample) && Sample == 255) ? 1 : 0;
+			OnWater += (MantlePlaceFoliageScatterLogic::RawAt(WaterMask, Aoi, FVector(Location.X, Location.Y, 0.0), Sample) && Sample == 255) ? 1 : 0;
 		}
 		TestEqual(*FString::Printf(TEXT("%s: every instance is inside the AOI"), *Pass), OutsideAoi, 0);
 		TestEqual(*FString::Printf(TEXT("%s: zero instances on water-classified texels"), *Pass), OnWater, 0);
