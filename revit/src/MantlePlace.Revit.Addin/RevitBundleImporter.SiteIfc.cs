@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.IFC;
 using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
@@ -55,7 +56,7 @@ internal sealed partial class RevitBundleImporter
             try
             {
                 Stopwatch converting = Stopwatch.StartNew();
-                converted = _application.OpenIFCDocument(ifcPath);
+                converted = OpenSiteModel(ifcPath);
                 Trace($"  site model: converted {step.EntryName} in {converting.Elapsed.TotalSeconds:0.0} s, to link it.");
                 converted.SaveAs(companionRvt);
             }
@@ -115,6 +116,26 @@ internal sealed partial class RevitBundleImporter
         Say(result.ElementId != ElementId.InvalidElementId
             ? $"Linked the IFC site model ({step.EntryName})."
             : $"Revit declined to link the IFC site model ({step.EntryName}).");
+    }
+
+    /// <summary>
+    /// Converts the site model the way Link IFC does — reference intent, no auto-join — the one
+    /// conversion both site-model steps make.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ Not <c>OpenIFCDocument(path)</c>. Its defaults are Open IFC's: parametric intent, which builds
+    /// standard Revit elements that Revit then tries to keep joined, and an auto-join pass on top. On a
+    /// 6,148-building site model that posted "Can't keep elements joined" with no resolution and
+    /// refused the whole conversion, in all three versions, costing both the context buildings and the
+    /// link; turning auto-join off alone did not get past it in Revit 2025. Reference intent builds
+    /// lightweight shapes with nothing to join, which is all either step wants: the buildings step
+    /// clones solids out and closes the document, and the link step stands in for Link IFC, which
+    /// converts this way itself.
+    /// </remarks>
+    private Document OpenSiteModel(string ifcPath)
+    {
+        using IFCImportOptions options = new() { Intent = IFCImportIntent.Reference, AutoJoin = false };
+        return _application.OpenIFCDocument(ifcPath, options);
     }
 
     /// <summary>

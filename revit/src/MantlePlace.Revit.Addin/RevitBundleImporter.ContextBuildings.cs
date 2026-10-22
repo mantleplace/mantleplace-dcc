@@ -271,7 +271,7 @@ internal sealed partial class RevitBundleImporter
         try
         {
             Stopwatch converting = Stopwatch.StartNew();
-            siteModel = _application.OpenIFCDocument(ifcPath);
+            siteModel = OpenSiteModel(ifcPath);
             Trace($"  site model: converted {step.EntryName} in {converting.Elapsed.TotalSeconds:0.0} s, to copy its buildings.");
 
             using FilteredElementCollector collector = new(siteModel);
