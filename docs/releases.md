@@ -54,6 +54,7 @@ setting renamed. Bold the action.>
 - Built from `<short sha>` on `main`. <Gate result at that commit.>
 - Published asset: <check from step 4 and its date>.
 - `<asset name>` sha256 `<hash>`
+- Storefront: <submitted to Fab / the Autodesk App Store on date>, from <the asset, or the source zip built from the same commit> sha256 `<hash>`.
 
 Previous: [<previous tag>](https://github.com/mantleplace/mantleplace-dcc/releases/tag/<previous tag>)
 ```
