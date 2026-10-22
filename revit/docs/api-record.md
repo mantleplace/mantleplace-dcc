@@ -174,7 +174,7 @@ renderer-neutral.
   one with a solid, in 22.7 s including the conversion. A second import of the same build copied
   nothing and never converted the site model. The harness imports of 2026-09-18 had already copied
   834 of 834 buildings in Revit 2025 and 2026 as well, and a re-import in a fresh Revit process
-  found all 834 and copied none. Three things the run settled that reading would not have. Open IFC raises *IFC versions 4 and above are only
+  found all 834 and copied none. Three things the run settled that reading would not have, all observed under Open IFC's parametric defaults, before the conversion moved to reference intent (below). Open IFC raises *IFC versions 4 and above are only
   partially supported* on every IFC4 file, as a warning that waits for a click unless a failures
   handler takes it, which the step's swallower does. A new `DirectShape` gets an `IfcGUID` of Revit's
   own, not the source GlobalId, so the Comments stamp is the only identity. And the copy carries no
@@ -212,7 +212,7 @@ renderer-neutral.
   names is one of them, be answered with `FailuresAccessor.DeleteElements` instead of a rollback:
   the feature is counted as declined and named in the log, in the same single commit.
 
-- **A silent rollback from the session hook is compiled, not executed.** Revit's IFC importer opens
+- **A silent rollback from the session hook has left that set**, in Revit 2025. Revit's IFC importer opens
   a transaction of its own, and its "Can't keep elements joined" error can arrive with no
   resolution, in all three versions (order of 6,148 buildings, 2026-10-15): the hook returned
   `ProceedWithRollBack` and Revit still showed its modal. Revit's own documentation for
@@ -230,7 +230,8 @@ renderer-neutral.
   `AutoJoin = false` (`OpenSiteModel`), which is how Link IFC converts. The defaults are Open IFC's,
   parametric with auto-join on, and on the 6,148-building order they posted "Can't keep elements
   joined" with no resolution. Turning auto-join off alone was still refused in Revit 2025 on
-  2026-10-21. With reference intent the same order converted in 41 s.
+  2026-10-21. With reference intent the same order converted in 41 s in Revit 2025, 92 s in 2026
+  and 42 s in 2027, and each copied 6,148 of 6,148 buildings and linked the site model with no dialog.
 
 - **The hazard plan's calls have left that set**, in all three versions. `ViewPlan.Create` on the
   lowest level, a plan's `CropBox` set in model coordinates with its annotation crop off,
