@@ -52,3 +52,8 @@ jobs:
 
       - name: Check generated names
         run: python tools/unreal-naming/check_generated_names.py
+
+      # Fab's review requires third-party content under Source/ThirdParty/, and a licence text is
+      # what marks third-party content. Same text-only, offline shape as the check above.
+      - name: Check third-party layout
+        run: python tools/unreal-naming/check_third_party_layout.py

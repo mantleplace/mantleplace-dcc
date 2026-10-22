@@ -41,7 +41,7 @@ public class MantlePlaceEditor : ModuleRules
 				"SlateCore",     // Slate widget + style (FAppStyle) types
 				"InputCore",     // EKeys::* referenced by the SListView/SComboBox/STableRow templates
 				"WorkspaceMenuStructure", // GetLevelEditorCategory() -> the Window-menu tab entry
-				"Projects",      // IPluginManager: locate the plugin Resources dir for the tab-icon style set
+				"Projects",      // IPluginManager: locate the plugin dir for the style set (icons in Resources, fonts in Source/ThirdParty)
 			}
 		);
 	}

@@ -118,5 +118,21 @@ Packaging needs a licensed Unreal Engine 5.8 install, so it runs privately and n
 6. **Publish** the tag `unreal-<version>` at that commit, with the zip as its asset, titled and
    written to [`docs/releases.md`](../docs/releases.md).
 
+**Fab pre-submit list.** Fab's technical review rejects a plugin on any of these; check them
+against the Source zip before an upload:
+
+- Third-party content sits in `Source/ThirdParty/`, directly under `Source/`. The only such content
+  here is the three editor-panel fonts and their SIL Open Font License texts, in
+  `Source/ThirdParty/Fonts/`; `tools/unreal-naming/check_third_party_layout.py` fails a licence text
+  anywhere else in the plugin.
+- Fab's Third Party Software form is filed for that content: each font, its version, its licence,
+  its upstream source and its path in the plugin.
+- Every source file (`.cpp`, `.h`, `.cs`) opens with the copyright header.
+- Every module in the descriptor carries a `PlatformAllowList`.
+- No `Binaries`, `Intermediate`, `Saved` or `Build` folder anywhere in the plugin.
+- No path from the plugin folder down is longer than 170 characters.
+- The zip uploaded to the storefront is the same asset as the GitHub release's, built from the same
+  commit.
+
 For anything deeper — building, testing, naming, what a change here must not do — read
 [`CLAUDE.md`](CLAUDE.md) in this folder and the root [`README.md`](../README.md).
