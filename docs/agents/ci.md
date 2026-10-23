@@ -49,6 +49,8 @@ would have:
 ```bash
 python tools/manifest-conformance/check_manifest_conformance.py
 python -m unittest discover -s tools/manifest-conformance
+python -m unittest discover -s tools/mantleplace-mpb/tests
+PYTHONPATH=tools/mantleplace-mpb/src python -m mantleplace_mpb corpus tools/manifest-conformance/corpus
 python tools/public-hygiene/check_public_references.py
 python tools/public-hygiene/check_docs_integrity.py
 python tools/unreal-naming/check_generated_names.py

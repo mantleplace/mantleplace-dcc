@@ -1,0 +1,7 @@
+{
+  "$comment": "The manifest is truncated text.",
+  "files": {
+    "README.md": "A synthetic bundle for the conformance corpus. It holds no real data.\n",
+    "Metadata/manifest.json": "{\"version\": \"1.14.0\", "
+  }
+}

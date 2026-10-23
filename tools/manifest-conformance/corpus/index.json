@@ -1875,6 +1875,212 @@
       "manifestVersion": "1.0.0",
       "errorContains": "contradicts itself",
       "appliesTo": "unreal"
+    },
+    {
+      "id": "bundle.minimal",
+      "group": "bundle",
+      "file": "bundle/minimal.json",
+      "expect": "accept",
+      "reason": "The smallest conforming bundle: a README and a manifest the published schema accepts, with every layer pointer null. A validator that needs more than this to pass is stricter than the format.",
+      "expectations": {
+        "hashesVerified": 0
+      }
+    },
+    {
+      "id": "bundle.fileEntries",
+      "group": "bundle",
+      "file": "bundle/file-entries.json",
+      "expect": "accept",
+      "reason": "Every 1.14.0 neutral field a validator checks, written correctly: whole frames for a raster, a vector file and an offset mesh with its site origin, ODbL roles that agree with each format and source, and one sha256 that matches. It must pass with no error and verify exactly one hash.",
+      "expectations": {
+        "hashesVerified": 1
+      }
+    },
+    {
+      "id": "bundle.macosDebrisIgnored",
+      "group": "bundle",
+      "file": "bundle/macos-debris-ignored.json",
+      "expect": "accept",
+      "reason": "A bundle zipped on macOS carries __MACOSX/ and .DS_Store entries. They are not part of the bundle: a validator ignores them wherever they sit, and the root .DS_Store must not stop the wrapper folder being found."
+    },
+    {
+      "id": "bundle.noManifest",
+      "group": "bundle",
+      "file": "bundle/no-manifest.json",
+      "expect": "reject",
+      "reason": "Metadata/manifest.json is the one file found by convention. A bundle without it at the root or inside one wrapper folder is not a bundle.",
+      "expectations": {
+        "errors": [
+          "archive.no-manifest"
+        ]
+      }
+    },
+    {
+      "id": "bundle.manifestNotJson",
+      "group": "bundle",
+      "file": "bundle/manifest-not-json.json",
+      "expect": "reject",
+      "reason": "A manifest that does not parse is refused, never read in part.",
+      "expectations": {
+        "errors": [
+          "manifest.not-json"
+        ]
+      }
+    },
+    {
+      "id": "bundle.schemaInvalid",
+      "group": "bundle",
+      "file": "bundle/schema-invalid.json",
+      "expect": "reject",
+      "reason": "A manifest is held to the schema of the version it declares; one missing required member fails it.",
+      "expectations": {
+        "errors": [
+          "schema.invalid"
+        ]
+      }
+    },
+    {
+      "id": "bundle.versionUnpublished",
+      "group": "bundle",
+      "file": "bundle/version-unpublished.json",
+      "expect": "reject",
+      "reason": "A version the freeze ledger does not list has no schema, so nothing could vouch for the manifest.",
+      "expectations": {
+        "errors": [
+          "schema.version-unpublished"
+        ]
+      }
+    },
+    {
+      "id": "bundle.versionInvalid",
+      "group": "bundle",
+      "file": "bundle/version-invalid.json",
+      "expect": "reject",
+      "reason": "The JSON type tells the two version families apart; a partial semver string is neither.",
+      "expectations": {
+        "errors": [
+          "schema.version-invalid"
+        ]
+      }
+    },
+    {
+      "id": "bundle.pointerMissing",
+      "group": "bundle",
+      "file": "bundle/pointer-missing.json",
+      "expect": "reject",
+      "reason": "Every file is found through a pointer value, so a pointer to a file the bundle does not hold fails, named by its JSON Pointer.",
+      "expectations": {
+        "errors": [
+          "pointer.missing"
+        ]
+      }
+    },
+    {
+      "id": "bundle.pointerEscapes",
+      "group": "bundle",
+      "file": "bundle/pointer-escapes.json",
+      "expect": "reject",
+      "reason": "Archive paths are untrusted input. A pointer that leaves the bundle is refused before anything is read through it.",
+      "expectations": {
+        "errors": [
+          "pointer.unsafe"
+        ]
+      }
+    },
+    {
+      "id": "bundle.hashMismatch",
+      "group": "bundle",
+      "file": "bundle/hash-mismatch.json",
+      "expect": "reject",
+      "reason": "Where the manifest states a sha256, the bytes must match it, and a mismatch is refused by file name.",
+      "expectations": {
+        "errors": [
+          "sha256.mismatch"
+        ],
+        "hashesVerified": 0
+      }
+    },
+    {
+      "id": "bundle.hashUnknown",
+      "group": "bundle",
+      "file": "bundle/hash-unknown.json",
+      "expect": "accept",
+      "reason": "A missing optional hash means unknown, not corrupt: the file stays valid and the report counts it as unverified rather than claiming a check it did not make.",
+      "expectations": {
+        "hashesVerified": 0
+      }
+    },
+    {
+      "id": "bundle.framePartial",
+      "group": "bundle",
+      "file": "bundle/frame-partial.json",
+      "expect": "reject",
+      "reason": "A frame is written whole or not at all: a raster frame without its axis mapping cannot place the file.",
+      "expectations": {
+        "errors": [
+          "frame.partial"
+        ]
+      }
+    },
+    {
+      "id": "bundle.frameOffsetWithoutOrigin",
+      "group": "bundle",
+      "file": "bundle/frame-offset-without-origin.json",
+      "expect": "reject",
+      "reason": "An offset file is measured from the site origin, so a bundle holding one must carry location.site_origin.",
+      "expectations": {
+        "errors": [
+          "frame.offset-without-site-origin"
+        ]
+      }
+    },
+    {
+      "id": "bundle.frameAxesDegenerate",
+      "group": "bundle",
+      "file": "bundle/frame-axes-degenerate.json",
+      "expect": "reject",
+      "reason": "Each of a file's three axes points along a different line; two along one line is no frame at all.",
+      "expectations": {
+        "errors": [
+          "frame.axis-mapping-degenerate"
+        ]
+      }
+    },
+    {
+      "id": "bundle.roleProducedWorkVector",
+      "group": "bundle",
+      "file": "bundle/role-produced-work-vector.json",
+      "expect": "reject",
+      "reason": "A Produced Work is rasterized, meshed, extruded or baked output. A GeoPackage keeps its features recoverable, so a role of produced-work on one disagrees with its extension.",
+      "expectations": {
+        "errors": [
+          "role.extension-mismatch"
+        ]
+      }
+    },
+    {
+      "id": "bundle.roleAbsent",
+      "group": "bundle",
+      "file": "bundle/role-absent.json",
+      "expect": "accept",
+      "reason": "A missing role reads as database, the stricter duty. It is reported, not refused, while the field is optional.",
+      "expectations": {
+        "warnings": [
+          "role.absent"
+        ]
+      }
+    },
+    {
+      "id": "bundle.roleNoneWithOdblSource",
+      "group": "bundle",
+      "file": "bundle/role-none-with-odbl-source.json",
+      "expect": "reject",
+      "reason": "A role of none means no ODbL source contributes, so it disagrees with a source licensed ODbL.",
+      "expectations": {
+        "errors": [
+          "role.sources-mismatch"
+        ]
+      }
     }
   ]
 }

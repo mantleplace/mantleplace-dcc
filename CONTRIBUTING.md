@@ -72,7 +72,8 @@ Five workflows run on every pull request, on free hosted runners:
 
 - **`ci-manifest-conformance`** — fetches the published bundle-manifest schema, checks every
   registered host is verified against the newest version, and checks the shared corpus under
-  `tools/manifest-conformance/corpus/` for integrity.
+  `tools/manifest-conformance/corpus/` for integrity. It also tests the `mpb` bundle validator,
+  installs it, and runs it over the corpus's `bundle` group.
 - **`ci-revit-tests`** — builds the Revit pure core and client and drives the shared corpus through
   them on **.NET 8 and .NET 10**.
 - **`ci-public-hygiene`** — refuses references that resolve only in a private repository, in

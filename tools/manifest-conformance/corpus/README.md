@@ -84,6 +84,27 @@ In practice a case is one pull request with these edits:
 A coverage **drop** is a lost assertion. Retiring a case is a deliberate edit with its reason in the
 pull request body, never a baseline update made to turn the gate green.
 
+## The bundle group (`bundle/`)
+
+The other groups hold a reader's parser; `bundle` holds a **validator**: a tool that judges a
+whole bundle conformant or not, with reasons. No host plugin claims it.
+
+A `bundle` case is a JSON description of a synthetic bundle, never a bundle: `files` maps each
+archive path to its content, a string written as UTF-8 or a JSON value written as JSON, so the
+corpus stays text and holds no sample data. A validator builds each case as a folder, a zip and
+a zip inside one wrapper folder, and must reach the same result on all three:
+
+| Field | What the validator must report |
+| --- | --- |
+| `expect` | `accept`: the bundle conforms; `reject`: it does not |
+| `expectations.errors` | exactly these finding codes at error severity, and no others |
+| `expectations.warnings` | exactly these at warning severity; absent means none |
+| `expectations.hashesVerified` | the number of files whose sha256 it verified |
+
+The codes are those [`mantleplace-mpb`](../../mantleplace-mpb/README.md) reports, and
+`mpb corpus` is the runner. A manifest in a case declares its own version and is held to that
+published schema, so a case is fetched against the network the way the contract gate is.
+
 ## The self-test corpus (`self-test/`)
 
 `self-test/` holds deliberately broken index and case fixtures that every host's corpus **reader**
@@ -105,6 +126,7 @@ host may ever consume.
 | `cache`      | `MantlePlaceBundleCacheLogicTest.cpp`                                                                             |
 | `digest`     | `MantlePlaceSha256Test.cpp` + the cache suite (NIST FIPS 180-4 known answers)                                     |
 | `projection` | `MantlePlaceRoadSplinesLogicTest.cpp` (`mesh.origin` of the reference fixture)                                    |
+| `bundle`     | written for the bundle validator; the manifests start from the platform's minimal readiness-only manifest          |
 
 "Lifted from" means the _assertions_ came from those files, not that every fixture is byte-identical
 to its C++ literal. Where a vector was renamed or padded for readability (placeholder sha values,

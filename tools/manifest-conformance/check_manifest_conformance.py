@@ -94,7 +94,7 @@ _NON_HOST_KEYS = frozenset({"$comment"})
 
 #: The documented corpus groups. A typo'd group silently excludes a case from every host suite
 #: that dispatches on it, so it is checked rather than trusted.
-_CORPUS_GROUPS = frozenset({"manifest", "vault", "auth", "cache", "digest", "projection"})
+_CORPUS_GROUPS = frozenset({"manifest", "vault", "auth", "cache", "digest", "projection", "bundle"})
 
 #: Every host entry must carry these. A host that omits one is a silent hole in the gate, so this
 #: is checked before anything is fetched.
