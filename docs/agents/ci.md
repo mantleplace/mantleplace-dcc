@@ -11,6 +11,11 @@ Five workflows run on every pull request, all on free hosted runners: `ci-manife
 events, a pull request's own comments included, and it detects rather than blocks
 ([`public-surface.md`](public-surface.md)).
 
+`release-mpb.yml` is not a gate: it runs on a `mpb-<version>` tag, not on a pull request, and
+publishes the `mantleplace-mpb` package to PyPI through trusted publishing (no stored token; the `pypi`
+environment is where a maintainer approves). `release_check.py` holds the tag to the package version and
+the package version to the conformance corpus; the mpb tests hold the same line on every pull request.
+
 `ci-brand-assets` is **half a gate by construction**: the mark renderer's input is a private file,
 so no runner can regenerate the committed PNGs, and the job tests the rules that decide what a
 render looks like rather than the renders themselves

@@ -58,6 +58,12 @@ class Bundle:
     def has_folder(self, path: str) -> bool:
         return path.rstrip("/") in self.folders
 
+    def size(self, path: str) -> int:
+        handle = self._files[path]
+        if self._archive is not None:
+            return handle.file_size  # type: ignore[attr-defined]
+        return handle.stat().st_size  # type: ignore[attr-defined]
+
     def open(self, path: str) -> IO[bytes]:
         handle = self._files[path]
         if self._archive is not None:
