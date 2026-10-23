@@ -194,7 +194,7 @@ Building the add-in shim itself needs Revit 2025's API present — see
 compile target.
 
 **Unreal** — drop `unreal/MantlePlace/` into a UE 5.8 project's `Plugins/` directory and let the
-editor build it. Its engine dependencies are Epic's built-in Interchange and PCG.
+editor build it. Its engine dependencies are Epic's built-in Interchange, PCG and SQLiteCore.
 
 **The contract gate** — Python 3.12, standard library only:
 

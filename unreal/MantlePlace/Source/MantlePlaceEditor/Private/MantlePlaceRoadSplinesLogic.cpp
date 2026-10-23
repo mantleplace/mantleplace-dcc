@@ -23,6 +23,29 @@ constexpr double SouthFalseNorthingM = 10000000.0;
 // schema's `$defs/verticalDatum`, and the one `foliage_points.vertical_datum` is fixed to.
 const TCHAR* const HostVerticalDatum = TEXT("EGM2008-orthometric");
 
+/** Convert one WGS84 position (lon deg, lat deg, orthometric z m) into the Local Projected Frame (UE cm). */
+bool LonLatZToUeCm(
+    double LonDeg,
+    double LatDeg,
+    double ZM,
+    double OriginEastingM,
+    double OriginNorthingM,
+    int32 Epsg,
+    FVector& OutUeCm)
+{
+	double EastingM = 0.0, NorthingM = 0.0;
+	if (!FMantlePlaceRoadSplinesLogic::LonLatToUtm(LonDeg, LatDeg, Epsg, EastingM, NorthingM))
+	{
+		return false;
+	}
+	// Same frame math as FMantlePlaceVaultManifest::GetDrapeWorldRect / GetMeshLocation, through
+	// the one helper that owns it: North -> +X, East -> +Y, orthometric metres -> +Z, all relative
+	// to the AOI-centroid origin.
+	OutUeCm = FMantlePlaceVaultManifest::ProjectedToUeCm(
+	    EastingM - OriginEastingM, NorthingM - OriginNorthingM, ZM);
+	return true;
+}
+
 /** Convert one GeoJSON position array [lon, lat, z?] into the Local Projected Frame (UE cm). */
 bool PositionToUeCm(
     const TArray<TSharedPtr<FJsonValue>>& Position,
@@ -35,21 +58,8 @@ bool PositionToUeCm(
 	{
 		return false;
 	}
-	const double LonDeg = Position[0]->AsNumber();
-	const double LatDeg = Position[1]->AsNumber();
 	const double ZM = Position.Num() >= 3 ? Position[2]->AsNumber() : 0.0;
-
-	double EastingM = 0.0, NorthingM = 0.0;
-	if (!FMantlePlaceRoadSplinesLogic::LonLatToUtm(LonDeg, LatDeg, Epsg, EastingM, NorthingM))
-	{
-		return false;
-	}
-	// Same frame math as FMantlePlaceVaultManifest::GetDrapeWorldRect / GetMeshLocation, through
-	// the one helper that owns it: North -> +X, East -> +Y, orthometric metres -> +Z, all relative
-	// to the AOI-centroid origin.
-	OutUeCm = FMantlePlaceVaultManifest::ProjectedToUeCm(
-	    EastingM - OriginEastingM, NorthingM - OriginNorthingM, ZM);
-	return true;
+	return LonLatZToUeCm(Position[0]->AsNumber(), Position[1]->AsNumber(), ZM, OriginEastingM, OriginNorthingM, Epsg, OutUeCm);
 }
 
 /** Append every part of a LineString/MultiLineString geometry as its own spline. */
@@ -254,6 +264,33 @@ bool FMantlePlaceRoadSplinesLogic::ParseGeoJson(
 			AppendGeometry(*Geometry, Prototype, OriginEastingM, OriginNorthingM, Epsg, OutSplines, OutLinesSeen);
 		}
 	}
+	return true;
+}
+
+bool FMantlePlaceRoadSplinesLogic::AppendLonLatLine(
+    const TArray<FVector>& LonLatZ,
+    const FMantlePlaceRoadSpline& Prototype,
+    double OriginEastingM,
+    double OriginNorthingM,
+    int32 Epsg,
+    TArray<FMantlePlaceRoadSpline>& OutSplines,
+    int32& OutLinesSeen)
+{
+	++OutLinesSeen;
+	FMantlePlaceRoadSpline Spline = Prototype;
+	for (const FVector& Position : LonLatZ)
+	{
+		FVector UeCm;
+		if (LonLatZToUeCm(Position.X, Position.Y, Position.Z, OriginEastingM, OriginNorthingM, Epsg, UeCm))
+		{
+			Spline.PointsUeCm.Add(UeCm);
+		}
+	}
+	if (Spline.PointsUeCm.Num() < 2)
+	{
+		return false;
+	}
+	OutSplines.Add(MoveTemp(Spline));
 	return true;
 }
 

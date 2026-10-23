@@ -35,6 +35,7 @@ public class MantlePlaceEditor : ModuleRules
 				"FileUtilities", // FZipArchiveReader (editor-only, libzip-backed)
 				"ImageWrapper",  // 16-bit grayscale PNG decode
 				"Json",          // Metadata/manifest.json parse
+				"SQLiteCore",    // FSQLiteDatabase: the road-splines GeoPackage (engine plugin SQLiteCore, enabled in the .uplugin)
 				"HTTPServer",    // FMantlePlaceLocalTileServer: stream the bundle to Cesium for Unreal
 				"DesktopPlatform", // IDesktopPlatform::OpenFileDialog (Browse button)
 				"Slate",         // SMantlePlaceVaultPanel/Row: the native vault tooling UI
