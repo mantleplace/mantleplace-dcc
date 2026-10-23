@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "MantlePlaceManifestBlocks.h"
+#include "MantlePlaceOdblLogic.h"
 
 class FJsonObject;
 struct FMantlePlaceRoadSplinesDatum;
@@ -70,6 +71,12 @@ struct FMantlePlaceVaultManifest
 	FString DeliveryModel;          // packaging.delivery_model, e.g. "base_on_demand" (v14 Vault
 	                                 // Pick-and-Process); empty if absent
 	FMantlePlaceDeliveryFacts Delivery; // the top-level `delivery` block, for DISPLAY only -- see the type
+
+	// What the manifest states about each file's terms (MPB 1.14.0 `file_entries`, keyed by archive path)
+	// and the credit it words (`attribution.sources[]`). Read for ONE purpose: telling ODbL content from
+	// the rest, and crediting it (MantlePlaceOdblLogic). A file with no entry reads as `database`.
+	TMap<FString, FMantlePlaceFileLicensing> FileLicensing;
+	TArray<FMantlePlaceAttributionSource> Attribution;
 
 	// --- Core blocks: not artifacts, read by Parse itself -------------------------------
 	FMantlePlaceGeoreferenceBlock Georef;

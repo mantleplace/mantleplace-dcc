@@ -5,8 +5,12 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Docking/TabManager.h"
 #include "MantlePlaceEditorStyle.h"
+#include "MantlePlaceHandover.h"
 #include "Slate/SMantlePlaceVaultPanel.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "ToolMenus.h"
 #include "Widgets/Docking/SDockTab.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "WorkspaceMenuStructure.h"
 #include "WorkspaceMenuStructureModule.h"
 
@@ -39,10 +43,36 @@ void FMantlePlaceEditorModule::StartupModule()
 		.SetDisplayName(LOCTEXT("MantlePlaceTabTitle", "Mantle Place"))
 		.SetTooltipText(LOCTEXT("MantlePlaceTabTooltip", "Open the Mantle Place vault panel: browse & import owned bundles, or import a local .zip."))
 		.SetIcon(FSlateIcon(FMantlePlaceEditorStyle::GetStyleSetName(), "MantlePlace.TabIcon"));
+
+	// The handover command, in the Tools menu once the menus exist.
+	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FMantlePlaceEditorModule::RegisterMenus));
+}
+
+void FMantlePlaceEditorModule::RegisterMenus()
+{
+	FToolMenuOwnerScoped OwnerScoped(this);
+	UToolMenu* Menu = UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Tools");
+	FToolMenuSection& Section = Menu->FindOrAddSection("MantlePlace", LOCTEXT("MantlePlaceMenuSection", "Mantle Place"));
+	Section.AddMenuEntry(
+		"MantlePlacePrepareForHandover",
+		LOCTEXT("PrepareForHandoverLabel", "Prepare for handover"),
+		LOCTEXT("PrepareForHandoverTooltip", "Remove the ODbL content the import filed under ODbL (or swap in its Produced Work) and add the credit, so this level is safe to ship or share. One undo step; nothing is saved."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateLambda([]()
+		{
+			FNotificationInfo Info(FText::FromString(MantlePlaceHandover::PrepareEditorWorld().Summary()));
+			Info.ExpireDuration = 12.0f;
+			FSlateNotificationManager::Get().AddNotification(Info);
+		})));
 }
 
 void FMantlePlaceEditorModule::ShutdownModule()
 {
+	if (UObjectInitialized())
+	{
+		UToolMenus::UnRegisterStartupCallback(this);
+		UToolMenus::UnregisterOwner(this);
+	}
 	if (FSlateApplication::IsInitialized())
 	{
 		FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(MantlePlaceVaultTabId);

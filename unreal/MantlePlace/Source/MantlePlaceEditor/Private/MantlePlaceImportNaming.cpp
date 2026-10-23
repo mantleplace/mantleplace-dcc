@@ -142,6 +142,51 @@ namespace MantlePlaceImportNaming
 		return FString::Printf(TEXT("%s="), ImportTagKey);
 	}
 
+	FString OdblFolder(const FString& Identity)
+	{
+		return OutlinerFolder(Identity) / TEXT("ODbL");
+	}
+
+	FString OdblLayerName()
+	{
+		return TEXT("ODbL");
+	}
+
+	FName OdblTag()
+	{
+		return FName(TEXT("mantleplace_odbl"));
+	}
+
+	FString EquivalenceTagPrefix()
+	{
+		return TEXT("mantleplace_equivalent=");
+	}
+
+	FString EquivalenceTag(const FString& Group)
+	{
+		return EquivalenceTagPrefix() + Group;
+	}
+
+	FString CreditLineTagPrefix()
+	{
+		return TEXT("mantleplace_credit=");
+	}
+
+	FString CreditLineTag(const FString& Line)
+	{
+		return CreditLineTagPrefix() + Line;
+	}
+
+	FString CreditActorTag(const FString& Identity)
+	{
+		return TEXT("mantleplace_credit_actor=") + Identity;
+	}
+
+	FString CreditActorLabel(const FString& Identity)
+	{
+		return FString::Printf(TEXT("%sCredit_%s"), ActorLabelPrefix, *ShortIdentity(Identity));
+	}
+
 	const TCHAR* DefaultContentRoot()
 	{
 		return TEXT("/Game/MantlePlace");

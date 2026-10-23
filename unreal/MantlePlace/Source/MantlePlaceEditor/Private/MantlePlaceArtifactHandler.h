@@ -99,6 +99,15 @@ struct FMantlePlaceImportContext
 	 */
 	EMantlePlaceLayerFamily Family = EMantlePlaceLayerFamily::None;
 
+	/**
+	 * The files the handler running now makes its actors from, and its equivalence group, set by the
+	 * orchestration beside Family. Claim reads each file's `odbl_role` from the manifest: an actor made
+	 * from `database` files (a missing role included) lands in the ODbL outliner folder and Data Layer.
+	 * Empty means the actor is made from no file, and is not ODbL content.
+	 */
+	TArray<FString> SourcePaths;
+	FName EquivalenceGroup;
+
 	// Shared between handlers by ORDER: the drape handler runs first and leaves its material for the
 	// geometry that follows; every geometry handler leaves its actor for the drape's coverage report.
 	UMaterialInstanceConstant* DrapeMic = nullptr;
@@ -125,6 +134,11 @@ struct FMantlePlaceImportContext
 	 *
 	 * In a World Partition level it also assigns the actor (and a landscape's streaming proxies) to
 	 * the Data Layer of the current Family; in a non-partitioned level it does not.
+	 *
+	 * An actor made from `database` files goes to the order's `ODbL` outliner folder instead, takes the
+	 * ODbL tag, and (in World Partition) joins the ODbL Data Layer as well. An actor owing the credit
+	 * carries its lines as tags, and an equivalence group as one, so Prepare for handover can act on
+	 * the level alone, with no bundle open.
 	 */
 	void Claim(AActor* Actor, const FString& Label) const;
 };
@@ -167,6 +181,28 @@ public:
 
 	/** The integrity terms: every payload this artifact declares, digest or no digest (see FMantlePlaceIntegrityLogic). */
 	virtual void CollectDeclared(const FMantlePlaceVaultManifest& Manifest, TArray<FMantlePlaceDeclaredArtifact>& Out) const = 0;
+
+	/**
+	 * The files this artifact's actors are made from, whose stated `odbl_role` decides whether they are
+	 * ODbL content (MantlePlaceOdblLogic). Every payload it declares by default; an artifact that is
+	 * generated from other artifacts' files (the foliage scatter) names those instead.
+	 */
+	virtual void CollectSourcePaths(const FMantlePlaceVaultManifest& Manifest, TArray<FString>& Out) const
+	{
+		TArray<FMantlePlaceDeclaredArtifact> Declared;
+		CollectDeclared(Manifest, Declared);
+		for (const FMantlePlaceDeclaredArtifact& Artifact : Declared)
+		{
+			Out.Add(Artifact.Path);
+		}
+	}
+
+	/**
+	 * Artifacts that return the same non-empty name stand for the same thing in the level (the terrain
+	 * Landscape and the terrain Mesh). Prepare for handover swaps ODbL content for a Produced Work of
+	 * the same group where the level holds one. NAME_None: it has no equivalent.
+	 */
+	virtual FName EquivalenceGroup() const { return NAME_None; }
 
 	/**
 	 * The layer family this artifact's actors belong to, and so the World Partition Data Layer they

@@ -15,6 +15,9 @@ public:
 	virtual void ShutdownModule() override;
 
 private:
+	/** Tools > Mantle Place > Prepare for handover. */
+	void RegisterMenus();
+
 	/** Spawns the dockable Mantle Place vault panel for the Window-menu nomad tab. */
 	TSharedRef<SDockTab> SpawnVaultTab(const FSpawnTabArgs& Args);
 };

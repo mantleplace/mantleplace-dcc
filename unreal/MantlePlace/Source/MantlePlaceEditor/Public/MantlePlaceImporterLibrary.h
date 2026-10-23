@@ -91,4 +91,16 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Import", meta = (ScriptName = "BuildHlods"))
 	static FString BuildHLODs();
+
+	/**
+	 * Prepare for handover: make the current editor level safe to ship or share. Everything the import
+	 * filed under ODbL (imported from `database` files, a missing role included) is removed, or swapped
+	 * for the Produced Work of the same group already in the level where there is one, and the credit is
+	 * added. One undo transaction; nothing is saved. The same command as Tools > Mantle Place >
+	 * Prepare for handover and the console command `MantlePlace.PrepareForHandover`.
+	 *
+	 * @return  What it did: the counts, and any note the user should read.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Import", meta = (ScriptName = "PrepareForHandover"))
+	static FString PrepareForHandover();
 };

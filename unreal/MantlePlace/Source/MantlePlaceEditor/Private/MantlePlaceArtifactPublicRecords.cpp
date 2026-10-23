@@ -494,6 +494,8 @@ private:
 			Spline->UpdateSpline();
 		}
 
+		// One overlay is drawn from these files, so these files' roles are its roles (not the family's every file).
+		Ctx.SourcePaths = Drawn;
 		Ctx.Claim(Actor, MantlePlaceImportNaming::PublicRecordLabel(Ctx.Identity, Layer.Family));
 		Actor->Tags.Add(FName(*FString::Printf(TEXT("record_family=%s"), *Layer.Family)));
 		Ctx.Result.CreatedActors.Add(Actor->GetActorLabel());

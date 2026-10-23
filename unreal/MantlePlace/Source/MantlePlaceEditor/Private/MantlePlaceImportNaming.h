@@ -134,6 +134,35 @@ namespace MantlePlaceImportNaming
 	/** The tag prefix alone, for finding this plugin's actors regardless of identity. */
 	FString ImportTagPrefix();
 
+	// --- ODbL content ---------------------------------------------------------------------------
+
+	/**
+	 * `MantlePlace/<shortIdentity>/ODbL` -- the outliner folder of everything imported from `database`
+	 * files (missing role included). A sub-folder of the order's own, so it reads as part of the order
+	 * and stays one predictable place to look.
+	 */
+	FString OdblFolder(const FString& Identity);
+
+	/** `ODbL` -- the name of the shared World Partition Data Layer ODbL content joins beside its family's. */
+	FString OdblLayerName();
+
+	/** The tag that marks an actor as imported from `database` files. Prepare for handover matches on it. */
+	FName OdblTag();
+
+	/** `mantleplace_equivalent=<group>` -- artifacts of one group stand for the same thing (the terrain). */
+	FString EquivalenceTag(const FString& Group);
+	FString EquivalenceTagPrefix();
+
+	/** `mantleplace_credit=<line>` -- one line of the credit the import recorded on an actor. */
+	FString CreditLineTag(const FString& Line);
+	FString CreditLineTagPrefix();
+
+	/** `mantleplace_credit_actor=<identity>` -- marks the credit actor Prepare for handover adds. */
+	FString CreditActorTag(const FString& Identity);
+
+	/** `MP_Credit_<shortIdentity>` -- the credit actor's label. */
+	FString CreditActorLabel(const FString& Identity);
+
 	// --- Package paths ------------------------------------------------------------------------
 
 	/** The default content root, before any project setting overrides it. */
