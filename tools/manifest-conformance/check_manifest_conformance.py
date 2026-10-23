@@ -77,6 +77,11 @@ _HERE = Path(__file__).resolve().parent
 _PINNED = _HERE / "verified-against.json"
 _CORPUS = _HERE / "corpus"
 _BASELINE = _HERE / "coverage-baseline.json"
+_CHANGELOG = _REPO_ROOT / "spec" / "changelog.md"
+
+#: A changelog entry for a semver version is a level-3 heading that opens with the version.
+#: "Within 1.0.1" and the integer-era "v19" headings do not match: only the semver era is specified.
+_CHANGELOG_HEADING_RE = re.compile(r"^###\s+(\d+\.\d+\.\d+)\b", re.MULTILINE)
 
 #: The one-way-broken classes a self-test fixture may declare (HPS-46). Anything else is a typo.
 _SELFTEST_CLASSES = frozenset({
@@ -969,6 +974,22 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
     return failures, pinned
 
 
+def check_changelog(versions: list[str], changelog_text: str) -> list[str]:
+    """One failure per ledgered semver version that `spec/changelog.md` has no entry for.
+
+    The integer era is public pre-history and is summarised there, not specified, so it is not
+    required. A version the platform publishes without an entry would leave an outside implementer
+    unable to see what changed, which is what the changelog is for.
+    """
+    described = set(_CHANGELOG_HEADING_RE.findall(changelog_text))
+    return [
+        f"FAIL: the freeze ledger names manifest {version}, but spec/changelog.md has no "
+        f"'### {version}' entry. Add one saying what a reader must do differently."
+        for version in versions
+        if _SEMVER_RE.match(version) and version not in described
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Native manifest-contract conformance, all hosts.")
     parser.add_argument(
@@ -1034,6 +1055,11 @@ def main(argv: list[str] | None = None) -> int:
         # The full roster, never the --host-filtered slice: coverage is a property of the whole
         # corpus, and a filtered run must not read as a coverage regression.
         failures.extend(check_corpus(full_entries))
+
+    # The whole ledger, never the --host-filtered slice: the changelog describes the contract.
+    failures.extend(
+        check_changelog(fetch_published_versions(), _CHANGELOG.read_text(encoding="utf-8"))
+    )
 
     if failures:
         for line in failures:
