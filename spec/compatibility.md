@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: Mantle Place LLC -->
+
 # MPB compatibility policy
 
 What a version number means, what a producer promises, and what a consumer must do with a field or

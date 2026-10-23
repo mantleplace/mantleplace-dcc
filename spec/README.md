@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: Mantle Place LLC -->
+
 # The Mantle Place Bundle (MPB) spec
 
 A **Mantle Place Bundle (MPB)** is the delivered format: a zip of pre-derived, host-ready
@@ -41,6 +44,23 @@ schema has two contracts and no way to tell which one a producer honoured.
   what claiming a corpus group obliges.
 - **[`changelog.md`](changelog.md)** — the consolidated version history, including the integer
   pre-history that predates this spec.
+
+## Licence
+
+Which licence covers what:
+
+| What | Licence |
+| --- | --- |
+| This prose (`spec/`) | [CC BY 4.0](../LICENSES/CC-BY-4.0.txt). Reuse it, with credit to Mantle Place |
+| The schema series | [Apache 2.0](../LICENSES/Apache-2.0.txt) |
+| The conformance corpus and the validator (`tools/manifest-conformance/`) | [Apache 2.0](../LICENSES/Apache-2.0.txt) |
+
+The corpus holds **synthetic data only**: no real survey, parcel, imagery or customer data appears in
+any vector. Each prose file carries an SPDX header; the corpus is marked Apache-2.0 in its
+[README](../tools/manifest-conformance/corpus/README.md), because JSON vectors cannot carry a header.
+
+You may say a producer or reader is "MPB 2.x-conformant" on the free, self-declared terms in
+[`TRADEMARK.md`](../TRADEMARK.md#the-mpb-2x-conformant-statement).
 
 ## Which version am I reading against
 
