@@ -13,6 +13,7 @@
 #include "MantlePlaceImportTiming.h"
 #include "MantlePlaceHLODLogic.h"
 #include "MantlePlaceHLODs.h"
+#include "MantlePlaceHandover.h"
 #include "MantlePlaceLocalTileServer.h"
 #include "MantlePlaceScopedRestore.h"
 #include "MantlePlaceStreamStaging.h"
@@ -813,6 +814,11 @@ FString UMantlePlaceImporterLibrary::BuildHLODs()
 {
 	UWorld* World = GEditor != nullptr ? GEditor->GetEditorWorldContext().World() : nullptr;
 	return MantlePlaceHLODs::Build(World).Message;
+}
+
+FString UMantlePlaceImporterLibrary::PrepareForHandover()
+{
+	return MantlePlaceHandover::PrepareEditorWorld().Summary();
 }
 
 #undef LOCTEXT_NAMESPACE

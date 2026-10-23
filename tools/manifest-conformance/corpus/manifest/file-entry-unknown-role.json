@@ -1,0 +1,249 @@
+{
+  "version": "1.14.0",
+  "location": {
+    "time_zone": {
+      "iana": "America/Denver",
+      "utc_offset_standard_h": -7,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    },
+    "site_origin": {
+      "latitude": 36.2725,
+      "longitude": -105.6462,
+      "ellipsoidal_height_m": 2623.1,
+      "datum_height_m": 2640.9,
+      "vertical_datum": "EGM2008-orthometric",
+      "projected": {
+        "crs": {
+          "code": "EPSG:32613"
+        },
+        "x": 441959.5,
+        "y": 4014372.5,
+        "unit": "m",
+        "z": 2640.9,
+        "z_reference": "vertical_datum"
+      }
+    }
+  },
+  "delivery": {
+    "unit_system": "metric",
+    "tier": "metric",
+    "horizontal_epsg": 32613,
+    "linear_unit": "m",
+    "label": "WGS 84 / UTM zone 13N"
+  },
+  "landcover": {
+    "tree_points": {
+      "path": "Landcover/TreePoints.csv",
+      "crs": "EPSG:32613",
+      "units": "m",
+      "horizontal_units": "m",
+      "point_count": 2,
+      "min_height_m": 3,
+      "columns": [
+        "x",
+        "y",
+        "ground_z",
+        "height_m",
+        "crown_radius_m",
+        "foliage_type"
+      ],
+      "foliage_type_vocabulary": "1"
+    }
+  },
+  "vector": {
+    "crs": "EPSG:4326",
+    "layers": [
+      {
+        "name": "road_splines",
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/RoadSplines.geojson",
+            "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        ]
+      }
+    ]
+  },
+  "job_id": "file-entry-unknown-role",
+  "order_id": "ord-file-entry-unknown-role-1",
+  "hosts": {
+    "unreal": {
+      "engine_min_version": "5.7",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "origin": {
+          "lon": -105.6462,
+          "lat": 36.2725,
+          "utm": {
+            "epsg": 32613,
+            "easting_m": 441959.5,
+            "northing_m": 4014372.5
+          },
+          "ground_orthometric_h_m": 2640.9
+        },
+        "planet_shape": "Flat",
+        "is_projected": true
+      },
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:32613",
+        "horizontal_unit": "m",
+        "vertical_unit": "m"
+      },
+      "mesh_alternative": {
+        "path": "Mesh/Terrain.glb",
+        "up_axis": "y",
+        "nanite_recommended": true,
+        "note": "First-class terrain option; import via Interchange glTF (Y-up->Z-up auto).",
+        "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "foliage_points": {
+        "path": "Landcover/TreePoints.csv",
+        "crs": "EPSG:32613",
+        "units": "m",
+        "horizontal_units": "m",
+        "columns": [
+          "x",
+          "y",
+          "ground_z",
+          "height_m",
+          "crown_radius_m",
+          "foliage_type"
+        ],
+        "point_count": 2
+      }
+    },
+    "revit": {
+      "host_min_version": "2025",
+      "units_note": "Apply georeference.origin verbatim as the survey point; every artifact's Z is absolute orthometric height.",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "vertical_datum": "EGM2008-orthometric",
+        "grid_rotation_deg": 0.0,
+        "is_projected": true,
+        "origin": {
+          "lon": -105.6462,
+          "lat": 36.2725,
+          "projected": {
+            "epsg": 32613,
+            "easting": 441959.5,
+            "northing": 4014372.5,
+            "linear_unit": "m"
+          }
+        }
+      },
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:32613",
+        "horizontal_unit": "m",
+        "vertical_unit": "m"
+      },
+      "vectors": {
+        "format": "geojson",
+        "layers": [
+          {
+            "name": "road_splines",
+            "path": "Site/Vector/RoadSplines.geojson",
+            "horizontal_frame": "absolute_projected",
+            "units": "m",
+            "vertical_reference": "absolute",
+            "feature_count": 1,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      "drape": {
+        "path": "Imagery/Drape.png",
+        "format": "png-rgb-8bit",
+        "extent": [
+          441247.1,
+          4013672.8,
+          442671.9,
+          4015072.5
+        ],
+        "extent_crs": "EPSG:32613",
+        "units": "m",
+        "width": 2375,
+        "height": 2333,
+        "effective_gsd_m": 0.6,
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "readiness": {
+        "toposurface_points": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "ifc_site": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "surface_dxf": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "vectors": {
+          "present": true
+        }
+      }
+    }
+  },
+  "file_entries": {
+    "Mesh/Terrain.glb": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32613"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "geoid_model": "EGM2008",
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "up",
+          "z": "south"
+        },
+        "coordinate_mode": "offset"
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-USGov-PublicDomain",
+      "sources": [
+        {
+          "name": "USGS 3DEP",
+          "license": "LicenseRef-USGov-PublicDomain",
+          "source_id": "src-0042",
+          "link": "https://www.usgs.gov/3d-elevation-program"
+        }
+      ]
+    },
+    "Vector/RoadSplines.geojson": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:4326"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "collective-database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "OpenStreetMap",
+          "license": "ODbL-1.0",
+          "link": "https://www.openstreetmap.org/copyright"
+        }
+      ]
+    }
+  }
+}

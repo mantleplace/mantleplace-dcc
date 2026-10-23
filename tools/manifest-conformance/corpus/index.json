@@ -949,6 +949,62 @@
       }
     },
     {
+      "id": "manifest.fileFramesIgnored",
+      "group": "manifest",
+      "file": "manifest/file-frames-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 1.14.0 adds, in the neutral part of the manifest, a site origin (`location.site_origin`) and a `file_entries` map from an archive path to what the manifest states about that file: its full File frame, its ODbL role, its licence, its sources and, for a PNG rendition, the neutral value mapping. The fixture is versioned 1.14.0 and carries one of each kind: a glTF terrain mesh that is an `offset` file about the site origin (x east, y up, z south), a 16-bit heightmap, a mask and an indexed landcover raster that are `absolute` north-up rasters with their value mappings, and a GeoJSON road layer that is the `database` role under ODbL-1.0; every CRS is a `code`, and the horizontal and vertical CRS are separate references, so no file relies on a compound EPSG code alone. EXPECTED READER OUTCOME: a reader that reads neither member ACCEPTS the manifest and ignores both, which is every registered host today; a reader that reads them places the glTF file by adding its offsets to the origin's `projected` x, y and z and never reprojects, and reads each raster's pixels through its `encoding`. Two readers fail here while every earlier case stays green: one that gates the version on equality with the last minor it saw, and one that refuses a member it does not recognise inside `location` or at the top level. Either turns an additive minor into a breaking release (compatibility.md). All of the new blocks validate against the published 1.14.0 schema. Host-invariant on purpose: neither registered host reads `location.site_origin` or `file_entries`, so both ACCEPT the manifest and still read everything around the new members -- the job id, the order id and the road-spline selection the expectations assert.",
+      "manifestVersion": "1.14.0",
+      "expectations": {
+        "jobId": "file-frames",
+        "orderId": "ord-file-frames-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "manifest.fileEntryNoRole",
+      "group": "manifest",
+      "file": "manifest/file-entry-no-role.json",
+      "expect": "accept",
+      "reason": "A 1.14.0 `file_entries` entry may carry no `odbl_role` at all: here the road layer states its licence (ODbL-1.0) and its OpenStreetMap source but no role, beside a terrain mesh that does say `produced-work`. EXPECTED READER OUTCOME: the manifest is ACCEPTED, and a reader that reads roles reads the roleless file as `database`, the stricter duty -- never as `none`, and never as an error; the mesh keeps the `produced-work` it states, so the one missing role is the only file that reads as `database`. A reader that does not read roles ignores the member and still reads the job id, the order id and the road-spline selection, as both registered hosts do. The fixture validates against the published 1.14.0 schema, where every member of an entry is optional.",
+      "manifestVersion": "1.14.0",
+      "expectations": {
+        "jobId": "file-entry-no-role",
+        "orderId": "ord-file-entry-no-role-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "id": "manifest.fileEntryUnknownRole",
+      "group": "manifest",
+      "file": "manifest/file-entry-unknown-role.json",
+      "expect": "accept",
+      "reason": "A role value no member of the 1.14.0 schema names (`collective-database`), the road layer's `odbl_role`, beside a terrain mesh whose role is `produced-work`. It is out of the schema's closed set on purpose: a later minor may add a role, and a reader built for 1.14.0 meets it before it is taught it. EXPECTED READER OUTCOME: the manifest is ACCEPTED, and a reader that reads roles FAILS CLOSED on the unknown value by treating the file as `database`, the stricter duty -- it neither rejects the whole manifest nor reads the value as `none` or `produced-work`; the mesh's known role is unaffected. A reader that does not read roles ignores the member and still reads the job id, the order id and the road-spline selection, as both registered hosts do. Unlike its siblings this fixture does not validate against the published schema, and that is what it tests.",
+      "manifestVersion": "1.14.0",
+      "expectations": {
+        "jobId": "file-entry-unknown-role",
+        "orderId": "ord-file-entry-unknown-role-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    {
+      "id": "manifest.fileEntryVerticalCrsApart",
+      "group": "manifest",
+      "file": "manifest/file-entry-vertical-crs-apart.json",
+      "expect": "accept",
+      "reason": "Two 1.14.0 files whose vertical CRS is a reference of its own, apart from the horizontal one, never a compound code: a GeoTIFF DEM in NAD83(2011) / UTM zone 13N (`EPSG:6342`) with heights in NAVD88 (`EPSG:5703`, `geoid_model` `GEOID18`), and a contour DXF whose horizontal unit is the metre and whose vertical CRS is NAVD88 in US survey feet (`EPSG:6360`, `vertical_unit_to_metres` 0.3048006096012192), so the two linear units are stated apart. The manifest carries no `location.site_origin`: both files are `absolute`, placed by their own horizontal CRS. EXPECTED READER OUTCOME: the manifest is ACCEPTED; a reader that reads frames takes the horizontal and the vertical CRS from their own fields and the vertical unit from `vertical_unit_to_metres` where it is present (and from `unit_to_metres` where it is not), and a reader that cannot place heights in the stated vertical CRS does not guess one from the horizontal code. A reader that does not read frames ignores the member and still reads the job id, the order id and the road-spline selection, as both registered hosts do. The fixture validates against the published 1.14.0 schema.",
+      "manifestVersion": "1.14.0",
+      "expectations": {
+        "jobId": "file-entry-vertical-crs",
+        "orderId": "ord-file-entry-vertical-crs-1",
+        "roadSplinesPath": "Vector/RoadSplines.geojson",
+        "roadSplinesSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    },
+    {
       "id": "manifest.unrealPublicRecordsLegacyLayout",
       "group": "manifest",
       "file": "manifest/public-records-legacy-layout.json",
