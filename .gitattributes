@@ -2,7 +2,7 @@
 #
 # THERE ARE NO GIT LFS PATTERNS HERE, AND THAT IS DELIBERATE. A stranger's first clone of an
 # open-source plugin must not be a multi-hundred-megabyte pull. The binaries in this tree — one
-# .uasset file, three fonts, twenty-seven PNG icons, one Revit family — total about 1.6 MB and are
+# .uasset file, twenty-seven PNG icons, one Revit family — total about 1 MB and are
 # plain git blobs.
 #
 # If a real need for LFS ever arises (a binary submission that genuinely belongs here), that is a
@@ -33,7 +33,7 @@
 *.uplugin   text eol=lf
 
 # Ships inside the Revit release zip and gets opened in Notepad by someone who did not choose an
-# editor. Not *.txt — the two font licence texts under unreal/ keep the bytes their authors wrote.
+# editor. Not *.txt — a third-party licence text keeps the bytes its authors wrote.
 revit/packaging/README.txt text eol=crlf
 
 # Hooks run under sh on every platform, Git for Windows included; a CRLF checkout breaks them

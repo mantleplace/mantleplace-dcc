@@ -3,8 +3,8 @@
 
 Fab's technical review requires third-party content to sit in a `ThirdParty` folder directly under
 the plugin's `Source/`, and a plugin that ships any must file Fab's Third Party Software form. The
-plugin's only third-party content today is three editor-panel fonts under the SIL Open Font License.
-Nothing in review catches a fourth file landing beside the icons, and the review rejection comes
+plugin ships no third-party content today (its editor panel uses the engine's own typefaces).
+Nothing in review catches a third-party file landing beside the icons, and the review rejection comes
 weeks later, after a release was cut. `unreal/CLAUDE.md` states the rule; this gate enforces it.
 
 A licence text is the marker of third-party content, so that is what is looked for:
@@ -14,7 +14,7 @@ A licence text is the marker of third-party content, so that is what is looked f
     the MIT License, BSD, the GPL or the GNU General Public License.
 
 Source files (`.cpp`, `.h`, `.cs`) are not read: they may mention a licence word in a comment, and
-they carry our own Apache header. A full licence scanner is more than one folder of fonts needs; this
+they carry our own Apache header. A full licence scanner is more than a plugin with no third-party content needs; this
 list is the one the review cares about.
 
 It is text-only and offline, like the generated-name gate beside it.

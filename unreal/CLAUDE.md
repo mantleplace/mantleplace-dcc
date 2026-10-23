@@ -165,9 +165,10 @@ The rest is [`docs/generated-content.md`](docs/generated-content.md):
 
 Third-party content in this plugin lives **only under `MantlePlace/Source/ThirdParty/`**, directly
 under `Source/`: Fab's technical review requires it, and a plugin that ships any must also file Fab's
-Third Party Software form. Today that is the three editor-panel fonts and their SIL Open Font License
-texts in `Source/ThirdParty/Fonts/`; the editor style loads them from there
-(`FMantlePlaceEditorStyle::GetFontFilePath`), and `Resources/` holds only our own icons. The gate
+Third Party Software form. **Today there is none, on purpose**: the editor panel draws with the
+engine's own typefaces (`FMantlePlaceEditorStyle::GetFontTypeface`), so no font file ships, no form
+is owed, and `Resources/` holds only our own icons. Adding a third-party file brings the form back;
+ask first. The gate
 enforces it: `tools/unreal-naming/check_third_party_layout.py`, run by `ci-unreal-naming`, fails any
 licence text (an `OFL*`, `LICENSE*`, `COPYING*` or `NOTICE*` file, or a text file naming the SIL Open
 Font License, MIT, BSD or GPL) that sits in the plugin folder outside `Source/ThirdParty/`. The

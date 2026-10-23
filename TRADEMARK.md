@@ -60,11 +60,9 @@ You may still say your fork *derives from* Mantle Place. Say it in prose, not in
 - Domain names, org names, app-store listings or social accounts that a reasonable person would read
   as being us.
 
-## Fonts and third-party marks
+## Third-party marks
 
-The fonts under `unreal/MantlePlace/Source/ThirdParty/Fonts/` are third-party works under the SIL Open Font
-Licence; their own licence texts travel beside them and govern their use. Autodesk, Revit, Epic
-Games, Unreal Engine and Cesium are the marks of their respective owners and are used here only to
+Autodesk, Revit, Epic Games, Unreal Engine and Cesium are the marks of their respective owners and are used here only to
 say, truthfully, what this software runs in.
 
 ## Asking

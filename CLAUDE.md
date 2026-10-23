@@ -140,7 +140,7 @@ packaging.
 ## Binaries
 
 **No Git LFS, on purpose** — a stranger's first clone must not be a multi-hundred-megabyte pull. The
-binaries here (one `.uasset`, three fonts, twenty-seven PNG icons, one Revit family, about 1.6 MB)
+binaries here (one `.uasset`, twenty-seven PNG icons, one Revit family, about 1 MB)
 are plain git blobs. **Ask before you `git add` any binary**, a new file of a type already here
 included: the axis is bytes, not novelty, and there is deliberately no per-file size threshold, which
 is why the answer is to ask. A binary committed here is in history forever. **No engine binaries, no
