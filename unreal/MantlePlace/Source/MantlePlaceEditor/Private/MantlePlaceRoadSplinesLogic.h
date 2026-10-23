@@ -100,6 +100,22 @@ struct FMantlePlaceRoadSplinesLogic
 	    FString& OutError);
 
 	/**
+	 * Project one road line given as WGS84 (lon deg, lat deg, orthometric z m) points into the
+	 * Local Projected Frame and append it as a spline. The shared tail of both readers: GeoJSON
+	 * positions and GeoPackage geometry blobs arrive here as the same numbers. The line counts as
+	 * seen (OutLinesSeen) whether or not it can be placed; it is appended only when at least two of
+	 * its points project, as ParseGeoJson does. Returns true when it was appended.
+	 */
+	static bool AppendLonLatLine(
+	    const TArray<FVector>& LonLatZ,
+	    const FMantlePlaceRoadSpline& Prototype,
+	    double OriginEastingM,
+	    double OriginNorthingM,
+	    int32 Epsg,
+	    TArray<FMantlePlaceRoadSpline>& OutSplines,
+	    int32& OutLinesSeen);
+
+	/**
 	 * The importer's one-line status for a road layer that parsed: how many line parts were
 	 * present against how many became splines. An empty layer reads as a plain success; a layer
 	 * whose roads were all unplaceable, or some of them, says so and names both numbers, so the
