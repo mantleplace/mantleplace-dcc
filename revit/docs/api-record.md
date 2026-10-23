@@ -233,6 +233,13 @@ renderer-neutral.
   2026-10-21. With reference intent the same order converted in 41 s in Revit 2025, 92 s in 2026
   and 42 s in 2027, and each copied 6,148 of 6,148 buildings and linked the site model with no dialog.
 
+- **A link placed by shared coordinates is not the plugin's, and in 2027 it moves the site.**
+  `RevitLinkInstance.Create(document, typeId, ImportPlacement.Shared)` ran on 2026-10-22 in Revit
+  2025, 2026 and 2027 through the carrier probe ([`vector-carrier.md`](vector-carrier.md)): it lands
+  the site IFC where origin to origin does once the survey point is set, but in 2027 it gives the host
+  the link's coordinate reference system, warns that the survey point is outside it, and moves the
+  site location some 800 km. The same runs put `winsqlite3.dll` by P/Invoke in Revit's process in
+  2025 and 2027, and read the converted model's project position back as its `IfcMapConversion`.
 - **The hazard plan's calls have left that set**, in all three versions. `ViewPlan.Create` on the
   lowest level, a plan's `CropBox` set in model coordinates with its annotation crop off,
   `FilledRegionType.Duplicate` with a solid fill, a hatch over a fill and a hatch alone,
