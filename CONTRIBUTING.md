@@ -28,7 +28,8 @@ quietly stop answering. Any such change is announced here.
 
 This project uses the [Developer Certificate of Origin](https://developercertificate.org/). There is
 **no CLA**. You keep the copyright in your contribution; you licence it to everyone under
-[Apache 2.0](LICENSE), the same terms as the rest of the repository.
+[Apache 2.0](LICENSE), the same terms as the code in the repository. Contributions to [`spec/`](spec/)
+come in under CC BY 4.0, the licence of that prose (inbound = outbound).
 
 Add a sign-off line to each commit:
 

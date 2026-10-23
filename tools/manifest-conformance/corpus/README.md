@@ -11,6 +11,9 @@ part that decides: *a conforming reader passes the corpus*. The prose describes;
 corpus settle disagreements. See [`spec/conformance.md`](../../../spec/conformance.md) for what
 claiming a group obliges you to, and which groups a third-party bundle reader needs at all.
 
+The JSON vectors beside this file are Apache-2.0 and contain synthetic data only; an SPDX header covers
+only its own file, so this file's header does not say so for them.
+
 This file is procedural: how to consume the vectors. What a reader owes the manifest is
 [`spec/format.md`](../../../spec/format.md); the additional obligations a first-party Mantle Place
 plugin carries are the Host Plugin Standard's (`HPS-40`, `HPS-41`).

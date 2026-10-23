@@ -8,7 +8,7 @@ tools designers actually work in.
 | **Unreal Engine 5.8** | [`unreal/`](unreal/README.md) | pre-1.0 |
 | **Autodesk Revit 2025 / 2026 / 2027** | [`revit/`](revit/README.md) | pre-1.0 |
 
-Licensed under [Apache 2.0](LICENSE). The name is not covered — see [TRADEMARK.md](TRADEMARK.md).
+Licensed under [Apache 2.0](LICENSE), except the prose in [`spec/`](spec/), which is CC BY 4.0. The name is not covered — see [TRADEMARK.md](TRADEMARK.md).
 
 ![Drawing an area of interest on mantle.place: the price updates with every size step, and a 2 km² box is free](https://mantle.place/media/importer/hero-draw-to-price.gif)
 
