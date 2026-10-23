@@ -36,9 +36,21 @@ AWorldDataLayers* WorldDataLayersOf(UWorld* World, bool bCreate)
 }
 }
 
+namespace
+{
+UDataLayerAsset* FindAssetNamed(const FString& ContentRoot, const FString& FamilyName);
+UDataLayerInstance* FindOrCreateNamed(UWorld* World, const FString& ContentRoot, const FString& FamilyName);
+}
+
 UDataLayerAsset* MantlePlaceDataLayers::FindAsset(const FString& ContentRoot, EMantlePlaceLayerFamily Family)
 {
-	const FString FamilyName = MantlePlaceDataLayerLogic::FamilyName(Family);
+	return FindAssetNamed(ContentRoot, MantlePlaceDataLayerLogic::FamilyName(Family));
+}
+
+namespace
+{
+UDataLayerAsset* FindAssetNamed(const FString& ContentRoot, const FString& FamilyName)
+{
 	if (FamilyName.IsEmpty())
 	{
 		return nullptr;
@@ -55,6 +67,7 @@ UDataLayerAsset* MantlePlaceDataLayers::FindAsset(const FString& ContentRoot, EM
 	return Cast<UDataLayerAsset>(StaticLoadObject(
 		UDataLayerAsset::StaticClass(), nullptr, *ObjectPath, nullptr, LOAD_NoWarn | LOAD_Quiet));
 }
+}
 
 UDataLayerInstance* MantlePlaceDataLayers::Find(UWorld* World, const FString& ContentRoot, EMantlePlaceLayerFamily Family)
 {
@@ -65,7 +78,13 @@ UDataLayerInstance* MantlePlaceDataLayers::Find(UWorld* World, const FString& Co
 
 UDataLayerInstance* MantlePlaceDataLayers::FindOrCreate(UWorld* World, const FString& ContentRoot, EMantlePlaceLayerFamily Family)
 {
-	const FString FamilyName = MantlePlaceDataLayerLogic::FamilyName(Family);
+	return FindOrCreateNamed(World, ContentRoot, MantlePlaceDataLayerLogic::FamilyName(Family));
+}
+
+namespace
+{
+UDataLayerInstance* FindOrCreateNamed(UWorld* World, const FString& ContentRoot, const FString& FamilyName)
+{
 	AWorldDataLayers* WorldDataLayers = FamilyName.IsEmpty() ? nullptr : WorldDataLayersOf(World, /*bCreate*/ true);
 	UDataLayerEditorSubsystem* Subsystem = UDataLayerEditorSubsystem::Get();
 	if (WorldDataLayers == nullptr || Subsystem == nullptr)
@@ -74,7 +93,7 @@ UDataLayerInstance* MantlePlaceDataLayers::FindOrCreate(UWorld* World, const FSt
 	}
 
 	// The shared asset: reused when any import (this session or a saved one) already made it.
-	UDataLayerAsset* Asset = FindAsset(ContentRoot, Family);
+	UDataLayerAsset* Asset = FindAssetNamed(ContentRoot, FamilyName);
 	if (Asset == nullptr)
 	{
 		const FString AssetName = MantlePlaceImportNaming::DataLayerAssetName(FamilyName);
@@ -111,6 +130,34 @@ UDataLayerInstance* MantlePlaceDataLayers::FindOrCreate(UWorld* World, const FSt
 		Instance->SetInitialRuntimeState(EDataLayerRuntimeState::Activated);
 	}
 	return Instance;
+}
+}
+
+UDataLayerInstance* MantlePlaceDataLayers::FindOdbl(UWorld* World, const FString& ContentRoot)
+{
+	const AWorldDataLayers* WorldDataLayers = WorldDataLayersOf(World, /*bCreate*/ false);
+	const UDataLayerAsset* Asset = WorldDataLayers != nullptr
+		? FindAssetNamed(ContentRoot, MantlePlaceImportNaming::OdblLayerName()) : nullptr;
+	return Asset != nullptr ? const_cast<UDataLayerInstance*>(WorldDataLayers->GetDataLayerInstance(Asset)) : nullptr;
+}
+
+bool MantlePlaceDataLayers::AssignOdbl(AActor* Actor, const FString& ContentRoot)
+{
+	UWorld* World = Actor != nullptr ? Actor->GetWorld() : nullptr;
+	if (!UWorld::IsPartitionedWorld(World))
+	{
+		return false;
+	}
+	UDataLayerInstance* Instance = FindOrCreateNamed(World, ContentRoot, MantlePlaceImportNaming::OdblLayerName());
+	UDataLayerEditorSubsystem* Subsystem = UDataLayerEditorSubsystem::Get();
+	if (Instance != nullptr && Subsystem != nullptr && !Actor->ContainsDataLayer(Instance))
+	{
+		Subsystem->AddActorToDataLayer(Actor, Instance);
+	}
+	const bool bAssigned = Instance != nullptr && Actor->ContainsDataLayer(Instance);
+	UE_CLOG(!bAssigned, LogMantlePlaceImport, Warning,
+		TEXT("Could not assign %s to the ODbL Data Layer; it imports, but outside the layer."), *Actor->GetActorLabel());
+	return bAssigned;
 }
 
 bool MantlePlaceDataLayers::Assign(AActor* Actor, const FString& ContentRoot, EMantlePlaceLayerFamily Family)

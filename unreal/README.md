@@ -58,6 +58,29 @@ rather than adding a second copy ([ADR 0002](../docs/adr/0002-import-identity.md
 root is a project setting — Project Settings ▸ Plugins ▸ Mantle Place ▸ *Generated content root* —
 the outliner folder is fixed.
 
+## Sharing a level: ODbL content and Prepare for handover
+
+Content made from files the bundle marks `database` (an ODbL Derivative Database; a file with no
+stated role counts as one) is kept visibly apart: its actors go into the outliner folder
+`MantlePlace/<identity>/ODbL` instead of `MantlePlace/<identity>`, carry the tag `mantleplace_odbl`,
+and, in a World Partition level, also join one shared Data Layer, `DL_ODbL`, beside their family's.
+Produced Works (rasterized, meshed, extruded or baked output) stay in the order's own folder.
+
+**Tools ▸ Mantle Place ▸ Prepare for handover** (also the console command
+`MantlePlace.PrepareForHandover`, and `UMantlePlaceImporterLibrary::PrepareForHandover` from a Blueprint
+or Python) makes the open level safe to ship or share:
+
+- every ODbL actor is removed; where the level holds a Produced Work of the same group (the terrain
+  Mesh beside a Landscape made from a database file) that one stays and is shown, and the removal is
+  a swap;
+- each order that owes a credit gets a text actor, `MP_Credit_<identity>`, carrying the credit the
+  bundle's manifest words (`attribution.sources`), one line per source. A Produced Work made from an
+  ODbL source still owes the credit, so it is added even when nothing was removed.
+
+It works from the tags the import wrote, so it needs no bundle and works on a level a colleague saved.
+It is one undo step and saves nothing. Load the whole World Partition level first: an unloaded actor
+is not seen. Assets in the Content Browser are not touched; only what the level references ships.
+
 ## Troubleshooting
 
 - **Output Log**: filter on `LogMantlePlaceImport` (the import itself), `LogMantlePlaceAuth`

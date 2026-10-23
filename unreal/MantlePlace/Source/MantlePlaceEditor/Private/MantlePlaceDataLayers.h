@@ -32,6 +32,16 @@ UDataLayerAsset* FindAsset(const FString& ContentRoot, EMantlePlaceLayerFamily F
  */
 UDataLayerInstance* FindOrCreate(UWorld* World, const FString& ContentRoot, EMantlePlaceLayerFamily Family);
 
+/**
+ * The ODbL Data Layer: one shared layer, `DL_ODbL`, that content imported from `database` files joins
+ * beside its family's. It is the second container ODbL content lands in (the first is the outliner
+ * folder), and the one a game or a streaming setup can switch off whole.
+ */
+UDataLayerInstance* FindOdbl(UWorld* World, const FString& ContentRoot);
+
+/** Assign one actor to the ODbL Data Layer. No-op returning false outside World Partition. */
+bool AssignOdbl(AActor* Actor, const FString& ContentRoot);
+
 /** The family's instance in this world when it exists; null otherwise. Creates nothing. */
 UDataLayerInstance* Find(UWorld* World, const FString& ContentRoot, EMantlePlaceLayerFamily Family);
 

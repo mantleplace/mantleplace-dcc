@@ -24,6 +24,7 @@ class FTerrainMeshHandler final : public IMantlePlaceArtifactHandler
 public:
 	FName Id() const override { return MantlePlaceArtifactId::TerrainMesh(); }
 	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Terrain; }
+	FName EquivalenceGroup() const override { return FName(TEXT("terrain")); } // the Landscape and the Mesh stand for the same ground
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactTerrainMesh", "Terrain mesh"); }
 
 	bool ParseFields(const FMantlePlaceParseInput& In, FMantlePlaceVaultManifest& M, FString& OutError) const override

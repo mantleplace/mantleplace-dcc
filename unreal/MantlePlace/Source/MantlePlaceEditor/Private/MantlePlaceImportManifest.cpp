@@ -301,6 +301,71 @@ void ParseDelivery(const TSharedPtr<FJsonObject>& Root, FMantlePlaceDeliveryFact
 }
 }
 
+namespace
+{
+/** `file_entries` (MPB 1.14.0): each file's ODbL role, licence and sources. Only those three members are
+ *  read; the frame members are the host blocks' to state (HPS-33). A malformed entry is skipped, and a
+ *  file with no entry reads as `database` (MantlePlaceOdblLogic::RoleOfPath), the stricter duty. */
+void ParseFileLicensing(const TSharedPtr<FJsonObject>& Root, TMap<FString, FMantlePlaceFileLicensing>& Out)
+{
+	const TSharedPtr<FJsonObject>* EntriesPtr = GetObject(Root, TEXT("file_entries"));
+	if (EntriesPtr == nullptr)
+	{
+		return;
+	}
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*EntriesPtr)->Values)
+	{
+		const TSharedPtr<FJsonObject>* EntryPtr = nullptr;
+		if (!Pair.Value.IsValid() || !Pair.Value->TryGetObject(EntryPtr) || EntryPtr == nullptr)
+		{
+			continue;
+		}
+		FMantlePlaceFileLicensing Entry;
+		const bool bRoleStated = (*EntryPtr)->HasTypedField<EJson::String>(TEXT("odbl_role"));
+		Entry.Role = MantlePlaceOdblLogic::ParseRole(bRoleStated, GetString(*EntryPtr, TEXT("odbl_role")));
+		Entry.License = GetString(*EntryPtr, TEXT("license"));
+		const TArray<TSharedPtr<FJsonValue>>* Sources = nullptr;
+		if ((*EntryPtr)->TryGetArrayField(TEXT("sources"), Sources) && Sources != nullptr)
+		{
+			for (const TSharedPtr<FJsonValue>& SourceValue : *Sources)
+			{
+				const TSharedPtr<FJsonObject>* SourcePtr = nullptr;
+				if (SourceValue.IsValid() && SourceValue->TryGetObject(SourcePtr) && SourcePtr != nullptr)
+				{
+					Entry.Sources.Add({ GetString(*SourcePtr, TEXT("name")), GetString(*SourcePtr, TEXT("license")) });
+				}
+			}
+		}
+		Out.Add(Pair.Key, MoveTemp(Entry));
+	}
+}
+
+/** `attribution.sources[]`: the credit the manifest words, kept verbatim for MantlePlaceOdblLogic::CreditLine. */
+void ParseAttribution(const TSharedPtr<FJsonObject>& Root, TArray<FMantlePlaceAttributionSource>& Out)
+{
+	const TSharedPtr<FJsonObject>* AttributionPtr = GetObject(Root, TEXT("attribution"));
+	const TArray<TSharedPtr<FJsonValue>>* Sources = nullptr;
+	if (AttributionPtr == nullptr || !(*AttributionPtr)->TryGetArrayField(TEXT("sources"), Sources) || Sources == nullptr)
+	{
+		return;
+	}
+	for (const TSharedPtr<FJsonValue>& SourceValue : *Sources)
+	{
+		const TSharedPtr<FJsonObject>* SourcePtr = nullptr;
+		if (SourceValue.IsValid() && SourceValue->TryGetObject(SourcePtr) && SourcePtr != nullptr)
+		{
+			FMantlePlaceAttributionSource Source;
+			Source.ProviderId = GetString(*SourcePtr, TEXT("provider_id"));
+			Source.AttributionText = GetString(*SourcePtr, TEXT("attribution_text"));
+			Source.License = GetString(*SourcePtr, TEXT("license"));
+			Source.LicenseUrl = GetString(*SourcePtr, TEXT("license_url"));
+			Out.Add(MoveTemp(Source));
+		}
+	}
+}
+
+}
+
 FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonText, FString& OutError)
 {
 	FMantlePlaceVaultManifest M;
@@ -364,6 +429,8 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		M.DeliveryModel = GetString(*PackagingPtr, TEXT("delivery_model"));
 	}
 	ParseDelivery(Root, M.Delivery);
+	ParseFileLicensing(Root, M.FileLicensing);
+	ParseAttribution(Root, M.Attribution);
 
 	// `hosts.unreal` — the one subtree this host reads, and never a sibling's (HPS-33).
 	TSharedPtr<FJsonObject> Unreal;

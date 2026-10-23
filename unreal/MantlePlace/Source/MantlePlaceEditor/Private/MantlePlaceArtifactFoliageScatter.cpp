@@ -34,6 +34,31 @@ public:
 	bool IsPresent(const FMantlePlaceVaultManifest& M) const override { return M.Foliage.bPresent; }
 	void CollectDeclared(const FMantlePlaceVaultManifest& M, TArray<FMantlePlaceDeclaredArtifact>& Out) const override {}
 
+	// The scatter is generated, not read from a file of its own: it is made from the tree points and the
+	// coverage rasters it filters by, so those files' roles are its roles.
+	void CollectSourcePaths(const FMantlePlaceVaultManifest& M, TArray<FString>& Out) const override
+	{
+		if (!M.Foliage.Path.IsEmpty())
+		{
+			Out.Add(M.Foliage.Path);
+		}
+		for (const TCHAR* Key : { TEXT("canopy_height"), TEXT("water_mask"), TEXT("worldcover") })
+		{
+			if (const FMantlePlaceLandscapeLayer* Layer = M.FindLandscapeLayer(Key))
+			{
+				// The UE-ready PNGs are what the importer reads; the source GeoTIFF is only the fallback.
+			for (const FMantlePlaceUeReadyRaster& Raster : Layer->UeReady)
+			{
+				Out.Add(Raster.Path);
+			}
+			if (Layer->UeReady.IsEmpty())
+			{
+				Out.Add(Layer->Path);
+			}
+			}
+		}
+	}
+
 	void Import(FMantlePlaceImportContext& Ctx) override
 	{
 		if (Ctx.TreePointsTable == nullptr)

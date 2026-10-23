@@ -26,6 +26,9 @@ of what that file's Naming section used to.
   unusable value falls back to the default rather than failing the import, because the importer
   creates and force-deletes a directory beneath it and a malformed root is not something to resolve
   creatively.
+- ODbL content (made from `database` files, a missing role included) goes in the order's `ODbL` sub-folder
+  (`MantlePlace/<identity>/ODbL`) and, in World Partition, the shared `DL_ODbL` Data Layer as well;
+  `MantlePlaceOdblLogic` decides, and `Prepare for handover` acts on the tags `Claim` writes.
 - `<identity>` identifies the *order*, not the build that produced it. See
   [ADR 0002](../../docs/adr/0002-import-identity.md) — this is the part most likely to be got wrong, and
   getting it wrong duplicates a user's landscape silently.

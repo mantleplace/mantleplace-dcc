@@ -128,6 +128,23 @@ public:
 	// Every landscape layer and every UE-ready companion, including the layers this importer parses
 	// but does not yet apply: the check is on the bundle's bytes, not on what today's importer
 	// happens to read.
+	// The files whose roles are these textures' roles: the UE-ready PNGs the importer reads, and a layer's
+	// source raster only when it has none. The source GeoTIFF is declared for integrity, never imported.
+	void CollectSourcePaths(const FMantlePlaceVaultManifest& M, TArray<FString>& Out) const override
+	{
+		for (const FMantlePlaceLandscapeLayer& Layer : M.LandscapeLayers.Layers)
+		{
+			for (const FMantlePlaceUeReadyRaster& Raster : Layer.UeReady)
+			{
+				Out.Add(Raster.Path);
+			}
+			if (Layer.UeReady.IsEmpty() && !Layer.Path.IsEmpty())
+			{
+				Out.Add(Layer.Path);
+			}
+		}
+	}
+
 	void CollectDeclared(const FMantlePlaceVaultManifest& M, TArray<FMantlePlaceDeclaredArtifact>& Out) const override
 	{
 		const auto Add = [&Out](const FString& Path, const FString& Sha256)

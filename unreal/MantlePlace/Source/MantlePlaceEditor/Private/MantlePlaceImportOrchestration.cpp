@@ -12,6 +12,7 @@
 #include "MantlePlaceImportProvenance.h"
 #include "MantlePlaceImportTiming.h"
 #include "MantlePlaceIntegrityLogic.h"
+#include "MantlePlaceOdblLogic.h"
 #include "MantlePlaceSha256.h"
 #include "MantlePlaceWorldPartitionLogic.h"
 
@@ -67,10 +68,38 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 		return;
 	}
 	const FName Tag(*MantlePlaceImportNaming::ImportTag(Identity));
-	const FName Folder(*MantlePlaceImportNaming::OutlinerFolder(Identity));
+
+	// ODbL content: where an actor made from `database` files lands, decided from the files' stated roles.
+	const bool bOdbl = MantlePlaceOdblLogic::RoleOfPaths(Manifest.FileLicensing, SourcePaths) == EMantlePlaceOdblRole::Database;
+	const FName Folder(bOdbl ? *MantlePlaceImportNaming::OdblFolder(Identity) : *MantlePlaceImportNaming::OutlinerFolder(Identity));
+	TArray<FName> ExtraTags;
+	if (bOdbl)
+	{
+		ExtraTags.Add(MantlePlaceImportNaming::OdblTag());
+	}
+	if (!EquivalenceGroup.IsNone())
+	{
+		ExtraTags.Add(FName(*MantlePlaceImportNaming::EquivalenceTag(EquivalenceGroup.ToString())));
+	}
+	if (MantlePlaceOdblLogic::NeedsCredit(Manifest.FileLicensing, SourcePaths))
+	{
+		for (const FString& Line : MantlePlaceOdblLogic::CreditLines(Manifest.Attribution, Manifest.FileLicensing, SourcePaths))
+		{
+			ExtraTags.Add(FName(*MantlePlaceImportNaming::CreditLineTag(Line)));
+		}
+	}
+	const auto Mark = [&](AActor* Marked)
+	{
+		Marked->Tags.AddUnique(Tag);
+		for (const FName& Extra : ExtraTags)
+		{
+			Marked->Tags.AddUnique(Extra);
+		}
+		Marked->SetFolderPath(Folder);
+	};
+
 	Actor->SetActorLabel(Label);
-	Actor->Tags.AddUnique(Tag);
-	Actor->SetFolderPath(Folder);
+	Mark(Actor);
 
 	// World Partition only; a non-partitioned level's actors are claimed exactly as before.
 	if (!UWorld::IsPartitionedWorld(Actor->GetWorld()))
@@ -80,6 +109,10 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 
 	// One Data Layer per layer family, shared across orders: the actor joins its handler's family.
 	MantlePlaceDataLayers::Assign(Actor, ContentRoot, Family);
+	if (bOdbl)
+	{
+		MantlePlaceDataLayers::AssignOdbl(Actor, ContentRoot);
+	}
 
 	// One HLOD layer per HLOD family (Terrain, Buildings), shared across orders like the Data Layer.
 	MantlePlaceHLODs::Assign(Actor, ContentRoot, Family);
@@ -104,9 +137,12 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 			{
 				if (Proxy.IsValid())
 				{
-					Proxy->Tags.AddUnique(Tag);
-					Proxy->SetFolderPath(Folder);
+					Mark(Proxy.Get());
 					MantlePlaceDataLayers::Assign(Proxy.Get(), ContentRoot, Family);
+					if (bOdbl)
+					{
+						MantlePlaceDataLayers::AssignOdbl(Proxy.Get(), ContentRoot);
+					}
 					MantlePlaceHLODs::Assign(Proxy.Get(), ContentRoot, Family);
 				}
 			}
@@ -600,13 +636,25 @@ FString MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(UWorld* World
 	return MantlePlaceWorldPartitionLogic::ExplainUnloadedPriorActors(Unloaded);
 }
 
+namespace
+{
+/** What Claim needs to know about the handler about to run: its family, its source files, its equivalence group. */
+void BeginHandler(FMantlePlaceImportContext& Context, const IMantlePlaceArtifactHandler& Handler)
+{
+	Context.Family = Handler.LayerFamily();
+	Context.SourcePaths.Reset();
+	Handler.CollectSourcePaths(Context.Manifest, Context.SourcePaths);
+	Context.EquivalenceGroup = Handler.EquivalenceGroup();
+}
+}
+
 void MantlePlaceImportOrchestration::RunPrepare(const FHandlers& Handlers, FMantlePlaceImportContext& Context)
 {
 	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
 	{
 		if (Context.Selection.Includes(Handler->Id()))
 		{
-			Context.Family = Handler->LayerFamily();
+			BeginHandler(Context, *Handler);
 			Handler->Prepare(Context);
 		}
 	}
@@ -618,7 +666,7 @@ void MantlePlaceImportOrchestration::RunImport(const FHandlers& Handlers, FMantl
 	{
 		if (Context.Selection.Includes(Handler->Id()))
 		{
-			Context.Family = Handler->LayerFamily();
+			BeginHandler(Context, *Handler);
 			Handler->Import(Context);
 		}
 	}
@@ -630,7 +678,7 @@ void MantlePlaceImportOrchestration::RunFinalize(const FHandlers& Handlers, FMan
 	{
 		if (Context.Selection.Includes(Handler->Id()))
 		{
-			Context.Family = Handler->LayerFamily();
+			BeginHandler(Context, *Handler);
 			Handler->Finalize(Context);
 		}
 	}
