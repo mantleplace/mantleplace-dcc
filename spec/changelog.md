@@ -22,6 +22,45 @@ history, not contract.
 
 ## Semver era
 
+### 1.14.0 — file frames, the site origin and per-file licensing, in the neutral part of the manifest (additive minor; published and frozen 2026-10-22)
+
+Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under
+[compatibility](compatibility.md) §2, and every host floor at 1.0.0 reads it. [`format.md`](format.md)
+§6.8 explains the new members; this entry lists them.
+
+- **`file_entries`**, the optional top-level map from an archive path to what the manifest states
+  about that file: its full `frame`, its `odbl_role`, its `license`, its upstream `sources` and, for
+  a PNG rendition, its `value_mapping`. Every member of an entry is optional. It is separate from
+  the `files` member of 1.10.0, which describes storage on a bundle stored as parts.
+- **The File frame** (an entry's `frame`) states, field by field, how to place the file: its
+  `horizontal_crs` and `vertical_crs` as separate references, `unit_to_metres` and
+  `vertical_unit_to_metres` as numeric factors, `geoid_model`, `axis_order`, `axis_mapping`,
+  `coordinate_mode`, `pixel_convention`, `row_order` and `coordinate_epoch`. A producer that writes a
+  frame writes it whole. Its value sets fail closed on a member the reader does not know. It is
+  distinct from the thin per-host `file_frame` of a host block, which stays throughout 1.x.
+- **A CRS reference** names a CRS in exactly one of three forms, a `code`, a `projjson` object or a
+  `wkt2` string, chosen per CRS. Horizontal and vertical are separate references, so no file relies
+  on a compound EPSG code alone.
+- **The site origin**, `location.site_origin`: one point readable by any host, with its latitude,
+  longitude, ellipsoidal height and the height in the order's vertical datum, and optionally a
+  `geodetic_crs` and a `projected` block (the same point in a projected CRS, with a height and which
+  height it is). A glTF or USD file stores its coordinates as offsets from it
+  (`coordinate_mode: offset`). A reader applies it verbatim and never re-derives it.
+- **The neutral PNG mappings**, an entry's `value_mapping`: how to read a pixel of a PNG rendition
+  back as data, for a 16-bit grayscale, a mask, an indexed layer, an RGBA raster and an 8-bit
+  passthrough. An `encoding` a reader cannot decode is skipped, never guessed. The host-block copies
+  stay throughout 1.x.
+- **The three licensing fields**, on an entry: `odbl_role` (`database`, `produced-work` or `none`),
+  `license` (an SPDX licence expression) and `sources` (each with a single-id `license`). **A missing
+  role reads as `database`**, and so does a role a reader does not know.
+
+Both hosts re-pin to 1.14.0 on four corpus cases: `manifest.fileFramesIgnored` (a full 1.14.0
+manifest with a site origin, frames and roles), `manifest.fileEntryNoRole` (a file with no role),
+`manifest.fileEntryUnknownRole` (a role value no schema member names) and
+`manifest.fileEntryVerticalCrsApart` (a vertical CRS given apart from the horizontal one). Neither
+host reads a site origin or a file entry, so no import behaviour changes; each case states what a
+reader that does read the new members owes it.
+
 ### 1.13.0 — source pointers, for the indexed sources a bundle does not deliver (additive minor; published and frozen 2026-10-21)
 
 Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under
