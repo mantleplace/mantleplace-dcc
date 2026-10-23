@@ -127,8 +127,8 @@ python -m unittest discover -s tools/mantleplace-mpb/tests     # offline, no ins
 
 A release is a tag. `python tools/mantleplace-mpb/release_check.py` holds the package version to
 the newest MPB version the corpus declares a case for (the tests run it on every pull request),
-and `release_check.py --tag mpb-v<version>` holds the tag to the package. Pushing the tag
-`mpb-v<version>` runs `.github/workflows/release-mpb.yml`: it tests, builds, checks the
+and `release_check.py --tag mpb-<version>` holds the tag to the package. Pushing the tag
+`mpb-<version>` runs `.github/workflows/release-mpb.yml`: it tests, builds, checks the
 distributions and publishes them to PyPI through trusted publishing, with no token stored
 anywhere. To install from a checkout instead: `pip install ./tools/mantleplace-mpb`.
 

@@ -32,7 +32,7 @@ Homepage = "https://github.com/mantleplace/mantleplace-dcc/tree/main/tools/mantl
 Specification = "https://github.com/mantleplace/mantleplace-dcc/tree/main/spec"
 Repository = "https://github.com/mantleplace/mantleplace-dcc"
 Issues = "https://github.com/mantleplace/mantleplace-dcc/issues"
-Changelog = "https://github.com/mantleplace/mantleplace-dcc/blob/main/tools/mantleplace-mpb/CHANGELOG.md"
+Changelog = "https://github.com/mantleplace/mantleplace-dcc/releases"
 
 [project.scripts]
 mpb = "mantleplace_mpb.cli:main"

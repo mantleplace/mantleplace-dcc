@@ -64,24 +64,24 @@ class TheReleaseCheck(unittest.TestCase):
                 release_check.base_version(bad)
 
     def test_a_tag_naming_the_package_version_passes(self) -> None:
-        self.assertEqual([], release_check.problems("1.14.0", "1.14.0", tag="mpb-v1.14.0"))
-        self.assertEqual([], release_check.problems("1.14.0.post1", "1.14.0", tag="mpb-v1.14.0.post1"))
+        self.assertEqual([], release_check.problems("1.14.0", "1.14.0", tag="mpb-1.14.0"))
+        self.assertEqual([], release_check.problems("1.14.0.post1", "1.14.0", tag="mpb-1.14.0.post1"))
 
     def test_a_tag_naming_another_version_is_a_problem(self) -> None:
-        found = release_check.problems("1.14.0", "1.14.0", tag="mpb-v1.13.0")
+        found = release_check.problems("1.14.0", "1.14.0", tag="mpb-1.13.0")
         self.assertEqual(1, len(found))
-        self.assertIn("mpb-v1.14.0", found[0])
+        self.assertIn("mpb-1.14.0", found[0])
 
     def test_a_tag_that_is_not_an_mpb_release_tag_is_a_problem(self) -> None:
         self.assertTrue(release_check.problems("1.14.0", "1.14.0", tag="v1.14.0"))
 
     def test_a_package_that_trails_the_suite_is_a_problem_with_or_without_a_tag(self) -> None:
         self.assertTrue(release_check.problems("1.13.0", "1.14.0"))
-        self.assertTrue(release_check.problems("1.15.0.post1", "1.14.0", tag="mpb-v1.15.0.post1"))
+        self.assertTrue(release_check.problems("1.15.0.post1", "1.14.0", tag="mpb-1.15.0.post1"))
 
     def test_main_reports_a_mismatch_and_exits_one(self) -> None:
-        self.assertEqual(0, release_check.main(["--tag", f"mpb-v{release_check.package_version()}"]))
-        self.assertEqual(1, release_check.main(["--tag", "mpb-v0.0.1"]))
+        self.assertEqual(0, release_check.main(["--tag", f"mpb-{release_check.package_version()}"]))
+        self.assertEqual(1, release_check.main(["--tag", "mpb-0.0.1"]))
 
 
 @unittest.skipIf(tomllib is None, "tomllib needs Python 3.11")
@@ -125,7 +125,7 @@ class TheReleaseWorkflow(unittest.TestCase):
         self.assertEqual(1, self.text.count("id-token: write"))
 
     def test_it_runs_on_a_release_tag_and_by_hand_never_on_a_pull_request(self) -> None:
-        self.assertRegex(self.text, r"tags:\s*\n\s*- 'mpb-v\*'")
+        self.assertRegex(self.text, r"tags:\s*\n\s*- 'mpb-\*'")
         self.assertNotIn("pull_request", self.text)
         self.assertNotIn("self-hosted", self.text)
 

@@ -4,10 +4,10 @@
 
 The package version is `MAJOR.MINOR.PATCH` of the newest MPB manifest version the conformance
 corpus declares a case against, and `MAJOR.MINOR.PATCH.postN` for a release that changes the
-package and not the suite. A release is cut from the tag `mpb-v<version>`.
+package and not the suite. A release is cut from the tag `mpb-<version>`.
 
     python tools/mantleplace-mpb/release_check.py                    # the package against the corpus
-    python tools/mantleplace-mpb/release_check.py --tag mpb-v1.14.0  # and the tag against the package
+    python tools/mantleplace-mpb/release_check.py --tag mpb-1.14.0  # and the tag against the package
 
 Exit 0: consistent. Exit 1: each problem is printed. Standard library only, like the package.
 """
@@ -24,7 +24,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 INIT = HERE / "src" / "mantleplace_mpb" / "__init__.py"
 CORPUS_INDEX = HERE.parents[1] / "tools" / "manifest-conformance" / "corpus" / "index.json"
-TAG_PREFIX = "mpb-v"
+TAG_PREFIX = "mpb-"
 
 _SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 _RELEASE = re.compile(r"^((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))(?:\.post[0-9]+)?$")
@@ -74,7 +74,7 @@ def problems(package: str, suite: str, tag: str | None = None) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--tag", help="the release tag, e.g. mpb-v1.14.0")
+    parser.add_argument("--tag", help="the release tag, e.g. mpb-1.14.0")
     parser.add_argument("--index", type=Path, default=CORPUS_INDEX, help="the corpus index.json")
     args = parser.parse_args(argv)
     package = package_version()

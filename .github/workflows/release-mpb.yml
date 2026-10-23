@@ -1,6 +1,6 @@
 # Release of the mantleplace-mpb package (the `mpb` validator and bundle reader) to PyPI.
 #
-# A release is a tag: `mpb-v<version>`, where <version> is tools/mantleplace-mpb's __version__.
+# A release is a tag: `mpb-<version>`, where <version> is tools/mantleplace-mpb's __version__.
 # That version is the MPB manifest version the conformance corpus is written against (plus `.postN`
 # for a package-only release), and the build job refuses a tag that names anything else.
 #
@@ -21,7 +21,7 @@ name: release-mpb
 on:
   push:
     tags:
-      - 'mpb-v*'
+      - 'mpb-*'
   workflow_dispatch:
 
 concurrency:

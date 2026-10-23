@@ -6,7 +6,9 @@ description: How a host release is cut and written up — the cut checklist both
 # Cutting a release
 
 Each host has its own track, tagged `<host>-<version>` with no `v`
-([ADR 0001](adr/0001-per-host-release-tracks.md)). How a host's zip is built and gated is that host's
+([ADR 0001](adr/0001-per-host-release-tracks.md)). The pure-Python `mpb` reader is a third track, tagged
+`mpb-<version>` and published to PyPI by `release-mpb.yml`, the one release built in public CI
+([ADR 0017](adr/0017-the-mpb-reader-is-a-ci-published-python-track.md)). How a host's zip is built and gated is that host's
 own: [`unreal/README.md` ▸ Packaging a release](../unreal/README.md#packaging-a-release) and
 [`revit/README.md` ▸ Packaging a release](../revit/README.md#packaging-a-release). This file holds what
 both share: the cut order, the title and the body.

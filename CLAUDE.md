@@ -130,10 +130,11 @@ plugin scan. Everything else about worktrees is the agent standard's.
 
 ## Releases
 
-**One release track per host**, tagged `<host>-<version>` with no `v` (`revit-0.1.0`,
+**One release track per host** (plus the `mpb` Python reader, tagged `mpb-<version>`), tagged `<host>-<version>` with no `v` (`revit-0.1.0`,
 `unreal-0.4.0`), so tag-matches-artifact is a string equality. The release body is the changelog and
-the provenance record; there is no changelog file. **No release is built or gated in public CI,
-ever** — both hosts need a licensed install, so packaging runs privately.
+the provenance record; there is no changelog file. **No host release is built or gated in public CI,
+ever** — both hosts need a licensed install, so packaging runs privately. The one exception is the
+pure-Python `mpb` track, published to PyPI by `release-mpb.yml` ([ADR 0017](docs/adr/0017-the-mpb-reader-is-a-ci-published-python-track.md)).
 [ADR 0001](docs/adr/0001-per-host-release-tracks.md) holds why; [`docs/releases.md`](docs/releases.md) holds
 the cut order, the title and the body template every release follows; each host's README holds its
 packaging.
@@ -208,7 +209,8 @@ Most facts already have exactly one home. Find it before writing a fact down any
   **0012** Revit context buildings are **the site model's own extrusions, copied** · **0013** Revit
   **published contours** are DirectShapes · **0014** Revit draws hazards **on a hazard plan** ·
   **0015** Revit **subdivides only roads and water**; land use and land cover go **on land plans** ·
-  **0016** Unreal **Mesh Terrain is parked** until UE 5.9; the Landscape stays the only terrain target.
+  **0016** Unreal **Mesh Terrain is parked** until UE 5.9; the Landscape stays the only terrain target ·
+  **0017** the **mpb reader** is a CI-published Python track, tagged `mpb-<version>`.
   When to write one, and the two edits it takes: [`docs/agents/domain.md`](docs/agents/domain.md).
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
   authority; never restate a value it owns or hardcode a version in prose — each host's verified
