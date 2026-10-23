@@ -151,6 +151,9 @@ there moves the standard first. Title Case is Revit's; a host construct keeps it
   themselves → [`docs/host-plugin-standard.md`](../docs/host-plugin-standard.md).
 - What has run inside Revit, and the design records the code points to →
   [`docs/api-record.md`](docs/api-record.md).
+- Which file Revit reads its vector layers from, the carrier exactly, and where a linked site IFC
+  lands → [`docs/vector-carrier.md`](docs/vector-carrier.md); its prototypes and live probe are
+  [`tools/carrier-spike/`](tools/carrier-spike/README.md).
 - Signing in, tokens, refresh, sign-out →
   [`docs/platform-auth-contract.md`](../docs/platform-auth-contract.md); `TokenGrant.cs` and
   `PlatformError.cs` implement it, and both hosts share one stored credential.
