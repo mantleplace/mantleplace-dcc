@@ -6,7 +6,7 @@ tools designers actually work in.
 | Host | Where | Status |
 | --- | --- | --- |
 | **Unreal Engine 5.8** | [`unreal/`](unreal/README.md) | pre-1.0 |
-| **Autodesk Revit 2025 / 2026 / 2027** | [`revit/`](revit/README.md) | pre-1.0 |
+| **Autodesk Revit 2025 / 2026 / 2027** ([product page](https://mantle.place/revit)) | [`revit/`](revit/README.md) — builds a native Toposolid for the ground | pre-1.0 |
 
 Licensed under [Apache 2.0](LICENSE), except the prose in [`spec/`](spec/), which is CC BY 4.0. The name is not covered — see [TRADEMARK.md](TRADEMARK.md).
 
