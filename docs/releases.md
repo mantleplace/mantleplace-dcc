@@ -34,6 +34,7 @@ section but the first and **Verification** is left out when it would be empty.
 
 ```markdown
 **<Host> <versions>, Windows 64-bit.** <Install in one sentence.> [Install guide](<host README link>)
+For a Revit release, also link the product page: [mantle.place/revit](https://mantle.place/revit).
 Upgrade by <how>; <"nothing else to do" or "see below">.
 
 ## Upgrading from <previous version>
