@@ -758,7 +758,9 @@ materialization signals — plus this host's **own three
 `manifest.reject.revitHashMissing`), which pin the `hosts.revit` manifest block described under
 "The contract gap" below.
 
-`revit` claims **all six groups**: `manifest`, `auth`, `vault`, `cache`, `digest`, `projection`.
+`revit` claims **every reader group**: `manifest`, `auth`, `vault`, `cache`, `digest`,
+`projection`. The seventh, `bundle`, holds the bundle validator to its verdicts and is no
+reader's to claim.
 
 **`projection` is claimed for one thing only**, per `HPS-45`: the WGS84 lon/lat → UTM forward
 projection behind the `vector` layers (roads, land use) — see `GeoProjection.cs` and

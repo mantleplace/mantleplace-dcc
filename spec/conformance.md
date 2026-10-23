@@ -74,6 +74,10 @@ service contract.
 
 - **`manifest`, `digest`, `projection`, `cache`** — the portable half. These are the groups this
   spec governs, and the ones a third-party bundle reader claims.
+- **`bundle`** — whole synthetic bundles, each described as JSON, with the verdict and the
+  finding codes a bundle validator must reach on it. It holds a validator, not a reader, so no
+  reader claims it; [`mantleplace-mpb`](../tools/mantleplace-mpb/README.md) (`mpb validate`) is
+  the validator it holds today.
 - **`vault`, `auth`** — the Mantle Place vault's REST and OAuth behaviour. First-party plugin
   obligations, not interchange. A reader that only opens bundles from disk does not claim them, and
   is fully conforming without them.

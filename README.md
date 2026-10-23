@@ -168,6 +168,7 @@ unreal/MantlePlace/            the Unreal plugin — MantlePlaceRuntime + Mantle
 revit/                         the Revit plugin — pure Core, Client, Addin shim, headless tests
 spec/                          the published MPB format spec — prose, policy, changelog
 tools/manifest-conformance/    the contract gate + the shared conformance corpus
+tools/mantleplace-mpb/         `mpb validate`, the open bundle validator (pure Python)
 tools/public-hygiene/          the private-reference and docs-integrity gates + their cases
 tools/unreal-naming/           the generated-name drift gate + its cases
 tools/brand-assets/            renders the mark for both hosts; its input is private
@@ -202,6 +203,9 @@ editor build it. Its engine dependencies are Epic's built-in Interchange, PCG an
 python -m unittest discover -s tools/manifest-conformance   # offline
 python tools/manifest-conformance/check_manifest_conformance.py
 ```
+
+**The bundle validator** — `mpb validate <zip or folder>`, the same standard library only
+([`tools/mantleplace-mpb/`](tools/mantleplace-mpb/README.md)).
 
 ## CI, and what it does not cover
 

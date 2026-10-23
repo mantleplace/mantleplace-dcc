@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Mantle Place LLC
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mantleplace-mpb"
+version = "0.1.0"
+description = "Validate Mantle Place Bundles (MPB): schema, pointers, hashes, frames and ODbL roles."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+# Standard library only, on purpose: no GDAL, no PROJ, nothing compiled. It runs wherever Python does.
+dependencies = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+
+[project.urls]
+Homepage = "https://github.com/mantleplace/mantleplace-dcc/tree/main/tools/mantleplace-mpb"
+Specification = "https://github.com/mantleplace/mantleplace-dcc/tree/main/spec"
+
+[project.scripts]
+mpb = "mantleplace_mpb.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

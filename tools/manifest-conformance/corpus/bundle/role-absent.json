@@ -1,0 +1,245 @@
+{
+  "$comment": "The DEM's entry states no odbl_role.",
+  "files": {
+    "README.md": "A synthetic bundle for the conformance corpus. It holds no real data.\n",
+    "Metadata/manifest.json": {
+      "job_id": "corpus-bundle",
+      "bbox": {
+        "west": -74.02,
+        "south": 40.7,
+        "east": -73.93,
+        "north": 40.81
+      },
+      "created_at": "2026-01-01T00:00:00+00:00",
+      "updated_at": "2026-01-01T00:00:00+00:00",
+      "version": "1.14.0",
+      "unit_system": "metric",
+      "deliverable_class": "produced_work",
+      "licensing": {
+        "basemap": {
+          "class": "produced_work"
+        },
+        "imagery": {
+          "class": "produced_work"
+        },
+        "elevation": {
+          "class": "produced_work"
+        },
+        "cad": {
+          "class": "produced_work"
+        },
+        "site": {
+          "class": "produced_work"
+        },
+        "mesh": {
+          "class": "produced_work"
+        },
+        "cesium_terrain": {
+          "class": "produced_work"
+        },
+        "vector": {
+          "class": "derivative_database",
+          "license": "ODbL-1.0"
+        }
+      },
+      "packaging": {
+        "selected": [
+          "elevation.dem_tif",
+          "elevation.steep_slope_gpkg",
+          "mesh.glb",
+          "vector.gpkg"
+        ],
+        "source": "legacy_full_catalog",
+        "default_applied": false
+      },
+      "layout": {
+        "readme": "README.md",
+        "manifest": "Metadata/manifest.json",
+        "basemap": null,
+        "imagery": null,
+        "imagery_cog": null,
+        "cesium_terrain": null,
+        "dem": "Elevation/DEM.tif",
+        "slope": "Elevation/Slope.tif"
+      },
+      "cesium_terrain": {
+        "present": false,
+        "tile_count": 0,
+        "layer_json": null
+      },
+      "basemap": {
+        "present": false,
+        "file": null
+      },
+      "imagery": {
+        "present": false,
+        "file": null,
+        "cog": null,
+        "provider": null,
+        "requested_provider": null,
+        "failover_reason": null,
+        "naip_coverage": null,
+        "naip_coverage_min": null,
+        "naip_covered": null,
+        "naip_scene_count": null,
+        "source_scenes": null,
+        "gsd_m": null,
+        "display_stretch": null
+      },
+      "location": {
+        "time_zone": {
+          "iana": "America/New_York",
+          "utc_offset_standard_h": -5.0,
+          "observes_dst": true,
+          "tzdata_version": "2026b"
+        },
+        "site_origin": {
+          "latitude": 40.755,
+          "longitude": -73.975,
+          "ellipsoidal_height_m": -22.4,
+          "datum_height_m": 10.3,
+          "vertical_datum": "NAVD88 (GEOID18)"
+        }
+      },
+      "platform": {
+        "thresholds": {
+          "mesh_area_cap_km2": 100.0,
+          "mesh_cesium_budget_bytes": 52428800,
+          "cad_tool_tri_budget": 150000
+        }
+      },
+      "pipeline": {
+        "git_sha": "unknown",
+        "worker_image": "unknown",
+        "processed_at": "2026-01-01T00:00:00+00:00"
+      },
+      "elevation": {
+        "slope": {
+          "path": "Elevation/Slope.tif",
+          "sha256": "e4daed653395653b04ca9df0e7ad36ba9e3aabfc850c02b1ad25747f4fa8e847"
+        }
+      },
+      "file_entries": {
+        "Elevation/DEM.tif": {
+          "frame": {
+            "horizontal_crs": {
+              "code": "EPSG:32618"
+            },
+            "vertical_crs": {
+              "code": "EPSG:5703"
+            },
+            "unit_to_metres": 1,
+            "geoid_model": "GEOID18",
+            "axis_order": "east-north",
+            "axis_mapping": {
+              "x": "east",
+              "y": "north",
+              "z": "up"
+            },
+            "coordinate_mode": "absolute",
+            "pixel_convention": "pixel-is-area",
+            "row_order": "north-up"
+          },
+          "license": "LicenseRef-Synthetic-PublicDomain",
+          "sources": [
+            {
+              "name": "Synthetic public record",
+              "license": "LicenseRef-Synthetic-PublicDomain"
+            }
+          ]
+        },
+        "Elevation/Slope.tif": {
+          "frame": {
+            "horizontal_crs": {
+              "code": "EPSG:32618"
+            },
+            "vertical_crs": {
+              "code": "EPSG:5703"
+            },
+            "unit_to_metres": 1,
+            "geoid_model": "GEOID18",
+            "axis_order": "east-north",
+            "axis_mapping": {
+              "x": "east",
+              "y": "north",
+              "z": "up"
+            },
+            "coordinate_mode": "absolute",
+            "pixel_convention": "pixel-is-area",
+            "row_order": "north-up"
+          },
+          "odbl_role": "none",
+          "license": "LicenseRef-Synthetic-PublicDomain",
+          "sources": [
+            {
+              "name": "Synthetic public record",
+              "license": "LicenseRef-Synthetic-PublicDomain"
+            }
+          ]
+        },
+        "Site/Terrain.glb": {
+          "frame": {
+            "horizontal_crs": {
+              "code": "EPSG:32618"
+            },
+            "vertical_crs": {
+              "code": "EPSG:5703"
+            },
+            "unit_to_metres": 1,
+            "geoid_model": "GEOID18",
+            "axis_order": "east-north",
+            "axis_mapping": {
+              "x": "east",
+              "y": "up",
+              "z": "south"
+            },
+            "coordinate_mode": "offset"
+          },
+          "odbl_role": "produced-work",
+          "license": "LicenseRef-Synthetic-PublicDomain",
+          "sources": [
+            {
+              "name": "Synthetic public record",
+              "license": "LicenseRef-Synthetic-PublicDomain"
+            },
+            {
+              "name": "Synthetic open map database",
+              "license": "ODbL-1.0"
+            }
+          ]
+        },
+        "Features/Roads.gpkg": {
+          "frame": {
+            "horizontal_crs": {
+              "code": "EPSG:32618"
+            },
+            "vertical_crs": {
+              "code": "EPSG:5703"
+            },
+            "unit_to_metres": 1,
+            "geoid_model": "GEOID18",
+            "axis_order": "east-north",
+            "axis_mapping": {
+              "x": "east",
+              "y": "north",
+              "z": "up"
+            },
+            "coordinate_mode": "absolute"
+          },
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "Synthetic open map database",
+              "license": "ODbL-1.0"
+            }
+          ]
+        }
+      }
+    },
+    "Elevation/DEM.tif": "synthetic placeholder bytes, not a real GeoTIFF\n",
+    "Elevation/Slope.tif": "synthetic placeholder bytes, not a real GeoTIFF\n",
+    "Site/Terrain.glb": "synthetic placeholder bytes, not a real glTF\n",
+    "Features/Roads.gpkg": "synthetic placeholder bytes, not a real GeoPackage\n"
+  }
+}
