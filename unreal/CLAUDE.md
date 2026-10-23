@@ -1,6 +1,6 @@
 ---
 name: unreal-host-onboarding
-description: Onboarding for the Unreal plugin — UE 5.8, Interchange and PCG, the two modules, how to drive the headless automation tests, the generated-name standard and where imported content lands, and the traps (CI never compiles this plugin, nothing the importer generates is saved, the identity is not the job id). An index — the detail is in `unreal/docs/`. Read first for any change under `unreal/`.
+description: Onboarding for the Unreal plugin — UE 5.8, Interchange, PCG and SQLiteCore, the two modules, how to drive the headless automation tests, the generated-name standard and where imported content lands, and the traps (CI never compiles this plugin, nothing the importer generates is saved, the identity is not the job id). An index — the detail is in `unreal/docs/`. Read first for any change under `unreal/`.
 ---
 
 # Mantle Place for Unreal — agent onboarding
@@ -13,8 +13,9 @@ here in a line, and its detail lives in the document it links.
 - **Host:** Unreal Engine **5.8**, editor-side. The plugin folder plus its `.uplugin` is
   [`MantlePlace/`](MantlePlace/) — PascalCase within; a consuming project's plugin discovery is a
   recursive scan of `Plugins/`.
-- **Engine dependencies:** Epic's built-in **Interchange** and **PCG** (the foliage scatter's graph
-  and its partitioned generation), and nothing else. A new engine plugin dependency is a new thing a
+- **Engine dependencies:** Epic's built-in **Interchange**, **PCG** (the foliage scatter's graph
+  and its partitioned generation) and **SQLiteCore** (the road splines' GeoPackage; SQLite is read
+  through the engine's module, never a vendored copy), and nothing else. A new engine plugin dependency is a new thing a
   stranger's project has to have enabled. Mesh Partition (UE 5.8's
   Experimental Mesh Terrain) is deliberately not one
   ([ADR 0016](../docs/adr/0016-unreal-mesh-terrain-is-parked-until-5-9.md)).

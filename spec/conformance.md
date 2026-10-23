@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: Mantle Place LLC -->
+
 # Conformance
 
 **A conforming reader passes the corpus.** That sentence is the whole of this document; the rest

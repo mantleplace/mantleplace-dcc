@@ -118,6 +118,33 @@ class VersionFamilyTest(unittest.TestCase):
         self.assertTrue(gate.SCHEMA_URL.format(version="1.0.0").endswith("/1.0.0.json"))
 
 
+class ChangelogEntryTest(unittest.TestCase):
+    """Every ledgered semver version must have a changelog entry."""
+
+    _TEXT = (
+        "## Semver era\n\n### 1.1.0 - a minor\n\n### Within 1.0.1 - prose\n\n### 1.0.0 - base\n"
+    )
+
+    def test_all_described_passes(self) -> None:
+        self.assertEqual([], gate.check_changelog(["v19", "1.0.0", "1.1.0"], self._TEXT))
+
+    def test_a_ledgered_version_without_an_entry_fails(self) -> None:
+        failures = gate.check_changelog(["v19", "1.0.0", "1.1.0", "1.2.0"], self._TEXT)
+        self.assertEqual(1, len(failures))
+        self.assertIn("1.2.0", failures[0])
+
+    def test_a_within_heading_is_not_an_entry(self) -> None:
+        self.assertEqual(1, len(gate.check_changelog(["1.0.1"], self._TEXT)))
+
+    def test_integer_era_is_not_required(self) -> None:
+        self.assertEqual([], gate.check_changelog(["v7", "v19"], self._TEXT))
+
+    def test_shipped_changelog_describes_every_shipped_version_1_x(self) -> None:
+        text = (_REPO_ROOT / "spec" / "changelog.md").read_text(encoding="utf-8")
+        versions = ["1.0.0", "1.0.1", "1.1.0", "1.2.0", "1.3.0"] + [f"1.{n}.0" for n in range(4, 14)]
+        self.assertEqual([], gate.check_changelog(versions, text))
+
+
 class NewestPublishedTest(unittest.TestCase):
     """Discovery reads the published ledger. The integer era could be found by counting; semver
     cannot, and a walk that guesses one axis misses bumps on the others."""

@@ -46,7 +46,7 @@ and everything in it is world-readable.
 | --- | --- |
 | Repo | `mantleplace/mantleplace-dcc` on GitHub |
 | VCS | **git**. No Git LFS — see "Binaries" below |
-| Licence | [Apache 2.0](LICENSE); the name is not licensed ([TRADEMARK.md](TRADEMARK.md)) |
+| Licence | [Apache 2.0](LICENSE), except `spec/` prose (CC BY 4.0); the name is not licensed ([TRADEMARK.md](TRADEMARK.md)) |
 | Contribution terms | DCO sign-off, no CLA ([CONTRIBUTING.md](CONTRIBUTING.md)) |
 
 **dcc means *digital content creation*:** the host applications designers work in. This repo holds

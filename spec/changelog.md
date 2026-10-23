@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: Mantle Place LLC -->
+
 # MPB manifest — consolidated changelog
 
 The version history of the bundle manifest, in one place. Before this file, it was scattered across

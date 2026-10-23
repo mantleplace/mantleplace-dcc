@@ -186,12 +186,18 @@ struct FMantlePlaceBuildingsBlock
 };
 
 /** The derived "road_splines" layer of the top-level `vector.layers[]` (-> spline actors). The importer
- *  consumes the GeoJSON format only; a gpkg-only bundle (base tier) ships none. */
+ *  reads the layer's GeoPackage when its `gpkg` format row is there, and falls back to the GeoJSON
+ *  row when it is not: the two rows are the same roads in the same frame. */
 struct FMantlePlaceRoadSplinesBlock
 {
-	bool bPresent = false;
+	bool bPresent = false;          // the GeoJSON row is declared (the fallback source)
 	FString Path;                   // in-zip path, e.g. "Vector/RoadSplines.geojson"
 	FString Sha256;                 // from the matching vector.layers[].formats[] entry; empty = skip check
+
+	bool bGpkgPresent = false;      // the GeoPackage row is declared (the source read first)
+	FString GpkgPath;               // in-zip path, e.g. "Vector/RoadSplines.gpkg"
+	FString GpkgSha256;             // from the gpkg format row; empty = skip check
+	TArray<FString> GpkgTables;     // the row's `tables` member; empty = every feature table in the file
 	FString VerticalDatum;          // vector.layers[road_splines].vertical_datum, verbatim (MPB 1.8.0);
 	                                // FMantlePlaceRoadSplinesLogic::CanPlaceHeights decides
 };

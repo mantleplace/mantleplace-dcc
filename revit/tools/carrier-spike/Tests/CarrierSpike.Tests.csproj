@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Headless tests of the carrier spike's two prototype readers (README.md beside ../). No Revit, no
+    NuGet: the GeoPackage reader reaches SQLite through the winsqlite3.dll Windows ships, so this
+    runs on Windows only, which is where Revit runs. Both frameworks run, as the plugin's suite does.
+    Run it from revit/tools/carrier-spike/Tests with "dotnet run -f net8.0", then net10.0.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>MantlePlace.Revit.CarrierSpike.Tests</RootNamespace>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\MantlePlace.Revit.Core\MantlePlace.Revit.Core.csproj" />
+    <Compile Include="..\Readers\*.cs" />
+  </ItemGroup>
+
+</Project>

@@ -4,6 +4,15 @@ An import of a bundle that ships the shared `road_splines` layer spawns one `AMa
 per road line, labelled `MP_RoadSpline_<shortIdentity>_<index>` (from `MantlePlaceImportNaming`). The
 class is in the Runtime module, so a saved level that holds one loads in a cooked build.
 
+## Where the roads come from
+
+The importer reads the layer from its GeoPackage, the file the `gpkg` row of the layer's `formats` in
+`vector.layers` points at, through the engine's own SQLiteCore module. The columns it takes are `class`,
+`name` and `width_m_estimated`, and the geometry is the lines of the file's feature tables in
+EPSG:4326 (a table in another frame is refused by name and never reprojected). A layer with no `gpkg`
+row, or one whose GeoPackage cannot be read, is read from its `geojson` row instead: the same roads,
+the same properties. Both files are declared payloads, so both are verified before anything is placed.
+
 It replaces a bare actor that carried the road's width, class and name as tag strings. **Nothing in
 the plugin reads a road attribute from a tag, and the importer writes none.** The only tag on the
 actor is the import tag, `mantleplace_import=<identity>`, which a re-import matches on whatever the

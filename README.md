@@ -8,7 +8,7 @@ tools designers actually work in.
 | **Unreal Engine 5.8** | [`unreal/`](unreal/README.md) | pre-1.0 |
 | **Autodesk Revit 2025 / 2026 / 2027** | [`revit/`](revit/README.md) | pre-1.0 |
 
-Licensed under [Apache 2.0](LICENSE). The name is not covered — see [TRADEMARK.md](TRADEMARK.md).
+Licensed under [Apache 2.0](LICENSE), except the prose in [`spec/`](spec/), which is CC BY 4.0. The name is not covered — see [TRADEMARK.md](TRADEMARK.md).
 
 ![Drawing an area of interest on mantle.place: the price updates with every size step, and a 2 km² box is free](https://mantle.place/media/importer/hero-draw-to-price.gif)
 
@@ -194,7 +194,7 @@ Building the add-in shim itself needs Revit 2025's API present — see
 compile target.
 
 **Unreal** — drop `unreal/MantlePlace/` into a UE 5.8 project's `Plugins/` directory and let the
-editor build it. Its engine dependencies are Epic's built-in Interchange and PCG.
+editor build it. Its engine dependencies are Epic's built-in Interchange, PCG and SQLiteCore.
 
 **The contract gate** — Python 3.12, standard library only:
 

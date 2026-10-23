@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: Mantle Place LLC -->
+
 # The MPB format
 
 How a Mantle Place Bundle is put together, and how a consumer is meant to read it.

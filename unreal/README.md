@@ -2,7 +2,8 @@
 
 The Unreal plugin — host #1, and the reference host. One `.uplugin` with two modules,
 `MantlePlaceRuntime` and `MantlePlaceEditor`, for **Unreal Engine 5.8**, editor-side. Its engine
-dependencies are Epic's built-in Interchange and PCG (the foliage scatter).
+dependencies are Epic's built-in Interchange, PCG (the foliage scatter) and SQLiteCore (the road
+splines' GeoPackage).
 
 **Status:** pre-1.0. Releases are tagged `unreal-<version>`
 ([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)); the version lives in

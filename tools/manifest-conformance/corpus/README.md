@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: Mantle Place LLC -->
+
 # The shared conformance corpus
 
 Language-neutral test vectors that **every** Mantle Place host plugin runs against its own parser.
@@ -7,6 +10,9 @@ in [`spec/`](../../../spec/), and these vectors, published and versioned togethe
 part that decides: *a conforming reader passes the corpus*. The prose describes; the schema and this
 corpus settle disagreements. See [`spec/conformance.md`](../../../spec/conformance.md) for what
 claiming a group obliges you to, and which groups a third-party bundle reader needs at all.
+
+The JSON vectors beside this file are Apache-2.0 and contain synthetic data only; an SPDX header covers
+only its own file, so this file's header does not say so for them.
 
 This file is procedural: how to consume the vectors. What a reader owes the manifest is
 [`spec/format.md`](../../../spec/format.md); the additional obligations a first-party Mantle Place

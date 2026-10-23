@@ -1,7 +1,9 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 // The derived "road_splines" layer of the ODbL Vector/ set (a top-level sibling of `unreal`):
-// Z-draped road centerlines -> one spline actor per road (Wave-2 pipeline layers). Like the
+// Z-draped road centerlines -> one spline actor per road (Wave-2 pipeline layers). The layer is read
+// from its GeoPackage through the `gpkg` format row of `vector.layers`, and from its GeoJSON row when
+// the bundle has no GeoPackage row (or its GeoPackage cannot be read). Like the
 // buildings, this is content, not a terrain representation: it imports whenever the bundle ships the
 // layer, regardless of Mode, and a failure is non-fatal. Each road is an AMantlePlaceRoadSpline whose
 // width, class and name are real properties, so PCG, a Blueprint or a road tool read them by name
@@ -13,6 +15,7 @@
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceManifestJson.h"
 #include "MantlePlaceRoadSpline.h" // runtime: AMantlePlaceRoadSpline
+#include "MantlePlaceRoadSplinesGpkg.h"
 #include "MantlePlaceRoadSplinesLogic.h"
 
 #include "Components/SplineComponent.h"
@@ -21,6 +24,16 @@
 
 namespace
 {
+/**
+ * Whether a `gpkg` format row holds the layer's lines. A row naming no family is the whole layer; a
+ * layer split by family names one per family, and the road lines are the `line` family's.
+ */
+bool IsLineFamilyRow(const TSharedPtr<FJsonObject>& FormatRow)
+{
+	const FString Family = MantlePlaceManifestJson::GetString(FormatRow, TEXT("geometry_family"));
+	return Family.IsEmpty() || Family.Equals(TEXT("line"), ESearchCase::IgnoreCase);
+}
+
 class FRoadSplinesHandler final : public IMantlePlaceArtifactHandler
 {
 public:
@@ -28,9 +41,9 @@ public:
 	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Roads; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactRoadSplines", "Road splines"); }
 
-	// The importer consumes the GeoJSON format only; a gpkg-only bundle (base tier) is treated as not
-	// shipping splines. Read from the top-level `vector.layers`, before the `unreal`-presence check,
-	// so streaming-adjacent data survives on unmaterialized bundles.
+	// Both formats the importer takes: the GeoPackage read first, the GeoJSON as the fallback. Read from
+	// the top-level `vector.layers`, before the `unreal`-presence check, so streaming-adjacent data
+	// survives on unmaterialized bundles.
 	bool ParseFields(const FMantlePlaceParseInput& In, FMantlePlaceVaultManifest& M, FString& OutError) const override
 	{
 		using namespace MantlePlaceManifestJson;
@@ -56,11 +69,32 @@ public:
 						for (const TSharedPtr<FJsonValue>& FormatValue : *Formats)
 						{
 							const TSharedPtr<FJsonObject> Format = FormatValue->AsObject();
-							if (Format.IsValid() && GetString(Format, TEXT("format")) == TEXT("geojson"))
+							if (!Format.IsValid())
+							{
+								continue;
+							}
+							const FString FormatName = GetString(Format, TEXT("format"));
+							if (FormatName == TEXT("geojson") && M.RoadSplines.Path.IsEmpty())
 							{
 								M.RoadSplines.Path = GetString(Format, TEXT("path"));
 								M.RoadSplines.Sha256 = GetString(Format, TEXT("sha256"));
-								break;
+							}
+							else if (FormatName == TEXT("gpkg") && M.RoadSplines.GpkgPath.IsEmpty() && IsLineFamilyRow(Format))
+							{
+								M.RoadSplines.GpkgPath = GetString(Format, TEXT("path"));
+								M.RoadSplines.GpkgSha256 = GetString(Format, TEXT("sha256"));
+								const TArray<TSharedPtr<FJsonValue>>* Tables = nullptr;
+								if (Format->TryGetArrayField(TEXT("tables"), Tables) && Tables != nullptr)
+								{
+									for (const TSharedPtr<FJsonValue>& TableValue : *Tables)
+									{
+										FString TableName;
+										if (TableValue.IsValid() && TableValue->TryGetString(TableName) && !TableName.IsEmpty())
+										{
+											M.RoadSplines.GpkgTables.Add(TableName);
+										}
+									}
+								}
 							}
 						}
 					}
@@ -69,10 +103,14 @@ public:
 			}
 		}
 		M.RoadSplines.bPresent = !M.RoadSplines.Path.IsEmpty();
+		M.RoadSplines.bGpkgPresent = !M.RoadSplines.GpkgPath.IsEmpty();
 		return true;
 	}
 
-	bool IsPresent(const FMantlePlaceVaultManifest& M) const override { return M.RoadSplines.bPresent; }
+	bool IsPresent(const FMantlePlaceVaultManifest& M) const override
+	{
+		return M.RoadSplines.bPresent || M.RoadSplines.bGpkgPresent;
+	}
 
 	void CollectDeclared(const FMantlePlaceVaultManifest& M, TArray<FMantlePlaceDeclaredArtifact>& Out) const override
 	{
@@ -80,17 +118,19 @@ public:
 		{
 			Out.Add(FMantlePlaceDeclaredArtifact{ M.RoadSplines.Path, M.RoadSplines.Sha256 });
 		}
+		if (M.RoadSplines.bGpkgPresent && !M.RoadSplines.GpkgPath.IsEmpty())
+		{
+			Out.Add(FMantlePlaceDeclaredArtifact{ M.RoadSplines.GpkgPath, M.RoadSplines.GpkgSha256 });
+		}
 	}
 
 	void Import(FMantlePlaceImportContext& Ctx) override
 	{
 		const FMantlePlaceVaultManifest& Manifest = Ctx.Manifest;
-		if (!Manifest.RoadSplines.bPresent)
+		if (!IsPresent(Manifest))
 		{
 			return;
 		}
-		TArray<uint8> GeoJsonBytes;
-		FString GeoJsonText, SplinesError;
 		TArray<FMantlePlaceRoadSpline> Splines;
 		int32 LinesSeen = 0;
 		bool bParsed = false;
@@ -103,21 +143,20 @@ public:
 		if (!FMantlePlaceRoadSplinesLogic::CanPlaceHeights(Manifest.GetRoadSplinesDatum(), DatumRefusal))
 		{
 			Ctx.Log.Add(FString::Printf(TEXT("Road splines skipped: %s"), *DatumRefusal));
+			return;
 		}
-		else if (!Ctx.ReadBytes(Manifest.RoadSplines.Path, GeoJsonBytes))
+
+		// The GeoPackage first. Only its absence sends the import to the GeoJSON, with one more case:
+		// a GeoPackage the bundle declares but this read cannot use (missing from the zip, not a
+		// GeoPackage, in another frame) says why in the log and gives way to the GeoJSON when there is
+		// one, so a layer is never lost to the format that was tried first.
+		if (Manifest.RoadSplines.bGpkgPresent)
 		{
-			Ctx.Log.Add(FString::Printf(TEXT("Road splines skipped: bundle is missing %s."), *Manifest.RoadSplines.Path));
+			bParsed = ReadGpkg(Ctx, Splines, LinesSeen);
 		}
-		else
+		if (!bParsed && Manifest.RoadSplines.bPresent)
 		{
-			FFileHelper::BufferToString(GeoJsonText, GeoJsonBytes.GetData(), GeoJsonBytes.Num());
-			bParsed = FMantlePlaceRoadSplinesLogic::ParseGeoJson(
-				GeoJsonText, Manifest.Georef.OriginEastingM, Manifest.Georef.OriginNorthingM, Manifest.Georef.Epsg,
-				Splines, LinesSeen, SplinesError);
-			if (!bParsed)
-			{
-				Ctx.Log.Add(FString::Printf(TEXT("Road splines skipped: %s"), *SplinesError));
-			}
+			bParsed = ReadGeoJson(Ctx, Splines, LinesSeen);
 		}
 		if (!bParsed)
 		{
@@ -162,6 +201,59 @@ public:
 			Ctx.Log.Add(FString::Printf(
 				TEXT("Road splines: %d spline actor(s) could not be spawned."), Splines.Num() - SplineIndex));
 		}
+	}
+
+private:
+	/** The layer from its GeoPackage; false (with the reason logged) when it cannot be read. */
+	static bool ReadGpkg(FMantlePlaceImportContext& Ctx, TArray<FMantlePlaceRoadSpline>& OutSplines, int32& OutLinesSeen)
+	{
+		const FMantlePlaceRoadSplinesBlock& Block = Ctx.Manifest.RoadSplines;
+		const FString Fallback = Block.bPresent ? TEXT(" Reading the GeoJSON instead.") : TEXT("");
+		TArray<uint8> GpkgBytes;
+		if (!Ctx.ReadBytes(Block.GpkgPath, GpkgBytes))
+		{
+			Ctx.Log.Add(FString::Printf(TEXT("Road splines: bundle is missing %s.%s"), *Block.GpkgPath, *Fallback));
+			return false;
+		}
+		int32 RowsUnreadable = 0;
+		FString GpkgError;
+		if (!FMantlePlaceRoadSplinesGpkg::ReadBytes(
+		        GpkgBytes, Block.GpkgTables, Ctx.Manifest.Georef.OriginEastingM, Ctx.Manifest.Georef.OriginNorthingM,
+		        Ctx.Manifest.Georef.Epsg, OutSplines, OutLinesSeen, RowsUnreadable, GpkgError))
+		{
+			Ctx.Log.Add(FString::Printf(TEXT("Road splines: %s could not be read: %s%s"), *Block.GpkgPath, *GpkgError, *Fallback));
+			return false;
+		}
+		Ctx.Log.Add(FString::Printf(TEXT("Road splines read from %s."), *Block.GpkgPath));
+		if (RowsUnreadable > 0)
+		{
+			Ctx.Log.Add(FString::Printf(
+				TEXT("Road splines: %d feature(s) in %s had a geometry that could not be read and were passed over."),
+				RowsUnreadable, *Block.GpkgPath));
+		}
+		return true;
+	}
+
+	/** The layer from its GeoJSON; false (with the reason logged) when it cannot be read. */
+	static bool ReadGeoJson(FMantlePlaceImportContext& Ctx, TArray<FMantlePlaceRoadSpline>& OutSplines, int32& OutLinesSeen)
+	{
+		const FMantlePlaceVaultManifest& Manifest = Ctx.Manifest;
+		TArray<uint8> GeoJsonBytes;
+		FString GeoJsonText, SplinesError;
+		if (!Ctx.ReadBytes(Manifest.RoadSplines.Path, GeoJsonBytes))
+		{
+			Ctx.Log.Add(FString::Printf(TEXT("Road splines skipped: bundle is missing %s."), *Manifest.RoadSplines.Path));
+			return false;
+		}
+		FFileHelper::BufferToString(GeoJsonText, GeoJsonBytes.GetData(), GeoJsonBytes.Num());
+		if (!FMantlePlaceRoadSplinesLogic::ParseGeoJson(
+		        GeoJsonText, Manifest.Georef.OriginEastingM, Manifest.Georef.OriginNorthingM, Manifest.Georef.Epsg,
+		        OutSplines, OutLinesSeen, SplinesError))
+		{
+			Ctx.Log.Add(FString::Printf(TEXT("Road splines skipped: %s"), *SplinesError));
+			return false;
+		}
+		return true;
 	}
 };
 }
