@@ -5,15 +5,14 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Fonts/CompositeFont.h"
-#include "HAL/PlatformFileManager.h"
 #include "MantlePlaceEditorStyle.h"
-#include "Misc/Paths.h"
+#include "Styling/CoreStyle.h"
 
-// The brand fonts are third-party content, so they live only under Source/ThirdParty/Fonts (Fab's
-// review requires it, and tools/unreal-naming/check_third_party_layout.py enforces it). A font that
-// fails to load does not fail the panel: Slate quietly draws the engine default, so a moved file or a
-// misspelt stem ships as a panel that looks subtly wrong. This asserts what a user never sees fail:
-// every MantlePlace.Font.* role resolves to a file that exists, in the folder the review requires.
+// The panel draws with the engine's own editor typefaces and ships no font files, so the plugin carries
+// no third-party content and Fab's Third Party Software form does not apply. A role that pointed at a
+// missing file or a misspelt typeface would not fail the panel: Slate quietly draws a fallback. This
+// asserts what a user never sees fail: every MantlePlace.Font.* role resolves to the engine default
+// font, at a typeface that font actually has.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceEditorStyleFontsTest,
@@ -27,26 +26,23 @@ bool FMantlePlaceEditorStyleFontsTest::RunTest(const FString& Parameters)
 	const TCHAR* const RoleNames[] = { TEXT("Wordmark"), TEXT("Heading"), TEXT("Title"), TEXT("Body"), TEXT("Small"), TEXT("Mono") };
 	const EFont Roles[] = { EFont::Wordmark, EFont::Heading, EFont::Title, EFont::Body, EFont::Small, EFont::Mono };
 
-	IPlatformFile& Platform = FPlatformFileManager::Get().GetPlatformFile();
+	const TSharedRef<const FCompositeFont> EngineDefault = FCoreStyle::GetDefaultFont();
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Roles); ++Index)
 	{
-		const FString Path = FMantlePlaceEditorStyle::GetFontFilePath(Roles[Index]);
-		TestTrue(FString::Printf(TEXT("%s font is under Source/ThirdParty/Fonts: %s"), RoleNames[Index], *Path),
-			FPaths::ConvertRelativePathToFull(Path).Contains(TEXT("/Source/ThirdParty/Fonts/")));
-		TestTrue(FString::Printf(TEXT("%s font file exists: %s"), RoleNames[Index], *Path), Platform.FileExists(*Path));
-
-		// The style set itself must point at that same file, not at some other root.
 		const FSlateFontInfo Font = FMantlePlaceEditorStyle::GetFont(Roles[Index]);
-		const FCompositeFont* Composite = Font.GetCompositeFont();
-		if (!TestNotNull(FString::Printf(TEXT("%s font carries a composite font"), RoleNames[Index]), Composite))
+		const FName Typeface = FMantlePlaceEditorStyle::GetFontTypeface(Roles[Index]);
+
+		TestTrue(FString::Printf(TEXT("%s font is the engine default font, not a bundled file"), RoleNames[Index]),
+			Font.GetCompositeFont() == &EngineDefault.Get());
+		TestEqual(FString::Printf(TEXT("%s font draws the role's typeface"), RoleNames[Index]), Font.TypefaceFontName, Typeface);
+
+		bool bTypefaceExists = false;
+		for (const FTypefaceEntry& Entry : EngineDefault->DefaultTypeface.Fonts)
 		{
-			continue;
+			bTypefaceExists |= (Entry.Name == Typeface);
 		}
-		if (TestTrue(FString::Printf(TEXT("%s font has a typeface entry"), RoleNames[Index]), Composite->DefaultTypeface.Fonts.Num() > 0))
-		{
-			TestTrue(FString::Printf(TEXT("%s style resolves to the moved file"), RoleNames[Index]),
-				FPaths::IsSamePath(Composite->DefaultTypeface.Fonts[0].Font.GetFontFilename(), Path));
-		}
+		TestTrue(FString::Printf(TEXT("%s typeface '%s' exists in the engine default font"), RoleNames[Index], *Typeface.ToString()),
+			bTypefaceExists);
 	}
 	return true;
 }

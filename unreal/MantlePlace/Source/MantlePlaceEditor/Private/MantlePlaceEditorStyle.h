@@ -11,8 +11,8 @@ class ISlateStyle;
 
 /**
  * Slate style set + design tokens for the Mantle Place editor tooling. Beyond the Window-menu / tab
- * logo icon it now carries the vault panel's small design system - the embedded brand fonts
- * (Montserrat + Geist Mono, from Source/ThirdParty/Fonts) and the rounded/hairline card + pill + logo brushes
+ * logo icon it now carries the vault panel's small design system - font roles on the engine's own
+ * editor typefaces (Regular, Bold, Mono) and the rounded/hairline card + pill + logo brushes
  * that reproduce the website's vault aesthetic. Colors live in MantlePlacePalette.h. Mirrors Cesium's
  * CesiumStyleSet: Initialize() in StartupModule, Shutdown() in ShutdownModule.
  */
@@ -22,12 +22,12 @@ public:
 	/** Named font roles mapped to the web type scale (see GetFont). */
 	enum class EFont : uint8
 	{
-		Wordmark,  // Montserrat SemiBold, tight tracking - the "mantle / place" header lockup
-		Heading,   // Montserrat SemiBold ~ web h3 (20px) - card codename / detail title
-		Title,     // Montserrat SemiBold - section headings
-		Body,      // Montserrat Medium  ~ web b2 (14px) - primary body text
-		Small,     // Montserrat Medium  ~ web b3 (12px) - secondary text
-		Mono,      // Geist Mono         ~ web mp-sub (10px) - meta lines / eyebrows / pill labels
+		Wordmark,  // Bold, tight tracking - the "mantle / place" header lockup
+		Heading,   // Bold    ~ web h3 (20px) - card codename / detail title
+		Title,     // Bold    - section headings
+		Body,      // Regular ~ web b2 (14px) - primary body text
+		Small,     // Regular ~ web b3 (12px) - secondary text
+		Mono,      // Mono    ~ web mp-sub (10px) - meta lines / eyebrows / pill labels
 	};
 
 	// ---- Spacing scale (Slate units) - mirrors the web Vault's two-value gutter system ----------
@@ -47,7 +47,7 @@ public:
 
 	// ---- Button content padding (a COMPONENT metric, deliberately OFF the margin scale) ----------
 	// Slate has no "h-8" height primitive: a pill's height == label height + 2*vertical padding. The
-	// vertical value is tuned to land the pill ~32px tall with the brand font and must stay uniform
+	// vertical value is tuned to land the pill ~32px tall with the panel font and must stay uniform
 	// across every button, so it is a fixed constant, NOT a scale token. Horizontal mirrors the web's
 	// two button sizes: sm = 8 (dense), md = 16 (roomy).
 	static constexpr float ButtonPadV = 5.f;
@@ -63,11 +63,11 @@ public:
 	/** Style-set name, used as the FSlateIcon style-set argument. */
 	static FName GetStyleSetName();
 
-	/** A brand font at the given role (embedded Montserrat / Geist Mono). */
+	/** The font for a role, drawn with the engine default font. */
 	static FSlateFontInfo GetFont(EFont Role);
 
-	/** Absolute path of the font file behind a role, under the plugin's Source/ThirdParty/Fonts. */
-	static FString GetFontFilePath(EFont Role);
+	/** The engine default typeface behind a role (Regular, Bold or Mono). */
+	static FName GetFontTypeface(EFont Role);
 
 private:
 	static TSharedRef<FSlateStyleSet> Create();

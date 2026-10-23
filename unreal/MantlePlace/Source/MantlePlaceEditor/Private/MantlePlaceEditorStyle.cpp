@@ -5,7 +5,7 @@
 #include "MantlePlacePalette.h"
 #include "Brushes/SlateColorBrush.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
-#include "Fonts/CompositeFont.h" // FStandaloneCompositeFont (non-deprecated font-from-file path)
+#include "Styling/CoreStyle.h" // FCoreStyle::GetDefaultFontStyle (the engine's own editor fonts)
 #include "Brushes/SlateNoResource.h" // FSlateNoResource (transparent row brushes)
 #include "Interfaces/IPluginManager.h"
 #include "Misc/Paths.h"
@@ -51,12 +51,12 @@ FName FMantlePlaceEditorStyle::GetStyleSetName()
 
 namespace
 {
-/** One brand font role: its style name, the file stem under Source/ThirdParty/, and its metrics. */
+/** One font role: its style name, the engine default typeface it draws with, and its metrics. */
 struct FFontSpec
 {
 	FMantlePlaceEditorStyle::EFont Role;
 	const TCHAR* StyleName;
-	const TCHAR* FileStem; // relative to Source/ThirdParty, without the .ttf
+	const TCHAR* Typeface; // a typeface of the engine default font (Regular, Bold, Mono)
 	uint16 Size;           // points
 	int16 LetterSpacing;   // 1/1000 em
 };
@@ -64,12 +64,12 @@ struct FFontSpec
 // Slate font sizes are in points (~1.333 px at 100% app scale), so these track the web px scale.
 // LetterSpacing is in 1/1000 em (web tracking-tight = -0.025em; mp-sub = +0.16em).
 const FFontSpec FontSpecs[] = {
-	{ FMantlePlaceEditorStyle::EFont::Wordmark, TEXT("MantlePlace.Font.Wordmark"), TEXT("Fonts/Montserrat-SemiBold"), 11, -25 },
-	{ FMantlePlaceEditorStyle::EFont::Heading,  TEXT("MantlePlace.Font.Heading"),  TEXT("Fonts/Montserrat-SemiBold"), 14, 0 },
-	{ FMantlePlaceEditorStyle::EFont::Title,    TEXT("MantlePlace.Font.Title"),    TEXT("Fonts/Montserrat-SemiBold"), 11, 0 },
-	{ FMantlePlaceEditorStyle::EFont::Body,     TEXT("MantlePlace.Font.Body"),     TEXT("Fonts/Montserrat-Medium"),   10, 0 },
-	{ FMantlePlaceEditorStyle::EFont::Small,    TEXT("MantlePlace.Font.Small"),    TEXT("Fonts/Montserrat-Medium"),   9,  0 },
-	{ FMantlePlaceEditorStyle::EFont::Mono,     TEXT("MantlePlace.Font.Mono"),     TEXT("Fonts/GeistMono"),           9,  160 },
+	{ FMantlePlaceEditorStyle::EFont::Wordmark, TEXT("MantlePlace.Font.Wordmark"), TEXT("Bold"),    11, -25 },
+	{ FMantlePlaceEditorStyle::EFont::Heading,  TEXT("MantlePlace.Font.Heading"),  TEXT("Bold"),    14, 0 },
+	{ FMantlePlaceEditorStyle::EFont::Title,    TEXT("MantlePlace.Font.Title"),    TEXT("Bold"),    11, 0 },
+	{ FMantlePlaceEditorStyle::EFont::Body,     TEXT("MantlePlace.Font.Body"),     TEXT("Regular"), 10, 0 },
+	{ FMantlePlaceEditorStyle::EFont::Small,    TEXT("MantlePlace.Font.Small"),    TEXT("Regular"), 9,  0 },
+	{ FMantlePlaceEditorStyle::EFont::Mono,     TEXT("MantlePlace.Font.Mono"),     TEXT("Mono"),    9,  160 },
 };
 
 const FFontSpec& SpecFor(FMantlePlaceEditorStyle::EFont Role)
@@ -85,12 +85,6 @@ const FFontSpec& SpecFor(FMantlePlaceEditorStyle::EFont Role)
 	return FontSpecs[0];
 }
 
-/** The plugin's Source/ThirdParty folder, where Fab's review requires third-party content. */
-FString ThirdPartyDir()
-{
-	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("MantlePlace"));
-	return Plugin.IsValid() ? Plugin->GetBaseDir() / TEXT("Source") / TEXT("ThirdParty") : FString();
-}
 } // namespace
 
 FSlateFontInfo FMantlePlaceEditorStyle::GetFont(EFont Role)
@@ -98,9 +92,9 @@ FSlateFontInfo FMantlePlaceEditorStyle::GetFont(EFont Role)
 	return Get().GetFontStyle(FName(SpecFor(Role).StyleName));
 }
 
-FString FMantlePlaceEditorStyle::GetFontFilePath(EFont Role)
+FName FMantlePlaceEditorStyle::GetFontTypeface(EFont Role)
 {
-	return ThirdPartyDir() / (FString(SpecFor(Role).FileStem) + TEXT(".ttf"));
+	return FName(SpecFor(Role).Typeface);
 }
 
 TSharedRef<FSlateStyleSet> FMantlePlaceEditorStyle::Create()
@@ -109,8 +103,7 @@ TSharedRef<FSlateStyleSet> FMantlePlaceEditorStyle::Create()
 
 	TSharedRef<FSlateStyleSet> Style = MakeShared<FSlateStyleSet>(GetStyleSetName());
 
-	// The icons (our own work) live in the plugin's own Resources dir so the module is self-contained;
-	// the fonts are third-party and load from Source/ThirdParty below.
+	// The icons (our own work) live in the plugin's own Resources dir so the module is self-contained.
 	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("MantlePlace"));
 	if (Plugin.IsValid())
 	{
@@ -128,17 +121,13 @@ TSharedRef<FSlateStyleSet> FMantlePlaceEditorStyle::Create()
 	Style->Set("MantlePlace.TabIcon", new IMAGE_BRUSH(TEXT("MantlePlaceTabIcon"), Icon16x16));
 	Style->Set("MantlePlace.Mark", new IMAGE_BRUSH(TEXT("MantlePlaceTabIcon"), Mark32x32));
 
-	// ---- Embedded brand fonts (Montserrat + Geist Mono, OFL) ----
-	// Third-party content lives only under Source/ThirdParty (Fab's review requires it, and
-	// tools/unreal-naming/check_third_party_layout.py enforces it), so the fonts load from there,
-	// not from the Resources root above. See FontSpecs for the roles and their metrics.
+	// ---- Fonts: the engine's own editor typefaces ----
+	// The plugin ships no font files: a bundled third-party font would have to sit under
+	// Source/ThirdParty and be declared on Fab's Third Party Software form. The roles keep the web
+	// type scale's sizes and tracking (see FontSpecs) and draw with the engine default font.
 	for (const FFontSpec& Spec : FontSpecs)
 	{
-		// Wrap the .ttf in a standalone composite font (the non-deprecated font-from-file path; the raw
-		// FSlateFontInfo(FString, ...) constructor is deprecated and slated for removal).
-		const TSharedRef<FCompositeFont> Composite = MakeShared<FStandaloneCompositeFont>(
-			NAME_None, GetFontFilePath(Spec.Role), EFontHinting::Default, EFontLoadingPolicy::LazyLoad);
-		FSlateFontInfo Font(Composite, static_cast<float>(Spec.Size));
+		FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle(FName(Spec.Typeface), static_cast<float>(Spec.Size));
 		Font.LetterSpacing = Spec.LetterSpacing;
 		Style->Set(FName(Spec.StyleName), Font);
 	}

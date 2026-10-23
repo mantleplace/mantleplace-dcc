@@ -122,12 +122,10 @@ Packaging needs a licensed Unreal Engine 5.8 install, so it runs privately and n
 **Fab pre-submit list.** Fab's technical review rejects a plugin on any of these; check them
 against the Source zip before an upload:
 
-- Third-party content sits in `Source/ThirdParty/`, directly under `Source/`. The only such content
-  here is the three editor-panel fonts and their SIL Open Font License texts, in
-  `Source/ThirdParty/Fonts/`; `tools/unreal-naming/check_third_party_layout.py` fails a licence text
-  anywhere else in the plugin.
-- Fab's Third Party Software form is filed for that content: each font, its version, its licence,
-  its upstream source and its path in the plugin.
+- The plugin ships no third-party content (the editor panel uses the engine's own typefaces), so
+  Fab's Third Party Software form does not apply. Any that is added sits in `Source/ThirdParty/`,
+  directly under `Source/`, and needs that form;
+  `tools/unreal-naming/check_third_party_layout.py` fails a licence text anywhere else in the plugin.
 - Every source file (`.cpp`, `.h`, `.cs`) opens with the copyright header.
 - Every module in the descriptor carries a `PlatformAllowList`.
 - No `Binaries`, `Intermediate`, `Saved` or `Build` folder anywhere in the plugin.

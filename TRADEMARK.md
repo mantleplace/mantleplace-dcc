@@ -84,11 +84,9 @@ This clause covers only that phrase. It does not license the **Mantle Place** na
 other mark listed above, which stay reserved exactly as written; use the phrase as a description of
 your work, not as a product name.
 
-## Fonts and third-party marks
+## Third-party marks
 
-The fonts under `unreal/MantlePlace/Source/ThirdParty/Fonts/` are third-party works under the SIL Open Font
-Licence; their own licence texts travel beside them and govern their use. Autodesk, Revit, Epic
-Games, Unreal Engine and Cesium are the marks of their respective owners and are used here only to
+Autodesk, Revit, Epic Games, Unreal Engine and Cesium are the marks of their respective owners and are used here only to
 say, truthfully, what this software runs in.
 
 ## Asking
