@@ -7,25 +7,41 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mantleplace-mpb"
-version = "0.1.0"
-description = "Validate Mantle Place Bundles (MPB): schema, pointers, hashes, frames and ODbL roles."
+dynamic = ["version"]
+description = "Validate and read Mantle Place Bundles (MPB): every file with its frame and ODbL role."
 readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Mantle Place LLC" }]
+keywords = ["mpb", "mantleplace", "geospatial", "site-context", "gis", "bundle", "validator"]
 requires-python = ">=3.10"
 # Standard library only, on purpose: no GDAL, no PROJ, nothing compiled. It runs wherever Python does.
 dependencies = []
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: GIS",
+    "Typing :: Typed",
 ]
 
 [project.urls]
 Homepage = "https://github.com/mantleplace/mantleplace-dcc/tree/main/tools/mantleplace-mpb"
 Specification = "https://github.com/mantleplace/mantleplace-dcc/tree/main/spec"
+Repository = "https://github.com/mantleplace/mantleplace-dcc"
+Issues = "https://github.com/mantleplace/mantleplace-dcc/issues"
+Changelog = "https://github.com/mantleplace/mantleplace-dcc/blob/main/tools/mantleplace-mpb/CHANGELOG.md"
 
 [project.scripts]
 mpb = "mantleplace_mpb.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "mantleplace_mpb.__version__" }
+
+[tool.setuptools.package-data]
+mantleplace_mpb = ["py.typed"]

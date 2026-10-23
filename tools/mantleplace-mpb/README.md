@@ -3,15 +3,23 @@
 
 # mantleplace-mpb
 
-`mpb validate` checks a Mantle Place Bundle and says pass or fail, with every reason. It is the
-conformance check a producer, a reader's author or a CI job runs on a bundle, and it is pure
-Python: the standard library and nothing else, so no GDAL, no PROJ and nothing compiled.
+Two things for anyone who works with a Mantle Place Bundle (MPB), in pure Python: the standard
+library and nothing else, so no GDAL, no PROJ and nothing compiled.
+
+- `mpb validate` checks a bundle and says pass or fail, with every reason. It is the conformance
+  check a producer, a reader's author or a CI job runs on a bundle.
+- `read_bundle` opens a bundle and gives every file with its frame and its ODbL role, and the
+  offset and axis transform that relate two files of one frame. It never reprojects.
 
 ```bash
-pip install ./tools/mantleplace-mpb      # from a checkout of this repository
+pip install mantleplace-mpb
 mpb validate site-bundle.zip             # a zip, a folder, or either inside one wrapper folder
 mpb validate site-bundle.zip --json      # the machine-readable report
 ```
+
+The package version is the MPB version it was tested against: `1.14.0` is held to the conformance
+corpus written for MPB 1.14.0, and a `.postN` release changes the package and not the suite.
+`mpb --version` and `mantleplace_mpb.__version__` report it.
 
 | Exit | Meaning                                                                               |
 | ---- | ------------------------------------------------------------------------------------- |
@@ -21,7 +29,7 @@ mpb validate site-bundle.zip --json      # the machine-readable report
 
 ## What it checks
 
-The format is [`spec/format.md`](../../spec/format.md); this tool checks a bundle against it and
+The format is [`spec/format.md`](https://github.com/mantleplace/mantleplace-dcc/blob/main/spec/format.md); this tool checks a bundle against it and
 against the published schema, and restates neither.
 
 - **The archive.** A zip, a folder, or either with the bundle inside one wrapper folder.
@@ -61,6 +69,42 @@ stable `code` (`pointer.missing`, `sha256.mismatch`, `frame.partial`, …), a `s
 `warning` or `info`), a `message`, and where it applies the JSON Pointer into the manifest and the
 bundle path it is about.
 
+## Reading a bundle
+
+```python
+from mantleplace_mpb import read_bundle
+
+with read_bundle("site-bundle.zip") as bundle:          # a zip, a folder or a wrapper folder
+    for f in bundle.files:                              # every file, the manifest and README included
+        print(f.path, f.role, f.frame.coordinate_mode if f.frame else f.frame_problem)
+
+    mesh = bundle.placement("Site/Terrain.glb")
+    mesh.axis_transform                                 # 3x3: file x, y, z onto east, north, up
+    mesh.offset                                         # the site origin the file is measured from
+    mesh.to_enu_metres((10.0, 5.0, 20.0))               # that point, east/north/up, in metres
+
+    move = bundle.transform("Site/Terrain.glb", "Elevation/DEM.tif")
+    move.apply((10.0, 5.0, 20.0))                       # the same point in the raster's coordinates
+```
+
+- **Every file, with its frame and role.** A `BundleFile` carries `path`, `size`, `frame`, `role`,
+  `license` and `sources`. A file the manifest has no entry for has no frame and reads as
+  `database`; so does a role the reader does not know (`declared_role` keeps what was written).
+- **A frame the reader cannot read is not guessed.** An axis, mode or order outside the known
+  sets, a missing field, or two axes on one line leaves `frame` as `None` and `frame_problem`
+  saying why. The file stays in the listing; `placement` refuses it.
+- **Within one frame, the offset and axis transform.** `placement(path)` gives the file's axis
+  transform, its units and, for an `offset`-mode file, the site origin as its `offset`.
+  `transform(source, destination)` relates two files of one frame by axes, units and that origin,
+  added.
+- **Never a reprojection.** Files whose horizontal CRS, vertical CRS, geoid or epoch differ are in
+  different frames: `transform` raises `FrameMismatch`. An origin stated only as latitude and
+  longitude, or in another CRS than the file's, leaves `offset` as `None` with `offset_problem`
+  saying so. CRS references are compared as written, so a `code` and a WKT2 string for one CRS are
+  two frames to this reader.
+- **Reading is not validating.** The reader opens the manifest and the archive and fetches
+  nothing. Run `mpb validate` first when the bundle is not yours.
+
 ## Offline
 
 `--schema-dir DIR` reads `<version>.json` and `frozen.lock.json` from a directory instead of the
@@ -70,7 +114,7 @@ this repository: the published series is the one source.
 ## The conformance corpus
 
 The validator is held to the `bundle` group of the shared corpus in
-[`tools/manifest-conformance/corpus/`](../manifest-conformance/corpus/README.md): each case
+[`tools/manifest-conformance/corpus/`](https://github.com/mantleplace/mantleplace-dcc/blob/main/tools/manifest-conformance/corpus/README.md): each case
 describes a synthetic bundle as JSON, and the runner builds it as a folder, a zip and a wrapped
 zip and requires the same verdict and the same finding codes from all three.
 
@@ -78,5 +122,14 @@ zip and requires the same verdict and the same finding codes from all three.
 mpb corpus tools/manifest-conformance/corpus
 python -m unittest discover -s tools/mantleplace-mpb/tests     # offline, no install needed
 ```
+
+## Releasing
+
+A release is a tag. `python tools/mantleplace-mpb/release_check.py` holds the package version to
+the newest MPB version the corpus declares a case for (the tests run it on every pull request),
+and `release_check.py --tag mpb-v<version>` holds the tag to the package. Pushing the tag
+`mpb-v<version>` runs `.github/workflows/release-mpb.yml`: it tests, builds, checks the
+distributions and publishes them to PyPI through trusted publishing, with no token stored
+anywhere. To install from a checkout instead: `pip install ./tools/mantleplace-mpb`.
 
 The 2.0 naming, case and folder rules arrive with the 2.0 corpus cases.

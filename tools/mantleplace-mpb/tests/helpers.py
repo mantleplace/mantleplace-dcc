@@ -80,3 +80,17 @@ def make_zip(path: Path, files: dict[str, bytes], prefix: str = "") -> Path:
         for name, data in files.items():
             archive.writestr(prefix + name, data)
     return path
+
+
+def write_corpus_index(root: Path, versions: list[object]) -> Path:
+    """A corpus `index.json` with one case per entry of `versions` (None: a case declaring none)."""
+    cases = []
+    for number, version in enumerate(versions):
+        case: dict = {"id": f"case.{number}", "group": "manifest", "file": "x.json", "expect": "accept"}
+        if version is not None:
+            case["manifestVersion"] = version
+        cases.append(case)
+    index = root / "index.json"
+    index.write_text(json.dumps({"corpusVersion": 3, "manifestVersion": "1.0.0", "cases": cases}),
+                     encoding="utf-8")
+    return index

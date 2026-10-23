@@ -204,7 +204,8 @@ python -m unittest discover -s tools/manifest-conformance   # offline
 python tools/manifest-conformance/check_manifest_conformance.py
 ```
 
-**The bundle validator** — `mpb validate <zip or folder>`, the same standard library only
+**The bundle validator and reader** — `pip install mantleplace-mpb`, then `mpb validate <zip or folder>` or
+`read_bundle` in Python, the same standard library only
 ([`tools/mantleplace-mpb/`](tools/mantleplace-mpb/README.md)).
 
 ## CI, and what it does not cover
