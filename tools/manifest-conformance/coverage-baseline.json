@@ -84,6 +84,22 @@
       "revit",
       "unreal"
     ],
+    "manifest.fileEntryNoRole": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.fileEntryUnknownRole": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.fileEntryVerticalCrsApart": [
+      "revit",
+      "unreal"
+    ],
+    "manifest.fileFramesIgnored": [
+      "revit",
+      "unreal"
+    ],
     "manifest.foliagePointsUnverified": [
       "unreal"
     ],

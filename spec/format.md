@@ -103,6 +103,11 @@ when its AOI straddles a zone line.
 - `location` is not an artifact family. `licensing.site` classifies the IFC Site model, which is
   unrelated.
 
+**Per-file frames, the site origin and licensing (from 1.14.0).** The core can also state, file by
+file, how each file is placed and under what terms (`file_entries`), and one point every offset
+file is measured from (`location.site_origin`). Both are optional and neither replaces a host block.
+§6.8 describes them.
+
 ### 4.2 `hosts.<hostId>` — pre-derived placement, one subtree per host
 
 Everything host-specific lives under `hosts.<hostId>`, and a consumer targeting a host reads
@@ -444,6 +449,107 @@ From 1.4.0 the Revit host has its own:
 What a host does with contours it cannot show to be in its frame is the host standard's
 (`HPS-52`, `HPS-53`), not this document's.
 
+### 6.8 File frames, the site origin and licensing (from 1.14.0)
+
+From 1.14.0 the neutral register can place a file and state its terms without a reader opening any
+`hosts.<hostId>` block. Two optional members carry it: `location.site_origin`, one point for the
+whole bundle, and `file_entries`, one entry per file keyed by its archive path. A bundle made before
+its producer writes them carries neither, and the host blocks (§4.2) keep stating the same facts
+through 1.x, so a host that reads only its own block loses nothing. `file_entries` is not the
+`files` member of 1.10.0: `files` exists only on a bundle stored as parts and describes storage
+(part, size, digest), where `file_entries` describes meaning and is valid on every bundle.
+
+**The File frame, field by field.** An entry's `frame` is the file's full frame, written whole or
+not at all. Every field is optional in the schema, so what follows is what each one says and what
+its absence means; the schema owns the types and the permitted values.
+
+- `horizontal_crs` is the CRS of the file's coordinates, or of its grid for a raster.
+- `vertical_crs` is the CRS the heights are in, as a reference of its own (an NAVD88 height, an
+  EGM2008 height), never folded into the horizontal one. It is absent for a file with no heights.
+- `unit_to_metres` is the horizontal linear unit as a number, the factor to metres: 1 for metres,
+  0.3048 for the international foot, 1200/3937 for the US survey foot. A number rather than a name,
+  so that no reader maps "foot" to the wrong foot. It is the vertical unit too, unless
+  `vertical_unit_to_metres` is present, which states a vertical unit that differs.
+- `geoid_model` names the geoid the heights are referenced to (`GEOID18`, `EGM2008`). It is absent
+  when the vertical CRS is ellipsoidal or the file has no heights.
+- `axis_order` is the order of the horizontal axes as the file stores them: easting first, or
+  latitude first.
+- `axis_mapping` says which way each of the file's three axes points. A glTF file is x east, y up,
+  z south; a projected GeoTIFF or a USD file is x east, y north, z up. A reader never assumes an
+  engine's convention for a file that states its own.
+- `coordinate_mode` is `absolute` (the coordinates are full values in `horizontal_crs`) or `offset`
+  (they are displacements from the site origin, below).
+- `pixel_convention` and `row_order` are for rasters only: whether a pixel value describes its cell
+  or the point at its centre, and whether row 0 is the northern or the southern edge.
+- `coordinate_epoch` is a decimal year, present where the CRS is dynamic or the realisation
+  matters, and absent otherwise.
+
+**No file relies on a compound EPSG code alone.** A CRS is named in exactly one of three forms: a
+`code` such as `EPSG:5703`, a PROJJSON object, or a WKT2 string. The form is chosen per CRS, and the
+horizontal and the vertical CRS are separate references, so a reader gets each from its own field
+and never has to take one apart from a compound code. Datums that have no authority code yet ride
+PROJJSON or WKT2 and arrive as a `code` later, which changes a value and not a field.
+
+⛔ **The frame's value sets fail closed.** An axis direction, an axis order, a coordinate mode, a
+pixel convention or a row order the reader does not know is a frame it cannot read, which is a file
+it cannot place: refuse the file by name. An unknown key beside the known ones is tolerated, as a
+later minor may add one.
+
+**The site origin.** `location.site_origin` is readable by any host, unlike a host block. It is one
+point: its latitude and longitude, its height above the ellipsoid, and its height in the order's
+vertical datum, which `vertical_datum` names. The difference of the two heights is the datum offset
+at the site. It is computed once and applied verbatim; a reader never re-derives it (§6). Two
+optional members add to it: `geodetic_crs`, for a reader that needs more than WGS 84 to the metre,
+and `projected`, the same point in a projected CRS with a height, so that a reader places every
+offset file by arithmetic. The six members of `projected` come together or the block is invalid.
+
+**How glTF and USD offsets relate to it.** glTF and USD files hold 32-bit floats, which lose
+precision at full projected coordinates, so their frames say `coordinate_mode: offset`. Each
+coordinate is then a displacement from the site origin, in the file's own axes (`axis_mapping`) and
+its own unit (`unit_to_metres`). Where `projected` is present, a reader adds the file's x and y to
+`projected.x` and `projected.y`, and its z to `projected.z`, whose height `projected.z_reference`
+names (ellipsoidal, or the vertical datum), and never reprojects. The offset is in the file's unit and
+the origin in `projected.unit`, and §6 applies: the unit is read from each, never assumed alike.
+Where `projected` is absent the origin is a latitude, longitude and heights only, and a reader
+reprojects that one point once to place the file. An `absolute` file, a GeoTIFF for example, needs
+no site origin; its own `horizontal_crs` places it. None of this changes §4.2: a host is handed only
+files in its own frame, and converts nothing.
+
+**The neutral PNG mappings.** A PNG rendition's entry may carry `value_mapping`, which says how to
+read a pixel back as data outside any host block. It states what the Unreal host block's heightmap
+and UE-ready raster mappings state, for any reader, and those copies stay through 1.x. Its
+`encoding` decides what else it must carry:
+
+- a 16-bit grayscale needs `min` (the value pixel code 0 stands for), `max` (the value 65535 stands
+  for) and `to_value`, the decoding formula in words, and may add `value_units`, `datum`,
+  `nodata_value` and `quantization_step`;
+- a mask needs `true_value` and `false_value`, the two pixel codes;
+- an indexed layer needs `classes`, either the list of pixel codes in use or an object from code to
+  class name, and a reader accepts both. The class codes are the legend and are never rescaled;
+- an RGBA raster needs `bands`, naming the four channels in order;
+- an 8-bit grayscale passthrough carries `identity: true`, as its codes are the data.
+
+⛔ A reader that cannot decode an `encoding` skips the file and says so. It never guesses at what a
+pixel means.
+
+**The three licensing fields.** Each entry may carry `odbl_role`, `license` and `sources`.
+
+- `odbl_role` is one of `database` (an ODbL Derivative Database, licensed ODbL), `produced-work`
+  (rasterized, meshed, extruded or baked output, which is not ODbL-licensed) and `none` (no ODbL
+  source contributes). Every file is exactly one of them.
+- `license` is what the file ships under: an SPDX licence expression, a single id or ids joined by
+  `AND`, `OR` or `WITH`, whose ids are SPDX ids or `LicenseRef-` ids. Free text is not a licence. A
+  `produced-work` entry never names ODbL here. A compound expression lives only in the manifest,
+  because the STAC Item beside it carries a single id per asset.
+- `sources` lists the upstream sources the file was made from, each with a `name` and a `license`
+  that is always a single id, never an expression, and optionally its registry id, its landing page
+  and `license_unconfirmed`, true when the id is the best reading but the publisher has not confirmed
+  it. The list is empty when the platform alone authored the file.
+
+⛔ **A missing role reads as `database`**, the stricter duty, and so does a role the reader does not
+know. An entry without `odbl_role` is not a `none`, and a reader that wants the lighter reading must
+hold the role that earns it.
+
 ## 7. The sidecar manifest
 
 The vault publishes a versioned copy of the manifest beside the zip, so that a listing can show a
@@ -474,7 +580,8 @@ The whole procedure, for a consumer holding a zip:
 7. **Honour the licensing obligations.** The `licensing` and `attribution` blocks state which
    families carry which terms; the platform's own [licensing](https://mantle.place/licensing) and
    [attributions](https://mantle.place/attributions) pages are the authority on the text those terms
-   require, and nothing in this repository restates them.
+   require, and nothing in this repository restates them. From 1.14.0, `file_entries` also states
+   each file's `odbl_role`, `license` and `sources` (§6.8), and a missing role reads as `database`.
 
 If a step above is under-specified for a bundle you hold, that is a spec bug worth an issue. If it
 is under-specified in a way the corpus does not catch, it is a corpus bug too — see

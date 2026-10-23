@@ -35,8 +35,9 @@ schema has two contracts and no way to tell which one a producer honoured.
 - **[`format.md`](format.md)** — the format itself: what a bundle contains (the zip layout), the
   modality-folder vocabulary, the pointer doctrine (find every file by a manifest pointer, never by
   folder name), the manifest's structure and the `hosts.<hostId>` boundary, integrity (sha256
-  present, absent, or required and missing), and how placement values are meant to be consumed
-  (applied verbatim).
+  present, absent, or required and missing), how placement values are meant to be consumed
+  (applied verbatim), and how a file states its own frame, the site origin and its licensing in the
+  neutral part of the manifest.
 - **[`compatibility.md`](compatibility.md)** — the versioning and compatibility policy: semver
   semantics (MAJOR/MINOR/PATCH), freeze-on-publish immutability, what a consumer must do with fields,
   enum values and versions it does not recognise, a higher major included.
