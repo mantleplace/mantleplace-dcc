@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- SPDX-FileCopyrightText: Mantle Place LLC -->
+
 # The shared conformance corpus
 
 Language-neutral test vectors that **every** Mantle Place host plugin runs against its own parser.

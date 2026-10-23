@@ -60,6 +60,27 @@ You may still say your fork *derives from* Mantle Place. Say it in prose, not in
 - Domain names, org names, app-store listings or social accounts that a reasonable person would read
   as being us.
 
+## The "MPB 2.x-conformant" statement
+
+The format is open, and so is the right to say you follow it. Anyone may state that their work is
+**"MPB 2.x-conformant"**, with no licence, fee, registration or approval from us. The statement is
+**self-declared**: we do not certify, audit or endorse it, and making it implies no affiliation.
+
+It is made per class, and each class has its own claim:
+
+- **Producer**: software that writes Mantle Place Bundles may say "MPB 2.x-conformant producer" when
+  its output validates against the published schema series.
+- **Reader**: software that reads bundles may say "MPB 2.x-conformant reader" when it passes the
+  conformance corpus groups that [`spec/conformance.md`](spec/conformance.md) names for a reader.
+
+Tie the statement to a conformance-suite version: say which version of the corpus and validator you
+ran, for example "MPB 2.x-conformant reader (conformance suite <version>)". A claim with no suite version
+is not a claim we can read. If you stop passing the suite, stop making the claim.
+
+This clause covers only that phrase. It does not license the **Mantle Place** name, the logo or any
+other mark listed above, which stay reserved exactly as written; use the phrase as a description of
+your work, not as a product name.
+
 ## Fonts and third-party marks
 
 The fonts under `unreal/MantlePlace/Source/ThirdParty/Fonts/` are third-party works under the SIL Open Font
