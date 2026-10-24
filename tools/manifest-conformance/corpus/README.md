@@ -194,8 +194,9 @@ fixture untrue.
 
 **The reject set waits for the slowest host.** It is host-invariant (no case carries `appliesTo`),
 so it may only name versions below the _lowest_ floor among registered hosts. Its other end is the
-one exception: `manifest.reject.majorAhead` holds a full 2.0 manifest, which every reader of a
-lower major refuses with an update message (`format.md` §11), so it names a version above every
-floor. When the hosts read 2.x it is restamped one major ahead of them, never deleted. v18 and v19 could
+one exception: `manifest.reject.majorAhead` holds a full 2.0 manifest stamped one major above the
+newest any registered host reads, which every reader refuses with an update message (`format.md`
+§11), so it names a version above every floor. It is stamped `3.0.0` since the Revit host reads 2.x,
+and is restamped one major ahead again when a host reads 3.x, never deleted. v18 and v19 could
 join it only because both registered hosts take the 1.0.0 floor together; had one host repinned
 first, the retired versions would have stayed out until the other caught up.

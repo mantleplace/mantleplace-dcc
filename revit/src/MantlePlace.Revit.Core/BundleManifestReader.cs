@@ -28,6 +28,13 @@ public static class BundleManifestReader
     private const string LayoutTreePoints = "tree_points";
     private const string LayoutImageryDrape = "imagery_drape";
 
+    /// <summary>MPB 2.0's map of each original vector file to its twin in the order's projected CRS.</summary>
+    private const string LayoutProjectedVariants = "projected_variants";
+
+    /// <summary>MPB 2.0's pointers to the two hazard layers, each a GeoPackage of one table.</summary>
+    private const string LayoutFloodZones = "flood_zones";
+    private const string LayoutSteepSlope = "steep_slope";
+
     /// <summary>
     /// What <see cref="BundleArtifact.HorizontalFrame"/> reads on a layer whose coordinates are
     /// WGS84 lon/lat rather than a projected CRS.
@@ -159,22 +166,28 @@ public static class BundleManifestReader
         }
 
         // The other end of the semver compatibility policy, which the integer era had no way to
-        // express. Minors are strictly additive and unknown fields are ignored, so any 1.x reads
-        // here; an unknown higher MAJOR is a graceful refusal rather than a best-effort parse,
+        // express. Minors are strictly additive and unknown fields are ignored, so any 1.x or 2.x
+        // reads here; an unknown higher MAJOR is a graceful refusal rather than a best-effort parse,
         // because a major is exactly the promise that something this reader relies on may have
         // changed meaning. Too-old and too-new are distinct refusals with distinct remedies —
         // re-download the AOI, versus update the plugin — which a bare "unsupported" conflated.
-        if (parsedVersion.Major > floor.Major)
+        if (parsedVersion.Major > ManifestVersions.NewestSupportedMajor)
         {
             return Refuse(
                 manifest,
                 string.Format(
                     CultureInfo.InvariantCulture,
-                    "Bundle manifest version {0} is newer than this plugin understands (it reads {1}.x). "
+                    "Bundle manifest version {0} is newer than this plugin understands (it reads {1}.x to {2}.x). "
                     + "Update the Mantle Place plugin to import this bundle.",
                     manifest.Version,
-                    floor.Major));
+                    floor.Major,
+                    ManifestVersions.NewestSupportedMajor));
         }
+
+        // 2.0 removed `hosts.revit.vectors` and names each vector layer's projected twin in
+        // `layout.projected_variants` instead (spec/changelog.md, 2.0.0). Every other pointer this
+        // host reads kept its key, so this is the one place the two layouts part.
+        bool layoutTwo = parsedVersion.Major >= 2;
 
         // From here every refusal is accumulated rather than returned, so a refused manifest still
         // hands the caller a fully-populated set of facts (HPS-37).
@@ -191,8 +204,16 @@ public static class BundleManifestReader
         refusal ??= ReadDelivery(manifest, root);
         ReadReadiness(manifest, root);
         ReadFileFrame(manifest, root);
-        ReadOwnVectors(manifest, root);
-        ReadHazards(manifest, root);
+        if (layoutTwo)
+        {
+            ReadProjectedTwins(manifest, root);
+        }
+        else
+        {
+            ReadOwnVectors(manifest, root);
+        }
+
+        ReadHazards(manifest, root, layoutTwo);
         ReadArtifacts(manifest, root);
         refusal ??= ReadGeoreference(manifest, root);
 
@@ -205,7 +226,7 @@ public static class BundleManifestReader
             ? ownOrigin
             : manifest.Delivery.LocalOrigin;
 
-        refusal ??= CheckRevitHashes(manifest, root);
+        refusal ??= CheckRevitHashes(manifest, root, layoutTwo);
         refusal ??= CheckMaterialized(manifest, root);
 
         if (refusal is not null)
@@ -315,7 +336,11 @@ public static class BundleManifestReader
             return;
         }
 
-        Dictionary<string, FileLicensing> read = new(StringComparer.Ordinal);
+        // Keyed without regard to case, as the archive's entries are matched (BundleEntryIndex): the
+        // path a step asks about is the archive's own spelling, and 2.0 forbids two paths that differ
+        // only by case, so a case-only difference is the same file: a later spelling replaces an
+        // earlier one, as a repeated key always did.
+        Dictionary<string, FileLicensing> read = new(StringComparer.OrdinalIgnoreCase);
         foreach (JsonProperty entry in entries.EnumerateObject())
         {
             if (entry.Value.ValueKind != JsonValueKind.Object)
@@ -406,6 +431,7 @@ public static class BundleManifestReader
     private static void ReadLayout(BundleManifest manifest, JsonElement root)
     {
         Dictionary<string, string> layout = new(StringComparer.Ordinal);
+        Dictionary<string, string> twins = new(StringComparer.OrdinalIgnoreCase);
         if (root.Object("layout") is { } table)
         {
             foreach (JsonProperty entry in table.EnumerateObject())
@@ -419,9 +445,26 @@ public static class BundleManifestReader
                     }
                 }
             }
+
+            // MPB 2.0: each original vector file's archive path to its `-Projected` twin. Keyed
+            // without regard to case, so the original's path is matched as the archive matches it.
+            // A 1.x layout has no such member, and a value that is not a path is no twin.
+            if (table.Object(LayoutProjectedVariants) is { } variants)
+            {
+                foreach (JsonProperty variant in variants.EnumerateObject())
+                {
+                    if (variant.Value.ValueKind == JsonValueKind.String
+                        && variant.Value.GetString() is { } twin
+                        && !string.IsNullOrWhiteSpace(twin))
+                    {
+                        twins[variant.Name] = twin;
+                    }
+                }
+            }
         }
 
         manifest.Layout = layout;
+        manifest.ProjectedVariants = twins;
         manifest.CesiumTerrainPath = layout.GetValueOrDefault("cesium_terrain", string.Empty);
     }
 
@@ -906,9 +949,18 @@ public static class BundleManifestReader
     /// block costs its provenance lines and nothing else.
     /// </para>
     /// </remarks>
-    private static void ReadHazards(BundleManifest manifest, JsonElement root)
+    private static void ReadHazards(BundleManifest manifest, JsonElement root, bool layoutTwo)
     {
-        if (RevitHostBlock(root)?.Object("vectors") is { } vectors && HasOwnVectorLayers(vectors))
+        if (layoutTwo)
+        {
+            // MPB 2.0: each hazard layer is a GeoPackage of its own, found through its layout
+            // pointer, read from its projected twin where it has one and as it is where it has none
+            // (`Elevation/SteepSlopes.gpkg` is already in the order's CRS). Either way its CRS is
+            // checked against the origin's when it is read (HPS-53), never assumed.
+            manifest.FloodZones = LayoutGeoPackage(manifest, LayoutFloodZones, SiteVectorLayers.FloodZones.Name);
+            manifest.SteepGround = LayoutGeoPackage(manifest, LayoutSteepSlope, SiteVectorLayers.SteepGround.Name);
+        }
+        else if (RevitHostBlock(root)?.Object("vectors") is { } vectors && HasOwnVectorLayers(vectors))
         {
             manifest.FloodZones = ReadOwnVectorLayer(vectors, SiteVectorLayers.FloodZones.Name);
             manifest.SteepGround = ReadOwnVectorLayer(vectors, SiteVectorLayers.SteepGround.Name);
@@ -942,6 +994,165 @@ public static class BundleManifestReader
             manifest.HasSteepGroundBlock = true;
             manifest.SteepGroundThreshold = steep.RawNumber("threshold_deg");
         }
+    }
+
+    /// <summary>
+    /// MPB 2.0's projected copy of the shared vector layers: each layer's GeoPackage twin in the
+    /// order's projected CRS and unit, found through <c>layout.projected_variants</c>, with the shared
+    /// lon/lat GeoJSON kept as its fallback.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 2.0 removes <c>hosts.revit.vectors</c>, and a projected-CRS reader reads the <c>-Projected</c>
+    /// twins instead (<c>spec/changelog.md</c>, 2.0.0): absolute, in the same tables, columns and
+    /// types as the original, which is the 1.x carrier's frame exactly
+    /// (<c>revit/docs/vector-carrier.md</c>). So a twin is planned as the carrier was, against the
+    /// origin, and its CRS is checked when it is read.
+    /// </para>
+    /// <para>
+    /// A layer whose GeoPackage has no twin keeps the shared GeoJSON: the shared set is lon/lat, and
+    /// the GeoPackage beside it is too. These are the shared set's files, so the shared set's absence
+    /// rules hold, and <see cref="BundleManifest.VectorsFromOwnBlock"/> stays false.
+    /// </para>
+    /// <para>
+    /// The twin has no hash in the manifest: <c>file_entries</c> states meaning, not bytes. It rides the
+    /// bundle's own verification, the sidecar's archive digest or the part's, as every file without a
+    /// pointer hash does.
+    /// </para>
+    /// </remarks>
+    private static void ReadProjectedTwins(BundleManifest manifest, JsonElement root)
+    {
+        if (manifest.ProjectedVariants.Count == 0)
+        {
+            return;
+        }
+
+        manifest.RoadSplines = ProjectedTwin(manifest, root, SiteVectorLayers.RoadSplines, manifest.RoadSplines);
+        manifest.RoadSplinesPath = manifest.RoadSplines?.Path ?? string.Empty;
+        manifest.RoadSplinesSha256 = manifest.RoadSplines?.Sha256 ?? string.Empty;
+        manifest.HasRoadSplines = !string.IsNullOrEmpty(manifest.RoadSplinesPath);
+
+        manifest.LandUse = ProjectedTwin(manifest, root, SiteVectorLayers.LandUse, manifest.LandUse);
+        manifest.LandCover = ProjectedTwin(manifest, root, SiteVectorLayers.LandCover, manifest.LandCover);
+        manifest.Water = ProjectedTwin(manifest, root, SiteVectorLayers.Water, manifest.Water);
+        manifest.RoadPolygons = ProjectedTwin(manifest, root, SiteVectorLayers.RoadPolygons, manifest.RoadPolygons);
+    }
+
+    /// <summary>
+    /// The layer read from the twin of its GeoPackage, or <paramref name="geoJson"/> unchanged where
+    /// the layer has no GeoPackage of the wanted geometry with a twin.
+    /// </summary>
+    /// <remarks>
+    /// The GeoPackage rows are chosen as the GeoJSON rows are (<see cref="ReadVectorLayer"/>): a row
+    /// naming another geometry family this build knows is passed over. A row's <c>tables</c>, where it
+    /// lists them, split the layer by geometry family inside the file, named for the family
+    /// (<c>Water_polygon</c>); the table named for the layer is taken first, then the table of the
+    /// family the step draws from. A file listing neither has nothing this step can read.
+    /// </remarks>
+    private static BundleArtifact? ProjectedTwin(
+        BundleManifest manifest,
+        JsonElement root,
+        SiteVectorLayer wanted,
+        BundleArtifact? geoJson)
+    {
+        if (root.Object("vector")?.Array("layers") is not { } layers)
+        {
+            return geoJson;
+        }
+
+        foreach (JsonElement layer in layers.EnumerateArray())
+        {
+            if (layer.ValueKind != JsonValueKind.Object
+                || !string.Equals(layer.Str("name"), wanted.Name, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (layer.Array("formats") is not { } formats)
+            {
+                break;
+            }
+
+            foreach (JsonElement format in formats.EnumerateArray())
+            {
+                if (format.ValueKind != JsonValueKind.Object
+                    || !string.Equals(format.Str("format"), "gpkg", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                SiteGeometryKinds? holds = SiteGeometryFamilies.Holds(GeometryFamily(format));
+                if (holds is { } known && (known & wanted.DrawnFrom) == 0)
+                {
+                    continue;
+                }
+
+                string original = format.Str("path");
+                if (string.IsNullOrWhiteSpace(original)
+                    || !manifest.ProjectedVariants.TryGetValue(original.Trim(), out string? twin)
+                    || TwinTable(format, wanted) is not { } table)
+                {
+                    continue;
+                }
+
+                return new BundleArtifact
+                {
+                    Path = twin,
+                    Format = "gpkg",
+                    Table = table,
+                    HorizontalFrame = ProjectedFrame,
+                    VerticalReference = AbsoluteHeight,
+                    VerticalDatum = layer.OptionalStr("vertical_datum"),
+                    Levels = geoJson?.Levels,
+                    GeoJsonFallback = geoJson,
+                };
+            }
+
+            // Only the first layer of that name is ever considered, as the GeoJSON read does.
+            break;
+        }
+
+        return geoJson;
+    }
+
+    /// <summary>
+    /// The table of <paramref name="wanted"/> in a GeoPackage row: the layer's own name where the row
+    /// lists no tables, else the listed table of that name, else the one of the geometry family the
+    /// step draws from, or <c>null</c>.
+    /// </summary>
+    private static string? TwinTable(JsonElement format, SiteVectorLayer wanted)
+    {
+        IReadOnlyList<string> tables = format.StringArray("tables");
+        if (tables.Count == 0)
+        {
+            return wanted.Name;
+        }
+
+        string family = wanted.DrawnFrom == SiteGeometryKinds.Lines ? "_line" : "_polygon";
+        return tables.FirstOrDefault(name => string.Equals(name, wanted.Name, StringComparison.OrdinalIgnoreCase))
+            ?? tables.FirstOrDefault(name => name.EndsWith(family, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// A 2.0 hazard layer: the GeoPackage <paramref name="layoutKey"/> points at, or its projected
+    /// twin where <c>layout.projected_variants</c> names one, read as the table of the layer's name.
+    /// </summary>
+    private static BundleArtifact? LayoutGeoPackage(BundleManifest manifest, string layoutKey, string table)
+    {
+        string path = manifest.Layout.GetValueOrDefault(layoutKey, string.Empty);
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        return new BundleArtifact
+        {
+            Path = manifest.ProjectedVariants.TryGetValue(path.Trim(), out string? twin) ? twin : path,
+            Format = "gpkg",
+            Table = table,
+            HorizontalFrame = ProjectedFrame,
+            VerticalReference = AbsoluteHeight,
+        };
     }
 
     /// <summary>
@@ -1440,7 +1651,7 @@ public static class BundleManifestReader
     /// unconditionally true and a branch that can never be taken is worse than no branch — it
     /// reads as a live rule protecting a case that no longer exists.
     /// </remarks>
-    private static string? CheckRevitHashes(BundleManifest manifest, JsonElement root)
+    private static string? CheckRevitHashes(BundleManifest manifest, JsonElement root, bool layoutTwo)
     {
         if (RevitHostBlock(root) is not { } revit)
         {
@@ -1459,6 +1670,13 @@ public static class BundleManifestReader
                     key,
                     manifest.Version);
             }
+        }
+
+        // The vector copy below is a 1.x member, removed at 2.0 and not read there, so its hash
+        // rules do not reach a 2.0 bundle.
+        if (layoutTwo)
+        {
+            return null;
         }
 
         // The shared carrier's pointer requires its hash the same way (MPB 1.7.0).

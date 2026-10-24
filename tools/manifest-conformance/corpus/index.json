@@ -1773,8 +1773,8 @@
       "group": "manifest",
       "file": "manifest/reject-major-ahead.json",
       "expect": "reject",
-      "manifestVersion": "2.0.0",
-      "reason": "A higher major is refused gracefully (format.md §11, compatibility §3): a reader opens the manifest, reads `version` and nothing else, and stops when its major is above the one it reads, telling the user to update rather than to re-download. The file is a full 2.0 manifest, the one bundle.v2Full ships, so a 1.x reader is shown the real thing and must still refuse it before reading a pointer. The case is the version gate's other end, so it is host-invariant even though it names a version above every floor; when the hosts read 2.x, it is restamped one major ahead of them.",
+      "manifestVersion": "3.0.0",
+      "reason": "A higher major is refused gracefully (format.md §11, compatibility §3): a reader opens the manifest, reads `version` and nothing else, and stops when its major is above the newest one it reads, telling the user to update rather than to re-download. The file is the full 2.0 manifest bundle.v2Full ships, stamped 3.0.0, one major above the newest any registered host reads (the Revit host reads 2.x), so every reader is shown a whole manifest and must still refuse it before reading a pointer. The case is the version gate's other end, so it is host-invariant even though it names a version above every floor; when a host reads 3.x, it is restamped one major ahead again.",
       "errorContains": "newer than this plugin understands"
     },
     {

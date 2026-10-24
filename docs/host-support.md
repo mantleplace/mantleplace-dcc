@@ -58,6 +58,7 @@ A `declined` cell with no ADR may carry one line of reason instead. No cell desc
 | --- | --- | --- |
 | Import a downloaded bundle with no account | supported | supported |
 | Refuse a manifest version outside the supported range | supported | supported |
+| Read a 2.0 bundle as well as a 1.x one | planned — [issue 381](https://github.com/mantleplace/mantleplace-dcc/issues/381) | supported |
 | Refuse a bundle whose bytes do not match its published digest | supported | supported |
 | Say the bundle's unit system and delivery CRS | supported | supported |
 | Choose what an import brings in, before it runs | planned — [issue 93](https://github.com/mantleplace/mantleplace-dcc/issues/93) | supported |
