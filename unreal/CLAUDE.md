@@ -111,7 +111,12 @@ run reporting any `No editor` skip is not green.**
   `MP_LIVETEST_BUNDLE` to it (otherwise it falls back to
   `<ProjectSaved>/MantlePlace/livetest/download.zip`). With no bundle, or one below the manifest
   floor, it warns and passes locally; it errors only when `CI` is set. A "Sample bundle not present"
-  (or "below the floor") warning therefore means the run is not green, whatever the count says.
+  (or "below the floor") warning therefore means the run is not green, whatever the count says. Its
+  placement gate checks the landscape against the bundle's own surface points (`elevation.points_csv`),
+  which the importer never reads; a "Placement gate not run" warning is the same not-green.
+  **`MantlePlace.Import.LiveHandover`** imports the same bundle, checks every ODbL actor is in its
+  order's `ODbL` folder, then runs Prepare for handover and checks the ODbL content is gone and the
+  credit actor holds every credit line the import recorded.
 - **Scratch hygiene.** Set `EditorStartupMap` and `GameDefaultMap` to a `/Game` map or
   `/Engine/Maps/Templates/Template_Default`, never `/Engine/Maps/Entry`; never save an `/Engine`
   package (one such save overwrote an install's `Entry.umap` and broke other projects' tests). In Git
