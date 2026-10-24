@@ -623,9 +623,17 @@ spec, as an addition (§11) and not a replacement, so a reader that supports onl
 never broken by it.
 
 What "promised" obliges. For as long as 2.x lasts (§11), a canonical format stays on the list. A
-reader that reads every canonical format can read the content of every bundle, because the
-producer ships each kind of content in a canonical format wherever it ships that content at all.
-A reader MUST NOT need a courtesy format to read the content of a bundle.
+reader that reads every canonical format can read the data content of every bundle, because the
+producer ships each kind of data content (rasters, vector layers, meshes, the packaged site, the
+site model) in a canonical format wherever it ships that content at all. A reader MUST NOT need a
+courtesy format to read that data content.
+
+Four kinds of file are exempt from that rule, and only these: the **documents** (the Site Brief and
+the plan sheets, PDF and SVG); the **drawings** (`Drawings/Linework.dxf` and the contour linework
+`Surface/Contours.dxf`), which exist as drawings for CAD tools; the **point tables** (`SurfacePoints.csv`
+and `TreePoints.csv`), which are point lists for tools that read CSV; and the **LandXML and DXF encodings of the surface** (`Surface.landxml`,
+`Surface.dxf`), whose surface is carried canonically by the elevation COG. A bundle's exempt files
+are courtesy files, and nothing in the bundle's data content depends on them.
 
 ### 9.3 The courtesy list
 
