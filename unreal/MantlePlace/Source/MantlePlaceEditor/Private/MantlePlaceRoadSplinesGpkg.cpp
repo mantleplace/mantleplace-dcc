@@ -258,6 +258,20 @@ bool ReadDatabase(
 	TArray<FFeatureTable> Chosen;
 	if (RequestedTables.IsEmpty())
 	{
+		// A row that lists no `tables` holds exactly one (format.md 6.3): that one is read whatever
+		// the producer named it, and a file of several is refused, never read as any one of them.
+		if (Available.Num() > 1)
+		{
+			TArray<FString> Names;
+			for (const FFeatureTable& Table : Available)
+			{
+				Names.Add(Table.Name);
+			}
+			OutError = FString::Printf(
+			    TEXT("the manifest lists no tables, so the GeoPackage must hold exactly one feature table, and it holds %d (%s)."),
+			    Available.Num(), *FString::Join(Names, TEXT(", ")));
+			return false;
+		}
 		Chosen = Available;
 	}
 	else

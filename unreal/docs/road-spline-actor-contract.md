@@ -9,7 +9,10 @@ class is in the Runtime module, so a saved level that holds one loads in a cooke
 The importer reads the layer from its GeoPackage, the file the `gpkg` row of the layer's `formats` in
 `vector.layers` points at, through the engine's own SQLiteCore module. The columns it takes are `class`,
 `name` and `width_m_estimated`, and the geometry is the lines of the file's feature tables in
-EPSG:4326 (a table in another frame is refused by name and never reprojected). A layer with no `gpkg`
+EPSG:4326 (a table in another frame is refused by name and never reprojected). A row that lists no
+`tables` holds one table, which the importer reads whatever it is named (the producer names it in
+CamelCase, `RoadSplines`, not `road_splines`); a file of several tables under such a row is refused
+and the layer is read from its `geojson` row, never from one table picked out of the file. A layer with no `gpkg`
 row, or one whose GeoPackage cannot be read, is read from its `geojson` row instead: the same roads,
 the same properties. Both files are declared payloads, so both are verified before anything is placed.
 

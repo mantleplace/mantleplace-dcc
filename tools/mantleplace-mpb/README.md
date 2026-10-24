@@ -84,6 +84,12 @@ against the published schema, and restates neither.
   format's own folder, such as a tileset's, keep their own names (rule 4). Rule 2, plural or
   singular, is a matter of meaning that no validator reads.
 
+- **An untabled GeoPackage row** (`format.md` §6.3), for a manifest that declares 2.x. A
+  `vector.layers[].formats[]` row of format `gpkg` that lists no `tables` holds exactly one
+  feature table, and a reader reads it whatever the producer named it. A file that holds more than
+  one is `gpkg.tables-several` and one that holds none is `gpkg.table-none`, both errors; so is the
+  `-Projected` twin of the row. A file that is not a GeoPackage is `gpkg.unreadable`, at info.
+
 It never reprojects, and it derives no placement value: a frame is checked for being whole and
 self-consistent, never recomputed.
 

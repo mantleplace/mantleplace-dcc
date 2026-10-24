@@ -224,7 +224,7 @@ struct FMantlePlaceRoadSplinesBlock
 	bool bGpkgPresent = false;      // the GeoPackage row is declared (the source read first)
 	FString GpkgPath;               // in-zip path, e.g. "Vector/RoadSplines.gpkg"
 	FString GpkgSha256;             // from the gpkg format row; empty = skip check
-	TArray<FString> GpkgTables;     // the row's `tables` member; empty = every feature table in the file
+	TArray<FString> GpkgTables;     // the row's `tables` member; empty = the file holds exactly one feature table, read whatever it is named
 	FString VerticalDatum;          // vector.layers[road_splines].vertical_datum, verbatim (MPB 1.8.0);
 	                                // FMantlePlaceRoadSplinesLogic::CanPlaceHeights decides
 };

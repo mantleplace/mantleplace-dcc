@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .archive import MANIFEST_PATH, open_bundle
 from .checks import check_frames, check_hashes, check_pointers, check_roles
+from .geopackage import check_geopackage
 from .names import check_names, is_layout_2
 from .report import Report
 from .schema_subset import UnsupportedSchema, errors
@@ -47,6 +48,7 @@ def validate(path: str | Path, *, schemas: SchemaSource | None = None,
         check_frames(manifest, report)
         check_roles(manifest, bundle, report, fold_case=layout_2)
         if layout_2:
+            check_geopackage(manifest, bundle, report)
             check_names(bundle, report)
     return report
 

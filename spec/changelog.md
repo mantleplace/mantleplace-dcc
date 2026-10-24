@@ -101,6 +101,15 @@ the freeze ledger.
 - **Left to the validator.** No two archive paths differ only by case, and a basename never names
   two different things; neither can be a schema pattern.
 
+**Stated before 2.0.0 is published: an untabled GeoPackage row.** A GeoPackage row of
+`vector.layers` that lists no `tables` holds exactly one feature table. The producer names it in
+PascalCase after the file stem (`RoadSplines`), not after the layer (`road_splines`), and a reader
+reads that one table whatever it is called and never the only table of a file that holds several
+([`format.md`](format.md) §6.3). No member changes. The conformance corpus gains
+`bundle.v2GpkgSoleTable` and `bundle.v2GpkgSoleTableSeveral`, and `mpb validate` rejects an untabled
+row whose file holds more than one feature table (`gpkg.tables-several`) or none
+(`gpkg.table-none`).
+
 **What does not change.** The pointer doctrine, the integrity rules, the apply-verbatim rule for
 placement values and fail-closed behaviour on a unit or a value set a reader does not know are as
 in 1.x.

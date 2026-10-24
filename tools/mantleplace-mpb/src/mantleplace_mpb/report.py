@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 #: The checks, in the order a run makes them and a report lists them.
-CHECKS = ("archive", "manifest", "schema", "pointers", "sha256", "frames", "roles", "names")
+CHECKS = ("archive", "manifest", "schema", "pointers", "sha256", "frames", "roles", "geopackage", "names")
 
 SEVERITIES = ("error", "warning", "info")
 

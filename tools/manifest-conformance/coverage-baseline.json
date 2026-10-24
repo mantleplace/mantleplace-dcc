@@ -50,6 +50,8 @@
     "bundle.schemaInvalid": [],
     "bundle.v2FolderUnlisted": [],
     "bundle.v2Full": [],
+    "bundle.v2GpkgSoleTable": [],
+    "bundle.v2GpkgSoleTableSeveral": [],
     "bundle.v2MacosDebrisIgnored": [],
     "bundle.v2NameBasename": [],
     "bundle.v2NameBasenameShared": [],

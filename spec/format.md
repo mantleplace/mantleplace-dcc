@@ -308,6 +308,18 @@ wants is missing, nor take one family's file for another's. The corpus pins the 
 `manifest.revitSplitLayerFallback` lists a split layer's line file before the polygon file that host
 cuts water bodies from.
 
+**A GeoPackage row that lists no `tables` holds exactly one feature table.** The row is then the
+whole layer in one file, and the table is the one the file holds. A producer names that table in
+PascalCase after the file stem (`RoadSplines` in `RoadSplines.gpkg`), and not after the layer
+(`road_splines`). The spec states neither name for such a row, so a reader MUST NOT look the table
+up by the layer's name: it reads the file's one feature table whatever it is called. It MUST NOT
+take the only table of a file that holds several. A row whose file holds several lists them in
+`tables`, and a reader reads the table it wants by name from that list. The same holds for the
+`-Projected` twin of an untabled row. `mpb validate` rejects an untabled row whose file holds more
+than one feature table (`gpkg.tables-several`) or none (`gpkg.table-none`). The corpus pins it:
+`bundle.v2GpkgSoleTable` is a valid untabled row whose one table is CamelCase, and
+`bundle.v2GpkgSoleTableSeveral` an invalid one whose file holds two.
+
 The schema types `name` as a plain string on purpose. **This table states the vocabulary**, and
 the corpus case `manifest.vectorLayerVocabulary` carries every name in it:
 
