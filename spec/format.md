@@ -24,7 +24,8 @@ document says which one.
 ```
 
 Everything else lives under a modality folder. The README is generated per bundle and is not part of
-the contract; a consumer MUST NOT parse it.
+the contract; a consumer MUST NOT parse it. This section and §2 describe the layout of a 1.x bundle;
+the layout of a 2.0 bundle is §10.
 
 A **sidecar manifest** is also published beside the zip in the vault, carrying the same document
 plus one extra block — see [§7](#7-the-sidecar-manifest). Inside the zip,
@@ -32,7 +33,7 @@ plus one extra block — see [§7](#7-the-sidecar-manifest). Inside the zip,
 
 ## 2. Modality folders are human-facing, and machines never navigate by them
 
-The top-level folders are one-word nouns naming a **modality**, not a tool: `Basemap`, `Imagery`,
+In a 1.x bundle the top-level folders are one-word nouns naming a **modality**, not a tool: `Basemap`, `Imagery`,
 `Elevation`, `Surface`, `Site`, `Mesh`, `Vector`, `Landcover`, `Flood`, `Metadata`. The vocabulary
 is a frozen allowlist on the producing side — growing it is a deliberate, reviewed act — and it is
 frozen so that a curator opening the zip finds the same words next year.
@@ -41,9 +42,9 @@ The naming rule inside a folder: **basename is artifact identity, extension is f
 `Surface.dxf` and `Surface.landxml` are one artifact in two formats. A compound basename appears
 only where a file must still describe itself after being copied out of its folder.
 
-**None of this is a machine contract.** Folder names are human-facing convention and are free to
-evolve; they have already been reorganised once, and a pointer-driven consumer needed no change to
-survive it. Which brings us to the rule that matters most in this document.
+**None of this is a machine contract.** Folder names are human-facing convention for a consumer;
+they have already been reorganised twice (1.12.0 and 2.0), and a pointer-driven consumer needed no
+change to survive either. Which brings us to the rule that matters most in this document.
 
 ## 3. The pointer doctrine
 
@@ -567,7 +568,7 @@ The whole procedure, for a consumer holding a zip:
 1. **Extract and parse `Metadata/manifest.json`.**
 2. **Check the version.** Its JSON type tells you the era — a number is the integer pre-history, a
    string is MPB semver. Compare the major component, and refuse an unknown higher major gracefully
-   ([`compatibility.md`](compatibility.md)).
+   (§11, [`compatibility.md`](compatibility.md)).
 3. **Decide materialisation** from the neutral signals (§6.2). If the bundle carries no payload for
    your host, read the top-level facts, then report the readiness reasons rather than an empty
    import.
@@ -586,3 +587,212 @@ The whole procedure, for a consumer holding a zip:
 If a step above is under-specified for a bundle you hold, that is a spec bug worth an issue. If it
 is under-specified in a way the corpus does not catch, it is a corpus bug too — see
 [`conformance.md`](conformance.md).
+
+## 9. MPB is a profile: canonical and courtesy formats
+
+**A profile, never an encoding.** Mantle Place does not invent a way to store data, and MPB does not
+define a file format. Every file in a bundle is in a format somebody else already specified and
+maintains. What MPB adds is the layer above the files: the manifest, the placement rules (§6, §6.8)
+and the licence and source facts of every file (§6.8). A team writing a producer or a reader needs a
+library for each format it touches, and never a parser for anything MPB-specific except the manifest.
+
+### 9.1 The admission test
+
+A format is **canonical**, which is to say promised by this spec, only if it passes all three of:
+
+1. **An open specification**: anyone can read the format's specification without a licence
+   agreement, an account or a fee.
+2. **Royalty-free use**: reading and writing the format needs no royalty and no patent licence.
+3. **Two independent implementations**: at least two implementations that share no code and no
+   owner, so that no single party can change what the format means.
+
+A format that fails any of the three is never canonical, however widely it is used.
+
+### 9.2 The canonical list
+
+| Format | What a bundle carries in it |
+| --- | --- |
+| **COG** (Cloud Optimized GeoTIFF) | Rasters: elevation, imagery, the derived surfaces, land cover |
+| **GeoPackage** | Vector layers and the public records, with attributes |
+| **glTF 2.0** | Meshes: the terrain, extruded buildings |
+| **OpenUSD** | The packaged site: the Context file and the Features file (`.usdz`) |
+| **IFC**, named as **IFC 4.0.2.1 (IFC4 ADD2 TC1)** | The site model |
+
+The IFC row names one published release on purpose. IFC 4.3 is allowed in a later release of this
+spec, as an addition (§11) and not a replacement, so a reader that supports only IFC 4.0.2.1 is
+never broken by it.
+
+What "promised" obliges. For as long as 2.x lasts (§11), a canonical format stays on the list. A
+reader that reads every canonical format can read the content of every bundle, because the
+producer ships each kind of content in a canonical format wherever it ships that content at all.
+A reader MUST NOT need a courtesy format to read the content of a bundle.
+
+### 9.3 The courtesy list
+
+Every other file in a bundle is a **courtesy format**: shipped and described in the manifest, never
+promised. The courtesy formats of this release are:
+
+- **DXF**: the linework, the contours, the surfaces and the feature layers. DXF is a courtesy
+  format everywhere, whatever it carries, so no content has to be argued into an exception to the
+  admission test.
+- **Shapefile**, which Civil 3D and CityEngine read where they do not read GeoPackage.
+- **LandXML**, which Revit and Civil 3D read. The LandXML standard is no longer maintained; it
+  stays only because those tools read it.
+- **OBJ**, with its `.mtl` and texture, for tools that read no glTF.
+- **CSV**, the point tables.
+- **The PNG renditions** of a raster, and the **16-bit heightmap**.
+- **The quantized-mesh tileset** of the terrain.
+- **The PDF and SVG sheets**: the Site Brief and the plan sheets.
+
+A courtesy format stays in the producer's catalogue only while a named tool that curators use reads
+it natively and reads no canonical format for the same content. When no such tool is left, the
+format is dropped from the catalogue, in a release that records it in the
+[changelog](changelog.md). A reader MUST NOT fail a bundle because a courtesy file it once used is
+absent, and reads the manifest's pointers (§3) to learn which files exist.
+
+## 10. The 2.0 layout
+
+MPB 2.0 restructured the archive once so that it can be held steady. The layout below is what a 2.0
+producer writes. The pointer doctrine (§3) is unchanged and stronger for it: a consumer still finds
+every file through a manifest pointer value, and the layout is for the people who unzip.
+
+### 10.1 What a 2.0 bundle contains
+
+The root holds the README and the folders, and nothing else. This tree is the default download of a
+new order at its finest level. It is informative: the pointers decide which of these a given bundle
+holds, and a bundle holds only what the AOI and its sources produced.
+
+```
+README.md
+Metadata/   manifest.json  stac-item.json
+Site/       Brief.pdf  Model.ifc  Context.usdz  Features.usdz
+Elevation/  DEM.tif  Heightmap.png  Hillshade.tif .png  Slope.tif .png  Aspect.tif .png
+            SteepSlopes.gpkg  Contours.dxf  Surface.landxml .dxf  SurfacePoints.csv
+            Terrain.glb .obj .mtl .jpg  Terrain/ (quantized-mesh tileset)
+Imagery/    Imagery.tif  Imagery.png .pgw .prj  NDVI.tif .png
+LandCover/  LandCover.tif .png  LandCoverAreas.gpkg .shp .dxf  CanopyHeight.tif .png
+            WaterMask.tif .png  MaterialWeights.tif  MaterialWeights-1To4.png
+            MaterialWeights-5To8.png  TreePoints.csv
+Features/   StylizedMap.tif .png  Buildings.glb
+            BuildingFootprints, Roads, RoadsDraped, RoadSurfaces, Water, LandUse: each .gpkg .shp .dxf
+Records/    FloodZones, Parcels, Zoning, Wetlands, Soils, Hydrography, Contamination,
+            CriticalHabitat, HistoricPlaces, ProtectedAreas: each .gpkg .dxf
+Drawings/   Linework.dxf  SitePlan-Small.pdf .svg  SitePlan-Large.pdf .svg
+```
+
+Outside that default download, or only on some deliveries, a bundle can also hold the lighter levels
+of a surface or model (`Terrain-Med.glb`, `Context-Min.usdz`), the engine-frame variants, only where
+the order's frame differs from the engine's (`TreePoints-Engine.csv`, `Imagery-Engine.png`), and the
+Shapefile geometry splits (`Water-Lines.shp` with its sidecars).
+
+Four files carry most of what an outsider needs:
+
+- **`Metadata/manifest.json`** is the machine entry point (§1), and the only file found by
+  convention.
+- **`Metadata/stac-item.json`** is the same bundle as a STAC 1.1.0 Item, generated from the manifest,
+  for tools that already catalogue assets. Its asset keys match the manifest's pointer keys and its
+  hrefs are relative. It is a convenience and never an authority: where it and the manifest differ,
+  the manifest is right, and a reader that needs a frame, a role or a licence reads it from the
+  manifest.
+- **`Site/Context.usdz`** is the site as one handover-safe model: the terrain, extruded buildings,
+  roads, water and land use as meshes grouped by class, baked trees, and the imagery as textures. It
+  holds only Produced Work content (§10.4) and no curves, instancing or feature ids. Its up axis is Z,
+  its unit is the metre and its default prim is `/Site`. The `mpb:` georeference on `/Site` is the
+  file's frame, and the file stores its coordinates as offsets from the site origin (§6.8).
+- **`Site/Features.usdz`** is the vector data of the same site as curves, points and polygons with
+  their attributes, in the Context file's coordinates, and composes onto it as a sublayer. Its role
+  is `database`, and its layer metadata carries the ODbL notice.
+
+### 10.2 The folder allowlist
+
+⛔ **Normative: the folders of a 2.0 bundle are exactly these eight.** `Metadata`, `Site`,
+`Elevation`, `Imagery`, `LandCover`, `Features`, `Records` and `Drawings`.
+
+- **A producer MUST put no file at the root but `README.md`, and MUST use no top-level folder
+  outside the list.** The only way to add a folder is a new release of this spec (§11).
+- **A consumer MUST NOT depend on it.** The allowlist binds the producer. A consumer finds a file by
+  its pointer (§3), so a folder it has never heard of is no reason to refuse a bundle.
+- **A validator warns on a folder outside the list.** It is a warning because the consumer rule above
+  holds either way. A validator ignores the entries `__MACOSX` and `.DS_Store` that archive tools
+  add on their own.
+
+Each folder is named for what is in it, as a noun a curator would say. `Features/` holds the shared
+vector layers, rasterised map and building meshes; `Records/` holds the public-record layers, flat
+and named by the labels the Site Brief uses; `Site/` holds the files that describe the whole site and
+need no prefix for it. The land cover polygons are `LandCoverAreas`, not `LandCover`, because they
+are a separate vector product: they are processed differently from `LandCover.tif` and may be
+licensed differently, so they cannot share its basename (rule 1 below).
+
+**Licensing shows per file, never by folder.** A file's terms are its `odbl_role`, `license` and
+`sources` (§6.8), and the bundle's README lists them in a table. No folder means "ODbL".
+
+### 10.3 The six naming rules
+
+⛔ **Normative: a 2.0 producer follows all six.**
+
+1. **One noun per basename.** A basename names one thing, as a PascalCase noun a curator would say,
+   and the extension is the format. Two files that share a basename in one folder are
+   **renditions**: the same data in another encoding, at the same extent, with values possibly
+   quantized and never resampled or reprojected. Different data never shares a basename anywhere in
+   the bundle. (`Surface.dxf` and `Surface.landxml` are one surface in two encodings.)
+2. **Plural for countable things, singular for mass nouns.** `Roads`, `Parcels` and `TreePoints`
+   count things; `Imagery`, `LandCover` and `Water` do not.
+3. **Variant qualifiers are hyphenated, in a fixed order: subset, then frame, then level.** A
+   **variant** exists only for a frame or a format that a whole class of tools needs, never for one
+   plugin; it is named for what it is and sits beside the file it varies. No dots, underscores or
+   spaces.
+   - Subsets: `-Small`, `-1To4`, `-Lines`. A subset is a naming qualifier and never a storage part.
+   - Frame: `-Engine`. A file with it is in the frame a fixed-frame engine host places files in
+     (§6.4, §6.6): the AOI's metric UTM grid, in metres, with heights in the engine content's
+     datum. It is written only for an order whose delivered frame differs, beside the file in the
+     order's frame.
+   - Levels: `-Raw`, `-Med`, `-Min`. A coarser level of a surface or model is a separate file, because
+     none of the shipped formats holds levels portably. `Terrain-Med.glb` follows `Terrain.glb`.
+4. **Fixed names keep their convention.** A name that software or a convention looks up keeps it:
+   `README.md`, `Metadata/manifest.json`, `Metadata/stac-item.json`, and the names inside a format's
+   own structure (tileset internals, Shapefile sidecars, an OBJ's material and texture, world-file
+   and `.prj` sidecars). `Metadata/manifest.json` is fixed so that a reader written for an older
+   major can still open it, read its version and refuse a newer major (§11).
+5. **Character set.** Names are ASCII, from `[A-Za-z0-9._-]`, and no two entries of one archive
+   differ only by case, so that the bundle extracts the same on a case-sensitive and a
+   case-insensitive file system.
+6. **Case matching.** Writers use the exact case. Readers match a manifest path to an archive entry
+   regardless of case.
+
+### 10.4 Produced Works and ODbL files
+
+No file is both a Produced Work and an ODbL file. The Context file and the plan sheets are Produced
+Works at full quality, so a curator can hand them on with a credit line. The Features file, the
+vector layers built from ODbL sources and `Linework.dxf` are ODbL files, kept complete, and they
+carry their notice and the licence link inside the file (GeoPackage metadata, the DXF header, USD
+layer metadata). A file no ODbL source contributes to has the role `none`. The README says which is
+which; the manifest says it for a machine (`odbl_role`, §6.8).
+
+## 11. Stability, and a higher major
+
+**Within 2.x nothing breaks.** The full promise is [`compatibility.md`](compatibility.md) §8: a
+2.x consumer reads every 2.x bundle, and a 2.x producer's bundle stays readable by a consumer
+written against an earlier 2.x. For this document it means that the canonical list (§9.2) and the
+folder allowlist (§10.2) only grow, and that the naming rules (§10.3) never change meaning.
+
+**A higher major is refused gracefully.** A reader opens `Metadata/manifest.json` first, which is
+why rule 4 fixes its name, reads `version` and nothing else of the document, and compares the parsed
+major (compatibility §1, §3). If the major is higher than any it supports, it stops: it does not
+read a pointer, extract an artifact or import part of the bundle. It tells the user the bundle's
+version, the versions it supports, and what to do about it, which is to update the software. A 1.x
+reader refuses a 2.0 bundle in exactly this way, and a 2.x reader refuses a 3.0 bundle the same.
+
+## 12. The bundle's media type
+
+A bundle is a zip and keeps the `.zip` extension, because `.mpb` belongs to other applications. Its
+media type is:
+
+```
+application/vnd.mantleplace.bundle+zip
+```
+
+A server that serves a bundle SHOULD send that type, and a file that is a bundle SHOULD be offered to
+a reader under it. The `+zip` suffix says a generic zip reader can still open the file. The type is
+not registered with IANA yet; it follows the vendor-tree form so that the name is stable if it is
+registered later, and a reader MUST NOT refuse a bundle because it arrived as `application/zip` or
+as `application/octet-stream`. What makes a file a bundle is `Metadata/manifest.json` inside it.
