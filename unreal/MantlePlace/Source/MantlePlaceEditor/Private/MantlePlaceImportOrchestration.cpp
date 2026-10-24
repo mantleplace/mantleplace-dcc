@@ -83,9 +83,11 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 	}
 	if (MantlePlaceOdblLogic::NeedsCredit(Manifest.FileLicensing, SourcePaths))
 	{
-		for (const FString& Line : MantlePlaceOdblLogic::CreditLines(Manifest.Attribution, Manifest.FileLicensing, SourcePaths))
+		// Through CreditTags, never one FName per line: a line past FName's length is an assertion.
+		for (const FString& CreditTag : MantlePlaceOdblLogic::CreditTags(
+				 MantlePlaceOdblLogic::CreditLines(Manifest.Attribution, Manifest.FileLicensing, SourcePaths)))
 		{
-			ExtraTags.Add(FName(*MantlePlaceImportNaming::CreditLineTag(Line)));
+			ExtraTags.Add(FName(*CreditTag));
 		}
 	}
 	const auto Mark = [&](AActor* Marked)

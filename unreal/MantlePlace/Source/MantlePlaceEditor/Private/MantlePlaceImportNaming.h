@@ -157,6 +157,9 @@ namespace MantlePlaceImportNaming
 	FString CreditLineTag(const FString& Line);
 	FString CreditLineTagPrefix();
 
+	/** `mantleplace_credit_part=<line>.<part>.<parts>:<text>` -- one part of a credit line too long for one tag. */
+	FString CreditPartTagPrefix();
+
 	/** `mantleplace_credit_actor=<identity>` -- marks the credit actor Prepare for handover adds. */
 	FString CreditActorTag(const FString& Identity);
 

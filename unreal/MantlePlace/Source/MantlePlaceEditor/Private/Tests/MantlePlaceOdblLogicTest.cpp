@@ -9,6 +9,7 @@
 #include "MantlePlaceOdblLogic.h"
 #include "Tests/MantlePlaceConformanceCorpus.h"
 
+#include "Containers/StringConv.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
@@ -171,6 +172,9 @@ bool FMantlePlaceOdblLogicTest::RunTest(const FString& Parameters)
 		!MantlePlaceImportNaming::CreditActorTag(Identity).StartsWith(MantlePlaceImportNaming::ImportTagPrefix()));
 	TestTrue(TEXT("the credit-line tag is not the credit-actor tag"),
 		!MantlePlaceImportNaming::CreditActorTag(Identity).StartsWith(MantlePlaceImportNaming::CreditLineTagPrefix()));
+	TestTrue(TEXT("a credit part is neither a whole credit line nor the credit actor"),
+		!MantlePlaceImportNaming::CreditPartTagPrefix().StartsWith(MantlePlaceImportNaming::CreditLineTagPrefix())
+			&& !MantlePlaceImportNaming::CreditActorTag(Identity).StartsWith(MantlePlaceImportNaming::CreditPartTagPrefix()));
 	TestEqual(TEXT("the ODbL layer's asset"), MantlePlaceImportNaming::DataLayerAssetName(MantlePlaceImportNaming::OdblLayerName()),
 		FString(TEXT("DL_ODbL")));
 
@@ -258,6 +262,84 @@ bool FMantlePlaceOdblManifestTest::RunTest(const FString& Parameters)
 			TestTrue(TEXT("no file_entries: nothing is listed"), M.FileLicensing.IsEmpty());
 			TestTrue(TEXT("so every file reads as database"),
 				MantlePlaceOdblLogic::RoleOfPath(M.FileLicensing, TEXT("Mesh/Terrain.glb")) == EMantlePlaceOdblRole::Database);
+		}
+	}
+	return true;
+}
+
+// A credit line is recorded on the actor as tags, and a tag is an FName, which holds at most 1023
+// characters: a longer FName is an assertion that takes the editor down. A real bundle's attribution
+// carries lines far longer than that (a public-records disclaimer of 1,750 characters crashed the
+// first live import of a 2.0 bundle), so a line that does not fit one tag is recorded in numbered
+// parts and read back whole, verbatim and in order.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceOdblCreditTagsTest,
+	"MantlePlace.Import.Odbl.CreditTags",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceOdblCreditTagsTest::RunTest(const FString& Parameters)
+{
+	using namespace MantlePlaceOdblLogic;
+
+	const FString Short = TEXT("(c) OpenStreetMap contributors — ODbL-1.0");
+	FString Long;
+	for (int32 Index = 0; Long.Len() < 2500; ++Index)
+	{
+		Long += FString::Printf(TEXT("Clause %d of a disclaimer that is not legal advice. "), Index);
+	}
+	const FString AlsoShort = TEXT("USGS 3DEP 1 m DEM");
+
+	// A line that fits is the tag it always was, so a level imported before this reads the same.
+	{
+		const TArray<FString> Tags = CreditTags({ Short });
+		TestEqual(TEXT("one short line is one tag"), Tags.Num(), 1);
+		TestEqual(TEXT("in the form every earlier import wrote"),
+			Tags.Num() > 0 ? Tags[0] : FString(), MantlePlaceImportNaming::CreditLineTag(Short));
+	}
+
+	// A long line becomes parts, every one short enough to be a tag, and reads back whole and in place.
+	{
+		const TArray<FString> Lines = { Short, Long, AlsoShort };
+		const TArray<FString> Tags = CreditTags(Lines);
+		TestTrue(TEXT("the long line is more than one tag"), Tags.Num() > Lines.Num());
+		int32 Longest = 0;
+		for (const FString& Tag : Tags)
+		{
+			Longest = FMath::Max(Longest, Tag.Len());
+		}
+		TestTrue(FString::Printf(TEXT("every tag fits an FName (longest %d)"), Longest), Longest <= NAME_SIZE - 1);
+		TestEqual(TEXT("the lines read back verbatim, in order"), CreditLinesFromTags(Tags), Lines);
+	}
+
+	// Read back from an actor's tags, which hold other tags too and may hold the same line twice.
+	{
+		TArray<FString> Tags = { TEXT("mantleplace_import=abc"), TEXT("mantleplace_odbl") };
+		Tags.Append(CreditTags({ Long }));
+		Tags.Add(TEXT("mantleplace_equivalent=terrain"));
+		Tags.Append(CreditTags({ Short }));
+		TestEqual(TEXT("other tags are ignored"), CreditLinesFromTags(Tags), TArray<FString>({ Long, Short }));
+	}
+
+	// A line with a part missing (an edited tag list) is dropped rather than credited half-said.
+	{
+		TArray<FString> Tags = CreditTags({ Long, Short });
+		Tags.RemoveAt(1);
+		TestEqual(TEXT("an incomplete line is dropped, the rest kept"), CreditLinesFromTags(Tags), TArray<FString>({ Short }));
+	}
+
+	// A part never ends between the two halves of a surrogate pair.
+	{
+		FString Wide;
+		while (Wide.Len() < 3000)
+		{
+			Wide += TEXT("🌍"); // a character outside the BMP: two UTF-16 units
+		}
+		const TArray<FString> Tags = CreditTags({ Wide });
+		TestEqual(TEXT("a line of wide characters reads back verbatim"), CreditLinesFromTags(Tags), TArray<FString>({ Wide }));
+		for (const FString& Tag : Tags)
+		{
+			TestFalse(TEXT("no part ends on a high surrogate"),
+				!Tag.IsEmpty() && StringConv::IsHighSurrogate(Tag[Tag.Len() - 1]));
 		}
 	}
 	return true;

@@ -32,8 +32,11 @@
 #include "LandscapeLayerInfoObject.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInstance.h"
+#include "Dom/JsonObject.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 namespace MantlePlaceImportLiveTest
 {
@@ -176,6 +179,114 @@ namespace MantlePlaceImportLiveTest
 	bool IsCi()
 	{
 		return !FPlatformMisc::GetEnvironmentVariable(TEXT("CI")).IsEmpty();
+	}
+
+	/** One published ground point, in this host's frame: world X north, world Y east, Z in the landscape's datum. */
+	struct FCheckPoint
+	{
+		double XCm = 0.0;
+		double YCm = 0.0;
+		double ExpectedZCm = 0.0;
+	};
+
+	/** The datum of every height the landscape carries; a check point stated in another is shifted into it. */
+	const TCHAR* const LandscapeDatum = TEXT("EGM2008-orthometric");
+
+	/**
+	 * The bundle's own surface points (`elevation.points_csv`), as check points for the landscape.
+	 *
+	 * Read from the manifest this test re-opens, not from the importer's parse: the importer never reads
+	 * these points, so they are an independent statement of where the ground is, cut from the DEM rather
+	 * than from the heightmap the landscape is built from. They are local ENU offsets from the AOI
+	 * centroid, which is the world origin here, so the expected position is the published one with no
+	 * arithmetic but the axis order (north to +X, east to +Y) and metres to centimetres. A point stated in
+	 * NAVD88 is moved into the landscape's EGM2008 by the bundle's own `navd88_minus_egm2008_m`, verbatim;
+	 * a bundle that does not publish that difference has no check points this test can trust.
+	 *
+	 * `Wanted` points are taken evenly through the file. Returns false, with the reason, when the bundle
+	 * publishes no points this test can read.
+	 */
+	bool ReadCheckPoints(FZipArchiveReader& Reader, int32 Wanted, TArray<FCheckPoint>& Out, FString& OutReason)
+	{
+		Out.Reset();
+		TArray<uint8> ManifestBytes;
+		if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
+		{
+			OutReason = TEXT("the bundle has no Metadata/manifest.json");
+			return false;
+		}
+		const FString ManifestText(
+			FUTF8ToTCHAR(reinterpret_cast<const ANSICHAR*>(ManifestBytes.GetData()), ManifestBytes.Num()));
+		TSharedPtr<FJsonObject> Root;
+		if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(ManifestText), Root) || !Root.IsValid())
+		{
+			OutReason = TEXT("the manifest does not parse");
+			return false;
+		}
+		const TSharedPtr<FJsonObject>* Elevation = nullptr;
+		const TSharedPtr<FJsonObject>* Points = nullptr;
+		if (!Root->TryGetObjectField(TEXT("elevation"), Elevation)
+			|| !(*Elevation)->TryGetObjectField(TEXT("points_csv"), Points))
+		{
+			OutReason = TEXT("the bundle publishes no elevation.points_csv");
+			return false;
+		}
+		const FString Path = (*Points)->GetStringField(TEXT("path"));
+		const FString Frame = (*Points)->GetStringField(TEXT("horizontal_frame"));
+		const FString Datum = (*Points)->GetStringField(TEXT("vertical_datum"));
+		if (!Frame.StartsWith(TEXT("local-ENU")))
+		{
+			OutReason = FString::Printf(TEXT("its surface points are in \"%s\", not local ENU"), *Frame);
+			return false;
+		}
+
+		double DatumShiftM = 0.0;
+		if (!Datum.Equals(LandscapeDatum, ESearchCase::CaseSensitive))
+		{
+			const TSharedPtr<FJsonObject>* Dem = nullptr;
+			double NavdMinusEgm = 0.0;
+			if (!Datum.StartsWith(TEXT("NAVD88")) || !(*Elevation)->TryGetObjectField(TEXT("dem"), Dem)
+				|| (*Dem)->GetStringField(TEXT("vertical_datum")) != Datum
+				|| !(*Dem)->TryGetNumberField(TEXT("navd88_minus_egm2008_m"), NavdMinusEgm))
+			{
+				OutReason = FString::Printf(
+					TEXT("its surface points are in \"%s\" and the bundle publishes no difference to %s"),
+					*Datum, LandscapeDatum);
+				return false;
+			}
+			DatumShiftM = -NavdMinusEgm;
+		}
+
+		TArray<uint8> CsvBytes;
+		if (!Reader.TryReadFile(Path, CsvBytes))
+		{
+			OutReason = FString::Printf(TEXT("the bundle has no entry \"%s\""), *Path);
+			return false;
+		}
+		const FString CsvText(FUTF8ToTCHAR(reinterpret_cast<const ANSICHAR*>(CsvBytes.GetData()), CsvBytes.Num()));
+		TArray<FString> Lines;
+		CsvText.ParseIntoArrayLines(Lines);
+		const int32 Stride = FMath::Max(1, Lines.Num() / FMath::Max(1, Wanted));
+		for (int32 Index = Stride / 2; Index < Lines.Num() && Out.Num() < Wanted; Index += Stride)
+		{
+			TArray<FString> Cells;
+			Lines[Index].ParseIntoArray(Cells, TEXT(","));
+			if (Cells.Num() < 3)
+			{
+				continue;
+			}
+			FCheckPoint Point;
+			Point.YCm = FCString::Atod(*Cells[0]) * 100.0; // east
+			Point.XCm = FCString::Atod(*Cells[1]) * 100.0; // north
+			Point.ExpectedZCm = (FCString::Atod(*Cells[2]) + DatumShiftM) * 100.0;
+			Out.Add(Point);
+		}
+		if (Out.IsEmpty())
+		{
+			OutReason = FString::Printf(TEXT("\"%s\" holds no x,y,z rows"), *Path);
+			return false;
+		}
+		return true;
 	}
 }
 
@@ -701,6 +812,126 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			AddInfo(FString::Printf(
 				TEXT("orientation gate: best '%s' %+.4f, runner-up %+.4f (margin %.4f)"),
 				DihedralName(Best), BestCorr, RunnerUp, BestCorr - RunnerUp));
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Placement gate: the landscape stands where the bundle says the ground is.
+	//
+	// The orientation gate above is offset- and scale-invariant on purpose, so a landscape that is the
+	// right way round but sits a hundred metres east, or a metre too low, passes it. This closes that:
+	// the bundle's own surface points, cut from the DEM and never read by the importer, are known check
+	// points, and each must find the landscape's ground within a metre of its published height at its
+	// published position. The landscape is a 1 m grid, so the nearest vertex is within 0.71 m of a
+	// point, and a metre holds that plus the slope across it; a placement off by a post, a datum or a
+	// flip does not fit inside it, and the mean and RMS are logged so a drift shows before it fails.
+	// ---------------------------------------------------------------------------------------------
+	if (Landscape != nullptr)
+	{
+		using namespace MantlePlaceImportLiveTest;
+		constexpr int32 WantedPoints = 64;
+		constexpr double ToleranceCm = 100.0;
+
+		TArray<FCheckPoint> CheckPoints;
+		FString NoPoints;
+		bool bRead = false;
+		if (IFileHandle* Handle = Platform.OpenRead(*Zip))
+		{
+			FZipArchiveReader Reader(Handle); // takes ownership of the handle
+			bRead = ReadCheckPoints(Reader, WantedPoints, CheckPoints, NoPoints);
+		}
+		else
+		{
+			NoPoints = FString::Printf(TEXT("could not reopen the bundle \"%s\""), *Zip);
+		}
+
+		if (!bRead)
+		{
+			// The skip rule the rest of this test lives by: a warning locally, an error under CI.
+			const FString Reason = FString::Printf(TEXT("Placement gate not run: %s."), *NoPoints);
+			if (bStrict)
+			{
+				AddError(Reason);
+			}
+			else
+			{
+				AddWarning(Reason);
+			}
+		}
+		else
+		{
+			TArray<FVector> Vertices;
+			for (ULandscapeComponent* Component : MantlePlaceImportLiveTest::GatherLandscapeComponents(Landscape))
+			{
+				FLandscapeComponentDataInterface Data(Component, /*MipLevel*/ 0, /*WorkOnEditingLayer*/ false);
+				if (Data.GetRawHeightData() == nullptr)
+				{
+					continue;
+				}
+				const int32 SizeVerts = Component->ComponentSizeQuads + 1;
+				for (int32 LocalY = 0; LocalY < SizeVerts; ++LocalY)
+				{
+					for (int32 LocalX = 0; LocalX < SizeVerts; ++LocalX)
+					{
+						Vertices.Add(Data.GetWorldVertex(LocalX, LocalY));
+					}
+				}
+			}
+
+			FBox2D Extent(ForceInit);
+			for (const FVector& Vertex : Vertices)
+			{
+				Extent += FVector2D(Vertex.X, Vertex.Y);
+			}
+			const FBox2D Inner = Extent.ExpandBy(-100.0); // a point on the very edge has no ground on one side
+
+			int32 Measured = 0;
+			int32 Outside = 0;
+			double SumDz = 0.0;
+			double SumDz2 = 0.0;
+			double MaxAbsDz = 0.0;
+			double MaxDistance = 0.0;
+			for (const FCheckPoint& Point : CheckPoints)
+			{
+				if (!Inner.IsInside(FVector2D(Point.XCm, Point.YCm)))
+				{
+					++Outside;
+					continue;
+				}
+				double BestD2 = TNumericLimits<double>::Max();
+				double GroundZ = 0.0;
+				for (const FVector& Vertex : Vertices)
+				{
+					const double D2 = FMath::Square(Vertex.X - Point.XCm) + FMath::Square(Vertex.Y - Point.YCm);
+					if (D2 < BestD2)
+					{
+						BestD2 = D2;
+						GroundZ = Vertex.Z;
+					}
+				}
+				const double Dz = GroundZ - Point.ExpectedZCm;
+				++Measured;
+				SumDz += Dz;
+				SumDz2 += Dz * Dz;
+				MaxAbsDz = FMath::Max(MaxAbsDz, FMath::Abs(Dz));
+				MaxDistance = FMath::Max(MaxDistance, FMath::Sqrt(BestD2));
+			}
+
+			TestTrue(*FString::Printf(TEXT("placement gate: at least half of the %d check points fall on the landscape (%d did)"),
+						 CheckPoints.Num(), Measured),
+				Measured * 2 >= CheckPoints.Num());
+			if (Measured > 0)
+			{
+				const double Mean = SumDz / Measured;
+				const double Rms = FMath::Sqrt(SumDz2 / Measured);
+				AddInfo(FString::Printf(
+					TEXT("placement gate: %d check points (%d outside), landscape minus published ground: "
+						 "mean %+.3f m, RMS %.3f m, max |dz| %.3f m, nearest vertex within %.3f m"),
+					Measured, Outside, Mean / 100.0, Rms / 100.0, MaxAbsDz / 100.0, MaxDistance / 100.0));
+				TestTrue(*FString::Printf(TEXT("placement gate: every check point within %.1f m of the ground (max %.3f m)"),
+							 ToleranceCm / 100.0, MaxAbsDz / 100.0),
+					MaxAbsDz <= ToleranceCm);
+			}
 		}
 	}
 

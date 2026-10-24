@@ -43,15 +43,12 @@ bool ReadItem(const AActor& Actor, MantlePlaceOdblLogic::FHandoverItem& OutItem)
 	}
 	OutItem.bOdbl = Actor.Tags.Contains(MantlePlaceImportNaming::OdblTag());
 	TagValue(Actor, MantlePlaceImportNaming::EquivalenceTagPrefix(), OutItem.EquivalenceGroup);
-	const FString CreditPrefix = MantlePlaceImportNaming::CreditLineTagPrefix();
+	TArray<FString> TagStrings;
 	for (const FName& Tag : Actor.Tags)
 	{
-		const FString Text = Tag.ToString();
-		if (Text.StartsWith(CreditPrefix))
-		{
-			OutItem.CreditLines.AddUnique(Text.Mid(CreditPrefix.Len()));
-		}
+		TagStrings.Add(Tag.ToString());
 	}
+	OutItem.CreditLines = MantlePlaceOdblLogic::CreditLinesFromTags(TagStrings);
 	return true;
 }
 

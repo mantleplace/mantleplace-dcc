@@ -177,6 +177,11 @@ namespace MantlePlaceImportNaming
 		return CreditLineTagPrefix() + Line;
 	}
 
+	FString CreditPartTagPrefix()
+	{
+		return TEXT("mantleplace_credit_part=");
+	}
+
 	FString CreditActorTag(const FString& Identity)
 	{
 		return TEXT("mantleplace_credit_actor=") + Identity;
