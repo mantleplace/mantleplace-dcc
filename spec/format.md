@@ -630,9 +630,11 @@ courtesy format to read that data content.
 
 Four kinds of file are exempt from that rule, and only these: the **documents** (the Site Brief and
 the plan sheets, PDF and SVG); the **drawings** (`Drawings/Linework.dxf` and the contour linework
-`Surface/Contours.dxf`), which exist as drawings for CAD tools; the **point tables** (`SurfacePoints.csv`
-and `TreePoints.csv`), which are point lists for tools that read CSV; and the **LandXML and DXF encodings of the surface** (`Surface.landxml`,
-`Surface.dxf`), whose surface is carried canonically by the elevation COG. A bundle's exempt files
+`Elevation/Contours.dxf`), which exist as drawings for CAD tools; the **point tables**
+(`Elevation/SurfacePoints.csv` and `LandCover/TreePoints.csv`), which are point lists for tools that
+read CSV; and the **LandXML and DXF encodings of the surface** (`Elevation/Surface.landxml`,
+`Elevation/Surface.dxf`), whose surface is carried canonically by the elevation COG,
+`Elevation/DEM.tif`, in the same folder. A bundle's exempt files
 are courtesy files, and nothing in the bundle's data content depends on them.
 
 ### 9.3 The courtesy list
@@ -690,8 +692,10 @@ Drawings/   Linework.dxf  SitePlan-Small.pdf .svg  SitePlan-Large.pdf .svg
 
 Outside that default download, or only on some deliveries, a bundle can also hold the lighter levels
 of a surface or model (`Terrain-Med.glb`, `Context-Min.usdz`), the engine-frame variants, only where
-the order's frame differs from the engine's (`TreePoints-Engine.csv`, `Imagery-Engine.png`), and the
-Shapefile geometry splits (`Water-Lines.shp` with its sidecars).
+the order's frame differs from the engine's (`TreePoints-Engine.csv`, `Imagery-Engine.png`), the
+projected-CRS twins of the vector layers, only where a layer is not already in the order's CRS
+(`RoadsDraped-Projected.gpkg`), and the Shapefile geometry splits (`Water-Lines.shp` with its
+sidecars).
 
 Four files carry most of what an outsider needs:
 
@@ -750,10 +754,13 @@ licensed differently, so they cannot share its basename (rule 1 below).
    plugin; it is named for what it is and sits beside the file it varies. No dots, underscores or
    spaces.
    - Subsets: `-Small`, `-1To4`, `-Lines`. A subset is a naming qualifier and never a storage part.
-   - Frame: `-Engine`. A file with it is in the frame a fixed-frame engine host places files in
-     (§6.4, §6.6): the AOI's metric UTM grid, in metres, with heights in the engine content's
-     datum. It is written only for an order whose delivered frame differs, beside the file in the
-     order's frame.
+   - Frames: `-Engine` and `-Projected`. A file with `-Engine` is in the frame a fixed-frame engine
+     host places files in (§6.4, §6.6): the AOI's metric UTM grid, in metres, with heights in the
+     engine content's datum. It is written only for an order whose delivered frame differs, beside
+     the file in the order's frame. A `-Projected` file is a vector layer's twin for a reader that
+     works in a projected CRS: the same tables, columns and types in the order's projected CRS and
+     unit, with absolute coordinates, and the manifest names each twin in
+     `layout.projected_variants`. A layer already in that CRS has no twin.
    - Levels: `-Raw`, `-Med`, `-Min`. A coarser level of a surface or model is a separate file, because
      none of the shipped formats holds levels portably. `Terrain-Med.glb` follows `Terrain.glb`.
 4. **Fixed names keep their convention.** A name that software or a convention looks up keeps it:

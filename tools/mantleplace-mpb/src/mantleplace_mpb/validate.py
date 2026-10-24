@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .archive import MANIFEST_PATH, open_bundle
 from .checks import check_frames, check_hashes, check_pointers, check_roles
+from .names import check_names, is_layout_2
 from .report import Report
 from .schema_subset import UnsupportedSchema, errors
 from .schemas import SchemaProblem, SchemaSource, version_key
@@ -38,10 +39,15 @@ def validate(path: str | Path, *, schemas: SchemaSource | None = None,
                        f"{MANIFEST_PATH} is JSON but not an object", file=MANIFEST_PATH)
             return report
         _check_schema(manifest, schemas, report)
-        check_pointers(manifest, bundle, report)
-        check_hashes(manifest, bundle, report)
+        # The 2.0 layout's rules hold a bundle that declares 2.x, and only one: a 1.x bundle is
+        # judged by its own version, whose layout and names were different.
+        layout_2 = is_layout_2(manifest.get("version"))
+        check_pointers(manifest, bundle, report, fold_case=layout_2)
+        check_hashes(manifest, bundle, report, fold_case=layout_2)
         check_frames(manifest, report)
-        check_roles(manifest, bundle, report)
+        check_roles(manifest, bundle, report, fold_case=layout_2)
+        if layout_2:
+            check_names(bundle, report)
     return report
 
 
@@ -69,6 +75,11 @@ def _check_schema(manifest: dict, schemas: SchemaSource, report: Report) -> None
         else:
             report.add("schema", problem.code, "error", str(problem), pointer="/version")
         return
+    if schemas.is_staged(key):
+        report.add("schema", "schema.staged", "info",
+                   f"version {key} is staged: served at {report.schema_url} but not yet in the "
+                   "freeze ledger, so there is no recorded sha256 to hold its bytes to; the "
+                   "manifest is held to the served document", pointer="/version")
     try:
         found = errors(schema, manifest)
     except UnsupportedSchema as exc:

@@ -12,7 +12,7 @@
     "",
     "Case fields:",
     "  id              stable, dotted, never renumbered — host suites name it in failures.",
-    "  group           manifest | vault | auth | cache | digest | projection.",
+    "  group           manifest | vault | auth | cache | digest | projection | bundle.",
     "  file            path relative to corpus/.",
     "  expect          accept  — the parser MUST accept and produce `expectations`.",
     "                  reject  — the parser MUST refuse; `errorContains` if the message matters.",
@@ -30,6 +30,9 @@
     "                  by check_manifest_conformance.py against the file's own `version` field —",
     "                  a case whose declared and actual versions disagree is corpus rot, caught",
     "                  before any host suite sees it.",
+    "  stagedSchema    bundle group: the manifest declares a staged version, served but not",
+    "                  yet in the freeze ledger; the runner holds it to the served schema",
+    "                  (optional). Removed once that version is frozen.",
     "",
     "Top-level fields:",
     "  corpusVersion   the shape of THIS index's case fields — bumped on a breaking change to",
@@ -1766,6 +1769,15 @@
       "errorContains": "no longer supported"
     },
     {
+      "id": "manifest.reject.majorAhead",
+      "group": "manifest",
+      "file": "manifest/reject-major-ahead.json",
+      "expect": "reject",
+      "manifestVersion": "2.0.0",
+      "reason": "A higher major is refused gracefully (format.md §11, compatibility §3): a reader opens the manifest, reads `version` and nothing else, and stops when its major is above the one it reads, telling the user to update rather than to re-download. The file is a full 2.0 manifest, the one bundle.v2Full ships, so a 1.x reader is shown the real thing and must still refuse it before reading a pointer. The case is the version gate's other end, so it is host-invariant even though it names a version above every floor; when the hosts read 2.x, it is restamped one major ahead of them.",
+      "errorContains": "newer than this plugin understands"
+    },
+    {
       "id": "manifest.foliagePointsVerified",
       "group": "manifest",
       "file": "manifest/foliage-points-verified.json",
@@ -2109,6 +2121,145 @@
           "role.sources-mismatch"
         ]
       }
+    },
+    {
+      "id": "bundle.v2Full",
+      "group": "bundle",
+      "file": "bundle/v2-full.json",
+      "expect": "accept",
+      "stagedSchema": true,
+      "reason": "The default download of a 2.0 bundle (format.md §10.1) conforms: README.md alone at the root, the eight folders, every file with a whole frame (or `placed: false`), a role, a licence and its sources, and every name by the six rules: renditions share a basename in one folder, the fixed names and a tileset's and a Shapefile's own names keep their convention, and variants run subset, frame, level (`Terrain-Engine-Med.glb`). 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "hashesVerified": 0
+      }
+    },
+    {
+      "id": "bundle.v2NameBasename",
+      "group": "bundle",
+      "file": "bundle/v2-name-basename.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "Rule 1: a basename is a PascalCase noun a curator would say, and the extension is the format. `roads.gpkg` is not one. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "name.basename"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v2NameBasenameShared",
+      "group": "bundle",
+      "file": "bundle/v2-name-basename-shared.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "Rule 1: two files share a basename only as renditions in one folder, and different data never shares one anywhere in the bundle. `Water` in Features/ and in Records/ names two things. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "name.basename-shared"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v2NameQualifier",
+      "group": "bundle",
+      "file": "bundle/v2-name-qualifier.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "Rule 3: a variant qualifier is hyphenated, with no dots, underscores or spaces. `Terrain_Med.glb` joins its level with an underscore. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "name.qualifier"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v2NameQualifierOrder",
+      "group": "bundle",
+      "file": "bundle/v2-name-qualifier-order.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "Rule 3: qualifiers run subset, then frame, then level. `Terrain-Med-Engine.glb` puts the level before the frame; `Terrain-Engine-Med.glb` is the name. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "name.qualifier-order"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v2NameCharset",
+      "group": "bundle",
+      "file": "bundle/v2-name-charset.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "Rule 5: names are ASCII from [A-Za-z0-9._-]. `Site Plan.pdf` holds a space. The file has no entry (the schema refuses the path as a key), so its role is unstated too. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "name.charset"
+        ],
+        "warnings": [
+          "role.unstated"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v2NameCaseCollision",
+      "group": "bundle",
+      "file": "bundle/v2-name-case-collision.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "Rule 5: no two entries of one archive differ only by case, so that the bundle extracts the same on a case-sensitive and a case-insensitive file system. The runner builds this case only as the two zips: no folder on a case-insensitive file system can hold it. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "name.case-collision"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v2NameCaseMismatch",
+      "group": "bundle",
+      "file": "bundle/v2-name-case-mismatch.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "Rule 6: a reader matches a manifest path to an archive entry regardless of case, so `Elevation/DEM.tif` finds `Elevation/Dem.tif` and nothing is missing; and a writer uses the exact case, so the bundle does not conform. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "name.case-mismatch"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v2FolderUnlisted",
+      "group": "bundle",
+      "file": "bundle/v2-folder-unlisted.json",
+      "expect": "accept",
+      "stagedSchema": true,
+      "reason": "The folder allowlist binds the producer and no consumer depends on it (format.md §10.2), so a folder outside the eight is a warning and the bundle still conforms. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "warnings": [
+          "layout.folder-unlisted"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v2RootFileUnlisted",
+      "group": "bundle",
+      "file": "bundle/v2-root-file-unlisted.json",
+      "expect": "accept",
+      "stagedSchema": true,
+      "reason": "A 2.0 root holds README.md and the folders and nothing else (format.md §10.2). A stray root file is a warning for the reason an unlisted folder is one: a reader finds every file by its pointer, wherever it sits. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "warnings": [
+          "layout.root-file"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v2MacosDebrisIgnored",
+      "group": "bundle",
+      "file": "bundle/v2-macos-debris-ignored.json",
+      "expect": "accept",
+      "stagedSchema": true,
+      "reason": "A validator ignores the __MACOSX and .DS_Store entries archive tools add on their own (format.md §10.2). Read as entries, each would break a 2.0 rule; ignored, none is reported. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`)."
     }
   ]
 }

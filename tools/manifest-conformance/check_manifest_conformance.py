@@ -22,6 +22,14 @@ gate fetches both documents and requires them to be identical once prose and the
 stripped, so a release mislabelled as a patch fails here instead of passing unread. This is the gate that scales as hosts go from one to four — each new
 DCC host adds its own entry to `verified-against.json` and is held to the same line.
 
+**A staged release.** A major can be served for readers before it is frozen: its schema answers at
+its URL and the freeze ledger does not name it yet. A host pinned to it is verified against the
+served document, and reported as staged rather than published, so the hosts can verify against a
+major before it is ledgered. Only the next release can be staged: a pin that is served but sorts
+at or below the ledger's newest version is neither frozen nor staged, and fails. A staged version
+is never drift for a host pinned below it, because "is anything newer published?" is the ledger's
+answer alone.
+
 **N hosts, one gate.** Nothing here knows what a host is written in. Every host declares, in its own
 `verified-against.json` entry, where its version floor lives (`floorSource.path` +
 `floorSource.pattern`) and which test file a reviewer should touch when the pin moves
@@ -917,6 +925,29 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
             f"      ({entry['floorSource']['path']}), or pin this host back to the era it reads."
         )
 
+    staged_note = ""
+    ledgered = fetch_published_versions()
+    if pinned not in ledgered:
+        # Served but not ledgered. A STAGED release is served for readers before it is frozen,
+        # and it is the next release: above everything the ledger names. A host exercised against
+        # the served document is verified against it, and says so; the pin freezes with it. A
+        # served version below the ledger's newest is not the next release, so it is not staged:
+        # nothing published stands behind the pin.
+        head = ledgered[-1]
+        if sort_key(pinned) <= sort_key(head):
+            failures.append(
+                f"FAIL [{host}]: pinned manifest {describe(pinned)} is served but not in the freeze "
+                f"ledger, which already names {describe(head)}.\n"
+                "      A staged release sits above every frozen one, so this pin is neither frozen\n"
+                "      nor staged. Pin a version the ledger names, or the staged release above it."
+            )
+        else:
+            staged_note = (
+                f"    {describe(pinned)} is staged: served at "
+                f"{SCHEMA_URL.format(version=pinned)}\n    but not yet in the freeze ledger "
+                f"(newest frozen: {describe(head)}). Verified against the served document."
+            )
+
     newest = newest_published(pinned)
     patch_note = ""
     if sort_key(newest) > sort_key(pinned) and is_patch_over(pinned, newest):
@@ -962,7 +993,10 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
         )
 
     if not failures:
-        if patch_note:
+        if staged_note:
+            print(f"OK [{host}]: verified against manifest {describe(pinned)}, staged.")
+            print(staged_note)
+        elif patch_note:
             print(f"OK [{host}]: verified against manifest {describe(pinned)}.")
             print(patch_note)
         else:

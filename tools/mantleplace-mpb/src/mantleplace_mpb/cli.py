@@ -34,6 +34,10 @@ def _parser() -> argparse.ArgumentParser:
                                   f"(default {DEFAULT_BASE_URL})")
         command.add_argument("--timeout", type=float, default=20.0,
                              help="seconds to wait for each schema fetch")
+        command.add_argument("--staged", action="store_true",
+                             help="hold a manifest that declares a staged version (served for "
+                                  "readers, not yet in the freeze ledger) to the served schema, "
+                                  "instead of failing it as unpublished")
 
     check = commands.add_parser("validate", help="check one bundle: a zip, a folder or a wrapper "
                                                  "folder")
@@ -58,7 +62,7 @@ def _text(report: Report) -> str:
         lines.append(f"  {finding.severity:<7} {finding.code:<36} {where}")
         lines.append(f"          {finding.message}")
     checks = ", ".join(f"{name} {report.check_status(name)}" for name in
-                       ("schema", "pointers", "sha256", "frames", "roles"))
+                       ("schema", "pointers", "sha256", "frames", "roles", "names"))
     lines.append(f"checks: {checks}")
     h = report.hashes
     lines.append(f"sha256: {h['verified']} verified, {h['mismatched']} mismatched, "
@@ -69,7 +73,7 @@ def _text(report: Report) -> str:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     schemas = SchemaSource(schema_dir=args.schema_dir, base_url=args.schema_base_url,
-                           timeout=args.timeout)
+                           timeout=args.timeout, staged=args.staged)
     if args.command == "validate":
         report = validate(args.bundle, schemas=schemas, strict=args.strict)
         print(json.dumps(report.to_dict(), indent=2) if args.json else _text(report))

@@ -48,6 +48,13 @@ class TheVersionIsTheSuites(unittest.TestCase):
                                                    "1.0.0-rc1", "01.0.0", None])
             self.assertEqual("1.14.0", release_check.suite_version(index))
 
+    def test_a_version_the_corpus_only_refuses_is_not_the_suites(self) -> None:
+        """A reject case pins what a reader refuses: a 1.x reader given 2.0.0 refuses it, and a
+        suite holding that case is still written against 1.x."""
+        with tempfile.TemporaryDirectory() as tmp:
+            index = write_corpus_index(Path(tmp), ["1.15.0"], rejects=["2.0.0", "1.999.0"])
+            self.assertEqual("1.15.0", release_check.suite_version(index))
+
     def test_an_index_declaring_no_semver_has_no_suite_version(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             index = write_corpus_index(Path(tmp), [19, None])

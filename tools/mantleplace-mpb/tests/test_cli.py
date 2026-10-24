@@ -11,7 +11,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from helpers import bundle_files, make_folder, make_zip, manifest, write_schema_dir
+from helpers import (SYNTHETIC_SCHEMA, SYNTHETIC_SCHEMA_2, bundle_files, make_folder, make_zip,
+                     manifest, write_schema_dir)
 from mantleplace_mpb.cli import main
 
 
@@ -144,6 +145,36 @@ class TheCorpusCommand(unittest.TestCase):
         code, out = run("corpus", str(self.corpus), "--schema-dir", self.schemas)
         self.assertEqual(1, code)
         self.assertIn("verdictIsGreen", out)
+
+    def test_a_case_marked_staged_is_held_to_the_staged_schema(self) -> None:
+        staged = str(write_schema_dir(self.tmp / "staged", {"1.14.0": SYNTHETIC_SCHEMA,
+                                                            "2.0.0": SYNTHETIC_SCHEMA_2},
+                                      staged=("2.0.0",)))
+        case = {"id": "bundle.v2", "group": "bundle", "file": "bundle/v2.json", "expect": "accept",
+                "reason": "r"}
+        body = {"bundle/v2.json": self.body(manifest(version="2.0.0"))}
+        self.write([case], body)
+        code, out = run("corpus", str(self.corpus), "--schema-dir", staged)
+        self.assertEqual(1, code, out)
+        self.assertIn("schema.version-unpublished", out)
+        self.write([{**case, "stagedSchema": True}], body)
+        code, out = run("corpus", str(self.corpus), "--schema-dir", staged)
+        self.assertEqual(0, code, out)
+
+    def test_a_case_whose_names_collide_by_case_is_built_only_as_zips(self) -> None:
+        """No folder can hold it on a case-insensitive file system, which is the rule's point."""
+        self.write(
+            [{"id": "bundle.collide", "group": "bundle", "file": "bundle/collide.json",
+              "expect": "reject", "reason": "r",
+              "expectations": {"errors": ["name.case-collision"]}}],
+            {"bundle/collide.json": self.body(manifest(version="2.0.0"),
+                                              {"Features/RoadSurfaces.gpkg": "x",
+                                               "Features/Roadsurfaces.gpkg": "y"})},
+        )
+        schemas = str(write_schema_dir(self.tmp / "v2", {"2.0.0": SYNTHETIC_SCHEMA_2}))
+        code, out = run("corpus", str(self.corpus), "--schema-dir", schemas)
+        self.assertEqual(0, code, out)
+        self.assertNotIn("(folder)", out)
 
     def test_an_empty_bundle_group_fails(self) -> None:
         self.write([], {})
