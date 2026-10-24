@@ -28,10 +28,16 @@ if (Test-Path (Join-Path $dest 'COMMIT')) { Write-Host "$dest already exists"; r
 # Archive to a file first, so a failed `git archive` is its own exit code rather than hidden behind tar's, and the
 # COMMIT file (which marks the export complete) is written only after both succeeded.
 $tarFile = Join-Path $work "src\$short.tar"
+# git archive -o does not make the folder it writes into, and on a fresh work root src\ does not exist yet.
+New-Item -ItemType Directory -Force (Split-Path -Parent $tarFile) | Out-Null
 & git -C $Repo archive --format=tar -o $tarFile $sha revit
 if ($LASTEXITCODE -ne 0) { Remove-Item -LiteralPath $tarFile -Force -ErrorAction SilentlyContinue; throw "git archive of $sha failed" }
 New-Item -ItemType Directory -Force $dest | Out-Null
-& tar -x -f $tarFile -C $dest
+# Windows' own tar: a GNU tar earlier on PATH (Git's usr\bin, when this runs from Git Bash) reads 'D:' in a path as
+# a remote host.
+$tarExe = Join-Path $env:SystemRoot 'System32\tar.exe'
+if (-not (Test-Path -LiteralPath $tarExe)) { $tarExe = 'tar' }
+& $tarExe -x -f $tarFile -C $dest
 $tarExit = $LASTEXITCODE
 Remove-Item -LiteralPath $tarFile -Force -ErrorAction SilentlyContinue
 if ($tarExit -ne 0 -or -not (Test-Path (Join-Path $dest 'revit\src'))) { throw "extracting the archive of $sha into $dest failed" }
