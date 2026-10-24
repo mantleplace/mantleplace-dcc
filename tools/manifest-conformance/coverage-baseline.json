@@ -185,6 +185,9 @@
       "revit",
       "unreal"
     ],
+    "manifest.reject.revitCarrierHashMissing": [
+      "revit"
+    ],
     "manifest.reject.revitHashMissing": [
       "revit"
     ],
@@ -271,6 +274,9 @@
       "revit"
     ],
     "manifest.revitSplitLayerFallback": [
+      "revit"
+    ],
+    "manifest.revitVectorCarrier": [
       "revit"
     ],
     "manifest.roadSplinesGeojsonWins": [

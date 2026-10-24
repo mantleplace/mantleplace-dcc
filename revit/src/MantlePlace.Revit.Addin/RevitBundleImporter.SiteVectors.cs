@@ -82,7 +82,12 @@ internal sealed partial class RevitBundleImporter
     private string? TryReadCarrier(ImportStep step, SiteGeometryKinds accept, string label, out IReadOnlyList<SiteFeature> features)
     {
         features = [];
-        if (step.Frame is not { } frame || step.Layer is not { } layer || step.Table is not { } table)
+        if (step.Table is not { } table)
+        {
+            return $"The {label} could not be read from the shared vector file: the plan names no table for them.";
+        }
+
+        if (step.Frame is not { } frame || step.Layer is not { } layer)
         {
             return $"The {label} could not be placed: the plan states no frame for them.";
         }

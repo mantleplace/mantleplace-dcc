@@ -35,6 +35,9 @@ internal static partial class ManifestConformanceTests
         "hasRoadSplines",
         "revitRoadSplinesPath",
         "revitWaterPath",
+        "revitRoadSplinesSha256",
+        "revitRoadSplinesTable",
+        "revitRoadSplinesFallbackPath",
         "revitDrapePath",
         "revitContoursPath",
         "revitContoursVerticalUnits",
@@ -451,6 +454,27 @@ internal static partial class ManifestConformanceTests
         if (ConformanceCorpus.WantsString(corpusCase, "revitWaterPath", out string revitWaterPath))
         {
             run.Equal(manifest.Water?.Path ?? string.Empty, revitWaterPath, "revitWaterPath");
+        }
+
+        // The shared vector carrier (MPB 1.15.0, `hosts.revit.vectors.gpkg`): a layer the pointer lists
+        // is read as the table of its own name, verified by the carrier's own hash, with the layer's
+        // GeoJSON file kept as the fallback; a layer it does not list keeps its GeoJSON file above.
+        if (ConformanceCorpus.WantsString(corpusCase, "revitRoadSplinesSha256", out string revitRoadSplinesSha))
+        {
+            run.Equal(manifest.RoadSplines?.Sha256 ?? string.Empty, revitRoadSplinesSha, "revitRoadSplinesSha256");
+        }
+
+        if (ConformanceCorpus.WantsString(corpusCase, "revitRoadSplinesTable", out string revitRoadSplinesTable))
+        {
+            run.Equal(manifest.RoadSplines?.Table ?? string.Empty, revitRoadSplinesTable, "revitRoadSplinesTable");
+        }
+
+        if (ConformanceCorpus.WantsString(corpusCase, "revitRoadSplinesFallbackPath", out string revitRoadSplinesFallbackPath))
+        {
+            run.Equal(
+                manifest.RoadSplines?.GeoJsonFallback?.Path ?? string.Empty,
+                revitRoadSplinesFallbackPath,
+                "revitRoadSplinesFallbackPath");
         }
 
         if (ConformanceCorpus.WantsString(corpusCase, "revitDrapePath", out string revitDrapePath))

@@ -172,6 +172,8 @@ a case carrying its own `manifestVersion` — `manifest.locationBlockIgnored` is
 `manifest.recordsFolderIgnored` the twelfth, `manifest.sourcePointersIgnored` the thirteenth and
 `manifest.fileFramesIgnored` the fourteenth, with three siblings that pin one reader obligation each
 (`manifest.fileEntryNoRole`, `manifest.fileEntryUnknownRole` and `manifest.fileEntryVerticalCrsApart`).
+The fifteenth, 1.15.0, restated a pointer rather than adding a member, so its cases pin the Revit host's
+reading of it: `manifest.revitVectorCarrier` and `manifest.reject.revitCarrierHashMissing`.
 Stamping a newer version onto a fixture that lacks what that version requires would make the
 fixture untrue.
 
