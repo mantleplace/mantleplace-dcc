@@ -406,17 +406,22 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	}
 
 	// The other end of the semver compatibility policy. Minors are strictly additive and unknown
-	// fields are ignored, so any 1.x reads here; an unknown higher MAJOR is a graceful refusal
-	// rather than a best-effort parse, because a major is exactly the promise that something this
-	// reader relies on may have changed meaning. This is a refusal, not a crash, and it names the
-	// version it saw so the user can tell "too new" from "too old" — the two failures a bare
-	// "unsupported" message makes indistinguishable.
-	if (Parsed.Major > Floor.Major)
+	// fields are ignored, so any minor of a major this reader speaks reads here; an unknown higher
+	// MAJOR is a graceful refusal rather than a best-effort parse, because a major is exactly the
+	// promise that something this reader relies on may have changed meaning. This is a refusal, not
+	// a crash, and it names the version it saw so the user can tell "too new" from "too old" — the
+	// two failures a bare "unsupported" message makes indistinguishable.
+	//
+	// This reader speaks 1.x and 2.x (MantlePlaceMaxSupportedManifestMajor): a 2.0 bundle changed the
+	// folders and the names, and every file here is found through a pointer value, so the same
+	// parse reads both. What a 2.0 bundle moved is read where it moved to (the heightmap's and the
+	// UE-ready rasters' value mappings, in `file_entries`), never by branching on the version.
+	if (Parsed.Major > MantlePlaceMaxSupportedManifestMajor)
 	{
 		OutError = FString::Printf(
-		    TEXT("Bundle manifest version %s is newer than this plugin understands (it reads %d.x). "
+		    TEXT("Bundle manifest version %s is newer than this plugin understands (it reads up to %d.x). "
 		         "Update the Mantle Place plugin to import this bundle."),
-		    *M.Version, Floor.Major);
+		    *M.Version, MantlePlaceMaxSupportedManifestMajor);
 		return M;
 	}
 

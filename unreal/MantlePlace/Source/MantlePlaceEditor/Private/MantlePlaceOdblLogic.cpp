@@ -32,10 +32,29 @@ FString MantlePlaceOdblLogic::RoleName(EMantlePlaceOdblRole Role)
 	}
 }
 
+const FMantlePlaceFileLicensing* MantlePlaceOdblLogic::FindEntry(
+	const TMap<FString, FMantlePlaceFileLicensing>& Entries, const FString& Path)
+{
+	if (const FMantlePlaceFileLicensing* Exact = Entries.Find(Path))
+	{
+		return Exact;
+	}
+	// A path is matched regardless of case (MPB 2.0, format.md 10.3 rule 6). A bundle never holds two
+	// entries that differ only by case, so the first match is the only one.
+	for (const TPair<FString, FMantlePlaceFileLicensing>& Pair : Entries)
+	{
+		if (Pair.Key.Equals(Path, ESearchCase::IgnoreCase))
+		{
+			return &Pair.Value;
+		}
+	}
+	return nullptr;
+}
+
 EMantlePlaceOdblRole MantlePlaceOdblLogic::RoleOfPath(
 	const TMap<FString, FMantlePlaceFileLicensing>& Entries, const FString& Path)
 {
-	const FMantlePlaceFileLicensing* Entry = Entries.Find(Path);
+	const FMantlePlaceFileLicensing* Entry = FindEntry(Entries, Path);
 	return Entry != nullptr ? Entry->Role : EMantlePlaceOdblRole::Database;
 }
 
@@ -64,7 +83,7 @@ bool MantlePlaceOdblLogic::NeedsCredit(
 	}
 	for (const FString& Path : Paths)
 	{
-		const FMantlePlaceFileLicensing* Entry = Entries.Find(Path);
+		const FMantlePlaceFileLicensing* Entry = FindEntry(Entries, Path);
 		if (Entry == nullptr)
 		{
 			continue;
@@ -119,7 +138,7 @@ TArray<FString> MantlePlaceOdblLogic::CreditLines(
 	{
 		for (const FString& Path : Paths)
 		{
-			const FMantlePlaceFileLicensing* Entry = Entries.Find(Path);
+			const FMantlePlaceFileLicensing* Entry = FindEntry(Entries, Path);
 			if (Entry == nullptr)
 			{
 				continue;

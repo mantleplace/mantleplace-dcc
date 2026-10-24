@@ -272,17 +272,45 @@ def _clip_to_aoi(tileset, georef, info):
     return polygon
 
 
+_MANIFEST_MEMBER = "Metadata/manifest.json"
+
+
+def _find_member(archive, name):
+    """The archive's own spelling of `name`, matched regardless of case.
+
+    A reader matches a manifest path to an archive entry regardless of case (MPB 2.0, format.md
+    10.3 rule 6), and the engine's zip reader the C++ importer uses already does. Python's
+    `zipfile` matches the exact string, so a bundle whose entry is `metadata/MANIFEST.json` would
+    read as having no manifest here while the importer reads it. The exact name is tried first;
+    a bundle never holds two entries that differ only by case, so the fold is never ambiguous.
+    Raises KeyError, as `ZipFile.read` does, when nothing matches.
+    """
+    names = archive.namelist()
+    if name in names:
+        return name
+    folded = name.casefold()
+    for candidate in names:
+        if candidate.casefold() == folded:
+            return candidate
+    raise KeyError(name)
+
+
+def _read_manifest(zip_path):
+    """The bundle's manifest as parsed JSON. Raises if the zip, the entry or the JSON is unreadable."""
+    with zipfile.ZipFile(zip_path) as archive:
+        return json.loads(archive.read(_find_member(archive, _MANIFEST_MEMBER)))
+
+
 def _manifest_origin(zip_path):
     """(lon, lat, ground_orthometric_h_m) from the bundle manifest, or None.
 
     MPB 1.0.0 moved everything host-specific under `hosts.<hostId>`, so the origin lives at
     `hosts.unreal.georeference.origin`. The retired top-level `unreal` block is deliberately NOT
     consulted -- same clean break as the C++ manifest reader; a fallback is how a clean break
-    quietly becomes dual-parsing.
+    quietly becomes dual-parsing. A 1.x and a 2.0 bundle state it the same way.
     """
     try:
-        with zipfile.ZipFile(zip_path) as archive:
-            manifest = json.loads(archive.read("Metadata/manifest.json"))
+        manifest = _read_manifest(zip_path)
         origin = manifest["hosts"]["unreal"]["georeference"]["origin"]
         return origin["lon"], origin["lat"], origin.get("ground_orthometric_h_m", 0.0)
     except Exception as exc:  # noqa: BLE001 - QA helper: degrade to "leave the georeference alone"

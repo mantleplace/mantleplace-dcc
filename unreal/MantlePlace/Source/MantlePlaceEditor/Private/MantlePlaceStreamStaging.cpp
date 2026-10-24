@@ -96,12 +96,17 @@ namespace MantlePlaceStreamStaging
 		{
 			return false; // a directory entry
 		}
+		// Both matches ignore case, spelled out rather than left to a default: a manifest path finds its
+		// archive entry regardless of case (MPB 2.0, format.md 10.3 rule 6), as the engine's zip reader
+		// already does for a path read by name. A bundle written with one case and pointed at with another
+		// would otherwise be selected by neither, and stream a terrain with no tiles.
+		//
 		// An empty prefix would match every entry; the caller refuses one, and so does this.
-		if (!Record.TerrainPrefix.IsEmpty() && EntryName.StartsWith(Record.TerrainPrefix))
+		if (!Record.TerrainPrefix.IsEmpty() && EntryName.StartsWith(Record.TerrainPrefix, ESearchCase::IgnoreCase))
 		{
 			return true;
 		}
-		return !Record.DrapePath.IsEmpty() && EntryName.Equals(Record.DrapePath);
+		return !Record.DrapePath.IsEmpty() && EntryName.Equals(Record.DrapePath, ESearchCase::IgnoreCase);
 	}
 
 	FString ToJson(const FRecord& Record)

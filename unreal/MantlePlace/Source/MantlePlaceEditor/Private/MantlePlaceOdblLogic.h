@@ -58,6 +58,12 @@ EMantlePlaceOdblRole ParseRole(bool bStated, const FString& Value);
 /** The role's published word: `database`, `produced-work` or `none`. */
 FString RoleName(EMantlePlaceOdblRole Role);
 
+/**
+ * The `file_entries` entry for one archive path, or null when the manifest states none. The exact key
+ * first, then any key that differs only by case: a reader matches a path regardless of case (MPB 2.0).
+ */
+const FMantlePlaceFileLicensing* FindEntry(const TMap<FString, FMantlePlaceFileLicensing>& Entries, const FString& Path);
+
 /** The role of one file. A file with no `file_entries` entry has no stated role, so it is Database. */
 EMantlePlaceOdblRole RoleOfPath(const TMap<FString, FMantlePlaceFileLicensing>& Entries, const FString& Path);
 
