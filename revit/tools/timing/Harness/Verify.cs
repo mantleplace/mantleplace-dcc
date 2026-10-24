@@ -14,7 +14,7 @@ namespace MantlePlace.Scratch.Timing;
 // PrepareForHandover (Build-TimingHarness.ps1 decides), so a harness for an older commit still builds.
 //
 //   placement.csv       the bundle's own surface points (hosts.revit.toposurface_points, which a TIN import never
-//                       reads) against the ground toposolid, cast straight down at each point's plan position
+//                       reads) against the ground toposolid's own triangulated top at each point's plan position
 //   link-buildings.csv  every element of each linked model that carries an IFC GlobalId: its plan centre and its
 //                       base, in the host's shared coordinates, in metres, and the ground under that centre
 //   verify.json         the frame self-check, what the import stamped by class, each ODbL container by class,
@@ -47,13 +47,13 @@ internal static class Verify
 
         List<ElementId> grounds = GroundToposolids(document);
         record["ground_toposolids"] = grounds.Count;
-        View3D? probeView = grounds.Count == 0 ? null : ProbeView(document);
-        ReferenceIntersector? caster = probeView is null ? null : new ReferenceIntersector(grounds, FindReferenceTarget.Face, probeView);
+        Ground? ground = grounds.Count == 0 ? null : Ground.Of(document, grounds, toShared);
+        record["ground_top_triangles"] = ground?.Count ?? 0;
 
-        record["placement"] = Placement(bundle, revit, east, north, toInternal, toShared, caster, dir);
+        record["placement"] = Placement(bundle, revit, east, north, ground, dir);
         say("placement measured");
         record["stamped_by_class"] = ByClass(document, OdblContainers.StampedElementIds(document));
-        record["links"] = Links(document, toShared, caster, dir);
+        record["links"] = Links(document, toShared, ground, dir);
         say("links measured");
 
         PrepareForHandover.HandoverPlan plan = PrepareForHandover.Plan(document);
@@ -90,47 +90,7 @@ internal static class Verify
         return [.. all.Where(toposolid => !subdivisions.Contains(toposolid.Id)).Select(toposolid => toposolid.Id)];
     }
 
-    /// <summary>A fresh isometric 3D view to cast in: no section box, no hidden category, nothing the import set.</summary>
-    private static View3D? ProbeView(Document document)
-    {
-        ViewFamilyType? type = new FilteredElementCollector(document)
-            .OfClass(typeof(ViewFamilyType))
-            .Cast<ViewFamilyType>()
-            .FirstOrDefault(candidate => candidate.ViewFamily == ViewFamily.ThreeDimensional);
-        if (type is null)
-        {
-            return null;
-        }
-
-        using Transaction transaction = new(document, "Mantle Place verify: probe view");
-        transaction.Start();
-        View3D view = View3D.CreateIsometric(document, type.Id);
-        view.Name = "Mantle Place Verify Probe";
-        transaction.Commit();
-        return view;
-    }
-
-    /// <summary>The ground's height, in shared metres, straight down through the shared plan point; null on a miss.</summary>
-    private static double? GroundAt(ReferenceIntersector? caster, Transform toInternal, Transform toShared, double sharedEastFt, double sharedNorthFt)
-    {
-        if (caster is null)
-        {
-            return null;
-        }
-
-        XYZ start = toInternal.OfPoint(new XYZ(sharedEastFt, sharedNorthFt, 20000 * FeetPerMetre));
-        // Every face the ray passes through, top and bottom: the ground is the highest of them. The nearest
-        // hit alone is not it: on a toposolid the ray's first reference came back as the flat bottom face.
-        IList<ReferenceWithContext> hits = caster.Find(start, toInternal.BasisZ.Negate());
-        if (hits.Count == 0)
-        {
-            return null;
-        }
-
-        return hits.Max(hit => toShared.OfPoint(hit.GetReference().GlobalPoint).Z) / FeetPerMetre;
-    }
-
-    private static object Placement(string bundle, JsonElement revit, double east, double north, Transform toInternal, Transform toShared, ReferenceIntersector? caster, string dir)
+    private static object Placement(string bundle, JsonElement revit, double east, double north, Ground? ground, string dir)
     {
         if (!revit.TryGetProperty("toposurface_points", out JsonElement points) || points.ValueKind != JsonValueKind.Object)
         {
@@ -168,7 +128,7 @@ internal static class Verify
         {
             double e = frame == "local_enu" ? east + all[i][0] : all[i][0];
             double n = frame == "local_enu" ? north + all[i][1] : all[i][1];
-            double? measured = GroundAt(caster, toInternal, toShared, e * FeetPerMetre, n * FeetPerMetre);
+            double? measured = ground?.At(e * FeetPerMetre, n * FeetPerMetre) / FeetPerMetre;
             csv.Append(Invariant, $"{i},{e:F3},{n:F3},{all[i][2]:F3},{(measured is { } m ? m.ToString("F3", Invariant) : "")}\n");
         }
 
@@ -191,11 +151,10 @@ internal static class Verify
     private static string Describe(Element? element)
         => element is null ? "(gone)" : $"{element.GetType().Name}/{element.Category?.Name ?? "-"}{(element.ViewSpecific ? "/view-specific" : "")}";
 
-    private static List<object> Links(Document document, Transform toShared, ReferenceIntersector? caster, string dir)
+    private static List<object> Links(Document document, Transform toShared, Ground? ground, string dir)
     {
         List<object> links = [];
         StringBuilder csv = new("link,guid,centre_east_m,centre_north_m,base_z_m,top_z_m,ground_z_m\n");
-        Transform toInternal = toShared.Inverse;
         foreach (RevitLinkInstance instance in new FilteredElementCollector(document).OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>())
         {
             Transform total = instance.GetTotalTransform();
@@ -217,8 +176,8 @@ internal static class Verify
                     XYZ max = toShared.OfPoint(total.OfPoint(box.Max));
                     double cx = (min.X + max.X) / 2;
                     double cy = (min.Y + max.Y) / 2;
-                    double? ground = GroundAt(caster, toInternal, toShared, cx, cy);
-                    csv.Append(Invariant, $"{instance.Name.Replace(',', ' ')},{guid},{cx / FeetPerMetre:F3},{cy / FeetPerMetre:F3},{Math.Min(min.Z, max.Z) / FeetPerMetre:F3},{Math.Max(min.Z, max.Z) / FeetPerMetre:F3},{(ground is { } g ? g.ToString("F3", Invariant) : "")}\n");
+                    double? under = ground?.At(cx, cy) / FeetPerMetre;
+                    csv.Append(Invariant, $"{instance.Name.Replace(',', ' ')},{guid},{cx / FeetPerMetre:F3},{cy / FeetPerMetre:F3},{Math.Min(min.Z, max.Z) / FeetPerMetre:F3},{Math.Max(min.Z, max.Z) / FeetPerMetre:F3},{(under is { } g ? g.ToString("F3", Invariant) : "")}\n");
                     buildings++;
                 }
             }
@@ -354,5 +313,118 @@ internal static class Verify
             credit_line = result.CreditLine,
             attribution_notes = attribution,
         };
+    }
+
+    /// <summary>
+    /// The upward-facing triangles of the ground toposolids, in shared feet, and the height of the ground at a
+    /// shared plan point. A ray cast is not used: a ReferenceIntersector over a toposolid returned only its flat
+    /// bottom face, in every attempt, so the ground's top is read from its own triangulated faces instead.
+    /// </summary>
+    private sealed class Ground
+    {
+        private const double CellFt = 40.0;
+        private readonly List<(XYZ A, XYZ B, XYZ C)> _triangles = [];
+        private readonly Dictionary<(int, int), List<int>> _cells = [];
+
+        internal int Count => _triangles.Count;
+
+        internal static Ground Of(Document document, IEnumerable<ElementId> ids, Transform toShared)
+        {
+            Ground ground = new();
+            Options options = new() { DetailLevel = ViewDetailLevel.Fine, ComputeReferences = false };
+            foreach (ElementId id in ids)
+            {
+                if (document.GetElement(id)?.get_Geometry(options) is { } geometry)
+                {
+                    ground.Add(geometry, toShared);
+                }
+            }
+
+            return ground;
+        }
+
+        private void Add(GeometryElement geometry, Transform toShared)
+        {
+            foreach (GeometryObject part in geometry)
+            {
+                switch (part)
+                {
+                    case Solid solid:
+                        foreach (Face face in solid.Faces)
+                        {
+                            Add(face.Triangulate(), toShared);
+                        }
+
+                        break;
+                    case Mesh mesh:
+                        Add(mesh, toShared);
+                        break;
+                    case GeometryInstance instance:
+                        Add(instance.GetInstanceGeometry(), toShared);
+                        break;
+                }
+            }
+        }
+
+        private void Add(Mesh mesh, Transform toShared)
+        {
+            for (int i = 0; i < mesh.NumTriangles; i++)
+            {
+                MeshTriangle triangle = mesh.get_Triangle(i);
+                XYZ a = toShared.OfPoint(triangle.get_Vertex(0));
+                XYZ b = toShared.OfPoint(triangle.get_Vertex(1));
+                XYZ c = toShared.OfPoint(triangle.get_Vertex(2));
+                double normalZ = ((b.X - a.X) * (c.Y - a.Y)) - ((b.Y - a.Y) * (c.X - a.X));
+                if (Math.Abs(normalZ) < 1e-9 || Math.Max(a.Z, Math.Max(b.Z, c.Z)) - Math.Min(a.Z, Math.Min(b.Z, c.Z)) > 1e6)
+                {
+                    continue;
+                }
+
+                int index = _triangles.Count;
+                _triangles.Add((a, b, c));
+                for (int x = Cell(Math.Min(a.X, Math.Min(b.X, c.X))); x <= Cell(Math.Max(a.X, Math.Max(b.X, c.X))); x++)
+                {
+                    for (int y = Cell(Math.Min(a.Y, Math.Min(b.Y, c.Y))); y <= Cell(Math.Max(a.Y, Math.Max(b.Y, c.Y))); y++)
+                    {
+                        if (!_cells.TryGetValue((x, y), out List<int>? list))
+                        {
+                            _cells[(x, y)] = list = [];
+                        }
+
+                        list.Add(index);
+                    }
+                }
+            }
+        }
+
+        private static int Cell(double value) => (int)Math.Floor(value / CellFt);
+
+        /// <summary>The highest triangle over the point, interpolated in it, in shared feet; null where there is none.</summary>
+        internal double? At(double east, double north)
+        {
+            if (!_cells.TryGetValue((Cell(east), Cell(north)), out List<int>? candidates))
+            {
+                return null;
+            }
+
+            double? best = null;
+            foreach (int index in candidates)
+            {
+                (XYZ a, XYZ b, XYZ c) = _triangles[index];
+                double det = ((b.Y - c.Y) * (a.X - c.X)) + ((c.X - b.X) * (a.Y - c.Y));
+                double l1 = (((b.Y - c.Y) * (east - c.X)) + ((c.X - b.X) * (north - c.Y))) / det;
+                double l2 = (((c.Y - a.Y) * (east - c.X)) + ((a.X - c.X) * (north - c.Y))) / det;
+                double l3 = 1 - l1 - l2;
+                if (l1 < -1e-9 || l2 < -1e-9 || l3 < -1e-9)
+                {
+                    continue;
+                }
+
+                double z = (l1 * a.Z) + (l2 * b.Z) + (l3 * c.Z);
+                best = best is { } held ? Math.Max(held, z) : z;
+            }
+
+            return best;
+        }
     }
 }
