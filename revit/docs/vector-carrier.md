@@ -136,7 +136,10 @@ IFC carries for any other host, so a `Model.ifc` written the same way needs noth
 
 - **The ETL ticket** emits the carrier above: rename the tables of the GeoPackage it already writes,
   split water, add `building_footprints`, and point the Revit vectors block at it.
-- **The plugin** swaps `SiteVectorReader` for the GeoPackage reader behind the same `SiteFeature`
-  list: the decoder into `Core`, the SQLite calls into `Client`, the parity test kept. `threshold_deg`
-  is a `REAL`, so the steep-ground label formats the number itself rather than echoing the file's text.
+- **The plugin** (done) reads the carrier behind the same `SiteFeature` list: the decoder is
+  `GeoPackageGeometry` and `SiteGeoPackageReader` in `Core`, the SQLite calls are `GeoPackageFile` in
+  `Client`, and the parity test is kept. `threshold_deg` is a `REAL`, so the steep-ground label
+  formats the number itself rather than echoing the file's text. A layer with no carrier table, or a
+  carrier that cannot be read, falls back to its GeoJSON, so a bundle that predates the carrier still
+  imports. The live import check is a separate ticket.
 - The GeoJSON block goes when no supported manifest version publishes it.

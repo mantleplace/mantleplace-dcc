@@ -130,6 +130,25 @@ public sealed class BundleArtifact
     /// every entry before 1.9.0, and a pointer level's own file.
     /// </summary>
     public FidelityLevels? Levels { get; init; }
+
+    /// <summary>
+    /// The table of a GeoPackage this layer is read from, or <c>null</c> for a file that is the layer
+    /// on its own — every GeoJSON file. Set on a layer of the shared vector carrier
+    /// (<c>hosts.revit.vectors.gpkg</c>), where <see cref="Path"/> and <see cref="Sha256"/> are the
+    /// whole GeoPackage's, shared by every layer it holds.
+    /// </summary>
+    public string? Table { get; init; }
+
+    /// <summary>True for a layer read from a table of a GeoPackage.</summary>
+    public bool IsGeoPackage => Table is not null;
+
+    /// <summary>
+    /// For a carrier layer, the same layer's GeoJSON file in this host's own block, where the block
+    /// still lists one; <c>null</c> otherwise. What the layer is read from when the carrier cannot be
+    /// shown to hold it in this project's frame, so a bundle that has both does not lose a layer it
+    /// could place.
+    /// </summary>
+    public BundleArtifact? GeoJsonFallback { get; init; }
 }
 
 /// <summary>One <c>hosts.&lt;hostId&gt;.readiness.&lt;path&gt;</c> entry.</summary>

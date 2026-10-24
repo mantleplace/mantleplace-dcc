@@ -53,6 +53,12 @@ public static class BundleManifestReader
     internal const string LocalFrame = "local_enu";
 
     /// <summary>
+    /// The key of the shared vector carrier in <c>hosts.revit.vectors</c>: one GeoPackage in the origin's
+    /// own CRS, holding a table per layer.
+    /// </summary>
+    internal const string VectorCarrierKey = "gpkg";
+
+    /// <summary>
     /// The one <c>vertical_reference</c> the format declares: a Z that is real orthometric height, never
     /// an offset from the origin.
     /// </summary>
@@ -804,7 +810,7 @@ public static class BundleManifestReader
     /// </remarks>
     private static void ReadOwnVectors(BundleManifest manifest, JsonElement root)
     {
-        if (RevitHostBlock(root)?.Object("vectors")?.Array("layers") is not { } layers)
+        if (RevitHostBlock(root)?.Object("vectors") is not { } vectors || !HasOwnVectorLayers(vectors))
         {
             return;
         }
@@ -817,12 +823,19 @@ public static class BundleManifestReader
 
         manifest.VectorsFromOwnBlock = true;
 
-        manifest.RoadSplines = ReadOwnVectorLayer(layers, SiteVectorLayers.RoadSplines.Name);
-        manifest.LandUse = ReadOwnVectorLayer(layers, SiteVectorLayers.LandUse.Name);
-        manifest.LandCover = ReadOwnVectorLayer(layers, SiteVectorLayers.LandCover.Name);
-        manifest.Water = ReadOwnVectorLayer(layers, SiteVectorLayers.Water.Name);
-        manifest.RoadPolygons = ReadOwnVectorLayer(layers, SiteVectorLayers.RoadPolygons.Name);
+        manifest.RoadSplines = ReadOwnVectorLayer(vectors, SiteVectorLayers.RoadSplines.Name);
+        manifest.LandUse = ReadOwnVectorLayer(vectors, SiteVectorLayers.LandUse.Name);
+        manifest.LandCover = ReadOwnVectorLayer(vectors, SiteVectorLayers.LandCover.Name);
+        manifest.Water = ReadOwnVectorLayer(vectors, SiteVectorLayers.Water.Name);
+        manifest.RoadPolygons = ReadOwnVectorLayer(vectors, SiteVectorLayers.RoadPolygons.Name);
     }
+
+    /// <summary>
+    /// Whether the block holds any vector layer to read: a <c>layers</c> array of its own files, or the
+    /// shared carrier's pointer.
+    /// </summary>
+    private static bool HasOwnVectorLayers(JsonElement vectors)
+        => vectors.Array("layers") is not null || vectors.Object(VectorCarrierKey) is not null;
 
     /// <summary>
     /// The two hazard layers of this host's own copy, and what the manifest publishes about each:
@@ -843,10 +856,10 @@ public static class BundleManifestReader
     /// </remarks>
     private static void ReadHazards(BundleManifest manifest, JsonElement root)
     {
-        if (RevitHostBlock(root)?.Object("vectors")?.Array("layers") is { } layers)
+        if (RevitHostBlock(root)?.Object("vectors") is { } vectors && HasOwnVectorLayers(vectors))
         {
-            manifest.FloodZones = ReadOwnVectorLayer(layers, SiteVectorLayers.FloodZones.Name);
-            manifest.SteepGround = ReadOwnVectorLayer(layers, SiteVectorLayers.SteepGround.Name);
+            manifest.FloodZones = ReadOwnVectorLayer(vectors, SiteVectorLayers.FloodZones.Name);
+            manifest.SteepGround = ReadOwnVectorLayer(vectors, SiteVectorLayers.SteepGround.Name);
         }
 
         if (root.Object("flood")?.Object("nfhl") is { } nfhl)
@@ -879,8 +892,23 @@ public static class BundleManifestReader
         }
     }
 
-    private static BundleArtifact? ReadOwnVectorLayer(JsonElement layers, string layerName)
+    /// <summary>
+    /// One layer of this host's own copy: from the shared carrier when the carrier holds a table for it,
+    /// else from the layer's own GeoJSON file.
+    /// </summary>
+    private static BundleArtifact? ReadOwnVectorLayer(JsonElement vectors, string layerName)
     {
+        BundleArtifact? geoJson = ReadOwnGeoJsonLayer(vectors, layerName);
+        return ReadCarrierLayer(vectors, layerName, geoJson) ?? geoJson;
+    }
+
+    private static BundleArtifact? ReadOwnGeoJsonLayer(JsonElement vectors, string layerName)
+    {
+        if (vectors.Array("layers") is not { } layers)
+        {
+            return null;
+        }
+
         foreach (JsonElement layer in layers.EnumerateArray())
         {
             if (layer.ValueKind != JsonValueKind.Object
@@ -893,6 +921,55 @@ public static class BundleManifestReader
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The layer as a table of the shared vector carrier, found through <c>hosts.revit.vectors.gpkg</c>,
+    /// or <c>null</c> when the block has no carrier, or its <c>tables</c> list none for this layer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The pointer names a path, a hash and the tables the file holds (<c>tables</c>, as the schema has it
+    /// since MPB 1.7.0); a layer is the table of its own name, matched without regard to case as
+    /// SQLite matches names. The carrier is in the origin's own CRS and unit, absolute, on every tier
+    /// (<c>revit/docs/vector-carrier.md</c>), so the artifact states that frame and not the Revit files':
+    /// the planner places it against the origin, and the file's own CRS is checked when it is read.
+    /// </para>
+    /// <para>
+    /// A pointer with no hash is not a carrier: the schema requires one, and a file this host cannot
+    /// verify is not read (<c>HPS-34</c>; <see cref="CheckRevitHashes"/> refuses the bundle first). The
+    /// fidelity levels are the layer's own GeoJSON entry's where it has them, else the pointer's.
+    /// </para>
+    /// </remarks>
+    private static BundleArtifact? ReadCarrierLayer(JsonElement vectors, string layerName, BundleArtifact? geoJson)
+    {
+        if (vectors.Object(VectorCarrierKey) is not { } carrier)
+        {
+            return null;
+        }
+
+        string path = carrier.Str("path");
+        string? sha256 = carrier.OptionalStr("sha256");
+        string? table = carrier.StringArray("tables")
+            .FirstOrDefault(name => string.Equals(name, layerName, StringComparison.OrdinalIgnoreCase));
+
+        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(sha256) || table is null)
+        {
+            return null;
+        }
+
+        return new BundleArtifact
+        {
+            Path = path,
+            Sha256 = sha256,
+            Format = "gpkg",
+            Table = table,
+            HorizontalFrame = ProjectedFrame,
+            VerticalReference = AbsoluteHeight,
+            FromOwnBlock = true,
+            Levels = geoJson?.Levels ?? FidelityLevelsReader.Read(carrier.Object("levels"), level => OwnLayerFile(level)),
+            GeoJsonFallback = geoJson,
+        };
     }
 
     /// <summary>
@@ -1330,6 +1407,17 @@ public static class BundleManifestReader
                     key,
                     manifest.Version);
             }
+        }
+
+        // The shared carrier's pointer requires its hash the same way (MPB 1.7.0).
+        if (revit.Object("vectors")?.Object(VectorCarrierKey) is { } carrier && carrier.OptionalStr("sha256") is null)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "hosts.revit.vectors.gpkg has no sha256, and this bundle's manifest ({0}) is required to publish "
+                + "one. Re-download this AOI from your vault at mantle.place/vault — rebuilding it there "
+                + "re-cuts the bundle on the current pipeline.",
+                manifest.Version);
         }
 
         // MPB 1.3.0's own vector copy makes each layer's hash required the same way.
