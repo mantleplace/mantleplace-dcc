@@ -93,7 +93,13 @@ def _outside_view(manifest: dict, path: str) -> bool:
     return isinstance(parts, list) and isinstance(entry, dict) and entry.get("part") not in parts
 
 
-def check_pointers(manifest: dict, bundle: Bundle, report: Report) -> None:
+def check_pointers(manifest: dict, bundle: Bundle, report: Report, fold_case: bool = False) -> None:
+    """Every pointer names a file or folder in the bundle.
+
+    With `fold_case` (a 2.0 bundle), a pointer is matched to an entry regardless of case, as a
+    2.0 reader matches it (format §10.3, rule 6), and a match only regardless of case is the
+    writer's error, `name.case-mismatch`, rather than a missing file.
+    """
     report.ran.append("pointers")
     layout = manifest.get("layout")
     if isinstance(layout, dict) and isinstance(layout.get("manifest"), str) \
@@ -109,6 +115,11 @@ def check_pointers(manifest: dict, bundle: Bundle, report: Report) -> None:
                        pointer=where, file=path)
         elif bundle.has_file(path) or bundle.has_folder(path):
             continue
+        elif fold_case and (actual := bundle.resolve(path, fold_case=True)) is not None:
+            report.add("names", "name.case-mismatch", "error",
+                       f"the manifest names {path}, but the bundle holds {actual}: a reader "
+                       "matches the two regardless of case, and a writer uses the exact case",
+                       pointer=where, file=actual)
         elif _outside_view(manifest, path):
             report.add("pointers", "pointer.outside-view", "info",
                        f"{path} is held by a part this archive does not carry", pointer=where,
@@ -119,7 +130,7 @@ def check_pointers(manifest: dict, bundle: Bundle, report: Report) -> None:
                        file=path)
 
 
-def check_hashes(manifest: dict, bundle: Bundle, report: Report) -> None:
+def check_hashes(manifest: dict, bundle: Bundle, report: Report, fold_case: bool = False) -> None:
     """Verify every sha256 the manifest states for a file this bundle holds.
 
     A file named only by a pointer with no hash of its own takes the hash the manifest's format
@@ -137,7 +148,8 @@ def check_hashes(manifest: dict, bundle: Bundle, report: Report) -> None:
                 stated.setdefault(obj["path"], set()).add(obj["sha256"].lower())
     named = {path for _, path in pointers(manifest)} - {"README.md", MANIFEST_PATH}
     for path in sorted(named | set(stated)):
-        if unsafe(path) or not bundle.has_file(path):
+        actual = None if unsafe(path) else bundle.resolve(path, fold_case=fold_case)
+        if actual is None or not bundle.has_file(actual):
             continue
         hashes = stated.get(path)
         if not hashes:
@@ -149,7 +161,7 @@ def check_hashes(manifest: dict, bundle: Bundle, report: Report) -> None:
                        file=path)
             continue
         digest = hashlib.sha256()
-        with bundle.open(path) as stream:
+        with bundle.open(actual) as stream:
             for chunk in iter(lambda: stream.read(1 << 20), b""):
                 digest.update(chunk)
         expected = next(iter(hashes))
@@ -177,6 +189,8 @@ def check_frames(manifest: dict, report: Report) -> None:
         ext = extension(path)
         where = f"/file_entries/{escape(path)}/frame"
         frame = entry.get("frame")
+        if isinstance(frame, dict) and frame.get("placed") is False:
+            continue  # 2.0: a file with no spatial frame says so, and states nothing else.
         if not isinstance(frame, dict):
             if "frame" not in entry and ext in GEOSPATIAL:
                 report.add("frames", "frame.absent", "warning",
@@ -220,7 +234,7 @@ def check_frames(manifest: dict, report: Report) -> None:
                            pointer=f"{where}/axis_mapping", file=path)
 
 
-def check_roles(manifest: dict, bundle: Bundle, report: Report) -> None:
+def check_roles(manifest: dict, bundle: Bundle, report: Report, fold_case: bool = False) -> None:
     """Every file's ODbL role, against its format and its sources.
 
     A missing role reads as `database`, the stricter duty, so it is reported rather than
@@ -261,11 +275,15 @@ def check_roles(manifest: dict, bundle: Bundle, report: Report) -> None:
                 report.add("roles", "role.sources-mismatch", "error",
                            f"{path} states odbl_role none, but lists an ODbL source "
                            f"({', '.join(odbl)})", pointer=f"{where}/odbl_role", file=path)
-    folders = [p for p in raw if isinstance(p, str) and p.endswith("/")]
+    def fold(value: str) -> str:
+        return value.casefold() if fold_case else value
+
+    stated = {fold(p) for p in raw if isinstance(p, str)}
+    folders = [fold(p) for p in raw if isinstance(p, str) and p.endswith("/")]
     for path in bundle.files:
-        if path in ("README.md", MANIFEST_PATH) or path in raw:
+        if path in ("README.md", MANIFEST_PATH) or fold(path) in stated:
             continue
-        if any(path.startswith(folder) for folder in folders):
+        if any(fold(path).startswith(folder) for folder in folders):
             continue
         report.add("roles", "role.unstated", "warning",
                    f"{path} has no file entry, so its ODbL role is unstated; it reads as database",

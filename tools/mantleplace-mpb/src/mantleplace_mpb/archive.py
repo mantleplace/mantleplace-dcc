@@ -47,6 +47,7 @@ class Bundle:
         self._files = files
         self._archive = archive
         self.folders = {"/".join(p.split("/")[:i]) for p in files for i in range(1, p.count("/") + 1)}
+        self._folded: dict[str, str] | None = None
 
     @property
     def files(self) -> list[str]:
@@ -57,6 +58,26 @@ class Bundle:
 
     def has_folder(self, path: str) -> bool:
         return path.rstrip("/") in self.folders
+
+    def resolve(self, path: str, fold_case: bool = False) -> str | None:
+        """The entry `path` names, file or folder (a folder without its trailing `/`), or None.
+
+        With `fold_case`, a path that names no entry exactly is matched regardless of case, as a
+        2.0 reader matches a manifest path (format §10.3, rule 6). Where entries collide by case,
+        which one is returned is unspecified; the collision is a finding of its own.
+        """
+        bare = path.rstrip("/")
+        if path in self._files:
+            return path
+        if bare in self.folders:
+            return bare
+        if not fold_case:
+            return None
+        if self._folded is None:
+            self._folded = {}
+            for entry in sorted(self.folders) + self.files:
+                self._folded.setdefault(entry.casefold(), entry)
+        return self._folded.get(bare.casefold())
 
     def size(self, path: str) -> int:
         handle = self._files[path]

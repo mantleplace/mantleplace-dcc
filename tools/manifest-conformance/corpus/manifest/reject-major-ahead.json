@@ -1,0 +1,2143 @@
+{
+  "job_id": "corpus-bundle",
+  "bbox": {
+    "west": -74.02,
+    "south": 40.7,
+    "east": -73.93,
+    "north": 40.81
+  },
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "updated_at": "2026-01-01T00:00:00+00:00",
+  "version": "2.0.0",
+  "unit_system": "metric",
+  "location": {
+    "time_zone": {
+      "iana": "America/New_York",
+      "utc_offset_standard_h": -5,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    },
+    "site_origin": {
+      "latitude": 40.755,
+      "longitude": -73.975,
+      "ellipsoidal_height_m": -12.5,
+      "datum_height_m": 20.0,
+      "vertical_datum": "EGM2008-orthometric"
+    }
+  },
+  "deliverable_class": "produced_work",
+  "licensing": {
+    "basemap": {
+      "class": "produced_work"
+    },
+    "imagery": {
+      "class": "produced_work"
+    },
+    "elevation": {
+      "class": "produced_work"
+    },
+    "cad": {
+      "class": "produced_work"
+    },
+    "site": {
+      "class": "produced_work"
+    },
+    "mesh": {
+      "class": "produced_work"
+    },
+    "cesium_terrain": {
+      "class": "produced_work"
+    },
+    "vector": {
+      "class": "derivative_database",
+      "license": "ODbL-1.0"
+    }
+  },
+  "layout": {
+    "readme": "README.md",
+    "manifest": "Metadata/manifest.json",
+    "stac_item": "Metadata/stac-item.json",
+    "buildings_ifc": "Site/Model.ifc",
+    "context_usdz": "Site/Context.usdz",
+    "features_usdz": "Site/Features.usdz",
+    "dem": "Elevation/DEM.tif",
+    "heightmap": "Elevation/Heightmap.png",
+    "hillshade": "Elevation/Hillshade.tif",
+    "slope": "Elevation/Slope.tif",
+    "aspect": "Elevation/Aspect.tif",
+    "steep_slope": "Elevation/SteepSlopes.gpkg",
+    "contours": "Elevation/Contours.dxf",
+    "landxml": "Elevation/Surface.landxml",
+    "surface_dxf": "Elevation/Surface.dxf",
+    "points_csv": "Elevation/SurfacePoints.csv",
+    "cesium_terrain": "Elevation/Terrain/layer.json",
+    "imagery_cog": "Imagery/Imagery.tif",
+    "imagery_drape": "Imagery/Imagery.png",
+    "ndvi": "Imagery/NDVI.tif",
+    "worldcover": "LandCover/LandCover.tif",
+    "landcover_areas_gpkg": "LandCover/LandCoverAreas.gpkg",
+    "canopy_height": "LandCover/CanopyHeight.tif",
+    "water_mask": "LandCover/WaterMask.tif",
+    "material_weights": "LandCover/MaterialWeights.tif",
+    "tree_points": "LandCover/TreePoints.csv",
+    "basemap_cog": "Features/StylizedMap.tif",
+    "basemap_drape": "Features/StylizedMap.png",
+    "buildings": "Features/Buildings.glb",
+    "projected_variants": {
+      "Features/RoadsDraped.gpkg": "Features/RoadsDraped-Projected.gpkg"
+    },
+    "flood_zones": "Records/FloodZones.gpkg",
+    "parcels_gpkg": "Records/Parcels.gpkg",
+    "parcels_dxf": "Records/Parcels.dxf",
+    "zoning_gpkg": "Records/Zoning.gpkg",
+    "zoning_dxf": "Records/Zoning.dxf",
+    "hydrography_gpkg": "Records/Hydrography.gpkg",
+    "hydrography_dxf": "Records/Hydrography.dxf",
+    "wetlands_gpkg": "Records/Wetlands.gpkg",
+    "wetlands_dxf": "Records/Wetlands.dxf",
+    "linework_dxf": "Drawings/Linework.dxf",
+    "site_plan_small_pdf": "Drawings/SitePlan-Small.pdf",
+    "site_plan_small_svg": "Drawings/SitePlan-Small.svg",
+    "site_plan_large_pdf": "Drawings/SitePlan-Large.pdf",
+    "site_plan_large_svg": "Drawings/SitePlan-Large.svg"
+  },
+  "cesium_terrain": {
+    "present": true,
+    "tile_count": 1,
+    "layer_json": "Elevation/Terrain/layer.json"
+  },
+  "basemap": {
+    "present": false
+  },
+  "imagery": {
+    "present": false
+  },
+  "pipeline": {
+    "git_sha": "unknown",
+    "worker_image": "unknown",
+    "processed_at": "2026-01-01T00:00:00+00:00"
+  },
+  "packaging": {
+    "selected": [
+      "elevation.dem_tif"
+    ],
+    "source": "legacy_full_catalog",
+    "default_applied": false
+  },
+  "file_entries": {
+    "README.md": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": []
+    },
+    "Metadata/manifest.json": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": []
+    },
+    "Metadata/stac-item.json": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": []
+    },
+    "Site/Brief.pdf": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Site/Model.ifc": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "offset"
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Site/Context.usdz": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "offset"
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Site/Features.usdz": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "offset"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Elevation/DEM.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Heightmap.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ],
+      "value_mapping": {
+        "encoding": "png-16bit-grayscale",
+        "min": 0,
+        "max": 100,
+        "to_value": "value = min + (u16/65535)*(max - min)",
+        "value_units": "m"
+      }
+    },
+    "Elevation/Hillshade.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Hillshade.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Slope.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Slope.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Aspect.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Aspect.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/SteepSlopes.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Contours.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Surface.landxml": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Surface.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/SurfacePoints.csv": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Terrain.glb": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "offset"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Terrain.obj": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "offset"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Terrain.mtl": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Terrain.jpg": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Terrain-Med.glb": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "offset"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Terrain-Engine-Med.glb": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "south",
+          "z": "up"
+        },
+        "coordinate_mode": "offset"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Terrain/layer.json": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Elevation/Terrain/0/0/0.terrain": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "offset"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ]
+    },
+    "Imagery/Imagery.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic imagery",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Imagery/Imagery.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic imagery",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Imagery/Imagery.pgw": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic imagery",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Imagery/Imagery.prj": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic imagery",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Imagery/Imagery-Engine.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic imagery",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Imagery/NDVI.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic imagery",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Imagery/NDVI.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic imagery",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "LandCover/LandCover.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/LandCover.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/LandCoverAreas.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/LandCoverAreas.shp": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/LandCoverAreas.shx": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/LandCoverAreas.dbf": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/LandCoverAreas.prj": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/LandCoverAreas.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/CanopyHeight.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/WaterMask.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/MaterialWeights.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/MaterialWeights-1To4.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/MaterialWeights-5To8.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/TreePoints.csv": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "LandCover/TreePoints-Engine.csv": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "CC-BY-4.0",
+      "sources": [
+        {
+          "name": "Synthetic land cover",
+          "license": "CC-BY-4.0"
+        }
+      ]
+    },
+    "Features/StylizedMap.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/StylizedMap.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Buildings.glb": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "offset"
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/BuildingFootprints.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/BuildingFootprints.shp": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/BuildingFootprints.shx": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/BuildingFootprints.dbf": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/BuildingFootprints.prj": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/BuildingFootprints.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Roads.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Roads.shp": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Roads.shx": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Roads.dbf": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Roads.prj": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Roads.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/RoadsDraped.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/RoadsDraped.shp": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/RoadsDraped.shx": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/RoadsDraped.dbf": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/RoadsDraped.prj": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/RoadsDraped.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Water.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Water.shp": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Water.shx": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Water.dbf": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Water.prj": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Water.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Water-Lines.shp": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Water-Lines.shx": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Water-Lines.dbf": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/Water-Lines.prj": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Features/RoadsDraped-Projected.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Records/FloodZones.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic public record",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Records/FloodZones.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic public record",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Records/Parcels.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic public record",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Records/Parcels.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic public record",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Records/Zoning.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic public record",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Records/Zoning.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic public record",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Records/Hydrography.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic public record",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Records/Hydrography.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic public record",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Records/Wetlands.gpkg": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic public record",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Records/Wetlands.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Synthetic-PublicDomain",
+      "sources": [
+        {
+          "name": "Synthetic public record",
+          "license": "LicenseRef-Synthetic-PublicDomain"
+        }
+      ]
+    },
+    "Drawings/Linework.dxf": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute"
+      },
+      "odbl_role": "database",
+      "license": "ODbL-1.0",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Drawings/SitePlan-Small.pdf": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Drawings/SitePlan-Small.svg": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Drawings/SitePlan-Large.pdf": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    },
+    "Drawings/SitePlan-Large.svg": {
+      "frame": {
+        "placed": false
+      },
+      "odbl_role": "produced-work",
+      "license": "LicenseRef-MantlePlace-Terms",
+      "sources": [
+        {
+          "name": "Synthetic open map",
+          "license": "ODbL-1.0"
+        }
+      ]
+    }
+  }
+}

@@ -517,6 +517,86 @@ class PatchExemptionTest(unittest.TestCase):
         self.assertTrue(any("not served at" in f for f in failures), failures)
 
 
+class StagedPinTest(unittest.TestCase):
+    """A staged release is served before it is frozen: its schema answers at its URL, and the
+    freeze ledger does not name it yet. A host verified against it is verified (the document it
+    was exercised against is the served one), and the gate says it is staged rather than calling
+    it published. Served is not enough on its own, though: a served version below the ledger's
+    newest is not the next release, so it is not a staged one."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+        (self.tmp / "Semver.h").write_text('FLOOR = TEXT("2.0.0");\n', encoding="utf-8")
+        self._real_root = gate._REPO_ROOT
+        gate._REPO_ROOT = self.tmp
+        self.addCleanup(lambda: setattr(gate, "_REPO_ROOT", self._real_root))
+
+        gate._schema_cache.clear()
+        self.addCleanup(gate._schema_cache.clear)
+
+        # Served: what answers at a URL. Ledgered: what the freeze ledger names. Two artifacts.
+        self.served = {key: _semver_schema(key) for key in ("1.14.0", "1.15.0", "2.0.0")}
+        self.ledgered = ["1.14.0", "1.15.0"]
+        gate.fetch_schema = lambda version, timeout=20: self.served.get(version)  # type: ignore[assignment]
+        self.addCleanup(lambda: setattr(gate, "fetch_schema", _REAL_FETCH))
+        gate._ledger_cache = None
+        gate.fetch_published_versions = lambda timeout=20: sorted(  # type: ignore[assignment]
+            self.ledgered, key=gate.sort_key)
+        self.addCleanup(lambda: setattr(gate, "fetch_published_versions", _REAL_LEDGER))
+        self.addCleanup(lambda: setattr(gate, "_ledger_cache", None))
+
+    def _entry(self, pin: str = "2.0.0") -> dict:
+        return _host_entry(
+            verifiedAgainstManifestVersion=pin,
+            floorSource={"path": "Semver.h", "pattern": r'FLOOR\s*=\s*TEXT\("([0-9.]+)"\)'},
+            tests="synthetic/Tests/ManifestReaderTests.cs",
+        )
+
+    def test_a_pin_to_a_staged_major_is_verified(self) -> None:
+        failures, pinned = gate.check_host("synthetic", self._entry())
+        self.assertEqual([], failures)
+        self.assertEqual("2.0.0", pinned)
+
+    def test_the_staged_pin_is_reported_as_staged_not_as_published(self) -> None:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            gate.check_host("synthetic", self._entry())
+        printed = out.getvalue()
+        self.assertIn("staged", printed)
+        self.assertIn("not yet in the freeze ledger", printed)
+        self.assertNotIn("nothing newer published", printed)
+
+    def test_a_staged_major_is_not_drift_for_a_host_pinned_below_it(self) -> None:
+        (self.tmp / "Semver.h").write_text('FLOOR = TEXT("1.15.0");\n', encoding="utf-8")
+        failures, _ = gate.check_host("synthetic", self._entry("1.15.0"))
+        self.assertEqual([], failures)
+
+    def test_a_served_version_below_the_ledgers_newest_is_not_staged(self) -> None:
+        """1.14.5 answers at its URL but the ledger already names 1.15.0: it is neither frozen nor
+        the next release, so a pin to it is not verified against anything published."""
+        (self.tmp / "Semver.h").write_text('FLOOR = TEXT("1.14.0");\n', encoding="utf-8")
+        self.served["1.14.5"] = _semver_schema("1.14.5")
+        failures, _ = gate.check_host("synthetic", self._entry("1.14.5"))
+        self.assertTrue(any("not in the freeze ledger" in f and "staged" in f for f in failures),
+                        failures)
+
+    def test_once_frozen_the_pin_reads_as_published(self) -> None:
+        self.ledgered.append("2.0.0")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            failures, _ = gate.check_host("synthetic", self._entry())
+        self.assertEqual([], failures)
+        self.assertIn("nothing newer published", out.getvalue())
+
+    def test_a_staged_pin_that_is_not_served_is_still_unpublished(self) -> None:
+        del self.served["2.0.0"]
+        failures, _ = gate.check_host("synthetic", self._entry())
+        self.assertTrue(any("is not published" in f for f in failures), failures)
+
+
 class PatchRuleUnitTest(unittest.TestCase):
     """The two pure helpers behind the exemption."""
 

@@ -105,6 +105,21 @@ The codes are those [`mantleplace-mpb`](../../mantleplace-mpb/README.md) reports
 `mpb corpus` is the runner. A manifest in a case declares its own version and is held to that
 published schema, so a case is fetched against the network the way the contract gate is.
 
+Two case fields say how a case is built and fetched, not what it must report:
+
+- `stagedSchema: true` marks a case whose manifest declares a **staged** version: served for
+  readers, not yet in the freeze ledger. The runner holds it to the served schema, as
+  `mpb validate --staged` does. The 2.0 cases (`bundle.v2*`) carry it while 2.0.0 is staged; once
+  it is frozen the field changes nothing and is removed.
+- A case whose paths differ only by case (`bundle.v2NameCaseCollision`) is built as the zip and
+  the wrapped zip only. No folder on a case-insensitive file system can hold it, which is the
+  reason for the rule it tests.
+
+The 2.0 cases hold every 2.0 bundle to the folder allowlist and the naming rules
+([`format.md`](../../../spec/format.md) §10.2, §10.3): `bundle.v2Full` is the default download
+whole, each rule a validator can check has a case that breaks it, and the allowlist's two
+warnings, an unlisted folder and a stray root file, are accept cases.
+
 ## The self-test corpus (`self-test/`)
 
 `self-test/` holds deliberately broken index and case fixtures that every host's corpus **reader**
@@ -178,6 +193,9 @@ Stamping a newer version onto a fixture that lacks what that version requires wo
 fixture untrue.
 
 **The reject set waits for the slowest host.** It is host-invariant (no case carries `appliesTo`),
-so it may only name versions below the _lowest_ floor among registered hosts. v18 and v19 could
+so it may only name versions below the _lowest_ floor among registered hosts. Its other end is the
+one exception: `manifest.reject.majorAhead` holds a full 2.0 manifest, which every reader of a
+lower major refuses with an update message (`format.md` §11), so it names a version above every
+floor. When the hosts read 2.x it is restamped one major ahead of them, never deleted. v18 and v19 could
 join it only because both registered hosts take the 1.0.0 floor together; had one host repinned
 first, the retired versions would have stayed out until the other caught up.

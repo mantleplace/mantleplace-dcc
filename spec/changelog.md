@@ -28,8 +28,9 @@ The first major of the semver era, and the first version written for readers out
 removes, moves, renames and narrows members and files, which [compatibility](compatibility.md) §2
 defines as a MAJOR, and it is the version from which the 2.x promise (compatibility §8) holds.
 [`format.md`](format.md) §9 to §12 describe it; this entry lists what moved and what a 1.x consumer
-does about it. The schema, once published, owns the member-level list, and where it and this entry
-differ the schema is right.
+does about it. The schema owns the member-level list, and where it and this entry differ the schema
+is right. It is staged: served at `2.0.0.json` for readers before any order uses it, and not yet in
+the freeze ledger.
 
 **What a 2.0 bundle is.**
 
@@ -59,7 +60,8 @@ differ the schema is right.
   two 1.x files called `Drape.png`, in two folders, are now two names. The plugin-only copies of 1.x
   (a vector folder inside `Site/`, `TreePointsMetric.csv`, the State Plane drape) are gone; a frame or
   format that a whole class of tools needs is a **variant** with a hyphenated qualifier, such as
-  `TreePoints-Engine.csv`, and a host block points at the shared file.
+  `TreePoints-Engine.csv` or `RoadsDraped-Projected.gpkg`, and a host block points at the shared
+  file.
 - **The site model and the context.** `Site/Context.usdz` replaces the terrain-only `Mesh/Terrain.usdz`
   and holds the whole site as Produced Work content. `Site/Features.usdz` holds the vector data of the
   same site under the ODbL. Both state their georeference, and store coordinates as offsets from the
@@ -75,6 +77,29 @@ differ the schema is right.
   levels are still built, kept in the vault and selectable.
 - **STAC.** `Metadata/stac-item.json` is new: the bundle as a valid STAC 1.1.0 Item, generated from the
   manifest.
+
+**Members, against 1.15.0.** As the staged schema states them:
+
+- **Required now.** `file_entries`, and in each entry `frame`, `odbl_role`, `license` and
+  `sources`; `location.site_origin`; `layout.stac_item`. A file with no spatial frame (the README,
+  the manifest, the STAC Item, a sheet) states `frame: {"placed": false}` and nothing else, and
+  `placed` is the one new member of a frame.
+- **Removed from `layout`.** `terrain`, `elevation_cog`, `vector`, `placement_txt`,
+  `migrated_from`, `basemap` and `imagery` (the PMTiles pointers).
+- **Added to `layout`.** `stac_item`, `context_usdz`, `features_usdz`, `landcover_areas_gpkg`,
+  `hydrography_gpkg` and `hydrography_dxf`, `linework_dxf`, the four `site_plan_small_*` and
+  `site_plan_large_*` sheets, and `projected_variants`, which maps each vector layer to its
+  `-Projected` twin. A Site Brief record layer with no key of its own takes `<layer>_gpkg` and
+  `<layer>_dxf` under `Records/`.
+- **Narrowed.** Every fixed name of the tree is a constant of its `layout` key
+  (`layout.dem` is always `Elevation/DEM.tif`), and every archive path, as a pointer or a
+  `file_entries` key, is ASCII from `[A-Za-z0-9._-]` with no empty, `.` or `..` segment.
+- **Removed from the host blocks.** `hosts.revit.vectors`, the 1.15.0 carrier: 2.0 ships no such
+  file, and a projected-CRS reader reads the `-Projected` twins instead. And
+  `hosts.unreal.heightmap.uint16_mapping`, which the schema now refuses: a PNG's value mapping
+  lives only in its `file_entries` entry (`value_mapping`).
+- **Left to the validator.** No two archive paths differ only by case, and a basename never names
+  two different things; neither can be a schema pattern.
 
 **What does not change.** The pointer doctrine, the integrity rules, the apply-verbatim rule for
 placement values and fail-closed behaviour on a unit or a value set a reader does not know are as

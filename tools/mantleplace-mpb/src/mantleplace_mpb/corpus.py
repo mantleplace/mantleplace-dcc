@@ -15,6 +15,14 @@ The index entry decides what the validator must report:
   lists no warnings must produce none.
 - `expectations.hashesVerified` — the number of files whose sha256 was verified.
 
+Two case fields change how a case is run, not what it must report:
+
+- `stagedSchema: true` — the case's manifest declares a staged version, served for readers and
+  not yet in the freeze ledger; the runner admits it as `mpb validate --staged` does. Once the
+  version is frozen the field changes nothing, and it is removed.
+- A case whose paths differ only by case is built as the two zips and never as a folder: no
+  folder can hold it on a case-insensitive file system, which is why the rule exists.
+
 An expectation key the runner does not know fails the case: a runner that reads past an
 assertion it does not understand would pass a corpus full of assertions it never made.
 """
@@ -69,6 +77,13 @@ def _build(form: str, files: dict[str, bytes], where: Path) -> Path:
     return path
 
 
+def _forms(files: dict[str, bytes]) -> tuple[str, ...]:
+    entries = {"/".join(name.split("/")[:i]) for name in files for i in range(1, name.count("/") + 2)}
+    if len({entry.casefold() for entry in entries}) < len(entries):
+        return tuple(form for form in FORMS if form != "folder")
+    return FORMS
+
+
 def _judge(case: dict, report) -> list[str]:
     problems: list[str] = []
     want = {"accept": "pass", "reject": "fail"}.get(case.get("expect"))
@@ -102,6 +117,7 @@ def run_corpus(corpus: Path, schemas: SchemaSource) -> tuple[int, list[str]]:
     if not cases:
         return 0, [f"the corpus has no `{GROUP}` cases; a run that asserts nothing is not a pass"]
     failures: list[str] = []
+    staged = schemas.allowing_staged()
     for case in cases:
         case_id = case.get("id", "?")
         try:
@@ -110,9 +126,10 @@ def run_corpus(corpus: Path, schemas: SchemaSource) -> tuple[int, list[str]]:
         except (OSError, ValueError, KeyError, TypeError) as exc:
             failures.append(f"{case_id}: the case cannot be read: {exc}")
             continue
-        for form in FORMS:
+        source = staged if case.get("stagedSchema") is True else schemas
+        for form in _forms(files):
             with tempfile.TemporaryDirectory(prefix="mpb-corpus-") as tmp:
-                report = validate(_build(form, files, Path(tmp)), schemas=schemas)
+                report = validate(_build(form, files, Path(tmp)), schemas=source)
                 if report.incomplete:
                     raise CorpusError(f"{case_id} ({form}) could not be checked: "
                                       + "; ".join(f.message for f in report.findings

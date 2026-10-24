@@ -48,6 +48,17 @@
     "bundle.roleNoneWithOdblSource": [],
     "bundle.roleProducedWorkVector": [],
     "bundle.schemaInvalid": [],
+    "bundle.v2FolderUnlisted": [],
+    "bundle.v2Full": [],
+    "bundle.v2MacosDebrisIgnored": [],
+    "bundle.v2NameBasename": [],
+    "bundle.v2NameBasenameShared": [],
+    "bundle.v2NameCaseCollision": [],
+    "bundle.v2NameCaseMismatch": [],
+    "bundle.v2NameCharset": [],
+    "bundle.v2NameQualifier": [],
+    "bundle.v2NameQualifierOrder": [],
+    "bundle.v2RootFileUnlisted": [],
     "bundle.versionInvalid": [],
     "bundle.versionUnpublished": [],
     "cache.keySanitisation": [
@@ -179,6 +190,10 @@
       "unreal"
     ],
     "manifest.reject.drapeAlignmentContradiction": [
+      "unreal"
+    ],
+    "manifest.reject.majorAhead": [
+      "revit",
       "unreal"
     ],
     "manifest.reject.notJson": [

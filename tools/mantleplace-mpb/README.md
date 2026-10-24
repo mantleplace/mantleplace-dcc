@@ -41,6 +41,11 @@ against the published schema, and restates neither.
   sha256 the ledger records for them. The JSON Schema evaluator is built in and refuses any
   keyword it does not evaluate, so a schema it cannot fully check is "could not check", never
   "pass".
+- **A staged version, when asked.** A release can be served for readers before it is frozen, so
+  the ledger does not name it yet. `--staged` holds a manifest that declares one to the served
+  schema instead of failing it as unpublished, and the report says so (`schema.staged`, at info).
+  Only the next release can be staged: a version below the ledger's newest is unpublished either
+  way.
 - **The pointer rule.** Every `layout` path (each string value; `mesh_formats` lists format
   names, not files), every per-artifact `path` and every `file_entries` key must name a file or folder in the bundle, by a plain relative path that stays inside it.
   `layout.manifest` must name the manifest. In a bundle stored as parts, a file another part holds
@@ -52,10 +57,32 @@ against the published schema, and restates neither.
   mapping and coordinate mode, and for a raster its pixel convention and row order) and coherent:
   no raster fields on a non-raster, no geoid or vertical unit without a vertical CRS, no two axes
   along one line, and an offset file only where `location.site_origin` is there to measure from.
+  A file with no spatial frame states `{"placed": false}` and nothing else.
 - **ODbL roles** (`file_entries.<path>.odbl_role`). A vector or tabular data file (`.gpkg`,
   `.shp`, `.geojson`, `.dxf`, `.csv` and the like) is never a Produced Work, and a file whose role
   is `none` lists no ODbL source. A missing role reads as `database` and is a warning, as is a
   file with no entry at all.
+- **The 2.0 layout and names** (`format.md` §10.2, §10.3), for a manifest that declares 2.x and
+  only then; a 1.x bundle is held to its own version. These are the `names` check:
+
+  | Code | Severity | Rule |
+  | --- | --- | --- |
+  | `layout.folder-unlisted` | warning | a top-level folder outside the eight |
+  | `layout.root-file` | warning | a file at the root other than `README.md` |
+  | `name.basename` | error | rule 1: a basename is a PascalCase noun, and the extension, lowercase, is the format |
+  | `name.basename-shared` | error | rule 1: one basename in two folders names two things |
+  | `name.qualifier` | error | rule 3: a qualifier joined by `_` or `.`, or not a capitalised word or number |
+  | `name.qualifier-order` | error | rule 3: qualifiers run subset, frame (`Engine`, `Projected`), level (`Raw`, `Med`, `Min`) |
+  | `name.charset` | error | rule 5: a name outside ASCII `[A-Za-z0-9._-]` |
+  | `name.case-collision` | error | rule 5: two entries that differ only by case |
+  | `name.case-mismatch` | error | rule 6: a pointer that names an entry only regardless of case |
+
+  The allowlist binds the producer and no consumer depends on it, so it warns. A pointer is
+  matched regardless of case, as a 2.0 reader matches it, so a case mismatch is the writer's
+  error and not a missing file. Rules 1 and 3 name the files of a folder: the fixed names
+  (`README.md`, `Metadata/manifest.json`, `Metadata/stac-item.json`) and the files inside a
+  format's own folder, such as a tileset's, keep their own names (rule 4). Rule 2, plural or
+  singular, is a matter of meaning that no validator reads.
 
 It never reprojects, and it derives no placement value: a frame is checked for being whole and
 self-consistent, never recomputed.
@@ -126,10 +153,8 @@ python -m unittest discover -s tools/mantleplace-mpb/tests     # offline, no ins
 ## Releasing
 
 A release is a tag. `python tools/mantleplace-mpb/release_check.py` holds the package version to
-the newest MPB version the corpus declares a case for (the tests run it on every pull request),
-and `release_check.py --tag mpb-<version>` holds the tag to the package. Pushing the tag
-`mpb-<version>` runs `.github/workflows/release-mpb.yml`: it tests, builds, checks the
-distributions and publishes them to PyPI through trusted publishing, with no token stored
+the newest MPB version the corpus declares a case for, a reject case aside (the tests run it on
+every pull request), and `release_check.py --tag mpb-<version>` holds the tag to the package.
+Pushing the tag `mpb-<version>` runs `.github/workflows/release-mpb.yml`: it tests, builds, checks
+the distributions and publishes them to PyPI through trusted publishing, with no token stored
 anywhere. To install from a checkout instead: `pip install ./tools/mantleplace-mpb`.
-
-The 2.0 naming, case and folder rules arrive with the 2.0 corpus cases.

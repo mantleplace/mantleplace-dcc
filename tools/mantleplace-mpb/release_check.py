@@ -3,8 +3,8 @@
 """Hold a release of mantleplace-mpb to the conformance suite it was tested against.
 
 The package version is `MAJOR.MINOR.PATCH` of the newest MPB manifest version the conformance
-corpus declares a case against, and `MAJOR.MINOR.PATCH.postN` for a release that changes the
-package and not the suite. A release is cut from the tag `mpb-<version>`.
+corpus declares a case against (a reject case is not written against the version it refuses),
+and `MAJOR.MINOR.PATCH.postN` for a release that changes the package and not the suite. A release is cut from the tag `mpb-<version>`.
 
     python tools/mantleplace-mpb/release_check.py                    # the package against the corpus
     python tools/mantleplace-mpb/release_check.py --tag mpb-1.14.0  # and the tag against the package
@@ -48,10 +48,15 @@ def base_version(version: str) -> str:
 
 
 def suite_version(index: Path = CORPUS_INDEX) -> str:
-    """The newest semver manifest version any case of the corpus declares."""
+    """The newest semver manifest version any case of the corpus is written against.
+
+    A reject case does not count: it pins a version a reader refuses (a 1.x reader given 2.0.0),
+    which is not a version the suite holds the package to.
+    """
     cases = json.loads(index.read_text(encoding="utf-8")).get("cases", [])
     versions = [c["manifestVersion"] for c in cases
-                if isinstance(c.get("manifestVersion"), str) and _SEMVER.match(c["manifestVersion"])]
+                if c.get("expect") != "reject"
+                and isinstance(c.get("manifestVersion"), str) and _SEMVER.match(c["manifestVersion"])]
     if not versions:
         raise ValueError(f"{index} declares no semver manifestVersion on any case")
     return max(versions, key=lambda v: tuple(int(n) for n in v.split(".")))
