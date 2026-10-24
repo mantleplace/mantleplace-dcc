@@ -79,6 +79,30 @@ public sealed class OpenMantlePlaceCommand : IExternalCommand
     }
 }
 
+/// <summary>"Send Feedback": the web Feedback form, in the curator's default browser (<c>HPS-56</c>).</summary>
+/// <remarks>
+/// Works signed in or out: the form needs no account, so this reads nothing from the session. The
+/// link is built by <see cref="FeedbackLink"/> in the pure core, where its rules are tested.
+/// </remarks>
+[Transaction(TransactionMode.ReadOnly)]
+[Regeneration(RegenerationOption.Manual)]
+public sealed class SendFeedbackCommand : IExternalCommand
+{
+    public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+    {
+        if (!FeedbackLauncher.TryOpen(null, out string refused))
+        {
+            new TaskDialog("Mantle Place")
+            {
+                MainInstruction = "Could not open your browser.",
+                MainContent = $"Open this address manually: {refused}",
+            }.Show();
+        }
+
+        return Result.Succeeded;
+    }
+}
+
 /// <summary>"About Mantle Place": which build this is, and which Revit it is running in.</summary>
 [Transaction(TransactionMode.ReadOnly)]
 [Regeneration(RegenerationOption.Manual)]

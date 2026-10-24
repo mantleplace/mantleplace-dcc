@@ -25,7 +25,7 @@ writing the token somewhere less safe (`HPS-16`).
 `Sign In` when you are signed out, `Signing In…` — disabled — while a browser round-trip or a stored
 grant is being renewed, and `Signed In` once you are, with your address on the tooltip. Signed in,
 clicking the face opens About Mantle Place; the dropdown carries your address, `Sign Out`,
-`Open mantle.place`, and that About dialog, which names the build you are running, the Revit it is
+`Open mantle.place`, `Send Feedback`, and that About dialog, which names the build you are running, the Revit it is
 running in, and where each import wrote its log. `Sign Out` is offered only when there is a session
 to drop — including a stored one you are not currently signed in to, because both hosts share one
 credential per Windows user. F1 over any button on the tab opens this README on GitHub
@@ -77,6 +77,13 @@ watching process, and the same digest of the address.
 Downloads are written to `bundle.zip.part`, hashed, and renamed over `bundle.zip` only once they
 verify (⛔`HPS-26`). Nothing is ever evicted automatically: a purchased bundle stays until you press
 `Remove Download` (`HPS-44`).
+
+**Feedback goes to the web form, signed in or out** (`HPS-56`). `Mantle Place ▸ Account ▸ Send Feedback`
+opens `https://mantle.place/feedback` in your default browser, and the vault window's `Report a Problem`
+opens the same page for the selected bundle. The plugin has no feedback form of its own and sends
+nothing itself: the link carries only `source=dcc-revit`, this add-in's version (`v`), your Revit
+version (`hv`) and, for a bundle, its order id (`order`) — never an address, a name, text or a token.
+`FeedbackLink` in the pure core builds it, and a version that is not digits and dots is left out.
 
 **Every window this plugin opens is headed by the mark and its purpose** — `Vault`, `Sign In`,
 `Bundle Import` —

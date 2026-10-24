@@ -77,6 +77,12 @@ public static partial class WindowLabels
     /// <summary>Evict this order from the bundle cache (<c>HPS-44</c>). Was <c>Remove download</c>.</summary>
     public const string RemoveDownload = "Remove Download";
 
+    /// <summary>
+    /// Open the web Feedback form for the selected bundle (<c>HPS-56</c>). <c>HPS-51</c>'s words are
+    /// <c>Report a problem</c>; the casing is Revit's, as for <see cref="RemoveDownload"/>.
+    /// </summary>
+    public const string ReportProblem = "Report a Problem";
+
     /// <summary>Stop the step in flight. Never the primary action — it undoes rather than does.</summary>
     public const string Cancel = "Cancel";
 
