@@ -31,6 +31,8 @@ with uncommitted changes under `revit/` is refused; `-AllowDirty` measures it an
 | `lib/` | the Win32 and UI Automation helpers the driver dot-sources, and the work-root rule |
 | `timings.py` | one run folder → `timings.md` (the driver calls it at the end of every run) |
 | `summarise_runs.py` | several run folders → one step × run table, with the spread between runs of a year |
+| `Harness/Verify.cs` | `-Verify`: measures the imported project and runs Prepare for Handover on it, compiled only from a source that has `PrepareForHandover` |
+| `verify_report.py` | one `-Verify` run folder → `verify.md`, each check passed, failed or not run, and why |
 
 **Needs:** Windows, PowerShell 7 (`pwsh`), the .NET SDK the plugin builds with, Python 3, Revit 2025
 installed (the compile target, whatever year you run), and the Revit year you run.
@@ -180,6 +182,33 @@ pressed.
   named layer: every earlier step ended, the named one not started, no transaction open. Combined with
   `-SaveCheckpoint` it keeps the project exactly as a full import leaves it at that point. It never calls
   the import's `Finish()` (which commits terrain smooth shading). `stop-before.txt` records which steps ran.
+
+## Verifying an import
+
+`-Verify` (layers phase, never with `-StopBefore`) measures the project once the import has run to its end, then
+runs Prepare for Handover on it, unattended, through the same `PrepareForHandover.Plan` and `Run` the ribbon
+command calls between its two dialogs. The harness only measures; `verify_report.py` decides.
+
+```powershell
+./Invoke-TimingRun.ps1 -Phase layers -Tag verify-<sha7> -Year 2027 -Commit <sha> -Layers All -Verify -Bundle <zip>
+python verify_report.py "$env:MANTLEPLACE_TIMING_ROOT\runs\verify-<sha7>-2027" --footprints <projected gpkg> --table Building
+```
+
+| Check | What is measured | Passes when |
+|---|---|---|
+| Placement | 64 of the bundle's own surface points (`hosts.revit.toposurface_points`, which a TIN import never reads), taken evenly through the file, against the highest triangle of the ground toposolids' triangulated faces over each point, in shared coordinates | every point is over the ground and within 1 m |
+| Frame | the internal origin in shared coordinates against the manifest's origin | within 0.01 m |
+| Linked site model | each link's transform, and each linked Generic Model's plan centre and base against the ground under it; with `--footprints`, the nearest footprint centre too | origin to origin, and the median base within 3 m of the ground |
+| ODbL containers | each container's elements by class (`FilledRegion/Detail Items/view-specific`, `Toposolid/Sub-divisions`), and the site context view's override on each | listed, not judged |
+| Prepare for Handover | what it planned, every id `Delete` removed, named by class from a snapshot taken first, what is left, and the attribution view's notes | committed, every filed element gone, no removed container left, and a note naming OpenStreetMap |
+
+The run folder gains `placement.csv`, `link-buildings.csv`, `verify.json` and `site-context - 3D View - Mantle
+Place Site Context.png`, the view the override is drawn in, for the eyes-on check no script can make. The handover
+is not saved: the project is closed unsaved, as every layers run closes it. A ray cast is not how the ground is
+read: a `ReferenceIntersector` over a toposolid returned only its flat bottom face, so every point read one height.
+
+A harness built for a source older than `PrepareForHandover` builds without `Verify.cs`, and a `-Verify` run of it
+ends `verify-not-built`; a run without `-Verify` of an older source, a released tag's included, is unchanged.
 
 ## What a run leaves
 
