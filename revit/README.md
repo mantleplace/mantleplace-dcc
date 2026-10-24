@@ -239,6 +239,7 @@ Revit licence.
   leaves it alone, and any other note — one edited by hand, or another order's — is left as it is,
   with a fresh one added beneath it. See
   [ADR 0011](../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md);
+- keeps ODbL content visibly apart (see [Sharing a project](#sharing-a-project-odbl-content-and-prepare-for-handover));
 - refuses to import anything at all when an artifact's bytes do not match the `sha256` its own
   manifest publishes, before a single element is created (⛔`HPS-26`);
 - tells you what it did **not** import and why, using the manifest's own
@@ -251,6 +252,35 @@ back, so nothing in the project changes; use it when a bundle import is refused 
 say enough. `Logs` shows the most recent import or probe log in File Explorer. `Probe Terrain`
 used to sit on the panel face beside `Vault` and `Import Bundle`, where a first-time user read a
 diagnostic as a third way to import.
+
+### Sharing a project: ODbL content and Prepare for Handover
+
+Content made from files the bundle marks `database` (an ODbL Derivative Database; a file with no
+stated role counts as one, as `spec/format.md` §6.8 says) is kept visibly apart. Every element such
+a step makes is filed in a **selection filter** named `Mantle Place ODbL <order>` (with ` (terrain)`
+after it for the ground), which you can see under Manage ▸ Selection and in Visibility/Graphics, and
+which the **Mantle Place Site Context** view draws in orange. A selection filter, because it is the
+one thing in Revit that holds elements of any kind (toposolids, direct shapes, trees, filled regions)
+under a name, and is saved with the project. The elements' Comments stamps are not changed:
+a re-import finds what it already made by exact stamp, and a marker in one would make it draw them
+twice. Produced Works (rasterized, meshed, extruded or baked output) are not filed; they stay where
+they were made.
+
+**Prepare for Handover** on the Bundles panel makes the open project safe to give to a client. It
+asks first, then, in one undo step that saves nothing:
+
+- removes every element in an ODbL container, and the container; where the project holds a Produced
+  Work terrain of the same order that one stays, and the removal is a swap;
+- makes sure the data credit is in the project: it reads the sources the import recorded on Project
+  Information and adds them to the **Mantle Place Attribution** view if the note was removed, as the
+  attribution step does. A Produced Work made from an ODbL source still owes the credit, so it is
+  kept even when nothing was removed.
+
+It works from the containers alone, so it needs no bundle and works on a project a colleague saved.
+It removes what hangs on a removed element as well (a toposolid's subdivisions), and says how many
+that was. The views, materials and plans an import made are left: they hold no ODbL data once its
+elements are gone. Elements an earlier import made before containers existed are not filed
+retroactively; import the bundle again into a fresh project to get them filed.
 
 **Neither log has a fixed home**, which is the whole reason `Logs` exists: both writers put
 their file beside the zip they were handed, so a bundle downloaded from your vault logs inside its

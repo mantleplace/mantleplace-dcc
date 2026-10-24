@@ -225,9 +225,20 @@ internal sealed partial class RevitBundleImporter(
     internal void Report(string line) => Say(line);
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A step whose files are an ODbL Derivative Database has what it makes filed in the ODbL
+    /// container afterwards (<see cref="FiledInOdblContainer"/>); every other step runs as it was.
+    /// </remarks>
     public IEnumerable<StepProgress> Run(ImportStep step)
     {
         ArgumentNullException.ThrowIfNull(step);
+
+        IEnumerable<StepProgress> work = RunStep(step);
+        return OdblContent.IsContained(step.Odbl) ? FiledInOdblContainer(step, work) : work;
+    }
+
+    private IEnumerable<StepProgress> RunStep(ImportStep step)
+    {
 
         // Every layer cut as subdivisions runs the same step, in its own words (GroundCuts.LayerOf),
         // so a new one is a row in the core rather than a case here.

@@ -618,6 +618,22 @@ public sealed class MantlePlaceApplication : IExternalApplication
         RibbonImagery.GiveVignette(importLocal, Vignette.ImportBundle);
         GiveHelp(importLocal);
 
+        PushButton handover = (PushButton)panel.AddItem(new PushButtonData(
+            "MantlePlacePrepareForHandover",
+            "Prepare for\nHandover",
+            assemblyPath,
+            typeof(PrepareForHandoverCommand).FullName)
+        {
+            ToolTip = "Make this project safe to hand to a client: remove the ODbL content and leave the credit.",
+            LongDescription =
+                "Removes the content an import made from ODbL files, which Mantle Place keeps in selection "
+                + "filters named \"Mantle Place ODbL\", keeps a Produced Work terrain of the same order where "
+                + "there is one, and makes sure the data credit is in the project's attribution view. It asks "
+                + "first, is one undo step, and saves nothing.",
+        });
+        RibbonImagery.Give(handover, RibbonGlyph.PrepareForHandover);
+        GiveHelp(handover);
+
         // Everything after this call lands in the slide-out rather than on the panel face, and the
         // panel grows the small unfold arrow at its foot that opens it. The two buttons above are
         // how a curator gets content in; the two below are what they reach for when that went wrong,

@@ -750,6 +750,15 @@ public sealed class ImportStep
     /// place by its other file is not lost to it (<c>HPS-53</c>).
     /// </summary>
     public ImportStep? GeoJsonFallback { get; init; }
+
+    /// <summary>
+    /// The ODbL role of what this step makes, from the manifest's <c>file_entries</c> for the file it
+    /// reads (and, for a carrier step, the GeoJSON it may fall back to). Set by the planner once the
+    /// plan is final; <see cref="OdblRole.None"/> for a step that makes no content. A step of role
+    /// <see cref="OdblRole.Database"/> files everything it makes in an ODbL container
+    /// (<see cref="OdblContent"/>).
+    /// </summary>
+    public OdblRole Odbl { get; internal set; } = OdblRole.None;
 }
 
 /// <summary>

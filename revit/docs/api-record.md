@@ -163,6 +163,18 @@ renderer-neutral.
   `ProvenanceStorage.SchemaGuid` breaks every project that already holds the old definition, so a
   field change is a new GUID
   ([ADR 0011](../../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md)).
+- **The ODbL container and Prepare for Handover are compiled and unexecuted.** `SelectionFilterElement.Create`
+  and `AddSet`, `SelectionFilterElement.GetElementIds`, `View.AddFilter` and `SetFilterOverrides` with a
+  selection filter (rather than a rule-based one), a `ParameterFilterElement`-free
+  `FilteredElementCollector.WherePasses(ElementParameterFilter)` over every category, and
+  `Document.Delete(ICollection<ElementId>)` over a toposolid with its subdivisions have not run. What
+  is unknown: whether a selection filter accepts the ids of a view-specific element (a filled region
+  on a land use plan) and of a toposolid subdivision in 2025 (where it is not a separate element), what
+  `Delete` takes along with a toposolid, and how orange a 5-weight projection line reads on shaded
+  ground. The live check is the Revit live verification issue (
+  [issue 383](https://github.com/mantleplace/mantleplace-dcc/issues/383)). The decisions around them
+  (which files are `database`, which container holds what, what the handover keeps) are headless:
+  `OdblContentTests`.
 - **The context buildings have left that set.** The step converts the site model with
   `Application.OpenIFCDocument`, finds each building in the result by `BuiltInParameter.IFC_GUID`,
   clones its solids with `SolidUtils.Clone` and gives them to a Generic Model `DirectShape`. The

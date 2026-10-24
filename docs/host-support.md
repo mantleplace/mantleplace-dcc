@@ -99,7 +99,7 @@ A `declined` cell with no ADR may carry one line of reason instead. No cell desc
 | Tree points | partial — [issue 76](https://github.com/mantleplace/mantleplace-dcc/issues/76), [issue 196](https://github.com/mantleplace/mantleplace-dcc/issues/196) | supported |
 | Parcels and zoning | partial — [issue 259](https://github.com/mantleplace/mantleplace-dcc/issues/259) | planned — [issue 268](https://github.com/mantleplace/mantleplace-dcc/issues/268) |
 | The bundle's attribution, written into the project | planned — [issue 263](https://github.com/mantleplace/mantleplace-dcc/issues/263) | supported — [ADR 0011](adr/0011-revit-provenance-record-and-attribution-note-identity.md) |
-| ODbL content kept apart, and a Prepare for handover command | partial — [issue 384](https://github.com/mantleplace/mantleplace-dcc/issues/384) | planned — [issue 376](https://github.com/mantleplace/mantleplace-dcc/issues/376) |
+| ODbL content kept apart, and a Prepare for handover command | partial — [issue 384](https://github.com/mantleplace/mantleplace-dcc/issues/384) | partial — [issue 383](https://github.com/mantleplace/mantleplace-dcc/issues/383) |
 
 ## Large AOIs and streaming
 

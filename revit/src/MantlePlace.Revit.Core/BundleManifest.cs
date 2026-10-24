@@ -642,6 +642,14 @@ public sealed class BundleManifest
     /// </summary>
     public IReadOnlyList<AttributionSource> AttributionSources { get; internal set; } = [];
 
+    /// <summary>
+    /// <c>file_entries</c>, MPB 1.14.0: what the manifest states about each file's terms, keyed by
+    /// archive path. Empty on a manifest that predates it, where every file then reads as
+    /// <see cref="OdblRole.Database"/> (<see cref="OdblContent.RoleOf(IReadOnlyDictionary{string, FileLicensing}, string)"/>).
+    /// </summary>
+    public IReadOnlyDictionary<string, FileLicensing> FileEntries { get; internal set; }
+        = new Dictionary<string, FileLicensing>();
+
     public DeliveryFacts Delivery { get; internal set; } = new();
 
     /// <summary>

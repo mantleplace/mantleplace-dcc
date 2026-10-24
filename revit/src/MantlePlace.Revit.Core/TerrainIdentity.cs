@@ -176,6 +176,27 @@ public static class TerrainIdentity
             && comments.Length > Prefix.Length;
 
     /// <summary>
+    /// The cache-key stem a terrain stamp this plugin wrote names — the order it belongs to — or
+    /// <c>null</c> for any other Comments.
+    /// </summary>
+    /// <remarks>
+    /// For a reader that has no bundle in hand and needs to know whose ground this is, as the
+    /// handover does to tell an order's Produced Work terrain from another's. A stem holds no
+    /// <c>/</c> (<see cref="CacheKeySanitiser"/>), so the first one ends it.
+    /// </remarks>
+    public static string? StemOf(string? comments)
+    {
+        if (!IsStamp(comments))
+        {
+            return null;
+        }
+
+        string rest = comments![Prefix.Length..];
+        int slash = rest.IndexOf('/', StringComparison.Ordinal);
+        return slash > 0 ? rest[..slash] : null;
+    }
+
+    /// <summary>
     /// The build half of a stamp this bundle owns — the part after the stem — or <c>null</c> for any
     /// other Comments.
     /// </summary>
