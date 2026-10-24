@@ -119,8 +119,15 @@ internal static class Verify
         }
 
         XYZ start = toInternal.OfPoint(new XYZ(sharedEastFt, sharedNorthFt, 20000 * FeetPerMetre));
-        ReferenceWithContext? hit = caster.FindNearest(start, toInternal.BasisZ.Negate());
-        return hit is null ? null : toShared.OfPoint(hit.GetReference().GlobalPoint).Z / FeetPerMetre;
+        // Every face the ray passes through, top and bottom: the ground is the highest of them. The nearest
+        // hit alone is not it: on a toposolid the ray's first reference came back as the flat bottom face.
+        IList<ReferenceWithContext> hits = caster.Find(start, toInternal.BasisZ.Negate());
+        if (hits.Count == 0)
+        {
+            return null;
+        }
+
+        return hits.Max(hit => toShared.OfPoint(hit.GetReference().GlobalPoint).Z) / FeetPerMetre;
     }
 
     private static object Placement(string bundle, JsonElement revit, double east, double north, Transform toInternal, Transform toShared, ReferenceIntersector? caster, string dir)
@@ -196,7 +203,9 @@ internal static class Verify
             int buildings = 0;
             if (linked is not null)
             {
-                foreach (Element element in new FilteredElementCollector(linked).WhereElementIsNotElementType())
+                // The site model's buildings come in as Generic Models; its levels, grids and the like carry a
+                // GlobalId too but a box about the origin.
+                foreach (Element element in new FilteredElementCollector(linked).OfCategory(BuiltInCategory.OST_GenericModel).WhereElementIsNotElementType())
                 {
                     string? guid = element.get_Parameter(BuiltInParameter.IFC_GUID)?.AsString();
                     if (string.IsNullOrEmpty(guid) || element.Category is null || element.get_BoundingBox(null) is not { } box)
@@ -310,6 +319,9 @@ internal static class Verify
         }
 
         HashSet<ElementId> filed = [.. plan.Removing.SelectMany(container => container.Live)];
+        // Names now: a removed container is deleted with its content, and a deleted element has no name to read.
+        List<string> removals = [.. plan.Removing.Select(container => container.Filter.Name)];
+        List<string> kept = [.. plan.Containers.Except(plan.Removing).Select(container => container.Filter.Name)];
         PrepareForHandover.HandoverResult result = PrepareForHandover.Run(document, plan);
         say($"handover: committed={result.Committed}, deleted {result.Deleted.Count}, filed {filed.Count}");
 
@@ -329,8 +341,8 @@ internal static class Verify
         return new
         {
             counts = new { plan.Counts },
-            planned_removals = plan.Removing.Select(container => container.Filter.Name).ToList(),
-            kept = plan.Containers.Except(plan.Removing).Select(container => container.Filter.Name).ToList(),
+            planned_removals = removals,
+            kept,
             committed = result.Committed,
             failure = result.Failure,
             deleted_total = result.Deleted.Count,
