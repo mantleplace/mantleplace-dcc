@@ -23,6 +23,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
     private static VaultNewsChecker? _news;
     private static PrepareRejoiner? _rejoiner;
     private static readonly SignInEdge SignIns = new();
+    private static string? _hostVersion;
     private static ExternalEvent? _importEvent;
     private static BundleImportEventHandler? _importHandler;
 
@@ -58,6 +59,13 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
     /// <summary>The routes this process signs in against and sends curators to.</summary>
     internal static MantlePlaceEndpoints Endpoints => _endpoints ?? throw NotStarted();
+
+    /// <summary>
+    /// The running Revit's version number (<c>2025</c>, <c>2026</c>, <c>2027</c>), read once at
+    /// startup so the vault window, which holds no <c>UIApplication</c>, can build the feedback link
+    /// (<c>HPS-56</c>). Null only before startup.
+    /// </summary>
+    internal static string? HostVersion => _hostVersion;
 
     internal static VaultClient Vault => _vault ?? throw NotStarted();
 
@@ -302,6 +310,22 @@ public sealed class MantlePlaceApplication : IExternalApplication
         RibbonImagery.GiveMark(openSite);
         GiveHelp(openSite);
 
+        // HPS-56: beside About, and enabled signed in or out, because the web form needs no account.
+        PushButton feedback = _accountButton.AddPushButton(new PushButtonData(
+            "MantlePlaceSendFeedback",
+            AccountRibbon.SendFeedbackFace,
+            assemblyPath,
+            typeof(SendFeedbackCommand).FullName)
+        {
+            ToolTip = "Tell Mantle Place about a problem, or what would help, in your browser.",
+            LongDescription =
+                "Open the Mantle Place feedback form in your browser. It needs no account, so it works "
+                + "signed in or out. Only this plugin's version and your Revit version are sent along "
+                + "with the link: nothing from your model, and nothing about you.",
+        });
+        RibbonImagery.GiveMark(feedback);
+        GiveHelp(feedback);
+
         PushButton about = _accountButton.AddPushButton(new PushButtonData(
             "MantlePlaceAbout",
             "About Mantle Place",
@@ -530,6 +554,8 @@ public sealed class MantlePlaceApplication : IExternalApplication
             application.ControlledApplication.ApplicationInitialized += (sender, initialized) =>
                 _ = PlantingFamilyAuthoring.Run((Autodesk.Revit.ApplicationServices.Application)sender!, familyDirectory);
         }
+
+        _hostVersion = application.ControlledApplication.VersionNumber;
 
         MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load();
         _endpoints = endpoints;

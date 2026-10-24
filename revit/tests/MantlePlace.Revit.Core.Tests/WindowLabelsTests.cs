@@ -28,6 +28,7 @@ internal static class WindowLabelsTests
         WindowLabels.PrepareForRevit,
         WindowLabels.Import,
         WindowLabels.RemoveDownload,
+        WindowLabels.ReportProblem,
         WindowLabels.Cancel,
         WindowLabels.Close,
     ];
@@ -78,9 +79,10 @@ internal static class WindowLabelsTests
             {
                 foreach (string word in face.Split(' ', StringSplitOptions.RemoveEmptyEntries))
                 {
-                    // "for" is the one lower-case word Title Case keeps lower: a short preposition
-                    // inside the phrase, never at its start.
-                    bool minorWord = string.Equals(word, "for", StringComparison.Ordinal);
+                    // "for" and "a" are the lower-case words Title Case keeps lower: a short
+                    // preposition or article inside the phrase, never at its start.
+                    bool minorWord = string.Equals(word, "for", StringComparison.Ordinal)
+                        || string.Equals(word, "a", StringComparison.Ordinal);
                     bool leads = face.StartsWith(word, StringComparison.Ordinal);
 
                     run.Equal(
@@ -97,6 +99,7 @@ internal static class WindowLabelsTests
             run.Equal(WindowLabels.PrepareForRevit, "Prepare for Revit", "the prepare face");
             run.Equal(WindowLabels.Import, "Import", "the import face");
             run.Equal(WindowLabels.RemoveDownload, "Remove Download", "the remove face");
+            run.Equal(WindowLabels.ReportProblem, "Report a Problem", "the report face");
             run.Equal(WindowLabels.Cancel, "Cancel", "the cancel face");
             run.Equal(WindowLabels.Close, "Close", "the close face");
         });

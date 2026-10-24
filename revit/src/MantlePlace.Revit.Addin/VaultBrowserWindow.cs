@@ -53,6 +53,7 @@ internal sealed class VaultBrowserWindow : Window
     private readonly Button _prepare = new() { Content = WindowLabels.PrepareForRevit, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
     private readonly Button _import = new() { Content = WindowLabels.Import, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
     private readonly Button _remove = new() { Content = WindowLabels.RemoveDownload, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
+    private readonly Button _report = new() { Content = WindowLabels.ReportProblem, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
     private readonly Button _cancel = new() { Content = WindowLabels.Cancel, Padding = new Thickness(12, 4, 12, 4), IsEnabled = false };
 
     /// <summary>
@@ -120,6 +121,7 @@ internal sealed class VaultBrowserWindow : Window
         _prepare.Click += (_, _) => Prepare();
         _import.Click += (_, _) => _ = ImportAsync();
         _remove.Click += (_, _) => RemoveSelected();
+        _report.Click += (_, _) => ReportProblemWithSelected();
         _cancel.Click += (_, _) => CancelWork();
         _search.TextChanged += (_, _) => OnSearchChanged();
 
@@ -195,6 +197,7 @@ internal sealed class VaultBrowserWindow : Window
         buttons.Children.Add(_prepare);
         buttons.Children.Add(_import);
         buttons.Children.Add(_remove);
+        buttons.Children.Add(_report);
         buttons.Children.Add(_cancel);
 
         // Below the buttons, above the list it narrows.
@@ -482,6 +485,23 @@ internal sealed class VaultBrowserWindow : Window
         UpdateRow(bundle, _cache.InspectQuick(
             bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion));
         Report($"Removed the local copy of {bundle.AoiLabel}. It stays in your vault and can be downloaded again.");
+    }
+
+    /// <summary>
+    /// <c>HPS-56</c>: the web Feedback form in the system browser, scoped to the selected bundle by
+    /// its order id. Needs no session and does no work, so it is never gated on a busy step.
+    /// </summary>
+    private void ReportProblemWithSelected()
+    {
+        if (Selected is not { } bundle)
+        {
+            Report("Pick a bundle first.");
+            return;
+        }
+
+        Report(FeedbackLauncher.TryOpen(bundle.OrderId, out string refused)
+            ? $"Opened the feedback form for {bundle.AoiLabel} in your browser."
+            : $"Could not open your browser. Open this address manually: {refused}");
     }
 
     private void OnImportCompleted(object? sender, string report) => Report(report);

@@ -69,6 +69,12 @@ public static class AccountRibbon
     public const string SignedInFace = "Signed In";
 
     /// <summary>
+    /// The dropdown row that opens the web Feedback form (<c>HPS-56</c>). Offered signed in or out:
+    /// the form needs no account.
+    /// </summary>
+    public const string SendFeedbackFace = "Send Feedback";
+
+    /// <summary>
     /// The face and dropdown for a session.
     /// </summary>
     /// <param name="state">The session's state (<c>HPS-12</c>).</param>
