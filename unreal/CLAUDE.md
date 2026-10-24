@@ -69,6 +69,23 @@ sub-struct in `MantlePlaceManifestBlocks.h` held as a member of `FMantlePlaceVau
 entry in `MakeAll`. `Parse`, the integrity chain and the orchestration do not change. The registry is
 an explicit ordered list on purpose: no discovery, no reflection.
 
+## Reading a bundle: 1.x and 2.0, by pointer, regardless of case
+
+The importer reads MPB 1.x and 2.0 (`MantlePlaceMaxSupportedManifestMajor`; the floor stays 1.0.0) with
+one parse. A file is found through the path its manifest pointer states, never from a folder name: the
+only fixed name is `Metadata/manifest.json`. 2.0 moved the folders and the names, and it moved where a
+PNG's pixel meaning is stated: a 1.x host block carries `uint16_mapping` and `ue_ready[].value_mapping`;
+a 2.0 bundle states it only in `file_entries[<path>].value_mapping`. A host-block statement is applied
+verbatim and wins, and a block without one reads the file's own entry.
+
+A manifest path matches an archive entry **regardless of case** (format.md 10.3 rule 6). **The engine's
+zip reader already does:** `FZipArchiveReader` keeps its entries in a `TMap<FString, ...>` whose hash and
+key comparison ignore case, so `metadata/MANIFEST.json` finds `Metadata/manifest.json`; checked against
+the UE 5.8 source and by `MantlePlace.Import.BundleLayout`, which writes a real zip in another case than
+its pointers. Python's `zipfile` does not: the Cesium QA helper finds its manifest member through
+`_find_member`, and `unreal/tools/test_cesium_stream_manifest.py` pins it. Wherever the importer
+compares a manifest path itself (a `file_entries` key, the streaming selection), it ignores case too.
+
 ## Commands
 
 The tests are Unreal automation tests under a `MantlePlace.` prefix. Run the whole suite with the

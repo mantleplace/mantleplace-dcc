@@ -159,6 +159,15 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("a name that only begins with the drape's is not the drape"),
 			SelectsEntry(Incoming, TEXT("Imagery/Drape.png.aux.xml")));
 
+		// A manifest path finds its archive entry regardless of case (MPB 2.0, format.md 10.3 rule 6): the
+		// pointer says one case and the archive holds another, and the entry is still the one pointed at.
+		TestTrue(TEXT("a terrain tile is extracted whatever the case of the folder"),
+			SelectsEntry(Incoming, TEXT("cesiumterrain/14/5615/11520.terrain")));
+		TestTrue(TEXT("the drape is extracted whatever its case"),
+			SelectsEntry(Incoming, TEXT("IMAGERY/DRAPE.PNG")));
+		TestFalse(TEXT("ignoring case does not widen the drape match to a longer name"),
+			SelectsEntry(Incoming, TEXT("imagery/drape.png.aux.xml")));
+
 		// A stream that serves no imagery extracts none.
 		FRecord NoDrape = Incoming;
 		NoDrape.DrapePath = FString();

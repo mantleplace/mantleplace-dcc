@@ -10,8 +10,10 @@
 #include "MantlePlaceLandscapeWeightsLogic.h" // the band legend the corpus states the answer for
 #include "MantlePlaceRoadSplinesLogic.h"      // the height-datum check the road-layer table drives
 #include "MantlePlaceTreePointsLogic.h"     // the row-count and frame checks the vector tables drive
-#include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion
+#include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion, MantlePlaceMaxSupportedManifestMajor
 #include "Tests/MantlePlaceConformanceCorpus.h"
+
+#include "Serialization/JsonWriter.h"
 
 // Every manifest vector this suite asserts lives in the shared conformance corpus at
 // tools/manifest-conformance/corpus/manifest/ (HPS-40). They used to be inline C++ literals here,
@@ -565,6 +567,37 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 }
 
 /**
+ * The text a corpus case is driven with. Every case is its file, except `manifest.reject.majorAhead`:
+ * that case holds a 2.0 manifest for readers that stop at 1.x (format.md 11), and this reader reads 2.x,
+ * so a 2.0 manifest is no longer "a major ahead" of it. The case is driven with its own document restamped
+ * one major above what this reader speaks (the corpus README: "when the hosts read 2.x it is restamped one
+ * major ahead of them"), so the refusal it exists to pin is still asserted here, on the real document and
+ * not on a literal. A file the corpus has already restamped past this reader is driven as it stands.
+ */
+FString DrivenPayload(const FCase& Case)
+{
+	if (Case.Id != TEXT("manifest.reject.majorAhead") || !Case.PayloadObject.IsValid())
+	{
+		return Case.Payload;
+	}
+	FString Stamped;
+	Case.PayloadObject->TryGetStringField(TEXT("version"), Stamped);
+	const FMantlePlaceManifestVersion Version = FMantlePlaceManifestVersion::Parse(Stamped);
+	if (Version.bValid && Version.Major > MantlePlaceMaxSupportedManifestMajor)
+	{
+		return Case.Payload;
+	}
+	const TSharedRef<FJsonObject> Restamped = MakeShared<FJsonObject>();
+	Restamped->Values = Case.PayloadObject->Values;
+	Restamped->SetStringField(
+		TEXT("version"), FString::Printf(TEXT("%d.0.0"), MantlePlaceMaxSupportedManifestMajor + 1));
+	FString Out;
+	const TSharedRef<TJsonWriter<TCHAR>> Writer = TJsonWriterFactory<TCHAR>::Create(&Out);
+	FJsonSerializer::Serialize(Restamped, Writer);
+	return Out;
+}
+
+/**
  * Lay a row's overlay object over `Target`: a member set to null is removed, any other value
  * replaces. False when the row carries the overlay and there is no target to lay it on, so a
  * fixture that drifted fails loudly instead of quietly testing the unmodified manifest.
@@ -772,7 +805,7 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		Driven.Add(Case.Id);
 
 		FString Error;
-		const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(Case.Payload, Error);
+		const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(DrivenPayload(Case), Error);
 
 		if (Case.IsAccept())
 		{
@@ -1148,14 +1181,30 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("an absent version is refused"), Absent.bValid);
 		TestTrue(TEXT("absent version is named, not shown as 0"), Error.Contains(TEXT("(absent)")));
 
+		// This reader speaks 1.x and 2.x (MantlePlaceMaxSupportedManifestMajor): 2.0 changed the
+		// layout and not the pointer doctrine, so a 2.0 manifest with the same host block reads.
 		Error.Reset();
-		const FMantlePlaceVaultManifest Future = MantlePlaceImportManifest::Parse(
+		const FMantlePlaceVaultManifest Second = MantlePlaceImportManifest::Parse(
 		    TEXT("{\"job_id\":\"x\",\"version\":\"2.0.0\",")
-		        TEXT("\"hosts\":{\"unreal\":{\"mesh_alternative\":{\"path\":\"Mesh/Terrain.glb\"}}}}"),
+		        TEXT("\"hosts\":{\"unreal\":{\"mesh_alternative\":{\"path\":\"Site/Terrain.glb\"}}}}"),
+		    Error);
+		TestTrue(TEXT("a 2.0 manifest is read"), Second.bValid);
+		TestEqual(TEXT("a 2.0 manifest is read through its pointer"), Second.Mesh.Path, FString(TEXT("Site/Terrain.glb")));
+		TestEqual(TEXT("a 2.0 manifest is read with no error text"), Error, FString());
+
+		// One major above what this reader speaks is refused, naming the version and the remedy.
+		Error.Reset();
+		const FString AheadVersion = FString::Printf(TEXT("%d.0.0"), MantlePlaceMaxSupportedManifestMajor + 1);
+		const FMantlePlaceVaultManifest Future = MantlePlaceImportManifest::Parse(
+		    FString::Printf(
+		        TEXT("{\"job_id\":\"x\",\"version\":\"%s\",")
+		        TEXT("\"hosts\":{\"unreal\":{\"mesh_alternative\":{\"path\":\"Site/Terrain.glb\"}}}}"),
+		        *AheadVersion),
 		    Error);
 		TestFalse(TEXT("an unknown higher MAJOR is refused"), Future.bValid);
 		TestTrue(TEXT("the refusal says to update the plugin, not to re-download"),
 			Error.Contains(TEXT("Update the Mantle Place plugin")));
+		TestTrue(TEXT("the refusal names the version it saw"), Error.Contains(AheadVersion));
 
 		Error.Reset();
 		const FMantlePlaceVaultManifest AdditiveMinor = MantlePlaceImportManifest::Parse(

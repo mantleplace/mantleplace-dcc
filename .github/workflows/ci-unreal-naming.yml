@@ -50,6 +50,12 @@ jobs:
         working-directory: tools/unreal-naming
         run: python -m unittest discover -p "test_*.py" -v
 
+      # The QA helper that runs inside the editor reads a bundle's manifest regardless of the case of its
+      # entry name, as the engine's zip reader does (MPB 2.0, format.md 10.3 rule 6). `unreal` is stubbed.
+      - name: Unit-test the Python QA helper
+        working-directory: unreal/tools
+        run: python -m unittest discover -p "test_*.py" -v
+
       - name: Check generated names
         run: python tools/unreal-naming/check_generated_names.py
 

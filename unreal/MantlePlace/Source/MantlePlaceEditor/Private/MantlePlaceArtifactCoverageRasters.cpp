@@ -18,9 +18,14 @@
 
 namespace
 {
-/** `ue_ready[].value_mapping` — every shape the five encodings use, read into one struct. Absent
- *  keys simply stay at their defaults: the mapping's shape follows the encoding, so reading by
- *  key rather than branching on the encoding means a new encoding is inert rather than lossy. */
+/** A value mapping — every shape the five encodings use, read into one struct. Absent keys simply stay
+ *  at their defaults: the mapping's shape follows the encoding, so reading by key rather than
+ *  branching on the encoding means a new encoding is inert rather than lossy.
+ *
+ *  Two homes state it with the same members: `ue_ready[].value_mapping` in this host's block (1.x) and
+ *  the neutral `file_entries[<path>].value_mapping` (1.14.0 on, and the only home in 2.0). They differ in
+ *  one word, which this reads either way: the unit is `units` in the first and `value_units` in the
+ *  second. */
 FMantlePlaceRasterValueMapping ParseValueMapping(const TSharedPtr<FJsonObject>& Mapping)
 {
 	using namespace MantlePlaceManifestJson;
@@ -32,7 +37,7 @@ FMantlePlaceRasterValueMapping ParseValueMapping(const TSharedPtr<FJsonObject>& 
 	Out.MinValue = GetNumber(Mapping, TEXT("min"));
 	Out.MaxValue = GetNumber(Mapping, TEXT("max"));
 	Out.ToValueFormula = GetString(Mapping, TEXT("to_value"));
-	Out.Units = GetString(Mapping, TEXT("units"));
+	Out.Units = Mapping->HasField(TEXT("units")) ? GetString(Mapping, TEXT("units")) : GetString(Mapping, TEXT("value_units"));
 	Out.bHasNodata = Mapping->HasField(TEXT("nodata_value"));
 	Out.NodataValue = GetNumber(Mapping, TEXT("nodata_value"));
 	Out.TrueValue = GetNumber(Mapping, TEXT("true_value"));
@@ -50,6 +55,17 @@ FMantlePlaceRasterValueMapping ParseValueMapping(const TSharedPtr<FJsonObject>& 
 				Out.Classes.Add(static_cast<int32>(FMath::RoundToDouble(Value->AsNumber())));
 			}
 		}
+	}
+	// The neutral mapping may state the legend as an object of pixel code to class name instead
+	// ("a reader accepts both"): the codes are its keys.
+	const TSharedPtr<FJsonObject>* ClassesObject = nullptr;
+	if (Mapping->TryGetObjectField(TEXT("classes"), ClassesObject) && ClassesObject != nullptr)
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*ClassesObject)->Values)
+		{
+			Out.Classes.Add(FCString::Atoi(*Pair.Key));
+		}
+		Out.Classes.Sort();
 	}
 	return Out;
 }
@@ -112,6 +128,21 @@ public:
 						if (const TSharedPtr<FJsonObject>* MappingPtr = GetObject(RasterObject, TEXT("value_mapping")))
 						{
 							Raster.ValueMapping = ParseValueMapping(*MappingPtr);
+						}
+						else if (const TSharedPtr<FJsonObject> FileEntry = FindFileEntry(In.Root, Raster.Path); FileEntry.IsValid())
+						{
+							// A 2.0 bundle: the host block states where the PNG is and whether its bytes are
+							// intact, and what its pixels mean is the file's own neutral entry, whose
+							// `encoding` is the one the host block used to carry. A 1.x block's own
+							// statement, above, is applied verbatim and wins.
+							if (const TSharedPtr<FJsonObject>* NeutralPtr = GetObject(FileEntry, TEXT("value_mapping")))
+							{
+								Raster.ValueMapping = ParseValueMapping(*NeutralPtr);
+								if (Raster.Encoding.IsEmpty())
+								{
+									Raster.Encoding = GetString(*NeutralPtr, TEXT("encoding"));
+								}
+							}
 						}
 						Layer.UeReady.Add(MoveTemp(Raster));
 					}

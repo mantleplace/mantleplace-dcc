@@ -19,10 +19,24 @@
  * speak at all — `hosts.unreal` against a top-level `unreal` block.
  *
  * One home for the number: the importer's manifest gate, the bundle cache's validity decision, and
- * tools/manifest-conformance (which regexes this header) all read it here. The supported MAJOR
- * line is derived from this same literal rather than written twice.
+ * tools/manifest-conformance (which regexes this header) all read it here. The floor says how OLD a
+ * bundle may be; the newest major this reader speaks is MantlePlaceMaxSupportedManifestMajor below.
  */
 inline const FString MantlePlaceMinSupportedManifestVersion = TEXT("1.0.0");
+
+/**
+ * The newest MAJOR of the manifest this reader speaks. MPB 2.0 changed the bundle's layout, not the
+ * pointer doctrine, and this reader locates every file through a pointer value, so it reads both
+ * majors: 1.x as it always has, 2.x through the same pointers plus the neutral `file_entries`
+ * (where a 2.0 bundle states what a PNG's pixels mean). A manifest whose major is above this is
+ * refused with an "update the plugin" message rather than parsed best-effort, because a major is
+ * exactly the promise that something this reader relies on may have changed meaning.
+ *
+ * Unreal was the second major's first reader; the conformance corpus's `manifest.reject.majorAhead`
+ * case holds a 2.0 manifest for readers that stop at 1.x, so the suite restamps it one major above
+ * this constant before driving it (MantlePlaceImportManifestTest.cpp).
+ */
+inline constexpr int32 MantlePlaceMaxSupportedManifestMajor = 2;
 
 /**
  * A parsed MPB manifest version.

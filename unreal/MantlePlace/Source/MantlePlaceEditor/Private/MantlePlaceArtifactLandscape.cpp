@@ -39,10 +39,23 @@ public:
 		Heightmap.bRow0IsNorth = GetBool(H, TEXT("row0_is_north"), true);
 		Heightmap.Sha256 = GetString(H, TEXT("sha256")); // verified against the extracted bytes at import
 
+		// What the 16-bit pixels mean, in metres. A 1.x bundle states it in this host's block
+		// (`uint16_mapping`), applied verbatim as before. A 2.0 bundle states it only in the neutral
+		// `file_entries[<heightmap path>].value_mapping` (`min` and `max`, the heights codes 0 and 65535
+		// stand for), the host-block copy being refused by its schema; so it is read from there when
+		// the block does not carry it. Neither path guesses: absent in both, the range stays 0.
 		if (const TSharedPtr<FJsonObject>* MapPtr = GetObject(H, TEXT("uint16_mapping")))
 		{
 			Heightmap.ZMinM = GetNumber(*MapPtr, TEXT("z_min_m"));
 			Heightmap.ZMaxM = GetNumber(*MapPtr, TEXT("z_max_m"));
+		}
+		else if (const TSharedPtr<FJsonObject> Entry = FindFileEntry(In.Root, Heightmap.Path); Entry.IsValid())
+		{
+			if (const TSharedPtr<FJsonObject>* NeutralPtr = GetObject(Entry, TEXT("value_mapping")))
+			{
+				Heightmap.ZMinM = GetNumber(*NeutralPtr, TEXT("min"));
+				Heightmap.ZMaxM = GetNumber(*NeutralPtr, TEXT("max"));
+			}
 		}
 
 		if (const TSharedPtr<FJsonObject>* XformPtr = GetObject(H, TEXT("landscape_transform")))
