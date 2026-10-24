@@ -79,7 +79,7 @@ CONTEXT.md  CLAUDE.md
 spelled out in full — `mantleplace`, never `mp`. `max/`, `blender/`, `rhino/` are created only with
 real content: the triad every layer is built as (an impure host shim, a pure logic core, a headless
 test of that core — [CONTRIBUTING.md](CONTRIBUTING.md#style-and-shape)), the host's local-install
-tool and check script (`HPS-50`), and its own `<host>/CLAUDE.md`. **That rule governs this
+tool and check script (`HPS-50`), a Send Feedback action (`HPS-56`), and its own `<host>/CLAUDE.md`. **That rule governs this
 repository's code** — paths, folders, modules, symbols — **not the strings a plugin writes into a
 user's project** ([`unreal/CLAUDE.md`](unreal/CLAUDE.md#naming)).
 

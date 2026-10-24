@@ -67,6 +67,7 @@ host met the contract for real:
 | **v1.16** | ⛔`HPS-53` — a frame names its **vertical datum** as well as its CRS and its unit, and a height whose datum is not the one the host's ground is in is refused by name, never converted. MPB 1.8.0 moved a US order's heights in the delivery CRS from EGM2008 to NAVD88 (GEOID18) and stated the datum beside each of them. The fixed-frame host's road layer already refused by datum. The order-frame host read the strings and acted on none, which is right within one bundle and wrong across two: a re-import of the 1.8.0 rebuild over a ground from an earlier build put roads, trees, contours and buildings up to a metre off that ground, and the import reported success |
 | **v1.17** | ⛔`HPS-24` drops the queued outcome, and `HPS-36` and `HPS-47` name the keys MPB 1.0.0 reads. The platform retired the queued arm, so an order whose core build has not finished now answers a `not_ready` error; and MPB 1.0.0 folded the top-level `dcc_readiness` into `hosts.<hostId>.readiness`. Both hosts already read the new keys, and the queued arm left only dead code behind it, while the rule text still sent a new host to a start outcome that never arrives and to keys no bundle carries |
 | **v1.18** | `HPS-51` gains an eleventh action, choosing each category's fidelity level before a bundle import runs. MPB 1.9.0 lets a bundle publish RAW, MAX, MED and MIN of a deliverable, and Revit's import window grew a level beside each checklist row; the reference host's chooser is roadmapped against the same bundles, so its words were fixed here before either host named them — the glossary's `Fidelity Level`, and a level that is another said to be the same in place rather than hidden |
+| **v1.19** | `HPS-56` — every host carries a Send Feedback action from its first release. A curator who hits a problem inside a host had no route to tell Mantle Place from where they were; the web app's Feedback form needs no account and takes an image, but no plugin linked to it and nothing made a new host carry the link |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -1029,7 +1030,7 @@ scripts are proven by being run, and the rule by the check script's line at the 
 **`HPS-51` — The shared actions carry the same words in every host; anything naming a host construct
 carries the host's own noun.** A curator who signs in to Revit in the morning and to Unreal in the
 afternoon is doing one thing twice, and the plugin that calls it two things has made them learn it
-twice. Eleven actions are shared, and each carries one set of words:
+twice. Thirteen actions are shared, and each carries one set of words:
 
 | The action                                                     | The words            | Revit says it on                                                 | Unreal says it on                                    |
 | -------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
@@ -1040,6 +1041,8 @@ twice. Eleven actions are shared, and each carries one set of words:
 | The surface that lists the vault                               | `Vault`              | the Bundles panel's button, and the vault window's heading        | the panel's heading                                  |
 | Import a bundle the user already holds on disk                 | `Import Bundle`      | the Bundles panel's button                                        | the local-import section's button                    |
 | Which build this is, and what it is running in                 | `About Mantle Place` | the Account dropdown, and the dialog it opens                     | nothing yet; these are the words when it grows one |
+| Tell Mantle Place about a problem, from wherever the curator is | `Send Feedback` | the Account panel's split button, beside `About Mantle Place` | the vault panel's header |
+| Tell Mantle Place about a problem with one bundle | `Report a problem` | the Bundles panel, on the selected bundle | a bundle row |
 | Show a bundle import running, step by step, and stop it        | `Bundle Import`, `Cancel`; a step reads `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run` | the import window's heading, its stop button and each step's row | nothing yet; these are the words when it grows one |
 | Choose what a bundle import brings in, before its steps run    | `Include` over the list, `Import` to start; a row that cannot be chosen until another is reads `Needs` and that row's name | the import window, before its steps | nothing yet; these are the words when it grows one |
 | Say what a bundle holds that an import cannot offer, and why, before its steps run | `Unavailable` over the list; each entry is the row's name and one sentence from the table below — never a box | the import window, below its checklist | nothing yet; these are the words when it grows one |
@@ -1149,6 +1152,30 @@ where nothing but review reads them, and Unreal's are inline in the Slate panel 
 Unreal's delivery line is the exception there: it is decided in `MantlePlaceDeliveryLogic`, whose
 headless test asserts the words.
 Review is the enforcer of record; a test covers what a host has already moved out of its shim.
+
+**`HPS-56` — Every host carries Send Feedback, from its first release.** A curator who hits a problem
+inside a host has no route to tell Mantle Place from where they are, and the web app already has the
+form: `https://mantle.place/feedback` needs no account and takes an optional image. The host plugin
+carries **no feedback UI and no feedback API**; the web form is the one place to keep up to date. The
+action, worded `Send Feedback` (`HPS-51`), opens the **system browser** at the link below.
+
+`https://mantle.place/feedback?source=dcc-<host>&v=<plugin version>&hv=<host version>[&order=<order id>]`
+
+- `source` is `dcc-` plus the host's directory name (`dcc-unreal`, `dcc-revit`, later `dcc-blender`,
+  `dcc-rhino`, `dcc-max`). It matches `^[a-z0-9-]{1,40}$`.
+- `v` is the plugin's own version (`0.6.0`); `hv` is the host application's version (`5.8`, `2026`).
+  Both are version strings only, `^[0-9]+(\.[0-9]+){0,3}$`; a value that does not match is **left
+  out**, never sent raw.
+- `order` is optional. Only a bundle-scoped `Report a problem` action sends it, and it is the
+  bundle's order id (a UUID).
+- Nothing else goes in the URL: no email address, no name, no free text, no token.
+
+**One pure function in the host's core builds the link**, with a headless test (`HPS-02`) that
+covers each parameter's rule, including a malformed version being dropped and `order` being absent
+from the general action. The shim only opens the URL it returns. Screenshot capture and any in-host
+form are not part of this rule.
+
+_Enforcer:_ `agent-review`, plus the pure-core test of the link builder.
 
 ---
 
@@ -1318,6 +1345,7 @@ records that eviction is deliberately explicit-only.
 | Placing from the host block, and refusing a file whose frame the host cannot match (`HPS-52`, `HPS-53`)                                                                                                    | `agent-review`, plus a pure-core test where a host has moved the decision out of its shim; **no corpus case yet** for `HPS-52`; both halves of `HPS-53` have one for the fixed-frame host, and its datum has one for each host |
 | The host's frame kind, declared in its own `CLAUDE.md` (`HPS-54`)                                                                                                                                          | `agent-review`                                         |
 | The bounds on a vault listing nobody asked for (`HPS-55`)                                                                                                                                                  | `agent-review`; a pure-core test where a host has one  |
+| Every host carries Send Feedback, and its link (`HPS-56`) | `agent-review`, plus a pure-core test of the link builder |
 
 Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS-33`) appear in both rows —
 the corpus proves the behaviour, review catches the shape a vector cannot see. `HPS-53` appears twice
