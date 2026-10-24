@@ -29,6 +29,8 @@ What the pipeline emits for the Revit block, and what the reader takes:
   `linear_unit` (`ftUS` on the State Plane tier). On a tier whose files are local offsets today, the
   carrier is still written absolute in the origin's CRS and unit: a GeoPackage has no honest way to
   say "offsets about a point", and the reader places absolute coordinates by subtraction alone.
+  An origin that states no `linear_unit` leaves nothing to subtract in, so the reader refuses the carrier
+  for that bundle and reads each layer from its GeoJSON file; it never assumes metres.
 - **Z:** `road_splines` only, as XYZ: absolute orthometric height in the same linear unit, on the
   vertical datum the Revit block names. Every other table is XY.
 - **Tables:** one per layer, named as the manifest names the layer, geometry column `geom`, primary

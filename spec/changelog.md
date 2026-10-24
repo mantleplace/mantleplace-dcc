@@ -98,6 +98,39 @@ name every file by the six rules; write `file_entries` with a frame, a role, a l
 for every file; give a licence as an SPDX expression; ship a STAC Item beside the manifest; and
 state version `2.0.0` as a JSON string.
 
+### 1.15.0 — the Revit vectors pointer restated to the shared GeoPackage the bundle ships (additive minor; published and frozen 2026-10-24)
+
+No member is added, removed or re-typed: the schema differs from 1.14.0 only in prose, and in the
+`version` stamp. It is a MINOR, and not a patch, because the prose it restates is a contract: it
+replaces the description of `hosts.revit.vectors.gpkg` that 1.7.0 wrote and 1.8.0 to 1.14.0 repeated,
+which no bundle matched any longer. Every host floor at 1.0.0 reads it. What a reader of the pointer
+may now rely on:
+
+- **The file** is one GeoPackage 1.3 at `Site/Vector/SiteVectors.gpkg`, the shared vector file a
+  reader MAY take its vectors from instead of the GeoJSON files, which stay beside it.
+- **The CRS** is the origin's own, `georeference.origin.projected.epsg`, on every tier including
+  `local_ft`. A reader checks the file against that code and refuses a mismatch.
+- **The coordinates** are absolute eastings and northings in the origin's `linear_unit` on every
+  tier, not offsets. On `local_ft` the GeoJSON files beside it are feet about the origin while this
+  file is metric UTM metres, so a reader subtracts the origin in that unit rather than applying the
+  GeoJSON offsets.
+- **The tables** are named in snake_case for the layer the block lists (`road_splines`,
+  `road_polygons`, `water`, `land_use`, `land_cover`, `steep_slope`, `flood_zones`), one per geometry
+  family, so no table mixes geometries: a layer's own family keeps the plain name and any other takes
+  a family suffix (`water_line`). A `building_footprints` table holds the shared set's footprints,
+  which no GeoJSON file carries. Z is carried by `road_splines` only.
+- **The columns** an importer reads are `name`, `class`, `subtype`, `fld_zone`, `zone_subty` and
+  `lowest_level` (text) and `width_m_estimated` and `threshold_deg` (real). A missing column reads
+  as empty and any other column is ignored. A table name a reader does not know is ignored.
+- **The hash** is required on the pointer, as on every Revit deliverable, so a pointer without one
+  is a producer bug a reader refuses.
+
+Both hosts re-pin to 1.15.0 on two corpus cases that bind the Revit host: `manifest.revitVectorCarrier`
+(the carrier is found through its pointer, a layer is the table of its own name verified by the
+carrier's hash, and a layer the pointer does not list keeps its GeoJSON file) and
+`manifest.reject.revitCarrierHashMissing` (a pointer with no hash is refused, naming the pointer).
+Unreal reads no `hosts.revit` block, so no import behaviour changes there.
+
 ### 1.14.0 — file frames, the site origin and per-file licensing, in the neutral part of the manifest (additive minor; published and frozen 2026-10-22)
 
 Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under

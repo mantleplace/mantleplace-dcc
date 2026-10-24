@@ -646,6 +646,16 @@
       "errorContains": "revit.surface_dxf has no sha256"
     },
     {
+      "id": "manifest.reject.revitCarrierHashMissing",
+      "group": "manifest",
+      "file": "manifest/reject-revit-carrier-hash-missing.json",
+      "expect": "reject",
+      "manifestVersion": "1.15.0",
+      "appliesTo": "revit",
+      "reason": "The schema lists `sha256` in the `required` set of the `hosts.revit.vectors.gpkg` pointer, as it does for every Revit deliverable, so a pointer without one is a producer bug. The carrier is the one file this host would read every vector layer from, so reading it unverified would import unverifiable bytes and report them as fine: the asymmetry HPS-34 draws between a hash that was never published (skipped, valid-but-unverified) and one that was promised and is missing (refused). The refusal names the pointer, so a curator and a support reader see which file lacked its hash. The fixture is otherwise the manifest.revitVectorCarrier bundle, which the host accepts.",
+      "errorContains": "hosts.revit.vectors.gpkg has no sha256"
+    },
+    {
       "id": "manifest.reject.unversioned",
       "group": "manifest",
       "file": "manifest/reject-unversioned.json",
@@ -1350,6 +1360,24 @@
         "orderId": "ord-revit-contours-1",
         "revitContoursPath": "Surface/Contours.dxf",
         "revitContoursVerticalUnits": "m"
+      }
+    },
+    {
+      "id": "manifest.revitVectorCarrier",
+      "group": "manifest",
+      "file": "manifest/revit-vector-carrier.json",
+      "expect": "accept",
+      "manifestVersion": "1.15.0",
+      "appliesTo": "revit",
+      "reason": "HPS-52 for the Revit host's vector layers, read carrier first (MPB 1.15.0 restated `hosts.revit.vectors.gpkg`). The fixture is a `local_ft` bundle on purpose: its GeoJSON layer files are international-foot offsets about the origin, while the GeoPackage the pointer names is absolute metric UTM metres, which is the one tier where reading the wrong file puts the site 3.28x out. The reader asserts the layer is found through the pointer, as the table of its own name: road_splines is the carrier's path, hash and table, with the layer's own GeoJSON file kept beside it as the fallback for a carrier that cannot be opened or is in another CRS. A layer the pointer's `tables` do not list (water here) keeps its GeoJSON file, and a bundle with no pointer keeps reading GeoJSON throughout; a reader that took the carrier for every layer would hand water an empty table, and one that ignored the pointer would read the foot offsets as metres. The pointer's hash is the carrier's own, not the GeoJSON's: the bytes read are verified against the file read.",
+      "expectations": {
+        "jobId": "revit-vector-carrier",
+        "orderId": "ord-revit-vector-carrier-1",
+        "revitRoadSplinesPath": "Site/Vector/SiteVectors.gpkg",
+        "revitRoadSplinesSha256": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+        "revitRoadSplinesTable": "road_splines",
+        "revitRoadSplinesFallbackPath": "Site/Vector/RoadSplines.geojson",
+        "revitWaterPath": "Site/Vector/Water.geojson"
       }
     },
     {

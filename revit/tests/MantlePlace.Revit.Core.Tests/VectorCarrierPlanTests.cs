@@ -170,6 +170,28 @@ internal static class VectorCarrierPlanTests
             run.True(Has(plan, ImportStepKind.RoadCentrelines), "planned, where the GeoJSON would be refused for lack of a frame");
         });
 
+        run.Case("an origin that states no unit refuses the carrier rather than deriving one, and reads the GeoJSON", () =>
+        {
+            string vectors = Carrier(AllTables, GeoJsonLayerList("absolute_projected", "m", VectorNames));
+            BundleImportPlan plan = Plan(Manifest(UnitlessGeoreference, MetricFileFrame, vectors));
+
+            ImportStep? roads = Find(plan, ImportStepKind.RoadCentrelines);
+            run.Equal(roads?.EntryName, OwnPath("road_splines"), "the layer's own GeoJSON file is the step");
+            run.True(roads?.Table is null, "no carrier table is named");
+            run.True(roads?.GeoJsonFallback is null, "and nothing is left to fall back to");
+        });
+
+        run.Case("an origin that states no unit, with no GeoJSON beside the carrier, skips the layer and names the unit", () =>
+        {
+            BundleImportPlan plan = Plan(Manifest(UnitlessGeoreference, MetricFileFrame, Carrier(AllTables)));
+
+            run.False(Has(plan, ImportStepKind.RoadCentrelines), "nothing is planned");
+            run.True(
+                Skip(plan, ImportStepKind.RoadCentrelines)?.ReasonCode == SkipReasonCode.UnitNotUnderstood,
+                "refused as a unit this plugin cannot read");
+            run.Contains(Skip(plan, ImportStepKind.RoadCentrelines)?.Reason, "linear unit", "saying what is missing");
+        });
+
         run.Case("a bundle publishing no origin places no carrier layer, rather than dropping it at the project origin", () =>
         {
             string noOrigin = """
@@ -352,6 +374,18 @@ internal static class VectorCarrierPlanTests
             "lon": -105.32557885004304,
             "lat": 38.46130517000308,
             "projected": { "epsg": 32613, "easting": 471595.0, "northing": 4257050.0, "linear_unit": "m" }
+          }
+        }
+        """;
+
+    /// <summary>An origin whose <c>projected</c> pair names an EPSG code and no <c>linear_unit</c>.</summary>
+    private const string UnitlessGeoreference = """
+        "georeference": {
+          "crs_projected": "EPSG:32613",
+          "origin": {
+            "lon": -105.32557885004304,
+            "lat": 38.46130517000308,
+            "projected": { "epsg": 32613, "easting": 471595.0, "northing": 4257050.0 }
           }
         }
         """;

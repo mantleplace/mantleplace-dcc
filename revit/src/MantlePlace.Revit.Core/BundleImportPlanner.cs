@@ -926,6 +926,31 @@ public static class BundleImportPlanner
         ImportStep? geoJsonFallback = null;
         if (artifact.IsGeoPackage)
         {
+            // The carrier is absolute in the origin's own unit, so an origin that states none leaves
+            // nothing to subtract in: this host does not derive a unit (CLAUDE.md, no placement values
+            // here), it refuses the carrier and reads the layer from the GeoJSON file where the
+            // bundle holds one.
+            if (frame.Origin.LinearUnit == LinearUnit.Unspecified)
+            {
+                if (artifact.GeoJsonFallback is { } sibling)
+                {
+                    PlanPlacedArtifact(
+                        manifest, sibling, frame, entries, kind, label, steps, skipped, absence, crop, verticalUnits,
+                        hazard, drapePlanned, landPlan, level);
+                    return;
+                }
+
+                skipped.Add(new SkippedImport
+                {
+                    Kind = kind,
+                    ReasonCode = SkipReasonCode.UnitNotUnderstood,
+                    Reason = $"The {label} are in the shared vector file, which is placed in the linear unit of this "
+                        + "bundle's origin, and the origin states no linear unit this plugin can read. Importing them "
+                        + "could place them at the wrong scale, so they were left out.",
+                });
+                return;
+            }
+
             // The shared carrier states its frame in the file, not in the manifest: absolute, in the
             // origin's own CRS and unit. The origin is what it is placed against; its CRS is checked
             // against the origin's when the table is read.
@@ -994,12 +1019,11 @@ public static class BundleImportPlanner
 
     /// <summary>
     /// The frame the shared vector carrier is placed in: absolute eastings and northings in the origin's
-    /// own unit, whatever tier the bundle was cut on (<c>revit/docs/vector-carrier.md</c>).
+    /// own unit, whatever tier the bundle was cut on (<c>revit/docs/vector-carrier.md</c>). The caller
+    /// has refused an origin that states no unit, so none is assumed here.
     /// </summary>
     private static LayerFrame CarrierLayer(SiteFrame frame)
-        => new(
-            LayerCoordinates.AbsoluteProjected,
-            frame.Origin.LinearUnit == LinearUnit.Unspecified ? LinearUnit.Metre : frame.Origin.LinearUnit);
+        => new(LayerCoordinates.AbsoluteProjected, frame.Origin.LinearUnit);
 
     /// <summary>
     /// The step a carrier layer reads instead when the carrier cannot serve it: the same layer planned
