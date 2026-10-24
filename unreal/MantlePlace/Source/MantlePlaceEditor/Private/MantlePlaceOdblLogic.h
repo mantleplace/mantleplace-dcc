@@ -93,6 +93,22 @@ TArray<FString> CreditLines(
 	const TMap<FString, FMantlePlaceFileLicensing>& Entries,
 	const TArray<FString>& Paths);
 
+/**
+ * The actor tags that record these credit lines, in order, every one short enough to be an FName.
+ *
+ * A tag is an FName, and an FName longer than NAME_SIZE - 1 characters is an assertion, not an error:
+ * it takes the editor down. A line that fits is one `mantleplace_credit=<line>` tag, the form every
+ * earlier import wrote; a longer one is numbered `mantleplace_credit_part=` tags, read back whole by
+ * CreditLinesFromTags. Never truncated: the credit is the manifest's words, verbatim.
+ */
+TArray<FString> CreditTags(const TArray<FString>& Lines);
+
+/**
+ * The credit lines a set of actor tags records, in the order they were written, deduped. Tags that are
+ * not credit tags are ignored, and a line with a part missing is dropped rather than credited half-said.
+ */
+TArray<FString> CreditLinesFromTags(const TArray<FString>& Tags);
+
 // --- Prepare for handover ---------------------------------------------------------------------
 
 /** One imported actor, as the handover sees it (read back from the tags the import wrote). */
