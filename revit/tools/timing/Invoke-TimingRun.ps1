@@ -32,6 +32,10 @@ param(
     # that point (e.g. -Layers All -StopBefore ImageryDrape -SaveCheckpoint predrape). Which steps ran, and that the
     # named one did not, is recorded in stop-before.txt, result.json and the checkpoint's sidecar.
     [string]$StopBefore = '',
+    # layers phase: after the import, measure the open project and run Prepare for Handover on it (Harness\Verify.cs),
+    # writing placement.csv, link-buildings.csv, verify.json and site-context.png to the run folder; verify_report.py
+    # judges them. Not with -StopBefore, which leaves an import unfinished.
+    [switch]$Verify,
     # window phase: which boxes end up checked - All, Default (the boxes as the window opens them, untouched), or a
     # list of layer names (Published Contours or PublishedContours).
     [string]$Boxes = 'All',
@@ -97,6 +101,7 @@ if ($Tag -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$') { throw "Tag '$Tag' must 
 if ($Phase -eq 'layers' -and -not $Layers) { throw '-Layers is required for the layers phase (ImportLayer names, All, or Default).' }
 if ($Phase -eq 'window' -and ($Layers -or $Levels -or $SaveCheckpoint)) { throw '-Layers, -Levels and -SaveCheckpoint belong to the layers phase; the window phase takes -Boxes and imports the levels the window opens on.' }
 if ($StopBefore -and $Phase -ne 'layers') { throw '-StopBefore belongs to the layers phase.' }
+if ($Verify -and ($Phase -ne 'layers' -or $StopBefore)) { throw '-Verify belongs to the layers phase, on an import that runs to its end (no -StopBefore).' }
 $StopBefore = ($StopBefore -replace '\s', '')
 if ($SourceRoot -and $Commit) { throw 'pass -SourceRoot or -Commit, not both.' }
 if (-not $Bundle) { throw 'no bundle: pass -Bundle <zip> or set MANTLEPLACE_TIMING_BUNDLE.' }
@@ -497,6 +502,7 @@ if ($Phase -eq 'layers') {
     $envMap['MANTLEPLACE_TIMING_LAYERS'] = $Layers
     if ($Levels) { $envMap['MANTLEPLACE_TIMING_LEVELS'] = $Levels }
     if ($StopBefore) { $envMap['MANTLEPLACE_TIMING_STOP_BEFORE'] = $StopBefore }
+    if ($Verify) { $envMap['MANTLEPLACE_TIMING_VERIFY'] = '1' }
     if ($savePath) { $envMap['MANTLEPLACE_TIMING_SAVE_CHECKPOINT'] = (Join-Path $runDir 'checkpoint-saving.rvt') }
 }
 $envBlock = [string[]]@($envMap.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" })

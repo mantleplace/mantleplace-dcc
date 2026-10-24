@@ -60,7 +60,9 @@ internal sealed partial class RevitBundleImporter
             using Transaction transaction = BeginTransaction("Mantle Place: ODbL container", swallower);
 
             (SelectionFilterElement Filter, bool Created)? filed = OdblContainers.File(_document, identity, group, made);
-            bool shown = filed is { Created: true } created && OdblContainers.ShowInSiteContextView(_document, created.Filter);
+            // Every filing, not only the one that made the container: the first ODbL step can run before the
+            // site context view exists, and showing a container the view already shows changes nothing.
+            bool shown = filed is { } done && OdblContainers.ShowInSiteContextView(_document, done.Filter);
 
             bool committed = CommitAndReport(transaction, swallower);
             _stepRolledBack = stepRolledBack;

@@ -9,6 +9,7 @@
          HarnessSourceCommit    the commit the sources are, "-dirty" appended for a modified tree
          Tree                   <SourceRoot>\revit\src
          RevitApiDir            Revit 2025, the compile target the real add-in uses
+         HarnessVerify          true when the source has PrepareForHandover.cs: compiles Verify.cs (-Verify)
        The plugin's Core, Client and Addin sources compile into this ONE assembly. -->
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
@@ -28,11 +29,15 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <Optimize>true</Optimize>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(HarnessVerify)' == 'true'">
+    <DefineConstants>$(DefineConstants);HARNESS_VERIFY</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(Tree)\MantlePlace.Revit.Core\**\*.cs" Exclude="$(Tree)\**\obj\**;$(Tree)\**\bin\**" />
     <Compile Include="$(Tree)\MantlePlace.Revit.Client\**\*.cs" Exclude="$(Tree)\**\obj\**;$(Tree)\**\bin\**" />
     <Compile Include="$(Tree)\MantlePlace.Revit.Addin\**\*.cs" Exclude="$(Tree)\**\obj\**;$(Tree)\**\bin\**" />
     <Compile Include="TimingHarness.cs" />
+    <Compile Include="Verify.cs" Condition="'$(HarnessVerify)' == 'true'" />   <!-- the -Verify measurements; only from a source that has PrepareForHandover -->
     <Compile Include="BuildInfo.g.cs" Condition="Exists('BuildInfo.g.cs')" />   <!-- written by Build-TimingHarness.ps1: the tag as a compile-time constant -->
     <Using Include="System.IO" />
     <Using Include="System.Net.Http" />

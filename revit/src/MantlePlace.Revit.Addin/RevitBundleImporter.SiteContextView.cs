@@ -54,6 +54,12 @@ internal sealed partial class RevitBundleImporter
             view.AddFilter(filter.Id);
         }
 
+        // A container an earlier step filed, before this view existed, is drawn in orange here too: the land use
+        // plan runs before this step, so without this a bundle's first ODbL content was never shown.
+        int containersShown = view is null
+            ? 0
+            : OdblContainers.All(_document).Count(found => OdblContainers.ShowInSiteContextView(_document, found.Filter));
+
         if (!CommitAndReport(transaction, swallower))
         {
             return;
@@ -75,6 +81,11 @@ internal sealed partial class RevitBundleImporter
             Say(Describe(decision.Filter, $"the view filter \"{SiteContext.FilterName}\"") + " It matches every "
                 + $"element whose Comments begin with \"{SiteContext.StampPrefix}\" — everything an import "
                 + "stamped — so any view can hide, halftone or recolour the site context with it.");
+        }
+
+        if (containersShown > 0)
+        {
+            Say($"The \"{SiteContext.ViewName}\" view draws the ODbL content already filed in orange.");
         }
     }
 

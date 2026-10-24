@@ -85,6 +85,9 @@ CI runs both — the cheapest honest test of the three-versions-from-one-build b
 - **The cross-host contract gate:** `python ../tools/manifest-conformance/check_manifest_conformance.py`.
 - **Timing any commit in a real Revit** → [`tools/timing/README.md`](./tools/timing/README.md): a quiet
   Revit beside the install slot, one Revit at a time, a per-step table of where the seconds went.
+- **Verifying an import live** (placement against the bundle's own check points, the linked site model, the
+  ODbL containers and Prepare for Handover) → the same harness with `-Verify`, judged by `verify_report.py`
+  ([`tools/timing/README.md` ▸ Verifying an import](./tools/timing/README.md#verifying-an-import)).
 
 ## Naming
 

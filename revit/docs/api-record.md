@@ -163,18 +163,24 @@ renderer-neutral.
   `ProvenanceStorage.SchemaGuid` breaks every project that already holds the old definition, so a
   field change is a new GUID
   ([ADR 0011](../../docs/adr/0011-revit-provenance-record-and-attribution-note-identity.md)).
-- **The ODbL container and Prepare for Handover are compiled and unexecuted.** `SelectionFilterElement.Create`
-  and `AddSet`, `SelectionFilterElement.GetElementIds`, `View.AddFilter` and `SetFilterOverrides` with a
-  selection filter (rather than a rule-based one), a `ParameterFilterElement`-free
-  `FilteredElementCollector.WherePasses(ElementParameterFilter)` over every category, and
-  `Document.Delete(ICollection<ElementId>)` over a toposolid with its subdivisions have not run. What
-  is unknown: whether a selection filter accepts the ids of a view-specific element (a filled region
-  on a land use plan) and of a toposolid subdivision in 2025 (where it is not a separate element), what
-  `Delete` takes along with a toposolid, and how orange a 5-weight projection line reads on shaded
-  ground. The live check is the Revit live verification issue (
-  [issue 383](https://github.com/mantleplace/mantleplace-dcc/issues/383)). The decisions around them
-  (which files are `database`, which container holds what, what the handover keeps) are headless:
-  `OdblContentTests`.
+- **The ODbL container and Prepare for Handover have left that set.** `SelectionFilterElement.Create`
+  and `AddSet`, `GetElementIds`, `View.AddFilter` and `SetFilterOverrides` with a selection filter, the
+  `ElementParameterFilter` collector over every category, and `Document.Delete(ICollection<ElementId>)` ran on
+  2026-10-24 in Revit 2025, 2026 and 2027, through the timing harness's `-Verify`
+  ([`tools/timing/README.md`](../tools/timing/README.md#verifying-an-import)), which runs the command's own
+  `PrepareForHandover.Plan` and `Run` without its two dialogs. A selection filter accepts a filled region's id (a
+  view-specific `FilledRegion` on a land use plan) in all three, and a toposolid subdivision's id in all three:
+  in 2025 it is a `Toposolid` of the Toposolid category, in 2026 and 2027 a `Toposolid` of the Sub-divisions
+  category. `Delete` over the filed ids took only what those elements own: each filled region's view-specific
+  sketch, sketch plane, sketch lines and automatic sketch dimensions, each subdivision's sketch, sketch plane and
+  model lines, and on a 1.x bundle 694 unnamed `Element`s besides (869 filed elements, 15,837 ids in all). No
+  ground toposolid, tree or other stamped element went with them. No container is left, and the attribution view
+  keeps the credit. The orange override (`#F27A1A`, projection line weight 5) was never applied before this run
+  found it: the land use plan, the first ODbL step, runs before the site context view exists, and the override
+  was set only by the filing that made the container. The view step now shows the containers already filed. How
+  the orange reads is an eyes-on check: the view opens in Hidden Line, and the run folder keeps its exported PNG.
+  The decisions around them (which files are `database`, which container holds what, what the handover keeps) are
+  headless: `OdblContentTests`.
 - **The context buildings have left that set.** The step converts the site model with
   `Application.OpenIFCDocument`, finds each building in the result by `BuiltInParameter.IFC_GUID`,
   clones its solids with `SolidUtils.Clone` and gives them to a Generic Model `DirectShape`. The

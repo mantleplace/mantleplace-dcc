@@ -23,6 +23,8 @@ namespace MantlePlace.Scratch.Timing;
 //           instead of RunToEnd and stops at the boundary in front of that layer's step: every earlier step
 //           committed, the named one not started (see StepUntilBefore). The checkpoint is then the project
 //           as a full import leaves it at that point.
+//           With MANTLEPLACE_TIMING_VERIFY=1, the open project is then measured (Verify.cs): placement against
+//           the bundle's own check points, the linked site model, the ODbL containers, and Prepare for Handover.
 //   window  the real path a curator gets: a project opened and activated by an ExternalEvent, the import
 //           opened with ActiveImport.Open and handed to the handler with TakeOver, which shows the real
 //           import window on its checklist. The driver ticks the boxes and presses Import through UI
@@ -455,6 +457,18 @@ public sealed class Harness : IExternalApplication
                 }
 
                 facts["modifiable_after_import"] = document.IsModifiable;
+                if (Env("VERIFY") == "1" && outcome == "ok")
+                {
+#if HARNESS_VERIFY
+                    Stopwatch verifying = Stopwatch.StartNew();
+                    facts["verify"] = Verify.Run(document, Bundle, _dir, Say);
+                    facts["verify_seconds"] = Math.Round(verifying.Elapsed.TotalSeconds, 2);
+                    Say($"verified in {verifying.Elapsed.TotalSeconds:N1} s; verify.json written");
+#else
+                    facts["verify"] = "not built: this source has no PrepareForHandover";
+                    outcome = "verify-not-built";
+#endif
+                }
                 string save = Env("SAVE_CHECKPOINT");
                 if (save.Length > 0 && outcome == "ok")
                 {

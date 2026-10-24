@@ -59,7 +59,10 @@ New-Item -ItemType Directory -Force $buildDir | Out-Null
 $proj = Join-Path $buildDir 'proj'
 if (Test-Path $proj) { Remove-Item -Recurse -Force $proj }
 New-Item -ItemType Directory -Force $proj | Out-Null
-Copy-Item (Join-Path $root 'Harness\TimingHarness.csproj'), (Join-Path $root 'Harness\TimingHarness.cs') $proj
+Copy-Item (Join-Path $root 'Harness\TimingHarness.csproj'), (Join-Path $root 'Harness\TimingHarness.cs'), (Join-Path $root 'Harness\Verify.cs') $proj
+# -Verify measures through PrepareForHandover, which a source older than it does not have: such a source builds
+# without Verify.cs, and a -Verify run of it says so rather than failing to build.
+$verify = if (Test-Path (Join-Path $tree 'MantlePlace.Revit.Addin\PrepareForHandover.cs')) { 'true' } else { 'false' }
 
 # The tag is compiled into the assembly as a constant. The harness gates on it: it does nothing at all in a
 # Revit whose MANTLEPLACE_TIMING_TAG differs (a same-year Revit that picked up this run's temporary manifest), so
@@ -79,7 +82,7 @@ $log = Join-Path $buildDir 'build.log'
 Write-Host "building tag '$Tag' ($assemblyName) from $SourceRoot @ $commitLabel"
 & dotnet build (Join-Path $proj 'TimingHarness.csproj') -c Release -o $outDir --nologo -v minimal `
     "-p:HarnessTag=$Tag" "-p:HarnessAssemblyName=$assemblyName" "-p:HarnessSourceCommit=$commitLabel" `
-    "-p:Tree=$tree" "-p:RevitApiDir=$RevitApiDir" 2>&1 | Tee-Object -FilePath $log | Select-Object -Last 25
+    "-p:Tree=$tree" "-p:RevitApiDir=$RevitApiDir" "-p:HarnessVerify=$verify" 2>&1 | Tee-Object -FilePath $log | Select-Object -Last 25
 if ($LASTEXITCODE -ne 0) { throw "dotnet build failed (exit $LASTEXITCODE); see $log" }
 $dll = Join-Path $outDir "$assemblyName.dll"
 if (-not (Test-Path $dll)) { throw "build reported success but $dll is missing" }
