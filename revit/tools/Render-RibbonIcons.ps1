@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Writes <Command><Theme>_<size>.png into the add-in's Resources folder, for every command, both
-    Revit UI themes and both ribbon slots -- sixteen files from four sources. The PNGs are committed;
+    Revit UI themes and both ribbon slots -- twenty files from five sources. The PNGs are committed;
     this script is how they are REGENERATED, not a build step. Nothing in the build, the packaging
     script or CI runs it.
 
@@ -92,6 +92,14 @@ $glyphs = @(
         Accent = @()
         # Tabler's own name for it. Lines of record, and at 16 px it is the only glyph in the set
         # that is nothing but axis-aligned rules -- unmistakable next to the other three.
+    },
+    @{
+        Stem   = 'PrepareForHandover'
+        Source = 'package-export.svg'
+        Accent = @()
+        # Import Bundle's box with the arrow leaving it: the bundle going out to a client, with
+        # nothing of ours left in it that should not go. No accent -- the ribbon spends its one
+        # orange on Import Bundle, and a second would make the tab read as an advert.
     }
 )
 

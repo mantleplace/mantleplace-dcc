@@ -143,6 +143,13 @@ public static class BundleImportPlanner
             steps.RemoveAll(step => step.Kind == ImportStepKind.SiteContextView);
         }
 
+        // Last, once the checklist has taken out what the curator left out: the role of what each
+        // remaining step makes, so the importer knows which to file in the ODbL container.
+        foreach (ImportStep step in steps)
+        {
+            step.Odbl = OdblContent.RoleOf(manifest.FileEntries, step);
+        }
+
         return new BundleImportPlan
         {
             CanImport = canImport,

@@ -140,6 +140,10 @@ there moves the standard first. Title Case is Revit's; a host construct keeps it
     costs, and where it runs; never "fix" a 2025-only observation into a universal comment;
   - the tree and shrub families and the harness that runs branch code in a Revit of its own; the
     Prepare notice, the Vault badge and the interrupted-Prepare rejoin; the published contours;
+  - the **ODbL container** and Prepare for Handover: a `database` step's output is filed in a
+    selection filter, never marked in its Comments stamp (a marker would defeat every
+    exact-stamp re-import), and a missing role reads as `database`
+    ([`README.md`](README.md#sharing-a-project-odbl-content-and-prepare-for-handover));
   - **the add-in is renderer-neutral** — it never writes a renderer's own storage.
 
 ## Where knowledge lives

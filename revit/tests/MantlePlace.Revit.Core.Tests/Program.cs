@@ -37,6 +37,7 @@ exitCode |= ShrubFamilyTests.Run();
 exitCode |= PlantingSummaryTests.Run();
 exitCode |= FamilyFileStoreTests.Run();
 exitCode |= AttributionTests.Run();
+exitCode |= OdblContentTests.Run();
 exitCode |= BuildingIdentityTests.Run();
 exitCode |= SiteModelReaderTests.Run();
 exitCode |= SiteContextTests.Run();

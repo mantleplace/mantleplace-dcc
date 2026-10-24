@@ -186,6 +186,7 @@ public static class BundleManifestReader
         ReadLayout(manifest, root);
         ReadSharedVectorLayers(manifest, root);
         ReadAttribution(manifest, root);
+        ReadFileEntries(manifest, root);
         ReadTimeZone(manifest, root);
         refusal ??= ReadDelivery(manifest, root);
         ReadReadiness(manifest, root);
@@ -295,6 +296,57 @@ public static class BundleManifestReader
         }
 
         manifest.AttributionSources = read;
+    }
+
+    /// <summary>
+    /// <c>file_entries</c>: each file's <c>odbl_role</c>, <c>license</c> and <c>sources</c>, keyed by
+    /// archive path. The frame members are not read (<c>HPS-33</c>).
+    /// </summary>
+    /// <remarks>
+    /// Never a refusal, and never a lighter reading than the file earns: an entry that is not an
+    /// object, or that states no role, or a role this reader does not know, is kept as
+    /// <see cref="OdblRole.Database"/> (<c>spec/format.md</c> §6.8). Dropping such an entry would read
+    /// the same, but keeping it lets a later reader tell a file the manifest listed from one it did not.
+    /// </remarks>
+    private static void ReadFileEntries(BundleManifest manifest, JsonElement root)
+    {
+        if (root.Object("file_entries") is not { } entries)
+        {
+            return;
+        }
+
+        Dictionary<string, FileLicensing> read = new(StringComparer.Ordinal);
+        foreach (JsonProperty entry in entries.EnumerateObject())
+        {
+            if (entry.Value.ValueKind != JsonValueKind.Object)
+            {
+                read[entry.Name] = new FileLicensing();
+                continue;
+            }
+
+            List<FileSource> sources = [];
+            if (entry.Value.Array("sources") is { } listed)
+            {
+                foreach (JsonElement source in listed.EnumerateArray())
+                {
+                    string name = source.Str("name");
+                    string license = source.Str("license");
+                    if (name.Length > 0 || license.Length > 0)
+                    {
+                        sources.Add(new FileSource(name, license));
+                    }
+                }
+            }
+
+            read[entry.Name] = new FileLicensing
+            {
+                Role = OdblContent.ParseRole(entry.Value.OptionalStr("odbl_role")),
+                License = entry.Value.Str("license"),
+                Sources = sources,
+            };
+        }
+
+        manifest.FileEntries = read;
     }
 
     /// <summary>
