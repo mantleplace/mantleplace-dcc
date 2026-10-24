@@ -10,10 +10,12 @@
 #include "MantlePlaceVaultTypes.h"     // MantlePlaceMinSupportedManifestVersion (stale-fixture skip)
 #include "MantlePlaceImportTypes.h"
 #include "MantlePlaceRoadSplinesLogic.h" // the importer's own datum decision, asked not recomputed
+#include "MantlePlaceRoadSpline.h"       // the road gate reads the placed splines back
 #include "MantlePlaceCoverageRasterLogic.h"  // IsCoverageRaster (which layers to expect)
 #include "MantlePlaceCoverageRasterTypes.h"  // runtime: UMantlePlaceCoverageRasterData
 
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Components/SplineComponent.h"
 #include "Editor.h"
 #include "Editor/Transactor.h" // the import must land as ONE undoable transaction
 #include "Engine/Texture2D.h"
@@ -396,8 +398,11 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			TEXT("Import Mantle Place Vault Package"));
 	}
 
-	// New-layer assertions fire only when the bundle actually ships the layer.
-	if (Manifest.RoadSplines.bPresent)
+	// New-layer assertions fire only when the bundle actually ships the layer. Either row declares it:
+	// a 2.0 bundle publishes the road layer as a GeoPackage alone, with no GeoJSON row, and a check
+	// keyed on the GeoJSON row passed over every 2.0 bundle's roads without asserting anything.
+	bool bRoadSplinesPlaceable = false;
+	if (Manifest.RoadSplines.bPresent || Manifest.RoadSplines.bGpkgPresent)
 	{
 		int32 NumSplineActors = 0;
 		for (const FString& Label : Result.CreatedActors)
@@ -413,7 +418,18 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		FString DatumRefusal;
 		if (FMantlePlaceRoadSplinesLogic::CanPlaceHeights(Manifest.GetRoadSplinesDatum(), DatumRefusal))
 		{
+			bRoadSplinesPlaceable = true;
 			TestTrue(TEXT("road-splines bundle produced at least one spline actor"), NumSplineActors >= 1);
+			// The GeoPackage is the source read first; a bundle that declares one must have its roads
+			// from it, not from the GeoJSON fallback the importer takes when the GeoPackage fails.
+			if (Manifest.RoadSplines.bGpkgPresent)
+			{
+				TestTrue(*FString::Printf(TEXT("the road splines were read from the GeoPackage %s"),
+							 *Manifest.RoadSplines.GpkgPath),
+					Result.Message.Contains(
+						FString::Printf(TEXT("Road splines read from %s."), *Manifest.RoadSplines.GpkgPath),
+						ESearchCase::CaseSensitive));
+			}
 		}
 		else
 		{
@@ -932,6 +948,110 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 							 ToleranceCm / 100.0, MaxAbsDz / 100.0),
 					MaxAbsDz <= ToleranceCm);
 			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Road gate: the road splines lie on the landscape.
+	//
+	// A spline actor existing says the GeoPackage was read; it does not say the roads stand on the
+	// ground. Their heights are the file's, placed with no conversion, so a road layer stated in one
+	// datum and cut in another (#278), or placed with the wrong origin, floats or sinks while every
+	// count above stays green. Spline points are taken evenly across every placed road, and each is
+	// measured against the nearest landscape vertex. The median is held to the placement gate's metre:
+	// a draped centreline sits on the DEM the landscape is built from, while a datum or origin error
+	// moves every point at once. The max is logged, not held, because a road on an embankment or a
+	// bridge deck can stand off the 1 m grid by more than a metre without anything being misplaced.
+	// ---------------------------------------------------------------------------------------------
+	if (Landscape != nullptr && bRoadSplinesPlaceable)
+	{
+		constexpr int32 WantedRoadPoints = 128;
+		constexpr double RoadMedianToleranceCm = 100.0;
+
+		TArray<FVector> RoadPoints;
+		for (TActorIterator<AMantlePlaceRoadSpline> It(World); It; ++It)
+		{
+			if (!It->GetActorLabel().StartsWith(TEXT("MP_RoadSpline_")) || It->Spline == nullptr)
+			{
+				continue;
+			}
+			const int32 NumPoints = It->Spline->GetNumberOfSplinePoints();
+			for (int32 Index = 0; Index < NumPoints; ++Index)
+			{
+				RoadPoints.Add(It->Spline->GetLocationAtSplinePoint(Index, ESplineCoordinateSpace::World));
+			}
+		}
+
+		TArray<FVector> Vertices;
+		for (ULandscapeComponent* Component : MantlePlaceImportLiveTest::GatherLandscapeComponents(Landscape))
+		{
+			FLandscapeComponentDataInterface Data(Component, /*MipLevel*/ 0, /*WorkOnEditingLayer*/ false);
+			if (Data.GetRawHeightData() == nullptr)
+			{
+				continue;
+			}
+			const int32 SizeVerts = Component->ComponentSizeQuads + 1;
+			for (int32 LocalY = 0; LocalY < SizeVerts; ++LocalY)
+			{
+				for (int32 LocalX = 0; LocalX < SizeVerts; ++LocalX)
+				{
+					Vertices.Add(Data.GetWorldVertex(LocalX, LocalY));
+				}
+			}
+		}
+		FBox2D Extent(ForceInit);
+		for (const FVector& Vertex : Vertices)
+		{
+			Extent += FVector2D(Vertex.X, Vertex.Y);
+		}
+		const FBox2D Inner = Extent.ExpandBy(-100.0);
+
+		TArray<FVector> Inside;
+		for (const FVector& Point : RoadPoints)
+		{
+			if (Inner.IsInside(FVector2D(Point.X, Point.Y)))
+			{
+				Inside.Add(Point);
+			}
+		}
+		TestTrue(*FString::Printf(TEXT("road gate: the placed roads have points on the landscape (%d of %d)"),
+					 Inside.Num(), RoadPoints.Num()),
+			Inside.Num() > 0);
+
+		TArray<double> AbsDz;
+		double SumDz = 0.0;
+		const int32 Stride = FMath::Max(1, Inside.Num() / WantedRoadPoints);
+		for (int32 Index = Stride / 2; Index < Inside.Num() && AbsDz.Num() < WantedRoadPoints; Index += Stride)
+		{
+			const FVector& Point = Inside[Index];
+			double BestD2 = TNumericLimits<double>::Max();
+			double GroundZ = 0.0;
+			for (const FVector& Vertex : Vertices)
+			{
+				const double D2 = FMath::Square(Vertex.X - Point.X) + FMath::Square(Vertex.Y - Point.Y);
+				if (D2 < BestD2)
+				{
+					BestD2 = D2;
+					GroundZ = Vertex.Z;
+				}
+			}
+			const double Dz = Point.Z - GroundZ;
+			SumDz += Dz;
+			AbsDz.Add(FMath::Abs(Dz));
+		}
+		if (!AbsDz.IsEmpty())
+		{
+			AbsDz.Sort();
+			const double Median = AbsDz[AbsDz.Num() / 2];
+			const double P90 = AbsDz[FMath::Min(AbsDz.Num() - 1, (AbsDz.Num() * 9) / 10)];
+			AddInfo(FString::Printf(
+				TEXT("road gate: %d road points on the landscape, %d measured; road minus ground: mean %+.3f m, "
+					 "median |dz| %.3f m, p90 |dz| %.3f m, max |dz| %.3f m"),
+				Inside.Num(), AbsDz.Num(), SumDz / AbsDz.Num() / 100.0, Median / 100.0, P90 / 100.0,
+				AbsDz.Last() / 100.0));
+			TestTrue(*FString::Printf(TEXT("road gate: the median road point is within %.1f m of the ground (%.3f m)"),
+						 RoadMedianToleranceCm / 100.0, Median / 100.0),
+				Median <= RoadMedianToleranceCm);
 		}
 	}
 
