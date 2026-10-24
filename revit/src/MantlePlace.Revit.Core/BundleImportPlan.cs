@@ -734,6 +734,22 @@ public sealed class ImportStep
     /// (<see cref="TreeIdentity.Decide"/>).
     /// </summary>
     public IReadOnlyList<string> LevelFiles { get; init; } = [];
+
+    /// <summary>
+    /// The table of the GeoPackage <see cref="EntryName"/> names that this step reads, for a vector layer
+    /// read from the shared carrier; <c>null</c> for a step that reads its file whole. The entry is then
+    /// the whole carrier, shared by every layer it holds.
+    /// </summary>
+    public string? Table { get; init; }
+
+    /// <summary>
+    /// For a carrier step, the same layer planned from its own GeoJSON file, or <c>null</c> where the
+    /// bundle lists none or this host could not place it. What the importer reads when the carrier has
+    /// no table for the layer, cannot be opened, or is stored in a CRS other than this project's: a
+    /// carrier that cannot be shown to be in the frame is not placed, and a layer the same bundle can
+    /// place by its other file is not lost to it (<c>HPS-53</c>).
+    /// </summary>
+    public ImportStep? GeoJsonFallback { get; init; }
 }
 
 /// <summary>

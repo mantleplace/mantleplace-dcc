@@ -877,6 +877,15 @@ public static class BundleImportPlanner
         string? entry = entries.Resolve(artifact.Path);
         if (entry is null)
         {
+            // A carrier the archive lacks does not take the layer with it when its GeoJSON file is there.
+            if (artifact.IsGeoPackage && artifact.GeoJsonFallback is { } sibling)
+            {
+                PlanPlacedArtifact(
+                    manifest, sibling, frame, entries, kind, label, steps, skipped, absence, crop, verticalUnits,
+                    hazard, drapePlanned, landPlan, level);
+                return;
+            }
+
             skipped.Add(new SkippedImport
             {
                 Kind = kind,
@@ -907,7 +916,20 @@ public static class BundleImportPlanner
         LayerFrame? layer = null;
         (SkipReasonCode Code, string Reason)? refusal;
 
-        if (artifact.FromOwnBlock)
+        ImportStep? geoJsonFallback = null;
+        if (artifact.IsGeoPackage)
+        {
+            // The shared carrier states its frame in the file, not in the manifest: absolute, in the
+            // origin's own CRS and unit. The origin is what it is placed against; its CRS is checked
+            // against the origin's when the table is read.
+            refusal = null;
+            layer = CarrierLayer(frame);
+            units = layer.Value.Unit;
+            geoJsonFallback = PlanGeoJsonFallback(
+                manifest, artifact, frame, entries, kind, label, absence, crop, verticalUnits, hazard,
+                drapePlanned, landPlan, level);
+        }
+        else if (artifact.FromOwnBlock)
         {
             refusal = OwnFrameRefusal(artifact, manifest, frame, label, out LayerFrame own);
             layer = own;
@@ -958,7 +980,50 @@ public static class BundleImportPlanner
             Levels = published,
             Level = leveled.Applied,
             LevelFiles = levelFiles,
+            Table = artifact.Table,
+            GeoJsonFallback = geoJsonFallback,
         });
+    }
+
+    /// <summary>
+    /// The frame the shared vector carrier is placed in: absolute eastings and northings in the origin's
+    /// own unit, whatever tier the bundle was cut on (<c>revit/docs/vector-carrier.md</c>).
+    /// </summary>
+    private static LayerFrame CarrierLayer(SiteFrame frame)
+        => new(
+            LayerCoordinates.AbsoluteProjected,
+            frame.Origin.LinearUnit == LinearUnit.Unspecified ? LinearUnit.Metre : frame.Origin.LinearUnit);
+
+    /// <summary>
+    /// The step a carrier layer reads instead when the carrier cannot serve it: the same layer planned
+    /// from its own GeoJSON file, refusals and all, or <c>null</c> where the bundle lists none or this
+    /// host cannot place it.
+    /// </summary>
+    private static ImportStep? PlanGeoJsonFallback(
+        BundleManifest manifest,
+        BundleArtifact carrier,
+        SiteFrame frame,
+        BundleEntryIndex entries,
+        ImportStepKind kind,
+        string label,
+        string? absence,
+        SurfaceCropWindow? crop,
+        LinearUnit verticalUnits,
+        HazardPlanFacts? hazard,
+        bool drapePlanned,
+        LandPlanFacts? landPlan,
+        FidelityLevel level)
+    {
+        if (carrier.GeoJsonFallback is not { } sibling)
+        {
+            return null;
+        }
+
+        List<ImportStep> alternative = [];
+        PlanPlacedArtifact(
+            manifest, sibling, frame, entries, kind, label, alternative, [], absence, crop, verticalUnits,
+            hazard, drapePlanned, landPlan, level);
+        return alternative.FirstOrDefault();
     }
 
     /// <summary>
