@@ -116,6 +116,39 @@ internal static class GeoPackageFileTests
                 });
         });
 
+        run.Case("a file of one table is read whatever the table is named, where the row lists no tables", () =>
+        {
+            WithCarrier(
+                Srs,
+                "RoadSplines",
+                [Insert(GeoPackageFixture.LineStringZ(1010, 2010, 600, 1020, 2030, 601), "'Main St'", "NULL", "NULL", "NULL", "NULL", "NULL")],
+                path =>
+                {
+                    string? opened = GeoPackageFile.TryReadTable(path, "road_splines", "road centrelines", out GeoPackageTable? table, soleTable: true);
+                    run.True(opened is null && table is { Rows.Count: 1 }, $"opened: {opened}");
+                    run.Equal(table?.Name, "RoadSplines", "the table the file names");
+
+                    string? refused = GeoPackageFile.TryReadTable(path, "road_splines", "road centrelines", out GeoPackageTable? none);
+                    run.Contains(refused, "road_splines", "a row that lists tables is still read by name: the reason names the table");
+                    run.True(none is null, "and no table is read in its place");
+                });
+        });
+
+        run.Case("a file of several tables is never read as its only one", () =>
+        {
+            WithCarrier(
+                Srs,
+                "RoadSplines",
+                [Insert(GeoPackageFixture.LineStringZ(1010, 2010, 600, 1020, 2030, 601), "NULL", "NULL", "NULL", "NULL", "NULL", "NULL")],
+                path =>
+                {
+                    FixtureSqlite.Execute(path, $"INSERT INTO gpkg_geometry_columns VALUES ('Water', 'geom', 'GEOMETRY', {Srs}, 1, 0);");
+                    string? reason = GeoPackageFile.TryReadTable(path, "road_splines", "road centrelines", out GeoPackageTable? table, soleTable: true);
+                    run.Contains(reason, "road_splines", "the reason names the table");
+                    run.True(table is null, "no table is guessed");
+                });
+        });
+
         run.Case("a file whose table is in another CRS is read as that CRS, so the reader can refuse it by name", () =>
         {
             WithCarrier(

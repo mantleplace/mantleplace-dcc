@@ -743,6 +743,13 @@ public sealed class ImportStep
     public string? Table { get; init; }
 
     /// <summary>
+    /// True when the GeoPackage holds this layer alone, so the importer reads its one table whatever the
+    /// file names it (<see cref="BundleArtifact.SoleTable"/>); false where <see cref="Table"/> is read
+    /// by name.
+    /// </summary>
+    public bool SoleTable { get; init; }
+
+    /// <summary>
     /// For a carrier step, the same layer planned from its own GeoJSON file, or <c>null</c> where the
     /// bundle lists none or this host could not place it. What the importer reads when the carrier has
     /// no table for the layer, cannot be opened, or is stored in a CRS other than this project's: a
