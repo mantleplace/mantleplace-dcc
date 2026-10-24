@@ -8,8 +8,13 @@ geospatial artifacts — terrain, imagery, surfaces, site geometry, vectors — 
 describes them precisely enough to place them without guessing.
 
 This directory is the public specification of that format. It exists so a second implementer can
-write a consumer without reading our plugin code, and check that consumer against the same gates
+write a producer or a consumer without reading our plugin code, and check it against the same gates
 our own plugins are held to.
+
+MPB is a **profile**, not an encoding. It invents no way to store data: every file in a bundle is in
+a format somebody else specified, and MPB adds the manifest, the rules for placing each file, and each
+file's licence and sources. The formats a bundle promises are the canonical ones
+([`format.md`](format.md) §9).
 
 ## What decides, and what merely describes
 
@@ -33,14 +38,17 @@ schema has two contracts and no way to tell which one a producer honoured.
 ## Contents
 
 - **[`format.md`](format.md)** — the format itself: what a bundle contains (the zip layout), the
-  modality-folder vocabulary, the pointer doctrine (find every file by a manifest pointer, never by
-  folder name), the manifest's structure and the `hosts.<hostId>` boundary, integrity (sha256
-  present, absent, or required and missing), how placement values are meant to be consumed
-  (applied verbatim), and how a file states its own frame, the site origin and its licensing in the
-  neutral part of the manifest.
+  pointer doctrine (find every file by a manifest pointer, never by folder name), the manifest's
+  structure and the `hosts.<hostId>` boundary, integrity (sha256 present, absent, or required and
+  missing), how placement values are meant to be consumed (applied verbatim), and how a file states
+  its own frame, the site origin and its licensing in the neutral part of the manifest. For 2.0 it
+  also holds the canonical and courtesy formats and the test a format must pass, the 2.0 layout, the
+  folder allowlist and the six naming rules, how a higher major is refused, and the bundle's media
+  type.
 - **[`compatibility.md`](compatibility.md)** — the versioning and compatibility policy: semver
   semantics (MAJOR/MINOR/PATCH), freeze-on-publish immutability, what a consumer must do with fields,
-  enum values and versions it does not recognise, a higher major included.
+  enum values and versions it does not recognise, a higher major included, and the promise that
+  nothing breaks within 2.x.
 - **[`conformance.md`](conformance.md)** — what "a conforming reader" means, how to prove it, and
   what claiming a corpus group obliges.
 - **[`changelog.md`](changelog.md)** — the consolidated version history, including the integer

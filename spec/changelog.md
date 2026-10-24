@@ -22,6 +22,82 @@ history, not contract.
 
 ## Semver era
 
+### 2.0.0 — the open site-context standard: a profile over open formats, placed by every file's frame, in one layout (major; not yet published)
+
+The first major of the semver era, and the first version written for readers outside Mantle Place. It
+removes, moves, renames and narrows members and files, which [compatibility](compatibility.md) §2
+defines as a MAJOR, and it is the version from which the 2.x promise (compatibility §8) holds.
+[`format.md`](format.md) §9 to §12 describe it; this entry lists what moved and what a 1.x consumer
+does about it. The schema, once published, owns the member-level list, and where it and this entry
+differ the schema is right.
+
+**What a 2.0 bundle is.**
+
+- **A profile.** MPB defines no file format. Five formats are canonical (COG, GeoPackage, glTF 2.0,
+  OpenUSD, IFC 4.0.2.1 (IFC4 ADD2 TC1)) because each has an open specification, royalty-free use and
+  two independent implementations; every other file is a courtesy format, shipped but not promised
+  ([`format.md`](format.md) §9).
+- **One layout.** Eight top-level folders, an allowlist that is normative for producers, and six
+  naming rules ([`format.md`](format.md) §10). `Metadata/manifest.json` and `README.md` keep their
+  names.
+- **Frames belong to files.** Every file entry states its own frame, its licence, its sources and its
+  `odbl_role` in the neutral part of the manifest (the members 1.14.0 added). A host block becomes a
+  set of pointers and pre-computed shortcuts for one host's own plugin; any reader can place every
+  file without it.
+- **A media type.** `application/vnd.mantleplace.bundle+zip` ([`format.md`](format.md) §12).
+
+**What moved, for a consumer that read a 1.x bundle.**
+
+- **Folders.** The twelve folders of a 1.x bundle become eight. `Basemap/` and `Vector/` become
+  `Features/`, and `Landcover/` becomes `LandCover/`. The files of `Surface/` and `Mesh/` move to
+  `Elevation/` and `Site/`, and the 1.x placement text file gives way to the README's Placement
+  section. `Records/` is flat and named by the labels the Site Brief uses. The land cover polygons
+  are `LandCoverAreas`. **A consumer that located files by pointer needs no change here.** One that
+  built a path from a folder name must switch to the pointer values, which is what §3 of
+  [`format.md`](format.md) always required.
+- **Names.** Every basename follows the six rules. Different data no longer shares a basename: the
+  two 1.x files called `Drape.png`, in two folders, are now two names. The plugin-only copies of 1.x
+  (a vector folder inside `Site/`, `TreePointsMetric.csv`, the State Plane drape) are gone; a frame or
+  format that a whole class of tools needs is a **variant** with a hyphenated qualifier, such as
+  `TreePoints-Engine.csv`, and a host block points at the shared file.
+- **The site model and the context.** `Site/Context.usdz` replaces the terrain-only `Mesh/Terrain.usdz`
+  and holds the whole site as Produced Work content. `Site/Features.usdz` holds the vector data of the
+  same site under the ODbL. Both state their georeference, and store coordinates as offsets from the
+  site origin.
+- **Formats no longer written for a new order.** FlatGeobuf and the bundle's PMTiles files, which no
+  curator tool reads, are gated off, and so is the terrain-only USD, which `Context.usdz` replaces.
+  The lon/lat GeoJSON follows once nothing reads it. A consumer that read one of them reads the
+  GeoPackage, the glTF or the USD that carries the same content.
+- **Licensing is read from the manifest.** The ODbL class of a file comes from its `odbl_role`, never
+  from its folder. A missing or unknown role still reads as `database`.
+- **Tree points.** One ranked file per frame, with the finest level a row cut of the raw one.
+- **The default download** holds only the finest level of each surface and model. The lighter
+  levels are still built, kept in the vault and selectable.
+- **STAC.** `Metadata/stac-item.json` is new: the bundle as a valid STAC 1.1.0 Item, generated from the
+  manifest.
+
+**What does not change.** The pointer doctrine, the integrity rules, the apply-verbatim rule for
+placement values and fail-closed behaviour on a unit or a value set a reader does not know are as
+in 1.x.
+
+**Migration, for a reader of 1.x bundles.**
+
+1. Read `version` first, as a JSON type and then a parsed major (compatibility §1). A 2 means the
+   layout above.
+2. Locate files only through pointer values. A reader that already does so reads both layouts.
+3. In a 2.0 bundle every file's frame, licence and `odbl_role` are in its `file_entries` entry. In a
+   1.x bundle they are in a host block, in `file_entries` from 1.14.0, or absent.
+4. Do not require a courtesy format: read the canonical file for the content, or the pointer that
+   exists.
+5. A reader of 1.x only, and not updated, refuses a 2.0 bundle (compatibility §3). Bundles already in
+   a vault stay at their version and are not repackaged, so a reader that has to read both keeps its
+   1.x code path.
+
+**Migration, for a producer of 1.x bundles.** Write the eight folders and nothing else at the root;
+name every file by the six rules; write `file_entries` with a frame, a role, a licence and sources
+for every file; give a licence as an SPDX expression; ship a STAC Item beside the manifest; and
+state version `2.0.0` as a JSON string.
+
 ### 1.14.0 — file frames, the site origin and per-file licensing, in the neutral part of the manifest (additive minor; published and frozen 2026-10-22)
 
 Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under

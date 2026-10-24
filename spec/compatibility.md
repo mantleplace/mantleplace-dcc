@@ -50,9 +50,18 @@ is open throughout the schema precisely so that a newer producer's optional fiel
 older consumer untouched. A consumer that rejects a document for carrying a field it does not
 recognise turns every minor release into a breaking one.
 
-⛔ **Refuse an unknown higher MAJOR gracefully.** A clear refusal that names the version and tells
-the user what to do is correct behaviour. Attempting the import anyway is not; neither is a crash,
-nor a silent partial import. Refusal is a supported outcome of this spec, not a failure of it.
+⛔ **Refuse an unknown higher MAJOR gracefully.** A reader decides on `version` alone: it opens
+`Metadata/manifest.json`, which keeps its name in every major so that it can, reads `version`, and
+parses the major (§1). If that major is higher than any the reader supports, it stops before it
+reads a pointer, extracts an artifact or imports part of the bundle. A clear refusal names the
+bundle's version, says which versions the reader supports, and tells the user what to do, which is
+usually to update the software. Attempting the import anyway is not correct behaviour; neither is a
+crash, nor a silent partial import. Refusal is a supported outcome of this spec, not a failure of
+it.
+
+The case that matters first is a 1.x reader meeting a 2.0 bundle: the 2.0 layout moved and renamed
+files, so a 1.x reader that attempted the import would look for files that are not where it expects.
+A 2.x reader meeting a 3.0 bundle refuses in the same way.
 
 **Read a same-major manifest.** Within a major, a consumer reads what it recognises and ignores the
 rest — that is what makes minors safe to publish without a coordinated upgrade.
@@ -99,10 +108,9 @@ resolving its schema indefinitely. What changes is only whether new bundles are 
 A consumer MAY decline to support versions below some floor of its own choosing. That is a product
 decision belonging to whoever ships the consumer, and **this spec does not impose one**.
 
-Our own first-party plugins take a deliberately strict line — a single supported version, declared
-in one place, with everything below it refused and the user told to re-download the AOI from their
-vault. Re-procurement, not dual-parsing, is how we handle old bundles, because a fallback ladder is
-a second parser that nobody tests. That is our policy for our plugins. It is not an obligation this
+Our own first-party plugins take a deliberately strict line — a short list of supported versions,
+declared in one place, with everything outside it refused and the user told to update the plugin
+or re-download the AOI from their vault. That is our policy for our plugins. It is not an obligation this
 spec places on yours, and a third-party consumer that chooses to read several versions is
 conforming.
 
@@ -121,11 +129,41 @@ no network call.
 inner shape may change in a minor release, which no consumer may depend on. See
 [`format.md` §4.3](format.md#43-platform--present-reserved-and-not-part-of-the-contract).
 
-**Folder names.** Human-facing convention, free to evolve. The machine contract is the pointer
-values ([`format.md` §3](format.md#3-the-pointer-doctrine)).
+**Folder names, for a consumer.** Human-facing convention. The machine contract is the pointer
+values ([`format.md` §3](format.md#3-the-pointer-doctrine)). A 2.0 producer is bound by the folder
+allowlist and the naming rules ([`format.md` §10](format.md#10-the-20-layout)); a consumer is
+not.
 
 ## 7. A release is three things at once
 
 A version of this spec is not the schema alone. It is the schema, this prose, and the conformance
 corpus — published together and versioned together, so that "conforming" is a claim a test can
 settle. [`conformance.md`](conformance.md) is where that is spelled out.
+
+## 8. The 2.x promise
+
+**Within 2.x nothing breaks.** A bundle written to any 2.x release is readable by a consumer written
+against any earlier 2.x release, and a producer written to 2.0 stays conforming for as long as 2.x
+lasts. Concretely, no 2.x release:
+
+- removes, moves, renames, retypes or narrows a member of the manifest (§2). Those are the changes
+  that make a major, and the next one is 3.0;
+- gives a key a new meaning (§2);
+- removes or renames a folder of the allowlist, or changes what one of the six naming rules means
+  ([`format.md` §10](format.md#10-the-20-layout));
+- removes a format from the canonical list
+  ([`format.md` §9](format.md#9-mpb-is-a-profile-canonical-and-courtesy-formats));
+- changes a published schema (§4).
+
+A 2.x minor can add: a member, a block, a host, a value of a widened enum, a vector layer name, a
+folder of the allowlist, a canonical format (IFC 4.3 is allowed in this way) or a courtesy format.
+
+**What the promise does not cover.** A courtesy format is shipped but never promised, so a minor can
+stop shipping one without breaking anything: a consumer finds files by their pointers, ignores what it
+does not know, and never requires a courtesy file. The changelog records the change. Nor does the
+promise reach the `platform` block or the vault REST API (§6), or the advisory host-version floors
+(§5).
+
+**Bundles keep their version.** A bundle is made once, at the version current when it was built.
+Nothing repackages a 1.x bundle as 2.x, and a bundle that is already in a vault stays readable by a
+reader of its own version.
