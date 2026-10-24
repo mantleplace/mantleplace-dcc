@@ -4,7 +4,6 @@
 
 #include "Framework/Notifications/NotificationManager.h"
 #include "HAL/PlatformProcess.h"
-#include "Interfaces/IPlugin.h"
 #include "Interfaces/IPluginManager.h"
 #include "MantlePlaceEditorStyle.h"
 #include "MantlePlaceFeedbackLogic.h"
