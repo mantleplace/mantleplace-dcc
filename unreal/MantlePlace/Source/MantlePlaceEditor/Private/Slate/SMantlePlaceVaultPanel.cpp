@@ -3,12 +3,18 @@
 #include "Slate/SMantlePlaceVaultPanel.h"
 
 #include "Framework/Notifications/NotificationManager.h"
+#include "HAL/PlatformProcess.h"
+#include "Interfaces/IPlugin.h"
+#include "Interfaces/IPluginManager.h"
 #include "MantlePlaceEditorStyle.h"
+#include "MantlePlaceFeedbackLogic.h"
 #include "MantlePlacePalette.h"
 #include "MantlePlaceImporterLibrary.h"
 #include "MantlePlaceVaultPanelController.h"
+#include "MantlePlaceVaultClient.h"
 #include "MantlePlaceVaultRowView.h"
 #include "MantlePlaceVaultTypes.h"
+#include "Misc/EngineVersion.h"
 #include "Slate/SMantlePlaceVaultDetail.h"
 #include "Slate/SMantlePlaceVaultRow.h"
 #include "Styling/CoreStyle.h" // FCoreStyle "NoBorder" (breadcrumb link button)
@@ -38,6 +44,28 @@ namespace
 	{
 		const FString Label = Item.AoiLabel.IsEmpty() ? Item.OrderId : Item.AoiLabel;
 		return Label.Contains(Query); // FString::Contains is ESearchCase::IgnoreCase by default
+	}
+
+	/**
+	 * Open the web Feedback form in the system browser (HPS-56). The link itself is decided by the
+	 * pure FMantlePlaceFeedbackLogic; this only gathers the two version strings and opens the result.
+	 * OrderId is empty for the general Send Feedback, the bundle's order id for Report a problem.
+	 * Needs no sign-in: the form is public.
+	 */
+	void OpenFeedbackLink(const FString& OrderId)
+	{
+		const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("MantlePlace"));
+		const FString PluginVersion = Plugin.IsValid() ? Plugin->GetDescriptor().VersionName : FString();
+		const FEngineVersion& Engine = FEngineVersion::Current();
+		const FString HostVersion = FString::Printf(TEXT("%u.%u"), Engine.GetMajor(), Engine.GetMinor());
+
+		// The same configurable web-app host the vault API uses (DefaultGame.ini), compiled-in default.
+		const FString Url = FMantlePlaceFeedbackLogic::BuildFeedbackUrl(
+			GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, PluginVersion, HostVersion, OrderId);
+		if (!Url.IsEmpty())
+		{
+			FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
+		}
 	}
 }
 
@@ -226,6 +254,26 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 			[
 				SNew(STextBlock)
 				.Text(this, &SMantlePlaceVaultPanel::GetAuthButtonText)
+				.Font(FMantlePlaceEditorStyle::GetFont(EFont::Small))
+				.ColorAndOpacity(FSlateColor(MantlePlacePalette::White()))
+			]
+		]
+
+		// Send Feedback (HPS-56): opens the web Feedback form in the system browser; works signed in or out.
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(0.f, 0.f, FMantlePlaceEditorStyle::S2, 0.f)
+		[
+			SNew(SButton)
+			.Tag(TEXT("MantlePlace.Vault.SendFeedback"))
+			.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Secondary"))
+			.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
+			.ToolTipText(LOCTEXT("SendFeedbackTip", "Open the Mantle Place feedback form in your browser. No account needed."))
+			.OnClicked(this, &SMantlePlaceVaultPanel::OnSendFeedbackClicked)
+			[
+				SNew(STextBlock)
+				.Text(LOCTEXT("SendFeedback", "Send Feedback"))
 				.Font(FMantlePlaceEditorStyle::GetFont(EFont::Small))
 				.ColorAndOpacity(FSlateColor(MantlePlacePalette::White()))
 			]
@@ -632,7 +680,16 @@ TSharedRef<ITableRow> SMantlePlaceVaultPanel::OnGenerateRow(TSharedPtr<FMantlePl
 		.Item(Item)
 		.Controller(Controller.Get())
 		.OnImportClicked(this, &SMantlePlaceVaultPanel::HandleRowImportClicked)
-		.OnSelected(this, &SMantlePlaceVaultPanel::ShowDetail);
+		.OnSelected(this, &SMantlePlaceVaultPanel::ShowDetail)
+		.OnReportProblemClicked(this, &SMantlePlaceVaultPanel::HandleRowReportProblemClicked);
+}
+
+void SMantlePlaceVaultPanel::HandleRowReportProblemClicked(TSharedPtr<FMantlePlaceVaultItem> Item)
+{
+	if (Item.IsValid())
+	{
+		OpenFeedbackLink(Item->OrderId);
+	}
 }
 
 void SMantlePlaceVaultPanel::HandleRowImportClicked(TSharedPtr<FMantlePlaceVaultItem> Item)
@@ -745,6 +802,12 @@ bool SMantlePlaceVaultPanel::IsAuthButtonEnabled() const
 	}
 	const EMantlePlaceAuthState State = Controller->GetAuthState();
 	return State != EMantlePlaceAuthState::Authenticating && State != EMantlePlaceAuthState::Refreshing;
+}
+
+FReply SMantlePlaceVaultPanel::OnSendFeedbackClicked()
+{
+	OpenFeedbackLink(FString());
+	return FReply::Handled();
 }
 
 FReply SMantlePlaceVaultPanel::OnRefreshClicked()
