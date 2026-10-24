@@ -62,7 +62,7 @@ def _text(report: Report) -> str:
         lines.append(f"  {finding.severity:<7} {finding.code:<36} {where}")
         lines.append(f"          {finding.message}")
     checks = ", ".join(f"{name} {report.check_status(name)}" for name in
-                       ("schema", "pointers", "sha256", "frames", "roles", "names"))
+                       ("schema", "pointers", "sha256", "frames", "roles", "geopackage", "names"))
     lines.append(f"checks: {checks}")
     h = report.hashes
     lines.append(f"sha256: {h['verified']} verified, {h['mismatched']} mismatched, "

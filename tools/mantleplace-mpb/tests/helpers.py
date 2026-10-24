@@ -105,3 +105,10 @@ def write_corpus_index(root: Path, versions: list[object], rejects: list[object]
     index.write_text(json.dumps({"corpusVersion": 3, "manifestVersion": "1.0.0", "cases": cases}),
                      encoding="utf-8")
     return index
+
+
+def geopackage(*tables: str) -> bytes:
+    """A GeoPackage that holds one feature table per name, as the validator reads one."""
+    from mantleplace_mpb.corpus import geopackage_bytes
+
+    return geopackage_bytes(list(tables))

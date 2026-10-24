@@ -3,8 +3,10 @@
 """Hold the validator to the shared conformance corpus's `bundle` group.
 
 A `bundle` case is a JSON description of a synthetic bundle, never a bundle itself: `files` maps
-each archive path to its content, a string written as UTF-8 or a JSON value written as JSON. The
-runner builds each case three ways, as a folder, a zip and a zip with one wrapper folder, and
+each archive path to its content, a string written as UTF-8 or a JSON value written as JSON. One
+JSON value is read as a description and not written as it stands: `{"$geopackage": {"tables":
+["RoadSplines"]}}` is written as a GeoPackage that holds one empty feature table per name, so the
+corpus stays text and a case can say how many tables a file holds. The runner builds each case three ways, as a folder, a zip and a zip with one wrapper folder, and
 requires the same verdict from all three.
 
 The index entry decides what the validator must report:
@@ -30,6 +32,8 @@ assertion it does not understand would pass a corpus full of assertions it never
 from __future__ import annotations
 
 import json
+import os
+import sqlite3
 import tempfile
 import zipfile
 from pathlib import Path
@@ -48,6 +52,49 @@ class CorpusError(Exception):
     """The corpus itself is unreadable; nothing was run."""
 
 
+def geopackage_bytes(tables: list[str]) -> bytes:
+    """A GeoPackage that holds one empty feature table per name in `tables`, and no data.
+
+    It is only as much of the standard as the validator reads: `gpkg_contents` naming each table
+    as `features`, and `gpkg_geometry_columns` giving it a geometry column.
+    """
+    handle, scratch = tempfile.mkstemp(prefix="mpb-corpus-gpkg-", suffix=".gpkg")
+    os.close(handle)
+    try:
+        connection = sqlite3.connect(scratch)
+        try:
+            connection.execute("CREATE TABLE gpkg_contents (table_name TEXT PRIMARY KEY, "
+                               "data_type TEXT NOT NULL, identifier TEXT, srs_id INTEGER)")
+            connection.execute("CREATE TABLE gpkg_geometry_columns (table_name TEXT NOT NULL, "
+                               "column_name TEXT NOT NULL, geometry_type_name TEXT NOT NULL, "
+                               "srs_id INTEGER NOT NULL, z TINYINT NOT NULL, m TINYINT NOT NULL)")
+            for name in tables:
+                quoted = '"' + name.replace('"', '""') + '"'
+                connection.execute(f"CREATE TABLE {quoted} (fid INTEGER PRIMARY KEY, geom BLOB)")
+                connection.execute("INSERT INTO gpkg_contents VALUES (?, 'features', ?, 4326)",
+                                   (name, name))
+                connection.execute("INSERT INTO gpkg_geometry_columns "
+                                   "VALUES (?, 'geom', 'GEOMETRY', 4326, 0, 0)", (name,))
+            connection.commit()
+        finally:
+            connection.close()
+        with open(scratch, "rb") as stream:
+            return stream.read()
+    finally:
+        os.unlink(scratch)
+
+
+def _description(content: object) -> bytes | None:
+    """The bytes of a `$geopackage` description, or None for any other JSON value."""
+    if not isinstance(content, dict) or set(content) != {"$geopackage"}:
+        return None
+    spec = content["$geopackage"]
+    tables = spec.get("tables") if isinstance(spec, dict) else None
+    if not isinstance(tables, list) or not all(isinstance(t, str) and t for t in tables):
+        raise ValueError("`$geopackage` is an object with a `tables` list of names")
+    return geopackage_bytes(tables)
+
+
 def _materialise(files: object) -> dict[str, bytes]:
     if not isinstance(files, dict) or not files:
         raise ValueError("the case has no `files` object")
@@ -57,6 +104,8 @@ def _materialise(files: object) -> dict[str, bytes]:
             raise ValueError(f"the case names an unsafe path {name!r}")
         if isinstance(content, str):
             out[name] = content.encode("utf-8")
+        elif (described := _description(content)) is not None:
+            out[name] = described
         else:
             out[name] = (json.dumps(content, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
     return out

@@ -40,13 +40,16 @@ struct FMantlePlaceRoadSplinesGpkg
 
 	/**
 	 * Read the road lines of a GeoPackage on disk. `Tables` is the `tables` member of the layer's
-	 * format row (a layer split by geometry family names one table per family); empty reads every
-	 * feature table in the file. A feature's own geometry type decides whether it is a road line:
+	 * format row (a layer split by geometry family names one table per family). Empty means the row
+	 * lists none, so the file holds exactly one feature table and that one is read whatever it is
+	 * named (the producer names it in CamelCase, `RoadSplines`, not after the layer); a file of
+	 * several is refused, never read as its only one. A feature's own geometry type decides whether it is a road line:
 	 * LineString and MultiLineString are (each part its own spline, as in ParseGeoJson), and any
 	 * other type is skipped.
 	 *
 	 * Fails closed (false + OutError) on an Epsg that is not a UTM zone (checked first, as
 	 * ParseGeoJson does), a file that is not a GeoPackage, a named table the file does not hold,
+	 * an untabled row whose file holds more than one feature table,
 	 * and a table whose geometry column is not in EPSG:4326 -- the roads are never reprojected from
 	 * another frame (HPS-33). A single feature whose geometry blob cannot be read is counted in
 	 * OutRowsUnreadable and passed over, so one bad row does not drop the layer.

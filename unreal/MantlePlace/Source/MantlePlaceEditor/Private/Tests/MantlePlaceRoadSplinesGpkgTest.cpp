@@ -165,6 +165,21 @@ bool BuildGpkg(const FString& Path, const FString& Table, int32 SrsId, const TAr
 	return bOk;
 }
 
+/** Add a second feature table to a GeoPackage BuildGpkg made: just what the reader lists tables from. */
+bool AddFeatureTable(const FString& Path, const FString& Table, int32 SrsId)
+{
+	FSQLiteDatabase Database;
+	if (!Database.Open(*Path, ESQLiteDatabaseOpenMode::ReadWrite))
+	{
+		return false;
+	}
+	const bool bOk = Exec(Database, *FString::Printf(TEXT("CREATE TABLE \"%s\" (fid INTEGER PRIMARY KEY AUTOINCREMENT, geom BLOB)"), *Table))
+		&& Exec(Database, *FString::Printf(TEXT("INSERT INTO gpkg_contents VALUES ('%s', 'features', '%s', %d)"), *Table, *Table, SrsId))
+		&& Exec(Database, *FString::Printf(TEXT("INSERT INTO gpkg_geometry_columns VALUES ('%s', 'geom', 'GEOMETRY', %d, 0, 0)"), *Table, SrsId));
+	Database.Close();
+	return bOk;
+}
+
 FString ScratchPath()
 {
 	return FPaths::ConvertRelativePathToFull(FPaths::Combine(
@@ -358,6 +373,34 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("bytes that are not a SQLite file are refused"),
 			FGpkg::ReadBytes(NotSqlite, {}, OriginEastingM, OriginNorthingM, Epsg, Splines, LinesSeen, Unreadable, Error));
 		TestFalse(TEXT("with a reason"), Error.IsEmpty());
+	}
+
+	// --- A row that lists no `tables` holds one table: read whatever it is named, never picked out of several
+	{
+		const FString Path = ScratchPath();
+		ON_SCOPE_EXIT { IFileManager::Get().Delete(*Path, false, true, true); };
+		TestTrue(TEXT("a GeoPackage whose one table is not named for the layer is built"),
+			BuildGpkg(Path, TEXT("Streets"), 4326, { FRoadRow{ LineBlob(Comet), TEXT("residential"), TEXT("Comet Rd"), 6.0 } }));
+
+		TArray<FMantlePlaceRoadSpline> Splines;
+		int32 LinesSeen = 0, Unreadable = 0;
+		FString Error;
+		TestTrue(TEXT("an untabled row reads its one table whatever the producer named it"),
+			FGpkg::ReadFile(Path, {}, OriginEastingM, OriginNorthingM, Epsg, Splines, LinesSeen, Unreadable, Error));
+		TestEqual(TEXT("with no error"), Error, FString());
+		TestEqual(TEXT("and its road"), Splines.Num(), 1);
+
+		TestTrue(TEXT("a second feature table is added"), AddFeatureTable(Path, TEXT("Water"), 4326));
+		TArray<FMantlePlaceRoadSpline> None;
+		TestFalse(TEXT("an untabled row whose file holds two tables is refused, never read as one of them"),
+			FGpkg::ReadFile(Path, {}, OriginEastingM, OriginNorthingM, Epsg, None, LinesSeen, Unreadable, Error));
+		TestTrue(TEXT("the refusal names the tables"), Error.Contains(TEXT("Streets")) && Error.Contains(TEXT("Water")));
+		TestEqual(TEXT("and no road is kept"), None.Num(), 0);
+
+		TArray<FMantlePlaceRoadSpline> Listed;
+		TestTrue(TEXT("a row that lists its table reads that table of the same file"),
+			FGpkg::ReadFile(Path, { TEXT("Streets") }, OriginEastingM, OriginNorthingM, Epsg, Listed, LinesSeen, Unreadable, Error));
+		TestEqual(TEXT("with the same road"), Listed.Num(), 1);
 	}
 
 	// --- The manifest pointer: the gpkg row is taken, the geojson row stays the fallback ----------

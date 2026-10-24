@@ -2228,6 +2228,30 @@
       }
     },
     {
+      "id": "bundle.v2GpkgSoleTable",
+      "group": "bundle",
+      "file": "bundle/v2-gpkg-sole-table.json",
+      "expect": "accept",
+      "stagedSchema": true,
+      "reason": "A GeoPackage row that lists no `tables` holds exactly one feature table, and the producer names it in PascalCase after the file stem (`RoadSplines`), not after the layer (`road_splines`) (format.md §6.3). The file is a real GeoPackage that the runner builds from a `$geopackage` description, so the validator counts its one table; a reader reads that one whatever it is called. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "hashesVerified": 0
+      }
+    },
+    {
+      "id": "bundle.v2GpkgSoleTableSeveral",
+      "group": "bundle",
+      "file": "bundle/v2-gpkg-sole-table-several.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "A row that lists no `tables` names one table by not naming any, so its file must hold exactly one (format.md §6.3). This file holds two, `RoadSplines` and `Water`: a reader must not take the only table of a file that holds several, and here there is no one table to take. List the tables in the row, or split the file. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "gpkg.tables-several"
+        ]
+      }
+    },
+    {
       "id": "bundle.v2FolderUnlisted",
       "group": "bundle",
       "file": "bundle/v2-folder-unlisted.json",

@@ -91,7 +91,9 @@ whole bundle conformant or not, with reasons. No host plugin claims it.
 
 A `bundle` case is a JSON description of a synthetic bundle, never a bundle: `files` maps each
 archive path to its content, a string written as UTF-8 or a JSON value written as JSON, so the
-corpus stays text and holds no sample data. A validator builds each case as a folder, a zip and
+corpus stays text and holds no sample data. One JSON value is a description and not file content:
+`{"$geopackage": {"tables": ["RoadSplines"]}}` is built as a GeoPackage that holds one empty
+feature table per name, for the cases that count a file's tables (`bundle.v2GpkgSoleTable`). A validator builds each case as a folder, a zip and
 a zip inside one wrapper folder, and must reach the same result on all three:
 
 | Field | What the validator must report |
