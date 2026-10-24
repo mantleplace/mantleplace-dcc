@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MantlePlaceEditorSettings.h" // EMantlePlaceTreeLevel
 
 /**
  * The per-artifact sub-structs FMantlePlaceVaultManifest is composed of. Each is plain data, filled
@@ -145,6 +146,29 @@ struct FMantlePlaceMeshBlock
 	                                // (e.g. "mesh_not_produced"); empty when a mesh is present
 };
 
+/** How one published tree-points level is stated (`foliage_points.levels.<LEVEL>`). */
+enum class EMantlePlaceTreeLevelForm : uint8
+{
+	Absent,  // nothing usable stated: for MAX the entry itself; for MED and MIN an unavailable level
+	Pointer, // a file of its own (a bundle older than 2.0 ships TreePoints-Med.csv and the like)
+	RowCut,  // the first `Rows` data rows of the MAX file (2.0: one ranked file, a row's number is its rank)
+	SameAs,  // the same as another level
+};
+
+/** One level of `foliage_points.levels`, verbatim. Judged by FMantlePlaceTreeLevelLogic. */
+struct FMantlePlaceTreeLevelEntry
+{
+	EMantlePlaceTreeLevelForm Form = EMantlePlaceTreeLevelForm::Absent;
+	FString Path;                   // Pointer: the level's own file
+	FString Sha256;                 // Pointer: its digest; empty = unverified
+	int32 Count = 0;                // Pointer: its point_count; 0 = unstated
+	FString Crs;                    // Pointer: the file's own frame, as stated; all three empty = the block's
+	FString Units;
+	FString HorizontalUnits;
+	int32 Rows = 0;                 // RowCut: the row count
+	FString SameAs;                 // SameAs: the named level, verbatim ("MAX", "MED", ...)
+};
+
 /** `unreal.foliage_points` (-> DataTable scatter input; HPS-32). This host's own pointer: absent
  *  means the bundle has no tree points -- never fall back to `layout.tree_points` or
  *  `landcover.tree_points` (HPS-33). */
@@ -157,6 +181,9 @@ struct FMantlePlaceFoliagePointsBlock
 	                                // it -- a digest proves the bytes, and only the count proves the ROWS.
 	FString Crs;                    // crs, verbatim; empty when not stated.
 	FString Units;                  // units (ground_z), verbatim.
+	FMantlePlaceTreeLevelEntry LevelMax; // `levels` (MPB 1.9.0), by level; RAW is never imported
+	FMantlePlaceTreeLevelEntry LevelMed;
+	FMantlePlaceTreeLevelEntry LevelMin;
 	FString HorizontalUnits;        // horizontal_units (x, y), verbatim. All three are REQUIRED from
 	                                // MPB 1.3.0; FMantlePlaceTreePointsLogic decides what they mean.
 	FString FoliageTypeVocabulary;  // landcover.tree_points.foliage_type_vocabulary, verbatim; empty when the

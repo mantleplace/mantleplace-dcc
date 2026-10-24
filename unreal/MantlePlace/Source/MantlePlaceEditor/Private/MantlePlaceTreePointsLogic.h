@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "MantlePlaceLandcoverTypes.h" // runtime: FMantlePlaceTreePointRow
+#include "MantlePlaceManifestBlocks.h"  // FMantlePlaceFoliagePointsBlock, EMantlePlaceTreeLevel
 
 /**
  * How a tree-points parse ended. Three ways of not producing a table, deliberately kept apart,
@@ -75,6 +76,29 @@ struct FMantlePlaceTreePointsFrame
 	{
 		return bRequired || !Crs.IsEmpty() || !Units.IsEmpty() || !HorizontalUnits.IsEmpty();
 	}
+};
+
+/**
+ * What reading one tree-points level means: which file, what to check it against, and how much of
+ * it to take. Built by `FMantlePlaceTreePointsLogic::ResolveLevel`.
+ */
+struct FMantlePlaceResolvedTreeLevel
+{
+	/** The level the file read stands for; differs from the one asked for when that one is unavailable. */
+	EMantlePlaceTreeLevel Applied = EMantlePlaceTreeLevel::Max;
+	FString Path;
+	FString Sha256;
+	/** The published point count to check the parsed rows against; 0 = unknown, no check. */
+	int32 DeclaredCount = 0;
+	/** > 0 = take only the first this-many data rows (a 2.0 row cut of the MAX file); 0 = all. */
+	int32 RowLimit = 0;
+	/** The level's own frame replaces the block's (a per-level file states its own). */
+	bool bOwnFrame = false;
+	FString Crs;
+	FString Units;
+	FString HorizontalUnits;
+	/** Empty when the level asked for was applied; else why MAX was read instead. */
+	FString FallbackReason;
 };
 
 /**
@@ -151,6 +175,26 @@ struct FMantlePlaceTreePointsLogic
 	 * height or a crown (`spec/format.md` section 4.4).
 	 */
 	static EMantlePlaceFoliageType ReadFoliageType(const FString& Cell);
+
+	/**
+	 * The file, digest, count and row cut that read `Requested` out of the block's `levels` (MPB
+	 * 1.9.0), applied verbatim: a level the bundle publishes is read as published and one it does
+	 * not is never derived. MAX is the block's own file. MED and MIN are either a `cut` of the
+	 * MAX file, its first `rows` data rows (2.0 ships one ranked tree file and a row's number is
+	 * its rank), a pointer to a file of their own (a bundle older than 2.0 keeps those), or
+	 * `same_as` another level, followed one hop. A level that is absent, names an unknown level,
+	 * chains, or cuts to nothing is unavailable, and MAX is read with FallbackReason saying so. A
+	 * bundle with no `levels` at all reads as MAX only.
+	 */
+	static FMantlePlaceResolvedTreeLevel ResolveLevel(
+	    const FMantlePlaceFoliagePointsBlock& Block, EMantlePlaceTreeLevel Requested);
+
+	/**
+	 * The header and the first `Rows` data rows of a tree-points CSV, the rest dropped. A row's
+	 * number is its rank, so the prefix is the level. Blank lines are not rows; the cut keeps the
+	 * file's own line endings. `Rows` of 0 or less, or past the file's end, keeps the whole text.
+	 */
+	static FString CutRows(const FString& CsvText, int32 Rows);
 
 	/**
 	 * The names of the table's columns, in declaration order: the contract a PCG graph binds by.

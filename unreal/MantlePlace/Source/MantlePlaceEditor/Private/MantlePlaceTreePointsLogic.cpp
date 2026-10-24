@@ -222,3 +222,127 @@ const TArray<FName>& FMantlePlaceTreePointsLogic::ColumnContract()
 	    FName(TEXT("GroundZM")),     FName(TEXT("bGroundKnown"))};
 	return Columns;
 }
+
+namespace
+{
+const FMantlePlaceTreeLevelEntry* EntryFor(const FMantlePlaceFoliagePointsBlock& Block, EMantlePlaceTreeLevel Level)
+{
+	switch (Level)
+	{
+	case EMantlePlaceTreeLevel::Max: return &Block.LevelMax;
+	case EMantlePlaceTreeLevel::Med: return &Block.LevelMed;
+	case EMantlePlaceTreeLevel::Min: return &Block.LevelMin;
+	}
+	return nullptr;
+}
+
+bool LevelFromName(const FString& Name, EMantlePlaceTreeLevel& Out)
+{
+	if (Name == TEXT("MAX")) { Out = EMantlePlaceTreeLevel::Max; return true; }
+	if (Name == TEXT("MED")) { Out = EMantlePlaceTreeLevel::Med; return true; }
+	if (Name == TEXT("MIN")) { Out = EMantlePlaceTreeLevel::Min; return true; }
+	return false; // RAW is never imported, and anything else is not a level this build knows
+}
+
+FMantlePlaceResolvedTreeLevel MaxLevel(const FMantlePlaceFoliagePointsBlock& Block)
+{
+	FMantlePlaceResolvedTreeLevel Out;
+	Out.Applied = EMantlePlaceTreeLevel::Max;
+	Out.Path = Block.Path;
+	Out.Sha256 = Block.Sha256;
+	Out.DeclaredCount = Block.Count;
+	return Out;
+}
+}
+
+FMantlePlaceResolvedTreeLevel FMantlePlaceTreePointsLogic::ResolveLevel(
+    const FMantlePlaceFoliagePointsBlock& Block, EMantlePlaceTreeLevel Requested)
+{
+	FMantlePlaceResolvedTreeLevel Out = MaxLevel(Block);
+	if (Requested == EMantlePlaceTreeLevel::Max)
+	{
+		return Out;
+	}
+
+	const FMantlePlaceTreeLevelEntry* Entry = EntryFor(Block, Requested);
+	EMantlePlaceTreeLevel Applied = Requested;
+	if (Entry != nullptr && Entry->Form == EMantlePlaceTreeLevelForm::SameAs)
+	{
+		EMantlePlaceTreeLevel Target;
+		const FMantlePlaceTreeLevelEntry* TargetEntry = LevelFromName(Entry->SameAs, Target) ? EntryFor(Block, Target) : nullptr;
+		if (TargetEntry == nullptr || TargetEntry->Form == EMantlePlaceTreeLevelForm::SameAs)
+		{
+			Out.FallbackReason = TEXT("the level names another that is unknown or itself the same as a third");
+			return Out;
+		}
+		Applied = Target;
+		Entry = TargetEntry;
+		if (Target == EMantlePlaceTreeLevel::Max)
+		{
+			Out.Applied = EMantlePlaceTreeLevel::Max;
+			return Out;
+		}
+	}
+
+	if (Entry != nullptr && Entry->Form == EMantlePlaceTreeLevelForm::Pointer && !Entry->Path.IsEmpty())
+	{
+		Out.Applied = Applied;
+		Out.Path = Entry->Path;
+		Out.Sha256 = Entry->Sha256;
+		Out.DeclaredCount = Entry->Count;
+		Out.bOwnFrame = !Entry->Crs.IsEmpty() || !Entry->Units.IsEmpty() || !Entry->HorizontalUnits.IsEmpty();
+		Out.Crs = Entry->Crs;
+		Out.Units = Entry->Units;
+		Out.HorizontalUnits = Entry->HorizontalUnits;
+		return Out;
+	}
+	if (Entry != nullptr && Entry->Form == EMantlePlaceTreeLevelForm::RowCut && Entry->Rows > 0)
+	{
+		Out.Applied = Applied;
+		Out.RowLimit = Entry->Rows;
+		// The cut keeps the MAX file's first rows, so the file cannot hold fewer than the lesser of
+		// the cut and what MAX holds. Unknown MAX count = unknown cut count.
+		Out.DeclaredCount = Block.Count > 0 ? FMath::Min(Entry->Rows, Block.Count) : 0;
+		return Out;
+	}
+
+	Out.FallbackReason = TEXT("the bundle does not publish that level");
+	return Out;
+}
+
+FString FMantlePlaceTreePointsLogic::CutRows(const FString& CsvText, int32 Rows)
+{
+	if (Rows <= 0)
+	{
+		return CsvText;
+	}
+	// Walk the lines, counting the header as line one and skipping blank lines, and cut after the
+	// Rows-th data line. Ending the text at the line's end keeps its own newline out, which the
+	// parser does not need.
+	int32 Pos = 0;
+	int32 Lines = 0;
+	const int32 Len = CsvText.Len();
+	while (Pos < Len)
+	{
+		int32 End = Pos;
+		while (End < Len && CsvText[End] != TEXT('\n'))
+		{
+			++End;
+		}
+		int32 TextEnd = End;
+		if (TextEnd > Pos && CsvText[TextEnd - 1] == TEXT('\r'))
+		{
+			--TextEnd;
+		}
+		if (TextEnd > Pos)
+		{
+			++Lines;
+			if (Lines == Rows + 1)
+			{
+				return CsvText.Left(TextEnd);
+			}
+		}
+		Pos = End + 1;
+	}
+	return CsvText;
+}
