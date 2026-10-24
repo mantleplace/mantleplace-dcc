@@ -93,7 +93,7 @@ internal sealed partial class RevitBundleImporter
         }
 
         string path = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
-        string? opened = GeoPackageFile.TryReadTable(path, table, label, out GeoPackageTable? rows);
+        string? opened = GeoPackageFile.TryReadTable(path, table, label, out GeoPackageTable? rows, step.SoleTable);
         return opened is not null || rows is null
             ? opened ?? $"The {label} could not be read from the shared vector file."
             : SiteGeoPackageReader.TryRead(rows, frame, layer, accept, label, out features, LevelField(step));

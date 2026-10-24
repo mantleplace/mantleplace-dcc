@@ -22,8 +22,14 @@ public static class GeoPackageFile
     /// <param name="tableName">The table, matched without regard to case as SQLite matches names.</param>
     /// <param name="label">What to call the layer in a failure message, in the user's words.</param>
     /// <param name="table">The table; <c>null</c> on failure.</param>
+    /// <param name="soleTable">
+    /// True where the file holds this layer alone (<see cref="BundleArtifact.SoleTable"/>): a file that has
+    /// no table of that name but exactly one table is read as that one, because the producer names it in
+    /// CamelCase (<c>RoadSplines</c>) and not as the layer (<c>road_splines</c>). A file of several tables
+    /// is never read as its only one.
+    /// </param>
     /// <returns><c>null</c> on success, or a user-facing reason the table could not be read.</returns>
-    public static string? TryReadTable(string path, string tableName, string label, out GeoPackageTable? table)
+    public static string? TryReadTable(string path, string tableName, string label, out GeoPackageTable? table, bool soleTable = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
         ArgumentException.ThrowIfNullOrEmpty(tableName);
@@ -48,6 +54,36 @@ public static class GeoPackageFile
                     organisation = row.String(2);
                     code = row.Int64(3);
                 });
+
+            if (geometryColumn is null && soleTable)
+            {
+                // The file has no table of that name: it is the layer's only table if it holds exactly one.
+                int tables = 0;
+                string only = string.Empty;
+                string onlyColumn = string.Empty;
+                string onlyOrganisation = string.Empty;
+                long onlyCode = 0;
+                WinSqlite.Query(
+                    path,
+                    "SELECT g.table_name, g.column_name, s.organization, s.organization_coordsys_id "
+                    + "FROM gpkg_geometry_columns g JOIN gpkg_spatial_ref_sys s ON s.srs_id = g.srs_id",
+                    row =>
+                    {
+                        tables++;
+                        only = row.String(0);
+                        onlyColumn = row.String(1);
+                        onlyOrganisation = row.String(2);
+                        onlyCode = row.Int64(3);
+                    });
+
+                if (tables == 1)
+                {
+                    name = only;
+                    geometryColumn = onlyColumn;
+                    organisation = onlyOrganisation;
+                    code = onlyCode;
+                }
+            }
 
             if (geometryColumn is null)
             {

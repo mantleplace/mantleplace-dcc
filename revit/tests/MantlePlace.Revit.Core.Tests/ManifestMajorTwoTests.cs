@@ -86,6 +86,7 @@ internal static class ManifestMajorTwoTests
 
             run.Equal(roads?.EntryName, "Features/RoadsDraped-Projected.gpkg", "the twin the pointer names");
             run.Equal(roads?.Table, "road_splines", "the table named for the layer");
+            run.True(roads?.SoleTable == true, "a row that lists no tables holds one, whatever its name: the importer reads that one");
             run.True(
                 roads?.Layer == new LayerFrame(LayerCoordinates.AbsoluteProjected, LinearUnit.Metre),
                 "absolute, in the origin's CRS and unit");
@@ -98,6 +99,7 @@ internal static class ManifestMajorTwoTests
 
             run.Equal(water?.EntryName, "Features/Water-Projected.gpkg", "the twin");
             run.Equal(water?.Table, "Water_polygon", "the polygons, which water bodies are drawn from");
+            run.True(water?.SoleTable == false, "a row that lists tables is read by the table it names");
         });
 
         run.Case("a layer with no twin keeps its lon/lat GeoJSON, never its lon/lat GeoPackage", () =>
@@ -115,10 +117,12 @@ internal static class ManifestMajorTwoTests
             ImportStep? flood = Find(plan, ImportStepKind.FloodZones);
             run.Equal(flood?.EntryName, "Records/FloodZones.gpkg", "layout.flood_zones");
             run.Equal(flood?.Table, "flood_zones", "the table named for the layer");
+            run.True(flood?.SoleTable == true, "a layout pointer names a file of one table");
 
             ImportStep? steep = Find(plan, ImportStepKind.SteepGround);
             run.Equal(steep?.EntryName, "Elevation/SteepSlopes.gpkg", "layout.steep_slope, already in the order's CRS");
             run.Equal(steep?.Table, "steep_slope", "the table named for the layer");
+            run.True(steep?.SoleTable == true, "a layout pointer names a file of one table");
             run.Equal(steep?.Hazard?.Threshold, "35.0", "the manifest's threshold rides along");
         });
 

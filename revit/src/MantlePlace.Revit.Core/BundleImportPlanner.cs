@@ -1013,6 +1013,7 @@ public static class BundleImportPlanner
             Level = leveled.Applied,
             LevelFiles = levelFiles,
             Table = artifact.Table,
+            SoleTable = artifact.SoleTable,
             GeoJsonFallback = geoJsonFallback,
         });
     }

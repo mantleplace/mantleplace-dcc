@@ -1095,11 +1095,14 @@ public static class BundleManifestReader
                     continue;
                 }
 
+                bool listsTables = format.StringArray("tables").Count > 0;
+
                 return new BundleArtifact
                 {
                     Path = twin,
                     Format = "gpkg",
                     Table = table,
+                    SoleTable = !listsTables,
                     HorizontalFrame = ProjectedFrame,
                     VerticalReference = AbsoluteHeight,
                     VerticalDatum = layer.OptionalStr("vertical_datum"),
@@ -1117,8 +1120,9 @@ public static class BundleManifestReader
 
     /// <summary>
     /// The table of <paramref name="wanted"/> in a GeoPackage row: the layer's own name where the row
-    /// lists no tables, else the listed table of that name, else the one of the geometry family the
-    /// step draws from, or <c>null</c>.
+    /// lists no tables (the file holds the layer alone, and the importer reads its one table whatever it
+    /// is named: <see cref="BundleArtifact.SoleTable"/>), else the listed table of that name, else the
+    /// one of the geometry family the step draws from, or <c>null</c>.
     /// </summary>
     private static string? TwinTable(JsonElement format, SiteVectorLayer wanted)
     {
@@ -1150,6 +1154,7 @@ public static class BundleManifestReader
             Path = manifest.ProjectedVariants.TryGetValue(path.Trim(), out string? twin) ? twin : path,
             Format = "gpkg",
             Table = table,
+            SoleTable = true,
             HorizontalFrame = ProjectedFrame,
             VerticalReference = AbsoluteHeight,
         };

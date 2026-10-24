@@ -143,6 +143,15 @@ public sealed class BundleArtifact
     public bool IsGeoPackage => Table is not null;
 
     /// <summary>
+    /// True when the GeoPackage holds this layer alone, so its one table is the layer whatever the file
+    /// names it: a 2.0 row that lists no <c>tables</c>, and a layout pointer. The producer names that
+    /// table in CamelCase (<c>RoadSplines</c>) where <see cref="Table"/> is the layer's snake_case name,
+    /// which the spec states for neither. False where the row lists its tables, or the carrier does,
+    /// and the table is read by name.
+    /// </summary>
+    public bool SoleTable { get; init; }
+
+    /// <summary>
     /// For a carrier layer, the same layer's GeoJSON file in this host's own block, where the block
     /// still lists one; <c>null</c> otherwise. What the layer is read from when the carrier cannot be
     /// shown to hold it in this project's frame, so a bundle that has both does not lose a layer it
