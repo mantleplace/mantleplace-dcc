@@ -5,6 +5,12 @@ Revit-only GeoJSON in `hosts.revit.vectors` can go, and whether Revit places a l
 `IfcMapConversion`. The prototypes and the probe that produced every number here are in
 [`tools/carrier-spike/`](../tools/carrier-spike/README.md); nothing in the plugin changed.
 
+**In MPB 2.0** the carrier is gone with `hosts.revit.vectors`, and what replaces it has this frame
+exactly: each shared vector GeoPackage has a `-Projected` twin, named in `layout.projected_variants`,
+absolute in the order's projected CRS and unit with the same tables and columns. The reader takes a
+twin as it took the carrier, the table of the layer's name, and the planner places it the same way
+([`import-inventory.md`](../../docs/import-inventory.md)).
+
 ## The decision
 
 **A GeoPackage in the order's CRS.** Both candidates read every layer with every attribute and

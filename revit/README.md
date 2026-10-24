@@ -89,10 +89,13 @@ Revit licence.
 
 `Mantle Place ▸ Bundles ▸ Import Bundle` takes a bundle you already downloaded and:
 
-- refuses anything below manifest **MPB 1.0.0**, and anything whose MAJOR is above the line it
-  reads, naming re-download and plugin-update respectively rather than dual-parsing (`HPS-31`).
+- refuses anything below manifest **MPB 1.0.0**, and anything whose MAJOR is above the newest it
+  reads (1.x and 2.x), naming re-download and plugin-update respectively rather than guessing at a
+  newer major (`HPS-31`).
   The integer pre-history (v7–v19) is below the floor as a family: a bundle cut before the MPB
-  re-baseline is not merely old, it is written in a dialect this reader does not speak;
+  re-baseline is not merely old, it is written in a dialect this reader does not speak. Both
+  layouts are read through their pointers, never a folder name, so a 1.x bundle in the vault imports
+  beside a 2.0 one;
 - builds the terrain from the TIN in `Surface/Surface.dxf` — its vertices are placed adaptively,
   dense on slopes and sparse on flats, where `Surface/SurfacePoints.csv` is a perfectly regular
   lattice whose cells are cocircular and therefore degenerate to triangulate, so the triangulator

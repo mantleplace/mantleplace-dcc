@@ -519,6 +519,13 @@ public sealed class BundleManifest
         new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>
+    /// <c>layout.projected_variants</c> (MPB 2.0): each original vector file's archive path to its twin
+    /// in the order's projected CRS and unit, matched without regard to case. Empty on a 1.x bundle.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ProjectedVariants { get; internal set; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// <c>vector.layers[name=="road_splines"].formats[format=="geojson"]</c>. Host-invariant: the
     /// top-level vector pointers bind every host, not just the one that draws splines (HPS-41).
     /// </summary>
@@ -573,7 +580,8 @@ public sealed class BundleManifest
 
     /// <summary>
     /// True when the vector layers above come from <c>hosts.revit.vectors</c> rather than the
-    /// shared set — that is, when the bundle carries the copy.
+    /// shared set — that is, when the bundle carries the copy. Never on a 2.0 bundle, which has no
+    /// such block: its projected twins are the shared set's own files, reprojected.
     /// </summary>
     public bool VectorsFromOwnBlock { get; internal set; }
 

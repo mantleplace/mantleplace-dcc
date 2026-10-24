@@ -35,6 +35,26 @@ public static class ManifestVersions
 {
     /// <summary>The oldest bundle-manifest version this plugin will import.</summary>
     public const string MinSupportedManifestVersion = "1.0.0";
+
+    /// <summary>
+    /// The newest MAJOR this plugin reads. A manifest of a higher major is refused with the update
+    /// remedy, never parsed on a best effort (<c>spec/compatibility.md</c> §3).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The floor's major up to this one: 1.x and 2.x. MPB 2.0 moves and renames files and removes
+    /// members, and the bundles already in a vault keep the version they were cut at, so a reader of
+    /// both keeps its 1.x path (<c>spec/changelog.md</c>, 2.0.0, migration step 5). Files are found by
+    /// their pointers in either layout (HPS-32), so the two paths differ only where a member moved:
+    /// the 1.x <c>hosts.revit.vectors</c> copy against the 2.0 <c>layout.projected_variants</c> twins.
+    /// </para>
+    /// <para>
+    /// The floor stays where it is, and this is not a second floor: HPS-31 refuses what is too old,
+    /// and this refuses what is too new. Raising it is the same three moves as the floor, with the
+    /// corpus's <c>manifest.reject.majorAhead</c> restamped one major above it.
+    /// </para>
+    /// </remarks>
+    public const int NewestSupportedMajor = 2;
 }
 
 /// <summary>

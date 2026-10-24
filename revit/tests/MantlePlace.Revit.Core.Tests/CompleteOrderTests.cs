@@ -291,24 +291,29 @@ internal static class CompleteOrderTests
 
     private static void ViewArchiveCases(TestRun run, string sandbox)
     {
-        run.Case("a view whose manifest names parts the zip does not hold imports with no integrity refusal", () =>
+        // Both layouts, because a vault holds both: a bundle keeps the version it was cut at, and 2.0
+        // moves every file this view names (spec/changelog.md, 2.0.0).
+        foreach (ViewLayout layout in new[] { ViewLayout.One, ViewLayout.Two })
         {
-            string zip = WriteViewZip(Path.Combine(sandbox, "c.zip"));
-            using LocalBundleArchive archive = LocalBundleArchive.Open(zip, Path.Combine(sandbox, "cache-c"));
+            run.Case($"{layout.Name}: a view whose manifest names parts the zip does not hold imports with no integrity refusal", () =>
+            {
+                string zip = WriteViewZip(Path.Combine(sandbox, $"c-{layout.Major}.zip"), layout);
+                using LocalBundleArchive archive = LocalBundleArchive.Open(zip, Path.Combine(sandbox, $"cache-c-{layout.Major}"));
 
-            run.True(archive.Manifest is not null, "the manifest parsed");
-            BundleImportPlan plan = BundleImportPlanner.Plan(archive.Manifest!, archive.EntryNames, archive.ProbeImageSize);
+                run.True(archive.Manifest is { IsValid: true }, $"the manifest parsed (rejected with: {archive.Manifest?.Error})");
+                BundleImportPlan plan = BundleImportPlanner.Plan(archive.Manifest!, archive.EntryNames, archive.ProbeImageSize);
 
-            run.True(plan.CanImport, "importable");
-            run.True(
-                plan.Steps.Any(step => step.Kind == ImportStepKind.ToposurfaceFromPointsFile),
-                "the terrain the view carries is planned");
-            run.Equal(archive.VerifyPlan(plan), null, "no integrity refusal");
-            run.False(
-                plan.Skipped.Any(skip => skip.Reason.Contains("Mesh/", StringComparison.Ordinal)
-                    || skip.Reason.Contains("Landcover/LandCover.tif", StringComparison.Ordinal)),
-                "no file the view left out is named as missing");
-        });
+                run.True(plan.CanImport, "importable");
+                run.Equal(
+                    plan.Steps.FirstOrDefault(step => step.Kind == ImportStepKind.ToposurfaceFromPointsFile)?.EntryName,
+                    layout.PointsCsv,
+                    "the terrain the view carries is planned, from the file its pointer names");
+                run.Equal(archive.VerifyPlan(plan), null, "no integrity refusal");
+                run.False(
+                    plan.Skipped.Any(skip => layout.LeftOut.Any(path => skip.Reason.Contains(path, StringComparison.Ordinal))),
+                    "no file the view left out is named as missing");
+            });
+        }
     }
 
     // ------------------------------------------------------------------ fixtures
@@ -339,16 +344,38 @@ internal static class CompleteOrderTests
             expectedManifestSha256: manifestSha256);
 
     /// <summary>
+    /// Where one manifest major puts the files a view names: the terrain points it holds, and the mesh
+    /// and land-cover parts it leaves out.
+    /// </summary>
+    private sealed record ViewLayout(string Name, int Major, string Version, string PointsCsv, string[] LeftOut, string Extra)
+    {
+        internal static readonly ViewLayout One = new(
+            "1.x", 1, "1.0.0", "Surface/SurfacePoints.csv", ["Mesh/Terrain.glb", "Mesh/Terrain.MED.glb", "Landcover/LandCover.tif"], string.Empty);
+
+        /// <summary>The 2.0 layout: folders renamed, a level as a qualifier, and the members 2.0 requires.</summary>
+        internal static readonly ViewLayout Two = new(
+            "2.0", 2, "2.0.0", "Elevation/SurfacePoints.csv", ["Elevation/Terrain.glb", "Elevation/Terrain-Med.glb", "LandCover/LandCover.tif"],
+            """
+            ,
+              "file_entries": {
+                "Elevation/SurfacePoints.csv": { "frame": { "horizontal_crs": { "code": "EPSG:32610" }, "coordinate_mode": "absolute" }, "odbl_role": "none", "license": "CC0-1.0", "sources": [] }
+              }
+            """);
+    }
+
+    /// <summary>
     /// A view the way the platform cuts one: Revit's terrain points and the whole-bundle manifest,
     /// whose <c>files</c> block still names the mesh and land-cover parts the view left out.
     /// </summary>
-    private static string WriteViewZip(string zipPath)
+    private static string WriteViewZip(string zipPath) => WriteViewZip(zipPath, ViewLayout.One);
+
+    private static string WriteViewZip(string zipPath, ViewLayout layout)
     {
         string manifest = $$"""
             {
-              "version": "1.0.0",
+              "version": "{{layout.Version}}",
               "order_id": "{{OrderId}}",
-              "layout": { "manifest": "Metadata/manifest.json", "points_csv": "Surface/SurfacePoints.csv" },
+              "layout": { "manifest": "Metadata/manifest.json", "points_csv": "{{layout.PointsCsv}}" },
               "hosts": {
                 "revit": {
                   "georeference": {
@@ -360,7 +387,7 @@ internal static class CompleteOrderTests
                     }
                   },
                   "toposurface_points": {
-                    "path": "Surface/SurfacePoints.csv",
+                    "path": "{{layout.PointsCsv}}",
                     "horizontal_frame": "local_enu",
                     "units": "m",
                     "sha256": "{{Sha256Digest.OfUtf8(PointsCsv)}}"
@@ -368,10 +395,10 @@ internal static class CompleteOrderTests
                 }
               },
               "files": {
-                "Surface/SurfacePoints.csv": { "part": "elevation.points_csv@MAX", "size_bytes": 18, "sha256": "{{Sha256Digest.OfUtf8(PointsCsv)}}" },
-                "Mesh/Terrain.glb": { "part": "mesh.glb@MAX", "size_bytes": 1000, "sha256": "{{new string('1', 64)}}" },
-                "Mesh/Terrain.MED.glb": { "part": "mesh.glb@MED", "size_bytes": 500, "sha256": "{{new string('2', 64)}}" },
-                "Landcover/LandCover.tif": { "part": "landcover.worldcover_tif@MAX", "size_bytes": 800, "sha256": "{{new string('3', 64)}}" }
+                "{{layout.PointsCsv}}": { "part": "elevation.points_csv@MAX", "size_bytes": 18, "sha256": "{{Sha256Digest.OfUtf8(PointsCsv)}}" },
+                "{{layout.LeftOut[0]}}": { "part": "mesh.glb@MAX", "size_bytes": 1000, "sha256": "{{new string('1', 64)}}" },
+                "{{layout.LeftOut[1]}}": { "part": "mesh.glb@MED", "size_bytes": 500, "sha256": "{{new string('2', 64)}}" },
+                "{{layout.LeftOut[2]}}": { "part": "landcover.worldcover_tif@MAX", "size_bytes": 800, "sha256": "{{new string('3', 64)}}" }
               },
               "view": {
                 "kind": "host",
@@ -380,7 +407,7 @@ internal static class CompleteOrderTests
                 "parts": ["elevation.points_csv@MAX"],
                 "missing": [],
                 "file_count": 2
-              }
+              }{{layout.Extra}}
             }
             """;
 
@@ -389,7 +416,7 @@ internal static class CompleteOrderTests
         using (ZipArchive builder = new(stream, ZipArchiveMode.Create))
         {
             WriteEntry(builder, "Metadata/manifest.json", manifest);
-            WriteEntry(builder, "Surface/SurfacePoints.csv", PointsCsv);
+            WriteEntry(builder, layout.PointsCsv, PointsCsv);
         }
 
         return zipPath;
