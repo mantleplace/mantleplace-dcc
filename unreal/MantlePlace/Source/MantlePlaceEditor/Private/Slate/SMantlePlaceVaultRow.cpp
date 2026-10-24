@@ -22,6 +22,7 @@ void SMantlePlaceVaultRow::Construct(const FArguments& InArgs, const TSharedRef<
 	Controller = InArgs._Controller;
 	OnImportClicked = InArgs._OnImportClicked;
 	OnSelected = InArgs._OnSelected;
+	OnReportProblem = InArgs._OnReportProblemClicked;
 
 	const bool bBusy = Controller.IsValid() && Controller->IsBusy();
 	const FMantlePlaceVaultRowView View = Item.IsValid()
@@ -100,6 +101,28 @@ void SMantlePlaceVaultRow::Construct(const FArguments& InArgs, const TSharedRef<
 				[
 					SNew(SHorizontalBox)
 					+ SHorizontalBox::Slot().FillWidth(1.f)[ SNullWidget::NullWidget ]
+
+					// Report a problem (HPS-56): bundle-scoped, opens the web Feedback form with this
+					// bundle's order id. A nested button, so it consumes its own click.
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					.Padding(0.f, 0.f, FMantlePlaceEditorStyle::S3, 0.f)
+					[
+						SNew(SButton)
+						.Tag(TEXT("MantlePlace.Vault.ReportProblem"))
+						.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Secondary"))
+						.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
+						.ToolTipText(LOCTEXT("ReportProblemTip", "Tell Mantle Place about a problem with this bundle. Opens the feedback form in your browser."))
+						.OnClicked(this, &SMantlePlaceVaultRow::OnReportProblemClicked)
+						[
+							SNew(STextBlock)
+							.Text(LOCTEXT("ReportProblem", "Report a problem"))
+							.Font(FMantlePlaceEditorStyle::GetFont(EFont::Body))
+							.ColorAndOpacity(FSlateColor(MantlePlacePalette::White()))
+						]
+					]
+
 					+ SHorizontalBox::Slot()
 					.AutoWidth()
 					[
@@ -150,6 +173,12 @@ void SMantlePlaceVaultRow::Construct(const FArguments& InArgs, const TSharedRef<
 FReply SMantlePlaceVaultRow::OnPrimaryButtonClicked()
 {
 	OnImportClicked.ExecuteIfBound(Item);
+	return FReply::Handled();
+}
+
+FReply SMantlePlaceVaultRow::OnReportProblemClicked()
+{
+	OnReportProblem.ExecuteIfBound(Item);
 	return FReply::Handled();
 }
 

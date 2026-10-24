@@ -28,6 +28,8 @@ public:
 		SLATE_ARGUMENT(UMantlePlaceVaultPanelController*, Controller)
 		SLATE_EVENT(FMantlePlaceOnRowImportClicked, OnImportClicked)
 		SLATE_EVENT(FMantlePlaceOnRowImportClicked, OnSelected)
+		/** Fired when the card's "Report a problem" button is clicked (HPS-56); carries the item. */
+		SLATE_EVENT(FMantlePlaceOnRowImportClicked, OnReportProblemClicked)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs, const TSharedRef<STableViewBase>& OwnerTable);
@@ -38,11 +40,13 @@ public:
 private:
 	FReply OnPrimaryButtonClicked();
 	FReply OnCardClicked();
+	FReply OnReportProblemClicked();
 
 	TSharedPtr<FMantlePlaceVaultItem> Item;
 	TWeakObjectPtr<UMantlePlaceVaultPanelController> Controller;
 	FMantlePlaceOnRowImportClicked OnImportClicked;
 	FMantlePlaceOnRowImportClicked OnSelected;
+	FMantlePlaceOnRowImportClicked OnReportProblem;
 
 	// Transient progress state, read by the progress widgets' attribute lambdas.
 	bool bShowProgress = false;

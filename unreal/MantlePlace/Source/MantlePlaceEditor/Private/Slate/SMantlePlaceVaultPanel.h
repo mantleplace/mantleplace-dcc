@@ -54,6 +54,7 @@ private:
 	//~ List.
 	TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FMantlePlaceVaultItem> Item, const TSharedRef<STableViewBase>& OwnerTable);
 	void HandleRowImportClicked(TSharedPtr<FMantlePlaceVaultItem> Item);
+	void HandleRowReportProblemClicked(TSharedPtr<FMantlePlaceVaultItem> Item);
 	void RebuildRows();
 
 	//~ Search / filter (client-side, over AllItems).
@@ -71,6 +72,7 @@ private:
 	FReply OnAuthButtonClicked();
 	FText GetAuthButtonText() const;
 	bool IsAuthButtonEnabled() const;
+	FReply OnSendFeedbackClicked();
 	FReply OnRefreshClicked();
 	void UpdateHeaderState();
 
