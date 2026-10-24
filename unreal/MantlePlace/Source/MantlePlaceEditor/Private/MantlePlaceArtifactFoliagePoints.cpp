@@ -23,6 +23,8 @@
 #include "MantlePlaceManifestJson.h"
 #include "MantlePlaceTreePointsLogic.h"
 
+#include "MantlePlaceEditorSettings.h"
+
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/DataTable.h"
 #include "Misc/FileHelper.h"
@@ -30,6 +32,59 @@
 
 namespace
 {
+// One `levels.<LEVEL>` member, verbatim. A same_as wins over a cut over a pointer; a member that
+// states none of them is Absent, which for MAX is the entry itself and for MED and MIN is a level
+// the bundle does not publish.
+FMantlePlaceTreeLevelEntry ReadLevelEntry(const TSharedPtr<FJsonObject>& Levels, const TCHAR* Name)
+{
+	using namespace MantlePlaceManifestJson;
+	FMantlePlaceTreeLevelEntry Entry;
+	const TSharedPtr<FJsonObject>* Member = GetObject(Levels, Name);
+	if (Member == nullptr)
+	{
+		return Entry;
+	}
+	const FString SameAs = GetString(*Member, TEXT("same_as"));
+	if (!SameAs.IsEmpty())
+	{
+		Entry.Form = EMantlePlaceTreeLevelForm::SameAs;
+		Entry.SameAs = SameAs;
+		return Entry;
+	}
+	if (const TSharedPtr<FJsonObject>* Cut = GetObject(*Member, TEXT("cut")))
+	{
+		// A cut by anything but `rows` (or by rows that are not positive) is a form this build does
+		// not know: the level stays Absent and fails closed to MAX.
+		const int32 Rows = GetInt(*Cut, TEXT("rows"));
+		if (Rows > 0)
+		{
+			Entry.Form = EMantlePlaceTreeLevelForm::RowCut;
+			Entry.Rows = Rows;
+		}
+		return Entry;
+	}
+	const FString Path = GetString(*Member, TEXT("path"));
+	if (!Path.IsEmpty())
+	{
+		Entry.Form = EMantlePlaceTreeLevelForm::Pointer;
+		Entry.Path = Path;
+		Entry.Sha256 = GetString(*Member, TEXT("sha256"));
+		Entry.Count = GetInt(*Member, TEXT("point_count"));
+		Entry.Crs = GetString(*Member, TEXT("crs"));
+		Entry.Units = GetString(*Member, TEXT("units"));
+		Entry.HorizontalUnits = GetString(*Member, TEXT("horizontal_units"));
+	}
+	return Entry;
+}
+
+// The level the project asked for. A handler reading the default settings object is how the
+// foliage scatter beside this one reads its meshes.
+EMantlePlaceTreeLevel RequestedLevel()
+{
+	const UMantlePlaceEditorSettings* Settings = GetDefault<UMantlePlaceEditorSettings>();
+	return Settings != nullptr ? Settings->FoliageTreeLevel : EMantlePlaceTreeLevel::Max;
+}
+
 class FFoliagePointsHandler final : public IMantlePlaceArtifactHandler
 {
 public:
@@ -55,6 +110,14 @@ public:
 			M.Foliage.Crs = GetString(*FoliagePointsPtr, TEXT("crs"));
 			M.Foliage.Units = GetString(*FoliagePointsPtr, TEXT("units"));
 			M.Foliage.HorizontalUnits = GetString(*FoliagePointsPtr, TEXT("horizontal_units"));
+			// The published levels (MPB 1.9.0). Read as stated; which one is imported is the
+			// project's choice, and FMantlePlaceTreePointsLogic::ResolveLevel decides what it means.
+			if (const TSharedPtr<FJsonObject>* LevelsPtr = GetObject(*FoliagePointsPtr, TEXT("levels")))
+			{
+				M.Foliage.LevelMax = ReadLevelEntry(*LevelsPtr, TEXT("MAX"));
+				M.Foliage.LevelMed = ReadLevelEntry(*LevelsPtr, TEXT("MED"));
+				M.Foliage.LevelMin = ReadLevelEntry(*LevelsPtr, TEXT("MIN"));
+			}
 		}
 		// The vocabulary the CSV's `foliage_type` values come from (MPB 1.2.0). Published once, on the
 		// shared tree-points block, so this is the one read from outside `unreal`; it is the meaning of
@@ -81,7 +144,10 @@ public:
 	{
 		if (M.Foliage.bPresent && !M.Foliage.Path.IsEmpty())
 		{
-			Out.Add(FMantlePlaceDeclaredArtifact{ M.Foliage.Path, M.Foliage.Sha256 });
+			// The file the chosen level reads: the MAX file for MAX and for a row cut of it, a
+			// level's own file for an older bundle's per-level pointer.
+			const FMantlePlaceResolvedTreeLevel Level = FMantlePlaceTreePointsLogic::ResolveLevel(M.Foliage, RequestedLevel());
+			Out.Add(FMantlePlaceDeclaredArtifact{ Level.Path, Level.Sha256 });
 		}
 	}
 
@@ -92,26 +158,43 @@ public:
 		{
 			return;
 		}
-		TArray<uint8> CsvBytes;
-		if (!Ctx.ReadBytes(Manifest.Foliage.Path, CsvBytes))
+		const FMantlePlaceResolvedTreeLevel Level =
+			FMantlePlaceTreePointsLogic::ResolveLevel(Manifest.Foliage, RequestedLevel());
+		if (!Level.FallbackReason.IsEmpty())
 		{
-			Ctx.Log.Add(FString::Printf(TEXT("Tree points skipped: bundle is missing %s."), *Manifest.Foliage.Path));
+			Ctx.Log.Add(FString::Printf(
+				TEXT("Tree points: the requested level is not available (%s); importing MAX."), *Level.FallbackReason));
+		}
+		TArray<uint8> CsvBytes;
+		if (!Ctx.ReadBytes(Level.Path, CsvBytes))
+		{
+			Ctx.Log.Add(FString::Printf(TEXT("Tree points skipped: bundle is missing %s."), *Level.Path));
 			return;
 		}
 		FString CsvText, TreesError;
 		FFileHelper::BufferToString(CsvText, CsvBytes.GetData(), CsvBytes.Num());
+		// A row cut keeps the first rows of the one ranked file: a row's number is its rank.
+		CsvText = FMantlePlaceTreePointsLogic::CutRows(CsvText, Level.RowLimit);
+		// A per-level file states its own frame; a cut and MAX read the block's.
+		FMantlePlaceTreePointsFrame Frame = Manifest.GetFoliagePointsFrame();
+		if (Level.bOwnFrame)
+		{
+			Frame.Crs = Level.Crs;
+			Frame.Units = Level.Units;
+			Frame.HorizontalUnits = Level.HorizontalUnits;
+		}
 		TArray<FMantlePlaceTreePointRow> Rows;
 		const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
-			CsvText, Manifest.Georef.OriginEastingM, Manifest.Georef.OriginNorthingM, Manifest.GetFoliagePointsFrame(),
+			CsvText, Manifest.Georef.OriginEastingM, Manifest.Georef.OriginNorthingM, Frame,
 			Manifest.GetAoiSizeUeCm(), // zero when the block publishes no landscape transform
-			Manifest.Foliage.Count, Rows, TreesError, Manifest.Foliage.FoliageTypeVocabulary);
+			Level.DeclaredCount, Rows, TreesError, Manifest.Foliage.FoliageTypeVocabulary);
 		if (Outcome == EMantlePlaceTreePointsOutcome::CountMismatch)
 		{
 			// A count that disagrees with the payload FAILS the import rather than skipping the
 			// layer: the rows that did parse are a silent subset, and a scatter built from a
 			// subset reads as a sparse forest rather than as an error.
 			Ctx.Log.Add(FString::Printf(
-				TEXT("Tree points FAILED (%s): %s"), *Manifest.Foliage.Path, *TreesError));
+				TEXT("Tree points FAILED (%s): %s"), *Level.Path, *TreesError));
 			Ctx.bAllRequestedSucceeded = false;
 			return;
 		}
@@ -123,7 +206,7 @@ public:
 			// frame is the same news (HPS-53): a NAMED skip, no table made, so nothing downstream
 			// scatters a forest a thousand kilometres off site.
 			Ctx.Log.Add(FString::Printf(
-				TEXT("Tree points skipped (%s): %s"), *Manifest.Foliage.Path, *TreesError));
+				TEXT("Tree points skipped (%s): %s"), *Level.Path, *TreesError));
 			return;
 		}
 
@@ -161,9 +244,10 @@ public:
 		// VALID BUT UNVERIFIED — reporting it as verified is a lie and reporting it as
 		// corrupt makes every sidecar-less bundle un-importable (spec/format.md section 5).
 		Ctx.Log.Add(FString::Printf(
-			TEXT("Tree points imported (%d rows -> %s: %d shrub, %d without a measured ground height, %s)."),
+			TEXT("Tree points imported (%s level, %d rows -> %s: %d shrub, %d without a measured ground height, %s)."),
+			Level.Applied == EMantlePlaceTreeLevel::Max ? TEXT("MAX") : (Level.Applied == EMantlePlaceTreeLevel::Med ? TEXT("MED") : TEXT("MIN")),
 			Rows.Num(), *AssetName, ShrubCount, GroundUnknownCount,
-			Manifest.Foliage.Sha256.IsEmpty()
+			Level.Sha256.IsEmpty()
 				? TEXT("valid but unverified: the manifest publishes no digest for it")
 				: TEXT("verified against the manifest's sha256")));
 	}

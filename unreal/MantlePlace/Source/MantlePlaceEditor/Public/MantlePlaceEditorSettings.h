@@ -8,6 +8,20 @@
 #include "MantlePlaceEditorSettings.generated.h"
 
 /**
+ * The fidelity level of the tree points an import places (MPB `levels`). The bundle publishes the
+ * levels; the plugin picks one and never derives one. MAX is the entry itself, what every bundle
+ * delivers; MED and MIN are fewer trees from the same ranked source, either a row prefix of the
+ * one tree file (MPB 2.0) or a file of their own (older bundles).
+ */
+UENUM()
+enum class EMantlePlaceTreeLevel : uint8
+{
+	Max UMETA(DisplayName = "MAX"),
+	Med UMETA(DisplayName = "MED"),
+	Min UMETA(DisplayName = "MIN"),
+};
+
+/**
  * The plugin's project settings, under Project Settings -> Plugins -> Mantle Place.
  *
  * `config = Game` and `defaultconfig`, so a value is written to the project's DefaultGame.ini and
@@ -119,6 +133,15 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Foliage",
 		meta = (DisplayName = "Generate a foliage scatter on import"))
 	bool bGenerateFoliageScatter = false;
+
+	/**
+	 * Which published level of the bundle's tree points to import. MAX is every tree the bundle
+	 * delivers. MED and MIN are the lighter levels the bundle publishes: the first rows of the one
+	 * ranked tree file on a 2.0 bundle, or a file of their own on an older one. A level the bundle
+	 * does not publish imports MAX, and the import log says so.
+	 */
+	UPROPERTY(EditAnywhere, config, Category = "Foliage", meta = (DisplayName = "Tree points level"))
+	EMantlePlaceTreeLevel FoliageTreeLevel = EMantlePlaceTreeLevel::Max;
 
 	/**
 	 * The meshes a tree point is drawn with, one picked per point. Any static mesh the project has;
