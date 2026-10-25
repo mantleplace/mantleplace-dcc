@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "MantlePlaceArtifactHandler.h"
+#include "WorldPartition/WorldPartitionHandle.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogMantlePlaceImport, Log, All);
 
@@ -90,19 +91,46 @@ int32 ReplacePriorActors(UWorld* World, const FString& Identity, MantlePlaceImpo
 int32 ReleaseKeptPartitionActors(UWorld* World, const TArray<TWeakObjectPtr<AActor>>& KeptPartitionActors);
 
 /**
+ * The prior import's actors in unloaded World Partition regions, loaded for the wipe: the references
+ * that hold them loaded, released when this goes out of scope (or by Release), so the editor's
+ * loaded regions are as the user left them, less what the wipe destroyed. A reference to an actor
+ * the wipe destroyed releases nothing.
+ */
+struct FPriorActorLoad
+{
+	/** How many unloaded prior actors the descriptor walk found. */
+	int32 Unloaded = 0;
+	/** How many of them it loaded. */
+	int32 Loaded = 0;
+	/** The loaded actors and whatever they reference, keyed by actor GUID. */
+	TMap<FGuid, FWorldPartitionReference> References;
+
+	void Release() { References.Empty(); }
+};
+
+/**
  * The refusal for a re-import into a World Partition level when any actor of the prior import of
  * this ORDER is in an unloaded region, or empty when the import can go ahead (always, in a
- * non-partitioned level). ReplacePriorActors can only destroy what is loaded, so going ahead would
- * leave the unloaded ones behind as orphans beside the new import. Called before either wipe, so a
- * refusal changes nothing. A prior landscape's streaming proxies count whether or not they carry
- * the tag, matched by the landscape's GUID. So does a PCG partition actor whose cell overlaps a
- * prior foliage scatter's volume (MantlePlaceWorldPartitionLogic::CellHoldsPriorScatter): it holds
- * that scatter's generated instances untagged, and the wipe's cleanup reaches loaded ones only.
- * A descriptor an earlier wipe this session left behind does not count: the actor is destroyed,
- * not unloaded, and the next save deletes the descriptor
- * (MantlePlaceWorldPartitionLogic::IsDestroyedThisSession).
+ * non-partitioned level): v1's read of the level's actor descriptors, which loads nothing. A prior
+ * landscape's streaming proxies count whether or not they carry the tag, matched by the landscape's
+ * grid GUID. So does a PCG partition actor whose cell overlaps a prior foliage scatter's volume
+ * (MantlePlaceWorldPartitionLogic::CellHoldsPriorScatter): it holds that scatter's generated instances
+ * untagged, and the wipe's cleanup reaches loaded ones only. A descriptor an earlier wipe this session
+ * left behind does not count: the actor is destroyed, not unloaded, and the next save deletes the
+ * descriptor (MantlePlaceWorldPartitionLogic::IsDestroyedThisSession).
  */
 FString ExplainUnloadedPriorActors(UWorld* World, const FString& Identity);
+
+/**
+ * v2: load every actor ExplainUnloadedPriorActors would count, through the same descriptor walk, so
+ * ReplacePriorActors reaches them as it reaches the loaded ones. The references go in OutLoad; hold
+ * it until the wipe has run. Returns empty when every one loaded. When any one cannot be loaded it
+ * releases what it loaded and returns v1's refusal (MantlePlaceWorldPartitionLogic::
+ * ExplainUnloadablePriorActors): called before either wipe, so a refusal changes nothing. Nothing
+ * outside the prior import is loaded but what a prior actor itself references, and in a
+ * non-partitioned level nothing at all.
+ */
+FString LoadUnloadedPriorActors(UWorld* World, const FString& Identity, FPriorActorLoad& OutLoad);
 
 /** Each included handler's Prepare / Import / Finalize, in registry order. */
 void RunPrepare(const FHandlers& Handlers, FMantlePlaceImportContext& Context);

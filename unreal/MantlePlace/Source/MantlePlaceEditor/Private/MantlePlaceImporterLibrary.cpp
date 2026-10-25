@@ -458,13 +458,22 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	const FMantlePlaceScopedRestore RestoreAutoCheckout(
 		[LoadSaveSettings] { LoadSaveSettings->ResetAutomaticallyCheckoutOnAssetModificationOverride(); });
 
-	// --- World Partition: a prior import with actors in unloaded regions is refused, not half-wiped. ---
-	const FString UnloadedRefusal = MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(World, Identity);
+	// --- World Partition: a prior import's actors in unloaded regions are loaded for the wipe. ---
+	// Held until this function returns, so released after the transaction commits: the wipe destroys
+	// what it loaded, and whatever else loaded with them unloads again. One that cannot be loaded
+	// refuses the import, before either wipe and before the transaction, and changes nothing.
+	MantlePlaceImportOrchestration::FPriorActorLoad PriorActorLoad;
+	const FString UnloadedRefusal = MantlePlaceImportOrchestration::LoadUnloadedPriorActors(World, Identity, PriorActorLoad);
 	if (!UnloadedRefusal.IsEmpty())
 	{
-		// Before either wipe and before the transaction: the wipe can only reach loaded actors.
 		Result.Message = UnloadedRefusal;
 		return Result;
+	}
+	if (PriorActorLoad.Loaded > 0)
+	{
+		Log.Add(FString::Printf(
+			TEXT("Loaded %d actor(s) of the previous import from unloaded World Partition regions, to replace them."),
+			PriorActorLoad.Loaded));
 	}
 
 	// --- Wipe, assets: a prior import of THIS order goes, a different order's content is refused. ---

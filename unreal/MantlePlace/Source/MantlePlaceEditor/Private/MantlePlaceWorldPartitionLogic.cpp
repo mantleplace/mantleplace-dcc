@@ -48,6 +48,11 @@ FString MantlePlaceWorldPartitionLogic::ExplainUnloadedPriorActors(int32 Unloade
 		UnloadedCount);
 }
 
+FString MantlePlaceWorldPartitionLogic::ExplainUnloadablePriorActors(int32 UnloadedCount, int32 LoadedCount)
+{
+	return ExplainUnloadedPriorActors(FMath::Max(UnloadedCount, 0) - FMath::Clamp(LoadedCount, 0, FMath::Max(UnloadedCount, 0)));
+}
+
 bool MantlePlaceWorldPartitionLogic::CellHoldsPriorScatter(const FBox2D& Cell, const TArray<FBox2D>& ScatterFootprints)
 {
 	if (!Cell.bIsValid)
