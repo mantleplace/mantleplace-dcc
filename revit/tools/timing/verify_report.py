@@ -11,6 +11,7 @@ import csv
 import json
 import math
 import os
+import re
 import sqlite3
 import statistics
 import struct
@@ -195,6 +196,52 @@ def _handover(record):
     return verdict
 
 
+# The import steps that read a vector layer, by the name the plugin's log gives each. A curator's bundle offers
+# whichever of them its manifest names; each one that ran must have drawn from its own file.
+VECTOR_STEPS = ("LandUse", "LandCover", "FloodZones", "SteepGround", "RoadCentrelines", "Water", "RoadPolygons")
+_LOG_LINE = re.compile(r"^\d\d:\d\d:\d\d  (.*)$")
+_STEP_START = re.compile(r"^\[(\w+)\] started\.$")
+_DREW = re.compile(r"^(?:Drew|Imported) ([\d,]+) ")
+_FROM_FILE = re.compile(r" from ([\w./-]+\.(?:gpkg|geojson|json))")
+_FELL_BACK = "from the bundle's GeoJSON copy instead"
+
+
+def _vectors(folder):
+    """Each vector step the import ran, from the plugin's log: how many it placed and from which file, or why not."""
+    path = os.path.join(folder, "import.log")
+    if not os.path.exists(path):
+        return {"pass": False, "note": "no import.log in the run folder", "steps": []}
+    steps, current = [], None
+    with open(path, encoding="utf-8-sig") as handle:
+        for raw in handle:
+            match = _LOG_LINE.match(raw.rstrip("\n"))
+            if not match:
+                continue
+            line = match.group(1).strip()
+            started = _STEP_START.match(line)
+            if started:
+                name = started.group(1)
+                current = {"step": name, "count": None, "file": None, "fell_back": False, "note": None} if name in VECTOR_STEPS else None
+                if current:
+                    steps.append(current)
+                continue
+            if current is None or line.startswith(("[", "(", "Filed ")):
+                continue
+            if _FELL_BACK in line:
+                current["fell_back"] = True
+            drew = _DREW.match(line)
+            if drew and current["count"] is None:
+                current["count"] = int(drew.group(1).replace(",", ""))
+                found = _FROM_FILE.search(line)
+                current["file"] = found.group(1) if found else None
+            elif current["note"] is None and not drew:
+                current["note"] = line
+    if not steps:
+        return {"pass": False, "note": "no vector step ran", "steps": []}
+    passed = all(s["count"] and not s["fell_back"] for s in steps)
+    return {"pass": passed, "steps": steps}
+
+
 def judge(folder, footprints=None, table="Building"):
     with open(os.path.join(folder, "verify.json"), encoding="utf-8-sig") as handle:
         record = json.load(handle)
@@ -203,6 +250,7 @@ def judge(folder, footprints=None, table="Building"):
         "placement": _placement(folder),
         "frame": _frame(record),
         "link": _link(folder, record, footprints, table),
+        "vectors": _vectors(folder),
         "containers": record.get("containers") or [],
         "overrides": record.get("site_context_overrides") or [],
         "stamped_by_class": record.get("stamped_by_class") or {},
@@ -247,6 +295,19 @@ def markdown(report):
         lines.append(text + ".")
     else:
         lines.append(f"FAIL: {k.get('note')}")
+    lines += ["", "## Vectors", ""]
+    v = report["vectors"]
+    if v.get("steps"):
+        lines.append(f"{_mark(v)}: every vector step placed its layer from its own file." if v["pass"] else "FAIL: a vector step placed nothing, or read the GeoJSON copy.")
+        for step in v["steps"]:
+            if step["count"]:
+                source = f" from `{step['file']}`" if step["file"] else ""
+                fallback = " (the GeoJSON copy)" if step["fell_back"] else ""
+                lines.append(f"- {step['step']}: {step['count']}{source}{fallback}")
+            else:
+                lines.append(f"- {step['step']}: not imported: {step['note']}")
+    else:
+        lines.append(f"FAIL: {v.get('note')}")
     lines += ["", "## ODbL containers", ""]
     for container in report["containers"]:
         classes = ", ".join(f"{name} x{count}" for name, count in sorted(container.get("by_class", {}).items()))
@@ -282,7 +343,7 @@ def main(argv):
     with open(os.path.splitext(out)[0] + ".report.json", "w", encoding="utf-8", newline="\n") as handle:
         json.dump(report, handle, indent=2)
     print(markdown(report))
-    checks = ("placement", "frame", "link", "handover")
+    checks = ("placement", "frame", "link", "vectors", "handover")
     return 0 if all(report[name].get("pass") for name in checks) else 1
 
 
