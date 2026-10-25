@@ -140,11 +140,82 @@ class HandoverCases(unittest.TestCase):
         self.assertIn("no ODbL content", verdict["note"])
 
 
+def with_log(folder, *lines):
+    """The plugin's import log, each line stamped as the importer writes it, then the summary it repeats."""
+    stamped = [f"12:00:{i % 60:02d}  {line}" for i, line in enumerate(lines)]
+    write(os.path.join(folder, "import.log"), "Mantle Place bundle import.\n" + "\n".join(stamped) + "\n\n" + "\n".join(lines) + "\n")
+    return folder
+
+
+REFUSED = 'The road centrelines file has no "road_splines" table, so it is not the layer the manifest names. Re-download this bundle.'
+
+
+class VectorCases(unittest.TestCase):
+    def folder(self, *lines):
+        return with_log(run_dir("0,1,2,1,1\n", verify_record()), *lines)
+
+    def test_each_vector_step_that_drew_or_imported_passes_with_its_count_and_file(self):
+        folder = self.folder(
+            "[LandUse] started.",
+            "[Mantle Place: land use plan] commit took 0.5 s (Committed).",
+            'Drew 21 land use region(s) on "Mantle Place Land Use Plan 6a49", a new plan.',
+            'Filed 28 element(s) from the "LandUse" step in the selection filter "Mantle Place ODbL c".',
+            "(LandUse took 0.9 s.)",
+            "[RoadCentrelines] started.",
+            "Imported 1,278 road centreline(s) from Features/RoadsDraped-Projected.gpkg.",
+            "(RoadCentrelines took 0.1 s.)",
+            "[Planting] started.",
+            "Imported 8 tree(s).",
+            "(Planting took 0.1 s.)",
+        )
+        vectors = verify_report.judge(folder)["vectors"]
+        self.assertTrue(vectors["pass"])
+        self.assertEqual([s["step"] for s in vectors["steps"]], ["LandUse", "RoadCentrelines"])
+        self.assertEqual(vectors["steps"][0]["count"], 21)
+        self.assertIsNone(vectors["steps"][0]["file"])
+        self.assertEqual(vectors["steps"][1]["count"], 1278)
+        self.assertEqual(vectors["steps"][1]["file"], "Features/RoadsDraped-Projected.gpkg")
+
+    def test_a_refused_step_fails_and_keeps_the_reason(self):
+        folder = self.folder("[RoadCentrelines] started.", REFUSED, "(RoadCentrelines took 0.0 s.)")
+        vectors = verify_report.judge(folder)["vectors"]
+        self.assertFalse(vectors["pass"])
+        self.assertIsNone(vectors["steps"][0]["count"])
+        self.assertIn('no "road_splines" table', vectors["steps"][0]["note"])
+
+    def test_a_step_that_fell_back_to_the_geojson_copy_fails(self):
+        folder = self.folder(
+            "[Water] started.",
+            f"{REFUSED} Reading the water from the bundle's GeoJSON copy instead.",
+            "Imported 1 water subdivision(s) from Features/Water.geojson.",
+            "(Water took 0.2 s.)",
+        )
+        step = verify_report.judge(folder)["vectors"]["steps"][0]
+        self.assertTrue(step["fell_back"])
+        self.assertFalse(verify_report.judge(folder)["vectors"]["pass"])
+
+    def test_no_vector_step_or_no_log_is_named_not_passed(self):
+        self.assertIn("no vector step", verify_report.judge(self.folder("[Terrain] started."))["vectors"]["note"])
+        self.assertIn("no import.log", verify_report.judge(run_dir("0,1,2,1,1\n", verify_record()))["vectors"]["note"])
+
+
 class MarkdownCases(unittest.TestCase):
     def test_the_markdown_names_each_check(self):
         text = verify_report.markdown(verify_report.judge(run_dir("0,1,2,1,1\n", verify_record())))
-        for heading in ("Placement", "Frame", "Linked site model", "ODbL containers", "Prepare for Handover"):
+        for heading in ("Placement", "Frame", "Linked site model", "Vectors", "ODbL containers", "Prepare for Handover"):
             self.assertIn(heading, text)
+
+    def test_the_vectors_section_lists_each_step(self):
+        folder = with_log(
+            run_dir("0,1,2,1,1\n", verify_record()),
+            "[Water] started.",
+            "Imported 1 water subdivision(s) from Features/Water-Projected.gpkg.",
+            "[RoadPolygons] started.",
+            REFUSED.replace("road centrelines", "road surfaces").replace("road_splines", "road_polygons"),
+        )
+        text = verify_report.markdown(verify_report.judge(folder))
+        self.assertIn("- Water: 1 from `Features/Water-Projected.gpkg`", text)
+        self.assertIn('- RoadPolygons: not imported: The road surfaces file has no "road_polygons" table', text)
 
 
 if __name__ == "__main__":
