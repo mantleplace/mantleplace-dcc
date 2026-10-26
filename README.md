@@ -172,6 +172,7 @@ tools/mantleplace-mpb/         `mpb validate`, the open bundle validator (pure P
 tools/public-hygiene/          the private-reference and docs-integrity gates + their cases
 tools/unreal-naming/           the generated-name drift gate + its cases
 tools/brand-assets/            renders the mark for both hosts; its input is private
+tools/local-install/           the session-start check that a host's local install is the tree
 docs/                          the ADRs, the shared sign-in contract, the agent docs
 .githooks/                     opt-in pre-publication hooks running the hygiene gate
 .github/workflows/             the five public CI gates, plus tracker hygiene

@@ -47,9 +47,16 @@ is right.
 
 State the reasoning in prose instead of citing what a reader cannot open.
 
+**Private CI is described generically, never by workflow name.** A workflow, job or runner that lives
+outside this repository is "the private build gate" or "a privately run check", because its name
+resolves only where a stranger cannot look. Workflows in `.github/workflows/` here may be named.
+
+**Rule ids stand alone.** Only an `HPS-NN` id is a public identifier (below). An id from any other
+document set is not cited here, because that document is not published here.
+
 ## Rule ids are fine, links to them are not — and an `HPS-NN` must resolve
 
-`HPS-40`, `DOC-06` and their kin are stable public identifiers and stay as prose. Do not turn them
+`HPS-40` and its kin are stable public identifiers and stay as prose. Do not turn them
 into paths. This is the distinction the gate draws: the id is a name the repository is expected to
 use, the link is a door a stranger cannot open.
 
@@ -63,8 +70,8 @@ The claim and the identifier both looked authoritative, and one of them was a de
 
 A **definition** is a rule statement — the id in backticks at the start of a line, followed by an em
 dash. A passing mention of another rule's precedent is not, so citing a rule nobody wrote stays
-refused. `DOC-` and other domains are **not** checked: their documents are not published here, and
-the gate refuses to imply otherwise.
+refused. Ids from any other domain are not citable at all: their documents are not published here,
+and the gate refuses to imply otherwise.
 
 ⚠️ This one check cannot document itself with a worked example, and that is a real asymmetry rather
 than an oversight. A refused `#NN` is written inside a code span above, because a code span is how
