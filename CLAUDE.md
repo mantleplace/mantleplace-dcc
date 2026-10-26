@@ -23,9 +23,8 @@ and everything in it is world-readable.
   are append-only. No logic that derives a placement value (CRS, datum, mosaic, licence gating) belongs
   here. No engine binaries, compiled plugins, test bundles or sample assets, ever; ask before any
   `git add` of a binary. No `paths:` filter on `pull_request`, no self-hosted runner.
-- **Gate:** all five CI workflows green (`ci-manifest-conformance`, `ci-revit-tests`, `ci-public-hygiene`,
-  `ci-unreal-naming`, `ci-brand-assets`); the required checks are `conformance`, `pure-core`,
-  `pure-core-windows`, `references`. Catch the public-hygiene gate early with
+- **Gate:** every CI workflow that runs on a pull request green; the required checks are listed once, in
+  [`docs/agents/ci.md`](docs/agents/ci.md). Catch the public-hygiene gate early with
   `git config core.hooksPath .githooks`. Behaviour the conformance suite pins changes only with a case.
 - **Merge:** squash by default, once the gate is green; commit with `-s` (DCO). Branches are
   `type/short-description`, never an issue number.
@@ -54,26 +53,14 @@ the Mantle Place plugin for each such host, and nothing else. A consumer mounts 
 submodule inside the Unreal project's `Plugins/` directory, where plugin discovery is a recursive
 scan.
 
+**What this repo holds:** the plugin usage docs, the MPB spec prose, the Host Plugin Standard master,
+and the public glossary with its banned-term list. A value owned by code, config or a release is
+linked, never restated.
+
 ## Layout
 
-```
-unreal/MantlePlace/            the UE 5.8 plugin, folder + .uplugin — PascalCase within
-revit/                         the Revit plugin: pure Core, Client, Addin shim, headless tests
-spec/                          the public MPB format spec — prose only; the schema stays remote
-tools/manifest-conformance/    the contract gate + the shared conformance corpus
-tools/mantleplace-mpb/         `mpb validate`, the open bundle validator (pure Python)
-tools/public-hygiene/          the private-reference and docs-integrity gates + their cases
-tools/unreal-naming/           the generated-name drift gate + its cases
-tools/brand-assets/            renders the mark for both hosts; its input is private
-tools/local-install/           the session-start check that a host's local install is the tree
-docs/adr/                      architecture decision records, numbered and cross-host
-docs/agents/                   how agents work this repo — tracker, labels, domain, CI, public text
-docs/*.md                      the cross-host contracts and matrices — see "Where knowledge lives"
-.githooks/                     opt-in pre-publication hooks (core.hooksPath) running that gate
-.github/workflows/             the five public CI gates, plus the stale and tracker-hygiene jobs
-LICENSE  TRADEMARK.md  SECURITY.md  CONTRIBUTING.md  CODE_OF_CONDUCT.md  ROADMAP.md  README.md
-CONTEXT.md  CLAUDE.md
-```
+The layout is the list in [`README.md`](README.md#repository-layout); it is not kept twice.
+`docs/*.md` holds the cross-host contracts and matrices (see "Where knowledge lives").
 
 **Every future top-level addition is a DCC host or a cross-host concern, nothing else.** Names are
 spelled out in full — `mantleplace`, never `mp`. `max/`, `blender/`, `rhino/` are created only with
@@ -142,8 +129,7 @@ packaging.
 ## Binaries
 
 **No Git LFS, on purpose** — a stranger's first clone must not be a multi-hundred-megabyte pull. The
-binaries here (one `.uasset`, twenty-seven PNG icons, one Revit family, about 1 MB)
-are plain git blobs. **Ask before you `git add` any binary**, a new file of a type already here
+binaries here are plain git blobs. **Ask before you `git add` any binary**, a new file of a type already here
 included: the axis is bytes, not novelty, and there is deliberately no per-file size threshold, which
 is why the answer is to ask. A binary committed here is in history forever. **No engine binaries, no
 compiled plugins, no test bundles, no sample assets, no sample bundles — ever**; real geospatial data
@@ -178,7 +164,7 @@ That bounds *logic*. Which repository a piece of *work* belongs to is
 
 ## CI
 
-Five workflows gate every pull request, under the content-law card's CI rules. The jobs, required
+The workflows that gate every pull request follow the content-law card's CI rules. The jobs, required
 checks, why the Unreal compile is private, and **the commands that run every gate locally** are in
 [`docs/agents/ci.md`](docs/agents/ci.md).
 
@@ -245,7 +231,7 @@ How the engineering skills work *this* repo:
 
 - **Issue tracker** → [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md). GitHub issues
   on `mantleplace/mantleplace-dcc`, via `gh`; external PRs are not a triage surface.
-- **Triage labels** → [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md): five states
-  and two categories, each label string equal to its own name, plus the other label families.
+- **Triage labels** → [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md): six states
+  and two categories, each label string equal to its own name, plus the host labels.
 - **Domain docs** → [`docs/agents/domain.md`](docs/agents/domain.md). Single-context: one
   [`CONTEXT.md`](CONTEXT.md) and one [`docs/adr/`](docs/adr/), both cross-host.

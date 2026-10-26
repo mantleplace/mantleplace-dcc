@@ -14,7 +14,7 @@
 // northing south of the equator puts the AOI 10 000 km away and nothing else notices.
 //
 // The GeoJSON -> spline assertions below stay inline: FMantlePlaceRoadSpline is this plugin's own
-// structure and no other host produces it (DOC-06).
+// structure and no other host produces it.
 
 namespace
 {

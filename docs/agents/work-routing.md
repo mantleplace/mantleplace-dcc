@@ -81,9 +81,5 @@ looks settled and a stray fix arrives with no reviewer who owns it.
 
 One direction only. A private document may cite a public one freely. **A public file, commit
 message, pull request or branch name may never cite a private one** — not by URL, not by path, not
-by issue number. [`public-surface.md`](public-surface.md) is the authority on that, including the
-one split where a bare issue reference is this repository's own self-citation and is fine.
-
-The tracker is a publication surface too. An issue title, an issue body and every comment on one are
-world-readable the moment they are posted and there is no draft state before that. The gate does not
-read them, so this one is on you.
+by issue number. [`public-surface.md`](public-surface.md) is the authority on that, the tracker's own
+text included.

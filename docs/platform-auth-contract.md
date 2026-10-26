@@ -28,11 +28,9 @@ answers reaches both hosts at once, and a rejection either one misreads costs th
 session in both. That is why this document is cross-host and lives at the repository root rather
 than under a host folder.
 
-There is no packaging-time configuration for auth. There used to be — refresh and restore were
-identity-provider-direct and needed values hydrated into the consuming project's `DefaultGame.ini`,
-which meant sign-in worked on a plain clone and *staying* signed in did not. That was one of the
-causes of the sign-in-every-session defect, and the fix was to delete the path rather than document
-it better.
+There is no packaging-time configuration for auth. Sign-in, refresh and restore all use the same
+public routes compiled into each host, so a plain clone signs in and *stays* signed in with nothing
+hydrated into the consuming project.
 
 ## The routes
 

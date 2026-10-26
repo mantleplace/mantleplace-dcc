@@ -67,7 +67,7 @@ inconvenient, usually by the person it would have saved.
 
 The mechanical checks — required fields, unique ids, files present and parseable, versions
 agreeing, no orphans — run offline in CI. `check_manifest_conformance.py` owns that list; it is not
-restated here (`DOC-02`).
+restated here.
 
 In practice a case is one pull request with these edits:
 

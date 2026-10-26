@@ -355,7 +355,7 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 	// Host-local: presigned-URL expiry math + the cache.json sidecar
 	// ========================================================================================
 	// The sidecar is this plugin's own on-disk format (no other host reads it) and the expiry
-	// helper is engine FDateTime plumbing, so neither belongs in a cross-host corpus (DOC-06).
+	// helper is engine FDateTime plumbing, so neither belongs in a cross-host corpus.
 	{
 		FDateTime Expiry;
 		TestTrue(TEXT("ParseExpiry parses ISO-8601"),

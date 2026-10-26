@@ -1,29 +1,33 @@
 ---
 name: triage-labels
-description: Maps the skills' five canonical triage state roles and two categories to the label strings that actually exist on this tracker, the `spec` label a parent spec carries in place of a state, the labels that are not triage roles at all, and the separate wayfinder family used for planning work. Read before applying, removing or reasoning about a label.
+description: The labels this repository's tracker uses itself: the states and categories an issue carries, the `waiting` state, the `spec` label a parent spec carries in place of a state, the `host:*` labels and the `public-hygiene` label. Read before applying, removing or reasoning about a label.
 ---
 
 # Triage labels
 
-The engineering skills speak in terms of five canonical triage roles plus two categories. This file
-maps those roles to the label strings that actually exist on this repo's tracker.
+The engineering skills speak in terms of canonical triage roles. This file lists the label strings
+this tracker uses for them, and the labels that are this repository's own. Any other label on the
+tracker is the skills' general vocabulary, not restated here.
 
-## State roles
+## States
 
-| Canonical role    | Label in our tracker | Meaning                                  |
-| ----------------- | -------------------- | ---------------------------------------- |
-| `needs-triage`    | `needs-triage`       | Maintainer needs to evaluate this issue  |
-| `needs-info`      | `needs-info`         | Waiting on reporter for more information |
-| `ready-for-agent` | `ready-for-agent`    | Fully specified, ready for an AFK agent  |
-| `ready-for-human` | `ready-for-human`    | Requires human implementation            |
-| `wontfix`         | `wontfix`            | Will not be actioned                     |
+| Label             | Meaning                                                                   |
+| ----------------- | ------------------------------------------------------------------------- |
+| `needs-triage`    | Maintainer needs to evaluate this issue                                   |
+| `needs-info`      | Waiting on the reporter for more information                              |
+| `ready-for-agent` | Fully specified, ready for an AFK agent                                   |
+| `ready-for-human` | Requires human implementation                                             |
+| `waiting`         | Parked until the trigger its own body names                               |
+| `wontfix`         | Will not be actioned                                                      |
+
+`waiting` marks an issue parked until a trigger its own body names: an observation, a platform change,
+a real bundle to design against. Un-park it by removing the label and saying in a comment whether the
+trigger fired or the maintainer chose to bring the item forward. It is not exempt from the stale job;
+a waiting issue whose trigger is long-lived wants `pinned` as well.
 
 ## Categories
 
-| Canonical role | Label in our tracker | Meaning                    |
-| -------------- | -------------------- | -------------------------- |
-| `bug`          | `bug`                | Something is broken        |
-| `enhancement`  | `enhancement`        | New feature or improvement |
+`bug` (something is broken) and `enhancement` (new feature or improvement).
 
 Every triaged issue carries exactly one category and one state, except a parent spec.
 
@@ -32,35 +36,14 @@ Every triaged issue carries exactly one category and one state, except a parent 
 `spec` marks a parent spec: an effort that spans several pull requests. It carries its category and
 `spec`, and **no state** — `spec` takes the state's place. Its tickets are native sub-issues, each a
 normal triaged issue with its own category and state. The parent closes when its last sub-issue
-closes. A spec one pull request can deliver is its own ticket and gets no `spec` label. It is not
-exempt from the stale job; a spec expected to run past the stale window wants `tracking` as well.
+closes. A spec one pull request can deliver is its own ticket and gets no `spec` label.
 
-## Labels that are not triage roles
+## `public-hygiene`
 
-The tracker also carries `tracking`, `confirmed`, `security` and `pinned`, which exempt an issue
-from the stale job (`stale.yml` — tracker hygiene, not a merge gate). They are orthogonal to the
-table above: an issue can be `confirmed` and `needs-info` at once, and none of them counts as the
-one state role a triaged issue carries. Leave them alone unless the stale job is what you are
-reasoning about. All four exist on the tracker; `stale.yml` named `security` and `pinned` in its
-exempt lists for some time before either label was created, which made those two exemptions inert
-without erroring.
-
-`public-hygiene` is applied and removed by `ci-tracker-hygiene`, never by hand. It means this
-issue's own text cites something only a private repository can resolve
-([`public-surface.md`](public-surface.md)). It is also orthogonal to the table, and it clears itself
-once the text is edited — removing it manually hides a finding rather than fixing one.
-
-## Wayfinder labels
-
-Planning work uses a second family: `wayfinder:map` for the map issue that indexes an effort's
-decisions, and `wayfinder:research` / `wayfinder:prototype` / `wayfinder:grilling` /
-`wayfinder:task` for its child tickets. The skill that creates them is now `/map`, but the label
-strings kept the older `wayfinder:` prefix on purpose, because they were already live on trackers
-and renaming them would have been a behaviour change rather than a rename.
-
-**A wayfinder ticket is exempt from the one-category-one-state invariant.** It is a planning
-artifact created by whoever is running the effort, not an inbound report, and triage is only ever
-for issues you did not create. It carries its wayfinder label and needs nothing else.
+Applied and removed by `ci-tracker-hygiene`, never by hand. It means this issue's own text cites
+something only a private repository can resolve ([`public-surface.md`](public-surface.md)). It is
+orthogonal to the states, and it clears itself once the text is edited — removing it manually hides a
+finding rather than fixing one.
 
 ## Host labels
 
@@ -80,26 +63,12 @@ a change to the shared spec or the conformance corpus lands on several hosts at 
 signal. Use `host:all` when the answer is genuinely every host: the spec, the conformance corpus,
 `tools/`, the workflows, the repo's own documentation.
 
-The roster is fixed and ordered — Unreal and Revit first, then Rhino, Blender, Max — and
-`ROADMAP.md` already names the three that have no code yet. Labels exist for all five so an issue
-filed against a future host has somewhere to go; a label is not a folder, and the rule that a
-top-level folder appears only with real content is untouched by this.
-
-The bug-report template asks for the host as a required dropdown, but an issue form cannot turn that
-answer into a label. Applying it is a triage step.
-
-## Deferred
-
-`deferred` marks an issue parked until a trigger its own body names — an observation, a platform
-change, a real bundle to design against. It is not a state role and does not replace one. Un-defer by
-removing the label, dropping "deferred" from the title, and saying in a comment whether the trigger
-fired or the maintainer chose to bring the item forward. It is **not** exempt from the stale job; a
-deferred issue whose trigger is long-lived wants `pinned` as well.
+Labels exist for all five hosts so an issue filed against a future host has somewhere to go; a label
+is not a folder, and the rule that a top-level folder appears only with real content is untouched by
+this. The bug-report template asks for the host as a required dropdown, but an issue form cannot turn
+that answer into a label. Applying it is a triage step.
 
 ## Deleting a label
 
 Don't, if anything has ever carried it. Removing a label strips it from every issue that used it,
 including closed ones, and the tracker is the only record that it was ever applied.
-
-`bug`, `enhancement` and `wontfix` are GitHub's defaults. Edit the right-hand column if the
-vocabulary ever diverges — the left-hand column is what the skills say and does not change.
