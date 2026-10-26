@@ -41,7 +41,7 @@ void FMantlePlaceEditorModule::StartupModule()
 			FOnSpawnTab::CreateRaw(this, &FMantlePlaceEditorModule::SpawnVaultTab))
 		.SetGroup(WorkspaceMenu::GetMenuStructure().GetLevelEditorCategory())
 		.SetDisplayName(LOCTEXT("MantlePlaceTabTitle", "Mantle Place"))
-		.SetTooltipText(LOCTEXT("MantlePlaceTabTooltip", "Open the Mantle Place vault panel: browse & import owned bundles, or import a local .zip."))
+		.SetTooltipText(LOCTEXT("MantlePlaceTabTooltip", "Open the Mantle Place vault panel: browse & import bundles you keep, or import a local .zip."))
 		.SetIcon(FSlateIcon(FMantlePlaceEditorStyle::GetStyleSetName(), "MantlePlace.TabIcon"));
 
 	// The handover command, in the Tools menu once the menus exist.

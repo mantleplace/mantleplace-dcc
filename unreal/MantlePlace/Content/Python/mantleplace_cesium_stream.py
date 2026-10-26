@@ -9,7 +9,7 @@ under the level's CesiumGeoreference -- whose origin this module SETS from the b
 _ensure_georeference -- alongside Cesium World Terrain for apples-to-apples QA.
 
 This is the "stream locally into Unreal via Cesium" capability that complements the native-asset import.
-Download-to-own: nothing is streamed from the platform, only from the user's local copy of the bundle.
+Keep, not stream: nothing is streamed from the platform, only from the user's local copy of the bundle.
 
 Usage (Python console, or an Editor Utility Widget "Stream into Cesium" button via Execute Python):
     import mantleplace_cesium_stream as mp

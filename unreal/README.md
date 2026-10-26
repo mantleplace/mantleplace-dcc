@@ -39,7 +39,7 @@ source build: see [Building](../README.md#building) in the root README.
 **Window ▸ Mantle Place** opens the panel. From there either:
 
 - **Sign In** — your system browser opens; there is no token to paste. Once signed in the panel
-  lists the bundles you own; pick one and import it.
+  lists the bundles you keep; pick one and import it.
 
   Importing a bundle that is not on disk yet asks the order first. An order built complete when it
   was bought has nothing left to build, so the plugin downloads Unreal's own view of it — the files
@@ -138,7 +138,8 @@ Packaging needs a licensed Unreal Engine 5.8 install, so it runs privately and n
    and `TRADEMARK.md` into it (the GitHub-only Win64 binary zip keeps both), and zip it with
    `MantlePlace/` at the root as `MantlePlace-UE5.8-Win64-<version>.zip`. Diffing its file list
    against the previous release's asset is a cheap sanity check.
-   **The Source zip is the Fab upload and also the GitHub release's source asset**: Epic compiles it.
+   **The Source zip is the Fab upload only; the GitHub release carries just the Win64 zip**
+   ([`docs/releases.md`](../docs/releases.md)): Epic compiles the Source zip.
    Zip the exported `unreal/MantlePlace/` with **neither `LICENSE` nor `TRADEMARK.md`** (the storefront
    refuses licence and policy files beside its own licence), with no `Binaries/` or `Intermediate/`,
    as `MantlePlace-UE5.8-Source-<version>.zip`.
