@@ -585,7 +585,7 @@ _Enforcer:_ `automation-test` (corpus `cache.keySanitisation`).
 **`HPS-44` — Cache eviction is explicit and per-order.** There is no size-based or LRU eviction: a
 purchased bundle stays on disk until the user removes it. That is the anti-streaming guarantee, and
 it is a product commitment, not an oversight — a host that "helpfully" reclaims disk space has
-silently converted an owned asset into a streamed one.
+silently converted a kept asset into a streamed one.
 
 _Enforcer:_ `agent-review`.
 
