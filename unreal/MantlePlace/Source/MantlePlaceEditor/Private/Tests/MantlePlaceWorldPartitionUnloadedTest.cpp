@@ -23,6 +23,7 @@
 #include "Landscape.h"
 #include "LandscapeInfo.h"
 #include "LandscapeStreamingProxy.h"
+#include "MaterialDomain.h"
 #include "Materials/Material.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
