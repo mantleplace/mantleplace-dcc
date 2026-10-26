@@ -41,22 +41,36 @@ enum class EWipeRank : uint8
 TArray<int32> WipeOrder(const TArray<EWipeRank>& Ranks);
 
 /**
- * The v1 unloaded-actor policy: in a partitioned level every actor the importer spawns is kept
- * always loaded, so the tag-matched wipe always sees it. The streamed families are the exception.
- * A landscape: the parent ALandscape is non-spatially loaded by its own constructor, and its
- * streaming proxies have to stay spatially loaded for the level to stream at all. The HLOD families
- * (MantlePlaceHLODLogic::HasHLOD): an always-loaded actor is never represented by an HLOD. A
- * re-import while any of them is unloaded is refused (ExplainUnloadedPriorActors), so the wipe
- * still never leaves one behind.
+ * The unloaded-actor policy: in a partitioned level every actor the importer spawns is kept always
+ * loaded, except the streamed families. A landscape: the parent ALandscape is non-spatially loaded by
+ * its own constructor, and its streaming proxies have to stay spatially loaded for the level to stream
+ * at all. The HLOD families (MantlePlaceHLODLogic::HasHLOD): an always-loaded actor is never
+ * represented by an HLOD. A re-import loads the streamed ones that are unloaded before its wipe
+ * (MantlePlaceImportOrchestration::LoadUnloadedPriorActors), so the wipe never leaves one behind.
+ *
+ * Kept for the rest even though the wipe now loads them too (dcc 339): the importer's other readers of
+ * a prior import walk loaded actors only. Prepare for handover finds the ODbL actors it deletes and the
+ * credits it keeps by iterating the level, and the wipe finds a prior foliage scatter's footprint, the
+ * one thing that ties an untagged PCG partition actor to the order, from its loaded volume. A streamed
+ * road or scatter volume would be missed by both whenever its cell is unloaded.
  */
 bool ShouldForceNonSpatiallyLoaded(bool bPartitioned, bool bStreamedFamily);
 
 /**
  * The refusal for a re-import whose prior actors include some in unloaded World Partition regions,
- * or empty when there are none. A wipe can only destroy what is loaded, so going ahead would leave
+ * or empty when there are none: v1's whole policy, and since v2 the text of its fallback
+ * (ExplainUnloadablePriorActors). A wipe can only destroy what is loaded, so going ahead would leave
  * those actors behind as orphans beside the new import; refusing changes nothing.
  */
 FString ExplainUnloadedPriorActors(int32 UnloadedCount);
+
+/**
+ * v2: the refusal for a re-import whose wipe loaded LoadedCount of the UnloadedCount prior actors it
+ * found in unloaded regions, or empty when it loaded every one. One it could not load refuses the
+ * whole re-import with v1's message, counting the ones it could not load: the wipe is never partial,
+ * and the caller releases what it loaded, so a refusal changes nothing.
+ */
+FString ExplainUnloadablePriorActors(int32 UnloadedCount, int32 LoadedCount);
 
 /**
  * Whether an unloaded PCG partition actor, by its cell's footprint, may hold instances a prior

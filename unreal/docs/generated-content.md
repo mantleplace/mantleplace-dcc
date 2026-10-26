@@ -92,16 +92,28 @@ not split and imports exactly as before.
 
 - **Every proxy carries the import tag**, and the sweep also takes every proxy the parent landscape
   holds, tagged or not, destroying proxies before their parent.
-- **Every other imported actor is kept always loaded** (not spatially loaded), so the sweep, which can
-  only see loaded actors, always sees it. The cost is that those actors do not stream. The terrain
-  mesh and the buildings are the exception: they stream, because an always-loaded actor is never
-  represented by an HLOD, and the refusal below keeps the sweep from leaving one behind.
-- **A re-import refuses, changing nothing, when any actor of the prior import is in an unloaded
-  region.** Loading the regions that hold it, then importing again, is the remedy; a sweep that went
-  ahead would leave the unloaded actors behind beside the new import. An actor a re-import destroyed
-  is not one of them: its World Partition descriptor lingers, reading as unloaded, until the next save
-  deletes its package, so the check skips a descriptor whose package is in memory, dirty and holds no
-  live actor. A second re-import before saving is therefore allowed.
+- **A re-import loads the prior import's actors in unloaded regions, then replaces them with the
+  rest.** Before the sweep it reads the level's World Partition descriptors, which exist for loaded
+  and unloaded actors alike, and loads every unloaded one of the prior import: a tagged actor, a
+  streaming proxy of a prior landscape (by its landscape grid GUID, tagged or not), and a PCG
+  partition actor whose cell overlaps a prior foliage scatter. The sweep destroys them with the loaded
+  ones, and what was loaded for it is released afterwards, so the loaded regions are as the user left
+  them. Nothing outside the prior import is loaded, except what one of its actors references.
+- **If one of them cannot be loaded, the re-import refuses and changes nothing**, with the message the
+  first version gave for any unloaded actor: what it did load is unloaded again, so the sweep is never
+  partial. An actor a re-import destroyed is not one of them: its World Partition descriptor lingers,
+  reading as unloaded, until the next save deletes its package, so the check skips a descriptor whose
+  package is in memory, dirty and holds no live actor. A second re-import before saving is therefore
+  allowed.
+- **Every other imported actor is still kept always loaded** (not spatially loaded). The cost is that
+  those actors do not stream. The terrain mesh and the buildings are the exception: they stream,
+  because an always-loaded actor is never represented by an HLOD, and the re-import loads them as
+  above. Since the re-import can load any unloaded actor, the sweep no longer needs the rest to stay
+  loaded, but other parts of the plugin still do: Prepare for handover finds the ODbL actors it removes
+  and the credits it keeps by walking the loaded actors, and the sweep finds which unloaded PCG
+  partition actors hold a prior scatter from the scatter's loaded volume. A road or a volume that
+  streamed would be missed by both while its cell is unloaded. Those walks have to read descriptors
+  before the rest can stream.
 
 ### Data Layers, one per layer family
 

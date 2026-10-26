@@ -8,7 +8,8 @@
 
 // The decisions an import into a World Partition level makes, asserted without a world: how many
 // streaming proxies a split yields, the order a wipe destroys in, which actors are kept always
-// loaded, and when a re-import must refuse rather than leave part of the prior import behind,
+// loaded, when a re-import loads the prior import's unloaded actors to wipe them and when it must
+// refuse instead (one it cannot load) rather than leave part of the prior import behind,
 // including the foliage a prior scatter generated onto PCG partition actors in cells now unloaded,
 // and not when the only "unloaded" actors are ones this session destroyed and has not saved since.
 
@@ -69,6 +70,18 @@ bool FMantlePlaceWorldPartitionLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("one unloaded actor refuses"), One.IsEmpty());
 		TestTrue(TEXT("the refusal says how many"), ExplainUnloadedPriorActors(7).Contains(TEXT("7")));
 		TestTrue(TEXT("and what to do about it"), One.Contains(TEXT("Load")));
+	}
+
+	// --- v2: the wipe loads them first; the refusal is only the fallback for one it cannot load ----
+	{
+		TestTrue(TEXT("nothing unloaded loads nothing and is no refusal"), ExplainUnloadablePriorActors(0, 0).IsEmpty());
+		TestTrue(TEXT("every unloaded prior actor loaded is no refusal"), ExplainUnloadablePriorActors(5, 5).IsEmpty());
+		const FString OneShort = ExplainUnloadablePriorActors(5, 4);
+		TestFalse(TEXT("one the wipe could not load refuses the whole re-import"), OneShort.IsEmpty());
+		TestEqual(TEXT("with v1's message, counting the ones it could not load"), OneShort, ExplainUnloadedPriorActors(1));
+		TestEqual(TEXT("none loaded refuses them all"), ExplainUnloadablePriorActors(3, 0), ExplainUnloadedPriorActors(3));
+		TestTrue(TEXT("a count loaded above the count found is no refusal, never a negative count"),
+			ExplainUnloadablePriorActors(2, 3).IsEmpty());
 	}
 
 	// --- Unloaded PCG cells: a prior scatter's instances live on untagged partition actors ---------

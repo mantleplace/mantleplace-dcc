@@ -119,9 +119,10 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 	// One HLOD layer per HLOD family (Terrain, Buildings), shared across orders like the Data Layer.
 	MantlePlaceHLODs::Assign(Actor, ContentRoot, Family);
 
-	// v1 unloaded-actor policy: kept always loaded, so the tag-matched wipe always sees it. A
-	// landscape and the HLOD families stream instead: an always-loaded actor is never in an HLOD, and
-	// ExplainUnloadedPriorActors refuses a re-import while any of them is unloaded.
+	// The unloaded-actor policy: kept always loaded, so every loaded-actor walk of the import sees it
+	// (ShouldForceNonSpatiallyLoaded says which walks, and why that outlived v1). A landscape and the
+	// HLOD families stream instead: an always-loaded actor is never in an HLOD, and a re-import loads
+	// the unloaded ones before its wipe (LoadUnloadedPriorActors).
 	const bool bStreamedFamily = Actor->IsA<ALandscapeProxy>() || MantlePlaceHLODLogic::HasHLOD(Family);
 	if (MantlePlaceWorldPartitionLogic::ShouldForceNonSpatiallyLoaded(/*bPartitioned*/ true, bStreamedFamily)
 		&& Actor->CanChangeIsSpatiallyLoadedFlag())
@@ -494,7 +495,7 @@ int32 MantlePlaceImportOrchestration::ReplacePriorActors(
 	// A foliage scatter's generated instances live on PCG partition actors, which carry no tag and
 	// are shared per cell: swept before its volume goes, and each destroyed once nothing else uses it,
 	// or kept for the re-import to generate on (KeepOrDestroyEmptied).
-	// The sweep reaches loaded ones only; an unloaded one is ExplainUnloadedPriorActors' to refuse.
+	// The sweep reaches loaded ones only; LoadUnloadedPriorActors has loaded the unloaded ones first.
 	const TArray<AActor*> PartitionActors = MantlePlaceFoliageScatter::CleanupGenerated(World, StaleActors);
 
 	// A non-partitioned level is wiped exactly as it always was: no proxies, iteration order.
@@ -509,7 +510,7 @@ int32 MantlePlaceImportOrchestration::ReplacePriorActors(
 
 	// A split landscape's proxies go with it, tagged or not: a proxy the landscape tools added
 	// after the import never got the tag. Resolved from the parent's landscape info, which holds
-	// every loaded proxy; an unloaded one is ExplainUnloadedPriorActors' to refuse, before this.
+	// every loaded proxy; LoadUnloadedPriorActors has loaded the unloaded ones first.
 	const int32 TaggedCount = StaleActors.Num();
 	for (int32 Index = 0; Index < TaggedCount; ++Index)
 	{
@@ -560,15 +561,15 @@ int32 MantlePlaceImportOrchestration::ReleaseKeptPartitionActors(
 	return MantlePlaceFoliageScatter::DestroyEmptyPartitionActors(World, Live);
 }
 
-FString MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(UWorld* World, const FString& Identity)
+namespace
 {
-	UWorldPartition* WorldPartition = World != nullptr ? World->GetWorldPartition() : nullptr;
-	if (WorldPartition == nullptr)
-	{
-		// Not partitioned: every actor is loaded, and there is nothing to refuse.
-		return FString();
-	}
-
+/**
+ * The descriptor walk ExplainUnloadedPriorActors and LoadUnloadedPriorActors share: the GUIDs of the
+ * prior import's actors that are in unloaded regions. Reads the level's actor descriptors, which
+ * exist for loaded and unloaded actors alike and record each one's tags; loads nothing.
+ */
+TArray<FGuid> CollectUnloadedPriorActors(UWorldPartition* WorldPartition, UWorld* World, const FString& Identity)
+{
 	// The prior import's landscapes, by GUID: their proxies may be unloaded AND untagged.
 	const FName ImportTagName(*MantlePlaceImportNaming::ImportTag(Identity));
 	TSet<FGuid> PriorLandscapes;
@@ -593,10 +594,7 @@ FString MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(UWorld* World
 		}
 	}
 
-	// A read of the level's actor descriptors, which exist for loaded and unloaded actors alike and
-	// record each one's tags. Nothing is loaded and nothing is destroyed here; loading and
-	// destroying through this walk is the v2 upgrade, not this.
-	int32 Unloaded = 0;
+	TArray<FGuid> Unloaded;
 	FWorldPartitionHelpers::ForEachActorDescInstance(WorldPartition, AActor::StaticClass(),
 		[&Unloaded, &ImportTagName, &PriorLandscapes, &PriorScatters](const FWorldPartitionActorDescInstance* Desc)
 		{
@@ -632,10 +630,72 @@ FString MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(UWorld* World
 					bPrior = PartitionDesc != nullptr && PriorLandscapes.Contains(PartitionDesc->GridGuid);
 				}
 			}
-			Unloaded += bPrior ? 1 : 0;
+			if (bPrior)
+			{
+				Unloaded.Add(Desc->GetGuid());
+			}
 			return true;
 		});
-	return MantlePlaceWorldPartitionLogic::ExplainUnloadedPriorActors(Unloaded);
+	return Unloaded;
+}
+}
+
+FString MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(UWorld* World, const FString& Identity)
+{
+	UWorldPartition* WorldPartition = World != nullptr ? World->GetWorldPartition() : nullptr;
+	if (WorldPartition == nullptr)
+	{
+		// Not partitioned: every actor is loaded, and there is nothing to refuse.
+		return FString();
+	}
+	return MantlePlaceWorldPartitionLogic::ExplainUnloadedPriorActors(
+		CollectUnloadedPriorActors(WorldPartition, World, Identity).Num());
+}
+
+FString MantlePlaceImportOrchestration::LoadUnloadedPriorActors(UWorld* World, const FString& Identity, FPriorActorLoad& OutLoad)
+{
+	OutLoad = FPriorActorLoad();
+	UWorldPartition* WorldPartition = World != nullptr ? World->GetWorldPartition() : nullptr;
+	if (WorldPartition == nullptr)
+	{
+		// Not partitioned: every actor is loaded, and there is nothing to load.
+		return FString();
+	}
+	const TArray<FGuid> Unloaded = CollectUnloadedPriorActors(WorldPartition, World, Identity);
+	OutLoad.Unloaded = Unloaded.Num();
+	if (Unloaded.IsEmpty())
+	{
+		return FString();
+	}
+
+	// The engine's own load-through-the-descriptors walk, given exactly the prior actors: it loads
+	// each one with the actors it references (a reference to an unloaded one would not resolve) and,
+	// asked to keep them, collects no garbage and hands the references over.
+	FWorldPartitionHelpers::FForEachActorWithLoadingParams Params;
+	Params.ActorGuids = Unloaded;
+	Params.bKeepReferences = true;
+	FWorldPartitionHelpers::FForEachActorWithLoadingResult Loading;
+	int32 Loaded = 0;
+	FWorldPartitionHelpers::ForEachActorWithLoading(WorldPartition,
+		[&Loaded](const FWorldPartitionActorDescInstance* Desc)
+		{
+			Loaded += (Desc != nullptr && Desc->IsLoaded()) ? 1 : 0;
+			return true;
+		},
+		Params, Loading);
+	OutLoad.Loaded = Loaded;
+	OutLoad.References = MoveTemp(Loading.ActorReferences);
+
+	const FString Refusal = MantlePlaceWorldPartitionLogic::ExplainUnloadablePriorActors(OutLoad.Unloaded, OutLoad.Loaded);
+	if (!Refusal.IsEmpty())
+	{
+		// Never partial: what did load is unloaded again, and the re-import changes nothing.
+		UE_LOG(LogMantlePlaceImport, Warning,
+			TEXT("Re-import: %d of %d actor(s) of the previous import in unloaded World Partition regions could not be loaded; refused."),
+			OutLoad.Unloaded - OutLoad.Loaded, OutLoad.Unloaded);
+		OutLoad.Release();
+	}
+	return Refusal;
 }
 
 namespace
