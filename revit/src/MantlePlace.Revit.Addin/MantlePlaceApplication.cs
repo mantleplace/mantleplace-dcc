@@ -613,7 +613,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         {
             ToolTip = VaultBadge.ToolTip,
             LongDescription =
-                "Open the vault browser: it lists the bundles you own, prepares their Revit deliverables, "
+                "Open the vault browser: it lists the bundles you keep, prepares their Revit deliverables, "
                 + "downloads them and imports them. Closing it while a bundle builds does not cancel the "
                 + "job: you are told when it is ready to import, and reopening shows it still going. You "
                 + "are told, too, when a new order arrives in your vault. This is the one surface that "

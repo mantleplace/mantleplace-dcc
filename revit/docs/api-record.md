@@ -279,7 +279,7 @@ renderer-neutral.
   and the material is its type's. Each element is asked which shape it has (`SubDivisionMaterial`),
   and a typed one is moved onto a type of its own with `ChangeTypeId`. This bullet is where what
   that costs is recorded; the code's comments point here, and the import's notices quote it. Every
-  figure below is order `4276ef78` on a 75,314-point terrain unless it says otherwise, and the
+  figure below is a fixture order on a 75,314-point terrain unless it says otherwise, and the
   timing tables are in the pull request that added the move to the cut.
   - **The call is the whole cost of a retype.** Profiled in the drape in 2027, it was 96% of the
     retype loop, a median of 1.74 s a subdivision over 405; every other call around it took

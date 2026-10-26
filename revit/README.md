@@ -4,8 +4,9 @@ The Revit plugin — host #2, and the Host Plugin Standard's first test outside 
 maximally unlike Unreal (.NET, document-transactional, BIM semantics), which is exactly why it goes
 second: it debugs the standard.
 
-**Status:** sign-in → pick bundle → import completed end to end on a licensed install in **2025.4,
-2026.5 and 2027.2** on 2026-09-15, which is the release floor below. The local-zip path stays as the
+**Status:** sign-in → pick bundle → import works end to end on Revit 2025, 2026 and 2027, which is the
+release floor below. What each release changed is on the
+[Releases page](https://github.com/mantleplace/mantleplace-dcc/releases). The local-zip path stays as the
 permanent fallback. Which features this plugin supports, beside every other host, and why any is
 missing, is the [host support matrix](../docs/host-support.md); this page says how each one behaves.
 
@@ -31,7 +32,7 @@ to drop — including a stored one you are not currently signed in to, because b
 credential per Windows user. F1 over any button on the tab opens this README on GitHub
 (`HelpLinks.RibbonHelpUrl`, set on every button, the split button's rows included).
 
-`Mantle Place ▸ Bundles ▸ Vault` lists the bundles you own, prepares their Revit deliverables,
+`Mantle Place ▸ Bundles ▸ Vault` lists the bundles you keep, prepares their Revit deliverables,
 downloads them and imports. It is **modeless**: a build can take ten minutes and Revit stays usable
 throughout. Closing the window is not cancelling — only the Cancel button cancels. The Prepare keeps
 going without the window: reopened, the vault shows it still running, and pressing
@@ -59,7 +60,7 @@ lists the vault at startup, at sign-in and every 15 minutes (`HPS-55`), and says
 opens the vault, where `Prepare for Revit` builds it; nothing is prepared or downloaded unasked. An
 order is announced once per machine, however many Revits are open, and never again once the vault
 has listed it. The first listing on a machine, or under an account new to it, is taken as seen,
-so installing the add-in does not announce every order you already own. The record of what was
+so installing the add-in does not announce every order already in your vault. The record of what was
 announced is `%LOCALAPPDATA%\MantlePlace\announced-orders.json`, and holds order ids and a digest of
 each account's address, never the address.
 
@@ -795,8 +796,8 @@ Cases carrying another host's `appliesTo` are skipped. Today that binds Revit to
 near-misses, the base-bundle partial parse, the top-level `vector` pointers and the
 materialization signals — plus this host's **own three
 `appliesTo: "revit"` cases** (`manifest.revitArtifactHashes`, `manifest.revitOwnGeoreference`,
-`manifest.reject.revitHashMissing`), which pin the `hosts.revit` manifest block described under
-"The contract gap" below.
+`manifest.reject.revitHashMissing`), which pin the `hosts.revit` manifest block described in the
+[manifest changelog](../spec/changelog.md).
 
 `revit` claims **every reader group**: `manifest`, `auth`, `vault`, `cache`, `digest`,
 `projection`. The seventh, `bundle`, holds the bundle validator to its verdicts and is no
@@ -849,32 +850,15 @@ and lets Revit and Unreal be signed in at the same time. Absent or malformed, th
 and the defaults stand — this is read during Revit's add-in load, where throwing costs the ribbon
 button and explains nothing.
 
-## The contract gap, and how it closed
+## Where the manifest block is specified
 
-The plugin will not derive placement values, and it will not read another host's block to get them
-(`HPS-33`). Through v18 the packager computed the AOI centroid's easting/northing/EPSG in
-every Revit emitter and then **discarded it** — it survived only in `mesh.origin` and
-`unreal.georeference.origin`, neither of which is Revit's to read, and in `delivery.local_origin`,
-which is emitted on the `local_ft` tier alone. So on every other tier there was nothing this host
-was allowed to apply, and the model was imported not georeferenced at all.
-
-**v19 closed it, and the fix was host-side.**
-`revit.georeference.origin.projected` publishes the origin addressed to this host by name, and the
-reader takes it as the primary source with `delivery.local_origin` as the fallback — own block wins
-where both are present, which is what makes reading it a complete fix with no coordinated pipeline
-release. Two traps sit under that:
-
-- the origin's `linear_unit` is the **origin's**, not the artifacts'. They differ on the foot tiers,
-  where the origin is State Plane feet and the files are international feet, so the unit travels
-  with the coordinates rather than being assumed metric;
-- `grid_rotation_deg` is zero by construction today — the emitters reproject per-vertex, so
-  meridian convergence is already absorbed — but it is **read**, not assumed. The shared corpus case
-  `manifest.revitOwnGeoreference` states a non-zero one on purpose, because a fixture that agreed
-  with the old hardcoded zero would have been passed by it.
+The `hosts.revit` placement and per-artifact hash fields are specified in the
+[manifest changelog](../spec/changelog.md). The plugin does not derive placement values and does not read
+another host's block to get them (`HPS-33`).
 
 ## Where the rules live
 
 - Cross-host, binding: the Host Plugin Standard (`HPS-NN` rule IDs throughout this tree).
 - Revit-specific: this folder. Import semantics — what a toposurface is, which topo path wins — are
-  this host's own and deliberately not cross-host (`HPS-03`, `DOC-06`).
+  this host's own and deliberately not cross-host (`HPS-03`).
 - Agent onboarding: [`CLAUDE.md`](./CLAUDE.md).
