@@ -119,7 +119,11 @@ run reporting any `No editor` skip is not green.**
   shared layer's; a 2.0 bundle declares no GeoJSON row) and that the median placed
   spline point is within a metre of the landscape. Open the run on an empty partitioned level
   (`new_level(..., is_partitioned_world=True)`), not the OpenWorld template: the template's own
-  landscape can be the one the test picks up, and every gate then measures it.
+  landscape can be the one the test picks up, and every gate then measures it. Point it at the
+  sealed archive of a bundle (its manifest's `view.kind` is `everything`), not a selection cut from
+  it: a selection can leave out `Elevation/SurfacePoints.csv`, which the placement gate reads, and a
+  public-record GeoPackage such as `Records/Parcels.gpkg`, which the integrity pre-check then
+  refuses (`Integrity check could not read entry`), so the import itself fails.
   **`MantlePlace.Import.LiveHandover`** imports the same bundle, checks every ODbL actor is in its
   order's `ODbL` folder, then runs Prepare for handover and checks the ODbL content is gone and the
   credit actor holds every credit line the import recorded.
