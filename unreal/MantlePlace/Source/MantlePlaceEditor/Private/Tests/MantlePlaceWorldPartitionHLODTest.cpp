@@ -13,6 +13,7 @@
 #include "MantlePlaceImportTiming.h"
 #include "MantlePlaceLandscapeImporter.h"
 #include "MantlePlaceWorldPartitionLogic.h"
+#include "MantlePlaceTestMount.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Components/PrimitiveComponent.h"
@@ -25,6 +26,7 @@
 #include "Landscape.h"
 #include "LandscapeInfo.h"
 #include "LandscapeStreamingProxy.h"
+#include "MaterialDomain.h"
 #include "Materials/Material.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
@@ -50,16 +52,14 @@
 //    the import, which is what renders in place of the unloaded cells at distance, and reports its cost;
 //  - a wipe takes the order's actors out of the HLOD layers and leaves the layers intact.
 //
-// The saved level lives under a mount point in Intermediate, never in the project's Content, and is
-// deleted at the end.
+// The saved level lives under /MantlePlace/, so the plugin's asset domain covers it, with its files in
+// Intermediate, never in any Content folder (FMantlePlaceTestMount), and is deleted at the end.
 
 namespace MantlePlaceWorldPartitionHLODTest
 {
 constexpr int32 ComponentsPerAxis = 4;
 constexpr int32 QuadsPerSection = 7;
 constexpr int32 GridSize = 2;
-
-const TCHAR* const MountRoot = TEXT("/MantlePlaceHLODTest/");
 
 ALandscape* BuildFlatLandscape(UWorld* World, UMaterialInterface* Material)
 {
@@ -94,13 +94,13 @@ AStaticMeshActor* SpawnBox(UWorld* World, const FVector& Location)
 	return Actor;
 }
 
-/** Save every package under the mount point that is dirty, the world's first. False on any failure. */
-bool SaveMounted(UWorld* World, TArray<FString>& OutFailed)
+/** Save every package under the mount points that is dirty, the world's first. False on any failure. */
+bool SaveMounted(UWorld* World, const FMantlePlaceTestMount& Mount, TArray<FString>& OutFailed)
 {
 	TArray<UPackage*> Packages;
 	for (TObjectIterator<UPackage> It; It; ++It)
 	{
-		if (It->GetName().StartsWith(MountRoot) && (It->IsDirty() || *It == World->GetPackage()))
+		if (Mount.Owns(It->GetName()) && (It->IsDirty() || *It == World->GetPackage()))
 		{
 			Packages.Add(*It);
 		}
@@ -168,27 +168,24 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 		return true;
 	}
 
-	// A mount point in Intermediate, so the saved level never touches the project's Content.
-	const FString DiskRoot = FPaths::ConvertRelativePathToFull(FPaths::ProjectIntermediateDir() / TEXT("MantlePlaceHLODTest/"));
-	IFileManager::Get().DeleteDirectory(*DiskRoot, /*RequireExists*/ false, /*Tree*/ true);
-	IFileManager::Get().MakeDirectory(*DiskRoot, /*Tree*/ true);
-	FPackageName::RegisterMountPoint(MountRoot, DiskRoot);
+	// Under the plugin's root, its files in Intermediate, so the saved level never touches any Content.
+	FMantlePlaceTestMount Mount(TEXT("MantlePlaceHLODTest"));
+	Mount.Mount();
 
-	UPackage* WorldPackage = CreatePackage(TEXT("/MantlePlaceHLODTest/HLODTestMap"));
+	UPackage* WorldPackage = CreatePackage(*(Mount.Root + TEXT("HLODTestMap")));
 	UWorld::InitializationValues IVS;
 	IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
 	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
 		FName(TEXT("HLODTestMap")), WorldPackage, /*bAddToRoot*/ true, ERHIFeatureLevel::Num, &IVS);
 	if (!TestNotNull(TEXT("a partitioned world in a package of its own"), World))
 	{
-		FPackageName::UnRegisterMountPoint(MountRoot, DiskRoot);
 		return false;
 	}
 	// As a map the editor creates: a map package, its world the asset saved in it.
 	WorldPackage->SetPackageFlags(PKG_ContainsMap);
 	World->SetFlags(RF_Public | RF_Standalone);
 
-	const FString ContentRoot = TEXT("/MantlePlaceHLODTest/Content");
+	const FString ContentRoot = Mount.Root + TEXT("Content");
 	const int32 ExpectedProxies = MantlePlaceWorldPartitionLogic::ProxyCount(ComponentsPerAxis, ComponentsPerAxis, GridSize);
 
 	FMantlePlaceVaultManifest Manifest;
@@ -248,6 +245,7 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("the import counts its HLOD-layered actors"),
 		MantlePlaceHLODs::CountAssigned(World, ContentRoot), 1 + ExpectedProxies + 1);
 	TestTrue(TEXT("the actors live in packages of their own, as World Partition saves them"), Building->IsPackageExternal());
+	TestTrue(TEXT("under the test's mount points, so they save to Intermediate"), Mount.Owns(Building->GetPackage()->GetName()));
 
 	// --- Build before a save: refused, nothing built --------------------------------------------------
 	const MantlePlaceHLODs::FBuildReport Refused = MantlePlaceHLODs::Build(World);
@@ -257,7 +255,7 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 
 	// --- Save, then build: HLOD actors for Terrain and for Buildings, with geometry -------------------
 	TArray<FString> Failed;
-	TestTrue(TEXT("the level and its actors save"), SaveMounted(World, Failed));
+	TestTrue(TEXT("the level and its actors save"), SaveMounted(World, Mount, Failed));
 	for (const FString& Package : Failed)
 	{
 		AddError(FString::Printf(TEXT("could not save %s"), *Package));
@@ -310,15 +308,14 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 	World->RemoveFromRoot();
 	for (TObjectIterator<UPackage> It; It; ++It)
 	{
-		if (It->GetName().StartsWith(MountRoot))
+		if (Mount.Owns(It->GetName()))
 		{
 			It->SetDirtyFlag(false);
 			ForEachObjectWithPackage(*It, [](UObject* Object) { Object->ClearFlags(RF_Public | RF_Standalone); return true; });
 		}
 	}
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-	FPackageName::UnRegisterMountPoint(MountRoot, DiskRoot);
-	IFileManager::Get().DeleteDirectory(*DiskRoot, /*RequireExists*/ false, /*Tree*/ true);
+	Mount.Unmount();
 	return true;
 }
 
