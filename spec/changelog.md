@@ -738,6 +738,9 @@ published pre-history begins at v7.
   carrying its own linear unit — plus per-artifact toposurface-points, surface-DXF and IFC-site
   entries with fail-closed digests. Deliberately **not** shaped like the Unreal georeference, which
   stays metric UTM unconditionally.
+- The `revit` block's origin is addressed to the Revit host by name (`revit.georeference.origin.projected`), so a reader no longer needs `delivery.local_origin`, which
+  only the `local_ft` tier emitted; a reader prefers the `revit` origin and falls back to `delivery.local_origin`. The origin's
+  `linear_unit` is its own, not the artifacts', and `grid_rotation_deg` is read, not assumed zero.
 - BREAKING (restriction): the absence-reason field, in both the packaging block and the readiness
   block, became a closed enum drawn from one shared vocabulary — which required growing that
   vocabulary to cover every case it now had to close.
