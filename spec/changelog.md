@@ -132,6 +132,25 @@ name every file by the six rules; write `file_entries` with a frame, a role, a l
 for every file; give a licence as an SPDX expression; ship a STAC Item beside the manifest; and
 state version `2.0.0` as a JSON string.
 
+### 1.17.0 — a source that timed out at build time, named in a county's coverage gap (additive minor; published and frozen 2026-10-26)
+
+One value is added to the closed set of reasons a holder ships nothing: `timed_out_at_build_time`.
+It sits beside `down_at_build_time` in the record-pointer `reason` enum, and `source_id` now names
+the source for either. Nothing else in the schema changes beyond the pinned version. A reader that
+does not know the value treats it as `no_open_source`, as for any unknown reason.
+
+- **What it means.** A source that covers the holder's part of the extent did not answer in time
+  when the bundle was built: Mantle Place's deadline ran out, the source timed out, or it kept
+  rate-limiting. The source may be up. `source_id` names it, and the vault regenerates the pointer.
+- **What `down_at_build_time` now means.** A source that covers it was marked down, or failed, when
+  the bundle was built. Running out of time is no longer filed under it.
+
+What a reader does differently: it handles `timed_out_at_build_time` as it handles
+`down_at_build_time`, as a gap that may close on regeneration and not as a county with no open
+source, and it reads `source_id` for both. A reader that must show the cause says "did not answer in
+time" for the new value and "was down" for the old one. A reader that does neither keeps working
+and reads the new value as `no_open_source`.
+
 ### 1.16.0 — the road centrelines in the engine's datum, for the Unreal block (additive minor; published and frozen 2026-10-25)
 
 One member is added: `hosts.unreal.road_splines`, a pointer to a GeoPackage of the road centrelines

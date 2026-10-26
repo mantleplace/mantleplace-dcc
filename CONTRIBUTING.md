@@ -5,6 +5,11 @@ pull request closed before it is read — so you can spend your time on the ones
 Conduct expectations are the [Contributor Covenant](CODE_OF_CONDUCT.md); reports go to
 **support@mantle.place**.
 
+## What this repo holds
+
+The plugin usage docs, the MPB spec prose, the Host Plugin Standard master, and the public glossary
+with its banned-term list. A value owned by code, config or a release is linked, never restated.
+
 ## The maintenance posture, stated up front
 
 **Best-effort. A weekly triage batch. No SLA.**
@@ -54,10 +59,9 @@ thing a CLA would buy here is an option we do not intend to exercise.
 
 The moment you push, your **branch name** and every **commit message** are world-readable, and the
 PR **title and body** follow when you open it. A commit message can never be edited; the rest only
-with a public edit trail. So the citation rule (`CLAUDE.md` rule 1) applies to all of them, and CI
-checks all of them: no references that resolve only in a private repository — not qualified, not
-bare, not as a shorthand. A bare `#42` is fine in commit messages and PR text (it is this
-repository's own issue space); it stays forbidden in files.
+with a public edit trail. So the citation rule applies to all of them, and CI checks them. What
+is refused, on which surface, and the one split for a bare issue number are in
+[`docs/agents/public-surface.md`](docs/agents/public-surface.md); read it before you push.
 
 - **Branch names are `type/short-description`** — `fix/loopback-port-fallback`, not an issue
   number. If the work tracks a private issue, the cross-reference belongs on the private side.
@@ -92,11 +96,8 @@ Five workflows run on every pull request, on free hosted runners:
   committed PNGs and none tries. It asserts the geometry, which is where a silent change to a
   shipped logo would start.
 
-All five must be green before a maintainer merges — but that is this project's bar, not the one
-GitHub enforces. Branch protection on `main` matches *jobs*, not workflows, and `ci-unreal-naming`
-is not among them: it reports on every pull request and cannot block a merge, so the only automated
-guard in front of a naming regression is advisory. The enforced list lives in the repository rather
-than on this page — `gh api repos/mantleplace/mantleplace-dcc/branches/main/protection` prints it.
+All five must be green before a maintainer merges. Branch protection on `main` matches *jobs*, not
+workflows; which jobs are required is stated once, in [`docs/agents/ci.md`](docs/agents/ci.md).
 
 If your change makes a corpus case fail, the interesting question is whether the case or the code is
 wrong — say which you think it is in the pull request, and why.

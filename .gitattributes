@@ -1,9 +1,8 @@
 # mantleplace-dcc — line endings and binary marking.
 #
 # THERE ARE NO GIT LFS PATTERNS HERE, AND THAT IS DELIBERATE. A stranger's first clone of an
-# open-source plugin must not be a multi-hundred-megabyte pull. The binaries in this tree — one
-# .uasset file, twenty-seven PNG icons, one Revit family — total about 1 MB and are
-# plain git blobs.
+# open-source plugin must not be a multi-hundred-megabyte pull. The binaries in this tree are
+# plain git blobs, and the rule is to ask before adding any binary.
 #
 # If a real need for LFS ever arises (a binary submission that genuinely belongs here), that is a
 # decision to take deliberately and once. Adding a binary type by accident is not reversible without

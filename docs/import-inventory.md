@@ -6,9 +6,7 @@ description: What each host plugin imports from a bundle, per category — the m
 # Import inventory
 
 What each host plugin brings in from a bundle, one row per category: where it reads it, what it
-makes, when, at what cost, and what that cost grows with. It is the inventory that
-fidelity levels were decided from in
-[issue 283](https://github.com/mantleplace/mantleplace-dcc/issues/283). Revit's levels are settled;
+makes, when, at what cost, and what that cost grows with. Revit's fidelity levels are settled;
 the "Scale axis?" column of the Unreal rows is
 [issue 316](https://github.com/mantleplace/mantleplace-dcc/issues/316)'s to settle, and every entry
 in it is a hypothesis.
@@ -26,7 +24,7 @@ default, what cost and what driver, and nothing about status.
   figure. Where a step kind has no entry, the row says "not measured". A new Revit figure goes into
   `Measured`, not here.
 - **Unreal's figures have no home in code, so this file is their home.** Each one says how it was
-  taken: the order, the MPB version, the Unreal version, the plugin commit, and that the editor ran
+  taken: the fixture, the MPB version, the Unreal version, the plugin commit, and that the editor ran
   headless with `-nullrhi`.
 
 **Field names, not values.** Every manifest field is named as the published schema at
@@ -110,7 +108,13 @@ starts at Landscape: the landscape and its paint layers come with Landscape or B
 with Mesh or Both, and every other row comes in whenever the bundle carries it, in every mode.
 Cesium streaming is a separate request.
 
-**What was measured, and why most rows were not.** Order `4276ef78`'s cached bundle (MPB 1.6.0) has
+**What was measured, and why most rows were not.** Every Unreal figure below is one run, at one old plugin
+commit (`b0251a1`), on one MPB 1.6.0 fixture in UE 5.8.2; none has been taken since. **Re-measure them**
+when the Unreal plugin releases a track that changes an import step, when the importer reads a new
+bundle format, or when a fixture that carries Unreal's formats is available. A figure older than the
+latest Unreal release is a dated record, not a current cost.
+
+The reference fixture, a cached MPB 1.6.0 bundle, has
 `packaging.delivery_model` `base_on_demand`, and its `hosts.unreal` block carries `readiness` and
 nothing else. The import
 refuses it before anything is extracted: the bundle has not generated its Unreal formats. That was
@@ -130,7 +134,7 @@ zip as it stands, the Cesium stream, was measured.
 | Road splines | `hosts.unreal.road_splines.path` first, the engine-datum copy (a 2.0 bundle's `-Engine` twin), published on a US order; then `vector.layers[name=road_splines].formats[format=gpkg].path`; each read through the engine's SQLiteCore, and the `format=geojson` row when the layer has no `gpkg` row or its GeoPackage cannot be read. A source is placed only where it states `EGM2008-orthometric`: a US order's shared layer is NAVD88 and is skipped by name, never shifted, so a US bundle that publishes no copy places no roads | One `AMantlePlaceRoadSpline` per road, its width, class and name as properties ([contract](../unreal/docs/road-spline-actor-contract.md)) | Always | Not measured: the import refuses the bundle before this layer, although the layer is in it | Feature count: `vector.layers[].feature_count` | None: one actor per road | — |
 | Tree points | `hosts.unreal.foliage_points.path`, its `point_count` checked against the rows | One data table of typed rows, its columns a [contract](../unreal/docs/foliage-table-contract.md) a PCG graph binds by name. On request, a PCG volume and graph scattering them as mesh instances, partitioned per cell in a World Partition level | The table always; the scatter on request (a project setting) | Not measured, as above | `hosts.unreal.foliage_points.point_count`. **Precedent:** `landcover.tree_points.truncated_to_tallest`, on the same trees' shared pointer, which this host does not read | A progressive rank, or density tiers. The import makes a table, so the cost to scale is likely the scatter's instances, not the import | Canopy density |
 | Public records | Every top-level family block (`parcels`, `zoning`, `flood`, `wetlands`, `soils`, `protected`, `hydrography`, `habitat`, `contamination`, `historic`, and any family not yet named), each file by the `path` its entry states or its `layout` key, never by folder: `Records/<Family>/` and the legacy `Parcels/`, `Zoning/` and `Flood/` alike. Host-neutral: the Unreal block carries no copy | One actor per family, a spline for each DXF line, laid on the Landscape. A line is drawn only where its file states its frame and the frame is this host's. A GeoPackage is verified and credited, not drawn. The credit, disclaimer, notice and each record the bundle does not deliver, with where its holder publishes it, are written to the import log | Always | Not measured, as above | DXF line count. Not published for these files | None known | — |
-| Cesium stream | `layout.cesium_terrain` and `cesium_terrain.tile_count`. The drape's URL from `hosts.unreal.imagery_drape.source`, absent on this bundle | The terrain subtree under `layout.cesium_terrain`'s directory, plus the drape file when the stream serves one, extracted into the project's `Saved` folder and served on loopback. Nothing is extracted by folder name. The editor's Python helper then spawns a Cesium tileset | On request | **Staging: 0.081 s** cold, 48 entries, 73,851 bytes (47 terrain tiles and `layer.json`; no drape, so no imagery). **Repeat stream of the same bundle: 0.004 s**, reusing the staged files. One run, headless `-nullrhi`, order `4276ef78`, MPB 1.6.0, UE 5.8.2, after [issue 288](https://github.com/mantleplace/mantleplace-dcc/issues/288). Before it, staging took 0.196 to 0.205 s for 52 entries, four of them imagery the stream never served. Tile streaming at run time not measured | Tile count, and the drape's size when one is served | None at import: the tiles are a level-of-detail pyramid already, and Cesium picks the level at run time | — |
+| Cesium stream | `layout.cesium_terrain` and `cesium_terrain.tile_count`. The drape's URL from `hosts.unreal.imagery_drape.source`, absent on this bundle | The terrain subtree under `layout.cesium_terrain`'s directory, plus the drape file when the stream serves one, extracted into the project's `Saved` folder and served on loopback. Nothing is extracted by folder name. The editor's Python helper then spawns a Cesium tileset | On request | **Staging: 0.081 s** cold, 48 entries, 73,851 bytes (47 terrain tiles and `layer.json`; no drape, so no imagery). **Repeat stream of the same bundle: 0.004 s**, reusing the staged files. One run, headless `-nullrhi`, the reference fixture, MPB 1.6.0, UE 5.8.2, after [issue 288](https://github.com/mantleplace/mantleplace-dcc/issues/288). Before it, staging took 0.196 to 0.205 s for 52 entries, four of them imagery the stream never served. Tile streaming at run time not measured | Tile count, and the drape's size when one is served | None at import: the tiles are a level-of-detail pyramid already, and Cesium picks the level at run time | — |
 
 **How the figures were taken.** The editor ran headless (`UnrealEditor-Cmd` with `-unattended
 -nullrhi`) and a Python script called `UMantlePlaceImporterLibrary::ImportVaultPackage` and

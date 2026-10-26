@@ -36,15 +36,10 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## What this repo's own rules add
 
-This tracker is **public**, and so is everything written to it: a title, a body and every comment are
-world-readable the moment they are posted, and there is no draft state before that. Nothing that
-resolves only inside a private repository goes into one — not by URL, not by path, not by issue
-number, not as `repo#42`. What is refused, on which surface and with which exemptions is
-[`public-surface.md`](public-surface.md); root [`CLAUDE.md`](../../CLAUDE.md) governs.
-
-The one split worth knowing before you type: **a bare `#42` in an issue body, a comment, a commit
-message or a PR body is this repo's own self-reference and is fine.** In a *file* it is not, and
-`ci-public-hygiene` refuses it there.
+This tracker is **public**, and a title, a body and every comment are world-readable the moment they
+are posted. What is refused, on which surface, with which exemptions, and the one split for a bare
+issue number, is stated once in [`public-surface.md`](public-surface.md); root
+[`CLAUDE.md`](../../CLAUDE.md) governs.
 
 **`ci-tracker-hygiene` checks this surface, and it detects rather than prevents.** It runs the same
 checker over an issue title, an issue body and every comment, on the `issues` and `issue_comment`

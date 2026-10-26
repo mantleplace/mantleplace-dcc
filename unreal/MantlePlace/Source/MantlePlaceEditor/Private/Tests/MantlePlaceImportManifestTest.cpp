@@ -1156,7 +1156,7 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 	// --- Host-local helpers the corpus does not (and should not) specify --------------------
 	// Zip-entry prefix derivation and EPSG string parsing are this plugin's own API, not part of
 	// the cross-host contract: another host reads `layout.cesiumTerrain` verbatim and has no
-	// equivalent function to conform to (DOC-06).
+	// equivalent function to conform to.
 	{
 		TestEqual(TEXT("empty path yields empty prefix"),
 			MantlePlaceImportManifest::DeriveCesiumTerrainPrefix(FString()), FString());

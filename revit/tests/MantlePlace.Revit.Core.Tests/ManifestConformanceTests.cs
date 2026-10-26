@@ -555,7 +555,7 @@ internal static partial class ManifestConformanceTests
 
     /// <summary>
     /// Assertions that are this host's own rather than the contract's, and so are deliberately not
-    /// corpus cases (DOC-06): the derived-prefix helper's edge cases, and the wording of the
+    /// corpus cases: the derived-prefix helper's edge cases, and the wording of the
     /// refusal a user actually reads.
     /// </summary>
     private static void RunHostLocalAssertions(TestRun run, List<CorpusCase> cases)

@@ -856,14 +856,14 @@ _Enforcer:_ `pr-review`.
 testable standalone (`HPS-02`), so the corpus runs on a cheap hosted runner. A conformance suite
 that needs a licensed Revit install is a suite that runs when someone remembers.
 
-_Enforcer:_ each host's own headless suite — `ci-revit-tests` for Revit, `ci-ue-compile` for
-Unreal. Not `ci-manifest-conformance`: that
+_Enforcer:_ each host's own headless suite — `ci-revit-tests` for Revit, the Unreal host's own
+privately run build and automation gate for Unreal. Not `ci-manifest-conformance`: that
 gate only checks registration, version-floor and corpus integrity — it never runs a host suite.
 This rule binds the **pure cores only** (`HPS-02`): the shim half of a triad references the host
 application's own assemblies and cannot be built on a hosted runner. `ci-revit-tests` builds and
 tests `MantlePlace.Revit.Core` alone; the `MantlePlace.Revit.Addin` shim's gate is a developer
-build plus the tester import gate. `ci-ue-compile` solves this differently, with a pinned
-self-hosted runner that carries its own honest caveat (if that runner is offline the job
+build plus a developer-run import check in the host. The Unreal gate solves this differently, with a pinned
+private runner that carries its own honest caveat (if that runner is offline the job
 queues rather than failing) — that trade is available to Unreal and is not obviously worth it per
 host.
 
@@ -885,8 +885,8 @@ exist — coverage a Windows-only suite would never reach.
 **The residue after the split is genuinely untestable in CI, and this list is closed, not
 partial:** ribbon registration, `Transaction`, `Toposolid.Create`, `Document.Link`,
 `RevitLinkType.CreateFromIFC`, `SetProjectPosition`, and whether the modeless window renders. A
-per-DCC self-hosted runner, after the split, buys only this residue — the tester import gate is
-the instrument for it, and that trade is not obviously worth it per host.
+per-DCC self-hosted runner, after the split, buys only this residue — a developer-run import check in the
+host is the instrument for it, and that trade is not obviously worth it per host.
 
 ⛔ **`HPS-46` — A corpus reader proves consumption by tracking what it actually asserted: every
 `expectations` key of every case the host executes MUST be read by a typed assertion, and a
@@ -1327,8 +1327,8 @@ here rather than left for a future reader to discover as a contradiction.
 | `HPS-53` | The reference's **tree-point reader**, the call site the rule was written against, is no longer a deviation: `MantlePlaceTreePointsLogic.cpp` reads the CRS and both units the `foliage_points` entry states and refuses the file by name unless they are the host's own (`manifest.treePointsStatedFrame`), and holds every row against the landscape extent its block publishes as the backstop (`manifest.treePointsFrame`). A manifest older than the format version that states the frame meets the extent alone, and there a bundle that ships a terrain mesh and no heightmap still brings in no tree points, because an unstated frame with nothing to hold it against is refused. The **named** half is behind in one place, narrower than it was: `MantlePlaceRoadSplinesLogic.cpp` now refuses the whole layer by name when the origin is not a UTM zone, and reports a layer whose roads all failed to place as such rather than as an empty one, but it still drops a single point its projection refused without naming it — a refusal with no name on it, one layer over. |
 | `HPS-30` | The reference's **secret store** derives its blob name with its own per-code-unit walk and its own keep-set (`MantlePlaceSecretStore.cpp`, `ResolveSecretPath`), not with `SanitizeKeySegment`. It is inert today — `refresh_token` is the only key either host stores, and every derivation agrees on it — but the rule's secret-store sentence is ahead of this call site, not behind it. |
 
-Two places where the _silo prose_ was wrong and the code was right went the other way and are
-transcribed as shipped: `HPS-23` permits `"all"` as an explicit user-facing scope, and `HPS-44`
+Two places where an earlier text, recorded in the version table above, was wrong and the code was
+right went the other way and are transcribed as shipped: `HPS-23` permits `"all"` as an explicit user-facing scope, and `HPS-44`
 records that eviction is deliberately explicit-only.
 
 ## Enforcement summary
@@ -1336,7 +1336,7 @@ records that eviction is deliberately explicit-only.
 | Rule class                                                                                                                                                                                                                | Gate                                                   |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Version floor, host registration, floor declaration (`HPS-31`, `HPS-38`, `HPS-39`)                                                                                                                                        | `ci-manifest-conformance`                              |
-| Headless conformance of the pure cores (`HPS-42`)                                                                                                                                                                         | `ci-revit-tests` (Revit), `ci-ue-compile` (Unreal)     |
+| Headless conformance of the pure cores (`HPS-42`)                                                                                                                                                                         | `ci-revit-tests` (Revit), the Unreal host's private gate |
 | Protocol behaviour with corpus vectors (`HPS-04`, `HPS-07`, `HPS-10` … `HPS-12`, `HPS-19` … `HPS-25`, `HPS-25a`, `HPS-27`, `HPS-28`, `HPS-30`, `HPS-33` … `HPS-35`, `HPS-37`, `HPS-40`, `HPS-45` … `HPS-49`, `HPS-53`)               | `automation-test`, per host, against the shared corpus |
 | Secrets, browser flow, cache promotion, pointer-driven paths, dumb-consumer doctrine (`HPS-03` … `HPS-06`, `HPS-06a`, `HPS-08`, `HPS-09`, `HPS-13` … `HPS-18`, `HPS-23`, `HPS-26`, `HPS-29`, `HPS-32`, `HPS-33`, `HPS-36`, `HPS-44`) | `agent-review`                                         |
 | The triad — pure cores testable without the DCC (`HPS-02`)                                                                                                                                                                | `automation-test` + `agent-review`                     |
