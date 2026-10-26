@@ -126,8 +126,8 @@ class AllowsWhatIsLegitimate(unittest.TestCase):
         self.assertNotEqual(scan("fixes:#0B0C10FF is not a colour\n", "a.cs"), [])
 
     def test_public_rule_ids_are_prose_and_stay(self):
-        # The distinction CLAUDE.md already draws: rule ids are stable public identifiers.
-        found = scan("Registered in verified-against.json per HPS-38, and DOC-06 places it.\n")
+        # The distinction CLAUDE.md already draws: HPS rule ids are stable public identifiers. Other-domain ids are not citable, but the gate does not scan for them, so no case asserts either way.
+        found = scan("Registered in verified-against.json per HPS-38.\n")
         self.assertEqual(found, [])
 
     def test_a_lone_backtick_does_not_silence_the_rest_of_the_line(self):

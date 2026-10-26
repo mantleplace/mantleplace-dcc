@@ -27,7 +27,7 @@ What is refused, and why each is a real hazard rather than a style preference:
   capitals        reader cannot open, and unlike a rule id it is not a stable public identifier.
 
 Deliberately NOT refused, because they are stable public identifiers the repository is expected to
-use as prose: HPS-NN, DOC-NN and their kin. The distinction is the one CLAUDE.md already draws --
+use as prose: HPS-NN and their kin. The distinction is the one CLAUDE.md already draws --
 rule ids are fine, links to them are not.
 
 Exemptions are structural rather than a list of blessed strings, so that a legitimate construct
