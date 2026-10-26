@@ -82,3 +82,11 @@ compounds to.
 - **Publication is permanent.** Anything published under this record is world-readable forever,
   whether or not it is later deleted. The rule-by-rule judgment of what is portable is therefore
   made once, deliberately, against the boundary law — not in the tail of a session.
+
+## Amendment, 2026-10
+
+The first paragraph above says the standard's master is private. That is no longer so: the master
+lives in this repository as [`docs/host-plugin-standard.md`](../host-plugin-standard.md). The
+decision stands unchanged for the rule that matters here: a publicly cited rule must resolve
+publicly, and the gate still fails an `HPS-NN` that the published document does not state. Rules
+that exist only in some other, private document remain uncitable in public.

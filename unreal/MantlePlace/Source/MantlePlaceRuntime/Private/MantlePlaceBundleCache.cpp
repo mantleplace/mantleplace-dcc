@@ -129,7 +129,7 @@ void UMantlePlaceBundleCache::DownloadBundle(
 	const FMantlePlaceCachedBundle Cached = ResolveCached(Item);
 	if (Cached.State == EMantlePlaceCacheState::CachedValid)
 	{
-		NotifyDownloadComplete(true, Cached.LocalPath, TEXT("Cache hit - re-importing the owned local bundle."));
+		NotifyDownloadComplete(true, Cached.LocalPath, TEXT("Cache hit - re-importing the kept local bundle."));
 		return;
 	}
 

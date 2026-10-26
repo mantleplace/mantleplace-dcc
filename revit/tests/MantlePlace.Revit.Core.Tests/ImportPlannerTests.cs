@@ -8,7 +8,7 @@ namespace MantlePlace.Revit.Core.Tests;
 /// </summary>
 /// <remarks>
 /// These are host semantics, not contract semantics, so they live here rather than in the shared
-/// corpus — what a toposurface is belongs to Revit's own suite (HPS-03, <c>DOC-06</c>).
+/// corpus — what a toposurface is belongs to Revit's own suite (<c>HPS-03</c>).
 /// </remarks>
 internal static class ImportPlannerTests
 {

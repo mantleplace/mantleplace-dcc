@@ -5,9 +5,10 @@ description: The pull-request gates this repository runs, the jobs behind them, 
 
 # CI
 
-Five workflows run on every pull request, all on free hosted runners: `ci-manifest-conformance`,
-`ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming` and `ci-brand-assets`. `stale.yml` and
-`ci-tracker-hygiene.yml` are tracker hygiene, not gates — the second runs on issue and comment
+Eight workflows live here, all on free hosted runners. Five run on every pull request:
+`ci-manifest-conformance`, `ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming` and
+`ci-brand-assets`. The other three are not pull-request gates: `release-mpb.yml` (below), `stale.yml`
+and `ci-tracker-hygiene.yml`. The last two are tracker hygiene — the second runs on issue and comment
 events, a pull request's own comments included, and it detects rather than blocks
 ([`public-surface.md`](public-surface.md)).
 
@@ -24,16 +25,18 @@ render looks like rather than the renders themselves
 ## A workflow name is not a check name
 
 Branch protection matches *jobs*, and the mapping is not one-to-one — `ci-revit-tests` contributes
-two. The four required checks on `main` are `conformance`, `pure-core`, `pure-core-windows` and
-`references`; read them from the repository rather than from this list:
+two. The five required checks on `main` are `conformance`, `pure-core`, `pure-core-windows`, `references`
+and `generated-names`. **This is the one place the list is stated**; every other document links here.
+Read the live list from the repository rather than from this page:
 
 ```bash
 gh api repos/mantleplace/mantleplace-dcc/branches/main/protection
 ```
 
-Note what is **absent**: `generated-names`, the `ci-unreal-naming` job, reports on every pull
-request but is not a required check, so the one automated guard in front of an Unreal naming
-regression cannot currently block a merge.
+`generated-names` is the `ci-unreal-naming` job. The other four come from `ci-manifest-conformance`
+(`conformance`), `ci-revit-tests` (`pure-core` and `pure-core-windows`) and `ci-public-hygiene`
+(`references`). `ci-brand-assets` reports on every pull request but is not required, by construction
+(above).
 
 ## Rules for every workflow
 

@@ -8,7 +8,7 @@ namespace MantlePlace.Revit.Core.Tests;
 /// </summary>
 /// <remarks>
 /// Host semantics rather than contract semantics, so they live here and not in the shared corpus
-/// (<c>HPS-03</c>, <c>DOC-06</c>) — what "the frame the toposolid was built in" means is Revit's
+/// (<c>HPS-03</c>) — what "the frame the toposolid was built in" means is Revit's
 /// question. The one contract-level piece, the lon/lat forward projection itself, is driven from
 /// the corpus by <see cref="ProjectionConformanceTests"/>.
 /// </remarks>
