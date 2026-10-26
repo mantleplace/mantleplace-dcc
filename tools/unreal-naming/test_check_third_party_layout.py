@@ -70,6 +70,11 @@ class PassingLayouts(LayoutTestCase):
         code, out = self.run_gate()
         self.assertEqual(code, 0, out)
 
+    def test_filter_plugin_without_licence_or_policy_files_passes(self) -> None:
+        self.write("Config/FilterPlugin.ini", "; none carried\n[FilterPlugin]\n/Docs/Guide.pdf\n")
+        code, out = self.run_gate()
+        self.assertEqual(code, 0, out)
+
     def test_missing_plugin_folder_passes(self) -> None:
         code, _ = self.run_gate()
         self.assertEqual(code, 0)
@@ -114,6 +119,21 @@ class FailingLayouts(LayoutTestCase):
         self.write("ThirdParty/OFL.txt", OFL_TEXT)
         code, _ = self.run_gate()
         self.assertEqual(code, 1)
+
+    def test_filter_plugin_listing_a_licence_or_policy_file_fails(self) -> None:
+        for entry in ("/LICENSE", "/TRADEMARK.md", "/NOTICE.txt", "/COPYING", "/EULA.txt",
+                      "/CODE_OF_CONDUCT.md", "license.md"):
+            with self.subTest(entry=entry):
+                self.reset()
+                self.write("Config/FilterPlugin.ini", f"[FilterPlugin]\n{entry}\n")
+                code, out = self.run_gate()
+                self.assertEqual(code, 1, out)
+                self.assertIn("FilterPlugin.ini", out)
+
+    def test_filter_plugin_comment_naming_a_licence_file_passes(self) -> None:
+        self.write("Config/FilterPlugin.ini", "; no LICENSE here\n[FilterPlugin]\n")
+        code, out = self.run_gate()
+        self.assertEqual(code, 0, out)
 
     def test_each_offender_is_reported(self) -> None:
         self.write("Resources/Fonts/OFL-A.txt", OFL_TEXT)

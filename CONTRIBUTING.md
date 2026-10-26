@@ -31,6 +31,8 @@ This project uses the [Developer Certificate of Origin](https://developercertifi
 [Apache 2.0](LICENSE), the same terms as the code in the repository. Contributions to [`spec/`](spec/)
 come in under CC BY 4.0, the licence of that prose (inbound = outbound).
 
+**Storefronts.** Some storefronts, Fab among them, refuse packages that carry a licence file. By signing off, you also agree that your contribution may be distributed through such a storefront without the `LICENSE` file, provided its source stays public in this repository under Apache 2.0. This grants no right to change the licence or to close the source.
+
 Add a sign-off line to each commit:
 
 ```

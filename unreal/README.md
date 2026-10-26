@@ -119,7 +119,7 @@ Packaging needs a licensed Unreal Engine 5.8 install, so it runs privately and n
    and run the naming and conformance gates beside it.
 3. **Export, then build from the export.** Build from a short path, not from a checkout: Unreal's
    build tool fails past Windows' 260-character path limit. The tree carries its own
-   `Config/FilterPlugin.ini`, which names the two root files the package carries.
+   `Config/FilterPlugin.ini`, which names no licence or policy file: the plugin carries none.
 
    ```powershell
    git archive --format=zip -o D:\mp-pkg\src.zip <sha> unreal/MantlePlace LICENSE TRADEMARK.md
@@ -130,12 +130,13 @@ Packaging needs a licensed Unreal Engine 5.8 install, so it runs privately and n
    ```
 
 4. **Assemble the zip.** Delete `Intermediate/` and every `*.pdb` from the package, copy `LICENSE`
-   and `TRADEMARK.md` into it, and zip it with `MantlePlace/` at the root as
-   `MantlePlace-UE5.8-Win64-<version>.zip`. Diffing its file list against the previous release's
-   asset is a cheap sanity check.
-   **The Fab upload is source only**: Epic compiles it. Zip the exported `unreal/MantlePlace/` with
-   `LICENSE` and `TRADEMARK.md` copied into it, with no `Binaries/` or `Intermediate/`, as
-   `MantlePlace-UE5.8-Source-<version>.zip`.
+   and `TRADEMARK.md` into it (the GitHub-only Win64 binary zip keeps both), and zip it with
+   `MantlePlace/` at the root as `MantlePlace-UE5.8-Win64-<version>.zip`. Diffing its file list
+   against the previous release's asset is a cheap sanity check.
+   **The Source zip is the Fab upload and also the GitHub release's source asset**: Epic compiles it.
+   Zip the exported `unreal/MantlePlace/` with **neither `LICENSE` nor `TRADEMARK.md`** (the storefront
+   refuses licence and policy files beside its own licence), with no `Binaries/` or `Intermediate/`,
+   as `MantlePlace-UE5.8-Source-<version>.zip`.
 5. **Compile it in a consuming project.** Point a consuming project's submodule at the same commit
    and let that project's own compile and live-import check run; the local suite skips the live
    import, so this is the gate that exercises a real bundle.
@@ -149,6 +150,8 @@ against the Source zip before an upload:
   Fab's Third Party Software form does not apply. Any that is added sits in `Source/ThirdParty/`,
   directly under `Source/`, and needs that form;
   `tools/unreal-naming/check_third_party_layout.py` fails a licence text anywhere else in the plugin.
+- The Source zip contains no licence, EULA, trademark, code-of-conduct or other policy file;
+  `tools/unreal-naming/check_third_party_layout.py` also fails a `Config/FilterPlugin.ini` that lists one.
 - Every source file (`.cpp`, `.h`, `.cs`) opens with the copyright header.
 - Every module in the descriptor carries a `PlatformAllowList`.
 - No `Binaries`, `Intermediate`, `Saved` or `Build` folder anywhere in the plugin.

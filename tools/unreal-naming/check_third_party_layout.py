@@ -10,6 +10,9 @@ weeks later, after a release was cut. `unreal/CLAUDE.md` states the rule; this g
 A licence text is the marker of third-party content, so that is what is looked for:
 
   * a file named `OFL*`, `LICENSE*`, `COPYING*` or `NOTICE*`, whatever it contains;
+  * a `Config/FilterPlugin.ini` entry naming a `LICENSE*`, `COPYING*`, `NOTICE*`, `EULA*`,
+    `TRADEMARK*` or `CODE_OF_CONDUCT*` file: the Source zip carries no licence or policy file, as the
+    storefront refuses them beside its own licence;
   * a plain-text file (`.txt`, `.md`, or no extension) whose text names the SIL Open Font License,
     the MIT License, BSD, the GPL or the GNU General Public License.
 
@@ -39,6 +42,11 @@ NAME_RE = re.compile(r"^(?:OFL|LICENSE|COPYING|NOTICE)", re.IGNORECASE)
 TEXT_SUFFIXES = ("", ".txt", ".md", ".license")
 MAX_READ_BYTES = 1_000_000
 
+FILTER_PLUGIN = Path("Config/FilterPlugin.ini")
+FILTER_ENTRY_RE = re.compile(
+    r"^(?:LICENSE|COPYING|NOTICE|EULA|TRADEMARK|CODE_OF_CONDUCT)", re.IGNORECASE
+)
+
 PHRASE_RE = re.compile(
     r"SIL\s+Open\s+Font\s+Licen[sc]e"
     r"|\bMIT\s+Licen[sc]e\b"
@@ -60,12 +68,27 @@ def reason(path: Path) -> str | None:
     return None
 
 
+def filter_offenders(plugin: Path) -> list[tuple[str, str]]:
+    """FilterPlugin.ini lines that pull a licence or policy file into a package."""
+    ini = plugin / FILTER_PLUGIN
+    if not ini.is_file():
+        return []
+    found: list[tuple[str, str]] = []
+    for line in ini.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        entry = line.strip()
+        if not entry or entry.startswith((";", "[")):
+            continue
+        if FILTER_ENTRY_RE.match(entry.lstrip("/\\").split("/")[-1].split("\\")[-1]):
+            found.append((FILTER_PLUGIN.as_posix(), f"lists {entry!r}, a licence or policy file"))
+    return found
+
+
 def offenders(root: Path) -> list[tuple[str, str]]:
     plugin = root / PLUGIN_ROOT
     if not plugin.is_dir():
         return []
     allowed = plugin / THIRD_PARTY
-    found: list[tuple[str, str]] = []
+    found: list[tuple[str, str]] = filter_offenders(plugin)
     for path in sorted(plugin.rglob("*")):
         if not path.is_file() or allowed in path.parents:
             continue
