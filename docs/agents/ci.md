@@ -61,6 +61,7 @@ python -m unittest discover -s tools/mantleplace-mpb/tests
 PYTHONPATH=tools/mantleplace-mpb/src python -m mantleplace_mpb corpus tools/manifest-conformance/corpus
 python tools/public-hygiene/check_public_references.py
 python tools/public-hygiene/check_docs_integrity.py
+python tools/public-hygiene/check_vocabulary.py
 python tools/unreal-naming/check_generated_names.py
 python tools/unreal-naming/check_third_party_layout.py
 pwsh -NoProfile -File tools/public-hygiene/Test-PowerShellParses.ps1

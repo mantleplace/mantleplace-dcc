@@ -34,7 +34,7 @@ rule enforced at review, not an accident of the current design, and it is why th
 open without anything important leaking out of it.
 
 **Importing a local bundle needs no account.** No sign-in, no licence check, no server call. Point the
-plugin at a bundle zip on disk and it imports. The vault browser — sign in, list what you own,
+plugin at a bundle zip on disk and it imports. The vault browser — sign in, list your bundles,
 prepare and download — is a convenience on top of that, not a gate under it.
 
 ## The contract is published, not private
@@ -126,12 +126,12 @@ carry, and [mantle.place/attributions](https://mantle.place/attributions) is whe
 attribution statements live. Nothing here restates those values — the platform's pages are the
 authority, and they are the ones kept current.
 
-## Stream to compare, import to own
+## Stream to compare, import to keep
 
 The Unreal plugin can show you the same bundle two ways in one viewport, and the pairing is the
 clearest statement of what it is for.
 
-The import path is the product: the bundle becomes **owned, engine-native assets on your disk** — a
+The import path is the product: the bundle becomes **engine-native assets you keep on your disk** — a
 single `ALandscape` with painted weight layers, the imagery drape, meshes, splines. It works offline,
 needs no token, and survives the platform not being reachable, because after the download nothing is
 streamed from anywhere.
@@ -151,13 +151,13 @@ mp.stream_into_cesium()                             # newest cached vault bundle
 
 A separate helper in the same script can add Cesium World Terrain alongside for an apples-to-apples
 check; that one needs a Cesium ion account, the loopback stream does not. Nothing streams from the
-Mantle Place platform; the server reads only the local zip you already own.
+Mantle Place platform; the server reads only the local zip you already keep.
 
 The two paths do different jobs, and that is the point. Streaming answers *look at it now*; the
 import answers *keep it — offline, forever, no token*. Cesium for Unreal is the natural companion
 for the first job, and this plugin exists for the second.
 
-![The same bundle twice in one viewport: streamed through Cesium for Unreal from a local loopback server, and imported as an owned Landscape](https://mantle.place/media/importer/cesium-side-by-side.gif)
+![The same bundle twice in one viewport: streamed through Cesium for Unreal from a local loopback server, and imported as a Landscape you keep](https://mantle.place/media/importer/cesium-side-by-side.gif)
 
 *One bundle, two delivery models, one viewport: the loopback tileset streams the bundle's own terrain
 and imagery beside the imported Landscape.*

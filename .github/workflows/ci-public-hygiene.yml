@@ -63,6 +63,12 @@ jobs:
       - name: Check documentation links, frontmatter and the ADR index
         run: python tools/public-hygiene/check_docs_integrity.py
 
+      # The glossary's Avoid list, enforced. The banned terms are read from CONTEXT.md on every run,
+      # so adding a row there changes what is refused with no edit to the script. A step in THIS job,
+      # like the one above, so the required-check list does not change.
+      - name: Check the glossary's Avoid list in docs and user-visible strings
+        run: python tools/public-hygiene/check_vocabulary.py
+
       # The metadata surfaces. Everything below reads the event payload or the clone — no network.
       #
       # ⛔ PR title, body and head_ref are attacker-controlled on a fork's pull request. They reach
