@@ -13,19 +13,30 @@ things, or different words for the same thing.
 ### Hosts
 
 **DCC host**:
-A digital content creation application a designer works in, and which this repository ships a plugin
-for. Currently Unreal Engine and Revit.
+A digital content creation application a designer works in. It is either a plugin host or a
+format-served host, and never both.
 _Avoid_: application, editor, target, integration
 
+**Plugin host**:
+A DCC host this repository ships a Mantle Place plugin for. Currently Unreal Engine and Revit. Every
+fixed-frame host and every order-frame host is a plugin host.
+_Avoid_: supported host, plugin target, integration
+
+**Format-served host**:
+A DCC host with no Mantle Place plugin, which a curator serves by importing a bundle's files through
+the host's own import for their format. Nothing in this repository is written for one.
+_Avoid_: unsupported host, plugin-less host, file-only host
+
 **Host plugin**:
-The Mantle Place plugin for one DCC host. Each is written natively for its host and implements the
+The Mantle Place plugin for one plugin host. Each is written natively for its host and implements the
 same behaviour; they share no code, only a contract and a conformance corpus.
 _Avoid_: client, connector, adapter
 
 **Curator**:
-The person working in a DCC host who brings bundles into their project through a host plugin. Not
-necessarily the customer who placed the order.
-_Avoid_: user
+The person using the Mantle Place platform: someone who browses the vault, downloads bundles and
+brings them into a project, in a plugin host through its host plugin. Not necessarily the customer who
+placed the order. "User" is kept only where it means an OS user or an account user.
+_Avoid_: user (for the person)
 
 ### Brand and marks
 
@@ -69,24 +80,24 @@ _Avoid_: tooltip image, screenshot, illustration, preview
 
 **Editor session**:
 One run of a DCC host — from the moment the application launches to the moment it exits. Bounded by
-the process, not by the user.
+the process, not by the curator.
 _Avoid_: session (unqualified), instance, run
 
 **Auth session**:
-The signed-in state held in memory during one editor session: who the user is and the credentials the
-plugin currently holds for them. It begins when a stored credential is restored or a sign-in
-completes, and it ends with the editor session. There is at most one per host process.
+The signed-in state held in memory during one editor session: which account is signed in and the
+credentials the plugin currently holds for it. It begins when a stored credential is restored or a
+sign-in completes, and it ends with the editor session. There is at most one per host process.
 _Avoid_: session (unqualified), login, logged-in state
 
 **Grant lifetime**:
 The window over which a stored refresh token stays usable, independent of any editor session. This is
-the thing that survives an application restart, and the reason a user does not sign in every morning.
+the thing that survives an application restart, and the reason a curator does not sign in every morning.
 An auth session is reconstructed from it; the two are not the same and do not expire together.
 _Avoid_: session length, token lifetime, expiry
 
 **Machine identity**:
 The one Mantle Place account signed in on a machine, per OS user, shared by every host plugin on it.
-Signing in inside one host signs the user in for all of them; signing out anywhere signs them out
+Signing in inside one host signs the account in for all of them; signing out anywhere signs it out
 everywhere.
 _Avoid_: profile, account (when the machine-local credential is what is meant)
 
@@ -123,8 +134,8 @@ _Avoid_: auth error, failure, outage
 ### The vault
 
 **Vault**:
-The user's collection of bundles held by the Mantle Place platform. Reaching it is the only thing in
-any host plugin that requires being signed in.
+The curator's collection of bundles held by the Mantle Place platform, where each order's bundle waits
+to be downloaded. Reaching it is the only thing in any host plugin that requires being signed in.
 _Avoid_: library, catalogue, cloud
 
 **Vault browser**:
@@ -151,12 +162,12 @@ not been prepared.
 _Avoid_: new order, unseen order, unread order
 
 **Bundle**:
-A published unit of real-world site data a host plugin imports. What one is, and what it contains, is
-described in [`spec/`](spec/).
+A published unit of real-world site data a host plugin imports. A curator downloads one and keeps it.
+What one is, and what it contains, is described in [`spec/`](spec/).
 _Avoid_: package, asset, dataset, download
 
 **Bundle import**:
-Bringing a bundle the user already holds into the open document. Deliberately requires no account, no
+Bringing a bundle the curator already holds into the open document. Deliberately requires no account, no
 sign-in and no server call — it is not a vault operation and must never acquire one.
 _Avoid_: load, ingest, sync
 
@@ -179,11 +190,11 @@ _Avoid_: subset, partial bundle, export, package
 ### Orders and builds
 
 These two were one word for a long time, and a host plugin that keys anything on the wrong one
-duplicates a user's content instead of replacing it.
+duplicates a curator's content instead of replacing it.
 
 **Order**:
 What a customer asked the platform for. Stable: the same order rebuilt and re-delivered is still that
-order, and it is what a user thinks of as owning.
+order. A curator downloads a bundle of an order and keeps it.
 _Avoid_: purchase, request, job
 
 **Complete order**:
@@ -198,12 +209,18 @@ _Avoid_: legacy order, base bundle, old order
 
 **Job**:
 One run of the platform's pipeline that produces a bundle. Rebuilding an order produces a new job, so
-a job identifies a *build* and never a thing a customer owns.
+a job identifies a *build* and never the order a customer asked for.
 _Avoid_: build, run, materialization, order
 
 **AOI**:
 The area of interest an order covers.
-_Avoid_: region, extent, tile, site
+_Avoid_: region, extent (for the order's whole area), tile, site
+
+**Extent**:
+The area a curator picks, inside an order's AOI, to bring into a project. It is never the AOI itself.
+The manifest also uses the word for the bounds of one file, a drape's for instance; that is the file's
+own statement and not this term.
+_Avoid_: AOI (for a curator's pick), region, selection, bounds
 
 ### Units and frames
 
@@ -232,7 +249,8 @@ _Avoid_: bundle CRS, project CRS, the EPSG
 What one file's coordinates are stated in — a coordinate reference system, or an offset from a stated
 origin, a linear unit, and the vertical datum its heights are in. A frame belongs to a file, never to
 a bundle and never to a host block. The word has also been used for the delivery CRS and for whether
-a file's coordinates are absolute or offsets; each of those is one part of a frame.
+a file's coordinates are absolute or offsets; each of those is one part of a frame. `spec/` calls a
+file's frame the **file frame**; it is the same term, and either word names it.
 _Avoid_: bundle units, coordinate system (for a whole bundle), delivery frame
 
 **Host frame**:
@@ -242,12 +260,12 @@ at still states its own frame.
 _Avoid_: plugin units, import units
 
 **Fixed-frame host**:
-A DCC host with one native unit, so its host frame does not vary with the order's unit system.
+A plugin host with one native unit, so its host frame does not vary with the order's unit system.
 Unreal is one: the content made for it is metric on an imperial order.
 _Avoid_: metric host, metric-only plugin
 
 **Order-frame host**:
-A DCC host whose host frame follows the order's delivery instead of staying fixed. Revit is one.
+A plugin host whose host frame follows the order's delivery instead of staying fixed. Revit is one.
 _Avoid_: imperial host, unit-aware plugin
 
 ### What a bundle carries
@@ -341,7 +359,7 @@ _Avoid_: steep slope, steep-slope overlay, slope polygons
 ### What a host builds from a bundle
 
 **Terrain**:
-The ground surface a host builds from a bundle's surface artifact, and the thing an import owns. In
+The ground surface a host builds from a bundle's surface artifact, and what a re-import acts on. In
 Revit it is one toposolid; in Unreal it is the landscape. One bundle has exactly one.
 _Avoid_: topo, toposurface, mesh, DEM
 
@@ -393,3 +411,15 @@ The identity a host writes onto something it created so its next import recognis
 order and, for the terrain and the tree points, the build — never the element id, which identifies a run
 rather than a document.
 _Avoid_: tag, marker, label, key
+
+## Avoid list
+
+The public banned-term list. Each banned term is paired with the wording to use in its place. It applies
+to docs, READMEs and user-visible strings; code identifiers are exempt. The _Avoid_ line under each
+term above says which other words to steer clear of for that term.
+
+| Banned | Use instead |
+| --- | --- |
+| "own", "owned", "owning" and "ownership", said about bundles | keep wording: a curator downloads a bundle and *keeps* it |
+| "download-to-own" | keep wording: "download and keep" |
+| "Mantle Place Importer" | "Mantle Place for Unreal" or "Mantle Place for Revit" |
