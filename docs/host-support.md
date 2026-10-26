@@ -80,7 +80,7 @@ edited in the same pull request that updates the release.
 | Capability | Unreal | Revit |
 | --- | --- | --- |
 | Place content at the published georeference | supported — [fixed-frame host](host-plugin-standard.md#11-frames-and-placement-hps-52--hps-54), [unreal-0.8.0] | supported — [order-frame host](host-plugin-standard.md#11-frames-and-placement-hps-52--hps-54), [revit-0.2.0] |
-| Refuse a file that is not in the host frame | partial — [unreal-0.6.0] | supported — [revit-0.2.0] |
+| Refuse a file that is not in the host frame | supported — [unreal-0.6.0] | supported — [revit-0.2.0] |
 | Site location, sun and time zone | not shipped — [unreal-0.8.0] | supported — [revit-0.1.0] |
 
 ## Terrain and land
@@ -91,7 +91,7 @@ edited in the same pull request that updates the release.
 | Terrain as a mesh | supported — [unreal-0.8.0], [ADR 0016](adr/0016-unreal-mesh-terrain-is-parked-until-5-9.md) | declined — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) |
 | Imagery drape | supported — [unreal-0.8.0] | supported — [ADR 0008](adr/0008-revit-drape-is-anchored-to-the-smooth-shading-origin.md) |
 | Stylized map drape | not shipped — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
-| Land cover | partial — [unreal-0.8.0] | supported, on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
+| Land cover | not shipped — [unreal-0.8.0] | supported, on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
 | Land use, water bodies and road surfaces | not shipped — [unreal-0.8.0] | supported; land use on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
 | Coverage rasters as data textures | supported — [unreal-0.8.0] | not applicable |
 | Ground material names a renderer recognises | not applicable | supported, for water bodies and road surfaces — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
