@@ -11,6 +11,7 @@
 #include "MantlePlaceImportTiming.h"
 #include "MantlePlaceLandscapeImporter.h"
 #include "MantlePlaceWorldPartitionLogic.h"
+#include "MantlePlaceTestMount.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Editor.h"
@@ -134,8 +135,7 @@ struct FPartlyUnloadedLevel
 {
 	explicit FPartlyUnloadedLevel(const TCHAR* InName)
 		: Name(InName)
-		, MountRoot(FString::Printf(TEXT("/%s/"), InName))
-		, DiskRoot(FPaths::ConvertRelativePathToFull(FPaths::ProjectIntermediateDir() / InName / TEXT("")))
+		, Mount(InName)
 	{
 	}
 
@@ -148,27 +148,23 @@ struct FPartlyUnloadedLevel
 		}
 		for (TObjectIterator<UPackage> It; It; ++It)
 		{
-			if (It->GetName().StartsWith(MountRoot))
+			if (Mount.Owns(It->GetName()))
 			{
 				It->SetDirtyFlag(false);
 				ForEachObjectWithPackage(*It, [](UObject* Object) { Object->ClearFlags(RF_Public | RF_Standalone); return true; });
 			}
 		}
 		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-		if (bMounted)
-		{
-			FPackageName::UnRegisterMountPoint(MountRoot, DiskRoot);
-		}
-		IFileManager::Get().DeleteDirectory(*DiskRoot, /*RequireExists*/ false, /*Tree*/ true);
+		Mount.Unmount();
 	}
 
-	/** Save every package under the mount point that is dirty, the world's first. False on any failure. */
+	/** Save every package under the mount points that is dirty, the world's first. False on any failure. */
 	bool SaveAll()
 	{
 		TArray<UPackage*> Packages;
 		for (TObjectIterator<UPackage> It; It; ++It)
 		{
-			if (It->GetName().StartsWith(MountRoot) && (It->IsDirty() || *It == World->GetPackage()))
+			if (Mount.Owns(It->GetName()) && (It->IsDirty() || *It == World->GetPackage()))
 			{
 				Packages.Add(*It);
 			}
@@ -214,12 +210,9 @@ struct FPartlyUnloadedLevel
 	 */
 	bool Build(FAutomationTestBase& Test)
 	{
-		IFileManager::Get().DeleteDirectory(*DiskRoot, /*RequireExists*/ false, /*Tree*/ true);
-		IFileManager::Get().MakeDirectory(*DiskRoot, /*Tree*/ true);
-		FPackageName::RegisterMountPoint(MountRoot, DiskRoot);
-		bMounted = true;
+		Mount.Mount();
 
-		UPackage* WorldPackage = CreatePackage(*(MountRoot + Name));
+		UPackage* WorldPackage = CreatePackage(*(Mount.Root + Name));
 		UWorld::InitializationValues IVS;
 		IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
 		World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
@@ -244,7 +237,7 @@ struct FPartlyUnloadedLevel
 		const FMantlePlaceImportSelection Selection = FMantlePlaceImportSelection::Everything();
 		FMantlePlaceImportContext Order(World, Manifest, nullptr, Selection, Timeline, Result, Log);
 		Order.Identity = Identity;
-		Order.ContentRoot = MountRoot + TEXT("Content");
+		Order.ContentRoot = Mount.Root + TEXT("Content");
 
 		ALandscape* Landscape = BuildFlatLandscape(World, UMaterial::GetDefaultMaterial(MD_Surface));
 		if (!Test.TestNotNull(TEXT("fixture: the landscape is built"), Landscape)
@@ -313,10 +306,9 @@ struct FPartlyUnloadedLevel
 	}
 
 	const FString Name;
-	const FString MountRoot;
-	const FString DiskRoot;
+	/** Under the plugin's root, its files in Intermediate (FMantlePlaceTestMount). */
+	FMantlePlaceTestMount Mount;
 	const FString Identity = TEXT("abababab-3390");
-	bool bMounted = false;
 	UWorld* World = nullptr;
 	UWorldPartition* WorldPartition = nullptr;
 	FGuid LandscapeGuid;
@@ -401,7 +393,7 @@ bool FMantlePlaceWorldPartitionUnloadedRoundTripTest::RunTest(const FString& Par
 	// --- A re-import, and another, with no save between them (dcc 348) ------------------------------
 	for (const TCHAR* Pass : { TEXT("re-import"), TEXT("re-import again") })
 	{
-		ImportAgain(World, Identity, Level.MountRoot + TEXT("Content"));
+		ImportAgain(World, Identity, Level.Mount.Root + TEXT("Content"));
 		MantlePlaceImportOrchestration::FPriorActorLoad Load;
 		const FString Refusal = MantlePlaceImportOrchestration::LoadUnloadedPriorActors(World, Identity, Load);
 		TestTrue(*FString::Printf(TEXT("%s: the wipe's leftover descriptors are no refusal (got: %s)"), Pass, *Refusal), Refusal.IsEmpty());
