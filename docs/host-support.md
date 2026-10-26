@@ -1,6 +1,6 @@
 ---
 name: host-support
-description: The host support matrix — one row per user-facing capability, one column per DCC host, a fixed status in every cell, and a link to the issue or ADR behind every gap. The only place a per-host feature status is stated. Read before saying what a host does or does not do, before planning work in one host from another's behaviour, and when a change adds, narrows or drops a feature.
+description: The host support matrix — one row per user-facing capability, one column per DCC host, a fixed status in every cell, and a link to the release or ADR that status comes from. The only place a per-host feature status is stated. Read before saying what a host does or does not do, before planning work in one host from another's behaviour, and when a change adds, narrows or drops a feature.
 ---
 
 # Host support matrix
@@ -20,6 +20,11 @@ whether the host has the feature. Which pointer each host imports a category fro
 by default, and what it was measured to cost is the [import inventory](import-inventory.md)'s, and
 it states no status either.
 
+**A status comes from a release or an ADR, never from an issue.** A release is the host's published
+notes: what its *What's new* or *What it does* names is `supported`, what its *Known issues* names as a
+gap is `partial`, and what no release of that host names is `not shipped`. An ADR decides `declined`.
+Whether an issue is open or closed decides nothing here, and a cell does not link one for its status.
+
 **Each column belongs to its host.** A change that adds, narrows or drops a feature in one host
 edits that host's column in the same pull request, and no other. A new host adds its own column; a
 new capability adds a row with a cell for every host.
@@ -29,82 +34,90 @@ new capability adds a row with a cell for every host.
 | Status | Meaning |
 | --- | --- |
 | supported | imported and placed — or, for a row that imports nothing, working — and verified in the host |
-| partial | as `supported`, with a named gap — the cell links the issue |
-| planned | not yet — the cell links the issue that will do it |
-| declined | will not be done in this host — the cell links the ADR or issue, or says why in one line |
+| partial | as `supported`, with a gap the release names under *Known issues* — the cell links that release |
+| not shipped | in no release of this host so far — the cell links the host's latest release, which is the record that it is absent. Nothing is promised: when it will ship is [`ROADMAP.md`](../ROADMAP.md)'s |
+| declined | will not be done in this host — the cell links the ADR |
 | not applicable | the capability has no meaning in this host |
 
-Every cell is a status alone, or a status, an em dash and one or more links: an issue by its full
-URL, an ADR or the standard by a path relative to this file, so the docs-integrity gate checks it.
-A `declined` cell with no ADR may carry one line of reason instead. No cell describes behaviour.
+Every cell but `not applicable` is a status, an em dash and one or more links: the release it comes
+from, by its tag, or an ADR by a path relative to this file, so the docs-integrity gate checks it. A
+cell that names no more specific release links the host's latest one, whose *Verification* records
+what was run. No cell describes behaviour. When a host ships a release, the cells it changes are
+edited in the same pull request that updates the release.
 
 ## Account and vault
 
 | Capability | Unreal | Revit |
 | --- | --- | --- |
-| Sign in and out in the system browser | supported | supported |
-| List, prepare and download your orders | supported | supported |
-| Import a complete order in one press, downloading only the host's files | partial — [issue 301](https://github.com/mantleplace/mantleplace-dcc/issues/301) | partial — [issue 300](https://github.com/mantleplace/mantleplace-dcc/issues/300) |
-| Search the vault | supported | supported |
-| Remove a download on request | planned — [issue 264](https://github.com/mantleplace/mantleplace-dcc/issues/264) | supported |
-| A notice when a Prepare ends | partial — [issue 265](https://github.com/mantleplace/mantleplace-dcc/issues/265) | supported |
-| A notice when an order arrives in the vault | planned — [issue 234](https://github.com/mantleplace/mantleplace-dcc/issues/234) | supported |
-| Re-join a Prepare the host was closed during | planned — [issue 265](https://github.com/mantleplace/mantleplace-dcc/issues/265) | supported |
-| Each bundle's thumbnail in the vault | planned — [issue 241](https://github.com/mantleplace/mantleplace-dcc/issues/241) | planned — [issue 267](https://github.com/mantleplace/mantleplace-dcc/issues/267) |
+| Sign in and out in the system browser | supported — [unreal-0.8.0] | supported — [revit-0.1.0] |
+| List, prepare and download your orders | supported — [unreal-0.8.0] | supported — [revit-0.1.0] |
+| Import a complete order in one press, downloading only the host's files | not shipped — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
+| Search the vault | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
+| Remove a download on request | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
+| A notice when a Prepare ends | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
+| A notice when an order arrives in the vault | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
+| Re-join a Prepare the host was closed during | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
+| Each bundle's thumbnail in the vault | not shipped — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
 
 ## Importing a bundle
 
 | Capability | Unreal | Revit |
 | --- | --- | --- |
-| Import a downloaded bundle with no account | supported | supported |
-| Refuse a manifest version outside the supported range | supported | supported |
-| Read a 2.0 bundle as well as a 1.x one | planned — [issue 381](https://github.com/mantleplace/mantleplace-dcc/issues/381) | supported |
-| Refuse a bundle whose bytes do not match its published digest | supported | supported |
-| Say the bundle's unit system and delivery CRS | supported | supported |
-| Choose what an import brings in, before it runs | planned — [issue 93](https://github.com/mantleplace/mantleplace-dcc/issues/93) | supported |
-| Choose a fidelity level for each category, before it runs | planned — [issue 316](https://github.com/mantleplace/mantleplace-dcc/issues/316) | supported |
-| Say what a bundle holds that an import cannot place, and why | partial — [issue 266](https://github.com/mantleplace/mantleplace-dcc/issues/266) | supported |
-| Show an import step by step, and stop it | planned — [issue 269](https://github.com/mantleplace/mantleplace-dcc/issues/269) | supported |
+| Import a downloaded bundle with no account | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
+| Refuse a manifest version outside the supported range | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
+| Read a 2.0 bundle as well as a 1.x one | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
+| Refuse a bundle whose bytes do not match its published digest | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
+| Say the bundle's unit system and delivery CRS | supported — [unreal-0.6.0] | supported — [revit-0.2.0] |
+| Choose what an import brings in, before it runs | not shipped — [unreal-0.8.0] | supported — [revit-0.1.0] |
+| Choose a fidelity level for each category, before it runs | partial — [unreal-0.8.0] | supported — [revit-0.1.0] |
+| Say what a bundle holds that an import cannot place, and why | partial — [unreal-0.6.0] | supported — [revit-0.1.0] |
+| Show an import step by step, and stop it | not shipped — [unreal-0.8.0] | supported — [revit-0.1.0] |
 | Import the same order again | supported — [ADR 0002](adr/0002-import-identity.md) | supported — [ADR 0004](adr/0004-revit-terrain-identity.md) |
-| Find everything an import made | supported | supported |
+| Find everything an import made | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
 
 ## Placement
 
 | Capability | Unreal | Revit |
 | --- | --- | --- |
-| Place content at the published georeference | supported — [fixed-frame host](host-plugin-standard.md#11-frames-and-placement-hps-52--hps-54) | supported — [order-frame host](host-plugin-standard.md#11-frames-and-placement-hps-52--hps-54) |
-| Refuse a file that is not in the host frame | partial — [issue 222](https://github.com/mantleplace/mantleplace-dcc/issues/222) | supported |
-| Site location, sun and time zone | planned — [issue 262](https://github.com/mantleplace/mantleplace-dcc/issues/262) | supported |
+| Place content at the published georeference | supported — [fixed-frame host](host-plugin-standard.md#11-frames-and-placement-hps-52--hps-54), [unreal-0.8.0] | supported — [order-frame host](host-plugin-standard.md#11-frames-and-placement-hps-52--hps-54), [revit-0.2.0] |
+| Refuse a file that is not in the host frame | partial — [unreal-0.6.0] | supported — [revit-0.2.0] |
+| Site location, sun and time zone | not shipped — [unreal-0.8.0] | supported — [revit-0.1.0] |
 
 ## Terrain and land
 
 | Capability | Unreal | Revit |
 | --- | --- | --- |
-| Terrain | supported — [ADR 0006](adr/0006-unreal-declines-elevation-bounds-target-crs.md) | supported |
-| Terrain as a mesh | supported | declined — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) |
-| Imagery drape | supported | supported — [ADR 0008](adr/0008-revit-drape-is-anchored-to-the-smooth-shading-origin.md) |
-| Stylized map drape | planned — [issue 255](https://github.com/mantleplace/mantleplace-dcc/issues/255) | planned — [issue 255](https://github.com/mantleplace/mantleplace-dcc/issues/255) |
-| Land cover | partial — [issue 43](https://github.com/mantleplace/mantleplace-dcc/issues/43) | supported, on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
-| Land use, water bodies and road surfaces | planned — [issue 260](https://github.com/mantleplace/mantleplace-dcc/issues/260) | supported; land use on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
-| Coverage rasters as data textures | supported | not applicable |
+| Terrain | supported — [ADR 0006](adr/0006-unreal-declines-elevation-bounds-target-crs.md), [unreal-0.8.0] | supported — [revit-0.2.0] |
+| Terrain as a mesh | supported — [unreal-0.8.0], [ADR 0016](adr/0016-unreal-mesh-terrain-is-parked-until-5-9.md) | declined — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) |
+| Imagery drape | supported — [unreal-0.8.0] | supported — [ADR 0008](adr/0008-revit-drape-is-anchored-to-the-smooth-shading-origin.md) |
+| Stylized map drape | not shipped — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
+| Land cover | partial — [unreal-0.8.0] | supported, on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
+| Land use, water bodies and road surfaces | not shipped — [unreal-0.8.0] | supported; land use on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
+| Coverage rasters as data textures | supported — [unreal-0.8.0] | not applicable |
 | Ground material names a renderer recognises | not applicable | supported, for water bodies and road surfaces — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
-| Published contours | planned — [issue 261](https://github.com/mantleplace/mantleplace-dcc/issues/261) | supported — [ADR 0013](adr/0013-revit-published-contours-are-directshapes.md) |
-| Flood zones and steep ground | planned — [issue 270](https://github.com/mantleplace/mantleplace-dcc/issues/270) | supported — [ADR 0014](adr/0014-revit-hazards-are-drawn-on-a-hazard-plan.md) |
+| Published contours | not shipped — [unreal-0.8.0] | supported — [ADR 0013](adr/0013-revit-published-contours-are-directshapes.md) |
+| Flood zones and steep ground | not shipped — [unreal-0.8.0] | supported — [ADR 0014](adr/0014-revit-hazards-are-drawn-on-a-hazard-plan.md) |
 
 ## Site context
 
 | Capability | Unreal | Revit |
 | --- | --- | --- |
-| Context buildings | supported | supported — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) |
-| Road centrelines | supported | supported |
-| Tree points | partial — [issue 76](https://github.com/mantleplace/mantleplace-dcc/issues/76), [issue 196](https://github.com/mantleplace/mantleplace-dcc/issues/196) | supported |
-| Parcels and zoning | partial — [issue 259](https://github.com/mantleplace/mantleplace-dcc/issues/259) | planned — [issue 268](https://github.com/mantleplace/mantleplace-dcc/issues/268) |
-| The bundle's attribution, written into the project | planned — [issue 263](https://github.com/mantleplace/mantleplace-dcc/issues/263) | supported — [ADR 0011](adr/0011-revit-provenance-record-and-attribution-note-identity.md) |
-| ODbL content kept apart, and a Prepare for handover command | partial — [issue 384](https://github.com/mantleplace/mantleplace-dcc/issues/384) | supported |
+| Context buildings | supported — [unreal-0.7.0] | supported — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) |
+| Road centrelines | partial — [unreal-0.8.0] | supported — [revit-0.1.0] |
+| Tree points | supported — [unreal-0.7.0], [unreal-0.8.0] | supported — [revit-0.1.0] |
+| Parcels and zoning | partial — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
+| The bundle's attribution, written into the project | supported — [unreal-0.8.0] | supported — [ADR 0011](adr/0011-revit-provenance-record-and-attribution-note-identity.md) |
+| ODbL content kept apart, and a Prepare for handover command | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
 
 ## Large AOIs and streaming
 
 | Capability | Unreal | Revit |
 | --- | --- | --- |
-| An AOI too large for one terrain | planned — [issue 73](https://github.com/mantleplace/mantleplace-dcc/issues/73), [issue 74](https://github.com/mantleplace/mantleplace-dcc/issues/74), [issue 75](https://github.com/mantleplace/mantleplace-dcc/issues/75) | declined — [issue 163](https://github.com/mantleplace/mantleplace-dcc/issues/163) |
-| Stream the bundle beside the import, through Cesium | supported | not applicable |
+| An AOI too large for one terrain | supported — [unreal-0.7.0] | not shipped — [revit-0.2.0] |
+| Stream the bundle beside the import, through Cesium | supported — [unreal-0.6.0] | not applicable |
+
+[unreal-0.8.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.8.0
+[unreal-0.7.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.7.0
+[unreal-0.6.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.6.0
+[revit-0.2.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-0.2.0
+[revit-0.1.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-0.1.0

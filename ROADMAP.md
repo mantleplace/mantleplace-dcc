@@ -1,9 +1,10 @@
 # Roadmap
 
 Where these plugins are going, a quarter at a time. The near-term arc is the **Unreal plugin from
-pre-1.0 to 1.0 on Fab**, and the headline item on the way there is **World Partition import**:
+pre-1.0 to 1.0**, and the headline item on the way there is **large-AOI World Partition import**:
 real-world sites brought in as streaming World Partition worlds, lifting the ceiling on how much
-ground one order can practically bring in.
+ground one order can practically bring in. What has shipped is on the
+[Releases page](https://github.com/mantleplace/mantleplace-dcc/releases), not here.
 
 This page says **when**. What each host does today, and why a host leaves something out, is the
 [host support matrix](docs/host-support.md); an item leaves this page once it ships there.
@@ -21,30 +22,26 @@ planned it.
 
 ## Q4 2026
 
-- **World Partition import begins** — imported sites become streaming World Partition worlds
-  rather than one monolithic `ALandscape`, working toward the platform's largest orderable AOIs.
-  The quarter also opens a spike on **Mesh Terrain** (Experimental in UE 5.8) as the forward
-  terrain path alongside the `ALandscape` default.
-- **Packaged releases** — versioned GitHub Releases carrying a built plugin, with the packaging
-  step automated so a release is repeatable rather than an event. The scheme is settled: one release
-  track per host, tagged `<host>-<version>`
-  ([ADR 0001](docs/adr/0001-per-host-release-tracks.md)). Revit's packaging is scripted
-  (`revit/tools/Package-MantlePlaceRevit.ps1`) and its first release is the proof; Unreal's
-  packaging is still assembled by hand and is what remains of this item. Neither can ever run in
-  public CI — both need a licensed install this repository must not put on a runner.
+- **Large-AOI import beyond the first World Partition release** — the first World Partition release
+  has shipped (see Releases); what remains is working toward the platform's largest orderable AOIs.
+  **Mesh Terrain** (Experimental in UE 5.8) is parked until UE 5.9: its spike is done and the
+  `ALandscape` stays the only terrain target ([ADR 0016](docs/adr/0016-unreal-mesh-terrain-is-parked-until-5-9.md)).
+- **Unreal packaging** — Unreal's release packaging is still assembled by hand; automating it so a
+  release is repeatable rather than an event is what remains of the packaged-releases item. The scheme
+  is settled: one release track per host, tagged `<host>-<version>`
+  ([ADR 0001](docs/adr/0001-per-host-release-tracks.md)). It cannot run in public CI, because it needs a
+  licensed install this repository must not put on a runner.
 - **Unreal quickstart tutorial** — the missing walk-through from empty project to imported site,
   plus the README's screenshot and GIF slots filled with real captures.
 
 ## Q1 2027
 
-- **World Partition import lands** — large-AOI orders import end-to-end as streaming World
-  Partition worlds: bundle layers arrive as **Data Layers** with generated **HLODs**, and the
-  bundle's canopy and landcover data drives **PCG foliage** that generates and streams with World
-  Partition. Single-Landscape import remains the default for small sites, and Mesh Terrain
-  continues to be tracked as the Experimental feature matures.
+- **Large-AOI World Partition import, completed** — large-AOI orders import end-to-end as streaming
+  World Partition worlds. Single-Landscape import remains the default for small sites, and Mesh Terrain
+  stays parked until UE 5.9 ([ADR 0016](docs/adr/0016-unreal-mesh-terrain-is-parked-until-5-9.md)).
 - **Import-surface completion** — a per-layer import picker so a bundle can be brought in
-  selectively, a shipped landscape material that renders the painted weight layers and samples the
-  coverage rasters, and the Stylized map drape.
+  selectively, and a shipped landscape material that renders the painted weight layers and samples the
+  coverage rasters.
 - **The spec earns its second implementer** — [`spec/`](spec/) shipped early, so what this quarter
   owes it is use rather than prose: a worked third-party read of a real bundle against the spec and
   the [conformance corpus](tools/manifest-conformance/) alone, and whatever that exercise proves is
@@ -52,8 +49,9 @@ planned it.
 
 ## Q2 2027
 
-- **1.0 on Fab** — the Unreal plugin reaches 1.0 and lists on Fab; in-repo installs keep
-  working exactly as they do now.
+- **Unreal 1.0** — the Unreal plugin reaches 1.0. Each Unreal release is submitted to Fab the same
+  day it is published, from the same asset ([releases.md](docs/releases.md#the-cut)); in-repo installs
+  keep working exactly as they do now.
 - **Documentation completion** — the full import reference for both hosts, written against the
   shipped feature set rather than ahead of it.
 - **Release-gating infrastructure** — the private engine-compile check wired to block a release
