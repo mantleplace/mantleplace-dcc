@@ -349,6 +349,8 @@ enum class EMantlePlaceViewFetch : uint8
 	View,
 	/** A no-op order was answered with the whole archive: re-list for fresh facts and download it. */
 	WholeArchive,
+	/** The view leaves out a file Unreal reads from outside its host block: re-list and fetch the whole bundle instead. */
+	WholeBundleInstead,
 	/** The order is not shown complete (a partial view, or an unproven order answered with no view): Prepare. */
 	Prepare
 };

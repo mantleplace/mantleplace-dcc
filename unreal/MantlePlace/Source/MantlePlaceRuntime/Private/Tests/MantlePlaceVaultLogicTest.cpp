@@ -1080,16 +1080,29 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			TEXT("{\"url\":\"https://r2.example/p.zip\",\"view\":{\"partial\":true,\"parts\":[]}}"), Partial, Error);
 		TestTrue(TEXT("A partial view is read as partial"), Partial.bIsView && Partial.bPartial);
 
-		// What to fetch.
-		TestEqual(TEXT("A complete view is downloaded"), FLogic::DecideViewFetch(View, true), EMantlePlaceViewFetch::View);
+		// What to fetch. The no-op's delivered tokens say which outside-the-block files the order has.
+		const TArray<FString> NoneDelivered;
+		const TArray<FString> AllOutside = { TEXT("flood.nfhl"), TEXT("cesium.terrain") };
+		FMantlePlacePresignedDownload Full = View; // a view that carries the outside files too
+		Full.Parts.Add(TEXT("flood.nfhl@MAX"));
+		Full.Parts.Add(TEXT("cesium.terrain"));
+		TestEqual(TEXT("A complete view is downloaded"), FLogic::DecideViewFetch(Full, true, AllOutside), EMantlePlaceViewFetch::View);
 		TestEqual(TEXT("A complete view proves a complete order even when the state was unknown"),
-			FLogic::DecideViewFetch(View, false), EMantlePlaceViewFetch::View);
+			FLogic::DecideViewFetch(Full, false, NoneDelivered), EMantlePlaceViewFetch::View);
+		TestEqual(TEXT("A view of an order that has no outside file is enough"),
+			FLogic::DecideViewFetch(View, true, NoneDelivered), EMantlePlaceViewFetch::View);
+		TestEqual(TEXT("A view lacking a file the order has outside the block: the whole bundle instead"),
+			FLogic::DecideViewFetch(View, true, AllOutside), EMantlePlaceViewFetch::WholeBundleInstead);
+		TestEqual(TEXT("With the delivery state unknown every outside file is required of the view"),
+			FLogic::DecideViewFetch(View, false, NoneDelivered), EMantlePlaceViewFetch::WholeBundleInstead);
+		TestEqual(TEXT("A view lacking only the Cesium tileset the order has"),
+			FLogic::MissingFromView(View.Parts, true, TArray<FString>{ TEXT("cesium.terrain") }).Num(), 1);
 		TestEqual(TEXT("A partial view is never imported: the Prepare builds the rest"),
-			FLogic::DecideViewFetch(Partial, true), EMantlePlaceViewFetch::Prepare);
+			FLogic::DecideViewFetch(Partial, true, AllOutside), EMantlePlaceViewFetch::Prepare);
 		TestEqual(TEXT("A whole archive after a no-op is importable"),
-			FLogic::DecideViewFetch(Whole, true), EMantlePlaceViewFetch::WholeArchive);
+			FLogic::DecideViewFetch(Whole, true, AllOutside), EMantlePlaceViewFetch::WholeArchive);
 		TestEqual(TEXT("A whole archive after the unproven 503 may be an unbuilt on-demand bundle: Prepare"),
-			FLogic::DecideViewFetch(Whole, false), EMantlePlaceViewFetch::Prepare);
+			FLogic::DecideViewFetch(Whole, false, NoneDelivered), EMantlePlaceViewFetch::Prepare);
 	}
 
 	return true;

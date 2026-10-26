@@ -166,6 +166,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartVaultImport(const FMantlePlaceVau
 	bRouteStartPending = false;
 	bViewRequested = false;
 	bViewDeliveryKnown = false;
+	ViewDelivered.Reset();
 	ViewManifestSha256.Reset();
 	bMaterializeRunObserved = false;
 	MaterializeRepicks = 0;
@@ -246,6 +247,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartLocalImport(const FString& ZipPat
 	bRouteStartPending = false;
 	bViewRequested = false;
 	bViewDeliveryKnown = false;
+	ViewDelivered.Reset();
 	ViewManifestSha256.Reset();
 	bMaterializeRunObserved = false;
 	MaterializeRepicks = 0;
@@ -473,6 +475,7 @@ void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStartedNative(bool bS
 		// ⛔ A DeliveryUnknown start proved nothing, so a whole archive in the answer is not trusted.
 		bViewRequested = true;
 		bViewDeliveryKnown = Start.Outcome == EMantlePlaceMaterializeStartOutcome::NothingToDo;
+		ViewDelivered = bViewDeliveryKnown ? Start.Tokens : TArray<FString>(); // a no-op's Tokens is what the bundle HAS
 		Phase = EPhase::Presigning;
 		EmitPhase(TEXT("Downloading"), TEXT("This order is complete - requesting Unreal's files..."), -1.0f);
 		VaultClient->GetPresignedViewUrl(ActiveItem.OrderId); // -> HandlePresignedNative
@@ -725,7 +728,7 @@ void UMantlePlaceVaultImportOrchestrator::HandlePresignedNative(bool bSuccess, c
 	if (bViewRequested)
 	{
 		bViewRequested = false;
-		switch (UMantlePlaceVaultClient::DecideViewFetch(Download, bViewDeliveryKnown))
+		switch (UMantlePlaceVaultClient::DecideViewFetch(Download, bViewDeliveryKnown, ViewDelivered))
 		{
 		case EMantlePlaceViewFetch::Prepare:
 			// Not shown complete (a partial view, or an unproven order answered with no view): the
@@ -736,6 +739,11 @@ void UMantlePlaceVaultImportOrchestrator::HandlePresignedNative(bool bSuccess, c
 			VaultClient->RequestMaterialize(ActiveItem.OrderId, ActiveScope);
 			return;
 
+		case EMantlePlaceViewFetch::WholeBundleInstead:
+			// The view lacks a file Unreal reads from outside its host block (flood records, Cesium
+			// terrain): the whole bundle is fetched instead, verified against the listing like any whole archive.
+			UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("The view lacks a file the import reads from outside Unreal's block; fetching the whole bundle."));
+			[[fallthrough]];
 		case EMantlePlaceViewFetch::WholeArchive:
 			// A no-op order stored as one zip: nothing to build, so re-list for the fresh facts the
 			// whole-archive download is verified against, as the no-op has always done.

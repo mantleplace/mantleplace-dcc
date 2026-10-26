@@ -427,6 +427,18 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 			false, TEXT(""));
 		TestFalse(TEXT("A truncated view fails its own record"), Truncated.bValid);
 
+		// A re-cut moves the listing's digest from the one recorded at download time.
+		TestTrue(TEXT("A view is re-cut when the listing's digest moved"),
+			FLogic::IsViewRecut(true, TEXT("aaaa"), true, TEXT("bbbb")));
+		TestFalse(TEXT("The same listing digest is not a re-cut"),
+			FLogic::IsViewRecut(true, TEXT("aaaa"), true, TEXT("AAAA")));
+		TestFalse(TEXT("No recorded listing digest (an older sidecar) is not a re-cut"),
+			FLogic::IsViewRecut(true, TEXT(""), true, TEXT("bbbb")));
+		TestFalse(TEXT("A listing with no digest is not a re-cut"),
+			FLogic::IsViewRecut(true, TEXT("aaaa"), false, TEXT("")));
+		TestFalse(TEXT("A whole archive is held against the listing, not this"),
+			FLogic::IsViewRecut(false, TEXT("aaaa"), true, TEXT("bbbb")));
+
 		// A download in flight: a view is checked for the length the platform stated and nothing from the listing.
 		const FMantlePlaceCacheExpectation DownView = FLogic::ExpectationForDownload(
 			true, true, 4194304, true, TEXT("cafe"), true, 480000000);

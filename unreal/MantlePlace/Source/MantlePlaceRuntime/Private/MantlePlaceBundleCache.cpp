@@ -43,6 +43,8 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 	// re-hashing a multi-GB file on disk would block the editor. The sidecar sha is what we
 	// downloaded; comparing it to the vault's current sha detects a re-cut (-> CachedStale).
 	FString RecordedSha;
+	FString RecordedListingSha;
+	int64 RecordedSize = 0;
 	bool bHoldsView = false;
 	if (bExists)
 	{
@@ -55,6 +57,8 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 			{
 				RecordedSha = Meta.Sha256;
 				bHoldsView = Meta.bHoldsView;
+				RecordedSize = Meta.SizeBytes;
+				RecordedListingSha = Meta.ListingSha256;
 				Cached.bHoldsView = Meta.bHoldsView;
 				Cached.ManifestVersion = Meta.ManifestVersion;
 				Cached.DownloadedAtUtc = Meta.DownloadedAtUtc;
@@ -66,7 +70,7 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 
 	// A cached view is held against its own record: the listing states the whole archive.
 	const FMantlePlaceCacheExpectation Expected = FCacheLogic::ExpectationForHeld(
-		bHoldsView, RecordedSha, Size,
+		bHoldsView, RecordedSha, RecordedSize,
 		Item.bHasSha256, Item.Sha256, Item.bHasSizeBytes, Item.SizeBytes);
 	const FMantlePlaceCacheValidity Validity = FCacheLogic::DecideValidity(
 		bExists, Size, RecordedSha,
@@ -74,6 +78,13 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 		Expected.bHasSizeBytes, Expected.SizeBytes,
 		Item.bHasManifestVersion, Item.ManifestVersion);
 	Cached.State = FCacheLogic::DeriveCacheState(bExists, Validity);
+	// A view cannot be compared to the listing's digest, so a re-cut shows as the listing's digest
+	// moving from the one recorded when the view was downloaded.
+	if (Cached.State == EMantlePlaceCacheState::CachedValid
+		&& FCacheLogic::IsViewRecut(bHoldsView, RecordedListingSha, Item.bHasSha256, Item.Sha256))
+	{
+		Cached.State = EMantlePlaceCacheState::CachedStale;
+	}
 	return Cached;
 }
 
@@ -285,6 +296,7 @@ void UMantlePlaceBundleCache::HandleDownloadComplete(
 	Meta.DownloadedAtUtc = FDateTime::UtcNow().ToIso8601();
 	Meta.Format = TEXT("glb");
 	Meta.bHoldsView = bActiveIsView;
+	Meta.ListingSha256 = ActiveItem.bHasSha256 ? ActiveItem.Sha256 : FString();
 	FFileHelper::SaveStringToFile(
 		FCacheLogic::SerializeMeta(Meta), *FCacheLogic::DeriveMetaPath(GetCacheRoot(), ActiveItem.OrderId));
 

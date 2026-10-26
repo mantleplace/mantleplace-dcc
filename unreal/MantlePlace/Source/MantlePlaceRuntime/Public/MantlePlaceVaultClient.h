@@ -152,7 +152,8 @@ public:
 	 * no-op order that was not cut into parts), or the Prepare (a partial view, or an unproven order
 	 * answered with no view). Thin wrapper over the tested vault logic, as above.
 	 */
-	static EMantlePlaceViewFetch DecideViewFetch(const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown);
+	static EMantlePlaceViewFetch DecideViewFetch(
+		const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown, const TArray<FString>& Delivered);
 
 	/** Short tier label for a vault list row: "Base" (needs materialize), "Unreal" (importable), or "Unknown". */
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")

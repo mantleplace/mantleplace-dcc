@@ -257,10 +257,24 @@ struct FMantlePlaceVaultLogic
 	 * which is the Prepare's to build. A view cut before the bundle completed lacks parts and is never
 	 * imported.
 	 *
-	 * Unreal reads every file through the `unreal` block's own pointers, so (unlike Revit's tree
-	 * points) no file read from outside the host block makes a view insufficient.
+	 * Unreal also reads files only the bundle's `layout` points at (the flood family's GeoPackage,
+	 * `layout.flood_zones`, and the Cesium terrain tileset, `layout.cesium_terrain`). A view holds only
+	 * the `unreal` block's files, so a complete view that lacks a token of ReadOutsideHostBlock() the
+	 * order has is not enough: the whole bundle is fetched instead (EMantlePlaceViewFetch::WholeBundleInstead),
+	 * as Revit's does for its tree points.
+	 *
+	 * @param Delivered  What the order delivered, from the no-op; meaningful only when bDeliveryKnown.
+	 *                   With the delivery state unknown, every outside token is required of the view.
 	 */
-	static EMantlePlaceViewFetch DecideViewFetch(const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown);
+	static EMantlePlaceViewFetch DecideViewFetch(
+		const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown, const TArray<FString>& Delivered);
+
+	/** The tokens whose files Unreal reads from outside `hosts.unreal` (named by `layout`, not by the host block). */
+	static const TArray<FString>& ReadOutsideHostBlock();
+
+	/** The outside-the-block tokens the order has and the view's parts lack. Parts are `<token>@<level>`. */
+	static TArray<FString> MissingFromView(
+		const TArray<FString>& Parts, bool bDeliveryKnown, const TArray<FString>& Delivered);
 
 	//~ ----- Tier detection (drives the vault list surface) -----
 

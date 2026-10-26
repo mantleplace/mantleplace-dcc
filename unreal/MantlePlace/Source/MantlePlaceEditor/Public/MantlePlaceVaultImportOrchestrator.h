@@ -318,6 +318,9 @@ private:
 	bool bViewRequested = false;
 	bool bViewDeliveryKnown = false;
 
+	/** What the no-op said the order has; empty when the delivery state was unknown. */
+	TArray<FString> ViewDelivered;
+
 	/** The manifest digest the platform stated for the view being downloaded; empty when it stated none. */
 	FString ViewManifestSha256;
 

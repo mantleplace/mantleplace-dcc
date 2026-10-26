@@ -828,13 +828,50 @@ FString FMantlePlaceVaultLogic::BuildViewDownloadBody()
 	return VaultSerializeCondensed(Root);
 }
 
-EMantlePlaceViewFetch FMantlePlaceVaultLogic::DecideViewFetch(const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown)
+const TArray<FString>& FMantlePlaceVaultLogic::ReadOutsideHostBlock()
+{
+	// Grows only when a step that reads such a file lands; a file that moves into `hosts.unreal` leaves.
+	static const TArray<FString> Tokens = {
+		TEXT("flood.nfhl"),       // layout.flood_zones: the flood records' GeoPackage
+		TEXT("cesium.terrain")    // layout.cesium_terrain: the quantized-mesh tileset the stream serves
+	};
+	return Tokens;
+}
+
+TArray<FString> FMantlePlaceVaultLogic::MissingFromView(
+	const TArray<FString>& Parts, bool bDeliveryKnown, const TArray<FString>& Delivered)
+{
+	TSet<FString> Held;
+	for (const FString& Part : Parts)
+	{
+		int32 At = INDEX_NONE;
+		Held.Add(Part.FindChar(TEXT('@'), At) ? Part.Left(At) : Part);
+	}
+	TArray<FString> Missing;
+	for (const FString& Token : ReadOutsideHostBlock())
+	{
+		if ((!bDeliveryKnown || Delivered.Contains(Token)) && !Held.Contains(Token))
+		{
+			Missing.Add(Token);
+		}
+	}
+	return Missing;
+}
+
+EMantlePlaceViewFetch FMantlePlaceVaultLogic::DecideViewFetch(
+	const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown, const TArray<FString>& Delivered)
 {
 	if (!Download.bIsView)
 	{
 		return bDeliveryKnown ? EMantlePlaceViewFetch::WholeArchive : EMantlePlaceViewFetch::Prepare;
 	}
-	return Download.bPartial ? EMantlePlaceViewFetch::Prepare : EMantlePlaceViewFetch::View;
+	if (Download.bPartial)
+	{
+		return EMantlePlaceViewFetch::Prepare;
+	}
+	return MissingFromView(Download.Parts, bDeliveryKnown, Delivered).Num() == 0
+		? EMantlePlaceViewFetch::View
+		: EMantlePlaceViewFetch::WholeBundleInstead;
 }
 
 bool FMantlePlaceVaultLogic::IsIncompleteBundle(const FMantlePlaceVaultItem& Item)

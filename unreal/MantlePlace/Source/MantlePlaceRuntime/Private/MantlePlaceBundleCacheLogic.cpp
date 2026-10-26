@@ -373,6 +373,13 @@ FMantlePlaceCacheExpectation FMantlePlaceBundleCacheLogic::ExpectationForDownloa
 	return Expectation;
 }
 
+bool FMantlePlaceBundleCacheLogic::IsViewRecut(
+	bool bHoldsView, const FString& RecordedListingSha256, bool bListingHasSha256, const FString& ListingSha256)
+{
+	return bHoldsView && bListingHasSha256 && !RecordedListingSha256.IsEmpty()
+		&& !Sha256Equal(RecordedListingSha256, ListingSha256);
+}
+
 FString FMantlePlaceBundleCacheLogic::SerializeMeta(const FMantlePlaceCachedBundle& Meta)
 {
 	// State is recomputed at inspect time (it depends on the live vault item), so it is NOT
@@ -386,6 +393,7 @@ FString FMantlePlaceBundleCacheLogic::SerializeMeta(const FMantlePlaceCachedBund
 	Root->SetStringField(TEXT("downloadedAtUtc"), Meta.DownloadedAtUtc);
 	Root->SetStringField(TEXT("format"), Meta.Format);
 	Root->SetBoolField(TEXT("holdsView"), Meta.bHoldsView);
+	Root->SetStringField(TEXT("listingSha256"), Meta.ListingSha256);
 	return BundleCacheSerializeCondensed(Root);
 }
 
@@ -433,6 +441,7 @@ bool FMantlePlaceBundleCacheLogic::ParseMeta(const FString& Json, FMantlePlaceCa
 	Root->TryGetStringField(TEXT("downloadedAtUtc"), Parsed.DownloadedAtUtc);
 	Root->TryGetStringField(TEXT("format"), Parsed.Format);
 	Root->TryGetBoolField(TEXT("holdsView"), Parsed.bHoldsView); // absent in a sidecar older than views: false
+	Root->TryGetStringField(TEXT("listingSha256"), Parsed.ListingSha256);
 
 	Out = MoveTemp(Parsed);
 	return true;

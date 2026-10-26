@@ -33,9 +33,10 @@ EMantlePlaceImportRoute UMantlePlaceVaultClient::DecideImportRoute(const FMantle
 	return FMantlePlaceVaultLogic::DecideImportRoute(Start);
 }
 
-EMantlePlaceViewFetch UMantlePlaceVaultClient::DecideViewFetch(const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown)
+EMantlePlaceViewFetch UMantlePlaceVaultClient::DecideViewFetch(
+	const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown, const TArray<FString>& Delivered)
 {
-	return FMantlePlaceVaultLogic::DecideViewFetch(Download, bDeliveryKnown);
+	return FMantlePlaceVaultLogic::DecideViewFetch(Download, bDeliveryKnown, Delivered);
 }
 
 FString UMantlePlaceVaultClient::GetBundleTierLabel(const FMantlePlaceVaultItem& Item)

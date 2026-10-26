@@ -91,7 +91,8 @@ struct FMantlePlaceBundleCacheLogic
 	/**
 	 * What a zip already in the cache is held against. The listing describes the WHOLE archive, so a
 	 * cached view is never held against it: it is held against the size and digest recorded when it was
-	 * downloaded, which still catches truncation. A whole archive is held against the listing, as before.
+	 * downloaded: pass the SIDECAR's recorded size (not the file's size on disk, which would match
+	 * itself), so a truncated file fails against it. A whole archive is held against the listing.
 	 */
 	static FMantlePlaceCacheExpectation ExpectationForHeld(
 		bool bHoldsView,
@@ -101,6 +102,15 @@ struct FMantlePlaceBundleCacheLogic
 		const FString& ListingSha256,
 		bool bListingHasSizeBytes,
 		int64 ListingSizeBytes);
+
+	/**
+	 * Whether a cached view has been re-cut since it was downloaded. A view's own digest cannot be
+	 * compared to the listing's, so the listing's digest recorded at download time is: a later listing
+	 * that states a different one means the order was re-cut and the view is stale. Unknown on either
+	 * side (an older sidecar, a listing with no digest) is not stale.
+	 */
+	static bool IsViewRecut(
+		bool bHoldsView, const FString& RecordedListingSha256, bool bListingHasSha256, const FString& ListingSha256);
 
 	/**
 	 * What a zip being downloaded is held against. A view has no listing digest to match, so its bytes
