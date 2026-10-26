@@ -204,6 +204,78 @@ struct FMantlePlaceVaultLogic
 	 */
 	static void DeriveMaterializeDelivery(const TSharedPtr<FJsonObject>& Root, const TArray<FString>& Requested, FMantlePlaceMaterializeStatus& OutStatus);
 
+	//~ ----- A complete order imports without a Prepare (the download view) -----
+
+	/**
+	 * True for the one start answer that is neither a success nor a refusal: `503` carrying the code
+	 * `delivery_state_unknown`.
+	 *
+	 * STOP: it is "try the download", not an error. The platform could not read what the bundle has,
+	 * which it reports on complete orders too; refusing there would tell a curator to retry an order
+	 * that is ready. Read by its CODE, since the status alone is any outage (HPS-24 reads shapes; this
+	 * is the one code it names, and only to send the import to the download).
+	 */
+	static bool IsDeliveryStateUnknown(int32 HttpStatus, const FString& Body);
+
+	/** The code the platform sends beside that 503. */
+	static const FString& DeliveryStateUnknownCode();
+
+	/**
+	 * Which way an Import press goes, read from the one materialize start it made.
+	 *
+	 * A complete order has nothing left to build and answers the no-op; a 503 delivery_state_unknown
+	 * is the same "go to the download"; anything else (a fresh job, a joined run, a parked pick) is an
+	 * on-demand order the existing Prepare follows. This is the interim answer: when the listing
+	 * carries the order's delivery model, it is read instead and the round trip goes.
+	 */
+	static EMantlePlaceImportRoute DecideImportRoute(const FMantlePlaceMaterializeStart& Start);
+
+	/** The host key the platform's view request names: the `hosts.unreal` block's key. */
+	static const FString& ViewHostKey();
+
+	/**
+	 * The level asked of every entry of the host block (`"*"` is "every entry not named").
+	 *
+	 * The platform takes ONE level per entry, so "every level" is not a value it accepts. MAX is the one
+	 * that holds them all: the tree points' MED and MIN are row cuts of the MAX file in a 2.0 bundle, and
+	 * the project's chosen tree level is applied when the file is read, so the cache keeps serving a
+	 * re-import at a different level without a second download.
+	 */
+	static const FString& ViewEveryEntryLevel();
+
+	/** JSON request body for Unreal's view (POST .../download): {"format":"bundle","view":{"host":"unreal","levels":{"*":"MAX"}}}. Condensed. */
+	static FString BuildViewDownloadBody();
+
+	/**
+	 * What to fetch from the response the platform gave to the view request.
+	 *
+	 * @param bDeliveryKnown  true after a no-op start (it proved there is nothing to build), false after
+	 *                        a 503 delivery_state_unknown (it proved nothing).
+	 *
+	 * STOP: with the delivery state unknown, only a `view` block proves the order complete. A whole
+	 * archive after a no-op is importable; after the 503 it may be an on-demand order's unbuilt bundle,
+	 * which is the Prepare's to build. A view cut before the bundle completed lacks parts and is never
+	 * imported.
+	 *
+	 * Unreal also reads files only the bundle's `layout` points at (the flood family's GeoPackage,
+	 * `layout.flood_zones`, and the Cesium terrain tileset, `layout.cesium_terrain`). A view holds only
+	 * the `unreal` block's files, so a complete view that lacks a token of ReadOutsideHostBlock() the
+	 * order has is not enough: the whole bundle is fetched instead (EMantlePlaceViewFetch::WholeBundleInstead),
+	 * as Revit's does for its tree points.
+	 *
+	 * @param Delivered  What the order delivered, from the no-op; meaningful only when bDeliveryKnown.
+	 *                   With the delivery state unknown, every outside token is required of the view.
+	 */
+	static EMantlePlaceViewFetch DecideViewFetch(
+		const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown, const TArray<FString>& Delivered);
+
+	/** The tokens whose files Unreal reads from outside `hosts.unreal` (named by `layout`, not by the host block). */
+	static const TArray<FString>& ReadOutsideHostBlock();
+
+	/** The outside-the-block tokens the order has and the view's parts lack. Parts are `<token>@<level>`. */
+	static TArray<FString> MissingFromView(
+		const TArray<FString>& Parts, bool bDeliveryKnown, const TArray<FString>& Delivered);
+
 	//~ ----- Tier detection (drives the vault list surface) -----
 
 	/**

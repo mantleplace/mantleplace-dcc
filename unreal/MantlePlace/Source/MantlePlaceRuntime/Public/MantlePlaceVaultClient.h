@@ -85,6 +85,14 @@ public:
 	void GetPresignedBundleUrl(const FString& OrderId);
 
 	/**
+	 * Begin minting a presigned URL for Unreal's download VIEW: the files `hosts.unreal` points at and
+	 * the whole-bundle manifest, a fraction of the archive that carries every host's meshes and rasters.
+	 * The platform cuts it; the host never assembles one from file names. The response says whether a
+	 * view was cut (FMantlePlacePresignedDownload::bIsView). Result via OnPresignedUrlReady.
+	 */
+	void GetPresignedViewUrl(const FString& OrderId);
+
+	/**
 	 * Probe a minted URL with a 1-byte ranged GET (no auth header) to confirm it resolves
 	 * without downloading the bundle. Result via OnPresignedUrlProbed.
 	 */
@@ -131,6 +139,21 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
 	static bool IsBundleIncomplete(const FMantlePlaceVaultItem& Item);
+
+	/**
+	 * Which way an Import press goes, from the one materialize start it made: a complete order (the
+	 * no-op, or a 503 delivery_state_unknown) downloads its view; anything else is the Prepare's.
+	 * Thin wrapper over the tested vault logic, as above.
+	 */
+	static EMantlePlaceImportRoute DecideImportRoute(const FMantlePlaceMaterializeStart& Start);
+
+	/**
+	 * What to fetch once the platform has answered the view request: the view, the whole archive (a
+	 * no-op order that was not cut into parts), or the Prepare (a partial view, or an unproven order
+	 * answered with no view). Thin wrapper over the tested vault logic, as above.
+	 */
+	static EMantlePlaceViewFetch DecideViewFetch(
+		const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown, const TArray<FString>& Delivered);
 
 	/** Short tier label for a vault list row: "Base" (needs materialize), "Unreal" (importable), or "Unknown". */
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
@@ -236,6 +259,7 @@ private:
 	void HandleProbeResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	/** The POST both materialize entry points share; they differ only in the body they build. */
+	void MintDownload(const FString& OrderId, const FString& Format, bool bView);
 	void SendMaterializeRequest(const FString& OrderId, const FString& Body, const FString& Jwt);
 
 	void HandleMaterializeStartResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,

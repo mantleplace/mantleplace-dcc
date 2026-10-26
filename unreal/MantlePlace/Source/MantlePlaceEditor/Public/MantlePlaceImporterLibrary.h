@@ -55,6 +55,15 @@ public:
 	static bool ReadVaultManifest(const FString& ZipPath, FMantlePlaceVaultManifest& OutManifest, FString& OutError);
 
 	/**
+	 * The lowercase-hex sha256 of a bundle zip's `Metadata/manifest.json` member, as stored. A download
+	 * view states this digest: the manifest is the root every per-file digest is trusted from, so a view
+	 * whose manifest does not match it is discarded. Not a UFUNCTION (plain out-params).
+	 *
+	 * @return  false + OutError when the zip is missing, unreadable, or has no manifest member.
+	 */
+	static bool ReadManifestSha256(const FString& ZipPath, FString& OutSha256, FString& OutError);
+
+	/**
 	 * Open a native file-open dialog filtered to *.zip and return the chosen bundle path.
 	 * Editor-only; the Editor Utility Widget's Browse button calls this so the user never types a path.
 	 *

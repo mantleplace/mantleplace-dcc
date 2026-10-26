@@ -88,6 +88,44 @@ struct FMantlePlaceBundleCacheLogic
 		const FString& ManifestVersion,
 		const FString& MinVersion = MantlePlaceMinSupportedManifestVersion);
 
+	/**
+	 * What a zip already in the cache is held against. The listing describes the WHOLE archive, so a
+	 * cached view is never held against it: it is held against the size and digest recorded when it was
+	 * downloaded: pass the SIDECAR's recorded size (not the file's size on disk, which would match
+	 * itself), so a truncated file fails against it. A whole archive is held against the listing.
+	 */
+	static FMantlePlaceCacheExpectation ExpectationForHeld(
+		bool bHoldsView,
+		const FString& RecordedSha256,
+		int64 RecordedSizeBytes,
+		bool bListingHasSha256,
+		const FString& ListingSha256,
+		bool bListingHasSizeBytes,
+		int64 ListingSizeBytes);
+
+	/**
+	 * Whether a cached view has been re-cut since it was downloaded. A view's own digest cannot be
+	 * compared to the listing's, so the listing's digest recorded at download time is: a later listing
+	 * that states a different one means the order was re-cut and the view is stale. Unknown on either
+	 * side (an older sidecar, a listing with no digest) is not stale.
+	 */
+	static bool IsViewRecut(
+		bool bHoldsView, const FString& RecordedListingSha256, bool bListingHasSha256, const FString& ListingSha256);
+
+	/**
+	 * What a zip being downloaded is held against. A view has no listing digest to match, so its bytes
+	 * are checked for the length the platform stated (and its manifest against the stated digest, by the
+	 * caller, which can open the zip); a whole archive is held against the listing, as before.
+	 */
+	static FMantlePlaceCacheExpectation ExpectationForDownload(
+		bool bIsView,
+		bool bViewHasSizeBytes,
+		int64 ViewSizeBytes,
+		bool bListingHasSha256,
+		const FString& ListingSha256,
+		bool bListingHasSizeBytes,
+		int64 ListingSizeBytes);
+
 	/** Map (file present?, validity) to the list-row state. */
 	static EMantlePlaceCacheState DeriveCacheState(bool bFileExists, const FMantlePlaceCacheValidity& Validity);
 

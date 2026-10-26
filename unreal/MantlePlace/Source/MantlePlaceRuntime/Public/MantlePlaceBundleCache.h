@@ -83,6 +83,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
 	bool IsCachedAndValid(const FMantlePlaceVaultItem& Item) const;
 
+	/**
+	 * True iff this item's cached zip is the host's download VIEW rather than the whole archive (its
+	 * sidecar says so). The caller that checks a view's manifest digest asks first: a whole archive
+	 * served from the cache has a different manifest and is checked against the listing instead.
+	 */
+	bool CachedHoldsView(const FMantlePlaceVaultItem& Item) const;
+
 	/** Delete this item's cache dir (user-owned cache management). Returns true if it is now gone. */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	bool EvictCache(const FMantlePlaceVaultItem& Item);
@@ -144,4 +151,7 @@ private:
 	FString ActivePartPath;
 	FString ActiveFinalPath;
 	uint64 ExpectedTotalBytes = 0;
+	/** The active download is the host's view, and its length as the platform stated it (0 = unstated). */
+	bool bActiveIsView = false;
+	int64 ActiveViewSizeBytes = 0;
 };

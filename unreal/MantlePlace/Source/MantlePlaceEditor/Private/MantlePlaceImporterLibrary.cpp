@@ -182,6 +182,42 @@ namespace
 	TUniquePtr<FMantlePlaceLocalTileServer> GBundleStreamServer;
 }
 
+bool UMantlePlaceImporterLibrary::ReadManifestSha256(const FString& ZipPath, FString& OutSha256, FString& OutError)
+{
+	OutSha256.Reset();
+	OutError.Reset();
+
+	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+	if (ZipPath.IsEmpty() || !PlatformFile.FileExists(*ZipPath))
+	{
+		OutError = FString::Printf(TEXT("Zip not found: %s"), *ZipPath);
+		return false;
+	}
+
+	IFileHandle* Handle = PlatformFile.OpenRead(*ZipPath);
+	if (Handle == nullptr)
+	{
+		OutError = FString::Printf(TEXT("Could not open zip: %s"), *ZipPath);
+		return false;
+	}
+	FZipArchiveReader Reader(Handle); // takes ownership of the handle
+	if (!Reader.IsValid())
+	{
+		OutError = FString::Printf(TEXT("Not a readable zip archive: %s"), *ZipPath);
+		return false;
+	}
+
+	TArray<uint8> ManifestBytes;
+	if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
+	{
+		OutError = TEXT("Bundle has no Metadata/manifest.json.");
+		return false;
+	}
+
+	OutSha256 = MantlePlaceSha256::HexDigest(ManifestBytes);
+	return true;
+}
+
 bool UMantlePlaceImporterLibrary::ReadVaultManifest(
 	const FString& ZipPath, FMantlePlaceVaultManifest& OutManifest, FString& OutError)
 {

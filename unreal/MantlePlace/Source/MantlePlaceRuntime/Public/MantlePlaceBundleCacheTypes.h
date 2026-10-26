@@ -104,9 +104,34 @@ struct FMantlePlaceCachedBundle
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	FString Format;
 
+	/**
+	 * True when the cached zip is the host's download VIEW, not the whole archive. The vault's listing
+	 * states the whole archive's size and digest, so a view is held against its own record instead
+	 * (FMantlePlaceBundleCacheLogic::ExpectationForHeld). Absent in a sidecar written before views: false.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	bool bHoldsView = false;
+
+	/**
+	 * The listing's whole-archive digest at download time (empty when it stated none). A view cannot be
+	 * compared to the listing, but a re-cut changes the listing's digest, so a later listing that
+	 * disagrees with this one marks the view stale (FMantlePlaceBundleCacheLogic::IsViewRecut).
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString ListingSha256;
+
 	/** Cloud-vs-cached state for the list row. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	EMantlePlaceCacheState State = EMantlePlaceCacheState::NotCached;
+};
+
+/** The size and digest a zip is held against; the bHas* flags carry the "null = unknown" rule. */
+struct FMantlePlaceCacheExpectation
+{
+	bool bHasSha256 = false;
+	FString Sha256;
+	bool bHasSizeBytes = false;
+	int64 SizeBytes = 0;
 };
 
 /**

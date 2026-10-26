@@ -43,6 +43,9 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 	// re-hashing a multi-GB file on disk would block the editor. The sidecar sha is what we
 	// downloaded; comparing it to the vault's current sha detects a re-cut (-> CachedStale).
 	FString RecordedSha;
+	FString RecordedListingSha;
+	int64 RecordedSize = 0;
+	bool bHoldsView = false;
 	if (bExists)
 	{
 		FString MetaJson;
@@ -53,6 +56,10 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 			if (FCacheLogic::ParseMeta(MetaJson, Meta, MetaError))
 			{
 				RecordedSha = Meta.Sha256;
+				bHoldsView = Meta.bHoldsView;
+				RecordedSize = Meta.SizeBytes;
+				RecordedListingSha = Meta.ListingSha256;
+				Cached.bHoldsView = Meta.bHoldsView;
 				Cached.ManifestVersion = Meta.ManifestVersion;
 				Cached.DownloadedAtUtc = Meta.DownloadedAtUtc;
 				Cached.Format = Meta.Format;
@@ -61,12 +68,23 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 	}
 	Cached.Sha256 = RecordedSha;
 
+	// A cached view is held against its own record: the listing states the whole archive.
+	const FMantlePlaceCacheExpectation Expected = FCacheLogic::ExpectationForHeld(
+		bHoldsView, RecordedSha, RecordedSize,
+		Item.bHasSha256, Item.Sha256, Item.bHasSizeBytes, Item.SizeBytes);
 	const FMantlePlaceCacheValidity Validity = FCacheLogic::DecideValidity(
 		bExists, Size, RecordedSha,
-		Item.bHasSha256, Item.Sha256,
-		Item.bHasSizeBytes, Item.SizeBytes,
+		Expected.bHasSha256, Expected.Sha256,
+		Expected.bHasSizeBytes, Expected.SizeBytes,
 		Item.bHasManifestVersion, Item.ManifestVersion);
 	Cached.State = FCacheLogic::DeriveCacheState(bExists, Validity);
+	// A view cannot be compared to the listing's digest, so a re-cut shows as the listing's digest
+	// moving from the one recorded when the view was downloaded.
+	if (Cached.State == EMantlePlaceCacheState::CachedValid
+		&& FCacheLogic::IsViewRecut(bHoldsView, RecordedListingSha, Item.bHasSha256, Item.Sha256))
+	{
+		Cached.State = EMantlePlaceCacheState::CachedStale;
+	}
 	return Cached;
 }
 
@@ -75,6 +93,11 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::InspectCache(const FMantlePlac
 	const FMantlePlaceCachedBundle Cached = ResolveCached(Item);
 	OnCacheStateResolved(Item, Cached);
 	return Cached;
+}
+
+bool UMantlePlaceBundleCache::CachedHoldsView(const FMantlePlaceVaultItem& Item) const
+{
+	return ResolveCached(Item).bHoldsView;
 }
 
 bool UMantlePlaceBundleCache::IsCachedAndValid(const FMantlePlaceVaultItem& Item) const
@@ -135,7 +158,11 @@ void UMantlePlaceBundleCache::DownloadBundle(
 	ActiveItem = Item;
 	ActiveFinalPath = FCacheLogic::DeriveBundlePath(Root, Item.OrderId);
 	ActivePartPath = FCacheLogic::DerivePartPath(Root, Item.OrderId);
-	ExpectedTotalBytes = Item.bHasSizeBytes ? static_cast<uint64>(Item.SizeBytes) : 0;
+	bActiveIsView = Presigned.bIsView;
+	ActiveViewSizeBytes = Presigned.bHasSizeBytes ? Presigned.SizeBytes : 0;
+	ExpectedTotalBytes = bActiveIsView
+		? static_cast<uint64>(FMath::Max<int64>(0, ActiveViewSizeBytes))
+		: (Item.bHasSizeBytes ? static_cast<uint64>(Item.SizeBytes) : 0);
 
 	IFileManager& Files = IFileManager::Get();
 	Files.MakeDirectory(*FCacheLogic::DeriveBundleDir(Root, Item.OrderId), /*Tree*/ true);
@@ -231,10 +258,14 @@ void UMantlePlaceBundleCache::HandleDownloadComplete(
 	int64 OnDiskSize = -1;
 	const FString ComputedSha = ComputeFileSha256(ActivePartPath, OnDiskSize);
 
+	// A view is checked for the length the platform stated; the whole archive, against the listing.
+	const FMantlePlaceCacheExpectation Expected = FCacheLogic::ExpectationForDownload(
+		bActiveIsView, bActiveIsView && ActiveViewSizeBytes > 0, ActiveViewSizeBytes,
+		ActiveItem.bHasSha256, ActiveItem.Sha256, ActiveItem.bHasSizeBytes, ActiveItem.SizeBytes);
 	const FMantlePlaceCacheValidity Validity = FCacheLogic::DecideValidity(
 		/*bFileExists*/ OnDiskSize >= 0, OnDiskSize, ComputedSha,
-		ActiveItem.bHasSha256, ActiveItem.Sha256,
-		ActiveItem.bHasSizeBytes, ActiveItem.SizeBytes,
+		Expected.bHasSha256, Expected.Sha256,
+		Expected.bHasSizeBytes, Expected.SizeBytes,
 		ActiveItem.bHasManifestVersion, ActiveItem.ManifestVersion);
 
 	if (!Validity.bValid)
@@ -264,6 +295,8 @@ void UMantlePlaceBundleCache::HandleDownloadComplete(
 	Meta.ManifestVersion = ActiveItem.bHasManifestVersion ? ActiveItem.ManifestVersion : FString();
 	Meta.DownloadedAtUtc = FDateTime::UtcNow().ToIso8601();
 	Meta.Format = TEXT("glb");
+	Meta.bHoldsView = bActiveIsView;
+	Meta.ListingSha256 = ActiveItem.bHasSha256 ? ActiveItem.Sha256 : FString();
 	FFileHelper::SaveStringToFile(
 		FCacheLogic::SerializeMeta(Meta), *FCacheLogic::DeriveMetaPath(GetCacheRoot(), ActiveItem.OrderId));
 

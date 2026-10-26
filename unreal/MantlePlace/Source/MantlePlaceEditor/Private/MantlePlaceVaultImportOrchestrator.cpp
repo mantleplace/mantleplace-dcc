@@ -163,6 +163,11 @@ bool UMantlePlaceVaultImportOrchestrator::StartVaultImport(const FMantlePlaceVau
 	PollCount = 0;
 	ConsecutivePollFailures = 0;
 	bAttemptedMaterializeRecovery = false;
+	bRouteStartPending = false;
+	bViewRequested = false;
+	bViewDeliveryKnown = false;
+	ViewDelivered.Reset();
+	ViewManifestSha256.Reset();
 	bMaterializeRunObserved = false;
 	MaterializeRepicks = 0;
 	LastOutstanding.Reset();
@@ -180,6 +185,9 @@ void UMantlePlaceVaultImportOrchestrator::BeginItemImport()
 	{
 		Phase = EPhase::Materializing;
 		bAttemptedMaterializeRecovery = true;
+		// This start is also the question that tells a complete order from an on-demand one. A local
+		// zip matched to an owned bundle keeps the whole-bundle download: it is not a vault-row import.
+		bRouteStartPending = !bLocalImport;
 		EmitPhase(TEXT("Generating"), FString::Printf(TEXT("Requesting Unreal formats (%s)..."), *ActiveScope), -1.0f);
 		VaultClient->RequestMaterialize(ActiveItem.OrderId, ActiveScope);
 	}
@@ -236,6 +244,11 @@ bool UMantlePlaceVaultImportOrchestrator::StartLocalImport(const FString& ZipPat
 	PollCount = 0;
 	ConsecutivePollFailures = 0;
 	bAttemptedMaterializeRecovery = false;
+	bRouteStartPending = false;
+	bViewRequested = false;
+	bViewDeliveryKnown = false;
+	ViewDelivered.Reset();
+	ViewManifestSha256.Reset();
 	bMaterializeRunObserved = false;
 	MaterializeRepicks = 0;
 	LastOutstanding.Reset();
@@ -447,6 +460,31 @@ void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStartedNative(bool bS
 	if (!bSuccess)
 	{
 		FailImport(Message.IsEmpty() ? TEXT("Could not start generating Unreal formats.") : Message);
+		return;
+	}
+
+	// The first start of a vault-row import is the route decision (CONTEXT.md: complete order). It is
+	// read once; every later start belongs to the Prepare.
+	const bool bRouteStart = bRouteStartPending;
+	bRouteStartPending = false;
+	if (bRouteStart && UMantlePlaceVaultClient::DecideImportRoute(Start) == EMantlePlaceImportRoute::DownloadView)
+	{
+		// A complete order was built whole at procurement: a Prepare on it only fills the cache. Ask
+		// for Unreal's own view and import it, with no polling and no re-list (a view is verified
+		// against its own size and manifest digest, not the listing's whole-archive facts).
+		// ⛔ A DeliveryUnknown start proved nothing, so a whole archive in the answer is not trusted.
+		bViewRequested = true;
+		bViewDeliveryKnown = Start.Outcome == EMantlePlaceMaterializeStartOutcome::NothingToDo;
+		ViewDelivered = bViewDeliveryKnown ? Start.Tokens : TArray<FString>(); // a no-op's Tokens is what the bundle HAS
+		Phase = EPhase::Presigning;
+		EmitPhase(TEXT("Downloading"), TEXT("This order is complete - requesting Unreal's files..."), -1.0f);
+		VaultClient->GetPresignedViewUrl(ActiveItem.OrderId); // -> HandlePresignedNative
+		return;
+	}
+	if (Start.Outcome == EMantlePlaceMaterializeStartOutcome::DeliveryUnknown)
+	{
+		// Not the first start (a self-heal or a re-pick): there is no job to follow and nothing proven.
+		FailImport(TEXT("The platform could not read what this bundle has. Try again in a moment."));
 		return;
 	}
 
@@ -687,8 +725,42 @@ void UMantlePlaceVaultImportOrchestrator::HandlePresignedNative(bool bSuccess, c
 		return;
 	}
 
+	if (bViewRequested)
+	{
+		bViewRequested = false;
+		switch (UMantlePlaceVaultClient::DecideViewFetch(Download, bViewDeliveryKnown, ViewDelivered))
+		{
+		case EMantlePlaceViewFetch::Prepare:
+			// Not shown complete (a partial view, or an unproven order answered with no view): the
+			// Prepare builds it, exactly as an on-demand order's does. Its own start follows.
+			UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("The view does not show the order complete; running the Prepare."));
+			Phase = EPhase::Materializing;
+			EmitPhase(TEXT("Generating"), FString::Printf(TEXT("Requesting Unreal formats (%s)..."), *ActiveScope), -1.0f);
+			VaultClient->RequestMaterialize(ActiveItem.OrderId, ActiveScope);
+			return;
+
+		case EMantlePlaceViewFetch::WholeBundleInstead:
+			// The view lacks a file Unreal reads from outside its host block (flood records, Cesium
+			// terrain): the whole bundle is fetched instead, verified against the listing like any whole archive.
+			UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("The view lacks a file the import reads from outside Unreal's block; fetching the whole bundle."));
+			[[fallthrough]];
+		case EMantlePlaceViewFetch::WholeArchive:
+			// A no-op order stored as one zip: nothing to build, so re-list for the fresh facts the
+			// whole-archive download is verified against, as the no-op has always done.
+			Phase = EPhase::Relisting;
+			VaultClient->ListVault();
+			return;
+
+		case EMantlePlaceViewFetch::View:
+		default:
+			ViewManifestSha256 = Download.ManifestSha256;
+			break;
+		}
+	}
+
 	Phase = EPhase::Downloading;
-	EmitPhase(TEXT("Downloading"), TEXT("Downloading the bundle..."), 0.0f);
+	EmitPhase(TEXT("Downloading"),
+		Download.bIsView ? TEXT("Downloading Unreal's files...") : TEXT("Downloading the bundle..."), 0.0f);
 	BundleCache->DownloadBundle(ActiveItem, Download); // streamed to the local cache; result -> HandleDownloadCompleteNative
 }
 
@@ -711,6 +783,25 @@ void UMantlePlaceVaultImportOrchestrator::HandleDownloadCompleteNative(bool bSuc
 	{
 		FailImport(Message.IsEmpty() ? TEXT("Download failed.") : Message);
 		return;
+	}
+
+	// A view states the digest of its manifest member, the root every per-file digest is trusted from.
+	// Checked here, where the zip can be opened; a mismatch is discarded so it is never served again.
+	// A whole archive already in the cache is served instead of the view when it is valid, and its
+	// manifest is not the view's, so the check applies to a cached view only.
+	const FString ExpectedManifestSha256 = ViewManifestSha256;
+	ViewManifestSha256.Reset();
+	if (!ExpectedManifestSha256.IsEmpty() && BundleCache->CachedHoldsView(ActiveItem))
+	{
+		FString ActualManifestSha256;
+		FString DigestError;
+		if (!UMantlePlaceImporterLibrary::ReadManifestSha256(LocalBundlePath, ActualManifestSha256, DigestError)
+			|| !ActualManifestSha256.Equals(ExpectedManifestSha256, ESearchCase::IgnoreCase))
+		{
+			BundleCache->EvictCache(ActiveItem);
+			FailImport(TEXT("The download's manifest did not match its checksum and was discarded. Try again."));
+			return;
+		}
 	}
 
 	// Pre-flight the manifest before announcing an import: the listing's completeness signal

@@ -301,6 +301,29 @@ private:
 	 */
 	bool bAttemptedMaterializeRecovery = false;
 
+	/**
+	 * The import's FIRST materialize start is still to be read as a route (a vault-row import of a
+	 * bundle the listing judges incomplete). A complete order answers it with the no-op and downloads
+	 * Unreal's view; an on-demand order answers with a job and the Prepare follows. Every later start
+	 * (the post-download self-heal, a re-pick after a joined run) belongs to the Prepare and reads as
+	 * it always did, so this is cleared the moment the first answer lands.
+	 */
+	bool bRouteStartPending = false;
+
+	/**
+	 * The view was requested and its answer is awaited. bViewDeliveryKnown is true after a no-op start
+	 * (it proved nothing is left to build) and false after a 503 delivery_state_unknown (it proved
+	 * nothing), which is what decides whether a whole-archive answer is importable.
+	 */
+	bool bViewRequested = false;
+	bool bViewDeliveryKnown = false;
+
+	/** What the no-op said the order has; empty when the delivery state was unknown. */
+	TArray<FString> ViewDelivered;
+
+	/** The manifest digest the platform stated for the view being downloaded; empty when it stated none. */
+	FString ViewManifestSha256;
+
 	//~ Local-zip import bookkeeping (all empty/false for a vault-row import).
 	bool bLocalImport = false;    // this flow originated from a local .zip
 	FString LocalOriginalPath;    // the user's zip path (never modified) - referenced in the "unchanged" notice
