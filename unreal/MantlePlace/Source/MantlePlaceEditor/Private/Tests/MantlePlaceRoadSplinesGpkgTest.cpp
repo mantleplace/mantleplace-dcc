@@ -452,6 +452,80 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("and so is the geojson"), DeclaresPath(TEXT("Vector/RoadSplines.geojson")));
 	}
 
+	// --- The Unreal block's own copy (MPB 1.16.0): read from its own pointer, preferred, verified ---
+	{
+		const FString Template = TEXT(R"JSON({
+  "version": "%VERSION%",
+  "job_id": "g",
+  "vector": { "layers": [ { "name": "road_splines", "vertical_datum": "NAVD88 (GEOID18)", "formats": [
+    { "format": "gpkg", "path": "Vector/RoadSplines.gpkg", "sha256": "bb", "tables": ["RoadSplines"] } ] } ] },
+  "hosts": { "unreal": { "mesh_alternative": { "path": "Mesh/Terrain.glb" }%ENGINE% } }
+})JSON");
+		const FString EngineBlock = TEXT(R"JSON(, "road_splines": {
+    "path": "%PATH%", "format": "gpkg", "tables": ["RoadSplinesEngine"], "crs": "EPSG:4326",
+    "vertical_datum": "%DATUM%", "z_unit": "m", "feature_count": 278, "sha256": "dd", "size_bytes": 4096 }
+)JSON");
+		auto ParseWith = [&](const TCHAR* Version, const TCHAR* Path, const TCHAR* Datum)
+		{
+			const FString Engine = EngineBlock.Replace(TEXT("%PATH%"), Path).Replace(TEXT("%DATUM%"), Datum);
+			FString Error;
+			return MantlePlaceImportManifest::Parse(
+			    Template.Replace(TEXT("%VERSION%"), Version).Replace(TEXT("%ENGINE%"), *Engine), Error);
+		};
+
+		// 1.x: the pointer is read verbatim, beside the shared layer, which is untouched.
+		const FMantlePlaceVaultManifest Us = ParseWith(TEXT("1.16.0"), TEXT("Vector/RoadSplinesEngine.gpkg"), TEXT("EGM2008-orthometric"));
+		TestTrue(TEXT("a 1.16.0 manifest with the pointer parses"), Us.bValid);
+		TestTrue(TEXT("the pointer is declared"), Us.RoadSplines.bEnginePresent);
+		TestEqual(TEXT("its path"), Us.RoadSplines.EnginePath, FString(TEXT("Vector/RoadSplinesEngine.gpkg")));
+		TestEqual(TEXT("its digest is the pointer's own"), Us.RoadSplines.EngineSha256, FString(TEXT("dd")));
+		TestEqual(TEXT("its tables"), Us.RoadSplines.EngineTables.Num(), 1);
+		TestEqual(TEXT("its datum, verbatim"), Us.RoadSplines.EngineVerticalDatum, FString(TEXT("EGM2008-orthometric")));
+		TestTrue(TEXT("the shared layer is still read"), Us.RoadSplines.bGpkgPresent);
+		TestEqual(TEXT("with its own path"), Us.RoadSplines.GpkgPath, FString(TEXT("Vector/RoadSplines.gpkg")));
+		TestEqual(TEXT("and its own NAVD88 datum"), Us.RoadSplines.VerticalDatum, FString(TEXT("NAVD88 (GEOID18)")));
+
+		// The importer tries the copy first and places it; the NAVD88 layer behind it is refused by name.
+		const TArray<FMantlePlaceRoadSplinesCandidate> Plan = Us.GetRoadSplinesPlan();
+		if (TestEqual(TEXT("two sources are declared"), Plan.Num(), 2))
+		{
+			TestTrue(TEXT("the engine copy is first"), Plan[0].Source == EMantlePlaceRoadSplinesSource::EngineCopy);
+			TestTrue(TEXT("and placeable"), Plan[0].bPlaceable);
+			TestTrue(TEXT("the shared layer is second"), Plan[1].Source == EMantlePlaceRoadSplinesSource::SharedLayer);
+			TestFalse(TEXT("and refused"), Plan[1].bPlaceable);
+			TestTrue(TEXT("by its datum"), Plan[1].Refusal.Contains(TEXT("NAVD88 (GEOID18)")));
+		}
+
+		// 2.0: the same pointer names the -Engine twin.
+		const FMantlePlaceVaultManifest Two = ParseWith(TEXT("2.0.0"), TEXT("Features/RoadsDraped-Engine.gpkg"), TEXT("EGM2008-orthometric"));
+		TestTrue(TEXT("a 2.0 manifest with the twin parses"), Two.bValid);
+		TestEqual(TEXT("the twin is read from the same pointer"), Two.RoadSplines.EnginePath, FString(TEXT("Features/RoadsDraped-Engine.gpkg")));
+		const TArray<FMantlePlaceRoadSplinesCandidate> TwoPlan = Two.GetRoadSplinesPlan();
+		TestTrue(TEXT("and placed first"), TwoPlan.Num() > 0 && TwoPlan[0].bPlaceable);
+
+		// The pointer states NAVD88: refused by name, so a US order that carries such a file under
+		// the pointer still places no road and nothing is shifted.
+		const FMantlePlaceVaultManifest Wrong = ParseWith(TEXT("1.16.0"), TEXT("Vector/RoadSplinesEngine.gpkg"), TEXT("NAVD88 (GEOID18)"));
+		bool bAnyPlaceable = false;
+		for (const FMantlePlaceRoadSplinesCandidate& Candidate : Wrong.GetRoadSplinesPlan())
+		{
+			bAnyPlaceable = bAnyPlaceable || Candidate.bPlaceable;
+		}
+		TestFalse(TEXT("a copy stating NAVD88 and a NAVD88 layer place no road"), bAnyPlaceable);
+
+		// Without the pointer (1.8.0 to 1.15.0) the manifest declares the shared layer alone.
+		FString NoEngineError;
+		const FMantlePlaceVaultManifest Older = MantlePlaceImportManifest::Parse(
+		    Template.Replace(TEXT("%VERSION%"), TEXT("1.15.0")).Replace(TEXT("%ENGINE%"), TEXT("")), NoEngineError);
+		TestFalse(TEXT("no pointer: no engine copy is declared"), Older.RoadSplines.bEnginePresent);
+		TestEqual(TEXT("no pointer: the shared layer is the only source"), Older.GetRoadSplinesPlan().Num(), 1);
+
+		// The copy is a declared payload, so it is verified before anything is placed.
+		const TArray<FMantlePlaceDeclaredArtifact> Declared = FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(Us);
+		TestTrue(TEXT("the engine copy is verified"), Declared.ContainsByPredicate(
+			[](const FMantlePlaceDeclaredArtifact& Artifact) { return Artifact.Path == TEXT("Vector/RoadSplinesEngine.gpkg"); }));
+	}
+
 	return true;
 }
 

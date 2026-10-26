@@ -6,7 +6,14 @@ class is in the Runtime module, so a saved level that holds one loads in a cooke
 
 ## Where the roads come from
 
-The importer reads the layer from its GeoPackage, the file the `gpkg` row of the layer's `formats` in
+The heights are placed as the file carries them, and only in the landscape's datum, `EGM2008-orthometric`;
+the importer converts none. It reads the Unreal block's own copy first when the manifest publishes one,
+`hosts.unreal.road_splines` (MPB 1.16.0; a 2.0 bundle's `-Engine` twin): the same roads draped on the
+engine's ground, which a US order needs because its shared layer is `NAVD88 (GEOID18)`. A source that states
+another datum, or none, is skipped by name, so a US bundle that publishes no copy places no roads. The import
+log says how many splines were created and which file they were read from.
+
+Failing that, the importer reads the layer from its GeoPackage, the file the `gpkg` row of the layer's `formats` in
 `vector.layers` points at, through the engine's own SQLiteCore module. The columns it takes are `class`,
 `name` and `width_m_estimated`, and the geometry is the lines of the file's feature tables in
 EPSG:4326 (a table in another frame is refused by name and never reprojected). A row that lists no

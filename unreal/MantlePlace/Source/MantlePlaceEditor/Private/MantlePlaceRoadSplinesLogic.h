@@ -38,6 +38,27 @@ struct FMantlePlaceRoadSplinesDatum
 	bool bRequired = false;
 };
 
+/** A place the road centrelines can be read from, in the order the importer prefers them (HPS-52). */
+enum class EMantlePlaceRoadSplinesSource : uint8
+{
+	/** `hosts.unreal.road_splines` (MPB 1.16.0): this host's own copy, draped on the engine's ground. */
+	EngineCopy,
+	/** `vector.layers[road_splines]`: the layer every host shares, in the datum of the delivered elevation. */
+	SharedLayer,
+};
+
+/** One declared source, with whether its heights may be placed and, when they may not, why. */
+struct FMantlePlaceRoadSplinesCandidate
+{
+	EMantlePlaceRoadSplinesSource Source = EMantlePlaceRoadSplinesSource::SharedLayer;
+
+	/** The heights are in this host's datum (or, on the shared layer, a bundle's version owes none). */
+	bool bPlaceable = false;
+
+	/** Why the source is refused, naming what it stated; empty when it is placeable. */
+	FString Refusal;
+};
+
 /**
  * Pure (engine-/IO-free) logic for the road-splines layer: GeoJSON text -> spline point sets in
  * the Local Projected Frame. The GeoJSON ships WGS84 lon/lat (RFC 7946) with orthometric Z in
@@ -74,6 +95,42 @@ struct FMantlePlaceRoadSplinesLogic
 	 * is deriving one (HPS-33).
 	 */
 	static bool CanPlaceHeights(const FMantlePlaceRoadSplinesDatum& Datum, FString& OutReason);
+
+	/**
+	 * Whether the Unreal block's own road copy (`hosts.unreal.road_splines`, MPB 1.16.0) is in this
+	 * host's vertical datum. The schema fixes the datum of that file to EGM2008-orthometric, and this
+	 * still asks: it is true only when the pointer states exactly `EGM2008-orthometric`, compared
+	 * verbatim, and never because of where the pointer sits or what its file is called. A pointer is a
+	 * statement that was made at 1.16.0 or later, so a missing datum is always owed (unlike the shared
+	 * layer's, which a bundle from before 1.8.0 could not state). False, with OutReason naming what was
+	 * stated, otherwise: the copy is refused by name, nothing is shifted (HPS-33).
+	 */
+	static bool CanPlaceEngineHeights(const FString& StatedDatum, FString& OutReason);
+
+	/**
+	 * The sources the manifest declares for the road centrelines, in the order the importer tries
+	 * them (HPS-52): the Unreal block's own copy first, then the shared layer, each with its datum
+	 * verdict. A source the manifest does not declare is not listed. The importer reads the first
+	 * placeable one that can be read, and logs the refusal of each one it passes over, so a US order
+	 * whose manifest publishes no engine copy still skips the shared layer by name (its NAVD88 heights
+	 * are neither shifted nor placed as they are), and a bundle whose engine copy cannot be read still
+	 * gets its shared layer when that one is placeable.
+	 */
+	static TArray<FMantlePlaceRoadSplinesCandidate> PlanSources(
+	    bool bEngineCopyDeclared,
+	    const FString& EngineStatedDatum,
+	    bool bSharedLayerDeclared,
+	    const FMantlePlaceRoadSplinesDatum& SharedDatum);
+
+	/** "engine" or "shared": the name a source goes by in a corpus row and in the import log. */
+	static const TCHAR* SourceName(EMantlePlaceRoadSplinesSource Source);
+
+	/**
+	 * The importer's one-line statement of where the placed roads were read from, naming the file. The
+	 * engine copy says so, so a reader of the import summary can tell the roads were the engine-datum
+	 * copy and not the shared layer; the shared layer's line is the one the importer has always written.
+	 */
+	static FString DescribeSource(EMantlePlaceRoadSplinesSource Source, const FString& Path);
 
 	/**
 	 * Parse a RoadSplines GeoJSON FeatureCollection into Local-Projected-Frame splines.

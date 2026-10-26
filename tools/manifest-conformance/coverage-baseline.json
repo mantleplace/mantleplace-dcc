@@ -330,6 +330,9 @@
     "manifest.unrealPublicRecordsLegacyLayout": [
       "unreal"
     ],
+    "manifest.unrealRoadSplinesPointer": [
+      "unreal"
+    ],
     "manifest.vectorLayerUnknownName": [
       "revit",
       "unreal"

@@ -7,6 +7,7 @@
 #include "MantlePlaceOdblLogic.h"
 
 class FJsonObject;
+struct FMantlePlaceRoadSplinesCandidate;
 struct FMantlePlaceRoadSplinesDatum;
 struct FMantlePlaceTreePointsFrame;
 
@@ -190,6 +191,14 @@ struct FMantlePlaceVaultManifest
 	 * before the format had one.
 	 */
 	FMantlePlaceRoadSplinesDatum GetRoadSplinesDatum() const; // callers include MantlePlaceRoadSplinesLogic.h
+
+	/**
+	 * Where the road centrelines may be read from and whether each one's heights may be placed: the
+	 * Unreal block's own copy (`hosts.unreal.road_splines`, MPB 1.16.0) first, then the shared layer,
+	 * each only if the manifest declares it (HPS-52). The importer, the live test and the corpus
+	 * row all ask this one question of the manifest. Callers include MantlePlaceRoadSplinesLogic.h.
+	 */
+	TArray<FMantlePlaceRoadSplinesCandidate> GetRoadSplinesPlan() const;
 };
 
 namespace MantlePlaceImportManifest

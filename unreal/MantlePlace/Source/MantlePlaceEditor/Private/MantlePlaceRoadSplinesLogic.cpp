@@ -153,6 +153,68 @@ bool FMantlePlaceRoadSplinesLogic::CanPlaceHeights(const FMantlePlaceRoadSplines
 	return false;
 }
 
+bool FMantlePlaceRoadSplinesLogic::CanPlaceEngineHeights(const FString& StatedDatum, FString& OutReason)
+{
+	OutReason.Reset();
+	if (StatedDatum.IsEmpty())
+	{
+		OutReason = FString::Printf(
+		    TEXT("the engine-datum road copy (hosts.unreal.road_splines) states no vertical datum for its "
+		         "heights, and an unstated datum is never taken to be %s, the datum of this landscape. "
+		         "The copy was not read."),
+		    HostVerticalDatum);
+		return false;
+	}
+	if (StatedDatum.Equals(HostVerticalDatum, ESearchCase::CaseSensitive))
+	{
+		return true;
+	}
+	OutReason = FString::Printf(
+	    TEXT("the engine-datum road copy (hosts.unreal.road_splines) states its heights in \"%s\", not %s, "
+	         "the datum of this landscape. This plugin converts no height, so the copy was not read."),
+	    *StatedDatum, HostVerticalDatum);
+	return false;
+}
+
+TArray<FMantlePlaceRoadSplinesCandidate> FMantlePlaceRoadSplinesLogic::PlanSources(
+    bool bEngineCopyDeclared,
+    const FString& EngineStatedDatum,
+    bool bSharedLayerDeclared,
+    const FMantlePlaceRoadSplinesDatum& SharedDatum)
+{
+	TArray<FMantlePlaceRoadSplinesCandidate> Plan;
+	if (bEngineCopyDeclared)
+	{
+		FMantlePlaceRoadSplinesCandidate Engine;
+		Engine.Source = EMantlePlaceRoadSplinesSource::EngineCopy;
+		Engine.bPlaceable = CanPlaceEngineHeights(EngineStatedDatum, Engine.Refusal);
+		Plan.Add(MoveTemp(Engine));
+	}
+	if (bSharedLayerDeclared)
+	{
+		FMantlePlaceRoadSplinesCandidate Shared;
+		Shared.Source = EMantlePlaceRoadSplinesSource::SharedLayer;
+		Shared.bPlaceable = CanPlaceHeights(SharedDatum, Shared.Refusal);
+		Plan.Add(MoveTemp(Shared));
+	}
+	return Plan;
+}
+
+const TCHAR* FMantlePlaceRoadSplinesLogic::SourceName(EMantlePlaceRoadSplinesSource Source)
+{
+	return Source == EMantlePlaceRoadSplinesSource::EngineCopy ? TEXT("engine") : TEXT("shared");
+}
+
+FString FMantlePlaceRoadSplinesLogic::DescribeSource(EMantlePlaceRoadSplinesSource Source, const FString& Path)
+{
+	if (Source == EMantlePlaceRoadSplinesSource::EngineCopy)
+	{
+		return FString::Printf(
+		    TEXT("Road splines read from %s, the engine-datum copy (hosts.unreal.road_splines)."), *Path);
+	}
+	return FString::Printf(TEXT("Road splines read from %s."), *Path);
+}
+
 bool FMantlePlaceRoadSplinesLogic::IsUtmEpsg(int32 Epsg)
 {
 	// UTM EPSG ranges: 32601-32660 (north) / 32701-32760 (south).
