@@ -70,8 +70,8 @@ The claim and the identifier both looked authoritative, and one of them was a de
 
 A **definition** is a rule statement — the id in backticks at the start of a line, followed by an em
 dash. A passing mention of another rule's precedent is not, so citing a rule nobody wrote stays
-refused. Ids from any other domain are not citable at all: their documents are not published here,
-and the gate refuses to imply otherwise.
+refused. Ids from any other domain are not citable at all: their documents are not published here.
+The gate does not scan for them, so this is a rule for authors and reviewers, not a refusal the gate makes.
 
 ⚠️ This one check cannot document itself with a worked example, and that is a real asymmetry rather
 than an oversight. A refused `#NN` is written inside a code span above, because a code span is how
