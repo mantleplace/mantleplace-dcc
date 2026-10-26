@@ -5,15 +5,15 @@ tools designers actually work in.
 
 | Host | Where | Status |
 | --- | --- | --- |
-| **Unreal Engine 5.8** | [`unreal/`](unreal/README.md) | pre-1.0 |
-| **Autodesk Revit 2025 / 2026 / 2027** ([product page](https://mantle.place/revit)) | [`revit/`](revit/README.md) — builds a native Toposolid for the ground | pre-1.0 |
+| **Unreal Engine 5.8** | [`unreal/`](unreal/README.md) | [Releases](https://github.com/mantleplace/mantleplace-dcc/releases) |
+| **Autodesk Revit 2025 / 2026 / 2027** ([product page](https://mantle.place/revit)) | [`revit/`](revit/README.md) — builds a native Toposolid for the ground | [Releases](https://github.com/mantleplace/mantleplace-dcc/releases) |
 
 Licensed under [Apache 2.0](LICENSE), except the prose in [`spec/`](spec/), which is CC BY 4.0. The name is not covered — see [TRADEMARK.md](TRADEMARK.md).
 
-![Drawing an area of interest on mantle.place: the price updates with every size step, and a 2 km² box is free](https://mantle.place/media/importer/hero-draw-to-price.gif)
+![Drawing an area of interest on mantle.place: the price updates with every size step](https://mantle.place/media/importer/hero-draw-to-price.gif)
 
-*Draw the area, watch the price follow it, land under 2 km² and the order is free. Every capture on
-this page is the live platform and the released plugin, recorded in one unattended pass.*
+*Draw the area and watch the price follow it. Every capture on this page is the live platform and the
+released plugin, recorded in one unattended pass.*
 
 The whole pass, as one film (1:48, silent): **[Mantle Place for Unreal Engine: draw a site, own it
 in UE](https://youtu.be/oJJM80M88Rw)**.
@@ -64,8 +64,8 @@ requires reading a line of our plugin code.
 ## Install a built plugin
 
 [**Releases**](https://github.com/mantleplace/mantleplace-dcc/releases) carry a built plugin per
-host as each track ships, so trying one needs no compiler. Today that is Unreal: **no Revit release
-exists yet**, and Revit is source-only until the first `revit-` tag.
+host, so trying one needs no compiler. Which host has a release, and which is the newest, is the
+Releases page's to say; this README does not keep it.
 
 **Each host has its own release track**, with its own version series and its own cadence — the hosts
 share the manifest contract, not a version number, and their release gates have nothing in common
@@ -77,7 +77,7 @@ exact string the artifact itself declares. The reasoning, and why the first thre
 | Host | Asset | Install |
 | --- | --- | --- |
 | Unreal | `MantlePlace-UE5.8-Win64-<version>.zip` | Extract into a project's `Plugins/` directory and open the project. No compilation step; Windows only. Then read [`unreal/README.md`](unreal/README.md) — in particular, the importer saves nothing. |
-| Revit | `MantlePlace-Revit-<version>.zip` | **Not published yet** — source-only until a `revit-` tag ships ([build it](revit/README.md#build-and-test)). When it does: copy the `Contents` folder's files into `%APPDATA%\Autodesk\Revit\Addins\<year>\`, for each of 2025/2026/2027 you use — or double-click `Install.cmd`. No admin rights, and no .NET install: Revit brings its own. |
+| Revit | `MantlePlace-Revit-<version>.zip` | Copy the `Contents` folder's files into `%APPDATA%\Autodesk\Revit\Addins\<year>\`, for each of 2025/2026/2027 you use — or double-click `Install.cmd`. No admin rights, and no .NET install: Revit brings its own. Building from source is in [`revit/README.md`](revit/README.md#build-and-test). |
 
 The Revit package leads with the manual copy rather than the script on purpose
 ([ADR 0005](docs/adr/0005-release-installs-are-copy-first.md)) — Windows blocks downloaded scripts by
@@ -94,12 +94,13 @@ one. Real geospatial data carries real licence obligations (much of it is ODbL),
 ships a bundle is redistributing that data. So the docs show you how to *make* one instead — and the
 free tier makes that a matter of minutes, not a purchase decision.
 
-**Areas of interest up to 2 km² are free.** $0, full paid-tier quality, an account but no payment
-method. That is the intended way to evaluate these plugins: a real bundle over ground you know,
-produced by the same pipeline as a paid order.
+**Small areas of interest are free**: $0, full paid-tier quality, an account but no payment method.
+The size limit is on the [pricing page](https://mantle.place/pricing). That is the intended way to
+evaluate these plugins: a real bundle over ground you know, produced by the same pipeline as a paid
+order.
 
-1. Create an account at [mantle.place](https://mantle.place) and draw an area of interest — keep it
-   at or under 2 km² and the order is free.
+1. Create an account at [mantle.place](https://mantle.place) and draw an area of interest within the
+   free size.
 2. Order a bundle for your host. The platform packages the artifacts and publishes a manifest.
 3. Either sign in from inside the plugin and use the vault browser, or download the zip and use the
    local-import path:
@@ -163,20 +164,7 @@ and imagery beside the imported Landscape.*
 
 ## Repository layout
 
-```
-unreal/MantlePlace/            the Unreal plugin — MantlePlaceRuntime + MantlePlaceEditor
-revit/                         the Revit plugin — pure Core, Client, Addin shim, headless tests
-spec/                          the published MPB format spec — prose, policy, changelog
-tools/manifest-conformance/    the contract gate + the shared conformance corpus
-tools/mantleplace-mpb/         `mpb validate`, the open bundle validator (pure Python)
-tools/public-hygiene/          the private-reference and docs-integrity gates + their cases
-tools/unreal-naming/           the generated-name drift gate + its cases
-tools/brand-assets/            renders the mark for both hosts; its input is private
-tools/local-install/           the session-start check that a host's local install is the tree
-docs/                          the ADRs, the shared sign-in contract, the agent docs
-.githooks/                     opt-in pre-publication hooks running the hygiene gate
-.github/workflows/             the five public CI gates, plus tracker hygiene
-```
+The layout, directory by directory, is in [`CLAUDE.md`](CLAUDE.md#layout), which keeps it current.
 
 Start with each host's own docs: [`unreal/README.md`](unreal/README.md) for Unreal and
 [`revit/README.md`](revit/README.md) for Revit. Sign-in is shared by both hosts and documented once,
@@ -211,18 +199,11 @@ python tools/manifest-conformance/check_manifest_conformance.py
 
 ## CI, and what it does not cover
 
-Five workflows run on every pull request, on free hosted runners: `ci-manifest-conformance`,
-`ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming` and `ci-brand-assets`. The third checks tracked files *and*
-the pull request's title, body, branch name and commit messages for references that resolve only in
-a private repository, and checks that every relative link in a Markdown file resolves, that the
-agent-facing documents carry their frontmatter, and that the ADR index in `CLAUDE.md` still matches
-`docs/adr/` (see [CONTRIBUTING.md](CONTRIBUTING.md)). The fourth refuses a generated asset
-name or package path built anywhere but the Unreal naming module — text-only, and the one automated
-check standing in front of a naming regression, since nothing here compiles the plugin. The fifth
-tests the geometry behind the rendered Mantle Place mark; it cannot render one, because that input is
-private. Together they are the objective merge bar.
+Every pull request runs the public CI gates, on free hosted runners. What each checks, and which are
+required, is the [CI guide](docs/agents/ci.md); the process for a change is in
+[CONTRIBUTING.md](CONTRIBUTING.md) and [`CLAUDE.md`](CLAUDE.md). The public gates are the objective merge bar.
 
-**The Unreal compile is not among them.** It needs a licensed engine on Windows, and attaching a
+**The Unreal compile is not among the gates.** It needs a licensed engine on Windows, and attaching a
 self-hosted runner to a public repository would let a fork's pull request execute on the build
 machine. So the engine build runs privately and at integration time. A pull request here can go green
 and still break the Unreal compile; releases gate on that private build being green. This is a real,
@@ -230,10 +211,8 @@ accepted lag rather than a gap we would rather you not notice.
 
 ## Roadmap
 
-Quarter-by-quarter, in [ROADMAP.md](ROADMAP.md). The headline: **World Partition large-AOI import**,
-the main course of the Unreal plugin's path to 1.0. The Unreal importer is listed on Fab before 1.0, once a
-release gate holds, with each GitHub release submitted to Fab the same day; GitHub Releases stays the primary
-channel. What each host does today is the [host support matrix](docs/host-support.md).
+When each thing is planned is [ROADMAP.md](ROADMAP.md). What each host does today is the
+[host support matrix](docs/host-support.md).
 
 ## Contributing
 
