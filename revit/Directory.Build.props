@@ -26,7 +26,7 @@
       claimed to be a 1.0. Revit's own version series starts here, at 0.1.0, and does not track
       Unreal's: the hosts release on separate clocks and share a contract, not a number.
     -->
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
   <PropertyGroup>
