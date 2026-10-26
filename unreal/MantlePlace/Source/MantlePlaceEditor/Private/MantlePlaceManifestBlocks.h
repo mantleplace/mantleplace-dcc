@@ -214,7 +214,12 @@ struct FMantlePlaceBuildingsBlock
 
 /** The derived "road_splines" layer of the top-level `vector.layers[]` (-> spline actors). The importer
  *  reads the layer's GeoPackage when its `gpkg` format row is there, and falls back to the GeoJSON
- *  row when it is not: the two rows are the same roads in the same frame. */
+ *  row when it is not: the two rows are the same roads in the same frame.
+ *
+ *  Before either, it reads this host's own copy when the Unreal block publishes one,
+ *  `hosts.unreal.road_splines` (MPB 1.16.0; a 2.0 bundle's `Features/RoadsDraped-Engine.gpkg`): the
+ *  same roads draped on the engine's ground, so their heights are the landscape's datum on a US order,
+ *  where the shared layer's are not. */
 struct FMantlePlaceRoadSplinesBlock
 {
 	bool bPresent = false;          // the GeoJSON row is declared (the fallback source)
@@ -227,6 +232,14 @@ struct FMantlePlaceRoadSplinesBlock
 	TArray<FString> GpkgTables;     // the row's `tables` member; empty = the file holds exactly one feature table, read whatever it is named
 	FString VerticalDatum;          // vector.layers[road_splines].vertical_datum, verbatim (MPB 1.8.0);
 	                                // FMantlePlaceRoadSplinesLogic::CanPlaceHeights decides
+
+	bool bEnginePresent = false;    // hosts.unreal.road_splines names a file (MPB 1.16.0): the source read first
+	FString EnginePath;             // in-zip path, e.g. "Vector/RoadSplinesEngine.gpkg" or "Features/RoadsDraped-Engine.gpkg"
+	FString EngineSha256;           // the pointer's own digest (HPS-33: this block, not the shared layer's); empty = skip check
+	TArray<FString> EngineTables;   // the pointer's `tables`; empty = the file holds exactly one feature table
+	FString EngineVerticalDatum;    // hosts.unreal.road_splines.vertical_datum, verbatim; the schema fixes it to
+	                                // EGM2008-orthometric and FMantlePlaceRoadSplinesLogic::CanPlaceEngineHeights
+	                                // still asks, never assuming it from the pointer's name
 };
 
 /**

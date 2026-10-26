@@ -273,6 +273,120 @@ bool FMantlePlaceRoadSplinesLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("all placed reports the created count"), AllLine.Contains(TEXT("created (4")));
 	}
 
+	// --- Which source the roads come from (MPB 1.16.0; HPS-52) -----------------------------------
+	// A US order's shared layer is NAVD88 and the landscape is EGM2008, so the Unreal block's own
+	// copy is read first and the shared layer stays behind its datum check. Nothing here converts a
+	// height: a source is placed as the file carries it or it is refused by name.
+	{
+		const FString Egm = TEXT("EGM2008-orthometric");
+		const FString Navd = TEXT("NAVD88 (GEOID18)");
+		const FMantlePlaceRoadSplinesDatum SharedNavd{ Navd, /*bRequired*/ true };
+		const FMantlePlaceRoadSplinesDatum SharedEgm{ Egm, /*bRequired*/ true };
+		const FMantlePlaceRoadSplinesDatum SharedPre18{ FString(), /*bRequired*/ false };
+
+		const auto FirstPlaceable = [](const TArray<FMantlePlaceRoadSplinesCandidate>& Plan) -> const FMantlePlaceRoadSplinesCandidate*
+		{
+			return Plan.FindByPredicate([](const FMantlePlaceRoadSplinesCandidate& Candidate) { return Candidate.bPlaceable; });
+		};
+
+		// A US order at 1.16.0: the copy states EGM2008, the shared layer NAVD88. The copy is placed;
+		// the shared layer is passed over by name, never shifted and never placed as it is.
+		{
+			const TArray<FMantlePlaceRoadSplinesCandidate> Plan = FLogic::PlanSources(true, Egm, true, SharedNavd);
+			if (TestEqual(TEXT("a US 1.16.0 order lists both sources"), Plan.Num(), 2))
+			{
+				TestTrue(TEXT("the engine copy comes first"), Plan[0].Source == EMantlePlaceRoadSplinesSource::EngineCopy);
+				TestTrue(TEXT("the engine copy states this host's datum and is placeable"), Plan[0].bPlaceable);
+				TestTrue(TEXT("a placeable source carries no refusal"), Plan[0].Refusal.IsEmpty());
+				TestTrue(TEXT("the shared layer comes second"), Plan[1].Source == EMantlePlaceRoadSplinesSource::SharedLayer);
+				TestFalse(TEXT("the shared NAVD88 layer is not placeable"), Plan[1].bPlaceable);
+				TestTrue(TEXT("and its refusal names the datum it stated"), Plan[1].Refusal.Contains(Navd));
+			}
+			const FMantlePlaceRoadSplinesCandidate* Chosen = FirstPlaceable(Plan);
+			if (TestNotNull(TEXT("the roads are placed"), Chosen))
+			{
+				TestTrue(TEXT("from the engine copy"), Chosen->Source == EMantlePlaceRoadSplinesSource::EngineCopy);
+			}
+		}
+
+		// A US order at 1.8.0 to 1.15.0 publishes no copy: the shared layer is the only source, it
+		// is NAVD88, and the order gets no roads rather than shifted or unshifted ones.
+		{
+			const TArray<FMantlePlaceRoadSplinesCandidate> Plan = FLogic::PlanSources(false, FString(), true, SharedNavd);
+			if (TestEqual(TEXT("without the pointer only the shared layer is a source"), Plan.Num(), 1))
+			{
+				TestTrue(TEXT("it is the shared layer"), Plan[0].Source == EMantlePlaceRoadSplinesSource::SharedLayer);
+				TestFalse(TEXT("which is not placeable"), Plan[0].bPlaceable);
+				TestTrue(TEXT("and is refused by the datum it stated"), Plan[0].Refusal.Contains(Navd));
+			}
+			TestNull(TEXT("no road is placed"), FirstPlaceable(Plan));
+		}
+
+		// A non-US order, and a bundle from before the format stated a datum, place the shared layer
+		// exactly as before.
+		{
+			const TArray<FMantlePlaceRoadSplinesCandidate> NonUs = FLogic::PlanSources(false, FString(), true, SharedEgm);
+			const FMantlePlaceRoadSplinesCandidate* NonUsChosen = FirstPlaceable(NonUs);
+			if (TestNotNull(TEXT("a non-US order places its roads"), NonUsChosen))
+			{
+				TestTrue(TEXT("from the shared layer"), NonUsChosen->Source == EMantlePlaceRoadSplinesSource::SharedLayer);
+			}
+			const TArray<FMantlePlaceRoadSplinesCandidate> Old = FLogic::PlanSources(false, FString(), true, SharedPre18);
+			const FMantlePlaceRoadSplinesCandidate* OldChosen = FirstPlaceable(Old);
+			if (TestNotNull(TEXT("a bundle from before 1.8.0 places its roads"), OldChosen))
+			{
+				TestTrue(TEXT("from the shared layer"), OldChosen->Source == EMantlePlaceRoadSplinesSource::SharedLayer);
+			}
+		}
+
+		// The pointer's datum is asked, not assumed from where the pointer sits or what its file is
+		// called. A copy that states another datum, none, or EGM2008 in other letters is refused by
+		// name, and the shared layer is then the only one that can be placed.
+		{
+			const TCHAR* Wrong[] = { TEXT("NAVD88 (GEOID18)"), TEXT("a-datum-no-reader-knows"), TEXT("egm2008-orthometric"), TEXT("") };
+			for (const TCHAR* Stated : Wrong)
+			{
+				FString Reason;
+				TestFalse(*FString::Printf(TEXT("an engine copy stating \"%s\" is refused"), Stated),
+					FLogic::CanPlaceEngineHeights(Stated, Reason));
+				TestFalse(*FString::Printf(TEXT("\"%s\": the refusal is named"), Stated), Reason.IsEmpty());
+				if (FCString::Strlen(Stated) > 0)
+				{
+					TestTrue(*FString::Printf(TEXT("\"%s\": the refusal names what was stated"), Stated), Reason.Contains(Stated));
+				}
+				else
+				{
+					TestTrue(TEXT("an unstated datum is named as unstated"), Reason.Contains(TEXT("states no vertical datum")));
+				}
+
+				const TArray<FMantlePlaceRoadSplinesCandidate> Plan = FLogic::PlanSources(true, Stated, true, SharedNavd);
+				TestNull(*FString::Printf(TEXT("\"%s\": a refused copy and a NAVD88 layer place nothing"), Stated), FirstPlaceable(Plan));
+			}
+			FString Reason;
+			TestTrue(TEXT("an engine copy stating EGM2008 is placeable"), FLogic::CanPlaceEngineHeights(Egm, Reason));
+			TestTrue(TEXT("with no refusal"), Reason.IsEmpty());
+
+			// The copy's refusal leaves the shared layer to be judged on its own datum.
+			const TArray<FMantlePlaceRoadSplinesCandidate> Fallback = FLogic::PlanSources(true, Navd, true, SharedEgm);
+			const FMantlePlaceRoadSplinesCandidate* FallbackChosen = FirstPlaceable(Fallback);
+			if (TestNotNull(TEXT("a refused copy beside a placeable shared layer still places roads"), FallbackChosen))
+			{
+				TestTrue(TEXT("from the shared layer"), FallbackChosen->Source == EMantlePlaceRoadSplinesSource::SharedLayer);
+			}
+		}
+
+		TestEqual(TEXT("a manifest declaring no road source plans none"),
+			FLogic::PlanSources(false, FString(), false, SharedEgm).Num(), 0);
+
+		// The log names where the placed roads were read from: the engine copy says so.
+		const FString EngineLine = FLogic::DescribeSource(EMantlePlaceRoadSplinesSource::EngineCopy, TEXT("Vector/RoadSplinesEngine.gpkg"));
+		const FString SharedLine = FLogic::DescribeSource(EMantlePlaceRoadSplinesSource::SharedLayer, TEXT("Vector/RoadSplines.gpkg"));
+		TestTrue(TEXT("the engine line names the file"), EngineLine.Contains(TEXT("Vector/RoadSplinesEngine.gpkg")));
+		TestTrue(TEXT("and says it is the engine-datum copy"), EngineLine.Contains(TEXT("engine-datum copy")));
+		TestEqual(TEXT("the shared layer's line is the one the importer has always written"),
+			SharedLine, FString(TEXT("Road splines read from Vector/RoadSplines.gpkg.")));
+	}
+
 	return true;
 }
 

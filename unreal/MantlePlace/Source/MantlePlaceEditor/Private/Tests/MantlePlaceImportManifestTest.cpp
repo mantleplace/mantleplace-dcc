@@ -658,8 +658,9 @@ TSharedPtr<FJsonObject> RoadSplinesLayer(const TSharedPtr<FJsonObject>& Manifest
 
 /**
  * The case's embedded `manifest` with the row's overlays laid on it: `root` over the document,
- * `unreal` over `hosts.unreal`, `foliagePoints` over `hosts.unreal.foliage_points` and
- * `roadSplines` over the `road_splines` entry of `vector.layers`, in that order. One manifest per
+ * `unreal` over `hosts.unreal`, `foliagePoints` over `hosts.unreal.foliage_points`,
+ * `engineRoadSplines` over `hosts.unreal.road_splines` and `roadSplines` over the `road_splines`
+ * entry of `vector.layers`, in that order. One manifest per
  * case and a few members per row keeps the table about the frame and not about the document.
  * Empty — which no parser accepts — when an overlay has nothing to land on.
  */
@@ -679,7 +680,8 @@ FString ManifestWithOverlays(const FCase& Case, const TSharedPtr<FJsonObject>& R
 	const TSharedPtr<FJsonObject> Unreal = Child(Child(Manifest, TEXT("hosts")), TEXT("unreal"));
 	if (!OverlayMembers(Row, TEXT("root"), Manifest)
 		|| !OverlayMembers(Row, TEXT("unreal"), Unreal)
-		|| !OverlayMembers(Row, TEXT("foliagePoints"), Child(Unreal, TEXT("foliage_points"))))
+		|| !OverlayMembers(Row, TEXT("foliagePoints"), Child(Unreal, TEXT("foliage_points")))
+		|| !OverlayMembers(Row, TEXT("engineRoadSplines"), Child(Unreal, TEXT("road_splines"))))
 	{
 		return FString();
 	}
@@ -1054,6 +1056,71 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 	else
 	{
 		AddError(TEXT("corpus case manifest.roadSplinesStatedDatum has gone missing"));
+	}
+
+	// --- The Unreal block's own road copy is read first, and its datum is asked (MPB 1.16.0) -----
+	// Each row lays its members over the one embedded manifest and parses it again, so what is proven
+	// is the importer's path: Parse, then GetRoadSplinesPlan, which the importer walks in order. A
+	// source that is declared but not placeable is refused by name, and nothing is shifted.
+	if (const FCase* Case = FindCase(Cases, TEXT("manifest.unrealRoadSplinesPointer")))
+	{
+		Driven.Add(Case->Id);
+		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("rows"));
+		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
+		for (const TSharedPtr<FJsonObject>& Row : Vectors)
+		{
+			const FString Name = RowString(Row, TEXT("name"));
+			const FString Overlaid = ManifestWithOverlays(*Case, Row);
+			FString ManifestError;
+			const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(Overlaid, ManifestError);
+			const FString Parses = FString::Printf(TEXT("\"%s\": embedded manifest parses (%s)"), *Name, *ManifestError);
+			TestTrue(Case->What(*Parses), M.bValid);
+
+			TArray<FString> Declared;
+			TArray<FString> Placeable;
+			TArray<FString> Refusals;
+			for (const FMantlePlaceRoadSplinesCandidate& Candidate : M.GetRoadSplinesPlan())
+			{
+				Declared.Add(FMantlePlaceRoadSplinesLogic::SourceName(Candidate.Source));
+				if (Candidate.bPlaceable)
+				{
+					Placeable.Add(FMantlePlaceRoadSplinesLogic::SourceName(Candidate.Source));
+					const FString NoRefusal = FString::Printf(TEXT("\"%s\": a placeable source carries no refusal"), *Name);
+					TestTrue(Case->What(*NoRefusal), Candidate.Refusal.IsEmpty());
+				}
+				else
+				{
+					const FString StatesReason = FString::Printf(TEXT("\"%s\": a refused source states a reason"), *Name);
+					TestFalse(Case->What(*StatesReason), Candidate.Refusal.IsEmpty());
+					Refusals.Add(Candidate.Refusal);
+				}
+			}
+			const FString DeclaredWhat = FString::Printf(TEXT("\"%s\": the sources the manifest declares, in order"), *Name);
+			TestEqual(Case->What(*DeclaredWhat), FString::Join(Declared, TEXT(",")),
+				FString::Join(RowStrings(Row, TEXT("declared")), TEXT(",")));
+			const FString PlaceableWhat = FString::Printf(TEXT("\"%s\": the sources whose heights are placed, in order"), *Name);
+			TestEqual(Case->What(*PlaceableWhat), FString::Join(Placeable, TEXT(",")),
+				FString::Join(RowStrings(Row, TEXT("placeable")), TEXT(",")));
+
+			const FString EnginePath = RowString(Row, TEXT("enginePath"));
+			if (!EnginePath.IsEmpty())
+			{
+				const FString PathWhat = FString::Printf(TEXT("\"%s\": the copy is read from its own pointer"), *Name);
+				TestEqual(Case->What(*PathWhat), M.RoadSplines.EnginePath, EnginePath);
+			}
+			// A refusal names what was stated, as HPS-53's named skip does.
+			const FString ErrorContains = RowString(Row, TEXT("errorContains"));
+			if (!ErrorContains.IsEmpty())
+			{
+				const FString All = FString::Join(Refusals, TEXT(" "));
+				const FString Contains = FString::Printf(TEXT("\"%s\" a refusal contains \"%s\" (got: %s)"), *Name, *ErrorContains, *All);
+				TestTrue(Case->What(*Contains), All.Contains(ErrorContains, ESearchCase::CaseSensitive));
+			}
+		}
+	}
+	else
+	{
+		AddError(TEXT("corpus case manifest.unrealRoadSplinesPointer has gone missing"));
 	}
 
 	// Vector cases' `expectations`, swept once every id-dispatched assertion above has run. HPS-46

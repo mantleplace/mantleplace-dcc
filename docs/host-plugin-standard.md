@@ -1227,7 +1227,10 @@ _Enforcer:_ `agent-review`, and for the Revit host the corpus case
 `manifest.revitOwnFramePointers`: a bundle on a State Plane delivery whose block points at host-frame vector and
 drape copies beside host-neutral copies of the same content in another frame, with the pointers the
 host takes expected to be its own block's. It carries `appliesTo` for that host, because the pair it
-states is that block's; a case for the fixed-frame host's own pointers is that host's to add.
+states is that block's. For the fixed-frame host the corpus case `manifest.unrealRoadSplinesPointer`
+pins the road centrelines: the `unreal` block's own copy is tried first and the shared layer after it,
+and the copy's datum is asked and never assumed from the pointer. It carries `appliesTo` for that host
+too; a case for that host's other pointers is that host's to add.
 
 ⛔ **`HPS-53` — A host places a file only where it can show the file's frame is its host frame, and
 otherwise refuses that file by name.** Read the frame from the thing you are placing — never from the

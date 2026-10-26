@@ -147,6 +147,13 @@ FMantlePlaceRoadSplinesDatum FMantlePlaceVaultManifest::GetRoadSplinesDatum() co
 	return Datum;
 }
 
+TArray<FMantlePlaceRoadSplinesCandidate> FMantlePlaceVaultManifest::GetRoadSplinesPlan() const
+{
+	return FMantlePlaceRoadSplinesLogic::PlanSources(
+	    RoadSplines.bEnginePresent, RoadSplines.EngineVerticalDatum,
+	    RoadSplines.bPresent || RoadSplines.bGpkgPresent, GetRoadSplinesDatum());
+}
+
 // ── Parsing ────────────────────────────────────────────────────────────────
 
 using MantlePlaceManifestJson::GetInt;

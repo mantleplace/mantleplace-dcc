@@ -1,0 +1,369 @@
+{
+  "$comment": [
+    "The Unreal block publishes its own copy of the road centrelines (`hosts.unreal.road_splines`, MPB 1.16.0;",
+    "a 2.0 bundle names its `-Engine` twin there too), and a reader prefers it to the shared layer (HPS-52).",
+    "",
+    "Why it exists: the Unreal host is fixed-frame vertically, its landscape EGM2008 orthometric on every",
+    "order, and from 1.8.0 a US order's shared `road_splines` layer is NAVD88 (GEOID18), which",
+    "`manifest.roadSplinesStatedDatum` refuses by name. The copy is the same roads draped on the engine's",
+    "ground, so its heights are the landscape's and are placed as the file carries them. Nothing here",
+    "converts a height: the published offset between the datums is one number for the whole site and is",
+    "not this host's to apply, so a layer in the wrong datum is never shifted, only refused or passed over.",
+    "",
+    "A reader tries the sources in order -- the copy, then the shared layer -- and places the first it can",
+    "read whose datum is its own. The datum of each is asked of what it states, never assumed from the",
+    "pointer's name: a copy stating anything but `EGM2008-orthometric` verbatim (NAVD88, a datum no reader",
+    "knows, a spelling that differs only in case, or none at all) is refused by name and the shared layer",
+    "is judged on its own datum as before. A US order whose manifest publishes no copy (1.8.0 to 1.15.0, or",
+    "a US order whose engine DEM was not staged) places no road, as `manifest.roadSplinesStatedDatum` has it,",
+    "and an order outside the US, or a bundle from before 1.8.0, places the shared layer exactly as before.",
+    "",
+    "`manifest` is one embedded 1.16.0 US document. Each row lays its own members over it before it is",
+    "parsed -- `root` over the document, `unreal` over `hosts.unreal`, `engineRoadSplines` over",
+    "`hosts.unreal.road_splines` and `roadSplines` over the `road_splines` entry of `vector.layers`; a",
+    "value sets a member and null removes it -- so the decision is proven through the parser, not beside",
+    "it. A row's `declared` lists the sources the manifest names, in the order they are tried, and",
+    "`placeable` the ones among them whose heights may be placed, in that order: the first is the one the",
+    "roads are read from. `errorContains` is asserted against the refusals of the sources that are not",
+    "placeable, and `enginePath` against the path the copy is read from."
+  ],
+  "manifest": {
+    "version": "1.16.0",
+    "job_id": "fixture-mpb-unreal-road-splines",
+    "order_id": "ord-unreal-road-splines-1",
+    "location": {
+      "time_zone": {
+        "iana": "America/Denver",
+        "utc_offset_standard_h": -7,
+        "observes_dst": true,
+        "tzdata_version": "2026b"
+      }
+    },
+    "delivery": {
+      "unit_system": "metric",
+      "tier": "metric",
+      "horizontal_epsg": 32613,
+      "linear_unit": "m",
+      "label": "WGS 84 / UTM zone 13N"
+    },
+    "landcover": {
+      "tree_points": {
+        "path": "Landcover/TreePoints.csv",
+        "crs": "EPSG:32613",
+        "units": "m",
+        "horizontal_units": "m",
+        "point_count": 3,
+        "columns": [
+          "x",
+          "y",
+          "ground_z",
+          "height_m",
+          "crown_radius_m",
+          "foliage_type"
+        ],
+        "foliage_type_vocabulary": "1",
+        "vertical_datum": "NAVD88 (GEOID18)"
+      }
+    },
+    "hosts": {
+      "unreal": {
+        "engine_min_version": "5.7",
+        "georeference": {
+          "crs_projected": "EPSG:32613",
+          "crs_geographic": "EPSG:4326",
+          "origin": {
+            "lon": -105.64620798739834,
+            "lat": 36.27254939041837,
+            "utm": {
+              "epsg": 32613,
+              "easting_m": 441959.49999999854,
+              "northing_m": 4014372.4999999995
+            },
+            "ground_orthometric_h_m": 2640.955078125
+          },
+          "planet_shape": "Flat",
+          "is_projected": true
+        },
+        "file_frame": {
+          "type": "projected",
+          "crs": "EPSG:32613",
+          "horizontal_unit": "m",
+          "vertical_unit": "m"
+        },
+        "heightmap": {
+          "path": "Elevation/Heightmap.png",
+          "format": "png-16bit-grayscale",
+          "resolution": 1009,
+          "row0_is_north": true,
+          "native_gsd_m": 1,
+          "landscape_post_spacing_m": 1.4136904761904763,
+          "uint16_mapping": {
+            "z_min_m": 2577.826171875,
+            "z_max_m": 2962.585693359375,
+            "datum": "EGM2008-orthometric",
+            "to_meters": "z_m = z_min_m + (u16/65535)*(z_max_m - z_min_m)",
+            "quantization_step_m": 0.005871053963292515
+          },
+          "landscape_transform": {
+            "z_scale_percent": 75.14834403991699,
+            "scale_x_percent": 141.36904761904762,
+            "scale_y_percent": 138.98809523809524,
+            "location_z_offset_cm": 277020.59326171875,
+            "section_size_quads": 63,
+            "sections_per_component": 2,
+            "component_count_x": 8,
+            "component_count_y": 8
+          },
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "mesh_alternative": {
+          "path": "Mesh/Terrain.glb",
+          "up_axis": "y",
+          "nanite_recommended": true,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "foliage_points": {
+          "path": "Landcover/TreePoints.csv",
+          "crs": "EPSG:32613",
+          "units": "m",
+          "horizontal_units": "m",
+          "columns": [
+            "x",
+            "y",
+            "ground_z",
+            "height_m",
+            "crown_radius_m",
+            "foliage_type"
+          ],
+          "vertical_datum": "EGM2008-orthometric"
+        },
+        "readiness": {
+          "landscape": {
+            "present": true
+          },
+          "mesh_terrain": {
+            "present": true,
+            "tile_count": 4
+          },
+          "mesh_import": {
+            "present": true
+          }
+        },
+        "road_splines": {
+          "path": "Vector/RoadSplinesEngine.gpkg",
+          "format": "gpkg",
+          "tables": [
+            "RoadSplinesEngine"
+          ],
+          "crs": "EPSG:4326",
+          "vertical_datum": "EGM2008-orthometric",
+          "z_unit": "m",
+          "feature_count": 3,
+          "sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+          "size_bytes": 8192
+        }
+      }
+    },
+    "vector": {
+      "present": true,
+      "crs": "EPSG:4326",
+      "layers": [
+        {
+          "name": "road_splines",
+          "feature_count": 1,
+          "vertical_datum": "NAVD88 (GEOID18)",
+          "formats": [
+            {
+              "format": "geojson",
+              "path": "Vector/RoadSplines.geojson",
+              "sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+            },
+            {
+              "format": "gpkg",
+              "path": "Vector/RoadSplines.gpkg",
+              "sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+              "tables": [
+                "RoadSplines"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "rows": [
+    {
+      "name": "a US order at 1.16.0: the engine copy is placed, and the NAVD88 shared layer is passed over, not shifted",
+      "declared": [
+        "engine",
+        "shared"
+      ],
+      "placeable": [
+        "engine"
+      ],
+      "enginePath": "Vector/RoadSplinesEngine.gpkg",
+      "errorContains": "NAVD88 (GEOID18)"
+    },
+    {
+      "name": "a US order at 1.15.0, whose manifest publishes no copy: the NAVD88 layer is refused by name and no road is placed",
+      "root": {
+        "version": "1.15.0"
+      },
+      "unreal": {
+        "road_splines": null
+      },
+      "declared": [
+        "shared"
+      ],
+      "placeable": [],
+      "errorContains": "NAVD88 (GEOID18)"
+    },
+    {
+      "name": "a US order at 1.8.0, the first version that states the datum, and no copy: still no road, never an unshifted one",
+      "root": {
+        "version": "1.8.0"
+      },
+      "unreal": {
+        "road_splines": null
+      },
+      "declared": [
+        "shared"
+      ],
+      "placeable": [],
+      "errorContains": "NAVD88 (GEOID18)"
+    },
+    {
+      "name": "an order outside the US at 1.16.0 publishes no copy and places its EGM2008 shared layer, as before",
+      "unreal": {
+        "road_splines": null
+      },
+      "roadSplines": {
+        "vertical_datum": "EGM2008-orthometric"
+      },
+      "declared": [
+        "shared"
+      ],
+      "placeable": [
+        "shared"
+      ]
+    },
+    {
+      "name": "a bundle from before 1.8.0 states no datum and places its shared layer, as before",
+      "root": {
+        "version": "1.7.0"
+      },
+      "unreal": {
+        "road_splines": null
+      },
+      "roadSplines": {
+        "vertical_datum": null
+      },
+      "declared": [
+        "shared"
+      ],
+      "placeable": [
+        "shared"
+      ]
+    },
+    {
+      "name": "a 2.0 bundle names its -Engine twin under the same pointer, and the twin is placed",
+      "root": {
+        "version": "2.0.0"
+      },
+      "engineRoadSplines": {
+        "path": "Features/RoadsDraped-Engine.gpkg",
+        "tables": [
+          "RoadsDraped"
+        ]
+      },
+      "declared": [
+        "engine",
+        "shared"
+      ],
+      "placeable": [
+        "engine"
+      ],
+      "enginePath": "Features/RoadsDraped-Engine.gpkg",
+      "errorContains": "NAVD88 (GEOID18)"
+    },
+    {
+      "name": "a copy that states NAVD88 under the pointer is refused by name: the pointer's name does not make it the engine's datum",
+      "engineRoadSplines": {
+        "vertical_datum": "NAVD88 (GEOID18)"
+      },
+      "declared": [
+        "engine",
+        "shared"
+      ],
+      "placeable": [],
+      "errorContains": "hosts.unreal.road_splines"
+    },
+    {
+      "name": "a copy that states a datum no reader knows is refused: an unknown datum fails closed",
+      "engineRoadSplines": {
+        "vertical_datum": "a-datum-no-reader-knows"
+      },
+      "declared": [
+        "engine",
+        "shared"
+      ],
+      "placeable": [],
+      "errorContains": "a-datum-no-reader-knows"
+    },
+    {
+      "name": "the copy's datum is compared verbatim: a spelling that differs only in case is not this host's",
+      "engineRoadSplines": {
+        "vertical_datum": "egm2008-orthometric"
+      },
+      "declared": [
+        "engine",
+        "shared"
+      ],
+      "placeable": [],
+      "errorContains": "egm2008-orthometric"
+    },
+    {
+      "name": "a copy that states no datum is refused: an unstated datum is never assumed to be the engine's",
+      "engineRoadSplines": {
+        "vertical_datum": null
+      },
+      "declared": [
+        "engine",
+        "shared"
+      ],
+      "placeable": [],
+      "errorContains": "states no vertical datum"
+    },
+    {
+      "name": "a refused copy beside an EGM2008 shared layer still places the shared layer",
+      "engineRoadSplines": {
+        "vertical_datum": "NAVD88 (GEOID18)"
+      },
+      "roadSplines": {
+        "vertical_datum": "EGM2008-orthometric"
+      },
+      "declared": [
+        "engine",
+        "shared"
+      ],
+      "placeable": [
+        "shared"
+      ],
+      "errorContains": "NAVD88 (GEOID18)"
+    },
+    {
+      "name": "a copy in the engine's datum is placed whatever the shared layer states, even nothing",
+      "roadSplines": {
+        "vertical_datum": null
+      },
+      "declared": [
+        "engine",
+        "shared"
+      ],
+      "placeable": [
+        "engine"
+      ],
+      "errorContains": "states no vertical datum"
+    }
+  ]
+}

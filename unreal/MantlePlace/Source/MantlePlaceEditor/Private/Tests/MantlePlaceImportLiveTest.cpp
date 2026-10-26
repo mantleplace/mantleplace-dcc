@@ -398,11 +398,12 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			TEXT("Import Mantle Place Vault Package"));
 	}
 
-	// New-layer assertions fire only when the bundle actually ships the layer. Either row declares it:
+	// New-layer assertions fire only when the bundle actually ships the layer. Any source declares it:
 	// a 2.0 bundle publishes the road layer as a GeoPackage alone, with no GeoJSON row, and a check
-	// keyed on the GeoJSON row passed over every 2.0 bundle's roads without asserting anything.
+	// keyed on the GeoJSON row passed over every 2.0 bundle's roads without asserting anything. The
+	// Unreal block's own copy (MPB 1.16.0) is a source too, the one a US order's roads come from.
 	bool bRoadSplinesPlaceable = false;
-	if (Manifest.RoadSplines.bPresent || Manifest.RoadSplines.bGpkgPresent)
+	if (Manifest.RoadSplines.bEnginePresent || Manifest.RoadSplines.bPresent || Manifest.RoadSplines.bGpkgPresent)
 	{
 		int32 NumSplineActors = 0;
 		for (const FString& Label : Result.CreatedActors)
@@ -412,22 +413,27 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 				++NumSplineActors;
 			}
 		}
-		// Assert on what the importer decided, not on the layer being present: a layer whose heights
+		// Assert on what the importer decided, not on the layer being present: a source whose heights
 		// are not in this landscape's datum is a named skip (#278), never shifted, so it places nothing.
-		// The decision is asked of the importer's own predicate, not re-derived here.
-		FString DatumRefusal;
-		if (FMantlePlaceRoadSplinesLogic::CanPlaceHeights(Manifest.GetRoadSplinesDatum(), DatumRefusal))
+		// The decision is asked of the importer's own plan, not re-derived here: the Unreal block's copy
+		// first, then the shared layer, the first placeable source being the one the roads come from.
+		const TArray<FMantlePlaceRoadSplinesCandidate> RoadPlan = Manifest.GetRoadSplinesPlan();
+		const FMantlePlaceRoadSplinesCandidate* RoadSource = RoadPlan.FindByPredicate(
+			[](const FMantlePlaceRoadSplinesCandidate& Candidate) { return Candidate.bPlaceable; });
+		if (RoadSource != nullptr)
 		{
 			bRoadSplinesPlaceable = true;
 			TestTrue(TEXT("road-splines bundle produced at least one spline actor"), NumSplineActors >= 1);
-			// The GeoPackage is the source read first; a bundle that declares one must have its roads
-			// from it, not from the GeoJSON fallback the importer takes when the GeoPackage fails.
-			if (Manifest.RoadSplines.bGpkgPresent)
+			// The source is read from its GeoPackage first; a bundle that declares one must have its roads
+			// from it, not from the GeoJSON fallback the importer takes when the GeoPackage fails. The
+			// engine copy, when the manifest publishes one, is the source and its line says so.
+			const bool bEngineCopy = RoadSource->Source == EMantlePlaceRoadSplinesSource::EngineCopy;
+			if (bEngineCopy || Manifest.RoadSplines.bGpkgPresent)
 			{
-				TestTrue(*FString::Printf(TEXT("the road splines were read from the GeoPackage %s"),
-							 *Manifest.RoadSplines.GpkgPath),
+				const FString& SourcePath = bEngineCopy ? Manifest.RoadSplines.EnginePath : Manifest.RoadSplines.GpkgPath;
+				TestTrue(*FString::Printf(TEXT("the road splines were read from the GeoPackage %s"), *SourcePath),
 					Result.Message.Contains(
-						FString::Printf(TEXT("Road splines read from %s."), *Manifest.RoadSplines.GpkgPath),
+						FMantlePlaceRoadSplinesLogic::DescribeSource(RoadSource->Source, SourcePath),
 						ESearchCase::CaseSensitive));
 			}
 		}
@@ -436,10 +442,14 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("a road layer skipped for its datum produced no spline actors"), NumSplineActors, 0);
 			// The importer writes this same "Road splines skipped" prefix for a missing file and for a
 			// parse error, so the prefix alone would pass for the wrong reason. Match the datum reason
-			// CanPlaceHeights returned, the exact entry the importer logs for this skip.
-			TestTrue(TEXT("the datum skip is named in the import result, with its datum reason"),
-				Result.Message.Contains(
-					FString::Printf(TEXT("Road splines skipped: %s"), *DatumRefusal), ESearchCase::CaseSensitive));
+			// each declared source was refused with, the exact entry the importer logs for the skip.
+			for (const FMantlePlaceRoadSplinesCandidate& Candidate : RoadPlan)
+			{
+				TestTrue(*FString::Printf(TEXT("the datum skip of the %s source is named in the import result, with its datum reason"),
+							 FMantlePlaceRoadSplinesLogic::SourceName(Candidate.Source)),
+					Result.Message.Contains(
+						FString::Printf(TEXT("Road splines skipped: %s"), *Candidate.Refusal), ESearchCase::CaseSensitive));
+			}
 		}
 	}
 

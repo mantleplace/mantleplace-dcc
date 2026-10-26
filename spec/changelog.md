@@ -132,6 +132,36 @@ name every file by the six rules; write `file_entries` with a frame, a role, a l
 for every file; give a licence as an SPDX expression; ship a STAC Item beside the manifest; and
 state version `2.0.0` as a JSON string.
 
+### 1.16.0 — the road centrelines in the engine's datum, for the Unreal block (additive minor; published and frozen 2026-10-25)
+
+One member is added: `hosts.unreal.road_splines`, a pointer to a GeoPackage of the road centrelines
+draped on the engine's ground, so their heights are in the datum the Unreal landscape is in. Every
+host floor at 1.0.0 reads it, and a reader that does not know the member ignores it.
+
+- **Why it exists.** From 1.8.0 the shared `road_splines` layer (`vector.layers[]`) is draped on the
+  delivered elevation, which on a US order is `NAVD88 (GEOID18)`. The Unreal host's ground is
+  `EGM2008-orthometric` and it converts no height, so it placed no roads on a US order. The pointer
+  names a file of its own: the same roads, with the same XY, whose Z is in the engine's datum.
+- **The members.** `path`, `format` (`gpkg`), `vertical_datum` (`EGM2008-orthometric`, a constant)
+  and `z_unit` (`m`) are required. `tables` names the GeoPackage tables to read, `crs` is the Vector
+  set's `EPSG:4326`, and `feature_count`, `sha256` and `size_bytes` are the file's own, repeated here
+  because a host reads its own block. The attributes are the shared layer's.
+- **When it is absent.** The block carries the pointer only where the file shipped. An order outside
+  the US has no copy, because its shared layer is already `EGM2008-orthometric`; a US order whose
+  engine elevation was not staged has none either, and is never given a NAVD88 file under the pointer.
+- **In 2.0.** The same pointer names the `-Engine` frame twin of the road layer,
+  `Features/RoadsDraped-Engine.gpkg`; see the 2.0.0 entry for how a twin is named.
+
+What a reader of the pointer does: it reads the Unreal block's copy first and the shared layer after
+it, and places a source only where the datum it states is the host's, compared verbatim. It asks the
+pointer's `vertical_datum` and never assumes it from the pointer's name, and it converts nothing: the
+published difference between the two datums, `elevation.dem.navd88_minus_egm2008_m`, is one number
+for the whole site and not a reader's to apply. The shared layer stays as it was, `NAVD88 (GEOID18)`
+on a US order, for the hosts that place their ground in the delivery's datum.
+
+The Unreal-scoped corpus case `manifest.unrealRoadSplinesPointer` pins the preference, the refusal of
+a copy that states another datum, and the unchanged reading of an order with no copy.
+
 ### 1.15.0 — the Revit vectors pointer restated to the shared GeoPackage the bundle ships (additive minor; published and frozen 2026-10-24)
 
 No member is added, removed or re-typed: the schema differs from 1.14.0 only in prose, and in the
@@ -374,9 +404,10 @@ released through `unreal-0.5.0` places a US order's roads above or below its lan
 metre, and the import reports success. The reader that pins 1.8.0 reads the layer's `vertical_datum`
 and places the layer only where it is `EGM2008-orthometric`, compared verbatim; it refuses any other
 datum by name, and on a layer from 1.8.0 on an unstated one too, and converts nothing. No copy
-of the road layer in the engine's datum is published yet, so on a US order the Unreal host places no
-roads. The Revit host places its block in the delivery's datum, and the shared road layer is in that
-same datum, so it reads nothing it must refuse.
+of the road layer in the engine's datum was published through 1.15.0, so on a US order of that
+period the Unreal host places no roads; 1.16.0 publishes one (`hosts.unreal.road_splines`). The Revit
+host places its block in the delivery's datum, and the shared road layer is in that same datum, so it
+reads nothing it must refuse.
 
 Both hosts re-pin to 1.8.0 on the corpus case `manifest.verticalDatumsIgnored`, a US order carrying
 every new member; the Unreal-scoped `manifest.roadSplinesStatedDatum` pins the road-layer refusal.
