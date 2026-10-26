@@ -28,6 +28,16 @@ bool UMantlePlaceVaultClient::ShouldRecoverMissingUnrealPayload(
 		bManifestReadable, bManifestValid, OrderId, bAlreadyRecovered);
 }
 
+EMantlePlaceImportRoute UMantlePlaceVaultClient::DecideImportRoute(const FMantlePlaceMaterializeStart& Start)
+{
+	return FMantlePlaceVaultLogic::DecideImportRoute(Start);
+}
+
+EMantlePlaceViewFetch UMantlePlaceVaultClient::DecideViewFetch(const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown)
+{
+	return FMantlePlaceVaultLogic::DecideViewFetch(Download, bDeliveryKnown);
+}
+
 FString UMantlePlaceVaultClient::GetBundleTierLabel(const FMantlePlaceVaultItem& Item)
 {
 	return FMantlePlaceVaultLogic::DeriveTierLabel(Item);
@@ -186,10 +196,20 @@ void UMantlePlaceVaultClient::ListVault()
 
 void UMantlePlaceVaultClient::GetPresignedUrl(const FString& OrderId, const FString& Format)
 {
+	MintDownload(OrderId, Format, /*bView*/ false);
+}
+
+void UMantlePlaceVaultClient::GetPresignedViewUrl(const FString& OrderId)
+{
+	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ true);
+}
+
+void UMantlePlaceVaultClient::MintDownload(const FString& OrderId, const FString& Format, bool bView)
+{
 	TWeakObjectPtr<UMantlePlaceVaultClient> WeakSelf(this);
-	TFunction<void()> Replay = [WeakSelf, OrderId, Format]()
+	TFunction<void()> Replay = [WeakSelf, OrderId, Format, bView]()
 	{
-		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->GetPresignedUrl(OrderId, Format); }
+		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->MintDownload(OrderId, Format, bView); }
 	};
 
 	const FMantlePlacePresignedDownload Empty;
@@ -228,7 +248,10 @@ void UMantlePlaceVaultClient::GetPresignedUrl(const FString& OrderId, const FStr
 	CancelActiveRequest();
 
 	const FString Url = FMantlePlaceVaultLogic::BuildDownloadUrl(VaultApiBaseUrl, OrderId);
-	const FString Body = FMantlePlaceVaultLogic::BuildDownloadBody(Format);
+	// A view request names the host and asks the platform to cut the zip; the host never assembles one.
+	const FString Body = bView
+		? FMantlePlaceVaultLogic::BuildViewDownloadBody()
+		: FMantlePlaceVaultLogic::BuildDownloadBody(Format);
 
 	ActiveRequest = FHttpModule::Get().CreateRequest();
 	ActiveRequest->SetVerb(TEXT("POST"));
@@ -400,7 +423,8 @@ void UMantlePlaceVaultClient::HandleDownloadResponse(
 		return;
 	}
 
-	UE_LOG(LogMantlePlaceVault, Log, TEXT("Minted presigned URL (expires %s)."), *Download.ExpiresAt);
+	UE_LOG(LogMantlePlaceVault, Log, TEXT("Minted presigned URL (expires %s, %s)."), *Download.ExpiresAt,
+	       Download.bIsView ? (Download.bPartial ? TEXT("partial view") : TEXT("view")) : TEXT("whole archive"));
 	NotifyPresigned(true, Download, TEXT("Presigned URL minted."));
 }
 
@@ -616,6 +640,18 @@ void UMantlePlaceVaultClient::HandleMaterializeStartResponse(
 
 	const int32 ResponseCode = Response->GetResponseCode();
 	const FString Content = Response->GetContentAsString();
+
+	// 503 delivery_state_unknown is not a failure either: the platform could not read what the bundle
+	// has, which it reports on complete orders too. It is "try the download", so it is passed on as an
+	// outcome of its own rather than as an error the curator would be told to retry.
+	if (FMantlePlaceVaultLogic::IsDeliveryStateUnknown(ResponseCode, Content))
+	{
+		FMantlePlaceMaterializeStart Unknown;
+		Unknown.Outcome = EMantlePlaceMaterializeStartOutcome::DeliveryUnknown;
+		UE_LOG(LogMantlePlaceVault, Log, TEXT("Materialize start: delivery state unknown; trying the download."));
+		NotifyMaterializeStarted(true, Unknown, TEXT("The order's delivery state could not be read - trying the download."));
+		return;
+	}
 
 	// 409 (single-flight: a materialize is already running) is not an OK code but is a success for us -
 	// the body carries the activeJobId, which we poll. Any other non-2xx is a genuine failure.

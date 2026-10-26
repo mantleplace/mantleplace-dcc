@@ -293,6 +293,64 @@ struct FMantlePlacePresignedDownload
 	/** ISO-8601 expiry ("expiresAt") - authoritative; do not use the URL past it. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	FString ExpiresAt;
+
+	/**
+	 * True when the platform cut a download VIEW: the response carried a `view` block. False means it
+	 * answered with the whole archive (a bundle stored as one zip, which is an on-demand order's), and
+	 * the listing's size and digest describe what the URL serves.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	bool bIsView = false;
+
+	/** Meaningful only when bIsView: the view was cut before the bundle completed, so it lacks parts. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	bool bPartial = false;
+
+	/** The parts a view holds (`<token>@<level>`); meaningful only when bIsView. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	TArray<FString> Parts;
+
+	/** True when the platform stated the served zip's length ("sizeBytes"). */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	bool bHasSizeBytes = false;
+
+	/** The served zip's length in bytes; meaningful only when bHasSizeBytes. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	int64 SizeBytes = 0;
+
+	/**
+	 * The sha256 of the served zip's manifest member ("manifestSha256"): the root every per-file digest
+	 * is trusted from. Empty when the platform stated none.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString ManifestSha256;
+};
+
+/**
+ * What Import does next for an order whose bundle is not on disk, read from one materialize start
+ * (FMantlePlaceVaultLogic::DecideImportRoute). A complete order was built whole at procurement, so
+ * its start answers "nothing to do" and the host downloads its own view; an on-demand order still
+ * being built answers with a job, which is the existing Prepare's to follow.
+ */
+UENUM(BlueprintType)
+enum class EMantlePlaceImportRoute : uint8
+{
+	/** The order is complete, or may be: ask for Unreal's download view and import it. */
+	DownloadView,
+	/** The order is built on demand and a build is running (or parked): the existing Prepare follows it. */
+	Prepare
+};
+
+/** What to fetch, once the platform has answered the view request (FMantlePlaceVaultLogic::DecideViewFetch). */
+UENUM(BlueprintType)
+enum class EMantlePlaceViewFetch : uint8
+{
+	/** Download the view: it holds every file Unreal's import reads. */
+	View,
+	/** A no-op order was answered with the whole archive: re-list for fresh facts and download it. */
+	WholeArchive,
+	/** The order is not shown complete (a partial view, or an unproven order answered with no view): Prepare. */
+	Prepare
 };
 
 /**
@@ -334,7 +392,13 @@ enum class EMantlePlaceMaterializeStartOutcome : uint8
 	/** Nothing to build: everything asked for is delivered or can never be produced here. Tokens is what the bundle HAS. */
 	NothingToDo,
 	/** The order's core build has not finished; the picks are parked and fire on their own. No job exists yet. */
-	Queued
+	Queued,
+	/**
+	 * The platform could not read what the bundle has (`503 delivery_state_unknown`). Not a refusal: it
+	 * answers complete orders too, so it means "try the download", which the view response settles.
+	 * Never parsed from a body; the client sets it from the status and code.
+	 */
+	DeliveryUnknown
 };
 
 /** The response to starting a materialize. */
@@ -343,7 +407,7 @@ struct FMantlePlaceMaterializeStart
 {
 	GENERATED_BODY()
 
-	/** Which of the four things happened. */
+	/** Which of the things happened. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	EMantlePlaceMaterializeStartOutcome Outcome = EMantlePlaceMaterializeStartOutcome::Started;
 

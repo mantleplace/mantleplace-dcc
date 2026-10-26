@@ -236,6 +236,36 @@ bool FMantlePlaceVaultLogic::ParseDownloadResponse(const FString& JsonStr, FMant
 	}
 
 	Root->TryGetStringField(TEXT("expiresAt"), Parsed.ExpiresAt);
+
+	// A view response states the cut it made. The `view` block is present only for a bundle cut into
+	// parts (a complete one); a whole-archive answer has none, and then the listing describes the zip.
+	const TSharedPtr<FJsonObject>* ViewPtr = nullptr;
+	if (Root->TryGetObjectField(TEXT("view"), ViewPtr) && ViewPtr != nullptr && ViewPtr->IsValid())
+	{
+		Parsed.bIsView = true;
+		(*ViewPtr)->TryGetBoolField(TEXT("partial"), Parsed.bPartial);
+		const TArray<TSharedPtr<FJsonValue>>* PartsPtr = nullptr;
+		if ((*ViewPtr)->TryGetArrayField(TEXT("parts"), PartsPtr) && PartsPtr != nullptr)
+		{
+			for (const TSharedPtr<FJsonValue>& Part : *PartsPtr)
+			{
+				FString Text;
+				if (Part.IsValid() && Part->TryGetString(Text) && !Text.IsEmpty())
+				{
+					Parsed.Parts.Add(MoveTemp(Text));
+				}
+			}
+		}
+	}
+
+	double SizeBytes = 0.0;
+	if (Root->TryGetNumberField(TEXT("sizeBytes"), SizeBytes) && SizeBytes >= 0.0)
+	{
+		Parsed.bHasSizeBytes = true;
+		Parsed.SizeBytes = static_cast<int64>(SizeBytes);
+	}
+	Root->TryGetStringField(TEXT("manifestSha256"), Parsed.ManifestSha256);
+
 	OutDownload = MoveTemp(Parsed);
 	return true;
 }
@@ -743,6 +773,68 @@ void FMantlePlaceVaultLogic::DeriveMaterializeDelivery(const TSharedPtr<FJsonObj
 	OutStatus.State = EMantlePlaceMaterializeState::Pending;
 	OutStatus.Fraction = Fraction;
 	OutStatus.Message = TEXT("Waiting for the platform to pick this up...");
+}
+
+const FString& FMantlePlaceVaultLogic::DeliveryStateUnknownCode()
+{
+	static const FString Code = TEXT("delivery_state_unknown");
+	return Code;
+}
+
+bool FMantlePlaceVaultLogic::IsDeliveryStateUnknown(int32 HttpStatus, const FString& Body)
+{
+	if (HttpStatus != 503)
+	{
+		return false;
+	}
+	FString Message;
+	FString Code;
+	ParseErrorBody(Body, Message, Code);
+	return Code.Equals(DeliveryStateUnknownCode(), ESearchCase::CaseSensitive);
+}
+
+EMantlePlaceImportRoute FMantlePlaceVaultLogic::DecideImportRoute(const FMantlePlaceMaterializeStart& Start)
+{
+	return (Start.Outcome == EMantlePlaceMaterializeStartOutcome::NothingToDo
+	        || Start.Outcome == EMantlePlaceMaterializeStartOutcome::DeliveryUnknown)
+		? EMantlePlaceImportRoute::DownloadView
+		: EMantlePlaceImportRoute::Prepare;
+}
+
+const FString& FMantlePlaceVaultLogic::ViewHostKey()
+{
+	static const FString Key = TEXT("unreal");
+	return Key;
+}
+
+const FString& FMantlePlaceVaultLogic::ViewEveryEntryLevel()
+{
+	static const FString Level = TEXT("MAX");
+	return Level;
+}
+
+FString FMantlePlaceVaultLogic::BuildViewDownloadBody()
+{
+	const TSharedRef<FJsonObject> Levels = MakeShared<FJsonObject>();
+	Levels->SetStringField(TEXT("*"), ViewEveryEntryLevel());
+
+	const TSharedRef<FJsonObject> View = MakeShared<FJsonObject>();
+	View->SetStringField(TEXT("host"), ViewHostKey());
+	View->SetObjectField(TEXT("levels"), Levels);
+
+	const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+	Root->SetStringField(TEXT("format"), WholeBundleFormat());
+	Root->SetObjectField(TEXT("view"), View);
+	return VaultSerializeCondensed(Root);
+}
+
+EMantlePlaceViewFetch FMantlePlaceVaultLogic::DecideViewFetch(const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown)
+{
+	if (!Download.bIsView)
+	{
+		return bDeliveryKnown ? EMantlePlaceViewFetch::WholeArchive : EMantlePlaceViewFetch::Prepare;
+	}
+	return Download.bPartial ? EMantlePlaceViewFetch::Prepare : EMantlePlaceViewFetch::View;
 }
 
 bool FMantlePlaceVaultLogic::IsIncompleteBundle(const FMantlePlaceVaultItem& Item)

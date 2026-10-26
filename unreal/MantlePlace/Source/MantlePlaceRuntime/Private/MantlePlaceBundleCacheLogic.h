@@ -88,6 +88,34 @@ struct FMantlePlaceBundleCacheLogic
 		const FString& ManifestVersion,
 		const FString& MinVersion = MantlePlaceMinSupportedManifestVersion);
 
+	/**
+	 * What a zip already in the cache is held against. The listing describes the WHOLE archive, so a
+	 * cached view is never held against it: it is held against the size and digest recorded when it was
+	 * downloaded, which still catches truncation. A whole archive is held against the listing, as before.
+	 */
+	static FMantlePlaceCacheExpectation ExpectationForHeld(
+		bool bHoldsView,
+		const FString& RecordedSha256,
+		int64 RecordedSizeBytes,
+		bool bListingHasSha256,
+		const FString& ListingSha256,
+		bool bListingHasSizeBytes,
+		int64 ListingSizeBytes);
+
+	/**
+	 * What a zip being downloaded is held against. A view has no listing digest to match, so its bytes
+	 * are checked for the length the platform stated (and its manifest against the stated digest, by the
+	 * caller, which can open the zip); a whole archive is held against the listing, as before.
+	 */
+	static FMantlePlaceCacheExpectation ExpectationForDownload(
+		bool bIsView,
+		bool bViewHasSizeBytes,
+		int64 ViewSizeBytes,
+		bool bListingHasSha256,
+		const FString& ListingSha256,
+		bool bListingHasSizeBytes,
+		int64 ListingSizeBytes);
+
 	/** Map (file present?, validity) to the list-row state. */
 	static EMantlePlaceCacheState DeriveCacheState(bool bFileExists, const FMantlePlaceCacheValidity& Validity);
 

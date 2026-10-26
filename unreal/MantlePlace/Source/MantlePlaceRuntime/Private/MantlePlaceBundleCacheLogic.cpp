@@ -325,6 +325,54 @@ FString FMantlePlaceBundleCacheLogic::Sha256Hex(const uint8* Data, int64 NumByte
 	return Hasher.Final();
 }
 
+FMantlePlaceCacheExpectation FMantlePlaceBundleCacheLogic::ExpectationForHeld(
+	bool bHoldsView,
+	const FString& RecordedSha256,
+	int64 RecordedSizeBytes,
+	bool bListingHasSha256,
+	const FString& ListingSha256,
+	bool bListingHasSizeBytes,
+	int64 ListingSizeBytes)
+{
+	FMantlePlaceCacheExpectation Expectation;
+	if (bHoldsView)
+	{
+		Expectation.bHasSha256 = !RecordedSha256.IsEmpty();
+		Expectation.Sha256 = RecordedSha256;
+		Expectation.bHasSizeBytes = RecordedSizeBytes > 0;
+		Expectation.SizeBytes = RecordedSizeBytes;
+		return Expectation;
+	}
+	Expectation.bHasSha256 = bListingHasSha256;
+	Expectation.Sha256 = ListingSha256;
+	Expectation.bHasSizeBytes = bListingHasSizeBytes;
+	Expectation.SizeBytes = ListingSizeBytes;
+	return Expectation;
+}
+
+FMantlePlaceCacheExpectation FMantlePlaceBundleCacheLogic::ExpectationForDownload(
+	bool bIsView,
+	bool bViewHasSizeBytes,
+	int64 ViewSizeBytes,
+	bool bListingHasSha256,
+	const FString& ListingSha256,
+	bool bListingHasSizeBytes,
+	int64 ListingSizeBytes)
+{
+	FMantlePlaceCacheExpectation Expectation;
+	if (bIsView)
+	{
+		Expectation.bHasSizeBytes = bViewHasSizeBytes;
+		Expectation.SizeBytes = ViewSizeBytes;
+		return Expectation;
+	}
+	Expectation.bHasSha256 = bListingHasSha256;
+	Expectation.Sha256 = ListingSha256;
+	Expectation.bHasSizeBytes = bListingHasSizeBytes;
+	Expectation.SizeBytes = ListingSizeBytes;
+	return Expectation;
+}
+
 FString FMantlePlaceBundleCacheLogic::SerializeMeta(const FMantlePlaceCachedBundle& Meta)
 {
 	// State is recomputed at inspect time (it depends on the live vault item), so it is NOT
@@ -337,6 +385,7 @@ FString FMantlePlaceBundleCacheLogic::SerializeMeta(const FMantlePlaceCachedBund
 	Root->SetStringField(TEXT("manifestVersion"), Meta.ManifestVersion);
 	Root->SetStringField(TEXT("downloadedAtUtc"), Meta.DownloadedAtUtc);
 	Root->SetStringField(TEXT("format"), Meta.Format);
+	Root->SetBoolField(TEXT("holdsView"), Meta.bHoldsView);
 	return BundleCacheSerializeCondensed(Root);
 }
 
@@ -383,6 +432,7 @@ bool FMantlePlaceBundleCacheLogic::ParseMeta(const FString& Json, FMantlePlaceCa
 
 	Root->TryGetStringField(TEXT("downloadedAtUtc"), Parsed.DownloadedAtUtc);
 	Root->TryGetStringField(TEXT("format"), Parsed.Format);
+	Root->TryGetBoolField(TEXT("holdsView"), Parsed.bHoldsView); // absent in a sidecar older than views: false
 
 	Out = MoveTemp(Parsed);
 	return true;

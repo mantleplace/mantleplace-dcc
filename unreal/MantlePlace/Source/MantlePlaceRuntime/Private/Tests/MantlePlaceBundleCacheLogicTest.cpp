@@ -396,6 +396,63 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("Missing orderId fails closed"), FLogic::ParseMeta(TEXT("{\"format\":\"glb\"}"), Bad, Error));
 	}
 
+	// --- A view is held against its own record, never the listing's whole-archive facts ---------
+	{
+		// A cached view: the listing states the whole archive (huge), the record states the view.
+		const FMantlePlaceCacheExpectation HeldView = FLogic::ExpectationForHeld(
+			true, TEXT("beef"), 4194304, true, TEXT("cafe"), true, 480000000);
+		TestTrue(TEXT("A cached view is held against its recorded digest"), HeldView.bHasSha256 && HeldView.Sha256 == TEXT("beef"));
+		TestTrue(TEXT("A cached view is held against its recorded size"), HeldView.bHasSizeBytes && HeldView.SizeBytes == 4194304);
+
+		const FMantlePlaceCacheExpectation HeldWhole = FLogic::ExpectationForHeld(
+			false, TEXT("beef"), 4194304, true, TEXT("cafe"), true, 480000000);
+		TestTrue(TEXT("A cached whole archive is held against the listing"),
+			HeldWhole.Sha256 == TEXT("cafe") && HeldWhole.SizeBytes == 480000000);
+
+		const FMantlePlaceCacheExpectation HeldNoRecord = FLogic::ExpectationForHeld(
+			true, TEXT(""), 0, true, TEXT("cafe"), true, 480000000);
+		TestFalse(TEXT("A view with no recorded digest is unverified, not held to the listing"), HeldNoRecord.bHasSha256);
+		TestFalse(TEXT("A view with no recorded size is unverified, not held to the listing"), HeldNoRecord.bHasSizeBytes);
+
+		// The decision the cache then makes: the view passes against its record where the listing would refuse it.
+		const FMantlePlaceCacheValidity Valid = FLogic::DecideValidity(
+			true, 4194304, TEXT("beef"), HeldView.bHasSha256, HeldView.Sha256, HeldView.bHasSizeBytes, HeldView.SizeBytes,
+			false, TEXT(""));
+		TestTrue(TEXT("A view is valid against its own record"), Valid.bValid && Valid.bIntegrityChecked);
+		const FMantlePlaceCacheValidity AgainstListing = FLogic::DecideValidity(
+			true, 4194304, TEXT("beef"), true, TEXT("cafe"), true, 480000000, false, TEXT(""));
+		TestFalse(TEXT("The same bytes fail the listing's whole-archive facts"), AgainstListing.bValid);
+		const FMantlePlaceCacheValidity Truncated = FLogic::DecideValidity(
+			true, 1000, TEXT("beef"), HeldView.bHasSha256, HeldView.Sha256, HeldView.bHasSizeBytes, HeldView.SizeBytes,
+			false, TEXT(""));
+		TestFalse(TEXT("A truncated view fails its own record"), Truncated.bValid);
+
+		// A download in flight: a view is checked for the length the platform stated and nothing from the listing.
+		const FMantlePlaceCacheExpectation DownView = FLogic::ExpectationForDownload(
+			true, true, 4194304, true, TEXT("cafe"), true, 480000000);
+		TestFalse(TEXT("A downloading view has no listing digest to match"), DownView.bHasSha256);
+		TestTrue(TEXT("A downloading view is checked for its stated length"), DownView.bHasSizeBytes && DownView.SizeBytes == 4194304);
+		const FMantlePlaceCacheExpectation DownViewNoSize = FLogic::ExpectationForDownload(
+			true, false, 0, true, TEXT("cafe"), true, 480000000);
+		TestFalse(TEXT("A view with no stated length is not held to the whole archive's"), DownViewNoSize.bHasSizeBytes);
+		const FMantlePlaceCacheExpectation DownWhole = FLogic::ExpectationForDownload(
+			false, false, 0, true, TEXT("cafe"), true, 480000000);
+		TestTrue(TEXT("A downloading whole archive is checked against the listing"),
+			DownWhole.bHasSha256 && DownWhole.Sha256 == TEXT("cafe") && DownWhole.SizeBytes == 480000000);
+
+		// The sidecar remembers which it holds; one written before views reads as a whole archive.
+		FMantlePlaceCachedBundle ViewMeta;
+		ViewMeta.OrderId = TEXT("f3c1");
+		ViewMeta.bHoldsView = true;
+		FMantlePlaceCachedBundle ViewBack;
+		FString MetaError;
+		TestTrue(TEXT("A view's sidecar round-trips"), FLogic::ParseMeta(FLogic::SerializeMeta(ViewMeta), ViewBack, MetaError));
+		TestTrue(TEXT("The sidecar keeps holdsView"), ViewBack.bHoldsView);
+		FMantlePlaceCachedBundle OldBack;
+		TestTrue(TEXT("A pre-view sidecar parses"), FLogic::ParseMeta(TEXT("{\"orderId\":\"f3c1\",\"sha256\":\"ab\"}"), OldBack, MetaError));
+		TestFalse(TEXT("A pre-view sidecar holds a whole archive"), OldBack.bHoldsView);
+	}
+
 	return true;
 }
 

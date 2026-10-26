@@ -40,6 +40,11 @@ source build: see [Building](../README.md#building) in the root README.
 
 - **Sign In** — your system browser opens; there is no token to paste. Once signed in the panel
   lists the bundles you own; pick one and import it.
+
+  Importing a bundle that is not on disk yet asks the order first. An order built complete when it
+  was bought has nothing left to build, so the plugin downloads Unreal's own view of it — the files
+  this import reads, without the meshes and rasters other hosts use — and imports, with no Prepare.
+  An order built on demand is prepared first, as before.
 - **Browse...** — pick a bundle `.zip` you downloaded from [mantle.place](https://mantle.place),
   leave the mode at *Landscape*, and press **Import**.
 

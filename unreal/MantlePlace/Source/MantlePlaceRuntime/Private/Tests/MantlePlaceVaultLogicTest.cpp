@@ -998,6 +998,100 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			FLogic::ShouldRecoverMissingUnrealPayload(true, false, Order, true));
 	}
 
+	// --- A complete order imports without a Prepare: the route, the view request, the view response ---
+	// The wire shapes are the platform's own: the no-op and the 503 delivery_state_unknown of the
+	// materialize start, and the view block, sizeBytes and manifestSha256 of POST .../download.
+	{
+		using EOutcome = EMantlePlaceMaterializeStartOutcome;
+		auto StartOf = [](const TCHAR* Body, int32 Status) -> FMantlePlaceMaterializeStart
+		{
+			FMantlePlaceMaterializeStart Start;
+			FString Error;
+			if (FMantlePlaceVaultLogic::IsDeliveryStateUnknown(Status, Body))
+			{
+				Start.Outcome = EMantlePlaceMaterializeStartOutcome::DeliveryUnknown;
+			}
+			else
+			{
+				FMantlePlaceVaultLogic::ParseMaterializeStartResponse(Body, Start, Error);
+			}
+			return Start;
+		};
+
+		// The delivery state unknown: a 503 carrying the code, and only that.
+		TestTrue(TEXT("503 delivery_state_unknown is the unproven answer"),
+			FLogic::IsDeliveryStateUnknown(503, TEXT("{\"error\":\"unavailable\",\"code\":\"delivery_state_unknown\"}")));
+		TestFalse(TEXT("A bare 503 is an outage, not the unproven answer"),
+			FLogic::IsDeliveryStateUnknown(503, TEXT("{\"error\":\"unavailable\"}")));
+		TestFalse(TEXT("A 503 whose body is not JSON is an outage"), FLogic::IsDeliveryStateUnknown(503, TEXT("<html>")));
+		TestFalse(TEXT("The code under another status is not the unproven answer"),
+			FLogic::IsDeliveryStateUnknown(500, TEXT("{\"code\":\"delivery_state_unknown\"}")));
+
+		// The route: complete (the no-op), unproven (the 503) both fetch the view; every other start is the Prepare's.
+		TestEqual(TEXT("The no-op is a complete order: fetch the view"),
+			FLogic::DecideImportRoute(StartOf(TEXT("{\"noop\":true,\"delivered\":[\"unreal_heightmap\"]}"), 200)),
+			EMantlePlaceImportRoute::DownloadView);
+		TestEqual(TEXT("The unproven 503 is 'try the download', not a refusal"),
+			FLogic::DecideImportRoute(StartOf(TEXT("{\"code\":\"delivery_state_unknown\"}"), 503)),
+			EMantlePlaceImportRoute::DownloadView);
+		TestEqual(TEXT("A fresh job is an on-demand order: the Prepare follows"),
+			FLogic::DecideImportRoute(StartOf(TEXT("{\"jobId\":\"j1\",\"tokens\":[\"a\"]}"), 201)),
+			EMantlePlaceImportRoute::Prepare);
+		TestEqual(TEXT("A joined run is the Prepare's to follow"),
+			FLogic::DecideImportRoute(StartOf(TEXT("{\"coalesced\":true,\"activeJobId\":\"j1\"}"), 200)),
+			EMantlePlaceImportRoute::Prepare);
+		TestEqual(TEXT("The single-flight 409 is a join: the Prepare follows"),
+			FLogic::DecideImportRoute(StartOf(TEXT("{\"error\":\"busy\",\"code\":\"active_job\",\"activeJobId\":\"j1\"}"), 409)),
+			EMantlePlaceImportRoute::Prepare);
+		TestEqual(TEXT("A parked pick is the Prepare's"),
+			FLogic::DecideImportRoute(StartOf(TEXT("{\"queued\":true,\"pendingTokens\":[\"a\"]}"), 202)),
+			EMantlePlaceImportRoute::Prepare);
+
+		// The request names the host and one level for every entry, and asks for the archive by name.
+		const FString ViewBody = FLogic::BuildViewDownloadBody();
+		TestEqual(TEXT("View request: format is the whole-archive token"),
+			VaultReadStringField(ViewBody, TEXT("format")), FString(TEXT("bundle")));
+		TestEqual(TEXT("View request, exact bytes"),
+			ViewBody,
+			FString(TEXT("{\"format\":\"bundle\",\"view\":{\"host\":\"unreal\",\"levels\":{\"*\":\"MAX\"}}}")));
+
+		// The view response: a view block only for a bundle cut into parts.
+		FMantlePlacePresignedDownload View;
+		FString Error;
+		TestTrue(TEXT("A view response parses"), FLogic::ParseDownloadResponse(
+			TEXT("{\"url\":\"https://r2.example/v.zip\",\"expiresAt\":\"2026-10-26T00:00:00Z\",\"sizeBytes\":4194304,"
+				"\"manifestSha256\":\"ab12\",\"view\":{\"partial\":false,\"parts\":[\"unreal_heightmap@MAX\",\"unreal_drape\"]}}"),
+			View, Error));
+		TestTrue(TEXT("The view block marks a view"), View.bIsView);
+		TestFalse(TEXT("A complete view is not partial"), View.bPartial);
+		TestEqual(TEXT("Parts are read"), View.Parts.Num(), 2);
+		TestTrue(TEXT("The stated length is read"), View.bHasSizeBytes && View.SizeBytes == 4194304);
+		TestEqual(TEXT("The manifest digest is read"), View.ManifestSha256, FString(TEXT("ab12")));
+
+		FMantlePlacePresignedDownload Whole;
+		TestTrue(TEXT("A whole-archive response parses"),
+			FLogic::ParseDownloadResponse(TEXT("{\"url\":\"https://r2.example/w.zip\",\"expiresAt\":\"2026-10-26T00:00:00Z\"}"), Whole, Error));
+		TestFalse(TEXT("No view block: the whole archive"), Whole.bIsView);
+		TestFalse(TEXT("No stated length"), Whole.bHasSizeBytes);
+		TestTrue(TEXT("No manifest digest"), Whole.ManifestSha256.IsEmpty());
+
+		FMantlePlacePresignedDownload Partial;
+		FLogic::ParseDownloadResponse(
+			TEXT("{\"url\":\"https://r2.example/p.zip\",\"view\":{\"partial\":true,\"parts\":[]}}"), Partial, Error);
+		TestTrue(TEXT("A partial view is read as partial"), Partial.bIsView && Partial.bPartial);
+
+		// What to fetch.
+		TestEqual(TEXT("A complete view is downloaded"), FLogic::DecideViewFetch(View, true), EMantlePlaceViewFetch::View);
+		TestEqual(TEXT("A complete view proves a complete order even when the state was unknown"),
+			FLogic::DecideViewFetch(View, false), EMantlePlaceViewFetch::View);
+		TestEqual(TEXT("A partial view is never imported: the Prepare builds the rest"),
+			FLogic::DecideViewFetch(Partial, true), EMantlePlaceViewFetch::Prepare);
+		TestEqual(TEXT("A whole archive after a no-op is importable"),
+			FLogic::DecideViewFetch(Whole, true), EMantlePlaceViewFetch::WholeArchive);
+		TestEqual(TEXT("A whole archive after the unproven 503 may be an unbuilt on-demand bundle: Prepare"),
+			FLogic::DecideViewFetch(Whole, false), EMantlePlaceViewFetch::Prepare);
+	}
+
 	return true;
 }
 
