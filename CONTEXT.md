@@ -30,7 +30,13 @@ _Avoid_: unsupported host, plugin-less host, file-only host
 **Host plugin**:
 The Mantle Place plugin for one plugin host. Each is written natively for its host and implements the
 same behaviour; they share no code, only a contract and a conformance corpus.
-_Avoid_: client, connector, adapter
+"Plugin" is the one collective word for this software, whatever the host calls its extensions: "the
+Mantle Place plugins", or "the plugin" for one. The product names are "Mantle Place for Unreal", "Mantle
+Place for Revit" and "Mantle Place for Blender". The host's own UI labels stay in install and
+troubleshooting steps (Revit's **Add-Ins** tab, Blender's **Add-ons** preferences), as do file types and
+manifests (`.addin`), code identifiers, and "import" as the verb or noun for what the plugin does.
+_Avoid_: client, connector, adapter, importer, "Mantle Place Importer", add-in, add-on, extension (as names
+for our software)
 
 **Curator**:
 The person using the Mantle Place platform: someone who browses the vault, downloads bundles and
