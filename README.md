@@ -89,10 +89,14 @@ is what [Building](#building) below covers.
 
 ## Get a real bundle in minutes
 
-**There are no sample bundles in this repository, and there never will be** — no trimmed one, no small
-one. Real geospatial data carries real licence obligations (much of it is ODbL), and a repository that
-ships a bundle is redistributing that data. So the docs show you how to *make* one instead — and the
-free tier makes that a matter of minutes, not a purchase decision.
+**Four MPB 2.0 sample bundles are published at [mantle.place/mpb-samples](https://mantle.place/mpb-samples)**,
+one per delivery frame: UTM metres (Austin), State Plane US survey feet (Charlotte), a local site grid in
+feet (St. Louis) and one outside the US (Zurich). Each comes with `CheckPoints.json` and `CheckPoints.csv`,
+known coordinates to test a reader's placement against. They carry ODbL data (OpenStreetMap, Overture):
+every ODbL file holds its notice and the licence link inside it, so keep them with any file you pass on.
+The bundles are served from there; this repository still ships none, because a repository that carries a
+bundle redistributes its data. To make one over your own ground, the free tier takes minutes, not a
+purchase decision.
 
 **Small areas of interest are free**: $0, full paid-tier quality, an account but no payment method.
 The size limit is on the [pricing page](https://mantle.place/pricing). That is the intended way to
