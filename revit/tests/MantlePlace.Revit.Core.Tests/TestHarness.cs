@@ -56,6 +56,27 @@ internal sealed class TestRun
         }
     }
 
+    /// <summary>Passes when <paramref name="body"/> throws exactly <typeparamref name="TException"/> or a subclass.</summary>
+    internal void Throws<TException>(Action body, string detail)
+        where TException : Exception
+    {
+        try
+        {
+            body();
+        }
+        catch (TException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Fail($"{detail} — expected {typeof(TException).Name}, got {ex.GetType().Name}");
+            return;
+        }
+
+        Fail($"{detail} — expected {typeof(TException).Name}, nothing was thrown");
+    }
+
     internal void Equal(string? actual, string? expected, string detail)
     {
         if (!string.Equals(actual, expected, StringComparison.Ordinal))
