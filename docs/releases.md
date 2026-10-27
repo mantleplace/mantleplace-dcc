@@ -21,8 +21,8 @@ both share: the cut order, the title and the body.
    Leave GitHub's *Latest* to the newest publish, whichever host it is (ADR 0001).
 4. **Download the published asset and check it**: its sha256 matches the body, and it installs and
    loads in a project or host that never built the plugin. Record the result in the body.
-5. **Submit to the storefront** the same day where the host has one (Fab for Unreal, the Autodesk App
-   Store for Revit), from the same asset.
+5. **Submit to the storefront** the same day where the host has one (Fab for Unreal, the Autodesk
+   storefront for Revit), from the same asset.
 
 ## Title
 
@@ -57,7 +57,7 @@ setting renamed. Bold the action.>
 - Built from `<short sha>` on `main`. <Gate result at that commit.>
 - Published asset: <check from step 4 and its date>.
 - `<asset name>` sha256 `<hash>`
-- Storefront: <submitted to Fab / the Autodesk App Store on date>, from <the asset, or the source zip built from the same commit> sha256 `<hash>`.
+- Storefront: <submitted to Fab / the Autodesk storefront on date>, from <the asset, or the source zip built from the same commit> sha256 `<hash>`.
 
 Previous: [<previous tag>](https://github.com/mantleplace/mantleplace-dcc/releases/tag/<previous tag>)
 ```

@@ -418,6 +418,24 @@ order and, for the terrain and the tree points, the build — never the element 
 rather than a document.
 _Avoid_: tag, marker, label, key
 
+### Releases and storefronts
+
+**Release cut**:
+Making one new release of one host: the version bump, the gate at that commit, the tag and the
+published asset. A storefront submission is made from a release cut, never between two.
+_Avoid_: cutout, drop, ship build
+
+**Storefront**:
+A third-party marketplace a host's users install from: Fab for Unreal Engine, and for Revit the
+Autodesk storefront, which Autodesk calls the Design and Make Marketplace (formerly the Autodesk App
+Store).
+_Avoid_: store listing, app store (for both at once)
+
+**Source zip**:
+The package Unreal's storefront receives: the plugin's descriptor and source from a release cut's
+tagged commit, without built binaries. Distinct from the release asset, the Win64 zip GitHub serves.
+_Avoid_: Fab zip, source package
+
 ## Avoid list
 
 The public banned-term list. Each banned term is paired with the wording to use in its place. It applies
