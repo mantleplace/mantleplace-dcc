@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Mantle Place LLC
+schema_version = "1.0.0"
+
+id = "mantleplace_blender"
+version = "0.1.0"
+name = "Mantle Place"
+tagline = "Import a Mantle Place bundle's site, placed at its site origin"
+maintainer = "Mantle Place"
+type = "add-on"
+website = "https://github.com/mantleplace/mantleplace-dcc/blob/main/blender/README.md"
+tags = ["Import-Export"]
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:Apache-2.0"]
+
+[permissions]
+files = "Read the bundle you pick and extract its site files"

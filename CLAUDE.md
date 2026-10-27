@@ -63,7 +63,7 @@ The layout is the list in [`README.md`](README.md#repository-layout); it is not 
 `docs/*.md` holds the cross-host contracts and matrices (see "Where knowledge lives").
 
 **Every future top-level addition is a DCC host or a cross-host concern, nothing else.** Names are
-spelled out in full — `mantleplace`, never `mp`. `max/`, `blender/`, `rhino/` are created only with
+spelled out in full — `mantleplace`, never `mp`. `max/` and `rhino/` are created only with
 real content: the triad every layer is built as (an impure host shim, a pure logic core, a headless
 test of that core — [CONTRIBUTING.md](CONTRIBUTING.md#style-and-shape)), the host's local-install
 tool and check script (`HPS-50`), a Send Feedback action (`HPS-56`), and its own `<host>/CLAUDE.md`. **That rule governs this
@@ -155,9 +155,9 @@ That bounds *logic*. Which repository a piece of *work* belongs to is
 - **At session start, run `./tools/local-install/Check-LocalInstall.ps1`.** `current` and `preview`
   need nothing; `stale` or `unverified` means a bug seen in the host is not yet evidence about the
   code.
-- **A session that merges a PR touching `revit/` or `unreal/` deploys from `main` before it
-  finishes**: pull `main`, run `revit/tools/Deploy-MantlePlaceRevit.ps1` and
-  `unreal/tools/Refresh-UnrealInstall.ps1`, and report each stamp. A refused deploy is reported as a
+- **A session that merges a PR touching `revit/`, `unreal/` or `blender/` deploys from `main` before it
+  finishes**: pull `main`, run `revit/tools/Deploy-MantlePlaceRevit.ps1`,
+  `unreal/tools/Refresh-UnrealInstall.ps1` and `blender/tools/Install-BlenderAddon.ps1`, and report each stamp. A refused deploy is reported as a
   leftover, never skipped silently (the host files say when one refuses).
 - **A preview from a branch happens only when the founder asks in that session.** It is stamped as a
   preview, and the next post-merge deploy returns the slot to `main`.
@@ -217,7 +217,7 @@ Most facts already have exactly one home. Find it before writing a fact down any
   [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md) — cross-host; both hosts share
   one stored credential.
 - **Building, testing, or what a host writes into a *user's* project** → that host's own `CLAUDE.md`
-  ([`unreal/`](unreal/CLAUDE.md), [`revit/`](revit/CLAUDE.md)), read before touching that host.
+  ([`unreal/`](unreal/CLAUDE.md), [`revit/`](revit/CLAUDE.md), [`blender/`](blender/CLAUDE.md)), read before touching that host.
 - **What the plugins do, and how to build them** → [`README.md`](README.md).
 - **Governance, and what this repo refuses** → [`CONTRIBUTING.md`](CONTRIBUTING.md) (merge bar, DCO,
   patches declined unread), [`SECURITY.md`](SECURITY.md) — **the auth flow (PKCE, the loopback

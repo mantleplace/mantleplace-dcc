@@ -30,7 +30,7 @@ WHAT IS CHECKED, and the exemptions that keep it honest:
                        blanked first (a code identifier is exempt, the glossary's own rule), and so
                        is a link target, which is an address and not prose.
   host strings         A string literal in production host code: C#, C++ headers and sources, and
-                       Python under `unreal/` and `revit/`, `.uplugin` included. Comments are not
+                       Python under `unreal/`, `revit/` and `blender/`, `.uplugin` included. Comments are not
                        strings and are not read. A path with a `test` component is not read, since a
                        test's name for a case is not shown to a curator. A literal with no space and
                        no hyphen is an identifier, a key or a path, never a sentence, and is exempt.
@@ -66,7 +66,7 @@ AVOID_HEADING = re.compile(r"(?m)^##[ \t]+Avoid list[ \t]*$")
 ANY_H2 = re.compile(r"(?m)^##[ \t]+\S")
 
 # Where host strings live. Production code only; the scan skips any path with a test component.
-HOST_ROOTS = ("unreal/", "revit/")
+HOST_ROOTS = ("unreal/", "revit/", "blender/")
 HOST_SUFFIXES = (".cs", ".cpp", ".h", ".py", ".uplugin")
 TEST_PATH = re.compile(r"(?i)(^|/)[^/]*tests?[^/]*(/|\.[a-z]+$)|(^|/)test_[^/]*$")
 
