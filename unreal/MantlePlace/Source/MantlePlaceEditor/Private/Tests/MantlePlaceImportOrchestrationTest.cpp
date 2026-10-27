@@ -31,8 +31,10 @@ namespace
 class FRecordingHandler final : public IMantlePlaceArtifactHandler
 {
 public:
-	FRecordingHandler(FName InId, TArray<FString>& InCalls, bool bInTerrain = false, bool bInPresent = true)
-		: IdValue(InId), Calls(InCalls), bTerrain(bInTerrain), bPresent(bInPresent)
+	FRecordingHandler(
+		FName InId, TArray<FString>& InCalls, bool bInTerrain = false, bool bInPresent = true,
+		const FString& InPayload = FString())
+		: IdValue(InId), Calls(InCalls), bTerrain(bInTerrain), bPresent(bInPresent), Payload(InPayload)
 	{
 	}
 
@@ -41,7 +43,13 @@ public:
 	FText DisplayName() const override { return FText::FromName(IdValue); }
 	bool ParseFields(const FMantlePlaceParseInput&, FMantlePlaceVaultManifest&, FString&) const override { return true; }
 	bool IsPresent(const FMantlePlaceVaultManifest&) const override { return bPresent; }
-	void CollectDeclared(const FMantlePlaceVaultManifest&, TArray<FMantlePlaceDeclaredArtifact>&) const override {}
+	void CollectDeclared(const FMantlePlaceVaultManifest&, TArray<FMantlePlaceDeclaredArtifact>& Out) const override
+	{
+		if (!Payload.IsEmpty())
+		{
+			Out.Add(FMantlePlaceDeclaredArtifact{ Payload, FString() });
+		}
+	}
 	bool IsTerrainRepresentation() const override { return bTerrain; }
 	void ExplainAbsence(const FMantlePlaceVaultManifest&, TArray<FString>& Out) const override
 	{
@@ -56,6 +64,7 @@ private:
 	TArray<FString>& Calls;
 	bool bTerrain;
 	bool bPresent;
+	FString Payload;
 };
 
 TArray<FString> IdsIn(const MantlePlaceArtifacts::FHandlers& Handlers, const FMantlePlaceImportSelection& Selection)
@@ -185,6 +194,72 @@ bool FMantlePlaceOrchestrationRunTest::RunTest(const FString& Parameters)
 		NoTerrain.Excluded.Add(MantlePlaceArtifactId::TerrainMesh());
 		TestTrue(TEXT("a selection that asks for no terrain asks for nothing the bundle could lack"),
 			MantlePlaceImportOrchestration::ExplainNothingToImport(Build(false, false), Manifest, NoTerrain).IsEmpty());
+	}
+
+	// --- An archive cut without an artifact's payloads skips it, named, and runs the rest ---------------
+	{
+		TArray<FString> Calls;
+		MantlePlaceArtifacts::FHandlers Handlers;
+		Handlers.Add(MakeUnique<FRecordingHandler>(
+			FName(TEXT("records")), Calls, false, true, TEXT("Records/Parcels.gpkg")));
+		Handlers.Add(MakeUnique<FRecordingHandler>(
+			FName(TEXT("mesh")), Calls, false, true, TEXT("Site/Terrain-Engine.glb")));
+		Handlers.Add(MakeUnique<FRecordingHandler>(FName(TEXT("buildings")), Calls));
+
+		FMantlePlaceVaultManifest Manifest;
+		Manifest.Archive.bDeclared = true;
+		Manifest.Archive.Kind = TEXT("selection");
+		Manifest.Archive.Parts = { TEXT("mesh.glb@MAX") };
+		Manifest.Archive.FileParts.Add(TEXT("Records/Parcels.gpkg"), TEXT("records.parcels_gpkg@MAX"));
+		Manifest.Archive.FileParts.Add(TEXT("Site/Terrain-Engine.glb"), TEXT("mesh.glb@MAX"));
+
+		const FMantlePlaceImportSelection Everything = FMantlePlaceImportSelection::Everything();
+		MantlePlaceImportTiming::FTimeline Timeline;
+		FMantlePlaceImportResult Result;
+		TArray<FString> Log;
+		FMantlePlaceImportContext Context(nullptr, Manifest, nullptr, Everything, Timeline, Result, Log);
+		MantlePlaceImportOrchestration::RunPrepare(Handlers, Context);
+		MantlePlaceImportOrchestration::RunImport(Handlers, Context);
+		MantlePlaceImportOrchestration::RunFinalize(Handlers, Context);
+
+		TestEqual(TEXT("left out: the artifact whose payload the archive lacks never runs; the others do"),
+			FString::Join(Calls, TEXT(" ")),
+			TEXT("mesh.Prepare buildings.Prepare mesh.Import buildings.Import mesh.Finalize buildings.Finalize"));
+		TestEqual(TEXT("left out: and the import log says so once"), Log.Num(), 1);
+		TestTrue(TEXT("left out: naming the artifact"), Log.Num() == 1 && Log[0].Contains(TEXT("records")));
+		TestTrue(TEXT("left out: as not in this archive"), Log.Num() == 1 && Log[0].Contains(TEXT("not in this archive")));
+		TestTrue(TEXT("left out: and the import did not fail for it"), Context.bAllRequestedSucceeded);
+
+		// The same archive with the part it claims to hold: nothing is skipped here (the pre-check refuses
+		// a missing entry, so a handler never meets one).
+		Manifest.Archive.Parts.Add(TEXT("records.parcels_gpkg@MAX"));
+		Calls.Reset();
+		Log.Reset();
+		MantlePlaceImportOrchestration::RunImport(Handlers, Context);
+		TestEqual(TEXT("held: every artifact runs"),
+			FString::Join(Calls, TEXT(" ")), TEXT("records.Import mesh.Import buildings.Import"));
+		TestEqual(TEXT("held: and nothing is logged as skipped"), Log.Num(), 0);
+	}
+
+	// --- Terrain whose only payload the archive lacks is "nothing to import", not an empty import --------
+	{
+		TArray<FString> Calls;
+		MantlePlaceArtifacts::FHandlers Handlers;
+		Handlers.Add(MakeUnique<FRecordingHandler>(
+			MantlePlaceArtifactId::Landscape(), Calls, true, true, TEXT("Elevation/Heightmap.png")));
+		Handlers.Add(MakeUnique<FRecordingHandler>(MantlePlaceArtifactId::TerrainMesh(), Calls, true, false));
+
+		FMantlePlaceVaultManifest Manifest;
+		Manifest.Archive.bDeclared = true;
+		Manifest.Archive.Kind = TEXT("selection");
+		Manifest.Archive.Parts = { TEXT("imagery.drape_png@MAX") };
+		Manifest.Archive.FileParts.Add(TEXT("Elevation/Heightmap.png"), TEXT("elevation.heightmap_png@MAX"));
+
+		const FString Refusal = MantlePlaceImportOrchestration::ExplainNothingToImport(
+			Handlers, Manifest, FMantlePlaceImportSelection::Everything());
+		TestTrue(TEXT("a terrain the archive was cut without is refused before the wipe"),
+			Refusal.StartsWith(TEXT("Nothing to import: ")));
+		TestTrue(TEXT("and the refusal says it is not in this archive"), Refusal.Contains(TEXT("not in this archive")));
 	}
 	return true;
 }

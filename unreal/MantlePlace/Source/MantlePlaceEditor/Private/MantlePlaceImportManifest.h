@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MantlePlaceIntegrityLogic.h"
 #include "MantlePlaceManifestBlocks.h"
 #include "MantlePlaceOdblLogic.h"
 
@@ -78,6 +79,11 @@ struct FMantlePlaceVaultManifest
 	// the rest, and crediting it (MantlePlaceOdblLogic). A file with no entry reads as `database`.
 	TMap<FString, FMantlePlaceFileLicensing> FileLicensing;
 	TArray<FMantlePlaceAttributionSource> Attribution;
+
+	// What this one archive holds (MPB 1.10.0 `view`, with the part each file of `files` belongs to).
+	// Read for ONE purpose: a declared payload the archive was cut without is skipped, not refused
+	// (FMantlePlaceIntegrityLogic::LeavesOut). Absent, the archive holds everything it declares.
+	FMantlePlaceArchiveView Archive;
 
 	// --- Core blocks: not artifacts, read by Parse itself -------------------------------
 	FMantlePlaceGeoreferenceBlock Georef;

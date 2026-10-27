@@ -262,7 +262,7 @@ MantlePlaceWorldPartitionLogic::FDescriptorPackage ReadDescriptorPackage(const F
 
 bool MantlePlaceImportOrchestration::VerifyAll(
 	const FMantlePlaceVaultManifest& Manifest, const FZipArchiveReader& Reader,
-	MantlePlaceImportTiming::FTimeline& Timeline, FString& OutError)
+	MantlePlaceImportTiming::FTimeline& Timeline, FString& OutError, TArray<FString>* OutNotes)
 {
 	const MantlePlaceImportTiming::FScopedPhase IntegrityPhase(
 		Timeline, MantlePlaceImportTiming::Phase::IntegrityPrecheck);
@@ -277,8 +277,25 @@ bool MantlePlaceImportOrchestration::VerifyAll(
 		FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(Manifest);
 	int32 VerifiedCount = 0;
 	int32 UnverifiableCount = 0;
+	int32 LeftOutCount = 0;
 	for (const FMantlePlaceDeclaredArtifact& Artifact : Declared)
 	{
+		// A payload the archive's own `view` says it was cut without is not read, hashed or refused:
+		// the selection left it out. It is named, so the log never silently lacks it. A payload in a
+		// part the archive claims to hold still falls through, and a missing entry there is refused.
+		if (FMantlePlaceIntegrityLogic::LeavesOut(Manifest, Artifact.Path))
+		{
+			++LeftOutCount;
+			const FString Note = FString::Printf(
+				TEXT("Not in this archive (left out of the selection), skipped: %s."), *Artifact.Path);
+			UE_LOG(LogMantlePlaceImport, Log, TEXT("%s"), *Note);
+			if (OutNotes != nullptr)
+			{
+				OutNotes->Add(Note);
+			}
+			continue;
+		}
+
 		FString IntegrityError;
 		if (!VerifyEntrySha256(Reader, Artifact.Path, Artifact.Sha256, IntegrityTiming, IntegrityError))
 		{
@@ -307,8 +324,8 @@ bool MantlePlaceImportOrchestration::VerifyAll(
 	// unverifiable is a fact about that bundle, not about this check.
 	UE_LOG(LogMantlePlaceImport, Log,
 		TEXT("Integrity verified: %d of %d declared payload(s) matched their manifest sha256, "
-			 "%d carried no digest and are valid but unverified (jobId %s)."),
-		VerifiedCount, Declared.Num(), UnverifiableCount,
+			 "%d carried no digest and are valid but unverified, %d not in this archive (jobId %s)."),
+		VerifiedCount, Declared.Num(), UnverifiableCount, LeftOutCount,
 		*MantlePlaceImportNaming::ShortIdentity(Manifest.JobId));
 	return true;
 }
@@ -327,7 +344,15 @@ FString MantlePlaceImportOrchestration::ExplainNothingToImport(
 			continue;
 		}
 		bRequested = true;
-		if (Handler->IsPresent(Manifest))
+		TArray<FString> Paths;
+		Handler->CollectSourcePaths(Manifest, Paths);
+		if (Handler->IsPresent(Manifest) && FMantlePlaceIntegrityLogic::LeavesOutAll(Manifest, Paths))
+		{
+			// The bundle ships it, but this archive was cut without it (RunImport skips it the same way).
+			Reasons.Add(FString::Printf(
+				TEXT("%s is not in this archive (left out of the selection)"), *Handler->DisplayName().ToString()));
+		}
+		else if (Handler->IsPresent(Manifest))
 		{
 			bCanProduce = true;
 		}
@@ -708,13 +733,29 @@ void BeginHandler(FMantlePlaceImportContext& Context, const IMantlePlaceArtifact
 	Handler.CollectSourcePaths(Context.Manifest, Context.SourcePaths);
 	Context.EquivalenceGroup = Handler.EquivalenceGroup();
 }
+
+/**
+ * Whether the import runs this handler: the selection includes it, and the archive does not lack
+ * everything it would make from. An artifact whose payloads the archive was cut without has nothing
+ * to place; it is skipped (and named once, in RunImport), never failed.
+ */
+bool Runs(const FMantlePlaceImportContext& Context, const IMantlePlaceArtifactHandler& Handler)
+{
+	if (!Context.Selection.Includes(Handler.Id()))
+	{
+		return false;
+	}
+	TArray<FString> Paths;
+	Handler.CollectSourcePaths(Context.Manifest, Paths);
+	return !FMantlePlaceIntegrityLogic::LeavesOutAll(Context.Manifest, Paths);
+}
 }
 
 void MantlePlaceImportOrchestration::RunPrepare(const FHandlers& Handlers, FMantlePlaceImportContext& Context)
 {
 	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
 	{
-		if (Context.Selection.Includes(Handler->Id()))
+		if (Runs(Context, *Handler))
 		{
 			BeginHandler(Context, *Handler);
 			Handler->Prepare(Context);
@@ -726,10 +767,16 @@ void MantlePlaceImportOrchestration::RunImport(const FHandlers& Handlers, FMantl
 {
 	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
 	{
-		if (Context.Selection.Includes(Handler->Id()))
+		if (Runs(Context, *Handler))
 		{
 			BeginHandler(Context, *Handler);
 			Handler->Import(Context);
+		}
+		else if (Context.Selection.Includes(Handler->Id()) && Handler->IsPresent(Context.Manifest))
+		{
+			Context.Log.Add(FString::Printf(
+				TEXT("%s skipped: what it is made from is not in this archive (left out of the selection)."),
+				*Handler->DisplayName().ToString()));
 		}
 	}
 }
@@ -738,7 +785,7 @@ void MantlePlaceImportOrchestration::RunFinalize(const FHandlers& Handlers, FMan
 {
 	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
 	{
-		if (Context.Selection.Includes(Handler->Id()))
+		if (Runs(Context, *Handler))
 		{
 			BeginHandler(Context, *Handler);
 			Handler->Finalize(Context);

@@ -423,7 +423,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	// --- Verify all: the downloaded bytes must match the manifest's declared sha256 before anything
 	// is imported. A corrupt/truncated/tampered download aborts here, creating nothing.
 	FString IntegrityError;
-	if (!MantlePlaceImportOrchestration::VerifyAll(Manifest, Reader, Timeline, IntegrityError))
+	if (!MantlePlaceImportOrchestration::VerifyAll(Manifest, Reader, Timeline, IntegrityError, &Log))
 	{
 		Result.Message = FString::Printf(TEXT("Integrity check failed: %s"), *IntegrityError);
 		return Result;
