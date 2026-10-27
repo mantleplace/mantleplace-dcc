@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds and packages the Mantle Place Revit add-in as a release zip.
+    Builds and packages the Mantle Place Revit plugin as a release zip.
 
 .DESCRIPTION
     Produces MantlePlace-Revit-<version>.zip: a Contents folder holding everything Revit loads, with
@@ -11,7 +11,7 @@
     format uses, so if this ever ships as a .bundle for the Autodesk App Store, that is adding a
     PackageContents.xml rather than rearranging the archive.
 
-    THIS CANNOT RUN IN CI, and no workflow should ever pretend otherwise. Building the add-in shim
+    THIS CANNOT RUN IN CI, and no workflow should ever pretend otherwise. Building the plugin shim
     needs RevitAPI.dll from a licensed Revit 2025 install, which is neither vendored nor
     redistributable, and this repository must never carry a self-hosted runner (a fork's pull request
     would execute on the build machine). A release is built on the same private licensed machine that
@@ -111,7 +111,7 @@ if ($builtVersion -ne $declaredVersion) {
 }
 
 # .pdb travels on purpose: a stack trace out of a curator's Revit is worth far more than the handful
-# of kilobytes, and this add-in has no telemetry to fall back on.
+# of kilobytes, and this plugin has no telemetry to fall back on.
 $payload = @(Get-ChildItem -LiteralPath $buildOutput -File | Where-Object { $_.Extension -in '.dll', '.pdb', '.json' })
 if ($payload.Count -eq 0) {
     throw "No assemblies in $buildOutput."
@@ -132,7 +132,7 @@ foreach ($file in $topLevel) {
 
 $manifest = Join-Path $addinProject $addinFileName
 if (-not (Test-Path -LiteralPath $manifest)) {
-    throw "Add-in manifest not found at $manifest."
+    throw "The .addin manifest was not found at $manifest."
 }
 
 $zipName = "MantlePlace-Revit-$declaredVersion.zip"

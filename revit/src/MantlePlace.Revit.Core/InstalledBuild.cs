@@ -212,8 +212,8 @@ public static class InstalledBuild
         ArgumentNullException.ThrowIfNull(build);
 
         string first = build.Dirty
-            ? $"Add-in version {build.Version}, commit {build.ShortSha} with uncommitted changes."
-            : $"Add-in version {build.Version}, commit {build.ShortSha}.";
+            ? $"Plugin version {build.Version}, commit {build.ShortSha} with uncommitted changes."
+            : $"Plugin version {build.Version}, commit {build.ShortSha}.";
 
         return first + "\n" + Provenance(build, stamp);
     }
@@ -222,7 +222,7 @@ public static class InstalledBuild
     {
         if (stamp is null)
         {
-            return "No install stamp beside the add-in: installed by hand, or from a release zip.";
+            return "No install stamp beside the plugin: installed by hand, or from a release zip.";
         }
 
         if (!stamp.FromSourceTree)

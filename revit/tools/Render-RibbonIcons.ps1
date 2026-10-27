@@ -3,7 +3,7 @@
     Renders the Revit ribbon's command glyphs from their committed SVG sources.
 
 .DESCRIPTION
-    Writes <Command><Theme>_<size>.png into the add-in's Resources folder, for every command, both
+    Writes <Command><Theme>_<size>.png into the plugin's Resources folder, for every command, both
     Revit UI themes and both ribbon slots -- twenty files from five sources. The PNGs are committed;
     this script is how they are REGENERATED, not a build step. Nothing in the build, the packaging
     script or CI runs it.
@@ -23,7 +23,7 @@
     repository already gives tools/brand-assets. Check `git diff --stat` before committing.
 
 .PARAMETER OutputDirectory
-    Where the PNGs are written. Defaults to the add-in's Resources folder, which is where the
+    Where the PNGs are written. Defaults to the plugin's Resources folder, which is where the
     Resource glob in MantlePlace.Revit.Addin.csproj picks them up. Unlike tools/brand-assets, whose
     input is private and whose path must therefore be typed every time, both halves of this script
     live in the repository, so a default is a fact rather than a guess about somebody's disk.

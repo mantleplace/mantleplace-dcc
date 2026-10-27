@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Says whether the Revit add-in installed on this machine is current with origin/main, a preview
+    Says whether the Revit plugin installed on this machine is current with origin/main, a preview
     of a branch, or stale -- one line, one exit code.
 
 .DESCRIPTION

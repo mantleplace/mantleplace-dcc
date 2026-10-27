@@ -64,7 +64,7 @@ public sealed partial class TerrainProbeCommand
         report.AppendLine("  (document-wide: both API members are static and take only a Document.)");
         report.AppendLine("  (it moves the origin of a real-world texture offset: flat shading measures");
         report.AppendLine("   from the project origin per face, smooth shading from the element's");
-        report.AppendLine("   bounding-box corner. The importer turns it on and anchors the drape for it.)");
+        report.AppendLine("   bounding-box corner. The plugin turns it on and anchors the drape for it.)");
 
         try
         {

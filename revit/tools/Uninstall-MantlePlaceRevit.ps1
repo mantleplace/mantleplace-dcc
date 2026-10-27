@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Removes the Mantle Place Revit add-in from the per-user Revit add-ins folders, and optionally
+    Removes the Mantle Place Revit plugin from the per-user Revit add-ins folders, and optionally
     the local data it accumulated.
 
 .DESCRIPTION
@@ -15,7 +15,7 @@
     longer targets is cleaned too. Nothing else in a year folder is touched, and the folder itself is
     left in place: it is Revit's, and other add-ins live in it.
 
-    What it removes only if asked, and asks before doing: the add-in's own data under
+    What it removes only if asked, and asks before doing: the plugin's own data under
     %LOCALAPPDATA%\MantlePlace -- the bundle cache (bundles), the planting family files (families)
     and the two machine records (announced-orders.json, interrupted-prepares.json).
 
@@ -25,8 +25,8 @@
     Revit before uninstalling. config.json is left too: nothing installs it, a person wrote it, and
     it holds overrides they may want back on a reinstall.
 
-    Refuses, before touching anything, while Revit is running: a loaded add-in is file-locked, so a
-    delete would remove some files and fail on the rest, leaving a half-removed add-in.
+    Refuses, before touching anything, while Revit is running: a loaded plugin is file-locked, so a
+    delete would remove some files and fail on the rest, leaving a half-removed plugin.
 
     Windows PowerShell 5.1 compatible, deliberately, for the reasons Deploy-MantlePlaceRevit.ps1
     gives. No ternaries, no null-coalescing, no pipeline chain operators. ASCII only: 5.1 reads a
@@ -43,7 +43,7 @@
     Exists so the script can be exercised against a scratch tree.
 
 .PARAMETER LocalDataRoot
-    The folder holding the add-in's local data. Defaults to %LOCALAPPDATA%\MantlePlace. Exists so
+    The folder holding the plugin's local data. Defaults to %LOCALAPPDATA%\MantlePlace. Exists so
     the script can be exercised against a scratch tree.
 
 .EXAMPLE
@@ -75,7 +75,7 @@ if ([string]::IsNullOrWhiteSpace($LocalDataRoot)) {
     $LocalDataRoot = Join-Path $env:LOCALAPPDATA 'MantlePlace'
 }
 
-# The names under the local data root that the add-in writes and this script may delete. Kept as an
+# The names under the local data root that the plugin writes and this script may delete. Kept as an
 # explicit list rather than "everything but auth": a folder this list does not name is one the
 # script has no business deleting, and a future credential-adjacent file stays safe by default.
 # Sources: BundleCacheLayout (bundles), FamilyFileStore (families), AnnouncedOrderStore and
@@ -87,7 +87,7 @@ $localDataNames = @('bundles', 'families', 'announced-orders.json', 'interrupted
 # ---------------------------------------------------------------------------
 $running = @(Get-Process -Name 'Revit' -ErrorAction SilentlyContinue)
 if ($running.Count -gt 0) {
-    throw 'Revit is running, so its add-in files are locked and only some of them would be removed. Close Revit and run this again. Nothing was removed.'
+    throw 'Revit is running, so its plugin files are locked and only some of them would be removed. Close Revit and run this again. Nothing was removed.'
 }
 
 $failures = 0
@@ -117,10 +117,10 @@ foreach ($yearFolder in $yearFolders) {
 }
 
 if ($removedFiles -eq 0 -and $failures -eq 0) {
-    Write-Host "No Mantle Place add-in files were found under $AddinsRoot."
+    Write-Host "No Mantle Place plugin files were found under $AddinsRoot."
 }
 else {
-    Write-Host "Removed $removedFiles add-in file(s)."
+    Write-Host "Removed $removedFiles plugin file(s)."
 }
 
 # ---------------------------------------------------------------------------
@@ -140,7 +140,7 @@ if ($localData.Count -eq 0) {
     Write-Host "No Mantle Place local data was found under $LocalDataRoot."
 }
 else {
-    Write-Host 'The add-in also keeps data of its own:' -ForegroundColor Cyan
+    Write-Host 'The plugin also keeps data of its own:' -ForegroundColor Cyan
     foreach ($path in $localData) {
         Write-Host "  $path"
     }

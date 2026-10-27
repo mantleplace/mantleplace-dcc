@@ -114,7 +114,7 @@ inline bool CheckUpAxis(const TCHAR* Block, const FString& UpAxis, FString& OutE
 		return true;
 	}
 	OutError = FString::Printf(
-		TEXT("Unsupported up_axis \"%s\" on hosts.unreal.%s: this importer converts Y-up glTF only "
+		TEXT("Unsupported up_axis \"%s\" on hosts.unreal.%s: this plugin converts Y-up glTF only "
 		     "(Interchange applies that conversion unconditionally, so any other axis would import "
 		     "rotated with no error)."),
 		*UpAxis, Block);

@@ -103,7 +103,7 @@ internal static class AttributionNotes
                 // while the record claimed a note; stop the step instead.
                 throw new InvalidOperationException(
                     $"This build of the plugin does not know how to carry out the attribution action "
-                    + $"'{plan.Action}'. Update the Mantle Place add-in.");
+                    + $"'{plan.Action}'. Update the Mantle Place plugin.");
         }
     }
 

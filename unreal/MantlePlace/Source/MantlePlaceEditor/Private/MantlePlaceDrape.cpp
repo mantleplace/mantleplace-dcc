@@ -210,7 +210,7 @@ namespace MantlePlaceDrape
 		// Every actor kind this importer spawns is handled above. A new one arriving here is a gap
 		// in this function, not a bundle problem, so it says so rather than returning quietly.
 		UE_LOG(LogMantlePlaceDrape, Error,
-			TEXT("Cannot drape \"%s\": %s is not an actor type this importer knows how to drape."),
+			TEXT("Cannot drape \"%s\": %s is not an actor type this plugin knows how to drape."),
 			*Target->GetName(), *Target->GetClass()->GetName());
 		return false;
 	}

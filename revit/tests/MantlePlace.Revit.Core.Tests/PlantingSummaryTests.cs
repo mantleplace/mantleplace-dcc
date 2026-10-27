@@ -99,7 +99,7 @@ internal static class PlantingSummaryTests
                 PlantingSummary.Sentence(Base with { TreesCreated = 120, EmptyFoliageCells = 7, UnknownFoliageValues = 1 }),
                 "Imported 120 tree point(s) of 130 from Landcover/TreePoints.csv: 120 tree(s) as \"Mantle Place Tree\" "
                     + "instances; 7 had no foliage type and were read as trees"
-                    + "; 1 had a foliage type this add-in does not know and were read as trees.",
+                    + "; 1 had a foliage type this plugin does not know and were read as trees.",
                 "the log counts empty cells"));
 
         run.Case("large counts are grouped, as every other count in the log is", () =>

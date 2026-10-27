@@ -82,14 +82,14 @@ internal static class InstalledBuildTests
             BuildIdentity clean = BuildIdentity.Parse($"0.1.0+{Sha}");
             run.Equal(
                 InstalledBuild.Describe(clean, null),
-                "Add-in version 0.1.0, commit c0e8438.\n"
-                    + "No install stamp beside the add-in: installed by hand, or from a release zip.",
+                "Plugin version 0.1.0, commit c0e8438.\n"
+                    + "No install stamp beside the plugin: installed by hand, or from a release zip.",
                 "no stamp means hand-copied or a release, and both are said");
 
             BuildIdentity dirty = BuildIdentity.Parse($"0.1.0+{Sha}-dirty");
             run.True(
                 InstalledBuild.Describe(dirty, null).StartsWith(
-                    "Add-in version 0.1.0, commit c0e8438 with uncommitted changes.",
+                    "Plugin version 0.1.0, commit c0e8438 with uncommitted changes.",
                     StringComparison.Ordinal),
                 "dirty is said in the first sentence, where a screenshot shows it");
         });
@@ -104,7 +104,7 @@ internal static class InstalledBuildTests
                 + "\"configuration\":\"Debug\",\"installedAt\":\"2026-09-17T10:12:00-05:00\"}")!;
             run.Equal(
                 InstalledBuild.Describe(build, stamp),
-                "Add-in version 0.1.0, commit c0e8438.\n"
+                "Plugin version 0.1.0, commit c0e8438.\n"
                     + "Installed 2026-09-17T10:12:00-05:00 from main (Debug) at D:\\GHW\\mantleplace-dcc\\main.",
                 "branch, configuration and tree, so a preview cannot be mistaken for main");
         });
@@ -121,7 +121,7 @@ internal static class InstalledBuildTests
                 + "\"installedAt\":\"2026-09-17T10:12:00-05:00\"}")!;
             run.Equal(
                 InstalledBuild.Describe(build, stamp),
-                "Add-in version 0.1.0, commit c0e8438.\n"
+                "Plugin version 0.1.0, commit c0e8438.\n"
                     + "The install stamp names commit 1234567, not this one: the files beside it were "
                     + "replaced by hand after that deploy.",
                 "the assembly wins, and the stamp's claim is reported as the discrepancy it is");
@@ -135,12 +135,12 @@ internal static class InstalledBuildTests
                 + "\"installedAt\":\"2026-09-17T10:12:00-05:00\"}")!;
             run.Equal(
                 InstalledBuild.Describe(build, stamp),
-                "Add-in version 0.1.0, commit c0e8438.\n"
+                "Plugin version 0.1.0, commit c0e8438.\n"
                     + "Installed 2026-09-17T10:12:00-05:00 from a release zip.",
                 "a curator's install has no branch to name");
         });
 
-        run.Case("the Client reads the stamp beside the add-in, and reads nothing as null", () =>
+        run.Case("the Client reads the stamp beside the plugin, and reads nothing as null", () =>
         {
             // The one file read behind About, kept in Client so CI builds it (revit/CLAUDE.md).
             string folder = Path.Combine(Path.GetTempPath(), "mantleplace-stamp-" + Guid.NewGuid().ToString("N"));

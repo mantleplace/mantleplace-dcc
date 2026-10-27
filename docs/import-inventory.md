@@ -103,14 +103,14 @@ and Road surface subdivisions carry today, and shows the count alone for every o
 
 ## Unreal
 
-One row per category the importer brings in. "When" follows the import panel's mode picker, which
+One row per category the plugin brings in. "When" follows the import panel's mode picker, which
 starts at Landscape: the landscape and its paint layers come with Landscape or Both, the terrain mesh
 with Mesh or Both, and every other row comes in whenever the bundle carries it, in every mode.
 Cesium streaming is a separate request.
 
 **What was measured, and why most rows were not.** Every Unreal figure below is one run, at one old plugin
 commit (`b0251a1`), on one MPB 1.6.0 fixture in UE 5.8.2; none has been taken since. **Re-measure them**
-when the Unreal plugin releases a track that changes an import step, when the importer reads a new
+when the Unreal plugin releases a track that changes an import step, when the plugin reads a new
 bundle format, or when a fixture that carries Unreal's formats is available. A figure older than the
 latest Unreal release is a dated record, not a current cost.
 
@@ -140,7 +140,7 @@ zip as it stands, the Cesium stream, was measured.
 -nullrhi`) and a Python script called `UMantlePlaceImporterLibrary::ImportVaultPackage` and
 `StreamBundleIntoCesium` directly, timing each call. The staged folder was removed between runs, so
 each run's first stream was cold. With `-nullrhi` no shader compiles and nothing renders, so a figure
-here is a lower bound on what a curator's editor takes. The importer's own ledger
+here is a lower bound on what a curator's editor takes. The plugin's own ledger
 (`MantlePlaceImportTiming`, written to `MANTLEPLACE_IMPORT_TIMELINE_DIR` when it is set) has a row for
 the terrain mesh, the buildings mesh, the drape, the weight resample and the landscape with its own
 steps. The coverage rasters, the road splines and the tree points have no row of their own: their time

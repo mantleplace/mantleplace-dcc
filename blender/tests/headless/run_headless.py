@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The add-on end to end, in Blender with no window: import a real bundle and check where it landed.
+"""The plugin end to end, in Blender with no window: import a real bundle and check where it landed.
 
     blender --background --factory-startup --python-exit-code 1 \
         --python blender/tests/headless/run_headless.py -- <bundle.zip or Metadata/manifest.json>
@@ -83,7 +83,7 @@ def main():
         print(f"      note: {note}", flush=True)
 
     mantleplace_blender.register()
-    check("mantleplace_bundle" in dir(bpy.ops.import_scene), "the add-on registers its operator")
+    check("mantleplace_bundle" in dir(bpy.ops.import_scene), "the plugin registers its operator")
 
     # 1. Context with Features composed over it.
     fresh_scene()

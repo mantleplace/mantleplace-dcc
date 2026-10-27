@@ -60,7 +60,7 @@ lists the vault at startup, at sign-in and every 15 minutes (`HPS-55`), and says
 opens the vault, where `Prepare for Revit` builds it; nothing is prepared or downloaded unasked. An
 order is announced once per machine, however many Revits are open, and never again once the vault
 has listed it. The first listing on a machine, or under an account new to it, is taken as seen,
-so installing the add-in does not announce every order already in your vault. The record of what was
+so installing the plugin does not announce every order already in your vault. The record of what was
 announced is `%LOCALAPPDATA%\MantlePlace\announced-orders.json`, and holds order ids and a digest of
 each account's address, never the address.
 
@@ -82,7 +82,7 @@ verify (⛔`HPS-26`). Nothing is ever evicted automatically: a purchased bundle 
 **Feedback goes to the web form, signed in or out** (`HPS-56`). `Mantle Place ▸ Account ▸ Send Feedback`
 opens `https://mantle.place/feedback` in your default browser, and the vault window's `Report a Problem`
 opens the same page for the selected bundle. The plugin has no feedback form of its own and sends
-nothing itself: the link carries only `source=dcc-revit`, this add-in's version (`v`), your Revit
+nothing itself: the link carries only `source=dcc-revit`, this plugin's version (`v`), your Revit
 version (`hv`) and, for a bundle, its order id (`order`) — never an address, a name, text or a token.
 `FeedbackLink` in the pure core builds it, and a version that is not digits and dots is left out.
 
@@ -90,7 +90,7 @@ version (`hv`) and, for a bundle, its order id (`order`) — never an address, a
 `Bundle Import` —
 and their button faces are Title Case, the same rule the ribbon follows and for the same reason. The
 brand orange appears on exactly one control in the whole plugin, the vault browser's `Import`;
-everything else keeps Revit's own chrome, because an add-in that paints its own windows stops looking
+everything else keeps Revit's own chrome, because a plugin that paints its own windows stops looking
 like part of the host. The words, the colour and which render of the mark a header slot gets are
 `WindowLabels`, `BrandPalette` and `MarkRenders` in the pure core, so the suite checks them without a
 Revit licence.
@@ -151,7 +151,7 @@ Revit licence.
   and a zone derived from longitude is derivation. Revit takes only UTC−12 to UTC+12, so a zone east
   of +12 (Tonga, Samoa, Kiritimati, the Chatham Islands) wraps by a day: +13 goes in as −11,
   the same clock time one calendar day later. Revit's daylight-saving switch cannot be set by an
-  add-in, so the log says whether the zone observes it. A bundle that publishes no zone leaves the
+  plugin, so the log says whether the zone observes it. A bundle that publishes no zone leaves the
   project's own in place, and the log names the zone set or kept;
 - makes one 3D view, **Mantle Place Site Context**, and one view filter of the same name that
   matches every element whose Comments begin with `Mantle Place` — everything an import stamped —
@@ -176,8 +176,8 @@ Revit licence.
   a dome with no trunk, with them in `Shrub Height` and `Crown Radius` (not `Height`: every Planting
   family already has a built-in *type* parameter of that name). Its row's stamp is in Comments —
   one stamp for every tree point, whichever family it is. A manifest that names no foliage-type
-  vocabulary, and a value this add-in does not know, make a tree; the add-in never guesses a type
-  from a height. Both families ship inside the add-in, and the shrub family is loaded only when a
+  vocabulary, and a value this plugin does not know, make a tree; the plugin never guesses a type
+  from a height. Both families ship inside the plugin, and the shrub family is loaded only when a
   shrub will be placed; when either cannot be loaded, the step builds that family's points as
   DirectShapes on the Planting category, the same shape and size, and the log says why — the other
   family is not affected. A family already in the project is used as it stands and never reloaded
@@ -185,7 +185,7 @@ Revit licence.
   project only when the curator reloads it. For the same reason a re-import never rebuilds a point
   an earlier plugin placed as the other family (a shrub placed as a tree before the foliage type
   was read): the log counts those and names the Comments prefix to delete to rebuild them. **No
-  render substitution is set, and the add-in never sets one:** linking a family type to a
+  render substitution is set, and the plugin never sets one:** linking a family type to a
   renderer's asset is the curator's step, in that renderer's own tool — and in Twinmotion it costs
   the published sizes. Checked on the tree family in **Twinmotion 2026.2 from Revit 2027, September
   2026**: with an asset set on a type's *Twinmotion Substitution*, every instance of that type
@@ -258,7 +258,7 @@ Revit licence.
 
 The Bundles panel carries a **slide-out** — the small unfold arrow at its foot — holding the two
 commands that are not ways to get content in. `Probe Terrain` measures what this project and a
-bundle would give the terrain importer, trying every way of placing it and rolling every attempt
+bundle would give the terrain import, trying every way of placing it and rolling every attempt
 back, so nothing in the project changes; use it when a bundle import is refused and the log does not
 say enough. `Logs` shows the most recent import or probe log in File Explorer. `Probe Terrain`
 used to sit on the panel face beside `Vault` and `Import Bundle`, where a first-time user read a
@@ -424,10 +424,10 @@ no window — it imports every layer, runs synchronously and writes `<zip>.mantl
 beside the bundle instead, because a `TaskDialog` or a modeless window during journal playback is
 never dismissed.
 
-⛔ **Load the add-in by hand once after every deploy, before the first unattended run.** The
+⛔ **Load the plugin by hand once after every deploy, before the first unattended run.** The
 assemblies are unsigned, so the first time Revit loads a *newly built* shim it raises
 **Security — Unsigned Add-In**, once per Revit version. Journal playback does not answer it, and
-the failure does not look like a failure: Revit carries on **without the add-in loaded**, the
+the failure does not look like a failure: Revit carries on **without the plugin loaded**, the
 journal runs to its end and reports `finished journal file playback`, the `Jrn.RibbonEvent` lines
 name ribbon buttons that were never created, and nothing happens — no import, no log, no error.
 Answering **Always Load** once per version is remembered for that build; the next build prompts
@@ -474,7 +474,7 @@ because the control path is the only handle a journal has on a button — and be
 slide-out adds a level to it is a reasonable one that happens to be wrong, as the Account line just
 above shows it would have been for a dropdown.
 
-⚠ **Read off the add-in's load, not off a click.** The intent was to settle this by replaying the
+⚠ **Read off the plugin's load, not off a click.** The intent was to settle this by replaying the
 recorded probe journal and watching the button fire, and that leg did not complete: every attempt
 stopped at startup on `processShellCommand` and `TaskDialog "Failed to open file."`, with Revit
 taking the journal as a document to open rather than a script to play, and no `Jrn.` line in it ever
@@ -510,7 +510,7 @@ which way round a published ring is wound.
 land-cover, 1 water and 4 road subdivisions, the roads cut last and over everything. The land-use,
 land-cover and water polygons are a real order's; no bundle on the machine published a
 `road_polygons` layer yet, so the road surfaces came from a hand-written one added to a scratch copy
-of that bundle. They exercise the add-in, and say nothing about what the platform publishes. Revit posted an
+of that bundle. They exercise the plugin, and say nothing about what the platform publishes. Revit posted an
 overlap warning for each pair (15, 96, 3 and 26 places as the four steps ran) and kept every
 subdivision. A ray straight down over six road/land overlaps met a **land-cover** subdivision first
 every time, the road surface last or not at all, with every surface inside 0.02 ft (6 mm) of the
@@ -533,7 +533,7 @@ edited, when the proportions change.
 
 It has no button. It runs at Revit's startup when an environment variable names a folder:
 
-1. Build the add-in, deploy it, and set `MANTLEPLACE_AUTHOR_PLANTING_FAMILIES` to a **neutral
+1. Build the plugin, deploy it, and set `MANTLEPLACE_AUTHOR_PLANTING_FAMILIES` to a **neutral
    folder** such as `C:\MantlePlace` in the environment Revit is started from.
 2. Start **Revit 2025** — a family saved by a Revit loads only in that Revit and later ones. Once
    Revit has initialised, the folder holds `Mantle Place Tree.rfa`, `Mantle Place Shrub.rfa` and
@@ -620,7 +620,7 @@ NuGet package, and the tree takes no packages.
 dotnet run --project tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -f net8.0
 dotnet run --project tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -f net10.0
 
-# Everything, including the add-in shim. Needs Revit 2025 installed.
+# Everything, including the plugin shim. Needs Revit 2025 installed.
 dotnet build MantlePlace.Revit.slnx
 
 # Build against a different Revit's API — narrows what the output can load into:
@@ -634,7 +634,7 @@ as missing.
 ## Loading it into Revit
 
 ```powershell
-# Close Revit first -- a loaded add-in DLL is file-locked.
+# Close Revit first -- a loaded plugin DLL is file-locked.
 ./tools/Deploy-MantlePlaceRevit.ps1
 ```
 
@@ -674,7 +674,7 @@ one, and the install returns to `main` when a session deploys after a merge — 
 [`tools/local-install/`](../tools/local-install/README.md).
 
 ```powershell
-# Is the add-in in Revit the tree? One line per install, exit 0 for current or preview.
+# Is the plugin in Revit the tree? One line per install, exit 0 for current or preview.
 ./tools/Check-RevitInstall.ps1
 ```
 
@@ -692,7 +692,7 @@ a dirty tree, or a commit this clone has never seen). It fetches first; `-NoFetc
 `-Launch` starts Revit (`-LaunchVersion`, 2027 by default: the one host where a .NET 8 assembly runs
 under a .NET 10 runtime, so the leg that shows a difference first) with
 `DOTNET_MODIFIABLE_ASSEMBLIES=debug`. Attach Visual Studio or Rider to that `Revit.exe`, edit a
-method body in `Core` or `Client`, and Hot Reload applies it to the running add-in — no deploy, no
+method body in `Core` or `Client`, and Hot Reload applies it to the running plugin — no deploy, no
 restart. That covers the behaviour behind the buttons. It does not cover the buttons: `OnStartup`
 ran once, and a ribbon change is a deploy and a restart, the same as a new type or a changed
 signature. A Revit started from the Start menu has no such variable and simply cannot be hot-reloaded.
@@ -753,7 +753,7 @@ deletes `auth` there: the stored sign-in is shared with the Unreal plugin. Its s
 
 `Deploy-MantlePlaceRevit.ps1` ships in the zip **verbatim** — one script, two callers, reached with
 `-PayloadDirectory`. That is deliberate and it is the only test coverage an installer can have here:
-CI can never run it, because CI can never build this add-in.
+CI can never run it, because CI can never build this plugin.
 
 The packaging materials live in [`packaging/`](./packaging/). `README.txt` leads with a manual copy
 and offers the script second — see [ADR 0005](../docs/adr/0005-release-installs-are-copy-first.md)
@@ -832,7 +832,7 @@ still open.
 ## Configuration
 
 **Nothing is required.** Sign-in and token refresh both reach mantle.place on compiled-in routes,
-so a curator installs the add-in and signs in with no file to obtain and nothing to configure.
+so a curator installs the plugin and signs in with no file to obtain and nothing to configure.
 
 Refresh used to be identity-provider-direct only, which meant a machine without the project URL and
 anon key could sign in once and then lose the session at access-token expiry — reporting a
@@ -847,7 +847,7 @@ of those defaults (`webLoginUrl`, `tokenEndpointUrl`, `refreshEndpointUrl`, `api
 non-production stack. `loopbackPorts` is the `HPS-06a` override: leave it out and the OS assigns
 the sign-in callback port, which is what keeps sign-in clear of Windows' shifting reserved ranges
 and lets Revit and Unreal be signed in at the same time. Absent or malformed, the file is ignored
-and the defaults stand — this is read during Revit's add-in load, where throwing costs the ribbon
+and the defaults stand — this is read during Revit's load of a plugin, where throwing costs the ribbon
 button and explains nothing.
 
 ## Where the manifest block is specified

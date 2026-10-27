@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: Mantle Place LLC
 """Mantle Place for Blender: import a bundle's site, placed at its site origin.
 
-This file is the add-on's entry point and nothing else. Blender is imported only when the add-on
+This file is the plugin's entry point and nothing else. Blender is imported only when the plugin
 registers, inside `register`, so `mantleplace_blender.core` imports on a machine with no Blender at
-all, which is what lets the headless suite test every decision the add-on makes (HPS-02).
+all, which is what lets the headless suite test every decision the plugin makes (HPS-02).
 
 `bl_info` serves a legacy add-on install (Preferences, Add-ons, Install from Disk on the package
 folder's zip in Blender before 4.2); `blender_manifest.toml` beside it serves an extension install.

@@ -12,7 +12,7 @@ public static class HandoverSummary
     /// <summary>What the credit step says when the project has no provenance record to credit from.</summary>
     public const string NoRecord =
         "This project has no Mantle Place provenance record, so there is no credit to add. A project "
-        + "imported by this add-in carries one.";
+        + "imported by this plugin carries one.";
 
     /// <summary>The confirmation's question.</summary>
     public static string Ask(HandoverCounts counts)

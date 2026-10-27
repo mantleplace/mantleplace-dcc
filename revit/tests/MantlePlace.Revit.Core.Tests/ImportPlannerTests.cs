@@ -1444,7 +1444,7 @@ internal static class ImportPlannerTests
             run.True(location?.TimeZone is not null, "the zone travels with the site location");
             run.Within(location?.TimeZoneToWrite(9.0) ?? 0.0, -7.0, 0.0, "the published zone, not the project's");
             run.Contains(location?.LogLine(9.0), "UTC-7 (America/Denver), as published", "the log names the zone set");
-            run.Contains(location?.LogLine(9.0), "observes daylight saving", "and what Revit will not let the add-in set");
+            run.Contains(location?.LogLine(9.0), "observes daylight saving", "and what Revit will not let the plugin set");
         });
 
         run.Case("with no published time zone the project keeps its own, and the log says so", () =>

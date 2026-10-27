@@ -10,7 +10,7 @@ that visible, and the rules in root [`CLAUDE.md`](../../CLAUDE.md) are what make
 ## The model
 
 **Each host's local install is a single slot that tracks `main`.** Revit loads one Mantle Place per
-process — the add-in manifest carries one `ClientId`, and Revit refuses a duplicate — and a
+process — the .addin manifest carries one `ClientId`, and Revit refuses a duplicate — and a
 consuming Unreal project has one submodule checkout, so an install per worktree is not available.
 With several worktrees and one slot, the slot has to say what it holds:
 
@@ -70,10 +70,10 @@ and checks out a ref in the submodule, detached, `origin/main` by default;
 project's own tree: its pin is a commit in *its* history and moves only by its own pull request,
 after the change has merged here.
 
-**Blender** — `blender/tools/Install-BlenderAddon.ps1` copies the add-on into each Blender's own
+**Blender** — `blender/tools/Install-BlenderAddon.ps1` copies the plugin into each Blender's own
 extension folder, from 4.2 up, and writes `MantlePlace.install.json` there with the same fields as
 the Revit stamp; `blender/tools/Check-BlenderInstall.ps1` reads it back, and reads only the Blender
-versions that hold the add-on. The loop is in [`blender/README.md`](../../blender/README.md#working-on-it).
+versions that hold the plugin. The loop is in [`blender/README.md`](../../blender/README.md#working-on-it).
 
 **A new host** adds `<host>/tools/Check-<Host>Install.ps1` under the contract above, an install
 tool that writes a stamp, and one line to the list in `Check-LocalInstall.ps1`. The obligation is
@@ -85,7 +85,7 @@ tool that writes a stamp, and one line to the list in `Check-LocalInstall.ps1`. 
   script launched, applies method-body edits live. It cannot re-run `OnStartup`, so a ribbon change
   is a deploy and a restart. Unreal's Live Coding has the same shape: `.cpp` bodies live, headers
   and assets on restart.
-- **The first launch.** A newly built, unsigned add-in raises Revit's *Security — Unsigned Add-In*
+- **The first launch.** A newly built, unsigned plugin raises Revit's *Security — Unsigned Add-In*
   dialog once per version, and the answer is kept only if that Revit then exits normally. No script
   answers it.
 - **Refuse a deploy.** The deploy script records a dirty or off-`main` tree and never refuses it:

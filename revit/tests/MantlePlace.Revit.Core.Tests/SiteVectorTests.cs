@@ -576,7 +576,7 @@ internal static class SiteVectorTests
             run.Equal(parse.Notes.Count, 0, "a bundle that says what it means needs no note");
         });
 
-        run.Case("a foliage type this add-in does not know reads as a tree, and is counted", () =>
+        run.Case("a foliage type this plugin does not know reads as a tree, and is counted", () =>
         {
             // ⛔ spec/format.md §4.4: a host MUST read a value it does not know as `tree`. The
             // vocabulary grows by adding values, never by changing what an existing one means.
@@ -660,7 +660,7 @@ internal static class SiteVectorTests
             run.Equal(parse.Notes.Count, 0, "the ordinary older bundle says nothing");
         });
 
-        run.Case("a vocabulary this add-in does not know still maps the values it knows", () =>
+        run.Case("a vocabulary this plugin does not know still maps the values it knows", () =>
         {
             // ⛔ spec/format.md §4.4: a vocabulary the host does not know is NO reason to ignore the
             // column. A new value is a new vocabulary version, never a change of meaning for an
@@ -679,7 +679,7 @@ internal static class SiteVectorTests
             run.Equal(parse.Points[1].FoliageType, FoliageType.Tree, "the vocabulary's new value reads as a tree");
             run.Equal(parse.UnknownFoliageValues, 1, "and is counted");
             run.Equal(parse.Notes.Count, 1, "said once, not once per row");
-            run.Contains(parse.Notes[0], "newer", "the note says the vocabulary is newer than the add-in");
+            run.Contains(parse.Notes[0], "newer", "the note says the vocabulary is newer than the plugin");
         });
 
         run.Case("a column with no vocabulary to read it by is ignored, and said once", () =>

@@ -520,7 +520,7 @@ public sealed class SiteTimeZone
 
         return zone + Published.ObservesDst switch
         {
-            true => " The zone observes daylight saving time, and an add-in cannot switch Revit's on: tick the "
+            true => " The zone observes daylight saving time, and a plugin cannot switch Revit's on: tick the "
                 + "daylight saving box under Manage ▸ Location before a sun study in the months it applies.",
             false => " The zone does not observe daylight saving time: if the daylight saving box under "
                 + "Manage ▸ Location is ticked, untick it.",
