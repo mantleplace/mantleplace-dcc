@@ -199,6 +199,10 @@ class HostStringTests(GateTestCase):
         self.write("unreal/Plugin/Content/Python/tool.py", 'print("Your bundle: download-to-own")\n')
         self.assertRefused("unreal/Plugin/Content/Python/tool.py:1:")
 
+    def test_a_banned_term_in_a_blender_string_is_refused(self) -> None:
+        self.write("blender/mantleplace_blender/shim.py", 'label = "Keep the bundle you own"\n')
+        self.assertRefused("blender/mantleplace_blender/shim.py:1:")
+
     def test_a_verbatim_string_reports_the_line_of_the_term(self) -> None:
         self.write("revit/src/Addin/Notice.cs", 'class N { string T = @"one\nthe bundle ownership\ntwo"; }\n')
         self.assertRefused("revit/src/Addin/Notice.cs:2:")

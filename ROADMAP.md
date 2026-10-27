@@ -60,8 +60,9 @@ planned it.
 
 ## What is deliberately not on this roadmap
 
-- **Other hosts** (Rhino, Blender, 3ds Max) — top-level folders appear when they have real content,
-  never as placeholders, and none is scheduled.
+- **Other hosts** (Rhino, 3ds Max) — top-level folders appear when they have real content,
+  never as placeholders, and none is scheduled. Blender has a bundle reader in
+  [`blender/`](blender/README.md); its sign-in and vault are not scheduled either.
 - **Anything that thickens the client.** Coordinate machinery, source selection, mosaic assembly and
   their relatives stay on the platform side by rule, so no quarter will ever contain them — see
   [What these plugins do](README.md#what-these-plugins-do).

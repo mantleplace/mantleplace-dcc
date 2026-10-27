@@ -18,7 +18,7 @@ format-served host, and never both.
 _Avoid_: application, editor, target, integration
 
 **Plugin host**:
-A DCC host this repository ships a Mantle Place plugin for. Currently Unreal Engine and Revit. Every
+A DCC host this repository ships a Mantle Place plugin for. Currently Unreal Engine, Revit and Blender. Every
 fixed-frame host and every order-frame host is a plugin host.
 _Avoid_: supported host, plugin target, integration
 

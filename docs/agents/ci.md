@@ -5,9 +5,9 @@ description: The pull-request gates this repository runs, the jobs behind them, 
 
 # CI
 
-Eight workflows live here, all on free hosted runners. Five run on every pull request:
-`ci-manifest-conformance`, `ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming` and
-`ci-brand-assets`. The other three are not pull-request gates: `release-mpb.yml` (below), `stale.yml`
+Nine workflows live here, all on free hosted runners. Six run on every pull request:
+`ci-manifest-conformance`, `ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming`,
+`ci-brand-assets` and `ci-blender-tests`. The other three are not pull-request gates: `release-mpb.yml` (below), `stale.yml`
 and `ci-tracker-hygiene.yml`. The last two are tracker hygiene — the second runs on issue and comment
 events, a pull request's own comments included, and it detects rather than blocks
 ([`public-surface.md`](public-surface.md)).
@@ -36,7 +36,8 @@ gh api repos/mantleplace/mantleplace-dcc/branches/main/protection
 `generated-names` is the `ci-unreal-naming` job. The other four come from `ci-manifest-conformance`
 (`conformance`), `ci-revit-tests` (`pure-core` and `pure-core-windows`) and `ci-public-hygiene`
 (`references`). `ci-brand-assets` reports on every pull request but is not required, by construction
-(above).
+(above). `ci-blender-tests` (`blender-core`, the Blender add-on's pure core) reports on every pull
+request and is not required yet; making it required is a branch-protection change.
 
 ## Rules for every workflow
 
@@ -68,6 +69,7 @@ pwsh -NoProfile -File tools/public-hygiene/Test-PowerShellParses.ps1
 (cd tools/public-hygiene && python -m unittest discover -p "test_*.py")
 (cd tools/unreal-naming && python -m unittest discover -p "test_*.py")
 (cd tools/brand-assets && python -m unittest discover -p "test_*.py")
+python -m unittest discover -s blender/tests -t blender
 python tools/public-hygiene/check_public_references.py --stdin --label "PR body" < pr-body.md
 ```
 

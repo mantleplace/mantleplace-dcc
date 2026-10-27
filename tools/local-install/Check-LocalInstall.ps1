@@ -31,7 +31,8 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 # One entry per host. Order is the order the lines print.
 $hosts = @(
     'revit/tools/Check-RevitInstall.ps1',
-    'unreal/tools/Check-UnrealInstall.ps1'
+    'unreal/tools/Check-UnrealInstall.ps1',
+    'blender/tools/Check-BlenderInstall.ps1'
 )
 
 $exitCode = 0

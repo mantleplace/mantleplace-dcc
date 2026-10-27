@@ -1,0 +1,40 @@
+# Blender pure-core tests — the headless half of the Blender add-on's triad.
+#
+# HPS-02: every decision the add-on makes (the version, the two pointers, the frame and site-origin
+# checks, the composed stage, the feedback link, zip and folder reading) lives in
+# blender/mantleplace_blender/core/, which imports no bpy, so a hosted runner with no Blender runs
+# all of it. The shim (shim.py) calls Blender's API and is deliberately NOT run here: it is proven
+# by blender/tests/headless/run_headless.py inside Blender --background, against a real bundle,
+# by hand, because no bundle is committed to this repository.
+#
+# Python 3.11 because Blender 4.2, the oldest supported, embeds 3.11: a construct newer than that
+# would pass here on a newer Python and fail to import in the host. Standard library only, so the
+# job restores nothing.
+#
+# NO paths: FILTER ON pull_request, deliberately, for the reason spelled out in ci-revit-tests.yml:
+# a check that is path-filtered never reports on a pull request outside its paths, so if it is ever
+# made required it sits pending forever and nothing can merge.
+name: ci-blender-tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-blender-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  blender-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run the pure-core suite
+        run: python -m unittest discover -s blender/tests -t blender -v

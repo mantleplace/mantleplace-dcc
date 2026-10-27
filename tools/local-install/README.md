@@ -70,6 +70,11 @@ and checks out a ref in the submodule, detached, `origin/main` by default;
 project's own tree: its pin is a commit in *its* history and moves only by its own pull request,
 after the change has merged here.
 
+**Blender** — `blender/tools/Install-BlenderAddon.ps1` copies the add-on into each Blender's own
+extension folder, from 4.2 up, and writes `MantlePlace.install.json` there with the same fields as
+the Revit stamp; `blender/tools/Check-BlenderInstall.ps1` reads it back, and reads only the Blender
+versions that hold the add-on. The loop is in [`blender/README.md`](../../blender/README.md#working-on-it).
+
 **A new host** adds `<host>/tools/Check-<Host>Install.ps1` under the contract above, an install
 tool that writes a stamp, and one line to the list in `Check-LocalInstall.ps1`. The obligation is
 `HPS-50` in the [host plugin standard](../../docs/host-plugin-standard.md).

@@ -149,6 +149,7 @@ Per-host specifics live beside the code:
 
 - Unreal — [`unreal/MantlePlace/`](unreal/MantlePlace/)
 - Revit — [`revit/README.md`](revit/README.md) and [`revit/CLAUDE.md`](revit/CLAUDE.md)
+- Blender — [`blender/README.md`](blender/README.md) and [`blender/CLAUDE.md`](blender/CLAUDE.md)
 
 Match the surrounding code. The comment density here is higher than most codebases and that is
 deliberate: comments explain *why*, especially where a rule guards a failure that looks like success.

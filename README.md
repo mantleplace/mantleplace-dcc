@@ -170,8 +170,9 @@ and imagery beside the imported Landscape.*
 
 The layout, directory by directory, is in [`CLAUDE.md`](CLAUDE.md#layout), which keeps it current.
 
-Start with each host's own docs: [`unreal/README.md`](unreal/README.md) for Unreal and
-[`revit/README.md`](revit/README.md) for Revit. Sign-in is shared by both hosts and documented once,
+Start with each host's own docs: [`unreal/README.md`](unreal/README.md) for Unreal,
+[`revit/README.md`](revit/README.md) for Revit, and [`blender/README.md`](blender/README.md) for the
+Blender add-on, which reads a bundle on disk and does not sign in. Sign-in is shared by both hosts and documented once,
 in [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md).
 
 ## Building
@@ -189,6 +190,13 @@ compile target.
 
 **Unreal** — drop `unreal/MantlePlace/` into a UE 5.8 project's `Plugins/` directory and let the
 editor build it. Its engine dependencies are Epic's built-in Interchange, PCG and SQLiteCore.
+
+**Blender** — the add-on's core suite needs no Blender, and its end-to-end check runs Blender with
+no window ([`blender/README.md`](blender/README.md#build-and-test)):
+
+```bash
+python -m unittest discover -s blender/tests -t blender
+```
 
 **The contract gate** — Python 3.12, standard library only:
 
