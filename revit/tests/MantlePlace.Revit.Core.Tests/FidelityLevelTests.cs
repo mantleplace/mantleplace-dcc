@@ -594,6 +594,23 @@ internal static class FidelityLevelTests
             run.False(checklist.OffersLevels, "no column");
             run.Equal(checklist.LevelOptions(ImportLayer.Planting).Count, 0, "no list");
             run.True(checklist.AllLevels is null, "nothing for set-all to read");
+
+        run.Case("the window opens on the levels the curator chose at their last Import", () =>
+        {
+            ImportChecklist last = ImportChecklist.For(Plan(Fixture()), "2025");
+            last.SetLevel(ImportLayer.RoadSubdivisions, FidelityLevel.Med);
+            last.SetLevel(ImportLayer.Planting, FidelityLevel.Max);
+            RememberedChoice remembered = RememberedChoice.Of(last, last.Choice);
+
+            ImportChecklist next = ImportChecklist.For(Plan(Fixture()), "2025", RememberedChoice.Parse(remembered.ToBytes()));
+            run.True(next.ChosenLevel(ImportLayer.RoadSubdivisions) == FidelityLevel.Med, "roads at the remembered MED");
+            run.True(next.ChosenLevel(ImportLayer.Planting) == FidelityLevel.Max, "trees at the remembered MAX, not their MIN default");
+            run.True(next.ChosenLevel(ImportLayer.ImageryDrape) == last.ChosenLevel(ImportLayer.ImageryDrape), "a row left alone is as it was");
+
+            RememberedChoice unavailable = RememberedChoice.Parse("""{ "shape": 1, "levels": { "RoadCentrelines": "MIN" } }"""u8.ToArray())!;
+            ImportChecklist ignored = ImportChecklist.For(Plan(Fixture()), "2025", unavailable);
+            run.True(ignored.ChosenLevel(ImportLayer.RoadCentrelines) == FidelityLevel.Max, "a level this bundle cannot import is ignored");
+        });
         });
     }
 

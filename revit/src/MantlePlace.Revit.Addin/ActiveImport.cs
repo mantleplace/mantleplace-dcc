@@ -73,10 +73,13 @@ internal sealed class ActiveImport : IDisposable
         _importer.CommitEnded += () => Tell(staged => staged.CommitEnded());
         _importer.Announced += notice => Tell(staged => staged.Announce(notice));
         _importer.Counted += progress => Tell(staged => staged.ReportProgress(progress));
-        Checklist = ImportChecklist.For(plan, application.VersionNumber);
+        Checklist = ImportChecklist.For(plan, application.VersionNumber, ChoiceStore.Read());
         DeliveryLine = DeliveryHeader.Describe(manifest.Delivery);
         UnitsDisagreement = DeliveryHeader.DisplayDisagreement(manifest.Delivery, LengthUnitTypeId(document));
     }
+
+    /// <summary>The record of what the curator ticked at their last Import: read as the window opens, written as Import is pressed.</summary>
+    internal static ImportChoiceStore ChoiceStore { get; } = new(ImportChoiceStore.DefaultPath);
 
     internal string ZipPath { get; }
 
