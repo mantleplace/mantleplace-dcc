@@ -108,7 +108,7 @@ there moves the standard first. Title Case is Revit's; a host construct keeps it
 
 - **`UseWPF` changes the implicit-usings set.** The WindowsDesktop set omits `System.IO`, so the shim
   imports it explicitly; the symptom is a wall of `CS0103: The name 'Path' does not exist`.
-- **The add-in shim is not built in CI, on purpose** (no Revit on a hosted runner). It is proven by a
+- **The Revit shim is not built in CI, on purpose** (no Revit on a hosted runner). It is proven by a
   developer build plus a real import in Revit; if you change it, build it locally. Testable code put
   in the shim is hidden from CI, which is why `Client` exists.
 - **Building the shim needs Revit 2025 specifically.** The project stops with one sentence when
@@ -147,7 +147,7 @@ there moves the standard first. Title Case is Revit's; a host construct keeps it
     selection filter, never marked in its Comments stamp (a marker would defeat every
     exact-stamp re-import), and a missing role reads as `database`
     ([`README.md`](README.md#sharing-a-project-odbl-content-and-prepare-for-handover));
-  - **the add-in is renderer-neutral** — it never writes a renderer's own storage.
+  - **the plugin is renderer-neutral** — it never writes a renderer's own storage.
 
 ## Where knowledge lives
 

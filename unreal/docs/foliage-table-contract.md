@@ -73,7 +73,7 @@ how a re-import removes it is [`generated-content.md`](generated-content.md).
 
 The table holds one published level of the tree points, chosen by the project setting
 **Tree points level** (Project Settings, Plugins, Mantle Place, Foliage; MAX by default). The bundle
-publishes the levels in `foliage_points.levels` and the importer reads the one asked for as stated and
+publishes the levels in `foliage_points.levels` and the plugin reads the one asked for as stated and
 never derives one. A MED or MIN stated as `cut: {rows: N}` takes the first N rows of the one ranked
 tree file the bundle ships (a row's number is its rank), checked against the one digest that file has.
 A bundle older than MPB 2.0 states them as pointers to a file each, and those are read from that file,

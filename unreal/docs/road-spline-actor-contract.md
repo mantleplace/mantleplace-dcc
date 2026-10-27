@@ -7,24 +7,24 @@ class is in the Runtime module, so a saved level that holds one loads in a cooke
 ## Where the roads come from
 
 The heights are placed as the file carries them, and only in the landscape's datum, `EGM2008-orthometric`;
-the importer converts none. It reads the Unreal block's own copy first when the manifest publishes one,
+the plugin converts none. It reads the Unreal block's own copy first when the manifest publishes one,
 `hosts.unreal.road_splines` (MPB 1.16.0; a 2.0 bundle's `-Engine` twin): the same roads draped on the
 engine's ground, which a US order needs because its shared layer is `NAVD88 (GEOID18)`. A source that states
 another datum, or none, is skipped by name, so a US bundle that publishes no copy places no roads. The import
 log says how many splines were created and which file they were read from.
 
-Failing that, the importer reads the layer from its GeoPackage, the file the `gpkg` row of the layer's `formats` in
+Failing that, the plugin reads the layer from its GeoPackage, the file the `gpkg` row of the layer's `formats` in
 `vector.layers` points at, through the engine's own SQLiteCore module. The columns it takes are `class`,
 `name` and `width_m_estimated`, and the geometry is the lines of the file's feature tables in
 EPSG:4326 (a table in another frame is refused by name and never reprojected). A row that lists no
-`tables` holds one table, which the importer reads whatever it is named (the producer names it in
+`tables` holds one table, which the plugin reads whatever it is named (the producer names it in
 CamelCase, `RoadSplines`, not `road_splines`); a file of several tables under such a row is refused
 and the layer is read from its `geojson` row, never from one table picked out of the file. A layer with no `gpkg`
 row, or one whose GeoPackage cannot be read, is read from its `geojson` row instead: the same roads,
 the same properties. Both files are declared payloads, so both are verified before anything is placed.
 
 It replaces a bare actor that carried the road's width, class and name as tag strings. **Nothing in
-the plugin reads a road attribute from a tag, and the importer writes none.** The only tag on the
+the plugin reads a road attribute from a tag, and it writes none.** The only tag on the
 actor is the import tag, `mantleplace_import=<identity>`, which a re-import matches on whatever the
 actor's class: a re-import replaces the road actors and never stacks them. There is no migration; a
 bare-actor road from an earlier import carries the same tag and goes with them.

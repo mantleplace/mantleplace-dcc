@@ -8,14 +8,14 @@ GeoPackage reader needs the Windows SQLite).
 
 | Path | What it is |
 |---|---|
-| `Readers/GeoPackageLayerReader.cs` | prototype: one GeoPackage table to the `SiteFeature` list the importer takes, through `WinSqlite` and `GeoPackageGeometry` |
-| `Readers/WinSqlite.cs` | P/Invoke over the `winsqlite3.dll` Windows ships: no NuGet, no native binary beside the add-in |
+| `Readers/GeoPackageLayerReader.cs` | prototype: one GeoPackage table to the `SiteFeature` list the plugin takes, through `WinSqlite` and `GeoPackageGeometry` |
+| `Readers/WinSqlite.cs` | P/Invoke over the `winsqlite3.dll` Windows ships: no NuGet, no native binary beside the plugin |
 | `Readers/GeoPackageGeometry.cs` | the GeoPackage blob header and WKB, to lines and rings |
 | `Readers/DxfLayerReader.cs` | prototype: one DXF layer to the same list, attributes from `MANTLEPLACE` extended data |
 | `Readers/CarrierFeatures.cs` | the one place a carrier's parts and attributes become `SiteFeature`s, with `SiteVectorReader`'s rules |
 | `Readers/CarrierComparison.cs` | reads a bundle through all three carriers and tables the differences against GeoJSON |
 | `Tests/` | headless tests of both readers against `SiteVectorReader`, and `--compare` over a real bundle |
-| `Probe/` | the scratch add-in a real Revit runs, one mode per launch |
+| `Probe/` | the scratch plugin a real Revit runs, one mode per launch |
 | `Invoke-CarrierProbe.ps1` | launches that Revit quietly, waits for the probe, stops it, prints `result.md` |
 | `make_carriers.py` | writes both carriers from one extracted bundle, standing in for the pipeline |
 

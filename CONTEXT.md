@@ -429,3 +429,6 @@ term above says which other words to steer clear of for that term.
 | "own", "owned", "owning" and "ownership", said about bundles | keep wording: a curator downloads a bundle and *keeps* it |
 | "download-to-own" | keep wording: "download and keep" |
 | "Mantle Place Importer" | "Mantle Place for Unreal" or "Mantle Place for Revit" |
+| "Mantle Place add-in", "Mantle Place add-on", "Mantle Place extension", "Mantle Place connector" | "Mantle Place for Revit", "Mantle Place for Blender" or "Mantle Place for Unreal"; for the software in general, "the Mantle Place plugin" |
+| "the add-in", "this add-in", "the Revit add-in", "the add-on", "this add-on", "the Blender add-on", said of our software | "the plugin", "the Revit plugin", "the Blender plugin"; the host's own **Add-Ins** tab and **Add-ons** preferences stay as labels |
+| "the importer", "this importer", "the Unreal importer", "the Revit importer", "the Blender importer", said of our software | "the plugin", or "the Unreal plugin", "the Revit plugin", "the Blender plugin"; "import" stays as the verb or noun for what the plugin does |

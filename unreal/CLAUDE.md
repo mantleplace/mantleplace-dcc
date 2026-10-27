@@ -1,6 +1,6 @@
 ---
 name: unreal-host-onboarding
-description: Onboarding for the Unreal plugin — UE 5.8, Interchange, PCG and SQLiteCore, the two modules, how to drive the headless automation tests, the generated-name standard and where imported content lands, and the traps (CI never compiles this plugin, nothing the importer generates is saved, the identity is not the job id). An index — the detail is in `unreal/docs/`. Read first for any change under `unreal/`.
+description: Onboarding for the Unreal plugin — UE 5.8, Interchange, PCG and SQLiteCore, the two modules, how to drive the headless automation tests, the generated-name standard and where imported content lands, and the traps (CI never compiles this plugin, nothing the plugin generates is saved, the identity is not the job id). An index — the detail is in `unreal/docs/`. Read first for any change under `unreal/`.
 ---
 
 # Mantle Place for Unreal — agent onboarding
@@ -49,18 +49,18 @@ arithmetic is correct.
 
 ```
 MantlePlace/Source/MantlePlaceRuntime/   auth, vault client, bundle cache, sha256. No editor, no UI.
-MantlePlace/Source/MantlePlaceEditor/    the importer, the vault panel, the naming module.
+MantlePlace/Source/MantlePlaceEditor/    the import code, the vault panel, the naming module.
 MantlePlace/Source/*/Private/Tests/      headless automation tests over the pure logic.
 MantlePlace/Content/                     shipped assets: the drape material, the auth Blueprint base.
 MantlePlace/Content/Python/              the Cesium streaming helper. Spawns actors; imports no assets.
 ```
 
 **Put the decision in a `*Logic` translation unit** (`MantlePlace<Name>Logic.cpp`, one per
-decision), each with a headless test beside it. The importer *executes*; the Logic unit *decides*.
+decision), each with a headless test beside it. The import code *executes*; the Logic unit *decides*.
 If asserting it needs a running editor and a real bundle, it is in the wrong unit: logic in the
-importer is covered by review alone.
+import code is covered by review alone.
 
-**The importer is a registry of per-artifact handlers.** `ImportVaultPackage` runs the steps in
+**The import code is a registry of per-artifact handlers.** `ImportVaultPackage` runs the steps in
 `MantlePlaceImportOrchestration` (verify, the nothing-to-import gate, the wipe, `Prepare`, `Import`,
 `Finalize`) over the list in `MantlePlaceArtifactRegistry.cpp`; each artifact type is one
 `MantlePlaceArtifact<Name>.cpp` that reads its own manifest block, declares its payloads for the
@@ -71,7 +71,7 @@ an explicit ordered list on purpose: no discovery, no reflection.
 
 ## Reading a bundle: 1.x and 2.0, by pointer, regardless of case
 
-The importer reads MPB 1.x and 2.0 (`MantlePlaceMaxSupportedManifestMajor`; the floor stays 1.0.0) with
+The plugin reads MPB 1.x and 2.0 (`MantlePlaceMaxSupportedManifestMajor`; the floor stays 1.0.0) with
 one parse. A file is found through the path its manifest pointer states, never from a folder name: the
 only fixed name is `Metadata/manifest.json`. 2.0 moved the folders and the names, and it moved where a
 PNG's pixel meaning is stated: a 1.x host block carries `uint16_mapping` and `ue_ready[].value_mapping`;
@@ -83,7 +83,7 @@ zip reader already does:** `FZipArchiveReader` keeps its entries in a `TMap<FStr
 key comparison ignore case, so `metadata/MANIFEST.json` finds `Metadata/manifest.json`; checked against
 the UE 5.8 source and by `MantlePlace.Import.BundleLayout`, which writes a real zip in another case than
 its pointers. Python's `zipfile` does not: the Cesium QA helper finds its manifest member through
-`_find_member`, and `unreal/tools/test_cesium_stream_manifest.py` pins it. Wherever the importer
+`_find_member`, and `unreal/tools/test_cesium_stream_manifest.py` pins it. Wherever the plugin
 compares a manifest path itself (a `file_entries` key, the streaming selection), it ignores case too.
 
 ## Commands
@@ -113,9 +113,9 @@ run reporting any `No editor` skip is not green.**
   floor, it warns and passes locally; it errors only when `CI` is set. A "Sample bundle not present"
   (or "below the floor") warning therefore means the run is not green, whatever the count says. Its
   placement gate checks the landscape against the bundle's own surface points (`elevation.points_csv`),
-  which the importer never reads; a "Placement gate not run" warning is the same not-green. When the
+  which the plugin never reads; a "Placement gate not run" warning is the same not-green. When the
   bundle's road layer is in the landscape's datum, it also checks the roads were read from the
-  GeoPackage the importer chose (the Unreal block's own `road_splines` copy on a US order, else the
+  GeoPackage the plugin chose (the Unreal block's own `road_splines` copy on a US order, else the
   shared layer's; a 2.0 bundle declares no GeoJSON row) and that the median placed
   spline point is within a metre of the landscape. Open the run on an empty partitioned level
   (`new_level(..., is_partitioned_world=True)`), not the OpenWorld template: the template's own
@@ -219,7 +219,7 @@ Fab pre-submit list is in [`README.md`](README.md#packaging-a-release).
   or `-ConsumingProjectRoot`, else `not configured` — which the session-start check treats as fine. Editing inside that checkout is root rule 3's
   orphan-commit hazard: edit in a worktree here, push, preview from origin. Live Coding picks up
   `.cpp` bodies; a changed header or asset needs a restart. The consumer documents its pin bump.
-- **Nothing the importer generates is ever saved.** No `SavePackage`; every task sets
+- **Nothing the plugin generates is ever saved.** No `SavePackage`; every task sets
   `bSave = false` and packages are only marked dirty. Closing without saving loses the import.
 - **The identity is not the job id.** `FMantlePlaceVaultManifest` offers `JobId` first; it changes
   on every rebuild, so anything keyed on it silently duplicates a user's content one refresh later.
