@@ -127,6 +127,63 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("a pathless payload is not in the chain"), Artifacts.Num(), 1);
 	}
 
+	// --- What the archive's own `view` says it holds -------------------------------------------------
+	// A selection that leaves a part out is not corruption; a part the archive claims to hold and does
+	// not have is. The decision is the `view` and `files`, never the zip listing alone.
+	{
+		FMantlePlaceArchiveView View;
+		View.bDeclared = true;
+		View.Kind = TEXT("selection");
+		View.Parts = { TEXT("imagery.drape_png@MAX") };
+		View.FileParts.Add(TEXT("Records/Parcels.gpkg"), TEXT("records.parcels_gpkg@MAX"));
+		View.FileParts.Add(TEXT("Imagery/Imagery.png"), TEXT("imagery.drape_png@MAX"));
+
+		TestTrue(TEXT("a file whose part the selection left out is left out"),
+			FMantlePlaceIntegrityLogic::LeavesOut(View, TEXT("Records/Parcels.gpkg")));
+		TestTrue(TEXT("and the path matches regardless of case, as the zip reader does"),
+			FMantlePlaceIntegrityLogic::LeavesOut(View, TEXT("RECORDS/PARCELS.GPKG")));
+		TestFalse(TEXT("a file whose part the archive claims to hold is not left out (a missing one is corruption)"),
+			FMantlePlaceIntegrityLogic::LeavesOut(View, TEXT("Imagery/Imagery.png")));
+		TestFalse(TEXT("a file the `files` mapping does not list cannot be told from corruption"),
+			FMantlePlaceIntegrityLogic::LeavesOut(View, TEXT("Elevation/Heightmap.png")));
+
+		FMantlePlaceArchiveView Everything = View;
+		Everything.Kind = TEXT("everything");
+		TestFalse(TEXT("an `everything` archive leaves nothing out, whatever its parts say"),
+			FMantlePlaceIntegrityLogic::LeavesOut(Everything, TEXT("Records/Parcels.gpkg")));
+
+		FMantlePlaceArchiveView Unknown = View;
+		Unknown.Kind = TEXT("some-future-kind");
+		TestTrue(TEXT("an unknown kind holds exactly its parts"),
+			FMantlePlaceIntegrityLogic::LeavesOut(Unknown, TEXT("Records/Parcels.gpkg")));
+
+		FMantlePlaceArchiveView NoFiles = View;
+		NoFiles.FileParts.Empty();
+		TestFalse(TEXT("with no `files` mapping there is no way to tell, so nothing is left out"),
+			FMantlePlaceIntegrityLogic::LeavesOut(NoFiles, TEXT("Records/Parcels.gpkg")));
+
+		TestFalse(TEXT("an archive with no `view` leaves nothing out"),
+			FMantlePlaceIntegrityLogic::LeavesOut(FMantlePlaceArchiveView(), TEXT("Records/Parcels.gpkg")));
+	}
+
+	// --- An artifact is skipped only when every payload it makes from is left out ----------------------
+	{
+		FMantlePlaceVaultManifest M;
+		M.Archive.bDeclared = true;
+		M.Archive.Kind = TEXT("selection");
+		M.Archive.Parts = { TEXT("mesh.glb@MAX") };
+		M.Archive.FileParts.Add(TEXT("Records/Parcels.gpkg"), TEXT("records.parcels_gpkg@MAX"));
+		M.Archive.FileParts.Add(TEXT("Records/Flood.gpkg"), TEXT("records.flood_gpkg@MAX"));
+		M.Archive.FileParts.Add(TEXT("Site/Terrain-Engine.glb"), TEXT("mesh.glb@MAX"));
+
+		TestTrue(TEXT("every payload left out"),
+			FMantlePlaceIntegrityLogic::LeavesOutAll(M, { TEXT("Records/Parcels.gpkg"), TEXT("Records/Flood.gpkg") }));
+		TestFalse(TEXT("one payload the archive holds keeps the artifact"),
+			FMantlePlaceIntegrityLogic::LeavesOutAll(M, { TEXT("Records/Parcels.gpkg"), TEXT("Site/Terrain-Engine.glb") }));
+		TestFalse(TEXT("an artifact that declares no payload is never skipped"),
+			FMantlePlaceIntegrityLogic::LeavesOutAll(M, {}));
+	}
+
 	return true;
 }
 

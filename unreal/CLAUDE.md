@@ -121,9 +121,13 @@ run reporting any `No editor` skip is not green.**
   (`new_level(..., is_partitioned_world=True)`), not the OpenWorld template: the template's own
   landscape can be the one the test picks up, and every gate then measures it. Point it at the
   sealed archive of a bundle (its manifest's `view.kind` is `everything`), not a selection cut from
-  it: a selection can leave out `Elevation/SurfacePoints.csv`, which the placement gate reads, and a
-  public-record GeoPackage such as `Records/Parcels.gpkg`, which the integrity pre-check then
-  refuses (`Integrity check could not read entry`), so the import itself fails.
+  it: a selection can leave out `Elevation/SurfacePoints.csv`, which the placement gate reads. The
+  import itself accepts a selection: a declared payload whose part the archive's `view.parts` leaves
+  out (a public-record GeoPackage such as `Records/Parcels.gpkg`, say) is skipped and named in the
+  import log, and the artifact made only from such payloads is skipped with it. The archive's own
+  `view` and `files` decide, not the zip listing: a missing entry in a part the archive claims to
+  hold, an `everything` archive, one with no `view`, and one with no `files` mapping are still
+  refused (`Integrity check could not read entry`), as corruption.
   **`MantlePlace.Import.LiveHandover`** imports the same bundle, checks every ODbL actor is in its
   order's `ODbL` folder, then runs Prepare for handover and checks the ODbL content is gone and the
   credit actor holds every credit line the import recorded.

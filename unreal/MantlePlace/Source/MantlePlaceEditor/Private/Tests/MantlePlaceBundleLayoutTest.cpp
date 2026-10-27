@@ -53,6 +53,9 @@ struct FSyntheticBundle
 	FString Drape;       // hosts.unreal.imagery_drape.source
 	FString Mesh;        // hosts.unreal.mesh_alternative.path
 	FString WaterMask;   // hosts.unreal.landscape_layers.water_mask.ue_ready[0].path
+
+	FString Extra;       // top-level members spliced in after `version`, each ending in a comma (or empty)
+	bool bParcelsInArchive = false; // the archive holds the parcels file, which the layout points at
 };
 
 FSyntheticBundle Make1x()
@@ -119,7 +122,7 @@ FString ManifestOf(const FSyntheticBundle& B)
 	}
 
 	FString Text = TEXT(
-		"{'job_id':'synthetic-@NAME@','version':'@VERSION@',"
+		"{'job_id':'synthetic-@NAME@','version':'@VERSION@',@EXTRA@"
 		"'layout':{'cesium_terrain':'@TERRAIN@','parcels_gpkg':'@PARCELS@'},"
 		"'parcels':{},"
 		"'file_entries':{@ENTRIES@},"
@@ -152,6 +155,7 @@ FString ManifestOf(const FSyntheticBundle& B)
 	Text.ReplaceInline(TEXT("@WATER@"), *B.WaterMask);
 	Text.ReplaceInline(TEXT("@WATER_SHA@"), *MantlePlaceSha256::HexDigest(PayloadOf(B.WaterMask)));
 	Text.ReplaceInline(TEXT("@WATER_MEANING@"), *WaterMeaning);
+	Text.ReplaceInline(TEXT("@EXTRA@"), *B.Extra); // last: its own `@` (a part id) must not meet a token
 	Text.ReplaceInline(TEXT("'"), TEXT("\""));
 	return Text;
 }
@@ -180,6 +184,10 @@ bool WriteZip(const FSyntheticBundle& B, const FString& ZipPath, const FString& 
 				Bytes = BytesOf(TEXT("not what the manifest hashed"));
 			}
 			Writer.AddFile(Spell(Path), Bytes, Now);
+		}
+		if (B.bParcelsInArchive)
+		{
+			Writer.AddFile(Spell(B.Parcels), PayloadOf(B.Parcels), Now);
 		}
 	}
 	return true;
@@ -287,10 +295,127 @@ void CheckBundle(FAutomationTestBase& T, const FSyntheticBundle& B)
 		}
 	}
 }
+
+/** What the pre-check made of one archive. */
+struct FSelectionOutcome
+{
+	bool bOpened = false;
+	bool bPassed = false;
+	FString Error;
+	TArray<FString> Notes;
+};
+
+/**
+ * The pre-check over a 2.0 bundle that declares `Records/Parcels.gpkg` with a digest (listed in `files`
+ * under the part `records.parcels_gpkg@MAX`), cut as `ViewJson` says (empty: no `view`), the archive
+ * holding the parcels file or not. Every other payload is in the archive.
+ */
+FSelectionOutcome VerifyCut(FAutomationTestBase& T, const FString& Label, const FString& ViewJson, bool bParcelsInArchive)
+{
+	FSelectionOutcome Outcome;
+	FSyntheticBundle B = Make2(/*bShuffleCase*/ false, /*bUpperEntryKeys*/ false);
+	B.bParcelsInArchive = bParcelsInArchive;
+	B.Extra = FString::Printf(
+		TEXT("'files':{'%s':{'part':'records.parcels_gpkg@MAX','size_bytes':1,'sha256':'%s'}},%s"),
+		*B.Parcels, *MantlePlaceSha256::HexDigest(PayloadOf(B.Parcels)), *ViewJson);
+
+	const FString ZipPath = FPaths::Combine(
+		FPaths::ProjectSavedDir(), TEXT("MantlePlace"), TEXT("Tests"), FGuid::NewGuid().ToString() + TEXT(".zip"));
+	ON_SCOPE_EXIT { IFileManager::Get().Delete(*ZipPath, /*RequireExists*/ false, /*EvenReadOnly*/ true); };
+	if (!T.TestTrue(Label + TEXT("the synthetic zip is written"), WriteZip(B, ZipPath, ManifestOf(B), false)))
+	{
+		return Outcome;
+	}
+	FMantlePlaceVaultManifest M;
+	FString ReadError;
+	UMantlePlaceImporterLibrary::ReadVaultManifest(ZipPath, M, ReadError);
+	if (!T.TestTrue(Label + FString::Printf(TEXT("the manifest is accepted (%s)"), *ReadError), M.bValid))
+	{
+		return Outcome;
+	}
+	IFileHandle* Handle = FPlatformFileManager::Get().GetPlatformFile().OpenRead(*ZipPath);
+	if (!T.TestNotNull(Label + TEXT("the zip opens for the pre-check"), Handle))
+	{
+		return Outcome;
+	}
+	Outcome.bOpened = true;
+	FZipArchiveReader Reader(Handle); // takes ownership of the handle
+	MantlePlaceImportTiming::FTimeline Timeline;
+	Outcome.bPassed = MantlePlaceImportOrchestration::VerifyAll(M, Reader, Timeline, Outcome.Error, &Outcome.Notes);
+	return Outcome;
+}
+
+/** A selection that leaves out a declared payload imports; a missing entry the archive claims to hold does not. */
+void CheckSelections(FAutomationTestBase& T)
+{
+	const FString Parcels = TEXT("Records/Parcels.gpkg");
+	const auto Names = [&Parcels](const FSelectionOutcome& O)
+	{
+		return O.Notes.ContainsByPredicate([&Parcels](const FString& Note) { return Note.Contains(Parcels); });
+	};
+
+	// --- The control: the archive holds the parcels file and it verifies -------------------------------
+	{
+		const FSelectionOutcome O = VerifyCut(T, TEXT("[whole archive] "), FString(), /*bParcelsInArchive*/ true);
+		if (O.bOpened)
+		{
+			T.TestTrue(TEXT("[whole archive] every payload verifies, the parcels file included"), O.bPassed);
+			T.TestEqual(TEXT("[whole archive] and nothing is reported left out"), O.Notes.Num(), 0);
+		}
+	}
+
+	// --- A selection whose parts leave out the parcels: skipped, named, and the rest still verifies -----
+	{
+		const FSelectionOutcome O = VerifyCut(T, TEXT("[selection] "),
+			TEXT("'view':{'kind':'selection','partial':false,'parts':['imagery.drape_png@MAX'],'missing':[]},"),
+			/*bParcelsInArchive*/ false);
+		if (O.bOpened)
+		{
+			T.TestTrue(TEXT("[selection] a payload the selection left out does not fail the pre-check"), O.bPassed);
+			T.TestTrue(TEXT("[selection] and the log names it"), Names(O));
+			T.TestEqual(TEXT("[selection] and names nothing else"), O.Notes.Num(), 1);
+		}
+	}
+
+	// --- A part the archive claims to hold, with its entry missing: corruption, refused by name ---------
+	{
+		const FSelectionOutcome O = VerifyCut(T, TEXT("[held part missing] "),
+			TEXT("'view':{'kind':'selection','partial':false,'parts':['records.parcels_gpkg@MAX'],'missing':[]},"),
+			/*bParcelsInArchive*/ false);
+		if (O.bOpened)
+		{
+			T.TestFalse(TEXT("[held part missing] a missing entry in a part the archive holds is still refused"), O.bPassed);
+			T.TestTrue(TEXT("[held part missing] and the refusal names the entry"), O.Error.Contains(Parcels));
+		}
+	}
+
+	// --- `everything`, and no `view` at all: today's refusal, unchanged ------------------------------------
+	{
+		const FSelectionOutcome O = VerifyCut(T, TEXT("[everything] "),
+			TEXT("'view':{'kind':'everything','partial':false,'parts':['imagery.drape_png@MAX'],'missing':[]},"),
+			/*bParcelsInArchive*/ false);
+		if (O.bOpened)
+		{
+			T.TestFalse(TEXT("[everything] a sealed archive missing a declared entry is refused"), O.bPassed);
+			T.TestTrue(TEXT("[everything] and the refusal names the entry"), O.Error.Contains(Parcels));
+		}
+	}
+	{
+		const FSelectionOutcome O = VerifyCut(T, TEXT("[no view] "), FString(), /*bParcelsInArchive*/ false);
+		if (O.bOpened)
+		{
+			T.TestFalse(TEXT("[no view] an archive that states no view and lacks a declared entry is refused"), O.bPassed);
+			T.TestTrue(TEXT("[no view] and the refusal names the entry"), O.Error.Contains(Parcels));
+		}
+	}
+}
 } // namespace
 
 bool FMantlePlaceBundleLayoutTest::RunTest(const FString& Parameters)
 {
+	// --- A selection archive that leaves out a declared payload, and the archives that must still refuse -
+	CheckSelections(*this);
+
 	// --- A 1.x bundle and a 2.0 bundle, each read through its own pointers ------------------------------
 	CheckBundle(*this, Make1x());
 	CheckBundle(*this, Make2(/*bShuffleCase*/ false, /*bUpperEntryKeys*/ false));

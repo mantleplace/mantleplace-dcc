@@ -347,6 +347,43 @@ void ParseFileLicensing(const TSharedPtr<FJsonObject>& Root, TMap<FString, FMant
 	}
 }
 
+/** `view` and the `part` of each `files` entry (MPB 1.10.0): what this one archive holds. A `view`
+ *  that states no `parts` array is not a statement of what is held, so it reads as no view. */
+void ParseArchiveView(const TSharedPtr<FJsonObject>& Root, FMantlePlaceArchiveView& Out)
+{
+	const TSharedPtr<FJsonObject>* ViewPtr = GetObject(Root, TEXT("view"));
+	const TArray<TSharedPtr<FJsonValue>>* Parts = nullptr;
+	if (ViewPtr == nullptr || !(*ViewPtr)->TryGetArrayField(TEXT("parts"), Parts) || Parts == nullptr)
+	{
+		return;
+	}
+	Out.Kind = GetString(*ViewPtr, TEXT("kind"));
+	for (const TSharedPtr<FJsonValue>& Value : *Parts)
+	{
+		FString Part;
+		if (Value.IsValid() && Value->TryGetString(Part))
+		{
+			Out.Parts.Add(MoveTemp(Part));
+		}
+	}
+	if (const TSharedPtr<FJsonObject>* FilesPtr = GetObject(Root, TEXT("files")))
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*FilesPtr)->Values)
+		{
+			const TSharedPtr<FJsonObject>* EntryPtr = nullptr;
+			if (Pair.Value.IsValid() && Pair.Value->TryGetObject(EntryPtr) && EntryPtr != nullptr)
+			{
+				const FString Part = GetString(*EntryPtr, TEXT("part"));
+				if (!Part.IsEmpty())
+				{
+					Out.FileParts.Add(Pair.Key, Part);
+				}
+			}
+		}
+	}
+	Out.bDeclared = true;
+}
+
 /** `attribution.sources[]`: the credit the manifest words, kept verbatim for MantlePlaceOdblLogic::CreditLine. */
 void ParseAttribution(const TSharedPtr<FJsonObject>& Root, TArray<FMantlePlaceAttributionSource>& Out)
 {
@@ -443,6 +480,7 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	ParseDelivery(Root, M.Delivery);
 	ParseFileLicensing(Root, M.FileLicensing);
 	ParseAttribution(Root, M.Attribution);
+	ParseArchiveView(Root, M.Archive);
 
 	// `hosts.unreal` — the one subtree this host reads, and never a sibling's (HPS-33).
 	TSharedPtr<FJsonObject> Unreal;

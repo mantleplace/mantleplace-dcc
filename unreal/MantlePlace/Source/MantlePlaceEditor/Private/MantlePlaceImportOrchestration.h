@@ -28,10 +28,15 @@ using FHandlers = MantlePlaceArtifacts::FHandlers;
  *
  * A payload with no published digest is skipped, not passed: "valid but unverified" is a third state,
  * and collapsing it into "verified" is a lie the log then tells the user (spec/format.md section 5).
+ *
+ * A payload the archive's own `view` says it was cut without (a curator's download selection) is
+ * skipped too, and named in OutNotes when given: "not selected" is not corruption. A payload in a part
+ * the archive claims to hold, and every payload of an archive with no `view` or an `everything` one,
+ * is still refused when its entry is missing (FMantlePlaceIntegrityLogic::LeavesOut).
  */
 bool VerifyAll(
 	const FMantlePlaceVaultManifest& Manifest, const FZipArchiveReader& Reader,
-	MantlePlaceImportTiming::FTimeline& Timeline, FString& OutError);
+	MantlePlaceImportTiming::FTimeline& Timeline, FString& OutError, TArray<FString>* OutNotes = nullptr);
 
 /**
  * The refusal for a selection that asks for a terrain representation the bundle cannot produce, or

@@ -22,6 +22,29 @@ struct FMantlePlaceDeclaredArtifact
 };
 
 /**
+ * What one archive says it holds (MPB 1.10.0): the manifest's `view` block and, from `files`, the part
+ * each file belongs to. Read for ONE purpose -- telling a payload the archive was cut without (a
+ * download selection) from one it should hold and does not (corruption). No placement value comes
+ * from it.
+ */
+struct FMantlePlaceArchiveView
+{
+	/** A `view` block with a `parts` array was stated. Without one the archive is taken to hold
+	 *  everything the manifest declares, as it always was. */
+	bool bDeclared = false;
+
+	/** `view.kind` verbatim: `everything`, `selection`, `host`, or one this reader has not met (which
+	 *  means the archive holds exactly `parts`). */
+	FString Kind;
+
+	/** `view.parts`: the parts this archive holds. Compared whole, never parsed beyond that. */
+	TArray<FString> Parts;
+
+	/** `files[<archive path>].part`, for each file the manifest lists with a part. */
+	TMap<FString, FString> FileParts;
+};
+
+/**
  * Pure (engine-/IO-free) logic for the import's fail-closed integrity pre-check: WHICH payloads a
  * bundle declares, and which of them the manifest published a digest for.
  *
@@ -49,4 +72,22 @@ struct FMantlePlaceIntegrityLogic
 	 *  published), as paths. The importer's log line and the conformance corpus both read this,
 	 *  so "what was verified" is one answer rather than two. */
 	static TArray<FString> VerifiablePaths(const FMantlePlaceVaultManifest& Manifest);
+
+	/**
+	 * True when the archive's own `view` says it was cut WITHOUT this file: a declared payload is not an
+	 * error to be missing when the curator's selection left it out (spec/format.md: "not selected" is a
+	 * reason distinct from corruption). The archive's `view` decides, not the zip listing alone:
+	 *
+	 *  - The file's part (from `files`) is not in `view.parts`: left out, so skipped and named.
+	 *  - Its part IS in `view.parts`: the archive claims to hold it, so a missing entry is corruption.
+	 *    False here, and the pre-check keeps refusing.
+	 *  - `view.kind` is `everything`, there is no `view`, no `files` mapping, or the file is not listed
+	 *    in it: there is no way to tell a selection from corruption, so false (fail closed).
+	 */
+	static bool LeavesOut(const FMantlePlaceArchiveView& View, const FString& Path);
+	static bool LeavesOut(const FMantlePlaceVaultManifest& Manifest, const FString& Path);
+
+	/** True when there is at least one path and the archive leaves out every one: the artifact those
+	 *  payloads make has nothing in this archive to import, so it is skipped rather than failed. */
+	static bool LeavesOutAll(const FMantlePlaceVaultManifest& Manifest, const TArray<FString>& Paths);
 };
