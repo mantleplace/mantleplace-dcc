@@ -164,6 +164,11 @@ there moves the standard first. Title Case is Revit's; a host construct keeps it
 - Signing in, tokens, refresh, sign-out →
   [`docs/platform-auth-contract.md`](../docs/platform-auth-contract.md); `TokenGrant.cs` and
   `PlatformError.cs` implement it, and both hosts share one stored credential.
+- Receiving an export from the web vault (presence, the lifecycle a plugin may send, readiness, the two
+  export routes) →
+  [`docs/platform-export-contract.md`](../docs/platform-export-contract.md); `ConnectedHost.cs`,
+  `HostExport.cs`, `ExportLifecycle.cs`, `ExportReadiness.cs` and `ExportRefusals.cs` in `Core` decide it,
+  and `ExportsClient.cs` in `Client` calls the routes. Headless so far: nothing in the Revit shim opens a channel yet.
 - How this plugin behaves and how to build it → [`README.md`](./README.md).
 - Whether this plugin supports a feature, and why not → the
   [host support matrix](../docs/host-support.md). A change that adds, narrows or drops a feature
