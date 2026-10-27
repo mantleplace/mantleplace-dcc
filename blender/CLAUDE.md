@@ -1,6 +1,6 @@
 ---
 name: blender-host-onboarding
-description: Onboarding for the Blender add-on — what it reads (Context.usdz, Features.usdz, location.site_origin) and what it does not (no host block, no sign-in, no vault), the pure core / shim split, the frame it places in, the two test runs and the install slot. Read first for any change under `blender/`.
+description: Onboarding for the Blender plugin — what it reads (Context.usdz, Features.usdz, location.site_origin) and what it does not (no host block, no sign-in, no vault), the pure core / shim split, the frame it places in, the two test runs and the install slot. Read first for any change under `blender/`.
 ---
 
 # Mantle Place for Blender — agent onboarding
@@ -11,13 +11,13 @@ are in [`README.md`](README.md); this file is what a change here must not break.
 ## Identity
 
 - **Host:** Blender **4.2 or later**, tested in 4.5 and 5.2. 4.2 is the floor because it is the first
-  with extensions (`blender_manifest.toml`); `bl_info` is kept for a legacy add-on install.
+  with extensions (`blender_manifest.toml`); `bl_info` is kept for a legacy install through the Add-ons preferences.
 - **What it is:** a bundle reader on disk, the smallest consumer of the open format. Of the four
   `HPS-01` layers it has **manifest consumption only**; sign-in, the vault client and the bundle cache
   are not built, so it is not a complete host plugin and says so in its README.
 - **What it reads:** the neutral register only — `layout.context_usdz`, `layout.features_usdz`,
   `file_entries`, `files` and `location.site_origin`. There is **no `hosts.blender` block**, and
-  the add-on reads no other host's block (`HPS-36`).
+  the plugin reads no other host's block (`HPS-36`).
 - **Frame:** Blender is a **fixed-frame host** (`HPS-54`). Its scene is in metres, Z up, and it
   places one frame: the frame `file_entries` states for `Context.usdz`, as offsets from the site
   origin. It applies `location.site_origin.projected` only when that point is in the Context file's

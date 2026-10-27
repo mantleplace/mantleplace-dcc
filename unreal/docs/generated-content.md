@@ -1,6 +1,6 @@
 # Generated content — where it lands, and how a re-import stays safe
 
-What the Unreal importer writes into a user's project beyond the names themselves. The naming
+What the Unreal plugin writes into a user's project beyond the names themselves. The naming
 standard — the asset prefix table and the `MP_` actor-label carve-out — stays in
 [`unreal/CLAUDE.md`](../CLAUDE.md), next to each other, as
 [ADR 0003](../../docs/adr/0003-naming-authority-and-mp-prefix.md) records; this file holds the rest
@@ -23,7 +23,7 @@ of what that file's Naming section used to.
   `UMantlePlaceEditorSettings`, Project Settings → Plugins → Mantle Place, `config=Game`, checked
   into `DefaultGame.ini`. Deliberately not per-user: two developers with different roots in one
   project produce two copies of the same import that neither one's re-import will clean up. An
-  unusable value falls back to the default rather than failing the import, because the importer
+  unusable value falls back to the default rather than failing the import, because the plugin
   creates and force-deletes a directory beneath it and a malformed root is not something to resolve
   creatively.
 - ODbL content (made from `database` files, a missing role included) goes in the order's `ODbL` sub-folder
@@ -73,7 +73,7 @@ package before the import runs (`RetireDeletedLeftovers`).
 **A provenance record**, written outside the content tree under the project's `Saved` directory. The
 folder is named by the *truncated* identity, so two orders sharing eight characters name one folder;
 the record holds the full identity, and a mismatch refuses instead of deleting. It lives outside the
-content because it has to be readable at the moment the importer is deciding whether to delete that
+content because it has to be readable at the moment the plugin is deciding whether to delete that
 content — loading an asset inside a folder about to be force-deleted is the hazard documented at the
 delete itself. Its absence is also how content from 0.3.0 and earlier is recognised: that content is
 refused, with its path, rather than adopted or silently replaced.
@@ -131,7 +131,7 @@ actor of its family, so no empty layer appears; a non-partitioned level gets non
   the assets and the level's instances of them stay for the next import.
 - **Runtime layers, initially Activated.** A game run loads and shows the import exactly as before
   layers existed, and a game can stream a family by changing the layer's runtime state.
-- Like everything else here, the asset is never saved by the importer; saving the level offers it.
+- Like everything else here, the asset is never saved by the plugin; saving the level offers it.
 
 ### The foliage scatter, partitioned per cell
 
@@ -177,7 +177,7 @@ get no HLOD layer: at the distance an HLOD stands in, they read as noise.
   setup lists it, so the import adds both to the main partition's first HLOD setup (World Settings
   → Runtime Partitions → HLOD Partitions), making one from the main partition when the level has none.
 - **The import never builds HLODs; building is a prompted step.** The engine's HLOD build reads the
-  saved level and leaves out every unsaved actor, and the importer saves nothing, so a build run by
+  saved level and leaves out every unsaved actor, and the plugin saves nothing, so a build run by
   the import would include none of it. The import log says so and names the two ways to build, after
   File → Save All: the editor's **Build → Build HLODs**, or `MantlePlaceImporterLibrary.BuildHLODs`
   (`build_hlods` from Python), which refuses an unsaved level, runs the engine's builder with no

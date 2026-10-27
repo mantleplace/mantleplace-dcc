@@ -31,7 +31,7 @@ the plugin would:
 | `SPIKE_PNG` | the bundle's `hosts.unreal.heightmap` PNG, extracted |
 | `SPIKE_EAST_CM`, `SPIKE_NORTH_CM` | the AOI's east and north spans, as `GetAoiSizeUeCm()` gives them |
 | `SPIKE_ZMIN_CM`, `SPIKE_ZRANGE_CM` | `uint16_mapping.z_min_m`, and `z_max_m - z_min_m`, in centimetres |
-| `SPIKE_SECTIONS` | sections a side (the importer caps the total at 4096) |
+| `SPIKE_SECTIONS` | sections a side (`FHeightmapImporter` caps the total at 4096) |
 | `SPIKE_GLB`, `SPIKE_GROUND_CM` | `convert` only: the glb, and the ground height its origin is placed at |
 
 The worst case needs no bundle: any 8129-square 16-bit grey PNG will do. The ADR's figures used a

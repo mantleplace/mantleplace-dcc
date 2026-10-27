@@ -139,6 +139,14 @@ class DocumentTests(GateTestCase):
         )
         self.assertClean()
 
+    def test_a_dated_record_keeps_its_wording(self) -> None:
+        """An accepted decision record is append-only and the changelog is dated: neither is reworded."""
+        self.write("docs/adr/0001-old.md", "# Old\n\nThe Fixture Importer was how it read then.\n")
+        self.write("spec/changelog.md", "# Changelog\n\nThe Fixture Importer needed no change.\n")
+        self.assertClean()
+        self.write("docs/notes.md", "The Fixture Importer is how it reads now.\n")
+        self.assertRefused("docs/notes.md:1:")
+
     def test_a_link_target_is_an_address_not_prose(self) -> None:
         self.write(
             "a.md",

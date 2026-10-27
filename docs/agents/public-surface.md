@@ -169,7 +169,8 @@ A third gate, [`tools/public-hygiene/check_vocabulary.py`](../../tools/public-hy
 enforces the glossary's Avoid list ([`CONTEXT.md`](../../CONTEXT.md#avoid-list)). It reads the banned
 terms from that table on every run, so adding a row needs no code change, and it refuses one in a
 doc, a README or a user-visible host string, naming the file, the line and the wording to use. Code
-identifiers are exempt, and so is a quoted mention in the glossary itself.
+identifiers are exempt, and so are a quoted mention in the glossary itself and the dated records (an
+accepted decision record under `docs/adr/` and `spec/changelog.md`), which keep the wording they were written in.
 
 `ci-tracker-hygiene` runs the same checker over the sixth, on the `issues` and `issue_comment`
 events. It is not a required check and cannot be one: there is no merge to block. Its outcome is

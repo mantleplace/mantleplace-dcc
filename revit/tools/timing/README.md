@@ -27,7 +27,7 @@ with uncommitted changes under `revit/` is refused; `-AllowDirty` measures it an
 | `Export-TimingSource.ps1` | `git archive` of `revit/` at one commit into the work root, with a `COMMIT` file |
 | `Build-TimingHarness.ps1` | compiles that source plus `Harness/` into one assembly named for a tag |
 | `Invoke-TimingRun.ps1` | the driver: launches Revit, runs one import, collects the record |
-| `Harness/TimingHarness.cs` | the add-in loaded into that Revit; it does nothing unless launched for its own tag |
+| `Harness/TimingHarness.cs` | the plugin loaded into that Revit; it does nothing unless launched for its own tag |
 | `lib/` | the Win32 and UI Automation helpers the driver dot-sources, and the work-root rule |
 | `timings.py` | one run folder → `timings.md` (the driver calls it at the end of every run) |
 | `summarise_runs.py` | several run folders → one step × run table, with the spread between runs of a year |
@@ -72,7 +72,7 @@ and `pids\`.
 
 ### Choosing layers or boxes
 
-- **Layers phase** (`-Phase layers -Layers ...`): the importer with no window. `-Layers` takes the names of
+- **Layers phase** (`-Phase layers -Layers ...`): the plugin's import with no window. `-Layers` takes the names of
   `ImportLayer` in `revit/src/MantlePlace.Revit.Core/ImportLayers.cs` of the source being timed (`Terrain`,
   `PublishedContours`, `ContextBuildings`, ...; spaces ignored), `All`, or `Default` (the layers
   `ImportLayers.OnByDefault` ticks, which is what a curator who changes nothing imports). The driver checks
@@ -100,7 +100,7 @@ unquoted list arrives as an array and is refused.
   a machine-wide launch lock just before anything is moved or written, so two drivers starting in the same
   minute cannot both pass.
 - **A tag names one source.** Pick your own, letters, digits, `-` and `_`, 31 characters at most. The tag
-  decides the assembly name (`MantlePlace.Scratch.Timing.<tag>`), the add-in ClientId, the build folder and
+  decides the assembly name (`MantlePlace.Scratch.Timing.<tag>`), the `.addin` manifest's ClientId, the build folder and
   the run folders. Building an existing tag from another source is refused (`-Force` / `-Rebuild` on a tag
   that is yours alone). If you edit `Harness/TimingHarness.cs`, rebuild every tag you still use.
 - **The installed plugin slot is never read or written.** The run's temporary manifest is
@@ -113,7 +113,7 @@ unquoted list arrives as an array and is refused.
 - **Run folders are never wiped.** A second run of the same tag and year first moves the earlier folder to
   `runs\<tag>-<year>.prev-<time>`.
 - **Each run imports a copy of the bundle**, so the plugin's `<zip>.mantleplace-import.log` never lands
-  beside the zip you passed. The copy, the project copy and the add-in copy are deleted when the run ends
+  beside the zip you passed. The copy, the project copy and the plugin copy are deleted when the run ends
   (`-KeepFiles` keeps them). The plugin itself still extracts to
   `%LOCALAPPDATA%\MantlePlace\bundles\<order id>\extracted`, keyed by the manifest's order id, so every
   run of an order and a real import of it share that folder.

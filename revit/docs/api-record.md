@@ -1,14 +1,14 @@
 # Revit API record — what compiles, and what has run
 
 The Revit compiler proves that a member exists and how it is shaped; it says nothing about what
-Revit does when the member runs. This file is the record of which calls the add-in shim makes that
+Revit does when the member runs. This file is the record of which calls the Revit shim makes that
 have **run inside a real Revit**, in which versions, how that was proven, and which are still
 **compiled and unexecuted**. Code comments that say "`revit/CLAUDE.md` lists them" or "says why"
 reach this file through that file's index, which names every entry below. Treat a call's behaviour as unverified until a real import
 proves it, and add to this record — in the bullet for that area — when one does.
 
 It also holds three design records the code points to: why the import window has a thread of its
-own (and which steps announce themselves), what a typed subdivision costs, and why the add-in is
+own (and which steps announce themselves), what a typed subdivision costs, and why the plugin is
 renderer-neutral.
 
 - **Revit API risk is real and not caught by the compiler.** `Toposolid.Create`, `ProjectLocation.SetProjectPosition`, `Toposolid.CreateSubDivision`,
@@ -109,7 +109,7 @@ renderer-neutral.
     Revit modal. `ForegroundWatch` carries the stacking out without ever sending Revit's thread a
     message.
   - **Its edges.** An exception leaving the window's thread would end Revit, so the thread body is
-    inside a net; a fault lowers the window, the first is said in the add-in's fault dialog and the
+    inside a net; a fault lowers the window, the first is said in the plugin's fault dialog and the
     rest go to the log. A window's callback that arrives while a slice runs — should Revit pump
     messages inside a commit — is held until the slice ends, and the log counts it. Nothing closes an
     unowned window with Revit, so every window still up, a finished one showing its report included,
@@ -119,7 +119,7 @@ renderer-neutral.
   - **Not taken.** `ControlledApplication.ProgressChanged` is silent through 57% of the road commit
     and 99.6% of the drape's, so it cannot feed a bar. `DisableProcessWindowsGhosting` is
     process-wide with no undo.
-  - **Proven offscreen, without Revit.** A scratch exe drove the built add-in's host while its own
+  - **Proven offscreen, without Revit.** A scratch exe drove the built plugin's host while its own
     UI thread hung in "commits" of up to 20 s. Read by UI Automation from another process every
     second, the window answered every read, each in under a quarter of a second, with its clock and
     the drape's count moving, `Finishing` named, and a Cancel pressed mid-commit said at once and
@@ -236,7 +236,7 @@ renderer-neutral.
   `ProceedWithRollBack` and Revit still showed its modal. Revit's own documentation for
   `FailureProcessingResult.ProceedWithRollBack` is the reason: a rollback is silent only when the
   failure handling options also clear after rollback, which a transaction this plugin opens sets
-  and the importer's never did. `ImportFailureSwallower` now sets it through
+  and the IFC importer's never did. `ImportFailureSwallower` now sets it through
   `FailuresAccessor.GetFailureHandlingOptions`/`SetFailureHandlingOptions` before it returns the
   rollback, and the two steps that convert the site model say, in the words of the error the hook
   caught, why a refused conversion cost the context buildings or the link
@@ -383,7 +383,7 @@ renderer-neutral.
     window, focus and foreground were unchanged.
   - Both entries were struck off once the Prepares ended.
 
-  What it did not run is the add-in's own wiring: the startup restore's sign-in arming
+  What it did not run is the plugin's own wiring: the startup restore's sign-in arming
   `PrepareRejoiner`, the checker's listing reaching it, and `OnShutdown` calling `InterruptAll`. Those are compiled and
   unexecuted, because the harness never signs in. Which entries a process may take is
   `InterruptedPrepares`, headless. Both records share one exclusive-open helper, `MachineRecordFile`.
@@ -397,10 +397,10 @@ renderer-neutral.
   bundle was clipped to its crop window. The hand-made half is the manifest's pointer and
   `file_frame`; the contour files are the bundles' own. What is settled headlessly is everything
   else — `PublishedContourReader`, `PublishedContours` and `ContourIdentity`.
-- **The add-in is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
+- **The plugin is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
   issue and reaches for their storage.** It writes Revit elements sized as published, with names a
   renderer recognises (a water body's and a road surface's layer word, `GroundLayerWords`), and leaves a renderer's own storage to the curator —
   see [`README.md`](../README.md) on the tree family. Writing Twinmotion's substitution entity at
-  import was declined: it saves one click per project by coupling the add-in to an
+  import was declined: it saves one click per project by coupling the plugin to an
   ExtensibleStorage schema Autodesk owns and an asset GUID from Epic's library. Writing it later is
   purely additive, which is why this is not an ADR.

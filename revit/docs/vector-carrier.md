@@ -46,7 +46,7 @@ What the pipeline emits for the Revit block, and what the reader takes:
   key `fid`. A ring list is exterior first, as WKB has it; orientation is not read. Spatial index
   optional and ignored.
 
-| table | geometry | the columns the importer reads |
+| table | geometry | the columns the plugin reads |
 |---|---|---|
 | `road_splines` | `LINESTRING Z` or `MULTILINESTRING Z` | `name`, `class`, `width_m_estimated`, `subtype` |
 | `road_polygons` | `MULTIPOLYGON` | `class`, `width_m_estimated`, `lowest_level` |
@@ -64,7 +64,7 @@ What the pipeline emits for the Revit block, and what the reader takes:
   (`overture_id`, `z_unit`, ...) is ignored. `lowest_level` is the fidelity cut field, as today.
 - **One table per geometry family.** Today's `Site/Vector/Water.geojson` mixes lines and polygons;
   the prototype read a mixed `GEOMETRY` table without trouble, but a mixed table is the one thing
-  ArcGIS will not show, and the importer draws water from polygons only, so water splits in two.
+  ArcGIS will not show, and the plugin draws water from polygons only, so water splits in two.
 
 ## How the two compared
 
@@ -79,7 +79,7 @@ CRS by GDAL (no Revit GeoJSON carries footprints today, ADR 0012).
 |---|---|---|---|
 | Features read, of today's | baseline | 564 of 564 lines and rings, 124 of 124 footprints | 564 of 564, 124 of 124 |
 | Worst vertex delta against GeoJSON | baseline | 0 m plan, 0 m Z, over 25,719 vertices | 0 m plan, 0 m Z, over 25,719 vertices |
-| Attributes (the eight the importer reads) | baseline | all eight on every feature; `threshold_deg` reads `35` where GeoJSON wrote `35.0` (same number) | all eight, text verbatim |
+| Attributes (the eight the plugin reads) | baseline | all eight on every feature; `threshold_deg` reads `35` where GeoJSON wrote `35.0` (same number) | all eight, text verbatim |
 | Placement in Revit (bounding boxes, every layer) | baseline | identical to 0.001 ft | identical to 0.001 ft |
 | Cold read of every layer inside Revit 2027 | 77.5 ms | 64.2 ms, `winsqlite3.dll` load included | 894.4 ms (the prototype walks the whole file once per layer; one walk is 96 to 194 ms) |
 | Placing every layer as DirectShape lines, Revit 2027 | 815 ms | 1,041 ms | 777 ms |
@@ -98,7 +98,7 @@ northing the file wrote, `(2573184.697, 461982.082)` survey feet.
 ### The dependency, decided
 
 The SQLite a GeoPackage needs does **not** need a NuGet package. `revit/Directory.Build.props` forbids
-one, and `Microsoft.Data.Sqlite` would bring three, plus a native `e_sqlite3.dll` beside the add-in
+one, and `Microsoft.Data.Sqlite` would bring three, plus a native `e_sqlite3.dll` beside the plugin
 that another add-in's copy can shadow in Revit's process. The prototype calls the `winsqlite3.dll`
 Windows ships, by P/Invoke: seventeen entry points, no file shipped, and it loaded in Revit's own
 process in both runtimes Revit runs (SQLite 3.51.1 in Revit 2027 on .NET 10 and in Revit 2025 on

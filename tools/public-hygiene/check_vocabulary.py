@@ -34,6 +34,8 @@ WHAT IS CHECKED, and the exemptions that keep it honest:
                        strings and are not read. A path with a `test` component is not read, since a
                        test's name for a case is not shown to a curator. A literal with no space and
                        no hyphen is an identifier, a key or a path, never a sentence, and is exempt.
+  dated records        An accepted decision record (`docs/adr/`) and `spec/changelog.md` are not read:
+                       the first is append-only, the second a dated log, and both keep their wording.
   the glossary         `CONTEXT.md` states the list, so the Avoid-list section is exempt, and a
                        term inside quotation marks anywhere in it is a mention, not a use.
   "its own"            The bare word "own" directly after a possessive ("its own", "a host's own")
@@ -64,6 +66,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 GLOSSARY = "CONTEXT.md"
 AVOID_HEADING = re.compile(r"(?m)^##[ \t]+Avoid list[ \t]*$")
 ANY_H2 = re.compile(r"(?m)^##[ \t]+\S")
+
+# Dated records keep the wording they were written in: an accepted decision record is append-only
+# and the changelog is a dated log. A word retired later is not a reason to rewrite either.
+RECORD_PREFIXES = ("docs/adr/", "spec/changelog.md")
 
 # Where host strings live. Production code only; the scan skips any path with a test component.
 HOST_ROOTS = ("unreal/", "revit/", "blender/")
@@ -360,7 +366,7 @@ def run(root: Path) -> int:
         )
         return 1
 
-    documents = tracked_markdown(root)
+    documents = [name for name in tracked_markdown(root) if not name.startswith(RECORD_PREFIXES)]
     sources = tracked_host_sources(root)
     findings: list[Finding] = []
     for name in documents:

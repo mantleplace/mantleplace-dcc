@@ -36,7 +36,7 @@ gh api repos/mantleplace/mantleplace-dcc/branches/main/protection
 `generated-names` is the `ci-unreal-naming` job. The other four come from `ci-manifest-conformance`
 (`conformance`), `ci-revit-tests` (`pure-core` and `pure-core-windows`) and `ci-public-hygiene`
 (`references`). `ci-brand-assets` reports on every pull request but is not required, by construction
-(above). `ci-blender-tests` (`blender-core`, the Blender add-on's pure core) reports on every pull
+(above). `ci-blender-tests` (`blender-core`, the Blender plugin's pure core) reports on every pull
 request and is not required yet; making it required is a branch-protection change.
 
 ## Rules for every workflow
