@@ -243,7 +243,7 @@ internal sealed partial class RevitBundleImporter
             using Stream? resource = assembly.GetManifestResourceStream(shrub ? ShrubFamilyResource : TreeFamilyResource);
             if (resource is null)
             {
-                return "this build of the add-in does not carry it";
+                return "this build of the plugin does not carry it";
             }
 
             using MemoryStream bytes = new();

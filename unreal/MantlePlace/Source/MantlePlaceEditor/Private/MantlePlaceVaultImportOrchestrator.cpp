@@ -494,7 +494,7 @@ void UMantlePlaceVaultImportOrchestrator::HandleMaterializeStartedNative(bool bS
 	// where the post-materialize integrity facts come from either way.
 	if (Start.Outcome == EMantlePlaceMaterializeStartOutcome::NothingToDo)
 	{
-		EmitPhase(TEXT("Generated"), TEXT("This bundle already has everything the importer needs."), 1.0f);
+		EmitPhase(TEXT("Generated"), TEXT("This bundle already has everything the plugin needs."), 1.0f);
 		Phase = EPhase::Relisting;
 		VaultClient->ListVault();
 		return;

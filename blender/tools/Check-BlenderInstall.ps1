@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-    Says whether the Blender add-on installed on this machine is current with origin/main, a
+    Says whether the Blender plugin installed on this machine is current with origin/main, a
     preview of a branch, or stale -- one line, one exit code.
 
 .DESCRIPTION
-    Reads the stamp Install-BlenderAddon.ps1 wrote into the add-on's folder in each Blender
+    Reads the stamp Install-BlenderAddon.ps1 wrote into the plugin's folder in each Blender
     version's extension repository, and compares the commit it names against origin/main, counting
     only commits that touch blender/. The verdict contract is tools/local-install/README.md; the
     sentences come from LocalInstall.psm1 and nowhere else.
 
-    Only the Blender versions that hold the add-on are read: a Blender used for something else is
+    Only the Blender versions that hold the plugin are read: a Blender used for something else is
     not a slot. No Blender configuration at all is "not configured", quiet with exit 0, so a
     stranger's clone sees nothing red.
 
@@ -57,7 +57,7 @@ $slots = @(Get-ChildItem -LiteralPath $ConfigRoot -Directory |
 
 if ($slots.Count -eq 0) {
     $verdict = Get-LocalInstallVerdict -HostName Blender -Installed $false
-    Write-Output ($verdict.Line + " - no Blender under $ConfigRoot holds the add-on; run $remedy")
+    Write-Output ($verdict.Line + " - no Blender under $ConfigRoot holds the plugin; run $remedy")
     exit $verdict.ExitCode
 }
 

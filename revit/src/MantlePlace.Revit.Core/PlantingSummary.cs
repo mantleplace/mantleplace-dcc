@@ -103,7 +103,7 @@ public static class PlantingSummary
         Suffix(sentence, tally.Unsized, "would not take their published size or elevation and stand at the family's default");
         Suffix(sentence, tally.Unstamped, "could not be stamped and will not be recognised by a re-import");
         Suffix(sentence, tally.EmptyFoliageCells, "had no foliage type and were read as trees");
-        Suffix(sentence, tally.UnknownFoliageValues, "had a foliage type this add-in does not know and were read as trees");
+        Suffix(sentence, tally.UnknownFoliageValues, "had a foliage type this plugin does not know and were read as trees");
         return sentence.Append('.').ToString();
     }
 

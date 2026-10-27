@@ -76,7 +76,7 @@ exact string the artifact itself declares. The reasoning, and why the first thre
 
 | Host | Asset | Install |
 | --- | --- | --- |
-| Unreal | `MantlePlace-UE5.8-Win64-<version>.zip` | Extract into a project's `Plugins/` directory and open the project. No compilation step; Windows only. Then read [`unreal/README.md`](unreal/README.md) — in particular, the importer saves nothing. |
+| Unreal | `MantlePlace-UE5.8-Win64-<version>.zip` | Extract into a project's `Plugins/` directory and open the project. No compilation step; Windows only. Then read [`unreal/README.md`](unreal/README.md) — in particular, the plugin saves nothing. |
 | Revit | `MantlePlace-Revit-<version>.zip` | Copy the `Contents` folder's files into `%APPDATA%\Autodesk\Revit\Addins\<year>\`, for each of 2025/2026/2027 you use — or double-click `Install.cmd`. No admin rights, and no .NET install: Revit brings its own. Building from source is in [`revit/README.md`](revit/README.md#build-and-test). |
 
 The Revit package leads with the manual copy rather than the script on purpose
@@ -109,7 +109,7 @@ order.
 3. Either sign in from inside the plugin and use the vault browser, or download the zip and use the
    local-import path:
    - **Unreal:** **Window ▸ Mantle Place**, then *Browse...* to pick the zip and *Import*. The
-     importer saves nothing — use **File ▸ Save All** (Ctrl+Shift+S) before closing the editor or
+     plugin saves nothing — use **File ▸ Save All** (Ctrl+Shift+S) before closing the editor or
      the import is lost. The rest is in [`unreal/README.md`](unreal/README.md).
    - **Revit:** `Mantle Place ▸ Bundles ▸ Import Bundle`, or set `MANTLEPLACE_BUNDLE_ZIP` and the
      picker is skipped entirely, so the import runs unattended from a script.
@@ -172,7 +172,7 @@ The layout, directory by directory, is in [`CLAUDE.md`](CLAUDE.md#layout), which
 
 Start with each host's own docs: [`unreal/README.md`](unreal/README.md) for Unreal,
 [`revit/README.md`](revit/README.md) for Revit, and [`blender/README.md`](blender/README.md) for the
-Blender add-on, which reads a bundle on disk and does not sign in. Sign-in is shared by both hosts and documented once,
+Blender plugin, which reads a bundle on disk and does not sign in. Sign-in is shared by both hosts and documented once,
 in [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md).
 
 ## Building
@@ -184,14 +184,14 @@ dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.
 dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -f net10.0
 ```
 
-Building the add-in shim itself needs Revit 2025's API present — see
+Building the plugin shim itself needs Revit 2025's API present — see
 [`revit/README.md`](revit/README.md#build-and-test) for why the *oldest* supported version is the
 compile target.
 
 **Unreal** — drop `unreal/MantlePlace/` into a UE 5.8 project's `Plugins/` directory and let the
 editor build it. Its engine dependencies are Epic's built-in Interchange, PCG and SQLiteCore.
 
-**Blender** — the add-on's core suite needs no Blender, and its end-to-end check runs Blender with
+**Blender** — the plugin's core suite needs no Blender, and its end-to-end check runs Blender with
 no window ([`blender/README.md`](blender/README.md#build-and-test)):
 
 ```bash

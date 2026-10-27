@@ -1,17 +1,17 @@
 <#
 .SYNOPSIS
-    Copies the Blender add-on from this tree into Blender's own extension folder, for every
+    Copies the Blender plugin from this tree into Blender's own extension folder, for every
     installed Blender from 4.2, and stamps what it copied.
 
 .DESCRIPTION
-    The add-on Blender loads is not this tree: it is a copy in the per-user extension repository,
+    The plugin Blender loads is not this tree: it is a copy in the per-user extension repository,
     one slot per Blender version (HPS-50). This script replaces that copy with blender/mantleplace_blender/
     and writes MantlePlace.install.json into it: the commit, the branch, the worktree, whether the
     tree had uncommitted changes under blender/, and when. Check-BlenderInstall.ps1 reads the stamp
     back. A deploy from a dirty tree or a branch is recorded as one and never refused; the check
     script is where "unverified" and "preview" are said.
 
-    After the first install, enable the add-on once in Blender: Edit, Preferences, Add-ons, search
+    After the first install, enable the plugin once in Blender: Edit, Preferences, Add-ons, search
     "Mantle Place". Later installs replace the files; restart Blender, or run Reload Scripts, to
     load them.
 

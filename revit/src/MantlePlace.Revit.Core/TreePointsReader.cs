@@ -261,7 +261,7 @@ public static class TreePointsReader
         if (!FoliageTypes.IsKnownVocabulary(vocabulary))
         {
             yield return "This bundle's " + FoliageTypes.Column + " vocabulary (\"" + vocabulary
-                + "\") is newer than this add-in: the values it knows were mapped, and the rest were "
+                + "\") is newer than this plugin: the values it knows were mapped, and the rest were "
                 + "read as trees.";
         }
     }

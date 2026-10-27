@@ -256,7 +256,7 @@ bool ParseGeoreference(const TSharedPtr<FJsonObject>& Unreal, FMantlePlaceGeoref
 	if (!Georef.PlanetShape.IsEmpty() && !Georef.PlanetShape.Equals(TEXT("Flat")))
 	{
 		OutError = FString::Printf(
-			TEXT("Unsupported planet_shape \"%s\": the v1 importer supports only \"Flat\"."),
+			TEXT("Unsupported planet_shape \"%s\": the v1 plugin supports only \"Flat\"."),
 			*Georef.PlanetShape);
 		return false;
 	}

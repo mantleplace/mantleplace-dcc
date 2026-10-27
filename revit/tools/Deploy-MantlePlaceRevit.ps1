@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-    Installs the Mantle Place Revit add-in into the per-user Revit add-ins folders, from a source
+    Installs the Mantle Place Revit plugin into the per-user Revit add-ins folders, from a source
     build or from an extracted release.
 
 .DESCRIPTION
     Two callers, one script, on purpose. Maintainers run it against the source tree, where it builds
     first; a curator runs it against an extracted release zip with -PayloadDirectory, where there is
     nothing to build. Keeping them in one file is what gives the installer a curator runs any test
-    coverage at all -- CI can never execute it, because CI can never build this add-in (no Revit on
+    coverage at all -- CI can never execute it, because CI can never build this plugin (no Revit on
     a hosted runner), so the only proof it works is that maintainers run the same file every day.
 
     Copying by hand is how a machine ends up running a plugin months older than the source tree: the
@@ -39,7 +39,7 @@
 
 .PARAMETER PayloadDirectory
     Install the files already in this directory, without building. This is the release path: point
-    it at the extracted zip's Contents folder. The add-in manifest is expected inside it. When this
+    it at the extracted zip's Contents folder. The .addin manifest is expected inside it. When this
     is given, -Configuration and -SkipBuild are unused and no part of the source tree is touched.
 
 .PARAMETER Configuration
@@ -57,7 +57,7 @@
     assembly runs under a .NET 10 runtime, so the leg that surfaces a difference first). A Debug
     source-tree deploy launches it with DOTNET_MODIFIABLE_ASSEMBLIES=debug, which is what lets a
     debugger attached to that Revit apply Hot Reload: edit a method body in the Client or Core, and
-    the running add-in takes it without a restart. What Hot Reload cannot do is re-run OnStartup,
+    the running plugin takes it without a restart. What Hot Reload cannot do is re-run OnStartup,
     so a ribbon change still needs a deploy and a restart -- and the first launch of a new build
     still needs a human to answer Always Load (revit/README.md).
 
@@ -115,14 +115,14 @@ if ($Launch -and ($RevitVersions -notcontains $LaunchVersion)) {
 # ---------------------------------------------------------------------------
 # Refuse before writing anything if Revit is open.
 #
-# A loaded add-in DLL is file-locked, so a copy across three folders fails PART WAY THROUGH: some
+# A loaded plugin DLL is file-locked, so a copy across three folders fails PART WAY THROUGH: some
 # files replaced, some not, in whichever folders got there first. That leaves a machine running a
 # MIXED build -- a strictly worse version of the stale-build failure this script exists to prevent,
 # and silent in exactly the same way. Checking first is the only way the failure stays honest.
 # ---------------------------------------------------------------------------
 $running = @(Get-Process -Name 'Revit' -ErrorAction SilentlyContinue)
 if ($running.Count -gt 0) {
-    throw "Revit is running, so its add-in files are locked and only some of them would be replaced. Close Revit and run this again. Nothing was installed."
+    throw "Revit is running, so its plugin files are locked and only some of them would be replaced. Close Revit and run this again. Nothing was installed."
 }
 
 if ($fromRelease) {
@@ -162,7 +162,7 @@ else {
     # names the assembly WITHOUT a path so Revit resolves it beside the manifest it was loaded from.
     $manifest = Join-Path $addinProject $addinFileName
     if (-not (Test-Path -LiteralPath $manifest)) {
-        throw "Add-in manifest not found at $manifest."
+        throw "The .addin manifest was not found at $manifest."
     }
 
     # What the stamp will say about where this build came from. Read from git rather than from the
@@ -190,7 +190,7 @@ else {
 }
 
 # .pdb travels on purpose: a stack trace out of a curator's Revit is worth far more than the
-# handful of kilobytes, and this add-in has no telemetry to fall back on.
+# handful of kilobytes, and this plugin has no telemetry to fall back on.
 $payload = @(Get-ChildItem -LiteralPath $source -File | Where-Object { $_.Extension -in '.dll', '.pdb', '.json' })
 if ($payload.Count -eq 0) {
     throw "No assemblies in $source."
@@ -271,7 +271,7 @@ Write-Host ''
 if ($Launch) {
     $revitExe = Join-Path (Join-Path $env:ProgramFiles "Autodesk\Revit $LaunchVersion") 'Revit.exe'
     if (-not (Test-Path -LiteralPath $revitExe)) {
-        throw "Revit $LaunchVersion is not installed at $revitExe. The add-in was installed; launch a Revit by hand."
+        throw "Revit $LaunchVersion is not installed at $revitExe. The plugin was installed; launch a Revit by hand."
     }
     # Only a Debug build can take Hot Reload, and only if the runtime was told at startup that its
     # assemblies may be modified. A Revit started from the Start menu will not have it, and that

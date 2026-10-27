@@ -3,7 +3,7 @@
     Renders the Revit ribbon's extended-tooltip vignettes.
 
 .DESCRIPTION
-    Writes <Command>Vignette<Theme>.png into the add-in's Resources folder -- four files, two
+    Writes <Command>Vignette<Theme>.png into the plugin's Resources folder -- four files, two
     commands, two Revit UI themes, one size each. The PNGs are committed; this script is how they are
     REGENERATED, not a build step. Nothing in the build, the packaging script or CI runs it.
 
@@ -29,7 +29,7 @@
     `git diff --stat` before committing.
 
 .PARAMETER OutputDirectory
-    Where the PNGs are written. Defaults to the add-in's Resources folder, which is where the Resource
+    Where the PNGs are written. Defaults to the plugin's Resources folder, which is where the Resource
     glob in MantlePlace.Revit.Addin.csproj picks them up.
 
 .PARAMETER SourceDirectory

@@ -50,7 +50,7 @@ source build: see [Building](../README.md#building) in the root README.
 
 ## Save your work
 
-**The importer saves nothing.** Everything it creates — the assets and the actors in your level — is
+**The plugin saves nothing.** Everything it creates — the assets and the actors in your level — is
 only marked dirty. Use **File ▸ Save All** (Ctrl+Shift+S) before you close the editor, or the import
 is gone.
 
@@ -91,7 +91,7 @@ is not seen. Assets in the Content Browser are not touched; only what the level 
 - **Output Log**: filter on `LogMantlePlaceImport` (the import itself), `LogMantlePlaceAuth`
   (sign-in) and `LogMantlePlaceDrape` (the imagery material). Filtering on `LogMantlePlace` catches
   every category the plugin writes.
-- **A re-import is refused** naming a folder: the importer keeps a provenance record per order under
+- **A re-import is refused** naming a folder: the plugin keeps a provenance record per order under
   `Saved/MantlePlace/Imports/`, and refuses to delete content it cannot match to one — including
   content imported by 0.3.0 or earlier. The message names the path; move or delete that content by
   hand and import again.

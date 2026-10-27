@@ -292,7 +292,7 @@ internal sealed partial class RevitBundleImporter(
                 throw new InvalidOperationException(
                     $"This build of the plugin does not know how to execute the import step "
                     + $"'{step.Kind}', so the import was stopped rather than left half-done. "
-                    + "Update the Mantle Place add-in.");
+                    + "Update the Mantle Place plugin.");
         }
     }
 

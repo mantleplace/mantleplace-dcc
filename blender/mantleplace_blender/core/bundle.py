@@ -2,10 +2,10 @@
 # SPDX-FileCopyrightText: Mantle Place LLC
 """What to import from a 2.x bundle's manifest, and where it goes. Pure: no Blender, no I/O.
 
-The add-on imports two files. `Site/Context.usdz` is the whole site as one model, and
+The plugin imports two files. `Site/Context.usdz` is the whole site as one model, and
 `Site/Features.usdz` is the vector data of the same site, which composes onto it as a sublayer
 (spec/format.md §10.1). Both store their coordinates as offsets from the site origin, so the one
-placement value the add-on applies is that origin, read from `location.site_origin` (§6.8).
+placement value the plugin applies is that origin, read from `location.site_origin` (§6.8).
 
 Three rules from the spec decide everything here, and each guards a failure that looks like success:
 
@@ -14,7 +14,7 @@ Three rules from the spec decide everything here, and each guards a failure that
   both files by archive path, and each 2.0 fixed name is the constant of its `layout` key (§10.3), so
   the fixed name is used only when the manifest itself lists that path, and the import says so.
 - **The origin is applied verbatim, never derived** (§6.8). The projected point is added as written;
-  where there is none, placing the site would take a reprojection, which this add-on never does.
+  where there is none, placing the site would take a reprojection, which this plugin never does.
 - **A frame it cannot read is a file it cannot place** (§6.8, `HPS-53`): an unknown value, another
   CRS than the origin's, or axes that are not east, north, up leave the site unplaced and say why.
   A refusal is a named note; the geometry still comes in, at the site origin.
@@ -26,7 +26,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
-#: The major version this add-on reads. A 1.x bundle has no Context file; 3.x is refused unread.
+#: The major version this plugin reads. A 1.x bundle has no Context file; 3.x is refused unread.
 SUPPORTED_MAJOR = 2
 
 CONTEXT_KEY = "context_usdz"
@@ -39,7 +39,7 @@ ORIGIN_UNITS = {"m": 1.0, "ft": 0.3048, "usft": 1200 / 3937}
 _AXIS_ORDERS = frozenset({"east-north", "north-east"})
 _COORDINATE_MODES = frozenset({"absolute", "offset"})
 _DIRECTIONS = frozenset({"east", "west", "north", "south", "up", "down"})
-#: Blender's own axes. A file in any other mapping would need a turn this add-on does not make.
+#: Blender's own axes. A file in any other mapping would need a turn this plugin does not make.
 _BLENDER_AXES = {"x": "east", "y": "north", "z": "up"}
 _SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
 
@@ -85,25 +85,25 @@ class Plan:
 
 
 def read_major(manifest: dict) -> int:
-    """The bundle's major version, or `BundleRefused` for one this add-on does not read (§11)."""
+    """The bundle's major version, or `BundleRefused` for one this plugin does not read (§11)."""
     version = manifest.get("version") if isinstance(manifest, dict) else None
     if not isinstance(version, str):
         era = "an integer version from before MPB semver" if isinstance(version, int) else "no readable version"
         raise BundleRefused(
-            f"This bundle has {era}; this add-on reads MPB {SUPPORTED_MAJOR}.x bundles only.")
+            f"This bundle has {era}; this plugin reads MPB {SUPPORTED_MAJOR}.x bundles only.")
     match = _SEMVER.match(version)
     if match is None:
         raise BundleRefused(
-            f"This bundle's version {version!r} is not an MPB version; this add-on reads MPB "
+            f"This bundle's version {version!r} is not an MPB version; this plugin reads MPB "
             f"{SUPPORTED_MAJOR}.x bundles only.")
     major = int(match.group(1))
     if major > SUPPORTED_MAJOR:
         raise BundleRefused(
-            f"This bundle is MPB {version}, and this add-on reads MPB {SUPPORTED_MAJOR}.x. "
-            "Update the add-on to import it.")
+            f"This bundle is MPB {version}, and this plugin reads MPB {SUPPORTED_MAJOR}.x. "
+            "Update the plugin to import it.")
     if major < SUPPORTED_MAJOR:
         raise BundleRefused(
-            f"This bundle is MPB {version}, which carries no Context file; this add-on reads MPB "
+            f"This bundle is MPB {version}, which carries no Context file; this plugin reads MPB "
             f"{SUPPORTED_MAJOR}.x. Download the bundle again from your vault to get a "
             f"{SUPPORTED_MAJOR}.x copy.")
     return major
@@ -160,7 +160,7 @@ def plan_import(manifest: dict, include_features: bool = True) -> Plan:
 
 
 def scene_properties(georeference: Georeference) -> dict:
-    """The custom properties the add-on writes on the scene for one applied site origin.
+    """The custom properties the plugin writes on the scene for one applied site origin.
 
     `mantleplace_site_origin` is the origin whole, as the manifest states it. `SRID`, `crs x`,
     `crs y`, `latitude` and `longitude` are the scene-origin keys that Blender's GIS add-ons read,
@@ -266,7 +266,7 @@ def _frame(entries: dict, path: str) -> tuple[dict | None, str | None]:
         return None, f"{path}'s frame states an unknown axis_mapping {raw['axis_mapping']!r}"
     if {axis: mapping[axis] for axis in ("x", "y", "z")} != _BLENDER_AXES:
         return None, (f"{path}'s axis_mapping is {mapping!r}, not x east, y north, z up, and this "
-                      "add-on turns no axes")
+                      "plugin turns no axes")
     if _crs_key(raw["horizontal_crs"]) is None:
         return None, f"{path}'s frame names no readable horizontal_crs"
     return raw, None
@@ -282,7 +282,7 @@ def _georeference(manifest: dict, path: str, frame: dict) -> tuple[Georeference 
     projected = origin.get("projected")
     if not isinstance(projected, dict):
         return None, ("location.site_origin has no projected point, and placing the site from "
-                      "latitude and longitude would take a reprojection, which this add-on never does")
+                      "latitude and longitude would take a reprojection, which this plugin never does")
     if not all(_number(projected.get(k)) for k in ("x", "y", "z")):
         return None, "location.site_origin.projected has no numeric x, y and z"
     if projected.get("unit") not in ORIGIN_UNITS:
@@ -293,7 +293,7 @@ def _georeference(manifest: dict, path: str, frame: dict) -> tuple[Georeference 
     if not _same_crs(projected.get("crs"), frame["horizontal_crs"]):
         return None, (f"the site origin is in {_crs_text(projected.get('crs'))} and {path} is in "
                       f"{_crs_text(frame['horizontal_crs'])}; relating them would take a "
-                      "reprojection, which this add-on never does")
+                      "reprojection, which this plugin never does")
     for key in ("latitude", "longitude", "ellipsoidal_height_m", "datum_height_m"):
         if not _number(origin.get(key)):
             return None, f"location.site_origin.{key} is not a number"

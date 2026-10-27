@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""`HPS-56`: the one link Send Feedback opens. The add-on carries no feedback form of its own."""
+"""`HPS-56`: the one link Send Feedback opens. The plugin carries no feedback form of its own."""
 
 from __future__ import annotations
 

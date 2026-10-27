@@ -675,7 +675,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         {
             ToolTip = "Measure what a terrain import would find here, changing nothing.",
             LongDescription =
-                "Measure what this project would give the terrain importer — its levels, its toposolid "
+                "Measure what this project would give the terrain import — its levels, its toposolid "
                 + "types and the bundle's own elevations — and try each way of placing the terrain. "
                 + "Every attempt is rolled back, so nothing in your project changes. Use it when a bundle "
                 + "import is refused and the log does not say enough.",
@@ -801,5 +801,5 @@ public sealed class MantlePlaceApplication : IExternalApplication
     }
 
     private static InvalidOperationException NotStarted()
-        => new("the Mantle Place add-in did not finish starting up");
+        => new("the Mantle Place plugin did not finish starting up");
 }

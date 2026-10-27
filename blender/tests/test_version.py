@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The add-on states its version three times, for three readers; they must say the same thing."""
+"""The plugin states its version three times, for three readers; they must say the same thing."""
 
 import ast
 import os

@@ -105,7 +105,7 @@ An import writes a log beside the bundle zip, named after it and ending
 send that file -- it is the single most useful thing you can attach.
 
 If an import is refused and the log does not explain enough, "Mantle Place > Bundles >
-Probe terrain" measures what your project would give the importer and tries every placement,
+Probe terrain" measures what your project would give the plugin and tries every placement,
 rolling all of it back. It changes nothing in your project.
 
 

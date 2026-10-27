@@ -3,7 +3,7 @@
 """The pure core's reading of a manifest: the version, the two pointers, and the site origin.
 
 No Blender here. Each test hands the core a manifest dict shaped like a 2.0 bundle's and asserts
-what the add-on will import and how it will place it.
+what the plugin will import and how it will place it.
 """
 
 import copy
