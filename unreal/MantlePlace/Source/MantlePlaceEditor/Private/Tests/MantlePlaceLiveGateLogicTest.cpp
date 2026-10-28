@@ -75,7 +75,7 @@ bool FMantlePlaceLiveGateLogicTest::RunTest(const FString& Parameters)
 		// Symmetric noise that no placement fault explains: two points 4 m off either way, the rest near
 		// the ground. A per-point bound fails it; here it must pass, since the point set is decimated.
 		FMantlePlaceDzStatistics Noisy;
-		for (int32 Index = 0; Index < 30; ++Index)
+		for (int32 Index = 0; Index < 62; ++Index) // 64 points in all, as the live gate takes
 		{
 			Noisy.Add(Index % 2 == 0 ? 20.0 : -20.0);
 		}
