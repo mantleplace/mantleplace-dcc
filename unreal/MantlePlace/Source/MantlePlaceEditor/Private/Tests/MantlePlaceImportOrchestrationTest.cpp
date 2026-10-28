@@ -260,6 +260,24 @@ bool FMantlePlaceOrchestrationRunTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("a terrain the archive was cut without is refused before the wipe"),
 			Refusal.StartsWith(TEXT("Nothing to import: ")));
 		TestTrue(TEXT("and the refusal says it is not in this archive"), Refusal.Contains(TEXT("not in this archive")));
+		TestFalse(TEXT("and it does not claim Cesium terrain the archive does not hold"),
+			Refusal.Contains(TEXT("Cesium")) || Refusal.Contains(TEXT("quantized-mesh")));
+
+		// A manifest that points at a tileset does not make a selection hold it.
+		Manifest.Cesium.bHasTerrain = true;
+		Manifest.Cesium.TerrainPath = TEXT("CesiumTerrain/layer.json");
+		TestFalse(TEXT("a pointer to a tileset the selection left out is not offered"),
+			MantlePlaceImportOrchestration::ExplainNothingToImport(
+				Handlers, Manifest, FMantlePlaceImportSelection::Everything()).Contains(TEXT("Cesium")));
+
+		// The same refusal for an archive that DOES hold the Cesium tileset points at streaming it.
+		Manifest.Archive.Parts.Add(TEXT("terrain.cesium@MAX"));
+		const FString CesiumRefusal = MantlePlaceImportOrchestration::ExplainNothingToImport(
+			Handlers, Manifest, FMantlePlaceImportSelection::Everything());
+		TestTrue(TEXT("a cut that holds Cesium terrain is still refused"),
+			CesiumRefusal.StartsWith(TEXT("Nothing to import: ")));
+		TestTrue(TEXT("and its refusal offers the Cesium stream"),
+			CesiumRefusal.Contains(TEXT("Cesium quantized-mesh terrain")) && CesiumRefusal.Contains(TEXT("Stream into Cesium")));
 	}
 	return true;
 }

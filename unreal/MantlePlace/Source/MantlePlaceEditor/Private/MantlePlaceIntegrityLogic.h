@@ -90,4 +90,16 @@ struct FMantlePlaceIntegrityLogic
 	/** True when there is at least one path and the archive leaves out every one: the artifact those
 	 *  payloads make has nothing in this archive to import, so it is skipped rather than failed. */
 	static bool LeavesOutAll(const FMantlePlaceVaultManifest& Manifest, const TArray<FString>& Paths);
+
+	/**
+	 * True when this archive holds the Cesium quantized-mesh tileset (`terrain.cesium`): the manifest
+	 * points at it (`layout.cesium_terrain`) AND the archive was not cut without it. A manifest describes
+	 * the whole bundle, so its pointer alone does not say what one archive holds; the `view` does. With no
+	 * `view`, or an `everything` one, the pointer decides (nothing was cut); otherwise (a selection, a
+	 * host cut, a kind this reader has not met) the archive holds exactly `view.parts`, and the part's
+	 * token (the id up to the `@`, compared whole) must be among them.
+	 *
+	 * Read to word a refusal truthfully ("use Stream into Cesium" only when there is a tileset to stream).
+	 */
+	static bool HoldsCesiumTerrain(const FMantlePlaceVaultManifest& Manifest);
 };
