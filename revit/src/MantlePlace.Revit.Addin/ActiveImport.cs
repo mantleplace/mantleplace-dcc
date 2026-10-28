@@ -14,7 +14,10 @@ namespace MantlePlace.Revit.Addin;
 /// <c>false</c> for a bundle whose manifest explains why there is nothing to import — a state, not an
 /// error (<c>HPS-36</c>).
 /// </param>
-internal sealed record ImportRefusal(string Instruction, string Message, bool IsFailure);
+/// <param name="Code">
+/// The reason code an export fails with when its bundle is refused here (<see cref="ExportReasons"/>).
+/// </param>
+internal sealed record ImportRefusal(string Instruction, string Message, bool IsFailure, string Code);
 
 /// <summary>
 /// The bundle import in progress, from the moment its plan is verified to the moment its log is
@@ -159,7 +162,7 @@ internal sealed class ActiveImport : IDisposable
         // there to dismiss it.
         if (!File.Exists(zipPath))
         {
-            return Refuse(log, new ImportRefusal("Bundle not found.", $"No bundle zip at \"{zipPath}\".", true), out refusal);
+            return Refuse(log, new ImportRefusal("Bundle not found.", $"No bundle zip at \"{zipPath}\".", true, ExportReasons.DownloadFailed), out refusal);
         }
 
         LocalBundleArchive archive;
@@ -169,7 +172,7 @@ internal sealed class ActiveImport : IDisposable
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
-            return Refuse(log, new ImportRefusal("That bundle could not be opened.", ex.Message, true), out refusal);
+            return Refuse(log, new ImportRefusal("That bundle could not be opened.", ex.Message, true, ExportReasons.NotABundle), out refusal);
         }
 
         if (archive.Manifest is not { } manifest)
@@ -180,7 +183,8 @@ internal sealed class ActiveImport : IDisposable
                 new ImportRefusal(
                     "Not a Mantle Place bundle.",
                     "That zip has no Metadata/manifest.json, so it is not a Mantle Place bundle.",
-                    true),
+                    true,
+                    ExportReasons.NotABundle),
                 out refusal);
         }
 
@@ -195,7 +199,8 @@ internal sealed class ActiveImport : IDisposable
                 new ImportRefusal(
                     "Nothing to import from this bundle.",
                     plan.BlockedReason + Environment.NewLine + Summarise(plan, []),
-                    false),
+                    false,
+                    ExportReasons.NothingToImport),
                 out refusal);
         }
 
@@ -206,7 +211,7 @@ internal sealed class ActiveImport : IDisposable
         if (archive.VerifyPlan(plan) is { } integrityFailure)
         {
             archive.Dispose();
-            return Refuse(log, new ImportRefusal("This bundle failed its integrity check.", integrityFailure, true), out refusal);
+            return Refuse(log, new ImportRefusal("This bundle failed its integrity check.", integrityFailure, true, ExportReasons.IntegrityFailed), out refusal);
         }
 
         refusal = null;

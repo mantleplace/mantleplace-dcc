@@ -32,8 +32,9 @@ namespace MantlePlace.Revit.Addin;
 /// leave both to whichever Revit happened to service first.
 /// </para>
 /// <para>
-/// Two ways in, one driver. The vault window is on its own and queues a zip path (<see cref="QueueImport"/>),
-/// opened here on Revit's thread. The ribbon command is already on Revit's thread, opens its own
+/// Three ways in, one driver. The vault window is on its own and queues a zip path (<see cref="QueueImport"/>),
+/// opened here on Revit's thread; the connected host queues an export's zip the same way
+/// (<see cref="QueueExport"/>), and hears how its window went through <see cref="MantlePlaceApplication.Connected"/>. The ribbon command is already on Revit's thread, opens its own
 /// import and hands it over (<see cref="TakeOver"/>). The unattended path never comes here: a modeless
 /// window in a journal playback never closes, so it runs its import to the end in place.
 /// </para>
@@ -67,6 +68,12 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// <summary>Whether the running import came from the vault window, which is who hears about it.</summary>
     private bool _fromVault;
 
+    /// <summary>An export's zip the connected host queued, opened at the next raise. Guarded by <see cref="_gate"/>.</summary>
+    private (string ExportId, string ZipPath)? _queuedExport;
+
+    /// <summary>The export the open import was opened for, or <c>null</c> for one the curator opened.</summary>
+    private string? _exportId;
+
     /// <summary>
     /// Raised on Revit's thread with one line for the vault window's status: why an import it asked
     /// for did not start, or that it finished and where its report is. An import started from the
@@ -95,6 +102,55 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         {
             _zipPath = zipPath;
         }
+    }
+
+    /// <summary>
+    /// Queues an export's zip from the connected host, on any thread. <c>false</c> when an import already
+    /// holds the window, or another export's is queued: the export waits its turn.
+    /// </summary>
+    /// <remarks>
+    /// Read off Revit's thread, the busy check can be a moment stale; the raise re-checks on Revit's
+    /// thread and says busy then (<see cref="OpenQueuedExport"/>), so a stale answer costs a turn, not
+    /// a second window.
+    /// </remarks>
+    internal bool QueueExport(string exportId, string zipPath)
+    {
+        lock (_gate)
+        {
+            if (_import is not null || _queuedExport is not null)
+            {
+                return false;
+            }
+
+            _queuedExport = (exportId, zipPath);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The web cancelled an export: its window goes if it is still on its checklist, and a queued one
+    /// is dropped. Revit's thread. A running import is left alone: the web cannot cancel one.
+    /// </summary>
+    internal void CloseExport(string exportId)
+    {
+        lock (_gate)
+        {
+            if (_queuedExport is { } queued && string.Equals(queued.ExportId, exportId, StringComparison.Ordinal))
+            {
+                _queuedExport = null;
+            }
+        }
+
+        if (!string.Equals(_exportId, exportId, StringComparison.Ordinal) || _import is not { Staged: null } import)
+        {
+            return;
+        }
+
+        import.Note("The export was cancelled from the web, so the import window closed before anything ran.");
+        _window?.CloseNow();
+        import.CancelBeforeStart();
+        End(import);
     }
 
     /// <summary>
@@ -129,15 +185,23 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         ArgumentNullException.ThrowIfNull(application);
 
         string? zipPath;
+        (string ExportId, string ZipPath)? export;
         lock (_gate)
         {
             zipPath = _zipPath;
             _zipPath = null;
+            export = _queuedExport;
+            _queuedExport = null;
         }
 
         if (zipPath is not null)
         {
             OpenQueued(application, zipPath);
+        }
+
+        if (export is { } queuedExport)
+        {
+            OpenQueuedExport(application, queuedExport.ExportId, queuedExport.ZipPath);
         }
 
         // An import still on its checklist has nothing to advance: it was either opened by this very
@@ -167,6 +231,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
 
         RunHeld(import);
         Refresh(import);
+        ReportProgress(import);
 
         if (more)
         {
@@ -203,13 +268,63 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         Show(import, application.MainWindowHandle, fromVault: true);
     }
 
+    /// <summary>Opens the import window for an export, on Revit's thread, and tells the connected host how it went.</summary>
+    private void OpenQueuedExport(UIApplication application, string exportId, string zipPath)
+    {
+        if (MantlePlaceApplication.Connected is not { } connected)
+        {
+            return;
+        }
+
+        if (_import is not null)
+        {
+            connected.ImportBusy(exportId);
+            return;
+        }
+
+        if (application.ActiveUIDocument?.Document is not Document document)
+        {
+            connected.ImportRefused(
+                exportId,
+                ExportReasons.NoDocument,
+                "Revit has no project open to import into. Open one, then send the bundle again.");
+            return;
+        }
+
+        if (ActiveImport.Open(application.Application, document, zipPath, out ImportRefusal? refusal) is not { } import)
+        {
+            connected.ImportRefused(exportId, refusal!.Code, refusal.Instruction + " " + refusal.Message);
+            return;
+        }
+
+        import.Note($"Opened for export {exportId}, sent from the web vault.");
+        if (!Show(import, application.MainWindowHandle, fromVault: false))
+        {
+            connected.ImportRefused(exportId, ExportReasons.WindowFailed, "The import window could not be opened in Revit.");
+            return;
+        }
+
+        _exportId = exportId;
+        connected.ImportOpened(exportId);
+    }
+
+    /// <summary>Tells the connected host how far an export's running import has got; it paces the reports.</summary>
+    private void ReportProgress(ActiveImport import)
+    {
+        if (_exportId is { } exportId && import.Staged is { } staged && ReferenceEquals(import, _import))
+        {
+            MantlePlaceApplication.Connected?.ImportProgress(exportId, ImportPercent.Of(staged));
+        }
+    }
+
     /// <remarks>
     /// The import becomes this handler's only once its window is open. A window that could not open
     /// leaves no Import to press and no close box, so nothing could ever end that import: it is
     /// dropped, and the curator is told why. Every callback is bound to this import, so one arriving
     /// late from an earlier import's window acts on nothing it does not own.
     /// </remarks>
-    private void Show(ActiveImport import, IntPtr revitWindow, bool fromVault)
+    /// <returns>Whether the window opened, and the import is this handler's.</returns>
+    private bool Show(ActiveImport import, IntPtr revitWindow, bool fromVault)
     {
         ImportWindowRequest request = new(
             Path.GetFileName(import.ZipPath),
@@ -246,7 +361,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             }
 
             MantlePlaceApplication.SayFault(failure ?? new InvalidOperationException("The import window could not be opened."));
-            return;
+            return false;
         }
 
         _import = import;
@@ -255,6 +370,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         _hosts.Add(host);
         host.Ended += () => _hosts.Remove(host);
         import.Changed += () => Refresh(import);
+        return true;
     }
 
     /// <summary>
@@ -370,6 +486,12 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             import.Dispose();
             _import = null;
         }
+
+        _exportId = null;
+        lock (_gate)
+        {
+            _queuedExport = null;
+        }
     }
 
     /// <summary>Posts the window the run as it stands. Never waits on the window's thread.</summary>
@@ -414,6 +536,11 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         }
 
         _window?.ShowRun(ImportRunView.Of(import.Staged!));
+        if (_exportId is { } exportId)
+        {
+            MantlePlaceApplication.Connected?.ImportBegan(exportId);
+        }
+
         RaiseNextSlice();
     }
 
@@ -482,8 +609,22 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         import.Dispose();
 
         bool fromVault = _fromVault;
+        string? exportId = _exportId;
         _import = null;
         _window = null;
+        _exportId = null;
+
+        if (MantlePlaceApplication.Connected is { } connected)
+        {
+            if (exportId is not null)
+            {
+                ImportEnding ending = ImportEndings.Of(import.Failed, import.Staged is not null, import.Staged?.WasCancelled ?? false);
+                connected.ImportEnded(exportId, ending, $"{import.Heading} {import.Summary}".Trim());
+            }
+
+            // Whichever import it was, an export waiting for the window may have it now.
+            connected.TurnFree();
+        }
 
         if (!fromVault)
         {

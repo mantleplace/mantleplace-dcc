@@ -171,7 +171,10 @@ there moves the standard first. Title Case is Revit's; a host construct keeps it
   and `ExportsClient.cs` in `Client` calls the routes. The channel itself (the private join, presence, row
   changes, retries) is `RealtimeFrames.cs` in `Core`, every frame pinned headlessly, and `RealtimeClient.cs` in
   `Client`, which holds only the socket and raises its events on its own thread; no Supabase SDK, so no
-  package. Headless so far: nothing in the Revit shim opens a channel yet.
+  package. The connected host itself is `ExportDesk.cs` in `Core` (which export is at which step, what
+  to report next, one window at a time), `ConnectedHostService.cs` and `ExportBundleFetcher.cs` in
+  `Client` (the channel, the routes and the vault fetch, all off Revit's thread), and in the shim only
+  `RevitExportImportHost.cs` and the export path through `BundleImportEventHandler`.
 - How this plugin behaves and how to build it → [`README.md`](./README.md).
 - Whether this plugin supports a feature, and why not → the
   [host support matrix](../docs/host-support.md). A change that adds, narrows or drops a feature

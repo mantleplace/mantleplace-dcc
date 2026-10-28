@@ -61,7 +61,7 @@ public enum RealtimeState
 /// the loop and applied in order, so the socket has one writer.
 /// </para>
 /// </remarks>
-public sealed class RealtimeClient : IAsyncDisposable
+public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
 {
     /// <summary>The heartbeat interval Supabase's clients use; Realtime drops a socket quiet for longer.</summary>
     public static readonly TimeSpan DefaultHeartbeatInterval = TimeSpan.FromSeconds(25);

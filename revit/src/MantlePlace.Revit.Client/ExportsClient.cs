@@ -112,7 +112,7 @@ public readonly record struct ExportCall<T>(
 /// whether anyone is still waiting.
 /// </para>
 /// </remarks>
-public sealed class ExportsClient
+public sealed class ExportsClient : IExportRoutes
 {
     /// <summary>How many times a 429 is waited out before it is reported.</summary>
     public const int MaxRateLimitRetries = 2;
