@@ -57,6 +57,7 @@ edited in the same pull request that updates the release.
 | A notice when a Prepare ends | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
 | A notice when an order arrives in the vault | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
 | Re-join a Prepare the host was closed during | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
+| Receive a bundle sent from the web vault, and report its import back | not shipped — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
 | Each bundle's thumbnail in the vault | not shipped — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
 
 ## Importing a bundle
