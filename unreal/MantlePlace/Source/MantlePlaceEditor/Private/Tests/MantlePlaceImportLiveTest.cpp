@@ -425,7 +425,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 				UMantlePlaceImporterLibrary::ImportVaultPackage(Zip, EMantlePlaceImportMode::Both);
 
 			AddInfo(FString::Printf(
-				TEXT("Refusal path checked (this archive holds no terrain the importer can place): jobId=%s\n%s"),
+				TEXT("Refusal path checked (this archive holds no terrain the plugin can place): jobId=%s\n%s"),
 				*Refused.JobId, *Refused.Message));
 			TestFalse(TEXT("an archive with no placeable terrain is refused, not imported"), Refused.bSuccess);
 			TestTrue(TEXT("the refusal says there is nothing to import"),
