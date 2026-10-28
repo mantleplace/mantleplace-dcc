@@ -75,6 +75,23 @@ failed is dropped without a notice. The record is
 `%LOCALAPPDATA%\MantlePlace\interrupted-prepares.json`: order ids, when each was pressed, the
 watching process, and the same digest of the address.
 
+**Revit is a connected host while you are signed in**: the web vault can send a bundle straight to it
+([the export contract](../docs/platform-export-contract.md)). Each Revit joins your private channel
+when you sign in or a saved session is restored, and leaves it when you sign out or close Revit. In
+the vault, you see each one as its own target, named by its Revit version, the plugin's version, the
+machine and the project it has active, or no project; switching projects updates that. Send a bundle
+from there and the vault shows each step as Revit takes it: received at once; waiting for the bundle
+while one still building finishes, after which Revit carries on by itself; then the import window
+opens on your active project with the choices you used last, and nothing is imported until you press
+`Import`. While it runs, the vault shows its progress about every two seconds, then imported, or
+failed with a reason and the plugin's own message. Closing the window before `Import` shows
+cancelled, and cancelling from the vault closes a window not yet started. A bundle sent while another
+import is open waits its turn and opens when that one ends. The bundle is fetched through the vault's
+own routes and download folder, so one already downloaded is not fetched again, and a bundle whose
+version this plugin cannot read fails as unsupported. With the channel not configured
+([Configuration](#configuration)), Revit stays off it and `Download` in the vault is the way in.
+What the connected host did is logged to `%LOCALAPPDATA%\MantlePlace\connected-host.log`.
+
 Downloads are written to `bundle.zip.part`, hashed, and renamed over `bundle.zip` only once they
 verify (⛔`HPS-26`). Nothing is ever evicted automatically: a purchased bundle stays until you press
 `Remove Download` (`HPS-44`).

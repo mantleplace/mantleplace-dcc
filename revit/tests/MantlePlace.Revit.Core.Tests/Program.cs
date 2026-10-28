@@ -92,6 +92,7 @@ exitCode |= ExportProtocolTests.Run();
 exitCode |= ExportsClientTests.Run();
 exitCode |= RealtimeFramesTests.Run();
 exitCode |= RealtimeClientTests.Run();
+exitCode |= ConnectedHostTests.Run();
 
 if (exitCode == 0)
 {

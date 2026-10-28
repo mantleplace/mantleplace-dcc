@@ -26,6 +26,11 @@ public sealed class MantlePlaceApplication : IExternalApplication
     private static string? _hostVersion;
     private static ExternalEvent? _importEvent;
     private static BundleImportEventHandler? _importHandler;
+    private static ConnectedHostService? _connected;
+    private static readonly ConnectedHostEdge ConnectedEdge = new();
+
+    /// <summary>The active document's title, as the presence payload last announced it; <c>null</c> for none.</summary>
+    private static volatile string? _document;
 
     /// <summary>Revit's UI dispatcher, held only so the handler below can be detached again.</summary>
     private static Dispatcher? _uiDispatcher;
@@ -87,6 +92,13 @@ public sealed class MantlePlaceApplication : IExternalApplication
     internal static ExternalEvent ImportEvent => _importEvent ?? throw NotStarted();
 
     internal static BundleImportEventHandler ImportHandler => _importHandler ?? throw NotStarted();
+
+    /// <summary>
+    /// The connected host: this Revit on the curator's private channel, receiving exports from the web
+    /// vault (<see cref="ConnectedHostService"/>). <c>null</c> before startup and after shutdown, never
+    /// otherwise; it stays off, joining nothing, while the channel is not configured.
+    /// </summary>
+    internal static ConnectedHostService? Connected => _connected;
 
     /// <summary>
     /// Resumes a stored session at startup (<c>HPS-13</c>), without making Revit wait for it.
@@ -167,7 +179,103 @@ public sealed class MantlePlaceApplication : IExternalApplication
     }
 
     /// <summary>A project has closed; the import handler decides whether its window goes with it.</summary>
-    private static void OnDocumentClosed(object? sender, DocumentClosedEventArgs e) => _importHandler?.OnDocumentClosed();
+    /// <remarks>
+    /// The presence payload says no document once the last one has gone. While another is still open,
+    /// the view Revit activates next says which (<see cref="OnViewActivated"/>).
+    /// </remarks>
+    private static void OnDocumentClosed(object? sender, DocumentClosedEventArgs e)
+    {
+        _importHandler?.OnDocumentClosed();
+
+        if (sender is Autodesk.Revit.ApplicationServices.Application application)
+        {
+            bool anyOpen = false;
+            foreach (Autodesk.Revit.DB.Document document in application.Documents)
+            {
+                anyOpen |= !document.IsLinked;
+            }
+
+            if (!anyOpen)
+            {
+                AnnounceDocument(null);
+            }
+        }
+    }
+
+    /// <summary>A view became active: the active document may be another one now. Revit's thread.</summary>
+    private static void OnViewActivated(object? sender, ViewActivatedEventArgs e)
+    {
+        if (e?.Document is { IsLinked: false } document)
+        {
+            AnnounceDocument(document.Title);
+        }
+    }
+
+    /// <summary>Re-tracks presence when the active document changed; an unchanged one sends nothing.</summary>
+    private static void AnnounceDocument(string? title)
+    {
+        string? document = string.IsNullOrWhiteSpace(title) ? null : title;
+        if (string.Equals(document, _document, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _document = document;
+        _connected?.Announce(Presence());
+    }
+
+    /// <summary>The presence payload for this Revit, its plugin and its active document.</summary>
+    private static ConnectedHost Presence()
+        => ConnectedHosts.Announce(_hostVersion ?? string.Empty, PluginVersion.Current, _document, Environment.MachineName);
+
+    /// <summary>
+    /// Joins, re-authorises or leaves the curator's channel as the session moves (<see cref="ConnectedHostEdge"/>).
+    /// </summary>
+    /// <remarks>
+    /// On whichever thread the session moved on. Nothing here waits: a join opens its socket on the
+    /// pool, and a leave is not awaited.
+    /// </remarks>
+    private static void MoveConnectedHost(AuthState state)
+    {
+        if (_connected is not { } connected || _session is not { } session)
+        {
+            return;
+        }
+
+        ConnectedHostMove move;
+        lock (ConnectedEdge)
+        {
+            move = ConnectedEdge.Observe(state);
+        }
+
+        switch (move)
+        {
+            case ConnectedHostMove.Join:
+                connected.Join(session.AccessToken, Presence());
+                break;
+
+            case ConnectedHostMove.Reauthorise:
+                connected.Reauthorise(session.AccessToken);
+                break;
+
+            case ConnectedHostMove.Leave:
+                _ = LeaveQuietlyAsync(connected);
+                break;
+        }
+    }
+
+    private static async Task LeaveQuietlyAsync(ConnectedHostService connected)
+    {
+        try
+        {
+            await connected.LeaveAsync().ConfigureAwait(false);
+        }
+#pragma warning disable CA1031 // Nothing observes this task, and a leave that faults leaves a socket the process drops anyway.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+        }
+    }
 
     /// <summary>
     /// Tells the curator a fault of this add-in's was caught and Revit is still running. On Revit's
@@ -440,6 +548,8 @@ public sealed class MantlePlaceApplication : IExternalApplication
             _news?.Wake();
         }
 
+        MoveConnectedHost(state);
+
         OnUiThread(ApplyAccountState);
     }
 
@@ -447,7 +557,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
     /// Runs <paramref name="action"/> on Revit's UI thread: now when already on it, posted otherwise,
     /// and not at all once the add-in has shut down.
     /// </summary>
-    private static void OnUiThread(Action action)
+    internal static void OnUiThread(Action action)
     {
         Dispatcher? dispatcher = _uiDispatcher;
         if (dispatcher is null)
@@ -584,6 +694,22 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         // The handler re-raises its own event between slices of a staged import, so it holds it.
         _importHandler.Attach(_importEvent);
+
+        // One connected host for the whole Revit session, under this launch's connection id. It joins on
+        // the first sign-in (the restore below included) and stays off while the channel is not
+        // configured. Its route calls and fetches run on the pool; the import window it opens is this
+        // handler's, through the same ExternalEvent the vault window raises.
+        ConnectedHostLog connectedLog = new(ConnectedHostLog.DefaultPath);
+        string connectionId = ConnectionIdSource.ThisLaunch.Id;
+        ExportBundleFetcher fetcher = new(new VaultExportSource(_vault, _cache), new VaultPrepareSteps(_vault, _cache));
+        _connected = new ConnectedHostService(
+            connectionId,
+            () => RealtimeClient.For(endpoints, connectionId, connectedLog.Append),
+            new ExportsClient(endpoints, new AuthBearerSession(_session)),
+            fetcher.FetchAsync,
+            connectedLog.Append);
+        _connected.Attach(new RevitExportImportHost(_importHandler, _importEvent));
+        application.ViewActivated += OnViewActivated;
 
         // The import window is not owned by Revit's window, so nothing closes it with a project or
         // with Revit unless it is told to (BundleImportEventHandler.OnDocumentClosed, Shutdown).
@@ -742,6 +868,17 @@ public sealed class MantlePlaceApplication : IExternalApplication
         if (application is not null)
         {
             application.ControlledApplication.DocumentClosed -= OnDocumentClosed;
+            application.ViewActivated -= OnViewActivated;
+        }
+
+        // Leaves the channel before the import handler drops its window, so no export is opened behind
+        // it. Bounded: the client waits at most two seconds for the leave to be answered, and Revit's
+        // close waits no longer than that for the untrack to go out rather than leaning on the socket
+        // dropping with the process.
+        if (_connected is { } connected)
+        {
+            _connected = null;
+            _ = Task.Run(() => LeaveQuietlyAsync(connected)).Wait(TimeSpan.FromSeconds(3));
         }
 
         _importHandler?.Shutdown();
