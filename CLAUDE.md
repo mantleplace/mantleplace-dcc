@@ -217,6 +217,9 @@ Most facts already have exactly one home. Find it before writing a fact down any
 - **Signing in, tokens, refresh, sign-out** →
   [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md) — cross-host; both hosts share
   one stored credential.
+- **Receiving an export: the channel, presence, lifecycle, routes** →
+  [`docs/platform-export-contract.md`](docs/platform-export-contract.md) — cross-host; the platform's
+  copy wins a disagreement.
 - **Building, testing, or what a host writes into a *user's* project** → that host's own `CLAUDE.md`
   ([`unreal/`](unreal/CLAUDE.md), [`revit/`](revit/CLAUDE.md), [`blender/`](blender/CLAUDE.md)), read before touching that host.
 - **What the plugins do, and how to build them** → [`README.md`](README.md).

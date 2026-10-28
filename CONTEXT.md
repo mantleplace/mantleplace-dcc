@@ -193,6 +193,24 @@ it asked for, or every file at every level — delivered as one zip whose manife
 whole bundle. A host asks for its view; it never assembles one from file names.
 _Avoid_: subset, partial bundle, export, package
 
+**Export**:
+A kept bundle handed from the web vault to a connected host. It is a record that names a bundle and
+a target, carries no file and no URL, and moves through a lifecycle the plugin and the web advance
+between them; the plugin fetches the bundle itself.
+_Avoid_: push, send-to-host, transfer
+
+**Connected host**:
+A running host program with the plugin, signed in as the curator, that has announced itself on the
+curator's private channel and can receive exports. One that cannot reach the channel stays off, and
+the curator still has Download.
+_Avoid_: live host, online host, listener
+
+**Connection id**:
+The random id a plugin generates once per host launch and announces as its presence key; an export
+names its target by it. Not persisted across launches and not a secret from the curator's other
+signed-in programs.
+_Avoid_: session id, client id, host id
+
 ### Orders and builds
 
 These two were one word for a long time, and a host plugin that keys anything on the wrong one

@@ -11,6 +11,7 @@ exitCode |= HostBlockPrecedenceTests.Run();
 exitCode |= ImportPlannerTests.Run();
 exitCode |= ImportLayerTests.Run();
 exitCode |= ImportLayerLinksTests.Run();
+exitCode |= RememberedChoiceTests.Run();
 exitCode |= SurfacePointsTests.Run();
 exitCode |= SurfaceTinTests.Run();
 exitCode |= PublishedContourTests.Run();
@@ -87,6 +88,8 @@ exitCode |= PrepareRejoinerTests.Run();
 exitCode |= CacheConformanceTests.Run();
 exitCode |= BundleCacheTests.Run();
 exitCode |= AutodeskBundleManifestTests.Run();
+exitCode |= ExportProtocolTests.Run();
+exitCode |= ExportsClientTests.Run();
 
 if (exitCode == 0)
 {
