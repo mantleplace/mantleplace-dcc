@@ -393,6 +393,13 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             return;
         }
 
+        // Remembered the moment Import is pressed, and only then: a window closed unpressed leaves the
+        // last choice as it was. A file that cannot be written costs the memory, never the import.
+        if (!ActiveImport.ChoiceStore.Write(RememberedChoice.Of(import.Checklist, choice)))
+        {
+            import.Note("The choice made here could not be saved, so the next import window opens on the last one that was.");
+        }
+
         try
         {
             import.Begin(choice);

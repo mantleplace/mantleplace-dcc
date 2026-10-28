@@ -315,8 +315,8 @@ layer the bundle carries (`Terrain`, `Published Contours`, `Context Buildings`, 
 `Site Model` links the site model, whose buildings `Context Buildings` has already copied in, and
 ticking both shows every building twice. Every other box starts ticked because, with everything
 ticked at the levels the rows open on, a 2 km² order imports in under five minutes in Revit 2025,
-2026 and 2027 ([the costs](../docs/import-inventory.md)). Nothing remembers a tick or a level from
-one import to the next, so a box you ticked last time starts unticked again.
+2026 and 2027 ([the costs](../docs/import-inventory.md)). That is how the window opens the first time on a machine.
+After that it opens on the choices you pressed `Import` with last time, from a local zip or the vault alike: the boxes and the levels. A layer the last bundle did not carry starts as above, and a remembered tick never turns on a layer this bundle lacks, nor a box whose prerequisite is off. The choice is saved when `Import` is pressed, not when the window closes, in `import-choice.json` beside the bundle cache; a file that is missing or unreadable is ignored.
 Nothing runs until `Import` is pressed. Both kinds of subdivision and the drape need the terrain, so unticking `Terrain` disables
 them and says `Needs Terrain` beside each; ticking it again gives back what they were. A layer left
 out creates nothing, and the log says it was left out by choice. The shared coordinates, the site

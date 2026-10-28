@@ -227,7 +227,8 @@ public sealed partial class ImportChecklist
     /// <summary>The checklist for everything a plan made with <see cref="ImportLayerChoice.All"/> would build.</summary>
     /// <param name="plan">The plan made with every layer.</param>
     /// <param name="revitVersionNumber"><c>Application.VersionNumber</c>, or <c>null</c> when it is not known.</param>
-    public static ImportChecklist For(BundleImportPlan plan, string? revitVersionNumber = null)
+    /// <param name="remembered">What the curator ticked at their last Import, or <c>null</c> for the defaults (<see cref="Restore"/>).</param>
+    public static ImportChecklist For(BundleImportPlan plan, string? revitVersionNumber = null, RememberedChoice? remembered = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ImportChecklist checklist = new(
@@ -235,6 +236,7 @@ public sealed partial class ImportChecklist
             plan.Skipped,
             revitVersionNumber);
         checklist.OfferLevels(plan.Steps);
+        checklist.Restore(remembered);
         return checklist;
     }
 
