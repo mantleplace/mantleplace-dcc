@@ -864,8 +864,11 @@ development, and there is no packaging-time secret in the auth path at all.
 One optional file remains: `%LOCALAPPDATA%\MantlePlace\config.json`, overrides layered over the
 compiled defaults when it is present, and nothing installs it. Every key in it is an override for one
 of those defaults (`webLoginUrl`, `tokenEndpointUrl`, `refreshEndpointUrl`, `apiBaseUrl`,
-`loopbackPorts`, `callbackPath`, `signInTimeoutSeconds`) and is how a dev build points at a
-non-production stack. `loopbackPorts` is the `HPS-06a` override: leave it out and the OS assigns
+`realtimeUrl`, `realtimePublishableKey`, `loopbackPorts`, `callbackPath`, `signInTimeoutSeconds`) and is
+how a dev build points at a non-production stack. `realtimeUrl` and `realtimePublishableKey` are the
+exception to "nothing is required": the platform has not published where the connected host's Realtime
+socket is, so both default to empty, and with either missing the connected host stays off, logs one line
+saying so, and joins no channel. `loopbackPorts` is the `HPS-06a` override: leave it out and the OS assigns
 the sign-in callback port, which is what keeps sign-in clear of Windows' shifting reserved ranges
 and lets Revit and Unreal be signed in at the same time. Absent or malformed, the file is ignored
 and the defaults stand — this is read during Revit's load of a plugin, where throwing costs the ribbon

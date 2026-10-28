@@ -57,6 +57,28 @@ public sealed class MantlePlaceEndpoints
     public string ApiBaseUrl { get; init; } = "https://mantle.place";
 
     /// <summary>
+    /// The Realtime location the connected host opens its socket on (<c>wss://…/realtime/v1</c>).
+    /// <b>Empty by default, which means the connected host is off.</b>
+    /// </summary>
+    /// <remarks>
+    /// The platform has not yet published where a plugin's Realtime socket is (the open point of the
+    /// export contract), so nothing is compiled in and a plain install stays off rather than guessing.
+    /// Set <c>realtimeUrl</c> in <c>config.json</c> to point at one. When the platform publishes it,
+    /// the default moves here, the one home.
+    /// </remarks>
+    public string RealtimeUrl { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The publishable key that opens the Realtime socket. <b>Empty by default</b>, for the same
+    /// reason as <see cref="RealtimeUrl"/>; set <c>realtimePublishableKey</c> in <c>config.json</c>.
+    /// </summary>
+    /// <remarks>
+    /// A publishable key is public by design: the access policies, not the key, admit a session to
+    /// its channel. It is still never logged.
+    /// </remarks>
+    public string RealtimePublishableKey { get; init; } = string.Empty;
+
+    /// <summary>
     /// Explicit loopback ports to try, in order (<c>HPS-06</c>). <b>Empty by default, which means
     /// the OS picks the port</b> — see <c>LoopbackRedirectListener.StartEphemeral</c>.
     /// </summary>
@@ -124,6 +146,8 @@ public sealed class MantlePlaceEndpoints
                 TokenEndpointUrl = Override(root, "tokenEndpointUrl", defaults.TokenEndpointUrl),
                 RefreshEndpointUrl = Override(root, "refreshEndpointUrl", defaults.RefreshEndpointUrl),
                 ApiBaseUrl = Override(root, "apiBaseUrl", defaults.ApiBaseUrl),
+                RealtimeUrl = Override(root, "realtimeUrl", defaults.RealtimeUrl),
+                RealtimePublishableKey = Override(root, "realtimePublishableKey", defaults.RealtimePublishableKey),
                 LoopbackPorts = OverridePorts(root, defaults.LoopbackPorts),
                 CallbackPath = Override(root, "callbackPath", defaults.CallbackPath),
                 SignInTimeoutSeconds = OverrideInt(root, "signInTimeoutSeconds", defaults.SignInTimeoutSeconds),

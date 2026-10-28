@@ -90,6 +90,8 @@ exitCode |= BundleCacheTests.Run();
 exitCode |= AutodeskBundleManifestTests.Run();
 exitCode |= ExportProtocolTests.Run();
 exitCode |= ExportsClientTests.Run();
+exitCode |= RealtimeFramesTests.Run();
+exitCode |= RealtimeClientTests.Run();
 
 if (exitCode == 0)
 {
