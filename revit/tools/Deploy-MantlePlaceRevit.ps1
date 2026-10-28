@@ -15,6 +15,11 @@
     only tell is a file timestamp nobody thinks to check. This script makes the deployed bits a
     function of its input, and prints the version and timestamp of what it wrote.
 
+    It refuses while a Mantle Place bundle sits in an Autodesk bundle folder (the storefront's
+    install, or the release zip's MantlePlace.bundle placed there by hand). Revit would then load
+    the plugin twice, once from there and once from the add-ins folder this script writes, and
+    refuses a second copy of the same ClientId. Remove one install before using the other.
+
     It also writes MantlePlace.install.json beside the manifest: which commit, which branch, which
     worktree, whether that tree was dirty, and when. The assembly knows its commit; it cannot know
     the branch or the worktree, and with several worktrees and one add-ins folder those are the
@@ -123,6 +128,52 @@ if ($Launch -and ($RevitVersions -notcontains $LaunchVersion)) {
 $running = @(Get-Process -Name 'Revit' -ErrorAction SilentlyContinue)
 if ($running.Count -gt 0) {
     throw "Revit is running, so its plugin files are locked and only some of them would be replaced. Close Revit and run this again. Nothing was installed."
+}
+
+# ---------------------------------------------------------------------------
+# Refuse before writing anything if a storefront-installed bundle is present.
+#
+# Revit scans three Autodesk bundle folders at startup besides the per-version add-ins folders this
+# script writes: the per-user one, and the two machine-wide ones. A Mantle Place bundle in any of
+# them loads the same add-in this script is about to copy, and a machine must never load the plugin
+# twice. A folder is a Mantle Place bundle by name (MantlePlace.bundle, what the release zip's root
+# is called) or by the name its PackageContents.xml declares, which survives a rename.
+# ---------------------------------------------------------------------------
+function Get-MantlePlaceBundleFolders {
+    $roots = @()
+    foreach ($base in @($env:APPDATA, $env:ProgramData, $env:ProgramFiles)) {
+        if (-not [string]::IsNullOrWhiteSpace($base)) {
+            $roots += (Join-Path $base 'Autodesk\ApplicationPlugins')
+        }
+    }
+
+    $found = @()
+    foreach ($root in $roots) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        foreach ($bundle in @(Get-ChildItem -LiteralPath $root -Directory -Filter '*.bundle' -ErrorAction SilentlyContinue)) {
+            $isMantlePlace = $bundle.Name -eq 'MantlePlace.bundle'
+            if (-not $isMantlePlace) {
+                $packageContents = Join-Path $bundle.FullName 'PackageContents.xml'
+                if (Test-Path -LiteralPath $packageContents) {
+                    try {
+                        [xml]$package = Get-Content -LiteralPath $packageContents -Raw
+                        $isMantlePlace = $package.ApplicationPackage.Name -eq 'Mantle Place'
+                    }
+                    catch {
+                        # An unreadable manifest is not ours to judge; the folder name was the other test.
+                        $isMantlePlace = $false
+                    }
+                }
+            }
+            if ($isMantlePlace) { $found += $bundle.FullName }
+        }
+    }
+    return $found
+}
+
+$bundleFolders = @(Get-MantlePlaceBundleFolders)
+if ($bundleFolders.Count -gt 0) {
+    throw "A Mantle Place bundle is already installed in $($bundleFolders -join ', '). Revit would load the plugin twice. Remove that folder (or uninstall Mantle Place from the Autodesk storefront), or keep it and do not run this script. Nothing was installed."
 }
 
 if ($fromRelease) {

@@ -647,6 +647,14 @@ per-version add-ins folder, printing the timestamp of what it wrote:
 %APPDATA%\Autodesk\Revit\Addins\2027\
 ```
 
+**One install at a time.** The script refuses, before it writes anything, while a Mantle Place bundle
+sits in an Autodesk bundle folder (`%APPDATA%\Autodesk\ApplicationPlugins`, and the two machine-wide
+`ApplicationPlugins` folders under `%ProgramData%` and `%ProgramFiles%`) and names that folder. Revit
+would otherwise load the plugin from both places. A folder counts by its name (`MantlePlace.bundle`) or
+by the app its `PackageContents.xml` names. Remove one install before using the other: delete the
+bundle folder (or uninstall it from the storefront) to deploy from here, and run
+`Uninstall-MantlePlaceRevit.ps1` to go back to the storefront's.
+
 `-Configuration Release`, `-RevitVersions 2025`, and `-SkipBuild` narrow it. Copying by hand works
 too, and the script does nothing you could not do with Explorer — but hand-copying is how a machine
 ends up running a plugin months older than the source tree. That failure is silent and it reads
@@ -740,9 +748,22 @@ script and a button that is silently blank.
 ```
 
 Builds `Release`, assembles `MantlePlace-Revit-<version>.zip` into `dist/`, and prints its sha256.
-Inside: a `Contents` folder holding everything Revit loads, with `README.txt`, `Install.cmd`,
-`Uninstall.cmd` and their two scripts above it. `Contents` is Autodesk's own bundle folder name, so
-shipping this as a `.bundle` later is adding a `PackageContents.xml` rather than rearranging the archive.
+Inside: one root folder, `MantlePlace.bundle`, which is an Autodesk application bundle
+([ADR 0018](../docs/adr/0018-the-revit-track-goes-to-1-0-0-for-its-storefront.md)). It holds
+`PackageContents.xml` beside a `Contents` folder with everything Revit loads, and `README.txt`,
+`Install.cmd`, `Uninstall.cmd` and their two scripts beside both. The same zip therefore installs from
+the Autodesk storefront and by hand; the copy-first install reads `Contents` exactly as it always did
+([ADR 0005](../docs/adr/0005-release-installs-are-copy-first.md)). `Contents/Resources/` carries the
+bundle icon (the monogram) and is not copied into a Revit add-ins folder.
+
+`PackageContents.xml` is built by `AutodeskBundleManifest` in the core, a pure function of the declared
+version and the supported Revit years (2025, 2026 and 2027, each naming the module that year loads,
+which is the one `MantlePlace.addin`), through the one-file
+[`tools/WriteBundleManifest/`](./tools/WriteBundleManifest/) console project. Headless tests cover it in
+`ci-revit-tests`. The script then compares the version the manifest carries with `<Version>` in
+[`Directory.Build.props`](./Directory.Build.props) and stops on a difference, so a stale build cannot
+ship under a new number. The zip is written entry by entry with forward slashes, which Windows
+PowerShell 5.1's `Compress-Archive` does not do.
 
 `Uninstall.cmd` removes `MantlePlace.addin` and every `MantlePlace.*` file from each year folder under
 `%APPDATA%\Autodesk\Revit\Addins`, refuses while Revit is open, and asks before also deleting the

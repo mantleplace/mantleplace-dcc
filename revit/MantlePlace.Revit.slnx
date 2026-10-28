@@ -4,6 +4,9 @@
     <Project Path="src/MantlePlace.Revit.Client/MantlePlace.Revit.Client.csproj" />
     <Project Path="src/MantlePlace.Revit.Addin/MantlePlace.Revit.Addin.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/WriteBundleManifest/WriteBundleManifest.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj" />
   </Folder>

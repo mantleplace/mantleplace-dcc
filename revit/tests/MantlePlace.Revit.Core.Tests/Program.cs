@@ -87,6 +87,7 @@ exitCode |= InterruptedPrepareStoreTests.Run();
 exitCode |= PrepareRejoinerTests.Run();
 exitCode |= CacheConformanceTests.Run();
 exitCode |= BundleCacheTests.Run();
+exitCode |= AutodeskBundleManifestTests.Run();
 exitCode |= ExportProtocolTests.Run();
 exitCode |= ExportsClientTests.Run();
 

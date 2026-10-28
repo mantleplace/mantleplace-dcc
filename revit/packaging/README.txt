@@ -13,6 +13,15 @@ are identical, and Revit reads a separate folder per year.
 Revit 2024 and earlier are not supported and will not be: they run on .NET Framework 4.8,
 where this plugin's dependencies are not part of the runtime.
 
+This package is one folder, MantlePlace.bundle. That is the folder name Autodesk's storefront
+installs, so the same package serves both ways in. Inside it: this file, Install.cmd,
+Uninstall.cmd, PackageContents.xml (the storefront reads it; you do not need to) and the
+"Contents" folder that holds the plugin.
+
+Use ONE way in. If Mantle Place is already installed from the Autodesk storefront, or sits in an
+Autodesk "ApplicationPlugins" folder, remove that install before copying the files below:
+Revit would load the plugin twice. Install.cmd checks for it and stops, naming the folder.
+
 
 -------------------------------------------------------------------------------
 INSTALL -- copy four things into a folder
@@ -30,9 +39,11 @@ and you do not need to install .NET: Revit brings its own, and this plugin loads
 3. Open the folder for your Revit year -- 2025, 2026 or 2027. If it is not there, make it,
    spelled exactly like that.
 
-4. Copy EVERYTHING inside this package's "Contents" folder into it. That is the .addin file
-   and the .dll files beside it. Copy the .pdb files too if they are there; they cost
-   nothing and they make a crash report useful.
+4. Copy the files directly inside this package's "Contents" folder (it is inside
+   MantlePlace.bundle) into it. That is the .addin file and the .dll files beside it. Copy
+   the .pdb files too if they are there; they cost nothing and they make a crash report
+   useful. Leave the "Resources" folder behind: it holds the storefront's icon and Revit
+   has no use for it.
 
 5. Repeat steps 3 and 4 for each other Revit year you use.
 
