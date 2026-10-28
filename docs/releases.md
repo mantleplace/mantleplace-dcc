@@ -22,7 +22,8 @@ both share: the cut order, the title and the body.
 4. **Download the published asset and check it**: its sha256 matches the body, and it installs and
    loads in a project or host that never built the plugin. Record the result in the body.
 5. **Submit to the storefront** the same day where the host has one (Fab for Unreal, the Autodesk
-   storefront for Revit), from the same asset.
+   storefront for Revit), from the same asset, or, where the storefront compiles the plugin itself
+   (Fab), from a Source zip built from the same commit.
 
 ## Title
 
