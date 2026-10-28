@@ -162,8 +162,8 @@ against the Source zip before an upload:
 - Every module in the descriptor carries a `PlatformAllowList`.
 - No `Binaries`, `Intermediate`, `Saved` or `Build` folder anywhere in the plugin.
 - No path from the plugin folder down is longer than 170 characters.
-- The zip uploaded to the storefront is the same asset as the GitHub release's, built from the same
-  commit.
+- The zip uploaded to the storefront is the Source zip built from the release's own commit, not the
+  GitHub release's Win64 asset.
 
 For anything deeper — building, testing, naming, what a change here must not do — read
 [`CLAUDE.md`](CLAUDE.md) in this folder and the root [`README.md`](../README.md).
