@@ -132,8 +132,8 @@ run reporting any `No editor` skip is not green.**
   `view` and `files` decide, not the zip listing: a missing entry in a part the archive claims to
   hold, an `everything` archive, one with no `view`, and one with no `files` mapping are still
   refused (`Integrity check could not read entry`), as corruption.
-  An archive that holds no terrain the importer can place (a download selection cut without the
-  heightmap, the terrain mesh and the Cesium tileset) is refused by the importer (`Nothing to import:`),
+  An archive that holds no terrain the plugin can place (a download selection cut without the
+  heightmap, the terrain mesh and the Cesium tileset) is refused by the plugin (`Nothing to import:`),
   and the test then checks that refusal instead of the placement: it asserts the refusal, that no actor
   was created and that the level and the generated content are as they were, logs that it took the
   refusal path, and stops. The refusal offers "Stream into Cesium" only when the archive holds the
