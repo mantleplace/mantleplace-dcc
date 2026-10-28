@@ -4,6 +4,10 @@
 
 #if WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
 
+#include "MantlePlaceArtifactHandler.h"  // the importer's own handlers: what it can place from this archive
+#include "MantlePlaceEditorSettings.h"   // the generated content root (the refusal touches nothing under it)
+#include "MantlePlaceImportOrchestration.h" // ExplainNothingToImport: the refusal this test checks when it applies
+#include "MantlePlaceIntegrityLogic.h"   // HoldsCesiumTerrain: whether the refusal may offer the stream
 #include "MantlePlaceImporterLibrary.h"
 #include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest (base-bundle skip + layer presence)
 #include "MantlePlaceImportNaming.h"   // subfolder layout, so this asserts the standard not a copy of it
@@ -379,6 +383,63 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			return SkipOrFail(
 			    TEXT("Base bundle — materialize incomplete, live import not exercised. "
 			         "Generate its Unreal formats (vault panel or mantle.place/vault) and re-download."));
+		}
+	}
+
+	// An archive that holds nothing the importer can place as terrain (a download selection cut without
+	// the heightmap, the terrain mesh and the Cesium tileset) is REFUSED by design, before anything is
+	// touched. For that archive the test checks the refusal and stops: running the placement, road,
+	// coverage and transaction checks below against an import that rightly placed nothing would report
+	// the correct refusal as a dozen failures. Every other archive runs the full test.
+	if (Manifest.bValid)
+	{
+		const FString ExpectedRefusal = MantlePlaceImportOrchestration::ExplainNothingToImport(
+			MantlePlaceArtifacts::MakeAll(), Manifest, FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode::Both));
+		if (!ExpectedRefusal.IsEmpty())
+		{
+			UWorld* RefusalWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+			const auto CountActors = [RefusalWorld]()
+			{
+				int32 Count = 0;
+				if (RefusalWorld != nullptr)
+				{
+					for (TActorIterator<AActor> It(RefusalWorld); It; ++It)
+					{
+						++Count;
+					}
+				}
+				return Count;
+			};
+			FAssetRegistryModule& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+			const FName ContentRoot(*UMantlePlaceEditorSettings::ResolveGeneratedContentRoot());
+			const auto CountAssets = [&Registry, ContentRoot]()
+			{
+				TArray<FAssetData> Assets;
+				Registry.Get().GetAssetsByPath(ContentRoot, Assets, /*bRecursive*/ true);
+				return Assets.Num();
+			};
+			const int32 ActorsBefore = CountActors();
+			const int32 AssetsBefore = CountAssets();
+
+			const FMantlePlaceImportResult Refused =
+				UMantlePlaceImporterLibrary::ImportVaultPackage(Zip, EMantlePlaceImportMode::Both);
+
+			AddInfo(FString::Printf(
+				TEXT("Refusal path checked (this archive holds no terrain the plugin can place): jobId=%s\n%s"),
+				*Refused.JobId, *Refused.Message));
+			TestFalse(TEXT("an archive with no placeable terrain is refused, not imported"), Refused.bSuccess);
+			TestTrue(TEXT("the refusal says there is nothing to import"),
+				Refused.Message.StartsWith(TEXT("Nothing to import: ")));
+			TestEqual(TEXT("the refusal is the importer's own explanation of the archive"), Refused.Message, ExpectedRefusal);
+			TestTrue(TEXT("the refusal promises the existing assets are untouched"),
+				Refused.Message.Contains(TEXT("Existing assets left untouched")));
+			TestEqual(TEXT("the Cesium hint is made exactly when the archive holds a Cesium tileset"),
+				Refused.Message.Contains(TEXT("Cesium quantized-mesh terrain")),
+				FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(Manifest));
+			TestEqual(TEXT("the refusal created no actors"), Refused.CreatedActors.Num(), 0);
+			TestEqual(TEXT("and left the level's actors as they were"), CountActors(), ActorsBefore);
+			TestEqual(TEXT("and left the generated content as it was"), CountAssets(), AssetsBefore);
+			return true;
 		}
 	}
 

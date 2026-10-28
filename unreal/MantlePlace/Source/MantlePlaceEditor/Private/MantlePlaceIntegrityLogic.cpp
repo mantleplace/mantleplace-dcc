@@ -77,6 +77,30 @@ bool FMantlePlaceIntegrityLogic::LeavesOutAll(const FMantlePlaceVaultManifest& M
 	return true;
 }
 
+bool FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(const FMantlePlaceVaultManifest& Manifest)
+{
+	if (!Manifest.Cesium.bHasTerrain)
+	{
+		return false;
+	}
+	const FMantlePlaceArchiveView& View = Manifest.Archive;
+	if (!View.bDeclared || View.Kind.Equals(TEXT("everything"), ESearchCase::CaseSensitive))
+	{
+		return true;
+	}
+	return View.Parts.ContainsByPredicate(
+	    [](const FString& Held)
+	    {
+		    FString Token;
+		    FString Level;
+		    if (!Held.Split(TEXT("@"), &Token, &Level))
+		    {
+			    Token = Held;
+		    }
+		    return Token.Equals(TEXT("terrain.cesium"), ESearchCase::CaseSensitive);
+	    });
+}
+
 TArray<FString> FMantlePlaceIntegrityLogic::VerifiablePaths(const FMantlePlaceVaultManifest& Manifest)
 {
 	TArray<FString> Paths;

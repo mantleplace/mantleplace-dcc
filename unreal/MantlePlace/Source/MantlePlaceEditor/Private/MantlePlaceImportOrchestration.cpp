@@ -365,10 +365,15 @@ FString MantlePlaceImportOrchestration::ExplainNothingToImport(
 	{
 		return FString();
 	}
+	// The streaming hint is a statement about THIS archive, so it is made only when the archive holds the
+	// tileset: a cut without it (a terrain-less download selection) has nothing to stream either.
+	const FString StreamHint = FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(Manifest)
+		? FString(TEXT(" This bundle ships Cesium quantized-mesh terrain — use a Landscape import or "
+					   "\"Stream into Cesium\" instead."))
+		: FString();
 	return FString::Printf(
-		TEXT("Nothing to import: %s. (Existing assets left untouched.) This bundle ships Cesium "
-			 "quantized-mesh terrain — use a Landscape import or \"Stream into Cesium\" instead."),
-		*FString::Join(Reasons, TEXT("; ")));
+		TEXT("Nothing to import: %s. (Existing assets left untouched.)%s"),
+		*FString::Join(Reasons, TEXT("; ")), *StreamHint);
 }
 
 FString MantlePlaceImportOrchestration::WipePriorAssets(

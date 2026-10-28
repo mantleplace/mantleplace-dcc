@@ -184,6 +184,48 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 			FMantlePlaceIntegrityLogic::LeavesOutAll(M, {}));
 	}
 
+	// --- Whether the archive holds the Cesium terrain tileset ------------------------------------------
+	// The refusal's Cesium hint is a statement about the archive, so it is made only when the archive
+	// holds the `terrain.cesium` part (or, with no `view`, when the manifest points at the tileset).
+	{
+		FMantlePlaceVaultManifest M;
+		TestFalse(TEXT("no pointer to a tileset: nothing to stream"),
+			FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(M));
+
+		M.Cesium.bHasTerrain = true;
+		M.Cesium.TerrainPath = TEXT("CesiumTerrain/layer.json");
+		TestTrue(TEXT("an archive with no `view` holds what the manifest points at"),
+			FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(M));
+
+		M.Archive.bDeclared = true;
+		M.Archive.Kind = TEXT("everything");
+		M.Archive.Parts = { TEXT("imagery.drape_png@MAX") };
+		TestTrue(TEXT("an `everything` archive holds the tileset the manifest points at, whatever its parts say"),
+			FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(M));
+
+		M.Archive.Kind = TEXT("selection");
+		TestFalse(TEXT("a selection without the part does not hold it, though the manifest still points at it"),
+			FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(M));
+
+		M.Archive.Parts.Add(TEXT("terrain.cesium@MAX"));
+		TestTrue(TEXT("a selection that holds the part holds the tileset"),
+			FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(M));
+
+		M.Archive.Kind = TEXT("some-future-kind");
+		TestTrue(TEXT("an unknown kind holds exactly its parts, and this is one"),
+			FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(M));
+
+		M.Archive.Parts = { TEXT("terrain.cesiumx@MAX"), TEXT("elevation.terrain.cesium@MAX") };
+		TestFalse(TEXT("a part whose token only resembles the Cesium one is not it"),
+			FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(M));
+
+		M.Archive.Parts = { TEXT("terrain.cesium@MAX") };
+		M.Cesium.bHasTerrain = false;
+		M.Cesium.TerrainPath.Empty();
+		TestFalse(TEXT("a held part with no pointer to read is not a tileset the stream could serve"),
+			FMantlePlaceIntegrityLogic::HoldsCesiumTerrain(M));
+	}
+
 	return true;
 }
 
