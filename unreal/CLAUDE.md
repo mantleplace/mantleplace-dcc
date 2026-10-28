@@ -113,7 +113,11 @@ run reporting any `No editor` skip is not green.**
   floor, it warns and passes locally; it errors only when `CI` is set. A "Sample bundle not present"
   (or "below the floor") warning therefore means the run is not green, whatever the count says. Its
   placement gate checks the landscape against the bundle's own surface points (`elevation.points_csv`),
-  which the plugin never reads; a "Placement gate not run" warning is the same not-green. When the
+  which the plugin never reads, in the unit the file states (`m`, `ftUS` or `ft`; any other leaves the
+  gate unrun). It passes on the mean offset (|mean| within 0.10 m) and the spread (RMS within 1.0 m)
+  and logs the largest single deviation for information only: the points are a decimated set, not the
+  DEM's cells, so one steep cell can sit metres off a correct landscape. A "Placement gate not run"
+  warning is the same not-green; a local-grid file (not local ENU) is one such. When the
   bundle's road layer is in the landscape's datum, it also checks the roads were read from the
   GeoPackage the plugin chose (the Unreal block's own `road_splines` copy on a US order, else the
   shared layer's; a 2.0 bundle declares no GeoJSON row) and that the median placed

@@ -9,6 +9,7 @@
 #include "MantlePlaceImportNaming.h"   // subfolder layout, so this asserts the standard not a copy of it
 #include "MantlePlaceVaultTypes.h"     // MantlePlaceMinSupportedManifestVersion (stale-fixture skip)
 #include "MantlePlaceImportTypes.h"
+#include "MantlePlaceLiveGateLogic.h"   // the placement gate's unit factors and tolerances
 #include "MantlePlaceRoadSplinesLogic.h" // the importer's own datum decision, asked not recomputed
 #include "MantlePlaceRoadSpline.h"       // the road gate reads the placed splines back
 #include "MantlePlaceCoverageRasterLogic.h"  // IsCoverageRaster (which layers to expect)
@@ -201,7 +202,10 @@ namespace MantlePlaceImportLiveTest
 	 * these points, so they are an independent statement of where the ground is, cut from the DEM rather
 	 * than from the heightmap the landscape is built from. They are local ENU offsets from the AOI
 	 * centroid, which is the world origin here, so the expected position is the published one with no
-	 * arithmetic but the axis order (north to +X, east to +Y) and metres to centimetres. A point stated in
+	 * arithmetic but the axis order (north to +X, east to +Y) and the unit: the points are in the unit
+	 * `points_csv.units` states (absent means metres; `ftUS`, `ft` and `m` convert, any other leaves the gate
+	 * unrun), and each of x, y and z is scaled by that unit's exact factor before the datum shift, which is
+	 * stated in metres. A point stated in
 	 * NAVD88 is moved into the landscape's EGM2008 by the bundle's own `navd88_minus_egm2008_m`, verbatim;
 	 * a bundle that does not publish that difference has no check points this test can trust.
 	 *
@@ -241,6 +245,13 @@ namespace MantlePlaceImportLiveTest
 			OutReason = FString::Printf(TEXT("its surface points are in \"%s\", not local ENU"), *Frame);
 			return false;
 		}
+		FString Units;
+		(*Points)->TryGetStringField(TEXT("units"), Units); // absent means metres
+		double MetresPerUnit = 1.0;
+		if (!FMantlePlaceLiveGateLogic::TryUnitToMetres(Units, MetresPerUnit, OutReason))
+		{
+			return false;
+		}
 
 		double DatumShiftM = 0.0;
 		if (!Datum.Equals(LandscapeDatum, ESearchCase::CaseSensitive))
@@ -278,9 +289,10 @@ namespace MantlePlaceImportLiveTest
 				continue;
 			}
 			FCheckPoint Point;
-			Point.YCm = FCString::Atod(*Cells[0]) * 100.0; // east
-			Point.XCm = FCString::Atod(*Cells[1]) * 100.0; // north
-			Point.ExpectedZCm = (FCString::Atod(*Cells[2]) + DatumShiftM) * 100.0;
+			const double ToCm = MetresPerUnit * 100.0;
+			Point.YCm = FCString::Atod(*Cells[0]) * ToCm; // east
+			Point.XCm = FCString::Atod(*Cells[1]) * ToCm; // north
+			Point.ExpectedZCm = (FCString::Atod(*Cells[2]) * MetresPerUnit + DatumShiftM) * 100.0;
 			Out.Add(Point);
 		}
 		if (Out.IsEmpty())
@@ -847,16 +859,17 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 	// The orientation gate above is offset- and scale-invariant on purpose, so a landscape that is the
 	// right way round but sits a hundred metres east, or a metre too low, passes it. This closes that:
 	// the bundle's own surface points, cut from the DEM and never read by the importer, are known check
-	// points, and each must find the landscape's ground within a metre of its published height at its
-	// published position. The landscape is a 1 m grid, so the nearest vertex is within 0.71 m of a
-	// point, and a metre holds that plus the slope across it; a placement off by a post, a datum or a
-	// flip does not fit inside it, and the mean and RMS are logged so a drift shows before it fails.
+	// points. Each is compared with the landscape's nearest vertex at its published position, and the
+	// landscape is judged by two statistics over them, not by each point: the mean (a systematic offset,
+	// a datum, a post or a flip) and the RMS (the spread). `SurfacePoints.csv` is a decimated point
+	// set, not a copy of the DEM's cells, and the landscape's posts are about 1.2 m apart, so on a steep
+	// cell one point can sit metres off a correct landscape; a bound on every point fails a good import.
+	// The max |dz| is logged for information only.
 	// ---------------------------------------------------------------------------------------------
 	if (Landscape != nullptr)
 	{
 		using namespace MantlePlaceImportLiveTest;
 		constexpr int32 WantedPoints = 64;
-		constexpr double ToleranceCm = 100.0;
 
 		TArray<FCheckPoint> CheckPoints;
 		FString NoPoints;
@@ -913,9 +926,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 
 			int32 Measured = 0;
 			int32 Outside = 0;
-			double SumDz = 0.0;
-			double SumDz2 = 0.0;
-			double MaxAbsDz = 0.0;
+			FMantlePlaceDzStatistics DzStats;
 			double MaxDistance = 0.0;
 			for (const FCheckPoint& Point : CheckPoints)
 			{
@@ -937,9 +948,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 				}
 				const double Dz = GroundZ - Point.ExpectedZCm;
 				++Measured;
-				SumDz += Dz;
-				SumDz2 += Dz * Dz;
-				MaxAbsDz = FMath::Max(MaxAbsDz, FMath::Abs(Dz));
+				DzStats.Add(Dz);
 				MaxDistance = FMath::Max(MaxDistance, FMath::Sqrt(BestD2));
 			}
 
@@ -948,15 +957,18 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 				Measured * 2 >= CheckPoints.Num());
 			if (Measured > 0)
 			{
-				const double Mean = SumDz / Measured;
-				const double Rms = FMath::Sqrt(SumDz2 / Measured);
+				const double Mean = DzStats.Mean();
+				const double Rms = DzStats.Rms();
 				AddInfo(FString::Printf(
 					TEXT("placement gate: %d check points (%d outside), landscape minus published ground: "
-						 "mean %+.3f m, RMS %.3f m, max |dz| %.3f m, nearest vertex within %.3f m"),
-					Measured, Outside, Mean / 100.0, Rms / 100.0, MaxAbsDz / 100.0, MaxDistance / 100.0));
-				TestTrue(*FString::Printf(TEXT("placement gate: every check point within %.1f m of the ground (max %.3f m)"),
-							 ToleranceCm / 100.0, MaxAbsDz / 100.0),
-					MaxAbsDz <= ToleranceCm);
+						 "mean %+.3f m, RMS %.3f m, max |dz| %.3f m (information only), nearest vertex within %.3f m"),
+					Measured, Outside, Mean / 100.0, Rms / 100.0, DzStats.MaxAbs / 100.0, MaxDistance / 100.0));
+				TestTrue(*FString::Printf(TEXT("placement gate: no systematic offset, |mean| within %.2f m (mean %+.3f m)"),
+							 FMantlePlaceLiveGateLogic::MaxMeanOffsetCm / 100.0, Mean / 100.0),
+					FMantlePlaceLiveGateLogic::MeanWithinTolerance(DzStats));
+				TestTrue(*FString::Printf(TEXT("placement gate: spread, RMS within %.2f m (RMS %.3f m)"),
+							 FMantlePlaceLiveGateLogic::MaxRmsCm / 100.0, Rms / 100.0),
+					FMantlePlaceLiveGateLogic::RmsWithinTolerance(DzStats));
 			}
 		}
 	}
