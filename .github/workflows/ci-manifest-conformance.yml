@@ -4,6 +4,10 @@
 # against the canonical schema. This job holds the other end: every host consumer in this repo must
 # have been VERIFIED against the newest schema version the platform actually publishes.
 #
+# On a pull request the check compares against the version pinned in verified-against.json and
+# needs no network for it (--mode pinned). The comparison with the live schema (--mode live) runs on
+# the scheduled poll, on main and on demand.
+#
 # The schema is fetched from https://mantle.place/.well-known/schemas/bundle-manifest/vN.json —
 # public, and the artifact the platform publishes. It is never copied into this repo: one contract,
 # one source, checked from both ends.
@@ -50,8 +54,17 @@ jobs:
       - name: Test the conformance gate itself
         run: python -m unittest discover -s tools/manifest-conformance -v
 
+      # A pull request is held to the pinned verified-against.json and fetches nothing: the platform
+      # publishing ahead of the pin is no fault of the change under review, and used to turn every
+      # open pull request red at once. The live comparison (the published schema and freeze ledger)
+      # runs everywhere else: on main, weekly, and on demand, which is where that drift is reported.
+      - name: Check every registered host against the pinned verified-against.json
+        if: github.event_name == 'pull_request'
+        run: python tools/manifest-conformance/check_manifest_conformance.py --mode pinned
+
       - name: Check every registered host against the published schema
-        run: python tools/manifest-conformance/check_manifest_conformance.py
+        if: github.event_name != 'pull_request'
+        run: python tools/manifest-conformance/check_manifest_conformance.py --mode live
 
       # The bundle validator: its own tests offline, then the installed `mpb` over the corpus's
       # `bundle` group, which fetches the schema each case declares from the published series.

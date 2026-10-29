@@ -56,7 +56,8 @@ except where a checker says otherwise. Run them before you push, not after revie
 would have:
 
 ```bash
-python tools/manifest-conformance/check_manifest_conformance.py
+python tools/manifest-conformance/check_manifest_conformance.py --mode pinned   # what a pull request runs; no network
+python tools/manifest-conformance/check_manifest_conformance.py --mode live     # what the weekly poll runs; fetches
 python -m unittest discover -s tools/manifest-conformance
 python -m unittest discover -s tools/mantleplace-mpb/tests
 PYTHONPATH=tools/mantleplace-mpb/src python -m mantleplace_mpb corpus tools/manifest-conformance/corpus

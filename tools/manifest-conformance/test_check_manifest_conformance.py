@@ -403,6 +403,112 @@ class MultiHostGateTest(unittest.TestCase):
                                        "--host", "unreal"]))
 
 
+class PinnedModeTest(unittest.TestCase):
+    """Pull requests compare against `verified-against.json`, not the live schema.
+
+    The platform can publish ahead of the pin without any commit landing here; that must not turn
+    every open pull request red. These tests make any network access an error, so "needs no
+    network" is asserted rather than assumed.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        (self.tmp / "Cpp.h").write_text("inline constexpr int FLOOR = 17;\n", encoding="utf-8")
+
+        self._real_root = gate._REPO_ROOT
+        gate._REPO_ROOT = self.tmp
+        self.addCleanup(lambda: setattr(gate, "_REPO_ROOT", self._real_root))
+
+        def _no_network(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("pinned mode touched the network")
+
+        gate._schema_cache.clear()
+        gate._ledger_cache = None
+        self.addCleanup(gate._schema_cache.clear)
+        self.addCleanup(lambda: setattr(gate, "_ledger_cache", None))
+        for name in ("fetch_schema", "fetch_published_versions"):
+            patcher = mock.patch.object(gate, name, _no_network)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        # Belt and braces: even a new fetch path that bypasses the two helpers cannot connect.
+        patcher = mock.patch.object(gate.urllib.request, "urlopen", _no_network)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _entry(self, **overrides) -> dict:
+        fields = {"floorSource": {"path": "Cpp.h", "pattern": r"FLOOR\s*=\s*(\d+)"}}
+        fields.update(overrides)
+        return _host_entry(**fields)
+
+    def _run(self, hosts: dict, *extra: str) -> int:
+        path = self.tmp / "verified-against.json"
+        path.write_text(json.dumps({"$comment": ["ignored"], **hosts}), encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return gate.main(["--verified-against", str(path), "--skip-corpus", *extra])
+
+    def test_a_pinned_run_passes_with_no_network_however_far_ahead_the_platform_is(self) -> None:
+        """The live ledger and schema are never read, so a newer publication cannot fail it."""
+        self.assertEqual(0, self._run({"unreal": self._entry()}, "--mode", "pinned"))
+
+    def test_a_pinned_run_still_fails_when_the_floor_is_above_the_pin(self) -> None:
+        (self.tmp / "Cpp.h").write_text("inline constexpr int FLOOR = 18;\n", encoding="utf-8")
+        self.assertEqual(1, self._run({"unreal": self._entry()}, "--mode", "pinned"))
+
+    def test_a_pinned_run_still_fails_when_the_floor_cannot_be_read(self) -> None:
+        entry = self._entry(floorSource={"path": "Cpp.h", "pattern": r"RENAMED\s*=\s*(\d+)"})
+        self.assertEqual(1, self._run({"unreal": entry}, "--mode", "pinned"))
+
+    def test_a_pinned_run_still_fails_on_a_malformed_pin(self) -> None:
+        entry = self._entry(verifiedAgainstManifestVersion="1.0")
+        self.assertEqual(1, self._run({"unreal": entry}, "--mode", "pinned"))
+
+    def test_a_pinned_run_still_fails_when_the_corpus_version_disagrees(self) -> None:
+        for pinned_corpus in (1, 3):
+            with self.subTest(pinned_corpus=pinned_corpus):
+                entry = self._entry(verifiedAgainstCorpusVersion=pinned_corpus)
+                failures, _ = gate.check_host("unreal", entry, corpus_version=2, live=False)
+                self.assertTrue(any("corpusVersion" in f for f in failures), failures)
+
+    def test_a_pinned_run_still_fails_on_a_semver_pin_with_an_integer_floor(self) -> None:
+        entry = self._entry(verifiedAgainstManifestVersion="1.0.0")
+        self.assertEqual(1, self._run({"unreal": entry}, "--mode", "pinned"))
+
+    def test_a_pinned_semver_without_a_changelog_entry_fails(self) -> None:
+        """The offline half of the changelog check: the pins themselves must be described."""
+        (self.tmp / "Semver.h").write_text('FLOOR = TEXT("1.0.0");\n', encoding="utf-8")
+        entry = self._entry(
+            verifiedAgainstManifestVersion="1.0.0",
+            floorSource={"path": "Semver.h", "pattern": r'FLOOR\s*=\s*TEXT\("([0-9.]+)"\)'},
+        )
+        changelog = self.tmp / "changelog.md"
+        with mock.patch.object(gate, "_CHANGELOG", changelog):
+            changelog.write_text("### 0.9.0\n", encoding="utf-8")
+            self.assertEqual(1, self._run({"unreal": entry}, "--mode", "pinned"))
+            changelog.write_text("### 1.0.0 (2026)\n", encoding="utf-8")
+            self.assertEqual(0, self._run({"unreal": entry}, "--mode", "pinned"))
+
+    def test_the_shipped_registry_passes_pinned_mode_offline(self) -> None:
+        gate._REPO_ROOT = self._real_root
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(0, gate.main(["--mode", "pinned"]))
+
+    def test_live_mode_is_the_default_and_still_fetches(self) -> None:
+        """The scheduled job and a bare command-line run keep the live behaviour."""
+        with mock.patch.object(gate, "fetch_schema", return_value=None) as fetch, \
+                mock.patch.object(gate, "fetch_published_versions", return_value=["v17"]):
+            self.assertEqual(1, self._run({"unreal": self._entry()}))
+            fetch.assert_called()
+            fetch.reset_mock()
+            self.assertEqual(1, self._run({"unreal": self._entry()}, "--mode", "live"))
+            fetch.assert_called()
+
+    def test_an_unknown_mode_is_refused(self) -> None:
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            self._run({"unreal": self._entry()}, "--mode", "nightly")
+
+
 class PatchExemptionTest(unittest.TestCase):
     """A newer PATCH is not drift — but only if it really is editorial.
 
