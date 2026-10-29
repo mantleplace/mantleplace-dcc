@@ -283,32 +283,34 @@ diagnostic as a third way to import.
 
 ### Terrain accuracy by Revit version
 
-**Revit 2026 and 2027 place every check point of a bundle within 1 m of the published ground. Revit 2025
-holds 2 m, not 1 m.** The check points are 64 of the bundle's `hosts.revit.toposurface_points`, taken
-evenly through the file, which a TIN import never reads ([the verify check](tools/timing/README.md#verifying-an-import)).
-Measured on two MPB 2.0 bundles, 64 check points each, one run per Revit year, the largest gap between a
-check point and the ground the toposolid reports over it:
+**Revit 2026 and 2027 place every check point within 1 m of the published ground on every bundle measured;
+Revit 2025 holds 2 m, not 1 m.** The check points are 64 of the bundle's `hosts.revit.toposurface_points`,
+taken evenly through the file, which a TIN import never reads ([the verify check](tools/timing/README.md#verifying-an-import)).
+Measured on four MPB 2.0 bundles, two in metres and two in US survey feet on State Plane, 64 check points each,
+one run per Revit year, the largest gap between a check point and the ground the toposolid reports over it:
 
 | Bundle | Revit 2025 | Revit 2026 | Revit 2027 |
 | --- | --- | --- | --- |
-| Larger (74,995 terrain points) | 1.586 m, 1 point over 1 m | 0.705 m | 0.438 m |
-| Smaller (63,252 points in its points file) | 0.594 m | 0.584 m | 0.251 m |
+| Metres, larger (74,995 terrain points) | 1.586 m, 1 point over 1 m | 0.705 m | 0.438 m |
+| Metres, smaller (63,252 points in its points file) | 0.594 m | 0.584 m | 0.251 m |
+| US survey feet, steeper (80,940 points in its points file) | 1.106 m, 1 point over 1 m | 0.999 m | 0.727 m |
+| US survey feet, gentler (90,557 points in its points file) | 0.300 m | 0.300 m | 0.687 m |
 
-On the larger bundle the next-worst 2025 points are 0.946 m and 0.700 m, and the median is 0.094 m (2026:
-0.071 m); one point in 64 is what puts 2025 over the bar.
+On the larger metric bundle the next-worst 2025 points are 0.946 m and 0.700 m, and the median is 0.094 m
+(2026: 0.071 m); one point in 64 is what puts 2025 over the bar. The steeper foot bundle's worst 2026 point
+sits at the bar itself.
 
 **Why 2025 cannot hold 1 m.** The plugin builds the terrain the same way in all three versions: one
 `Toposolid.Create` call from the same vertices of `Surface/Surface.dxf`, with no version-dependent sample,
-stride or point budget; there is no `TopographySurface` in it. The difference is Revit's. From the same
-149,999-face TIN, the toposolid's faces tessellate into 39,800 triangles in Revit 2025 against 79,706 in
-2026 and 79,628 in 2027 on the larger bundle (39,754 against 79,612 and 79,418 on the smaller), about half
-as many, so the surface the check reads between the published vertices is coarser. The check reads the
-ground through those faces, so it cannot say whether Revit 2025 stores a coarser solid or only reports a
-coarser tessellation of it; either way the import has no step that differs by version, and nothing in it
-can ask Revit 2025 for a finer one.
+stride or point budget; there is no `TopographySurface` in it. The difference is Revit's: given the tens of thousands of
+vertices in the file, the toposolid Revit stores keeps 10,000 of them in Revit 2025 and about 20,000 in 2026 and 2027,
+read from its slab shape editor on the three bundles probed, whatever the file's own count. Its faces
+tessellate to match: 39,800 triangles in Revit 2025 against 79,706 in 2026 and 79,628 in 2027 on the larger
+metric bundle. A fixed vertex budget, halved in 2025, is a coarser surface between the published points, and
+the import has no step that differs by version and nothing that can ask Revit for a larger budget.
 
 `verify_report.py` holds Revit 2025 to 2 m, the measured 1.586 m rounded up, and 2026 and 2027 to 1 m.
-Two bundles are a small sample: a 2025 import that lands a check point past 2 m is a finding, not noise.
+Four bundles are a small sample, and one 2026 point is at the bar: a check point past it is a finding, not noise.
 
 ### Sharing a project: ODbL content and Prepare for Handover
 

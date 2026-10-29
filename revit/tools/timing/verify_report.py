@@ -25,6 +25,8 @@ PLACEMENT_TOLERANCE_M = 1.0
 PLACEMENT_TOLERANCE_2025_M = 2.0
 # The internal origin, in shared coordinates, is the survey point the import set from the manifest, verbatim.
 FRAME_TOLERANCE_M = 0.01
+# The metres in one of each foot a delivery's linear unit names.
+FOOT_M = {"ft": 0.3048, "ftUS": 1200 / 3937}
 # A linked building's base against the ground under its plan centre: a building in the wrong place stands on
 # ground of another height. Generous, as a base is the lowest corner of its box on sloping ground.
 LINK_BASE_TOLERANCE_M = 3.0
@@ -86,7 +88,9 @@ def _frame(record):
     internal = record.get("internal_origin_in_shared_m") or []
     if "east" not in origin or len(internal) < 2:
         return {"pass": False, "note": "no origin recorded"}
-    offset = math.hypot(internal[0] - origin["east"], internal[1] - origin["north"])
+    # The manifest's origin is in the delivery's own unit; the internal origin is in metres.
+    scale = FOOT_M.get(origin.get("unit"), 1.0)
+    offset = math.hypot(internal[0] - origin["east"] * scale, internal[1] - origin["north"] * scale)
     return {"pass": offset <= FRAME_TOLERANCE_M, "offset_m": offset, "tolerance_m": FRAME_TOLERANCE_M}
 
 
