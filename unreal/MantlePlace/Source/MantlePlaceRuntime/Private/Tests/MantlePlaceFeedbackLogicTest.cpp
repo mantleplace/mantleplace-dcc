@@ -7,11 +7,12 @@
 #include "MantlePlaceFeedbackLogic.h"
 
 // HPS-56: every host's Send Feedback opens the web Feedback form at
-//   https://mantle.place/feedback?source=dcc-<host>&v=<plugin version>&hv=<host version>[&order=<order id>]
+//   https://mantle.place/feedback?source=dcc-<host>&v=<plugin version>&hv=<host version>[&order=<order id>][&rating=up|down]
 // and the pure builder is the one place that decides what goes in the link. Each parameter's rule
 // is asserted here: `v` / `hv` are version strings only and a malformed one is LEFT OUT (never sent
-// raw), `order` rides only on a bundle-scoped action and only as a UUID, and nothing else is ever
-// emitted.
+// raw), `order` rides only on a bundle-scoped action and only as a UUID, `rating` rides only on the
+// post-import prompt and only as exactly `up` or `down`, and nothing else is ever emitted. The
+// once-per-bundle memory behind that prompt ("Did this import come in right?") is asserted here too.
 
 namespace
 {
@@ -118,18 +119,72 @@ bool FMantlePlaceFeedbackLogicTest::RunTest(const FString& Parameters)
 	const FString Cases[] = {
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), FString()),
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), SampleOrderId),
-		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1&email=a@b.c"), TEXT("5.8&token=x"), TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d&x=1")),
+		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1&email=a@b.c"), TEXT("5.8&token=x"), TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d&x=1"), TEXT("up&token=x")),
+		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), SampleOrderId, TEXT("down")),
 	};
 	for (const FString& Url : Cases)
 	{
 		for (const FString& Name : ParamNames(Url))
 		{
 			TestTrue(FString::Printf(TEXT("only HPS-56 parameters (%s)"), *Name),
-				Name == TEXT("source") || Name == TEXT("v") || Name == TEXT("hv") || Name == TEXT("order"));
+				Name == TEXT("source") || Name == TEXT("v") || Name == TEXT("hv") || Name == TEXT("order") || Name == TEXT("rating"));
 		}
 	}
 	TestEqual(TEXT("general link carries three parameters"), ParamNames(Cases[0]).Num(), 3);
 	TestEqual(TEXT("bundle link carries four parameters"), ParamNames(Cases[1]).Num(), 4);
+	TestEqual(TEXT("a bad rating, order and versions leave only the source"), ParamNames(Cases[2]).Num(), 1);
+	TestEqual(TEXT("the rated link carries five parameters"), ParamNames(Cases[3]).Num(), 5);
+
+	// rating: only the post-import prompt sends it, and only as exactly `up` or `down`.
+	TestEqual(TEXT("Yes -> rating=up"),
+		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), SampleOrderId, TEXT("up")),
+		FString(TEXT("https://mantle.place/feedback?source=dcc-unreal&v=0.7.1&hv=5.8&order=0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d&rating=up")));
+	TestEqual(TEXT("No -> rating=down"),
+		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), SampleOrderId, TEXT("down")),
+		FString(TEXT("https://mantle.place/feedback?source=dcc-unreal&v=0.7.1&hv=5.8&order=0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d&rating=down")));
+	const TCHAR* const NotRatings[] = {
+		TEXT(""), TEXT(" "), TEXT("UP"), TEXT("Down"), TEXT("yes"), TEXT("no"), TEXT("1"), TEXT("5"),
+		TEXT(" up"), TEXT("up "), TEXT("up\n"), TEXT("up&x=1"), TEXT("down;"), TEXT("thumbs-up"),
+	};
+	for (const TCHAR* Bad : NotRatings)
+	{
+		TestEqual(FString::Printf(TEXT("non-rating left out: %s"), Bad),
+			FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), SampleOrderId, Bad),
+			FString(TEXT("https://mantle.place/feedback?source=dcc-unreal&v=0.7.1&hv=5.8&order=0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d")));
+	}
+	TestFalse(TEXT("the general link carries no rating"), FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), FString()).Contains(TEXT("rating")));
+	TestTrue(TEXT("IsValidRating up"), FMantlePlaceFeedbackLogic::IsValidRating(TEXT("up")));
+	TestTrue(TEXT("IsValidRating down"), FMantlePlaceFeedbackLogic::IsValidRating(TEXT("down")));
+	TestFalse(TEXT("IsValidRating is case-sensitive"), FMantlePlaceFeedbackLogic::IsValidRating(TEXT("Up")));
+	TestFalse(TEXT("IsValidRating empty"), FMantlePlaceFeedbackLogic::IsValidRating(FString()));
+
+	// The post-import prompt: asked after a finished import of a bundle with an order id that is a
+	// UUID, and never again for that bundle (the memory is the shim's file, the decision is here).
+	TArray<FString> Asked;
+	TestTrue(TEXT("a finished import of a new bundle asks"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(true, SampleOrderId, Asked));
+	TestFalse(TEXT("a failed import asks nothing"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(false, SampleOrderId, Asked));
+	TestFalse(TEXT("no order id asks nothing"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(true, FString(), Asked));
+	TestFalse(TEXT("an order id that is not a UUID asks nothing"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(true, TEXT("not-a-uuid"), Asked));
+	FMantlePlaceFeedbackLogic::RememberAsked(SampleOrderId, Asked);
+	TestEqual(TEXT("the bundle is remembered"), Asked.Num(), 1);
+	TestFalse(TEXT("a bundle already asked about is not asked about again"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(true, SampleOrderId, Asked));
+	TestFalse(TEXT("however its id is cased"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(true, TEXT("0B6C2D5E-9F31-4A7C-8E12-3D4F5A6B7C8D"), Asked));
+	TestTrue(TEXT("another bundle is still asked"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(true, TEXT("3f2b8c1e-9d4a-4e7b-8a61-0c5d2e9f7a14"), Asked));
+	FMantlePlaceFeedbackLogic::RememberAsked(TEXT("0B6C2D5E-9F31-4A7C-8E12-3D4F5A6B7C8D"), Asked);
+	TestEqual(TEXT("remembering a bundle twice is one entry"), Asked.Num(), 1);
+	FMantlePlaceFeedbackLogic::RememberAsked(TEXT("not-a-uuid"), Asked);
+	TestEqual(TEXT("an id that is not a UUID is never remembered"), Asked.Num(), 1);
+
+	// The memory is bounded; the oldest bundle is the one forgotten.
+	TArray<FString> Many;
+	const FString Oldest = FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphensLower);
+	FMantlePlaceFeedbackLogic::RememberAsked(Oldest, Many);
+	for (int32 i = 0; i < FMantlePlaceFeedbackLogic::MaxAskedOrders; ++i)
+	{
+		FMantlePlaceFeedbackLogic::RememberAsked(FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphensLower), Many);
+	}
+	TestEqual(TEXT("the memory stops at its cap"), Many.Num(), FMantlePlaceFeedbackLogic::MaxAskedOrders);
+	TestTrue(TEXT("and the oldest bundle is asked about again"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(true, Oldest, Many));
 
 	// The predicates the builder is made of.
 	TestTrue(TEXT("IsValidVersion 0.7.1"), FMantlePlaceFeedbackLogic::IsValidVersion(TEXT("0.7.1")));

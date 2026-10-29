@@ -25,4 +25,15 @@ internal static class FeedbackLauncher
 
         return ShellLauncher.TryOpen(link, out refused);
     }
+
+    /// <summary>
+    /// What Yes and No open on the import window's "Did this import come in right?" line, for the
+    /// bundle just imported. Built on Revit's thread, where the endpoints and the host version are read.
+    /// </summary>
+    internal static ImportFeedbackLinks ImportLinks(string orderId)
+        => ImportFeedbackPrompt.Links(
+            MantlePlaceApplication.Endpoints.ApiBaseUrl,
+            FeedbackLink.ReleaseVersion(PluginVersion.Current),
+            MantlePlaceApplication.HostVersion,
+            orderId);
 }

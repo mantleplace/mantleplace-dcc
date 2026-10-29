@@ -93,22 +93,54 @@ internal static class FeedbackLinkTests
                 "a UUID is sent in its canonical lower-case form");
         });
 
+        run.Case("the post-import prompt: the same link plus the order id and a rating of up or down", () =>
+        {
+            run.Equal(
+                FeedbackLink.Build(Site, "0.6.0", "2026", Order, "up"),
+                $"https://mantle.place/feedback?source=dcc-revit&v=0.6.0&hv=2026&order={Order}&rating=up",
+                "Yes");
+            run.Equal(
+                FeedbackLink.Build(Site, "0.6.0", "2026", Order, "down"),
+                $"https://mantle.place/feedback?source=dcc-revit&v=0.6.0&hv=2026&order={Order}&rating=down",
+                "No");
+            run.Equal(FeedbackLink.RatingUp, "up", "the token Yes sends");
+            run.Equal(FeedbackLink.RatingDown, "down", "the token No sends");
+        });
+
+        run.Case("a rating that is not exactly up or down is left out, never sent raw", () =>
+        {
+            string withoutRating = $"https://mantle.place/feedback?source=dcc-revit&v=0.6.0&hv=2026&order={Order}";
+
+            foreach (string? bad in new[] { null, "", " ", "UP", "Down", "yes", "no", "1", "5", " up", "up ", "up\n", "up&x=1", "down;", "thumbs-up" })
+            {
+                run.Equal(FeedbackLink.Build(Site, "0.6.0", "2026", Order, bad), withoutRating, $"rating \"{bad}\" is left out");
+            }
+        });
+
+        run.Case("the general action and Report a Problem carry no rating", () =>
+        {
+            run.False(FeedbackLink.Build(Site, "0.6.0", "2026").Contains("rating", StringComparison.Ordinal), "Send Feedback");
+            run.False(FeedbackLink.Build(Site, "0.6.0", "2026", Order).Contains("rating", StringComparison.Ordinal), "Report a Problem");
+        });
+
         run.Case("no other parameter is ever emitted", () =>
         {
-            string[] allowed = ["source", "v", "hv", "order"];
+            string[] allowed = ["source", "v", "hv", "order", "rating"];
 
             foreach (string? link in new[]
             {
                 FeedbackLink.Build(Site, "0.6.0", "2026", Order),
                 FeedbackLink.Build(Site, "x&email=a@b.c", "2026&token=abc", "email=a@b.c"),
                 FeedbackLink.Build(Site, "1.0", "2026", "&name=me"),
+                FeedbackLink.Build(Site, "0.6.0", "2026", Order, "up"),
+                FeedbackLink.Build(Site, "0.6.0", "2026", Order, "up&email=a@b.c"),
             })
             {
                 run.True(link is not null, "a link comes back");
                 string query = new Uri(link!).Query.TrimStart('?');
                 foreach (string pair in query.Split('&'))
                 {
-                    run.True(allowed.Contains(pair.Split('=')[0]), $"\"{pair}\" is one of the four parameters in {link}");
+                    run.True(allowed.Contains(pair.Split('=')[0]), $"\"{pair}\" is one of the five parameters in {link}");
                 }
             }
         });

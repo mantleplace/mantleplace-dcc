@@ -103,6 +103,12 @@ nothing itself: the link carries only `source=dcc-revit`, this plugin's version 
 version (`hv`) and, for a bundle, its order id (`order`) — never an address, a name, text or a token.
 `FeedbackLink` in the pure core builds it, and a version that is not digits and dots is left out.
 
+**Once a bundle has imported, the import window asks "Did this import come in right?"** with `Yes`, `No`
+and `Dismiss`. `Yes` and `No` open the same web form with your answer (`rating=up` or `rating=down`)
+already chosen; opening it records nothing, and the answer is stored only when you press send there.
+A bundle is asked about once on this machine, however the line ends — `feedback-asked.json` beside the
+bundle cache remembers which — and an import that failed, was cancelled or names no order is not asked.
+
 **Every window this plugin opens is headed by the mark and its purpose** — `Vault`, `Sign In`,
 `Bundle Import` —
 and their button faces are Title Case, the same rule the ribbon follows and for the same reason. The

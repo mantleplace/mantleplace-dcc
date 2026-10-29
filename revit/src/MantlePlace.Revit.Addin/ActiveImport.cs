@@ -84,7 +84,13 @@ internal sealed class ActiveImport : IDisposable
     /// <summary>The record of what the curator ticked at their last Import: read as the window opens, written as Import is pressed.</summary>
     internal static ImportChoiceStore ChoiceStore { get; } = new(ImportChoiceStore.DefaultPath);
 
+    /// <summary>The record of which bundles the "Did this import come in right?" line has already been shown for.</summary>
+    internal static FeedbackAskedStore AskedStore { get; } = new(FeedbackAskedStore.DefaultPath);
+
     internal string ZipPath { get; }
+
+    /// <summary>The imported bundle's order id as its manifest states it; empty for a bundle that names none.</summary>
+    internal string OrderId => _manifest.OrderId;
 
     /// <summary>
     /// The order's unit system, linear unit and delivery CRS, for the import window's header; <c>null</c>
