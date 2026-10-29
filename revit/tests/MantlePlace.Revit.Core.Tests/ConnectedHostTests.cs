@@ -448,6 +448,27 @@ internal static class ConnectedHostTests
             run.Equal(edge.Observe(AuthState.Failed), ConnectedHostMove.None, "a failed sign-in while out");
         });
 
+        run.Case("a signed-in session renews before its token lapses, so the channel is never left holding a dead one", () =>
+        {
+            DateTimeOffset now = DateTimeOffset.UnixEpoch;
+            DateTimeOffset expiresAt = now.AddHours(1);
+            TimeSpan? delay = SessionRenewal.Delay(AuthState.Authenticated, now, expiresAt, canRenew: true);
+            run.True(delay == TimeSpan.FromHours(1) - TimeSpan.FromSeconds(SessionRenewal.LeadSeconds), "one lead before the lapse");
+            run.True(
+                now + delay!.Value < expiresAt.AddSeconds(-TokenGrants.ExpirySkewSeconds),
+                "before the skew would call the token expired");
+            run.True(
+                SessionRenewal.Delay(AuthState.Authenticated, now, now.AddSeconds(30), canRenew: true) == TimeSpan.Zero,
+                "a token already inside the lead renews now");
+            run.True(
+                SessionRenewal.Delay(AuthState.Failed, now, DateTimeOffset.MinValue, canRenew: true) == TimeSpan.FromSeconds(SessionRenewal.RetrySeconds),
+                "a renewal the platform could not answer tries again");
+            run.True(SessionRenewal.Delay(AuthState.Failed, now, DateTimeOffset.MinValue, canRenew: false) is null, "nothing to renew from");
+            run.True(SessionRenewal.Delay(AuthState.Unauthenticated, now, expiresAt, canRenew: false) is null, "signed out");
+            run.True(SessionRenewal.Delay(AuthState.Refreshing, now, expiresAt, canRenew: true) is null, "already renewing");
+            run.True(SessionRenewal.Delay(AuthState.Authenticating, now, expiresAt, canRenew: true) is null, "signing in");
+        });
+
         run.Case("an order row is ready, unavailable, or still building", () =>
         {
             run.Equal(OrderRows.Classify("{\"status\":\"fulfilled\"}"), OrderReadiness.Ready, "fulfilled");
