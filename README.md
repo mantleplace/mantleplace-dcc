@@ -202,7 +202,8 @@ python -m unittest discover -s blender/tests -t blender
 
 ```bash
 python -m unittest discover -s tools/manifest-conformance   # offline
-python tools/manifest-conformance/check_manifest_conformance.py
+python tools/manifest-conformance/check_manifest_conformance.py --mode pinned   # pull requests; no network
+python tools/manifest-conformance/check_manifest_conformance.py --mode live     # scheduled poll; compares with the published schema
 ```
 
 **The bundle validator and reader** — `pip install mantleplace-mpb`, then `mpb validate <zip or folder>` or
