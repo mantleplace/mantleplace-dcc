@@ -196,7 +196,7 @@ python verify_report.py "$env:MANTLEPLACE_TIMING_ROOT\runs\verify-<sha7>-2027" -
 
 | Check | What is measured | Passes when |
 |---|---|---|
-| Placement | 64 of the bundle's own surface points (`hosts.revit.toposurface_points`, which a TIN import never reads), taken evenly through the file, against the highest triangle of the ground toposolids' triangulated faces over each point, in shared coordinates | every point is over the ground and within 1 m (2 m in Revit 2025, read from the run folder's `meta.json`; [why](../../README.md#terrain-accuracy-by-revit-version)) |
+| Placement | 64 of the bundle's own surface points (`hosts.revit.toposurface_points`, which a TIN import never reads), taken evenly through the file and read in the delivery's own unit (m, ft or ftUS), against the highest triangle of the ground toposolids' triangulated faces over each point, in shared coordinates | every point is over the ground and within 1 m (2 m in Revit 2025, read from the run folder's `meta.json`; [why](../../README.md#terrain-accuracy-by-revit-version)) |
 | Frame | the internal origin in shared coordinates against the manifest's origin | within 0.01 m |
 | Linked site model | each link's transform, and each linked Generic Model's plan centre and base against the ground under it; with `--footprints`, the nearest footprint centre too | origin to origin, and the median base within 3 m of the ground |
 | Vectors | each vector step the import ran (`LandUse`, `LandCover`, `FloodZones`, `SteepGround`, `RoadCentrelines`, `Water`, `RoadPolygons`), read from the run's `import.log`: how many it placed and, where the log names it, the file | every step that ran placed something, and none fell back to the GeoJSON copy |

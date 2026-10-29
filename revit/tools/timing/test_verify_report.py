@@ -112,6 +112,16 @@ class PlacementCases(unittest.TestCase):
         self.assertFalse(verify_report.judge(run_dir("0,1,2,1,1\n", moved))["frame"]["pass"])
         self.assertTrue(verify_report.judge(run_dir("0,1,2,1,1\n", verify_record()))["frame"]["pass"])
 
+    def test_the_frame_check_reads_a_foot_origin_in_its_own_foot(self):
+        # A State Plane easting: the two feet differ by about a metre here, so the wrong one fails.
+        east, north = 1449621.322926113, 542689.5776930021
+        us = verify_record(origin_projected={"east": east, "north": north, "unit": "ftUS"},
+                           internal_origin_in_shared_m=[east * 1200 / 3937, north * 1200 / 3937, 0.0])
+        self.assertTrue(verify_report.judge(run_dir("0,1,2,1,1\n", us))["frame"]["pass"])
+        international = verify_record(origin_projected={"east": east, "north": north, "unit": "ft"},
+                                      internal_origin_in_shared_m=[east * 1200 / 3937, north * 1200 / 3937, 0.0])
+        self.assertFalse(verify_report.judge(run_dir("0,1,2,1,1\n", international))["frame"]["pass"])
+
 
 class LinkCases(unittest.TestCase):
     rows = "Model.ifc,a,1000.0,2000.0,100.2,110,100.0\nModel.ifc,b,1050.0,2050.0,90.0,95,90.5\n"
