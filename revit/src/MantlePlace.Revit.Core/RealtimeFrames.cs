@@ -39,9 +39,9 @@ public readonly record struct RealtimeBinding(string Table, string Filter)
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⛔ <b>No location or key is compiled in.</b> The platform has not published where a plugin's Realtime
-/// socket is or which publishable key opens it (the contract's open point), so both come from local
-/// configuration, and with either missing the connected host stays off rather than guessing.
+/// ⛔ <b>No location or key is compiled in.</b> The platform publishes both on a public route
+/// (<see cref="PublishedRealtime"/>), and a local override wins over it; with neither available, or either
+/// missing, the connected host stays off rather than guessing.
 /// </para>
 /// </remarks>
 public static class RealtimeChannel

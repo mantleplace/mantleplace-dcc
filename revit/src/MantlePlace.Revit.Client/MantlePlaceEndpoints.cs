@@ -57,20 +57,22 @@ public sealed class MantlePlaceEndpoints
     public string ApiBaseUrl { get; init; } = "https://mantle.place";
 
     /// <summary>
-    /// The Realtime location the connected host opens its socket on (<c>wss://…/realtime/v1</c>).
-    /// <b>Empty by default, which means the connected host is off.</b>
+    /// The local override of the Realtime location the connected host opens its socket on
+    /// (<c>wss://…/realtime/v1</c>). <b>Empty by default, which means the platform's published value
+    /// is used.</b>
     /// </summary>
     /// <remarks>
-    /// The platform has not yet published where a plugin's Realtime socket is (the open point of the
-    /// export contract), so nothing is compiled in and a plain install stays off rather than guessing.
-    /// Set <c>realtimeUrl</c> in <c>config.json</c> to point at one. When the platform publishes it,
-    /// the default moves here, the one home.
+    /// Nothing is compiled in but the platform's public route: the platform publishes the location and
+    /// the key, and <see cref="RealtimeLocator"/> reads them, so a moved socket needs no new release.
+    /// Set <c>realtimeUrl</c> (with <c>realtimePublishableKey</c>) in <c>config.json</c> to point at
+    /// another; either one set means the route is not asked.
     /// </remarks>
     public string RealtimeUrl { get; init; } = string.Empty;
 
     /// <summary>
-    /// The publishable key that opens the Realtime socket. <b>Empty by default</b>, for the same
-    /// reason as <see cref="RealtimeUrl"/>; set <c>realtimePublishableKey</c> in <c>config.json</c>.
+    /// The local override of the publishable key that opens the Realtime socket. <b>Empty by
+    /// default</b>, for the same reason as <see cref="RealtimeUrl"/>; set <c>realtimePublishableKey</c>
+    /// in <c>config.json</c>.
     /// </summary>
     /// <remarks>
     /// A publishable key is public by design: the access policies, not the key, admit a session to

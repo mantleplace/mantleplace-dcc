@@ -1,6 +1,6 @@
 ---
 name: platform-export-contract
-description: The cross-host export contract (protocol 1) both host plugins build against to receive an export from the web vault — the per-curator private channel and its presence payload ConnectedHost, how a plugin receives and catches up on exports, the export lifecycle with the transitions each actor may make, the two v1 routes with request and response shapes, the refusal codes and rate limits, how the bundle is then fetched, and the additive-only rule with how the protocol number moves, and the one value not yet published (the Realtime socket and its publishable key). Read from Unreal or Revit work alike when writing or changing connected-host code.
+description: The cross-host export contract (protocol 1) both host plugins build against to receive an export from the web vault — the per-curator private channel and its presence payload ConnectedHost, how a plugin receives and catches up on exports, the export lifecycle with the transitions each actor may make, the two v1 routes with request and response shapes, the refusal codes and rate limits, how the bundle is then fetched, and the additive-only rule with how the protocol number moves, and where the Realtime socket and its publishable key are published. Read from Unreal or Revit work alike when writing or changing connected-host code.
 ---
 
 # What the platform must serve for a plugin to receive an export
@@ -15,14 +15,12 @@ Revit) running the Mantle Place plugin, signed in as the same curator. The expor
 no URL. It is a row that names a bundle and a target; the plugin fetches the bundle itself, through
 the v1 routes it already uses. Terms are in [`CONTEXT.md`](../CONTEXT.md).
 
-## Open: where the socket is and which key opens it
+## Where the socket is and which key opens it
 
-The contract does not yet say where a plugin's Realtime socket is, or which publishable key opens it.
-**This is not published, and this file does not invent a value.** Until the platform publishes both,
-each plugin takes the socket location and the publishable key from its local configuration override,
-and a connected host with neither configured stays off: it joins no channel and tracks no presence.
-The curator still has Download. The gap is raised with the platform; when it is closed this section
-is replaced by a link to the published values, not a restatement of them.
+The platform publishes both on a public route, [`https://mantle.place/api/v1/realtime`](https://mantle.place/api/v1/realtime).
+This file restates neither value: a plugin reads them from that route, and follows the platform if it
+moves either. A local configuration override wins over the route, and a connected host that can
+reach neither stays off: it joins no channel and tracks no presence. The curator still has Download.
 
 ## 1. The channel
 
