@@ -175,8 +175,8 @@ internal sealed class ImportWindowHost
     internal void Refresh(ImportRunView view) => Post(() => _window?.Refresh(view));
 
     /// <summary>Shows the closing report. Called on Revit's thread.</summary>
-    internal void ShowFinished(ImportRunView? view, string? outcome, string report)
-        => Post(() => _window?.ShowFinished(view, outcome, report));
+    internal void ShowFinished(ImportRunView? view, string? outcome, string report, ImportFeedbackLinks? ask = null)
+        => Post(() => _window?.ShowFinished(view, outcome, report, ask));
 
     /// <summary>Brings the window forward, unless a Revit modal is up. Called on Revit's thread.</summary>
     internal void BringForward() => Post(() => _window?.BringForward());

@@ -13,6 +13,7 @@
 #include "MantlePlaceVaultClient.h"
 #include "MantlePlaceVaultRowView.h"
 #include "MantlePlaceVaultTypes.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Misc/EngineVersion.h"
 #include "Slate/SMantlePlaceVaultDetail.h"
 #include "Slate/SMantlePlaceVaultRow.h"
@@ -48,10 +49,12 @@ namespace
 	/**
 	 * Open the web Feedback form in the system browser (HPS-56). The link itself is decided by the
 	 * pure FMantlePlaceFeedbackLogic; this only gathers the two version strings and opens the result.
-	 * OrderId is empty for the general Send Feedback, the bundle's order id for Report a problem.
-	 * Needs no sign-in: the form is public.
+	 * OrderId is empty for the general Send Feedback, the bundle's order id for Report a problem and
+	 * for the post-import prompt. Rating is empty except on that prompt, where it is `up` or `down`;
+	 * the builder drops anything else. Opening the link records nothing: the web form stores the
+	 * rating only when the curator presses send. Needs no sign-in: the form is public.
 	 */
-	void OpenFeedbackLink(const FString& OrderId)
+	void OpenFeedbackLink(const FString& OrderId, const FString& Rating = FString())
 	{
 		const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("MantlePlace"));
 		const FString PluginVersion = Plugin.IsValid() ? Plugin->GetDescriptor().VersionName : FString();
@@ -60,11 +63,77 @@ namespace
 
 		// The same configurable web-app host the vault API uses (DefaultGame.ini), compiled-in default.
 		const FString Url = FMantlePlaceFeedbackLogic::BuildFeedbackUrl(
-			GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, PluginVersion, HostVersion, OrderId);
+			GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, PluginVersion, HostVersion, OrderId, Rating);
 		if (!Url.IsEmpty())
 		{
 			FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
 		}
+	}
+
+	/** Where the order ids the post-import prompt has already asked about are kept (per project, per machine). */
+	const TCHAR* const AskedSection = TEXT("MantlePlace.Feedback");
+	const TCHAR* const AskedKey = TEXT("AskedOrder");
+
+	/**
+	 * "Did this import come in right?" (HPS-56): a small toast after a finished import with Yes, No and
+	 * Dismiss. Yes and No each open the Feedback form at the same link with `rating=up` / `rating=down`;
+	 * Dismiss opens nothing. It never blocks: it fades by itself, and the bundle was already recorded as
+	 * asked about, so none of the three brings it back. No feedback UI of our own: two buttons that open a URL.
+	 */
+	void ShowImportFeedbackPrompt(const FString& OrderId)
+	{
+		const TSharedRef<TWeakPtr<SNotificationItem>> Shown = MakeShared<TWeakPtr<SNotificationItem>>();
+		const auto Close = [Shown]()
+		{
+			if (const TSharedPtr<SNotificationItem> Notification = Shown->Pin())
+			{
+				Notification->ExpireAndFadeout();
+			}
+		};
+		const auto Answer = [OrderId, Close](const FString& Rating)
+		{
+			return FSimpleDelegate::CreateLambda([OrderId, Rating, Close]()
+			{
+				if (!Rating.IsEmpty())
+				{
+					OpenFeedbackLink(OrderId, Rating);
+				}
+				Close();
+			});
+		};
+
+		FNotificationInfo Info(LOCTEXT("ImportFeedbackQuestion", "Did this import come in right?"));
+		Info.bFireAndForget = true;
+		Info.ExpireDuration = 30.0f;
+		Info.FadeOutDuration = 0.5f;
+		Info.bUseSuccessFailIcons = false;
+		Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("ImportFeedbackYes", "Yes"), FText::GetEmpty(), Answer(TEXT("up")), SNotificationItem::CS_None));
+		Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("ImportFeedbackNo", "No"), FText::GetEmpty(), Answer(TEXT("down")), SNotificationItem::CS_None));
+		Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("ImportFeedbackDismiss", "Dismiss"), FText::GetEmpty(), Answer(FString()), SNotificationItem::CS_None));
+		*Shown = FSlateNotificationManager::Get().AddNotification(Info);
+	}
+
+	/**
+	 * Ask about a finished import's bundle, at most once per bundle. The decision and the list are the
+	 * pure FMantlePlaceFeedbackLogic's; this only keeps the list in the project's editor config and
+	 * writes it before the question is shown, so a line the curator ignores is not asked again.
+	 */
+	void MaybeAskAboutImport(bool bImportSucceeded, const FString& OrderId)
+	{
+		if (GConfig == nullptr)
+		{
+			return; // no place to remember the answer, so no question: never twice.
+		}
+		TArray<FString> Asked;
+		GConfig->GetArray(AskedSection, AskedKey, Asked, GEditorPerProjectIni);
+		if (!FMantlePlaceFeedbackLogic::ShouldAskAboutImport(bImportSucceeded, OrderId, Asked))
+		{
+			return;
+		}
+		FMantlePlaceFeedbackLogic::RememberAsked(OrderId, Asked);
+		GConfig->SetArray(AskedSection, AskedKey, Asked, GEditorPerProjectIni);
+		GConfig->Flush(false, GEditorPerProjectIni);
+		ShowImportFeedbackPrompt(OrderId);
 	}
 }
 
@@ -627,6 +696,9 @@ void SMantlePlaceVaultPanel::HandleImportPhase(const FString& Phase, const FStri
 
 void SMantlePlaceVaultPanel::HandleImportFinished(bool bSuccess, const FMantlePlaceImportResult& Result)
 {
+	// The imported bundle's order id, before the active row is released. A local-zip import has no row,
+	// so it has no order id and asks nothing.
+	const FString ImportedOrderId = ActiveItemPtr.IsValid() ? ActiveItemPtr->OrderId : FString();
 	if (HeaderStatus.IsValid())
 	{
 		HeaderStatus->SetText(FText::FromString(Result.Message));
@@ -645,6 +717,9 @@ void SMantlePlaceVaultPanel::HandleImportFinished(bool bSuccess, const FMantlePl
 	ShowToast(Result.Message.IsEmpty()
 		? (bSuccess ? TEXT("Import complete.") : TEXT("Import failed."))
 		: Result.Message, bSuccess);
+
+	// HPS-56: "Did this import come in right?", once per bundle, after a successful import.
+	MaybeAskAboutImport(bSuccess, ImportedOrderId);
 }
 
 void SMantlePlaceVaultPanel::HandleAuthChanged(EMantlePlaceAuthState NewState)

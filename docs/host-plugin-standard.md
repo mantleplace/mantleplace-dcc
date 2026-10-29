@@ -68,6 +68,7 @@ host met the contract for real:
 | **v1.17** | ⛔`HPS-24` drops the queued outcome, and `HPS-36` and `HPS-47` name the keys MPB 1.0.0 reads. The platform retired the queued arm, so an order whose core build has not finished now answers a `not_ready` error; and MPB 1.0.0 folded the top-level `dcc_readiness` into `hosts.<hostId>.readiness`. Both hosts already read the new keys, and the queued arm left only dead code behind it, while the rule text still sent a new host to a start outcome that never arrives and to keys no bundle carries |
 | **v1.18** | `HPS-51` gains an eleventh action, choosing each category's fidelity level before a bundle import runs. MPB 1.9.0 lets a bundle publish RAW, MAX, MED and MIN of a deliverable, and Revit's import window grew a level beside each checklist row; the reference host's chooser is roadmapped against the same bundles, so its words were fixed here before either host named them — the glossary's `Fidelity Level`, and a level that is another said to be the same in place rather than hidden |
 | **v1.19** | `HPS-56` — every host carries a Send Feedback action from its first release. A curator who hits a problem inside a host had no route to tell Mantle Place from where they were; the web app's Feedback form needs no account and takes an image, but no plugin linked to it and nothing made a new host carry the link |
+| **v1.20** | `HPS-56` gains the `rating` parameter and the post-import prompt, "Did this import come in right?". The moment right after an import is when a curator has an opinion about a bundle, and the only route to say so was the general `Send Feedback` action: a one-tap answer there gets far more replies than a general link, and the rule that a host carries no feedback form of its own stays whole, because the answer is two links to the web form |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -1159,21 +1160,44 @@ form: `https://mantle.place/feedback` needs no account and takes an optional ima
 carries **no feedback UI and no feedback API**; the web form is the one place to keep up to date. The
 action, worded `Send Feedback` (`HPS-51`), opens the **system browser** at the link below.
 
-`https://mantle.place/feedback?source=dcc-<host>&v=<plugin version>&hv=<host version>[&order=<order id>]`
+`https://mantle.place/feedback?source=dcc-<host>&v=<plugin version>&hv=<host version>[&order=<order id>][&rating=up|down]`
 
 - `source` is `dcc-` plus the host's directory name (`dcc-unreal`, `dcc-revit`, later `dcc-blender`,
   `dcc-rhino`, `dcc-max`). It matches `^[a-z0-9-]{1,40}$`.
 - `v` is the plugin's own version (`0.6.0`); `hv` is the host application's version (`5.8`, `2026`).
   Both are version strings only, `^[0-9]+(\.[0-9]+){0,3}$`; a value that does not match is **left
   out**, never sent raw.
-- `order` is optional. Only a bundle-scoped `Report a problem` action sends it, and it is the
-  bundle's order id (a UUID).
+- `order` is optional. Only a bundle-scoped action sends it (`Report a problem`, and the post-import
+  prompt below), and it is the bundle's order id (a UUID).
+- `rating` is optional. Only the post-import prompt sends it, and it is exactly the token `up` or
+  `down`, nothing else: a value that is anything other than those two (another case, a space, a word,
+  a number) is **left out**, never sent raw. The general `Send Feedback` and `Report a problem` never
+  send it.
 - Nothing else goes in the URL: no email address, no name, no free text, no token.
 
+**After a successful import the host asks "Did this import come in right?"** as a small line with
+**Yes** and **No**. Each opens the system browser at the link above with `order` set to the imported
+bundle's order id and `rating=up` (Yes) or `rating=down` (No). The line is the whole of the host's
+part, and it obeys five rules:
+
+- **Opening the link records nothing.** The web form shows the rating preselected and stores it only
+  when the curator presses send there, so a link opened by mistake leaves no false rating.
+- **At most once per imported bundle, and never blocking.** The line is dismissible and carries no
+  modal, and the bundle is remembered as asked about when the line is shown, not when it is answered,
+  so a line that is dismissed, ignored or closed with its window never comes back for that bundle.
+  A memory the host cannot keep means the line is not shown, rather than shown twice.
+- **Only a finished import of a bundle with an order id asks.** A failed, cancelled or dismissed
+  import has no result to have an opinion about, and a bundle with no order id has nothing to attach
+  the answer to.
+- **No feedback UI and no feedback API in the host:** two buttons that open a URL.
+- The words are the host's casing of `Did this import come in right?`, `Yes` and `No`.
+
 **One pure function in the host's core builds the link**, with a headless test (`HPS-02`) that
-covers each parameter's rule, including a malformed version being dropped and `order` being absent
-from the general action. The shim only opens the URL it returns. Screenshot capture and any in-host
-form are not part of this rule.
+covers each parameter's rule, including a malformed version being dropped, `order` being absent
+from the general action, `rating` being sent only as `up` or `down` and left out otherwise, and
+`order` being present on the prompt's links. The once-per-bundle decision is pure as well, and
+tested with it. The shim only opens the URL it returns and paints the line. Screenshot capture and any
+in-host form are not part of this rule.
 
 _Enforcer:_ `agent-review`, plus the pure-core test of the link builder.
 
@@ -1348,7 +1372,7 @@ records that eviction is deliberately explicit-only.
 | Placing from the host block, and refusing a file whose frame the host cannot match (`HPS-52`, `HPS-53`)                                                                                                    | `agent-review`, plus a pure-core test where a host has moved the decision out of its shim; **no corpus case yet** for `HPS-52`; both halves of `HPS-53` have one for the fixed-frame host, and its datum has one for each host |
 | The host's frame kind, declared in its own `CLAUDE.md` (`HPS-54`)                                                                                                                                          | `agent-review`                                         |
 | The bounds on a vault listing nobody asked for (`HPS-55`)                                                                                                                                                  | `agent-review`; a pure-core test where a host has one  |
-| Every host carries Send Feedback, and its link (`HPS-56`) | `agent-review`, plus a pure-core test of the link builder |
+| Every host carries Send Feedback, its link and the post-import prompt (`HPS-56`) | `agent-review`, plus a pure-core test of the link builder and of the prompt's once-per-bundle rule |
 
 Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS-33`) appear in both rows —
 the corpus proves the behaviour, review catches the shape a vector cannot see. `HPS-53` appears twice
