@@ -88,8 +88,8 @@ failed with a reason and the plugin's own message. Closing the window before `Im
 cancelled, and cancelling from the vault closes a window not yet started. A bundle sent while another
 import is open waits its turn and opens when that one ends. The bundle is fetched through the vault's
 own routes and download folder, so one already downloaded is not fetched again, and a bundle whose
-version this plugin cannot read fails as unsupported. With the channel not configured
-([Configuration](#configuration)), Revit stays off it and `Download` in the vault is the way in.
+version this plugin cannot read fails as unsupported. With the channel's location and key
+unobtainable ([Configuration](#configuration)), Revit stays off it and `Download` in the vault is the way in.
 What the connected host did is logged to `%LOCALAPPDATA%\MantlePlace\connected-host.log`.
 
 Downloads are written to `bundle.zip.part`, hashed, and renamed over `bundle.zip` only once they
@@ -913,10 +913,12 @@ One optional file remains: `%LOCALAPPDATA%\MantlePlace\config.json`, overrides l
 compiled defaults when it is present, and nothing installs it. Every key in it is an override for one
 of those defaults (`webLoginUrl`, `tokenEndpointUrl`, `refreshEndpointUrl`, `apiBaseUrl`,
 `realtimeUrl`, `realtimePublishableKey`, `loopbackPorts`, `callbackPath`, `signInTimeoutSeconds`) and is
-how a dev build points at a non-production stack. `realtimeUrl` and `realtimePublishableKey` are the
-exception to "nothing is required": the platform has not published where the connected host's Realtime
-socket is, so both default to empty, and with either missing the connected host stays off, logs one line
-saying so, and joins no channel. `loopbackPorts` is the `HPS-06a` override: leave it out and the OS assigns
+how a dev build points at a non-production stack. `realtimeUrl` and `realtimePublishableKey` have no
+compiled default: the platform publishes both on a public route, and with neither set the
+connected host reads them from there when it first joins, so a moved socket needs no new release. Setting
+either one means the route is not asked, and with only one set the connected host stays off. With the route
+unreachable or its answer unusable it also stays off, logs one line saying why (never the key), and joins no
+channel until the next launch. `loopbackPorts` is the `HPS-06a` override: leave it out and the OS assigns
 the sign-in callback port, which is what keeps sign-in clear of Windows' shifting reserved ranges
 and lets Revit and Unreal be signed in at the same time. Absent or malformed, the file is ignored
 and the defaults stand — this is read during Revit's load of a plugin, where throwing costs the ribbon

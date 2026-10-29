@@ -290,10 +290,183 @@ internal static class RealtimeClientTests
             }
         });
 
+        run.Case("a local override wins: the published route is not asked, and the socket opens on the override", () => Sync(async () =>
+        {
+            using LoopbackRealtimeServer server = new();
+            Route route = new(200, PublishedBody("wss://published.test.example/realtime/v1", "pk-published"));
+            MantlePlaceEndpoints endpoints = new() { RealtimeUrl = server.Location, RealtimePublishableKey = "pk-override" };
+
+            RealtimeValues values = await RealtimeLocator.ResolveAsync(endpoints, route);
+            run.Equal(values.WhyNot, null, "resolved");
+            run.Equal(values.Location, server.Location, "the override's location");
+            run.Equal(values.PublishableKey, "pk-override", "the override's key");
+
+            await using RealtimeClient client = RealtimeClient.For(endpoints, Connection, _ => { }, route);
+            run.True(client.Start(Token1, Presence), "started");
+            ServerConnection socket = (await server.AcceptAsync(Timeout))!;
+            run.Contains(socket.RequestTarget, "apikey=pk-override", "the override's key opens it");
+            run.Equal(route.Requests.Count, 0, "the route was never read");
+        }));
+
+        run.Case("an override of only one value does not borrow the other from the platform", () => Sync(async () =>
+        {
+            Route route = new(200, PublishedBody("wss://published.test.example/realtime/v1", "pk-published"));
+            MantlePlaceEndpoints endpoints = new() { RealtimeUrl = "wss://mine.test.example/realtime/v1" };
+
+            RealtimeValues values = await RealtimeLocator.ResolveAsync(endpoints, route);
+            run.True(values.WhyNot is not null, "off");
+            run.Contains(values.WhyNot!, "realtimePublishableKey", "naming the missing key");
+            run.Equal(route.Requests.Count, 0, "the route was never read");
+
+            List<string> log = [];
+            await using RealtimeClient client = RealtimeClient.For(endpoints, Connection, line => log.Add(line), route);
+            run.False(client.Start(Token1, Presence), "not started");
+            run.Equal(log.Count, 1, "one log line");
+        }));
+
+        run.Case("with no override, the published location and key open the socket, read from a route with no credential", () => Sync(async () =>
+        {
+            using LoopbackRealtimeServer server = new();
+            Route route = new(200, PublishedBody(server.Location, "pk-published"));
+            MantlePlaceEndpoints endpoints = new() { ApiBaseUrl = "https://platform.test.example/" };
+            Logged logged = new();
+
+            await using RealtimeClient client = RealtimeClient.For(endpoints, Connection, logged.Add, route);
+            run.True(client.Start(Token1, Presence), "started: the read happens off the caller's thread");
+
+            ServerConnection socket = (await server.AcceptAsync(Timeout))!;
+            run.Contains(socket.RequestTarget, "apikey=pk-published", "the published key opens it");
+            RealtimeMessage join = (await socket.NextAsync(Timeout))!;
+            run.Equal(join.Event, "phx_join", "and joins");
+
+            run.Equal(route.Requests.Count, 1, "one read");
+            run.Equal(route.Requests[0].Method, "GET", "a GET");
+            run.Equal(route.Requests[0].Url, "https://platform.test.example/api/v1/realtime", "of the one compiled-in route");
+            run.Equal(route.Requests[0].Authorization, string.Empty, "carrying no credential");
+            run.False(string.Join("\n", logged.Lines).Contains("pk-published", StringComparison.Ordinal), "the key is never logged");
+        }));
+
+        run.Case("a route that cannot be reached leaves the host off, with one logged reason and no socket", () => Sync(async () =>
+        {
+            using LoopbackRealtimeServer server = new();
+            Route route = new(200, string.Empty) { Throw = new HttpRequestException("no route to host") };
+            Logged logged = new();
+
+            await using RealtimeClient client = RealtimeClient.For(new MantlePlaceEndpoints(), Connection, logged.Add, route);
+            run.True(client.Start(Token1, Presence), "started");
+
+            string line = await logged.NextAsync();
+            run.Contains(line, "Connected host is off", "off");
+            run.Contains(line, "could not be reached", "saying the route was unreachable");
+            run.Contains(line, "no route to host", "and why");
+            run.Equal(client.State, RealtimeState.Off, "off");
+            run.True(await server.AcceptAsync(Quiet) is null, "no socket");
+            run.Equal(logged.Lines.Count, 1, "one line");
+        }));
+
+        run.Case("an answer that is not a usable pair leaves the host off, with a logged reason", () => Sync(async () =>
+        {
+            (string Name, int Status, string Body, string Expected)[] answers =
+            [
+                ("an error status", 503, "{}", "answered 503"),
+                ("an empty body", 200, "", "empty"),
+                ("not JSON", 200, "<html>maintenance</html>", "not JSON"),
+                ("not an object", 200, "[]", "both a url and a publishableKey"),
+                ("no key", 200, """{"url":"wss://published.test.example/realtime/v1"}""", "both a url and a publishableKey"),
+                ("no url", 200, """{"publishableKey":"pk-published"}""", "both a url and a publishableKey"),
+                ("a blank key", 200, """{"url":"wss://published.test.example/realtime/v1","publishableKey":"  "}""", "both a url and a publishableKey"),
+                ("a key that is not a string", 200, """{"url":"wss://published.test.example/realtime/v1","publishableKey":7}""", "both a url and a publishableKey"),
+                ("a url that is not a socket", 200, """{"url":"not a location","publishableKey":"pk-published"}""", "not a socket location"),
+            ];
+
+            foreach ((string name, int status, string body, string expected) in answers)
+            {
+                Route route = new(status, body);
+                RealtimeValues values = await RealtimeLocator.ResolveAsync(new MantlePlaceEndpoints(), route);
+                run.True(values.WhyNot is not null, name + ": off");
+                run.Contains(values.WhyNot!, expected, name + ": the reason");
+                run.Equal(values.Location + values.PublishableKey, string.Empty, name + ": no value taken");
+                run.False(values.WhyNot!.Contains("pk-published", StringComparison.Ordinal), name + ": the key is not in the reason");
+            }
+
+            using LoopbackRealtimeServer server = new();
+            Logged logged = new();
+            await using RealtimeClient client = RealtimeClient.For(
+                new MantlePlaceEndpoints(), Connection, logged.Add, new Route(200, """{"url":"wss://x.test.example/realtime/v1"}"""));
+            run.True(client.Start(Token1, Presence), "started");
+            run.Contains(await logged.NextAsync(), "Connected host is off", "the client logs it");
+            run.Equal(client.State, RealtimeState.Off, "off");
+            run.True(await server.AcceptAsync(Quiet) is null, "no socket");
+        }));
+
         return run.Report("Realtime client");
     }
 
+    private static string PublishedBody(string url, string key)
+        => JsonSerializer.Serialize(new Dictionary<string, string> { ["url"] = url, ["publishableKey"] = key });
+
     private static void Sync(Func<Task> body) => body().GetAwaiter().GetResult();
+
+    private sealed record Seen(string Method, string Url, string Authorization);
+
+    /// <summary>The platform's Realtime route, answered in process.</summary>
+    private sealed class Route : HttpMessageHandler
+    {
+        private readonly int _status;
+        private readonly string _body;
+
+        internal Route(int status, string body)
+        {
+            _status = status;
+            _body = body;
+        }
+
+        internal List<Seen> Requests { get; } = [];
+
+        internal Exception? Throw { get; init; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add(new Seen(request.Method.Method, request.RequestUri!.AbsoluteUri, request.Headers.Authorization?.ToString() ?? string.Empty));
+            if (Throw is not null)
+            {
+                throw Throw;
+            }
+
+            return Task.FromResult(new HttpResponseMessage((System.Net.HttpStatusCode)_status) { Content = new StringContent(_body) });
+        }
+    }
+
+    /// <summary>A client's log, with a wait for its next line.</summary>
+    private sealed class Logged
+    {
+        private readonly Channel<string> _lines = Channel.CreateUnbounded<string>();
+
+        internal List<string> Lines { get; } = [];
+
+        internal void Add(string line)
+        {
+            lock (Lines)
+            {
+                Lines.Add(line);
+            }
+
+            _lines.Writer.TryWrite(line);
+        }
+
+        internal async Task<string> NextAsync()
+        {
+            using CancellationTokenSource wait = new(Timeout);
+            try
+            {
+                return await _lines.Reader.ReadAsync(wait.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return "(no log line)";
+            }
+        }
+    }
 
     /// <summary>A client on the loopback server, its events and its log as text in arrival order.</summary>
     private sealed class Rig : IAsyncDisposable
