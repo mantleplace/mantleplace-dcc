@@ -9,7 +9,7 @@ namespace MantlePlace.Revit.Core;
 /// <remarks>
 /// <para>
 /// The route is public and unauthenticated, and the body is one JSON object with two strings:
-/// <c>url</c> (the Realtime base, <c>wss://…/realtime/v1</c>) and <c>publishableKey</c>. A
+/// <c>url</c> (the socket endpoint, <c>wss://…/realtime/v1/websocket</c>, used as it is) and <c>publishableKey</c>. A
 /// publishable key is public by design, but it is still never logged, and this type never puts one in
 /// a reason.
 /// </para>

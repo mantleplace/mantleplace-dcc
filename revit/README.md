@@ -913,8 +913,8 @@ One optional file remains: `%LOCALAPPDATA%\MantlePlace\config.json`, overrides l
 compiled defaults when it is present, and nothing installs it. Every key in it is an override for one
 of those defaults (`webLoginUrl`, `tokenEndpointUrl`, `refreshEndpointUrl`, `apiBaseUrl`,
 `realtimeUrl`, `realtimePublishableKey`, `loopbackPorts`, `callbackPath`, `signInTimeoutSeconds`) and is
-how a dev build points at a non-production stack. `realtimeUrl` and `realtimePublishableKey` are the
-exception to "compiled in": the platform publishes both on a public route, and with neither set the
+how a dev build points at a non-production stack. `realtimeUrl` and `realtimePublishableKey` have no
+compiled default: the platform publishes both on a public route, and with neither set the
 connected host reads them from there when it first joins, so a moved socket needs no new release. Setting
 either one means the route is not asked, and with only one set the connected host stays off. With the route
 unreachable or its answer unusable it also stays off, logs one line saying why (never the key), and joins no
