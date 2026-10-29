@@ -15,6 +15,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
     private const string TabName = "Mantle Place";
 
     private static AuthSession? _session;
+    private static SessionRenewer? _renewer;
     private static MantlePlaceEndpoints? _endpoints;
     private static VaultClient? _vault;
     private static BundleCache? _cache;
@@ -836,6 +837,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
         // including before this line; reading the session here rather than trusting the event means
         // a transition that landed while the ribbon was still being built is not missed.
         _session.StateChanged += OnAuthStateChanged;
+
+        // Renews ahead of each lapse: the connected host's channel makes no route call to renew on.
+        _renewer = new SessionRenewer(_session);
         _watcher.Ended += OnPrepareEnded;
         _news.Arrived += OnNewsArrived;
         _news.Listed += OnVaultListed;
@@ -916,6 +920,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
         {
             _session.StateChanged -= OnAuthStateChanged;
         }
+
+        _renewer?.Dispose();
+        _renewer = null;
 
         _accountButton = null;
         _accountFace = null;

@@ -111,6 +111,18 @@ public sealed class AuthSession : IDisposable
         }
     }
 
+    /// <summary>When the access token lapses, as the last grant stated; the minimum with none.</summary>
+    public DateTimeOffset AccessTokenExpiresAt
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _expiresAt;
+            }
+        }
+    }
+
     /// <summary>Whether the access token is within the skew of lapsing (<c>HPS-11</c>).</summary>
     public bool IsAccessTokenExpired(DateTimeOffset now)
     {
