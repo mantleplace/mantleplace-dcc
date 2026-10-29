@@ -51,13 +51,13 @@ edited in the same pull request that updates the release.
 | --- | --- | --- |
 | Sign in and out in the system browser | supported — [unreal-0.8.0] | supported — [revit-0.1.0] |
 | List, prepare and download your orders | supported — [unreal-0.8.0] | supported — [revit-0.1.0] |
-| Import a complete order in one press, downloading only the host's files | not shipped — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
+| Import a complete order in one press, downloading only the host's files | supported — [unreal-0.8.1] | not shipped — [revit-1.0.0] |
 | Search the vault | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
-| Remove a download on request | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
-| A notice when a Prepare ends | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
-| A notice when an order arrives in the vault | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
-| Re-join a Prepare the host was closed during | not shipped — [unreal-0.8.0] | supported — [revit-0.2.0] |
-| Each bundle's thumbnail in the vault | not shipped — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
+| Remove a download on request | not shipped — [unreal-0.8.1] | supported — [revit-0.2.0] |
+| A notice when a Prepare ends | not shipped — [unreal-0.8.1] | supported — [revit-0.2.0] |
+| A notice when an order arrives in the vault | not shipped — [unreal-0.8.1] | supported — [revit-0.2.0] |
+| Re-join a Prepare the host was closed during | not shipped — [unreal-0.8.1] | supported — [revit-0.2.0] |
+| Each bundle's thumbnail in the vault | not shipped — [unreal-0.8.1] | not shipped — [revit-1.0.0] |
 
 ## Importing a bundle
 
@@ -68,10 +68,10 @@ edited in the same pull request that updates the release.
 | Read a 2.0 bundle as well as a 1.x one | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
 | Refuse a bundle whose bytes do not match its published digest | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
 | Say the bundle's unit system and delivery CRS | supported — [unreal-0.6.0] | supported — [revit-0.2.0] |
-| Choose what an import brings in, before it runs | not shipped — [unreal-0.8.0] | supported — [revit-0.1.0] |
+| Choose what an import brings in, before it runs | not shipped — [unreal-0.8.1] | supported — [revit-0.1.0] |
 | Choose a fidelity level for each category, before it runs | partial — [unreal-0.8.0] | supported — [revit-0.1.0] |
 | Say what a bundle holds that an import cannot place, and why | partial — [unreal-0.6.0] | supported — [revit-0.1.0] |
-| Show an import step by step, and stop it | not shipped — [unreal-0.8.0] | supported — [revit-0.1.0] |
+| Show an import step by step, and stop it | not shipped — [unreal-0.8.1] | supported — [revit-0.1.0] |
 | Import the same order again | supported — [ADR 0002](adr/0002-import-identity.md) | supported — [ADR 0004](adr/0004-revit-terrain-identity.md) |
 | Find everything an import made | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
 
@@ -81,7 +81,7 @@ edited in the same pull request that updates the release.
 | --- | --- | --- |
 | Place content at the published georeference | supported — [fixed-frame host](host-plugin-standard.md#11-frames-and-placement-hps-52--hps-54), [unreal-0.8.0] | supported — [order-frame host](host-plugin-standard.md#11-frames-and-placement-hps-52--hps-54), [revit-0.2.0] |
 | Refuse a file that is not in the host frame | supported — [unreal-0.6.0] | supported — [revit-0.2.0] |
-| Site location, sun and time zone | not shipped — [unreal-0.8.0] | supported — [revit-0.1.0] |
+| Site location, sun and time zone | not shipped — [unreal-0.8.1] | supported — [revit-0.1.0] |
 
 ## Terrain and land
 
@@ -90,22 +90,22 @@ edited in the same pull request that updates the release.
 | Terrain | supported — [ADR 0006](adr/0006-unreal-declines-elevation-bounds-target-crs.md), [unreal-0.8.0] | supported — [revit-0.2.0] |
 | Terrain as a mesh | supported — [unreal-0.8.0], [ADR 0016](adr/0016-unreal-mesh-terrain-is-parked-until-5-9.md) | declined — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) |
 | Imagery drape | supported — [unreal-0.8.0] | supported — [ADR 0008](adr/0008-revit-drape-is-anchored-to-the-smooth-shading-origin.md) |
-| Stylized map drape | not shipped — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
-| Land cover | not shipped — [unreal-0.8.0] | supported, on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
-| Land use, water bodies and road surfaces | not shipped — [unreal-0.8.0] | supported; land use on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
+| Stylized map drape | not shipped — [unreal-0.8.1] | not shipped — [revit-1.0.0] |
+| Land cover | not shipped — [unreal-0.8.1] | supported, on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
+| Land use, water bodies and road surfaces | not shipped — [unreal-0.8.1] | supported; land use on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
 | Coverage rasters as data textures | supported — [unreal-0.8.0] | not applicable |
 | Ground material names a renderer recognises | not applicable | supported, for water bodies and road surfaces — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) |
-| Published contours | not shipped — [unreal-0.8.0] | supported — [ADR 0013](adr/0013-revit-published-contours-are-directshapes.md) |
-| Flood zones and steep ground | not shipped — [unreal-0.8.0] | supported — [ADR 0014](adr/0014-revit-hazards-are-drawn-on-a-hazard-plan.md) |
+| Published contours | not shipped — [unreal-0.8.1] | supported — [ADR 0013](adr/0013-revit-published-contours-are-directshapes.md) |
+| Flood zones and steep ground | not shipped — [unreal-0.8.1] | supported — [ADR 0014](adr/0014-revit-hazards-are-drawn-on-a-hazard-plan.md) |
 
 ## Site context
 
 | Capability | Unreal | Revit |
 | --- | --- | --- |
 | Context buildings | supported — [unreal-0.7.0] | supported — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) |
-| Road centrelines | partial — [unreal-0.8.0] | supported — [revit-0.1.0] |
+| Road centrelines | supported — [unreal-0.8.1] | supported — [revit-0.1.0] |
 | Tree points | supported — [unreal-0.7.0], [unreal-0.8.0] | supported — [revit-0.1.0] |
-| Parcels and zoning | partial — [unreal-0.8.0] | not shipped — [revit-0.2.0] |
+| Parcels and zoning | partial — [unreal-0.8.1] | not shipped — [revit-1.0.0] |
 | The bundle's attribution, written into the project | supported — [unreal-0.8.0] | supported — [ADR 0011](adr/0011-revit-provenance-record-and-attribution-note-identity.md) |
 | ODbL content kept apart, and a Prepare for handover command | supported — [unreal-0.8.0] | supported — [revit-0.2.0] |
 
@@ -113,11 +113,13 @@ edited in the same pull request that updates the release.
 
 | Capability | Unreal | Revit |
 | --- | --- | --- |
-| An AOI too large for one terrain | supported — [unreal-0.7.0] | not shipped — [revit-0.2.0] |
+| An AOI too large for one terrain | supported — [unreal-0.7.0] | not shipped — [revit-1.0.0] |
 | Stream the bundle beside the import, through Cesium | supported — [unreal-0.6.0] | not applicable |
 
+[unreal-0.8.1]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.8.1
 [unreal-0.8.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.8.0
 [unreal-0.7.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.7.0
 [unreal-0.6.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.6.0
+[revit-1.0.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-1.0.0
 [revit-0.2.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-0.2.0
 [revit-0.1.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-0.1.0
