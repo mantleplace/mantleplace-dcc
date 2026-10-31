@@ -49,6 +49,13 @@ Read `index.json`, iterate `cases`, and dispatch on `group` + `expect`:
 
 A case with `appliesTo` asserts one host's manifest block; every other host skips it (`HPS-41`).
 
+`appliesTo` names a host registered in `verified-against.json`, or a planned one whose plugin has not
+landed (`_PLANNED_HOSTS` in `check_manifest_conformance.py`). No registered host covers a planned
+host's case, so the baseline records it as `[]` until the host registers; registering removes the name
+from that set and updates the baseline. `autocad` is the one planned host today: its `hosts.autocad`
+cases (`manifest.autocad*`) assert only values the block states, so a plain AutoCAD reader and a
+Civil 3D reader both run them.
+
 Numeric tolerances are stated in the case (`landscapeSpawnToleranceCm`, `toleranceMetres`); do not
 invent tighter ones, and do not compare floats exactly.
 
