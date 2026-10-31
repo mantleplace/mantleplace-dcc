@@ -76,7 +76,7 @@ exact string the artifact itself declares. The reasoning, and why the first thre
 
 | Host | Asset | Install |
 | --- | --- | --- |
-| Unreal | `MantlePlace-UE5.8-Win64-<version>.zip` | Extract into a project's `Plugins/` directory and open the project. No compilation step; Windows only. Then read [`unreal/README.md`](unreal/README.md) — in particular, the plugin saves nothing. |
+| Unreal | `MantlePlace-UE5.8-Win64-<version>.zip` | Extract into a project's `Plugins/` directory and open the project. No compilation step; Windows only. Also on Fab ([`unreal/README.md`](unreal/README.md#install) links the listing). Then read [`unreal/README.md`](unreal/README.md) — in particular, the plugin saves nothing. |
 | Revit | `MantlePlace-Revit-<version>.zip` | Copy the `Contents` folder's files into `%APPDATA%\Autodesk\Revit\Addins\<year>\`, for each of 2025/2026/2027 you use — or double-click `Install.cmd`. No admin rights, and no .NET install: Revit brings its own. Building from source is in [`revit/README.md`](revit/README.md#build-and-test). |
 
 The Revit package leads with the manual copy rather than the script on purpose
