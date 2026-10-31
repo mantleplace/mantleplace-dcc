@@ -197,14 +197,16 @@ _Avoid_: subset, partial bundle, export, package
 **Export**:
 A kept bundle handed from the web vault to a connected host. It is a record that names a bundle and
 a target, carries no file and no URL, and moves through a lifecycle the plugin and the web advance
-between them; the plugin fetches the bundle itself.
-_Avoid_: push, send-to-host, transfer
+between them; the plugin fetches the bundle itself. The curator chooses the target in the **To** row
+of the Download step.
+_Avoid_: send, push, open in, sync, send-to-host, transfer
 
 **Connected host**:
 A running host program with the plugin, signed in as the curator, that has announced itself on the
 curator's private channel and can receive exports. One that cannot reach the channel stays off, and
-the curator still has Download.
-_Avoid_: live host, online host, listener
+the curator still has Download. It exists only while its host is open; nothing waits for a host that
+is not.
+_Avoid_: live host, online host, listener, instance, session, device
 
 **Connection id**:
 The random id a plugin generates once per host launch and announces as its presence key; an export
