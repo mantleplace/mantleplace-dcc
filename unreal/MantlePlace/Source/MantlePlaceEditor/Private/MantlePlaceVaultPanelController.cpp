@@ -14,6 +14,8 @@ void UMantlePlaceVaultPanelController::Initialize()
 	Orchestrator->OnImportPhase.AddUniqueDynamic(this, &UMantlePlaceVaultPanelController::HandleImportPhase);
 	Orchestrator->OnImportFinished.AddUniqueDynamic(this, &UMantlePlaceVaultPanelController::HandleImportFinished);
 	Orchestrator->OnAuthChanged.AddUniqueDynamic(this, &UMantlePlaceVaultPanelController::HandleAuthChanged);
+	Orchestrator->OnClientUpdateRequiredNative.RemoveAll(this); // a native delegate has no AddUnique: stay idempotent
+	Orchestrator->OnClientUpdateRequiredNative.AddUObject(this, &UMantlePlaceVaultPanelController::HandleClientUpdateRequired);
 }
 
 void UMantlePlaceVaultPanelController::Shutdown()
@@ -24,6 +26,7 @@ void UMantlePlaceVaultPanelController::Shutdown()
 		Orchestrator->OnImportPhase.RemoveAll(this);
 		Orchestrator->OnImportFinished.RemoveAll(this);
 		Orchestrator->OnAuthChanged.RemoveAll(this);
+		Orchestrator->OnClientUpdateRequiredNative.RemoveAll(this);
 		// Closing the tab mid-import must stop the in-flight poll/download - BeginDestroy alone does not.
 		Orchestrator->CancelImport();
 	}
@@ -31,6 +34,7 @@ void UMantlePlaceVaultPanelController::Shutdown()
 	OnImportPhase.Clear();
 	OnImportFinished.Clear();
 	OnAuthChanged.Clear();
+	OnClientUpdateRequired.Clear();
 	ActiveOrderId.Reset();
 }
 
@@ -130,4 +134,9 @@ void UMantlePlaceVaultPanelController::HandleImportFinished(bool bSuccess, const
 void UMantlePlaceVaultPanelController::HandleAuthChanged(EMantlePlaceAuthState NewState)
 {
 	OnAuthChanged.Broadcast(NewState);
+}
+
+void UMantlePlaceVaultPanelController::HandleClientUpdateRequired(const FMantlePlaceClientUpdate& Update)
+{
+	OnClientUpdateRequired.Broadcast(Update);
 }
