@@ -132,6 +132,35 @@ name every file by the six rules; write `file_entries` with a frame, a role, a l
 for every file; give a licence as an SPDX expression; ship a STAC Item beside the manifest; and
 state version `2.0.0` as a JSON string.
 
+### 1.18.0 — the AutoCAD host block, for AutoCAD and Civil 3D (additive minor; not yet published)
+
+One block is added: `hosts.autocad`, a new `hosts.<hostId>` sub-block, which is a MINOR under
+[compatibility](compatibility.md) §2. Nothing is removed, re-typed or re-meant, and every host floor
+at 1.0.0 reads it: a reader that does not know the host id ignores the block and infers nothing from
+its absence, as for any host id (compatibility §3, [`format.md`](format.md) §4.2). The first-party
+plugins' re-pin follows when the schema is published. [`format.md`](format.md) §6.9 explains the
+members; this entry lists them.
+
+- **One host.** The id is `autocad` for AutoCAD and Civil 3D alike. Civil 3D is a part of the host,
+  and not a second id, so a plain AutoCAD reader and a Civil 3D reader read the same subtree.
+- **`file_frame`**, the frame the block's files share, as for every host block that places files.
+- **`contours`**, a second pointer to `Surface/Contours.dxf`, in the shape of `hosts.revit.contours`
+  (1.4.0): its horizontal frame, and its X/Y unit and its heights' unit stated apart. Present only
+  when the file is in the block's `file_frame`.
+- **`surface`**, the terrain source for a Civil 3D surface, with its path, format, hash and frame.
+- **`aerial`**, the aerial image with its insertion pre-derived: the lower-left corner, the ground
+  size of the whole image and the rotation, in the block's frame, so a plugin inserts the image and
+  works nothing out.
+- **`readiness`**, a verdict for `contours`, `surface` and `aerial`. The `surface` verdict adds
+  `requires`, the host part that can place the file (`civil3d`), so a plain AutoCAD reader can say the
+  surface is unavailable there from its own block alone.
+
+What a reader does differently: a reader of `hosts.autocad` takes every value from the block and
+derives none, takes the contours' two units from the pointer and not from the drawing, and treats a
+`requires` it does not hold or does not recognise as "unavailable in this host". A reader that does
+not read `hosts.autocad` is unaffected. A bundle built before 1.18.0 carries no such block, and the
+shared pointers it does carry (`elevation.contours`, `imagery.drape`) stay as they were.
+
 ### 1.17.0 — a source that timed out at build time, named in a county's coverage gap (additive minor; published and frozen 2026-10-26)
 
 One value is added to the closed set of reasons a holder ships nothing: `timed_out_at_build_time`.
