@@ -563,6 +563,55 @@ pixel means.
 know. An entry without `odbl_role` is not a `none`, and a reader that wants the lighter reading must
 hold the role that earns it.
 
+### 6.9 The AutoCAD host block: one host, three parts (from 1.18.0)
+
+AutoCAD and Civil 3D are one host to the manifest. The host id is `autocad`, and Civil 3D is a part
+of that host rather than a second id: a plugin running in plain AutoCAD and one running in Civil 3D
+read the same `hosts.autocad` subtree and nothing else (§4.2). The block hands the plugin everything
+it needs to place an order, so the plugin applies values and derives none. It carries three parts,
+each with its own pointer and its own readiness verdict:
+
+- **`hosts.autocad.file_frame`** states the frame the block's files share, as §4.2 defines it. Every
+  coordinate-carrying file the block points at is in it, and the producer checks that before it
+  publishes. It follows the delivery wherever a projected CRS in the delivery unit exists, and is a
+  local frame about the origin where none does.
+- **`hosts.autocad.contours`** names the published contour linework (`Surface/Contours.dxf`, §6.7),
+  one file under two pointers. It is present only when the file is in the block's `file_frame`, and
+  has the shape of `hosts.revit.contours`: `horizontal_frame` (`absolute_projected`, or offsets about
+  the origin), `vertical_reference: absolute`, `horizontal_units` for X and Y and `vertical_units`
+  for the heights, **stated apart**, `vertical_datum` and the file's `sha256`. A reader takes both
+  units from the pointer, never from the drawing, which states one unit for all of it.
+- **`hosts.autocad.surface`** is the terrain source for a Civil 3D surface: one file that Civil 3D
+  builds a surface from, with `path`, `format`, `sha256`, and its frame stated beside the path as the
+  contours state theirs (`horizontal_frame`, `horizontal_units`, `vertical_units`,
+  `vertical_reference`, `vertical_datum`). The `format` is the pointer's own word for the file, and a
+  reader that does not know it declines the surface and names the format; it never guesses. A surface
+  is Civil 3D's, and plain AutoCAD has no object to place it as.
+- **`hosts.autocad.aerial`** is the aerial image with its insertion already worked out. Beside the
+  image's `path`, `format`, pixel `width` and `height` and `sha256`, an `insertion` object states
+  where and how the image goes in the drawing, in the block's `file_frame` and its horizontal unit:
+  the `x` and `y` of the image's lower-left corner, the ground `width` and `height` of the whole
+  image (not of a pixel), and `rotation_deg`. A plugin inserts the image at those numbers. It does not
+  work an insertion point or a scale out of an extent, a pixel size or a CRS, and it never
+  reprojects the image: an image the block does not show to be in the frame is absent, with a verdict
+  that says why (§6.4).
+
+**Readiness, a verdict for each part.** `hosts.autocad.readiness` states `contours`, `surface` and
+`aerial`, each as the §6.1 verdict: `present`, and when not, the stated `reason`, which a reader
+echoes and never matches on. A bundle built before 1.18.0 carries no `hosts.autocad` block, and a
+reader says so rather than reading another host's block (§4.2).
+
+The `surface` verdict carries one member more, `requires`, naming the host part that can place the
+file. For a surface it is `civil3d`. This is what lets a plain AutoCAD reader say the surface is
+unavailable in this host from its own block alone: a reader that does not hold the named part,
+or does not recognise the name, reports the surface as unavailable here ("needs Civil 3D") and
+imports nothing from it. It does not open another host's block to find out, and it does not treat the
+pointer's presence as a promise that its own host can use the file. `requires` is on the verdict
+whether or not the file shipped, so the answer is the same on an order whose surface is absent.
+
+What a host does with a part it cannot show to be in its frame is the host standard's (`HPS-52`,
+`HPS-53`), not this document's.
+
 ## 7. The sidecar manifest
 
 The vault publishes a versioned copy of the manifest beside the zip, so that a listing can show a

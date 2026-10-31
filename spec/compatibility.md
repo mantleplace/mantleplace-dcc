@@ -33,7 +33,8 @@ directory. Everything in `spec/` describes the semver era.
 - **MAJOR** — a breaking change. Fields removed, moved, renamed, retyped, or narrowed. A consumer
   written for one major cannot be assumed to read another.
 - **MINOR** — strictly additive. New optional fields, new blocks, a new `hosts.<hostId>` sub-block,
-  a widened enum. Nothing existing changes shape or meaning.
+  a widened enum. Nothing existing changes shape or meaning. The `hosts.autocad` block of 1.18.0 is
+  one: a reader that does not know the host id ignores it.
 - **PATCH** — editorial. Documentation and description text only; no change to what validates.
   A patch release therefore obliges a host to nothing: no re-pin and no re-verification,
   because nothing a reader parses has changed.
