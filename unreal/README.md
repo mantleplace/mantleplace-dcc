@@ -48,6 +48,25 @@ source build: see [Building](../README.md#building) in the root README.
 - **Browse...** — pick a bundle `.zip` you downloaded from [mantle.place](https://mantle.place),
   leave the mode at *Landscape*, and press **Import**.
 
+## Open in curator
+
+**Open in curator** (in the panel's header) opens the web curator in your browser on the extent your
+level already knows, drawn and ready: `https://mantle.place/curator#aoi=W,S,E,N&from=unreal`. It needs
+no account. The extent comes from the first of these the level has:
+
+1. **A previous Mantle Place import** — the extent the plugin recorded when it imported the order
+   (imports made before this version recorded none; import the order again to give a level one).
+2. **The level's georeferencing** — Epic's GeoReferencing system actor, if the plugin is on and the
+   level has one: the extent is the box around the level's landscape and static meshes.
+3. **A Cesium georeference** — a Cesium for Unreal georeference actor, read the same way. Cesium stays
+   optional: the plugin does not depend on it, and nothing streams from Cesium or from Mantle Place.
+4. **An Extent box** — place a **Mantle Place Extent Box** (the panel offers to when the level has
+   nothing else), set its **Center Longitude** and **Center Latitude** in Details (degrees), and scale
+   it over your site: X is east-west, Y is north-south, and rotation is ignored.
+
+A level with none of them offers to place an Extent box, or to open the plain curator
+(`https://mantle.place/curator`) so you can draw the extent there.
+
 ## Save your work
 
 **The plugin saves nothing.** Everything it creates — the assets and the actors in your level — is

@@ -192,6 +192,11 @@ namespace MantlePlaceImportNaming
 		return FString::Printf(TEXT("%sCredit_%s"), ActorLabelPrefix, *ShortIdentity(Identity));
 	}
 
+	FString ExtentBoxLabel()
+	{
+		return FString(ActorLabelPrefix) + TEXT("ExtentBox");
+	}
+
 	const TCHAR* DefaultContentRoot()
 	{
 		return TEXT("/Game/MantlePlace");
