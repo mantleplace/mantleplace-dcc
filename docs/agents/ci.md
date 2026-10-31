@@ -5,9 +5,10 @@ description: The pull-request gates this repository runs, the jobs behind them, 
 
 # CI
 
-Nine workflows live here, all on free hosted runners. Six run on every pull request:
+Eleven workflows live here, all on free hosted runners. Six run on every pull request:
 `ci-manifest-conformance`, `ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming`,
-`ci-brand-assets` and `ci-blender-tests`. The other three are not pull-request gates: `release-mpb.yml` (below), `stale.yml`
+`ci-brand-assets` and `ci-blender-tests`. The other five are not pull-request gates: `release-mpb.yml` (below),
+`ci-platform-api.yml` and `manifest-drift.yml` (both below), `stale.yml`
 and `ci-tracker-hygiene.yml`. The last two are tracker hygiene — the second runs on issue and comment
 events, a pull request's own comments included, and it detects rather than blocks
 ([`public-surface.md`](public-surface.md)).
@@ -21,6 +22,14 @@ the package version to the conformance corpus; the mpb tests hold the same line 
 so no runner can regenerate the committed PNGs, and the job tests the rules that decide what a
 render looks like rather than the renders themselves
 ([ADR 0009](../adr/0009-host-assets-render-the-monogram.md)).
+
+`ci-platform-api` (`sync-check`) fetches the Platform API spec the platform serves, regenerates the
+Revit plugin's client with the pinned generator, and fails when the vendored copy under
+`revit/src/MantlePlace.PlatformApi/Generated/` would change. It reads a live URL, so it runs on `main`, weekly and on demand, never on a pull request: a
+platform deploy moves the spec without this repo changing. A red run means the sync is due
+(`python revit/tools/platform-api/sync_platform_api.py`, then commit). `manifest-drift.yml` is the
+manifest schema's counterpart: weekly, it keeps one tracking issue open while the published schema is
+ahead of `verified-against.json`.
 
 ## A workflow name is not a check name
 
@@ -71,6 +80,7 @@ pwsh -NoProfile -File tools/public-hygiene/Test-PowerShellParses.ps1
 (cd tools/unreal-naming && python -m unittest discover -p "test_*.py")
 (cd tools/brand-assets && python -m unittest discover -p "test_*.py")
 python -m unittest discover -s blender/tests -t blender
+python revit/tools/platform-api/sync_platform_api.py --check                    # fetches the served spec; needs the .NET SDK
 python tools/public-hygiene/check_public_references.py --stdin --label "PR body" < pr-body.md
 ```
 

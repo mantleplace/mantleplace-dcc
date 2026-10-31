@@ -28,6 +28,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MantlePlace.Revit.Core\MantlePlace.Revit.Core.csproj" />
+
+    <!-- The generated Platform API client: host-neutral, no Revit, no package (MantlePlace.PlatformApi.csproj). -->
+    <ProjectReference Include="..\MantlePlace.PlatformApi\MantlePlace.PlatformApi.csproj" />
   </ItemGroup>
 
 </Project>

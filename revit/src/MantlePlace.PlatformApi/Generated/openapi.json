@@ -1,0 +1,3116 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Mantle Place Platform API",
+    "version": "1",
+    "description": "The Platform API: the /api/v1/ surface that the first-party Mantle Place clients call (the Revit and Unreal plugins today).\n\nThis document is for those first-party clients. It carries no stability promise for third parties: the API may change before it is published, and no key, quota or support is offered to outside callers.\n\nEvery call may name its client and version in the Mantle-Place-Client header. A client below the minimum version the platform sets for it is answered HTTP 426 with the code client_update_required, so it can show an update prompt instead of an error."
+  },
+  "servers": [
+    {
+      "url": "https://mantle.place",
+      "description": "Production"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Signing a desktop client in."
+    },
+    {
+      "name": "Vault",
+      "description": "The bundles a curator owns, and getting them."
+    },
+    {
+      "name": "Exports",
+      "description": "Handing a kept bundle to a connected host."
+    },
+    {
+      "name": "Orders",
+      "description": "Ordering an extent a host already knows."
+    },
+    {
+      "name": "Platform",
+      "description": "The platform itself."
+    }
+  ],
+  "paths": {
+    "/api/v1/openapi.json": {
+      "get": {
+        "operationId": "getPlatformApiSpec",
+        "summary": "This document",
+        "description": "The Platform API spec, as committed with the release that is running.",
+        "tags": [
+          "Platform"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The OpenAPI 3.1 document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          }
+        }
+      }
+    },
+    "/api/v1/realtime": {
+      "get": {
+        "operationId": "getRealtimeConfig",
+        "summary": "Where the Realtime socket is, and the key that opens it",
+        "description": "Lets a client compile in only a mantle.place route. Cacheable for an hour; the values change with a deploy.",
+        "tags": [
+          "Platform"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The socket URL and its publishable key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "description": "The Realtime websocket URL."
+                    },
+                    "publishableKey": {
+                      "type": "string",
+                      "description": "The publishable key that opens the socket; it opens nothing without a session."
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "publishableKey"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "503": {
+            "description": "Not configured. Code: realtime_unconfigured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/native/token": {
+      "post": {
+        "operationId": "exchangeNativeAuthCode",
+        "summary": "Exchange a sign-in code for a session",
+        "description": "The PKCE code-to-token step of the desktop sign-in. The signed, short-lived code the loopback redirect returned, plus the PKCE verifier, mint an independent session for the curator who signed in.",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "auth_code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The signed authorization code the loopback sign-in returned."
+                  },
+                  "code_verifier": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The PKCE verifier whose S256 challenge the code binds."
+                  }
+                },
+                "required": [
+                  "auth_code",
+                  "code_verifier"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "access_token": {
+                      "type": "string",
+                      "description": "The bearer for the routes that need one."
+                    },
+                    "refresh_token": {
+                      "type": "string"
+                    },
+                    "expires_in": {
+                      "type": "number",
+                      "description": "The access token lifetime, in seconds from now."
+                    },
+                    "token_type": {
+                      "type": "string",
+                      "const": "bearer"
+                    },
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "access_token",
+                    "refresh_token",
+                    "expires_in",
+                    "token_type",
+                    "user"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Refused. Codes: invalid_request (malformed body), invalid_grant (the code or verifier does not verify), mint_failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "429": {
+            "description": "Rate limited per IP; retryAfterMs says when to try again. Code: rate_limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/native/refresh": {
+      "post": {
+        "operationId": "refreshNativeSession",
+        "summary": "Renew a session from its refresh token",
+        "description": "Renews a stored session. A client discards its credential only on a 400 or 401 whose code is one of invalid_grant, invalid_refresh_token, refresh_token_not_found, refresh_token_already_used; every other answer means try again later and keep it.",
+        "tags": [
+          "Auth"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refresh_token": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "refresh_token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A renewed session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "access_token": {
+                      "type": "string",
+                      "description": "The bearer for the routes that need one."
+                    },
+                    "refresh_token": {
+                      "type": "string"
+                    },
+                    "expires_in": {
+                      "type": "number",
+                      "description": "The access token lifetime, in seconds from now."
+                    },
+                    "token_type": {
+                      "type": "string",
+                      "const": "bearer"
+                    },
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "access_token",
+                    "refresh_token",
+                    "expires_in",
+                    "token_type",
+                    "user"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The session has ended (code: invalid_grant, invalid_refresh_token, refresh_token_not_found, refresh_token_already_used) or the request is malformed (code: invalid_request; keep the credential).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "429": {
+            "description": "Rate limited per IP; retryAfterMs says when to try again. Code: rate_limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The provider could not be reached. Code: refresh_unavailable. Keep the credential.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quote": {
+      "get": {
+        "operationId": "getQuote",
+        "summary": "What an extent costs, before any order exists",
+        "description": "The area, price, pricing-config version, coverage verdict and licence terms of an extent. It runs the price, coverage preflight and licence line checkout uses, so the two cannot disagree. Public: no bearer needed. With a valid bearer the answer also carries the account Credit balance and whether a free-tier slot is open; an invalid bearer is ignored and the public Quote comes back. Nothing is stored: a Quote has no id and no expiry.",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          },
+          {
+            "name": "extent",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "The extent to quote: west,south,east,north in degrees (WGS 84), the order the brief URL and the curator deep link use. For example -122.4,37.7,-122.39,37.71."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The Quote.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "extent": {
+                      "type": "object",
+                      "properties": {
+                        "west": {
+                          "type": "number"
+                        },
+                        "south": {
+                          "type": "number"
+                        },
+                        "east": {
+                          "type": "number"
+                        },
+                        "north": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "west",
+                        "south",
+                        "east",
+                        "north"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The extent that was priced, as asked."
+                    },
+                    "areaKm2": {
+                      "type": "number",
+                      "description": "Geodesic area in square kilometres, the only input to the price."
+                    },
+                    "priceCents": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "The price in cents of currency. 0 for an extent inside the free tier."
+                    },
+                    "currency": {
+                      "type": "string",
+                      "const": "usd"
+                    },
+                    "pricingConfigVersion": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "The pricing-config version the price was computed with."
+                    },
+                    "freeEligible": {
+                      "type": "boolean",
+                      "description": "The extent is small enough for the free tier, so priceCents is 0."
+                    },
+                    "coverage": {
+                      "type": "string",
+                      "enum": [
+                        "covered",
+                        "degraded"
+                      ],
+                      "description": "covered, or degraded when a live elevation probe flaked; a degraded extent can still be ordered. An uncovered extent is refused instead (elevation_unavailable_for_aoi or imagery_unavailable_for_aoi)."
+                    },
+                    "licence": {
+                      "type": "object",
+                      "properties": {
+                        "line": {
+                          "type": "string",
+                          "description": "The licence line checkout shows before the Pay button."
+                        },
+                        "url": {
+                          "type": "string",
+                          "description": "Where the full licensing terms are."
+                        }
+                      },
+                      "required": [
+                        "line",
+                        "url"
+                      ],
+                      "additionalProperties": false,
+                      "description": "The licence terms of the bundle."
+                    },
+                    "creditBalanceCents": {
+                      "description": "Only with a valid bearer: the account Credit balance in cents, open holds already taken off.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "freeSlotOpen": {
+                      "description": "Only with a valid bearer: the account is under the free-bundle cap.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "extent",
+                    "areaKm2",
+                    "priceCents",
+                    "currency",
+                    "pricingConfigVersion",
+                    "freeEligible",
+                    "coverage",
+                    "licence"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The extent is malformed. Code: invalid_extent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The extent cannot be ordered. Codes: aoi_too_small, aoi_too_large, elevation_unavailable_for_aoi, imagery_unavailable_for_aoi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "429": {
+            "description": "Rate limited per IP; retryAfterMs says when to try again. Code: rate_limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders": {
+      "post": {
+        "operationId": "placeOrder",
+        "summary": "Order the extent the client was quoted, with Credit or a free-tier slot",
+        "description": "Places the order the web curator would place for the same extent: the same rows, Credit hold and build. Pays with Credit (the whole price) or a free-tier slot; never with a card. A refusal the curator can resolve on the web carries handoffUrl, the web curator on this extent. The order records the client the Mantle-Place-Client header names. The bundle reaches the calling host as an export it creates to itself once the bundle is built.",
+        "tags": [
+          "Orders"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Required. A unique key for this order, 16 to 255 characters (a random UUID is a good one). A retry with the same key returns the first order and never orders twice; the same key with a different extent is refused.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "extent": {
+                    "type": "object",
+                    "properties": {
+                      "west": {
+                        "type": "number"
+                      },
+                      "south": {
+                        "type": "number"
+                      },
+                      "east": {
+                        "type": "number"
+                      },
+                      "north": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "west",
+                      "south",
+                      "east",
+                      "north"
+                    ],
+                    "description": "The extent to order, in degrees (WGS 84): the extent the client was quoted."
+                  },
+                  "expectedPriceCents": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991,
+                    "description": "The priceCents of the Quote the client showed. Any other current price is refused with price_changed."
+                  },
+                  "payment": {
+                    "type": "string",
+                    "enum": [
+                      "credit",
+                      "free"
+                    ],
+                    "description": "credit pays the whole price from the account Credit balance; free takes a free-tier slot (an extent inside the free tier only). No card payment is taken here."
+                  }
+                },
+                "required": [
+                  "extent",
+                  "expectedPriceCents",
+                  "payment"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The order this Idempotency-Key placed before.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orderId": {
+                      "type": "string",
+                      "description": "The order id. The bundle arrives through the vault and exports routes."
+                    },
+                    "status": {
+                      "type": "string",
+                      "description": "The order status: paid when placed; later, its build status."
+                    }
+                  },
+                  "required": [
+                    "orderId",
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The order was placed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orderId": {
+                      "type": "string",
+                      "description": "The order id. The bundle arrives through the vault and exports routes."
+                    },
+                    "status": {
+                      "type": "string",
+                      "description": "The order status: paid when placed; later, its build status."
+                    }
+                  },
+                  "required": [
+                    "orderId",
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Refused. Codes: idempotency_key_required, invalid_idempotency_key, invalid_request (malformed body), invalid_extent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "description": "The Credit balance does not cover the whole price. Code: insufficient_credit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A human-readable message."
+                    },
+                    "code": {
+                      "description": "A stable, machine-readable code a client branches on. Codes are append-only.",
+                      "type": "string"
+                    },
+                    "detail": {
+                      "description": "Extra context for a person debugging; not stable.",
+                      "type": "string"
+                    },
+                    "handoffUrl": {
+                      "type": "string",
+                      "description": "The web curator on this extent (/curator#aoi=W,S,E,N&from=<client>), where the curator can finish the order, by card if need be."
+                    },
+                    "quote": {
+                      "description": "With price_changed only: the current Quote.",
+                      "type": "object",
+                      "properties": {
+                        "extent": {
+                          "type": "object",
+                          "properties": {
+                            "west": {
+                              "type": "number"
+                            },
+                            "south": {
+                              "type": "number"
+                            },
+                            "east": {
+                              "type": "number"
+                            },
+                            "north": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "west",
+                            "south",
+                            "east",
+                            "north"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The extent that was priced, as asked."
+                        },
+                        "areaKm2": {
+                          "type": "number",
+                          "description": "Geodesic area in square kilometres, the only input to the price."
+                        },
+                        "priceCents": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "The price in cents of currency. 0 for an extent inside the free tier."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "const": "usd"
+                        },
+                        "pricingConfigVersion": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "The pricing-config version the price was computed with."
+                        },
+                        "freeEligible": {
+                          "type": "boolean",
+                          "description": "The extent is small enough for the free tier, so priceCents is 0."
+                        },
+                        "coverage": {
+                          "type": "string",
+                          "enum": [
+                            "covered",
+                            "degraded"
+                          ],
+                          "description": "covered, or degraded when a live elevation probe flaked; a degraded extent can still be ordered. An uncovered extent is refused instead (elevation_unavailable_for_aoi or imagery_unavailable_for_aoi)."
+                        },
+                        "licence": {
+                          "type": "object",
+                          "properties": {
+                            "line": {
+                              "type": "string",
+                              "description": "The licence line checkout shows before the Pay button."
+                            },
+                            "url": {
+                              "type": "string",
+                              "description": "Where the full licensing terms are."
+                            }
+                          },
+                          "required": [
+                            "line",
+                            "url"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The licence terms of the bundle."
+                        },
+                        "creditBalanceCents": {
+                          "description": "Only with a valid bearer: the account Credit balance in cents, open holds already taken off.",
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "freeSlotOpen": {
+                          "description": "Only with a valid bearer: the account is under the free-bundle cap.",
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "extent",
+                        "areaKm2",
+                        "priceCents",
+                        "currency",
+                        "pricingConfigVersion",
+                        "freeEligible",
+                        "coverage",
+                        "licence"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "handoffUrl"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Refused. Codes: price_changed (carries the current quote; nothing was charged), free_cap_reached (the account holds the most live free bundles it may), idempotency_key_reused (the key placed an order for a different extent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A human-readable message."
+                    },
+                    "code": {
+                      "description": "A stable, machine-readable code a client branches on. Codes are append-only.",
+                      "type": "string"
+                    },
+                    "detail": {
+                      "description": "Extra context for a person debugging; not stable.",
+                      "type": "string"
+                    },
+                    "handoffUrl": {
+                      "type": "string",
+                      "description": "The web curator on this extent (/curator#aoi=W,S,E,N&from=<client>), where the curator can finish the order, by card if need be."
+                    },
+                    "quote": {
+                      "description": "With price_changed only: the current Quote.",
+                      "type": "object",
+                      "properties": {
+                        "extent": {
+                          "type": "object",
+                          "properties": {
+                            "west": {
+                              "type": "number"
+                            },
+                            "south": {
+                              "type": "number"
+                            },
+                            "east": {
+                              "type": "number"
+                            },
+                            "north": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "west",
+                            "south",
+                            "east",
+                            "north"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The extent that was priced, as asked."
+                        },
+                        "areaKm2": {
+                          "type": "number",
+                          "description": "Geodesic area in square kilometres, the only input to the price."
+                        },
+                        "priceCents": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "The price in cents of currency. 0 for an extent inside the free tier."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "const": "usd"
+                        },
+                        "pricingConfigVersion": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "The pricing-config version the price was computed with."
+                        },
+                        "freeEligible": {
+                          "type": "boolean",
+                          "description": "The extent is small enough for the free tier, so priceCents is 0."
+                        },
+                        "coverage": {
+                          "type": "string",
+                          "enum": [
+                            "covered",
+                            "degraded"
+                          ],
+                          "description": "covered, or degraded when a live elevation probe flaked; a degraded extent can still be ordered. An uncovered extent is refused instead (elevation_unavailable_for_aoi or imagery_unavailable_for_aoi)."
+                        },
+                        "licence": {
+                          "type": "object",
+                          "properties": {
+                            "line": {
+                              "type": "string",
+                              "description": "The licence line checkout shows before the Pay button."
+                            },
+                            "url": {
+                              "type": "string",
+                              "description": "Where the full licensing terms are."
+                            }
+                          },
+                          "required": [
+                            "line",
+                            "url"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The licence terms of the bundle."
+                        },
+                        "creditBalanceCents": {
+                          "description": "Only with a valid bearer: the account Credit balance in cents, open holds already taken off.",
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "freeSlotOpen": {
+                          "description": "Only with a valid bearer: the account is under the free-bundle cap.",
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "extent",
+                        "areaKm2",
+                        "priceCents",
+                        "currency",
+                        "pricingConfigVersion",
+                        "freeEligible",
+                        "coverage",
+                        "licence"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "handoffUrl"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The extent cannot be ordered this way. Codes: invalid_payment_method (free for an extent outside the free tier, or credit for one inside it), aoi_too_small, aoi_too_large, elevation_unavailable_for_aoi, imagery_unavailable_for_aoi, price_invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A human-readable message."
+                    },
+                    "code": {
+                      "description": "A stable, machine-readable code a client branches on. Codes are append-only.",
+                      "type": "string"
+                    },
+                    "detail": {
+                      "description": "Extra context for a person debugging; not stable.",
+                      "type": "string"
+                    },
+                    "handoffUrl": {
+                      "type": "string",
+                      "description": "The web curator on this extent (/curator#aoi=W,S,E,N&from=<client>), where the curator can finish the order, by card if need be."
+                    },
+                    "quote": {
+                      "description": "With price_changed only: the current Quote.",
+                      "type": "object",
+                      "properties": {
+                        "extent": {
+                          "type": "object",
+                          "properties": {
+                            "west": {
+                              "type": "number"
+                            },
+                            "south": {
+                              "type": "number"
+                            },
+                            "east": {
+                              "type": "number"
+                            },
+                            "north": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "west",
+                            "south",
+                            "east",
+                            "north"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The extent that was priced, as asked."
+                        },
+                        "areaKm2": {
+                          "type": "number",
+                          "description": "Geodesic area in square kilometres, the only input to the price."
+                        },
+                        "priceCents": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "The price in cents of currency. 0 for an extent inside the free tier."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "const": "usd"
+                        },
+                        "pricingConfigVersion": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "The pricing-config version the price was computed with."
+                        },
+                        "freeEligible": {
+                          "type": "boolean",
+                          "description": "The extent is small enough for the free tier, so priceCents is 0."
+                        },
+                        "coverage": {
+                          "type": "string",
+                          "enum": [
+                            "covered",
+                            "degraded"
+                          ],
+                          "description": "covered, or degraded when a live elevation probe flaked; a degraded extent can still be ordered. An uncovered extent is refused instead (elevation_unavailable_for_aoi or imagery_unavailable_for_aoi)."
+                        },
+                        "licence": {
+                          "type": "object",
+                          "properties": {
+                            "line": {
+                              "type": "string",
+                              "description": "The licence line checkout shows before the Pay button."
+                            },
+                            "url": {
+                              "type": "string",
+                              "description": "Where the full licensing terms are."
+                            }
+                          },
+                          "required": [
+                            "line",
+                            "url"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The licence terms of the bundle."
+                        },
+                        "creditBalanceCents": {
+                          "description": "Only with a valid bearer: the account Credit balance in cents, open holds already taken off.",
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "freeSlotOpen": {
+                          "description": "Only with a valid bearer: the account is under the free-bundle cap.",
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "extent",
+                        "areaKm2",
+                        "priceCents",
+                        "currency",
+                        "pricingConfigVersion",
+                        "freeEligible",
+                        "coverage",
+                        "licence"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "handoffUrl"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "429": {
+            "description": "Too many orders from this account lately; try again later. Code: rate_limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error; nothing was charged. Code: internal_error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A data source is unavailable; try again later. Code: provider_unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vault/bundles": {
+      "get": {
+        "operationId": "listVaultBundles",
+        "summary": "The curator bundles",
+        "description": "The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import.",
+        "tags": [
+          "Vault"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The bundles.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bundles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "The order id; the key of the download and materialize routes."
+                          },
+                          "aoiLabel": {
+                            "type": "string",
+                            "description": "The name the curator gave the order, else its codename."
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "areaKm2": {
+                            "type": "number"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "available",
+                              "refresh-pending",
+                              "refunded",
+                              "failed",
+                              "expired"
+                            ]
+                          },
+                          "layers": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "imagery": {
+                                    "type": "boolean"
+                                  },
+                                  "basemap": {
+                                    "type": "boolean"
+                                  },
+                                  "elevation": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "imagery",
+                                  "basemap",
+                                  "elevation"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Null is unknown (a bundle packaged before the sidecar manifest), not absent."
+                          },
+                          "manifestVersion": {
+                            "description": "A number before the MPB semver era, a string after it; null is unknown.",
+                            "type": [
+                              "number",
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "sizeBytes": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "sha256": {
+                            "description": "The whole bundle archive sha256; null is unknown.",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "formats": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "glb",
+                                    "gltf",
+                                    "usda",
+                                    "usdc",
+                                    "fbx",
+                                    "geotiff",
+                                    "cog",
+                                    "dwg",
+                                    "pmtiles",
+                                    "gpkg",
+                                    "geojson",
+                                    "shp",
+                                    "fgb"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "bundle"
+                                }
+                              ]
+                            }
+                          },
+                          "download": {
+                            "type": "object",
+                            "properties": {
+                              "method": {
+                                "type": "string",
+                                "const": "POST"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "formats": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "format": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "glb",
+                                            "gltf",
+                                            "usda",
+                                            "usdc",
+                                            "fbx",
+                                            "geotiff",
+                                            "cog",
+                                            "dwg",
+                                            "pmtiles",
+                                            "gpkg",
+                                            "geojson",
+                                            "shp",
+                                            "fgb"
+                                          ]
+                                        },
+                                        {
+                                          "type": "string",
+                                          "const": "bundle"
+                                        }
+                                      ]
+                                    },
+                                    "byteSize": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "format",
+                                    "byteSize"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "method",
+                              "path",
+                              "formats"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "thumbnail": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "url": {
+                                    "type": "string",
+                                    "description": "A presigned GET that needs no bearer token."
+                                  },
+                                  "width": {
+                                    "type": "number"
+                                  },
+                                  "height": {
+                                    "type": "number"
+                                  },
+                                  "expiresAt": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "url",
+                                  "width",
+                                  "height",
+                                  "expiresAt"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "deliveryModel": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "complete",
+                                  "base_on_demand"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "How the bundle is delivered; null is unknown, never \"complete\"."
+                          },
+                          "extent": {
+                            "description": "The order extent, so a host can hand the web curator the extent of its import. Present on every bundle that carries one.",
+                            "type": "object",
+                            "properties": {
+                              "west": {
+                                "type": "number"
+                              },
+                              "south": {
+                                "type": "number"
+                              },
+                              "east": {
+                                "type": "number"
+                              },
+                              "north": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "west",
+                              "south",
+                              "east",
+                              "north"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "links": {
+                            "description": "Present only when the bundle can start an adjacent order.",
+                            "type": "object",
+                            "properties": {
+                              "orderAdjacent": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "orderAdjacent"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "aoiLabel",
+                          "createdAt",
+                          "areaKm2",
+                          "status",
+                          "layers",
+                          "manifestVersion",
+                          "sizeBytes",
+                          "sha256",
+                          "formats",
+                          "download",
+                          "thumbnail",
+                          "deliveryModel"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "bundles"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "500": {
+            "description": "Internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vault/bundles/{orderId}/download": {
+      "post": {
+        "operationId": "getVaultBundleDownload",
+        "summary": "A fresh download link for one format of a bundle",
+        "description": "Mints a presigned URL for one artifact format, or for the whole archive with format bundle. A host that declares view support sends format bundle with a view naming itself, and gets a link to a view holding only the files its host block points at.",
+        "tags": [
+          "Vault"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          },
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "description": "The id of an order the signed-in curator owns.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "format": {
+                    "type": "string",
+                    "description": "An artifact format, or bundle for the whole archive. glb is the deprecated whole-bundle alias and is still accepted. A view needs bundle."
+                  },
+                  "view": {
+                    "type": "object",
+                    "properties": {
+                      "host": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,31}$",
+                        "description": "The key of the host block in the bundle manifest (hosts.<host>)."
+                      },
+                      "levels": {
+                        "description": "The level wanted of each entry of the host block; the key * is the rest.",
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "enum": [
+                            "RAW",
+                            "MAX",
+                            "MED",
+                            "MIN"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "host"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "format"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The link.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "description": "A presigned download URL, valid for 24 hours."
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    },
+                    "view": {
+                      "description": "With a host view: the view block of the view manifest.",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "sizeBytes": {
+                      "description": "With a host view: the size of the view.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "manifestSha256": {
+                      "description": "With a host view: the sha256 of the manifest member of the view.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "url",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed body or unknown format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "Not the order of the bearer, or not downloadable. Code: forbidden or not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such order or artifact. Code: not_found or not_ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The bundle was refunded or has expired. Code: refunded or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "500": {
+            "description": "Transient failure; retry. Code: transient.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vault/bundles/{orderId}/materialize": {
+      "post": {
+        "operationId": "materializeVaultBundleFormats",
+        "summary": "Generate more formats for a bundle",
+        "description": "Starts the on-demand build of formats that a bundle does not hold yet. Every materialization is free. At most one runs per bundle at a time.",
+        "tags": [
+          "Vault"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          },
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "description": "The id of an order the signed-in curator owns.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tokens": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "all"
+                      },
+                      {
+                        "type": "string",
+                        "const": "unreal"
+                      },
+                      {
+                        "minItems": 1,
+                        "maxItems": 52,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "basemap.pmtiles",
+                            "basemap.drape_png",
+                            "basemap.cog",
+                            "imagery.pmtiles",
+                            "imagery.drape_png",
+                            "imagery.cog",
+                            "elevation.dem_tif",
+                            "elevation.heightmap_png",
+                            "elevation.hillshade_tif",
+                            "elevation.contours_dxf",
+                            "elevation.landxml",
+                            "elevation.points_csv",
+                            "elevation.surface_dxf",
+                            "elevation.slope_tif",
+                            "elevation.aspect_tif",
+                            "elevation.steep_slope_gpkg",
+                            "imagery.ndvi_tif",
+                            "landcover.water_mask_tif",
+                            "landcover.worldcover_tif",
+                            "landcover.material_weights_tif",
+                            "landcover.canopy_height_tif",
+                            "landcover.tree_points_csv",
+                            "flood.nfhl_gpkg",
+                            "parcels.gpkg",
+                            "parcels.dxf",
+                            "zoning.gpkg",
+                            "zoning.dxf",
+                            "habitat.gpkg",
+                            "habitat.dxf",
+                            "historic.gpkg",
+                            "historic.dxf",
+                            "wetlands.gpkg",
+                            "wetlands.dxf",
+                            "contamination.gpkg",
+                            "contamination.dxf",
+                            "hydrography.gpkg",
+                            "hydrography.dxf",
+                            "soils.gpkg",
+                            "soils.dxf",
+                            "protected.gpkg",
+                            "protected.dxf",
+                            "terrain.cesium",
+                            "mesh.glb",
+                            "mesh.obj",
+                            "mesh.usdz",
+                            "buildings.glb",
+                            "buildings.ifc",
+                            "vector.gpkg",
+                            "vector.geojson",
+                            "vector.shp",
+                            "vector.fgb",
+                            "vector.usdz"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "claimToken": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "source": {
+                    "default": "curator",
+                    "type": "string",
+                    "enum": [
+                      "curator",
+                      "retry_replay",
+                      "pick_replay"
+                    ]
+                  },
+                  "remove": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "bundleJobId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "tokens"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Nothing to build (noop), or the build already running was joined (coalesced).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "noop": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "delivered": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "noop",
+                        "delivered"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "coalesced": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "activeJobId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "tokens": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "coalesced",
+                        "activeJobId",
+                        "tokens"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A build was queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jobId": {
+                      "type": "string"
+                    },
+                    "tokens": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "jobId",
+                    "tokens"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed body, or refused (for example code not_queueable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "Not the order of the bearer. Code: forbidden.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such order or bundle. Code: not_found or deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A build is already running. Code: active_job; carries activeJobId and tokens.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The free bundle expired. Code: expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "429": {
+            "description": "Rate limited per IP; retryAfterMs says when to try again. Code: rate_limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The build could not be dispatched.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A data source is unavailable; try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getVaultBundleMaterializeStatus",
+        "summary": "What a bundle holds, and what is being built",
+        "description": "The poll target of the materialize route.",
+        "tags": [
+          "Vault"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          },
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "description": "The id of an order the signed-in curator owns.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deliveryModel": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "base_on_demand",
+                            "complete"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "deliveryStateUnknown": {
+                      "type": "boolean"
+                    },
+                    "manifestVersion": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "delivered": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "basemap.pmtiles",
+                          "basemap.drape_png",
+                          "basemap.cog",
+                          "imagery.pmtiles",
+                          "imagery.drape_png",
+                          "imagery.cog",
+                          "elevation.dem_tif",
+                          "elevation.heightmap_png",
+                          "elevation.hillshade_tif",
+                          "elevation.contours_dxf",
+                          "elevation.landxml",
+                          "elevation.points_csv",
+                          "elevation.surface_dxf",
+                          "elevation.slope_tif",
+                          "elevation.aspect_tif",
+                          "elevation.steep_slope_gpkg",
+                          "imagery.ndvi_tif",
+                          "landcover.water_mask_tif",
+                          "landcover.worldcover_tif",
+                          "landcover.material_weights_tif",
+                          "landcover.canopy_height_tif",
+                          "landcover.tree_points_csv",
+                          "flood.nfhl_gpkg",
+                          "parcels.gpkg",
+                          "parcels.dxf",
+                          "zoning.gpkg",
+                          "zoning.dxf",
+                          "habitat.gpkg",
+                          "habitat.dxf",
+                          "historic.gpkg",
+                          "historic.dxf",
+                          "wetlands.gpkg",
+                          "wetlands.dxf",
+                          "contamination.gpkg",
+                          "contamination.dxf",
+                          "hydrography.gpkg",
+                          "hydrography.dxf",
+                          "soils.gpkg",
+                          "soils.dxf",
+                          "protected.gpkg",
+                          "protected.dxf",
+                          "terrain.cesium",
+                          "mesh.glb",
+                          "mesh.obj",
+                          "mesh.usdz",
+                          "buildings.glb",
+                          "buildings.ifc",
+                          "vector.gpkg",
+                          "vector.geojson",
+                          "vector.shp",
+                          "vector.fgb",
+                          "vector.usdz"
+                        ]
+                      }
+                    },
+                    "base": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "basemap.pmtiles",
+                          "basemap.drape_png",
+                          "basemap.cog",
+                          "imagery.pmtiles",
+                          "imagery.drape_png",
+                          "imagery.cog",
+                          "elevation.dem_tif",
+                          "elevation.heightmap_png",
+                          "elevation.hillshade_tif",
+                          "elevation.contours_dxf",
+                          "elevation.landxml",
+                          "elevation.points_csv",
+                          "elevation.surface_dxf",
+                          "elevation.slope_tif",
+                          "elevation.aspect_tif",
+                          "elevation.steep_slope_gpkg",
+                          "imagery.ndvi_tif",
+                          "landcover.water_mask_tif",
+                          "landcover.worldcover_tif",
+                          "landcover.material_weights_tif",
+                          "landcover.canopy_height_tif",
+                          "landcover.tree_points_csv",
+                          "flood.nfhl_gpkg",
+                          "parcels.gpkg",
+                          "parcels.dxf",
+                          "zoning.gpkg",
+                          "zoning.dxf",
+                          "habitat.gpkg",
+                          "habitat.dxf",
+                          "historic.gpkg",
+                          "historic.dxf",
+                          "wetlands.gpkg",
+                          "wetlands.dxf",
+                          "contamination.gpkg",
+                          "contamination.dxf",
+                          "hydrography.gpkg",
+                          "hydrography.dxf",
+                          "soils.gpkg",
+                          "soils.dxf",
+                          "protected.gpkg",
+                          "protected.dxf",
+                          "terrain.cesium",
+                          "mesh.glb",
+                          "mesh.obj",
+                          "mesh.usdz",
+                          "buildings.glb",
+                          "buildings.ifc",
+                          "vector.gpkg",
+                          "vector.geojson",
+                          "vector.shp",
+                          "vector.fgb",
+                          "vector.usdz"
+                        ]
+                      }
+                    },
+                    "notDelivered": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "token": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "token",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "activeJob": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "tokens": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "basemap.pmtiles",
+                                  "basemap.drape_png",
+                                  "basemap.cog",
+                                  "imagery.pmtiles",
+                                  "imagery.drape_png",
+                                  "imagery.cog",
+                                  "elevation.dem_tif",
+                                  "elevation.heightmap_png",
+                                  "elevation.hillshade_tif",
+                                  "elevation.contours_dxf",
+                                  "elevation.landxml",
+                                  "elevation.points_csv",
+                                  "elevation.surface_dxf",
+                                  "elevation.slope_tif",
+                                  "elevation.aspect_tif",
+                                  "elevation.steep_slope_gpkg",
+                                  "imagery.ndvi_tif",
+                                  "landcover.water_mask_tif",
+                                  "landcover.worldcover_tif",
+                                  "landcover.material_weights_tif",
+                                  "landcover.canopy_height_tif",
+                                  "landcover.tree_points_csv",
+                                  "flood.nfhl_gpkg",
+                                  "parcels.gpkg",
+                                  "parcels.dxf",
+                                  "zoning.gpkg",
+                                  "zoning.dxf",
+                                  "habitat.gpkg",
+                                  "habitat.dxf",
+                                  "historic.gpkg",
+                                  "historic.dxf",
+                                  "wetlands.gpkg",
+                                  "wetlands.dxf",
+                                  "contamination.gpkg",
+                                  "contamination.dxf",
+                                  "hydrography.gpkg",
+                                  "hydrography.dxf",
+                                  "soils.gpkg",
+                                  "soils.dxf",
+                                  "protected.gpkg",
+                                  "protected.dxf",
+                                  "terrain.cesium",
+                                  "mesh.glb",
+                                  "mesh.obj",
+                                  "mesh.usdz",
+                                  "buildings.glb",
+                                  "buildings.ifc",
+                                  "vector.gpkg",
+                                  "vector.geojson",
+                                  "vector.shp",
+                                  "vector.fgb",
+                                  "vector.usdz"
+                                ]
+                              }
+                            },
+                            "steps": {
+                              "anyOf": [
+                                {},
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "stall": {
+                              "type": "string",
+                              "enum": [
+                                "healthy",
+                                "redispatch",
+                                "terminate",
+                                "alert"
+                              ]
+                            },
+                            "safetyNetStall": {
+                              "type": "string",
+                              "enum": [
+                                "healthy",
+                                "redispatch",
+                                "terminate",
+                                "alert"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "tokens"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastFailed": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "tokens": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "basemap.pmtiles",
+                                  "basemap.drape_png",
+                                  "basemap.cog",
+                                  "imagery.pmtiles",
+                                  "imagery.drape_png",
+                                  "imagery.cog",
+                                  "elevation.dem_tif",
+                                  "elevation.heightmap_png",
+                                  "elevation.hillshade_tif",
+                                  "elevation.contours_dxf",
+                                  "elevation.landxml",
+                                  "elevation.points_csv",
+                                  "elevation.surface_dxf",
+                                  "elevation.slope_tif",
+                                  "elevation.aspect_tif",
+                                  "elevation.steep_slope_gpkg",
+                                  "imagery.ndvi_tif",
+                                  "landcover.water_mask_tif",
+                                  "landcover.worldcover_tif",
+                                  "landcover.material_weights_tif",
+                                  "landcover.canopy_height_tif",
+                                  "landcover.tree_points_csv",
+                                  "flood.nfhl_gpkg",
+                                  "parcels.gpkg",
+                                  "parcels.dxf",
+                                  "zoning.gpkg",
+                                  "zoning.dxf",
+                                  "habitat.gpkg",
+                                  "habitat.dxf",
+                                  "historic.gpkg",
+                                  "historic.dxf",
+                                  "wetlands.gpkg",
+                                  "wetlands.dxf",
+                                  "contamination.gpkg",
+                                  "contamination.dxf",
+                                  "hydrography.gpkg",
+                                  "hydrography.dxf",
+                                  "soils.gpkg",
+                                  "soils.dxf",
+                                  "protected.gpkg",
+                                  "protected.dxf",
+                                  "terrain.cesium",
+                                  "mesh.glb",
+                                  "mesh.obj",
+                                  "mesh.usdz",
+                                  "buildings.glb",
+                                  "buildings.ifc",
+                                  "vector.gpkg",
+                                  "vector.geojson",
+                                  "vector.shp",
+                                  "vector.fgb",
+                                  "vector.usdz"
+                                ]
+                              }
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "tokens"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastAttempt": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "tokens": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "basemap.pmtiles",
+                                  "basemap.drape_png",
+                                  "basemap.cog",
+                                  "imagery.pmtiles",
+                                  "imagery.drape_png",
+                                  "imagery.cog",
+                                  "elevation.dem_tif",
+                                  "elevation.heightmap_png",
+                                  "elevation.hillshade_tif",
+                                  "elevation.contours_dxf",
+                                  "elevation.landxml",
+                                  "elevation.points_csv",
+                                  "elevation.surface_dxf",
+                                  "elevation.slope_tif",
+                                  "elevation.aspect_tif",
+                                  "elevation.steep_slope_gpkg",
+                                  "imagery.ndvi_tif",
+                                  "landcover.water_mask_tif",
+                                  "landcover.worldcover_tif",
+                                  "landcover.material_weights_tif",
+                                  "landcover.canopy_height_tif",
+                                  "landcover.tree_points_csv",
+                                  "flood.nfhl_gpkg",
+                                  "parcels.gpkg",
+                                  "parcels.dxf",
+                                  "zoning.gpkg",
+                                  "zoning.dxf",
+                                  "habitat.gpkg",
+                                  "habitat.dxf",
+                                  "historic.gpkg",
+                                  "historic.dxf",
+                                  "wetlands.gpkg",
+                                  "wetlands.dxf",
+                                  "contamination.gpkg",
+                                  "contamination.dxf",
+                                  "hydrography.gpkg",
+                                  "hydrography.dxf",
+                                  "soils.gpkg",
+                                  "soils.dxf",
+                                  "protected.gpkg",
+                                  "protected.dxf",
+                                  "terrain.cesium",
+                                  "mesh.glb",
+                                  "mesh.obj",
+                                  "mesh.usdz",
+                                  "buildings.glb",
+                                  "buildings.ifc",
+                                  "vector.gpkg",
+                                  "vector.geojson",
+                                  "vector.shp",
+                                  "vector.fgb",
+                                  "vector.usdz"
+                                ]
+                              }
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": [
+                                "completed",
+                                "failed",
+                                "cancelled"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "tokens",
+                            "outcome",
+                            "reason"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "pendingRetryTokens": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "basemap.pmtiles",
+                          "basemap.drape_png",
+                          "basemap.cog",
+                          "imagery.pmtiles",
+                          "imagery.drape_png",
+                          "imagery.cog",
+                          "elevation.dem_tif",
+                          "elevation.heightmap_png",
+                          "elevation.hillshade_tif",
+                          "elevation.contours_dxf",
+                          "elevation.landxml",
+                          "elevation.points_csv",
+                          "elevation.surface_dxf",
+                          "elevation.slope_tif",
+                          "elevation.aspect_tif",
+                          "elevation.steep_slope_gpkg",
+                          "imagery.ndvi_tif",
+                          "landcover.water_mask_tif",
+                          "landcover.worldcover_tif",
+                          "landcover.material_weights_tif",
+                          "landcover.canopy_height_tif",
+                          "landcover.tree_points_csv",
+                          "flood.nfhl_gpkg",
+                          "parcels.gpkg",
+                          "parcels.dxf",
+                          "zoning.gpkg",
+                          "zoning.dxf",
+                          "habitat.gpkg",
+                          "habitat.dxf",
+                          "historic.gpkg",
+                          "historic.dxf",
+                          "wetlands.gpkg",
+                          "wetlands.dxf",
+                          "contamination.gpkg",
+                          "contamination.dxf",
+                          "hydrography.gpkg",
+                          "hydrography.dxf",
+                          "soils.gpkg",
+                          "soils.dxf",
+                          "protected.gpkg",
+                          "protected.dxf",
+                          "terrain.cesium",
+                          "mesh.glb",
+                          "mesh.obj",
+                          "mesh.usdz",
+                          "buildings.glb",
+                          "buildings.ifc",
+                          "vector.gpkg",
+                          "vector.geojson",
+                          "vector.shp",
+                          "vector.fgb",
+                          "vector.usdz"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "deliveryModel",
+                    "delivered",
+                    "base",
+                    "notDelivered",
+                    "activeJob",
+                    "lastFailed",
+                    "pendingRetryTokens"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "Not the order of the bearer. Code: forbidden.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such order. Code: not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "500": {
+            "description": "Internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exports": {
+      "get": {
+        "operationId": "listPendingExports",
+        "summary": "The exports waiting for this connection",
+        "description": "The signed-in curator exports that target this connection and are not yet terminal, oldest first. Exports of other curators are never listed.",
+        "tags": [
+          "Exports"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          },
+          {
+            "name": "connectionId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The exports.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "exports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "orderId": {
+                            "type": "string"
+                          },
+                          "host": {
+                            "type": "string",
+                            "enum": [
+                              "unreal",
+                              "revit"
+                            ]
+                          },
+                          "targetConnectionId": {
+                            "type": "string"
+                          },
+                          "target": {
+                            "type": "object",
+                            "properties": {
+                              "document": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "machine": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "pluginVersion": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "machine",
+                              "pluginVersion"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "sent",
+                              "received",
+                              "waiting_for_bundle",
+                              "awaiting_options",
+                              "importing",
+                              "imported",
+                              "failed",
+                              "cancelled"
+                            ]
+                          },
+                          "progress": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "failureReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "failureMessage": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "endedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "orderId",
+                          "host",
+                          "targetConnectionId",
+                          "target",
+                          "status",
+                          "progress",
+                          "failureReason",
+                          "failureMessage",
+                          "createdAt",
+                          "updatedAt",
+                          "endedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "exports"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "connectionId is missing. Code: invalid_query.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "429": {
+            "description": "Rate limited per IP; retryAfterMs says when to try again. Code: rate_limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exports/{exportId}/advance": {
+      "post": {
+        "operationId": "advanceExport",
+        "summary": "Move an export to its next status",
+        "description": "The host reports where an export has got to. The lifecycle reducer decides which moves are allowed.",
+        "tags": [
+          "Exports"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PlatformClient"
+          },
+          {
+            "name": "exportId",
+            "in": "path",
+            "required": true,
+            "description": "The id of an export of the signed-in curator.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "connectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "received",
+                      "waiting_for_bundle",
+                      "awaiting_options",
+                      "importing",
+                      "imported",
+                      "failed",
+                      "cancelled"
+                    ]
+                  },
+                  "progress": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "reason": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]{1,64}$"
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "connectionId",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The export after the move.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "orderId": {
+                      "type": "string"
+                    },
+                    "host": {
+                      "type": "string",
+                      "enum": [
+                        "unreal",
+                        "revit"
+                      ]
+                    },
+                    "targetConnectionId": {
+                      "type": "string"
+                    },
+                    "target": {
+                      "type": "object",
+                      "properties": {
+                        "document": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "machine": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "pluginVersion": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "document",
+                        "machine",
+                        "pluginVersion"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "sent",
+                        "received",
+                        "waiting_for_bundle",
+                        "awaiting_options",
+                        "importing",
+                        "imported",
+                        "failed",
+                        "cancelled"
+                      ]
+                    },
+                    "progress": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "failureReason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "failureMessage": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "endedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "orderId",
+                    "host",
+                    "targetConnectionId",
+                    "target",
+                    "status",
+                    "progress",
+                    "failureReason",
+                    "failureMessage",
+                    "createdAt",
+                    "updatedAt",
+                    "endedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed body. Code: invalid_body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "The export targets another connection. Code: wrong_target.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such export. Code: not_found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The lifecycle refuses the move. Code: invalid_transition.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "426": {
+            "$ref": "#/components/responses/ClientUpdateRequired"
+          },
+          "429": {
+            "description": "Rate limited per IP; retryAfterMs says when to try again. Code: rate_limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error. Code: internal_error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The access token the native sign-in returns (Authorization: Bearer <access_token>). It lasts about an hour; renew it with the refresh route."
+      }
+    },
+    "parameters": {
+      "PlatformClient": {
+        "name": "Mantle-Place-Client",
+        "in": "header",
+        "required": false,
+        "description": "Names the calling client and its version as <client>/<semver>, for example revit/2.1.0. Clients: web, revit, unreal, autocad. A call without the header, or with one the platform cannot read, is accepted and recorded as an unknown client.",
+        "schema": {
+          "type": "string",
+          "examples": [
+            "revit/2.1.0"
+          ]
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "The bearer token is missing, invalid or expired.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            }
+          }
+        }
+      },
+      "ClientUpdateRequired": {
+        "description": "The calling client is below the minimum version the platform serves for it. Code: client_update_required. Show an update prompt, not an error.",
+        "headers": {
+          "Cache-Control": {
+            "description": "no-store: the minimum moves with a deploy.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ClientUpdateRequired"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "A human-readable message."
+          },
+          "code": {
+            "description": "A stable, machine-readable code a client branches on. Codes are append-only.",
+            "type": "string"
+          },
+          "detail": {
+            "description": "Extra context for a person debugging; not stable.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": {}
+      },
+      "ClientUpdateRequired": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "const": "client_update_required"
+          },
+          "client": {
+            "type": "string",
+            "description": "The client name the request sent."
+          },
+          "version": {
+            "type": "string",
+            "description": "The version the request sent."
+          },
+          "minimumVersion": {
+            "type": "string",
+            "description": "The lowest version of this client the platform serves."
+          }
+        },
+        "required": [
+          "error",
+          "code",
+          "client",
+          "version",
+          "minimumVersion"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

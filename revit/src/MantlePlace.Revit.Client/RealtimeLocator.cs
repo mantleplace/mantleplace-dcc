@@ -1,3 +1,4 @@
+using MantlePlace.PlatformApi;
 using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Client;
@@ -33,8 +34,6 @@ public static class RealtimeLocator
 {
     private static readonly TimeSpan RouteTimeout = TimeSpan.FromSeconds(10);
 
-    private static readonly HttpClient SharedHttp = new();
-
     /// <summary>True when a local override leaves nothing to ask the platform.</summary>
     public static bool HasOverride(MantlePlaceEndpoints endpoints)
     {
@@ -61,22 +60,18 @@ public static class RealtimeLocator
                 : new RealtimeValues(string.Empty, string.Empty, why);
         }
 
-        string route = endpoints.ApiBaseUrl.TrimEnd('/') + PublishedRealtime.Path;
         string body;
         try
         {
             using CancellationTokenSource limit = CancellationTokenSource.CreateLinkedTokenSource(cancel);
             limit.CancelAfter(RouteTimeout);
-            using HttpClient? own = handler is null ? null : new HttpClient(handler, disposeHandler: false);
-            HttpClient http = own ?? SharedHttp;
-            using HttpRequestMessage request = new(HttpMethod.Get, route);
-            using HttpResponseMessage response = await http.SendAsync(request, limit.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
+            (int status, body) = await PlatformApiCalls.For(endpoints.ApiBaseUrl.TrimEnd('/'), handler)
+                .SendAsync((api, ct) => api.GetRealtimeConfigAsync(ct), null, limit.Token)
+                .ConfigureAwait(false);
+            if (status is < 200 or >= 300)
             {
-                return Off($"the platform's Realtime route answered {(int)response.StatusCode}");
+                return Off($"the platform's Realtime route answered {status}");
             }
-
-            body = await response.Content.ReadAsStringAsync(limit.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
