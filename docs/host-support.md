@@ -63,6 +63,7 @@ edited in the same pull request that updates the release.
 | A notice when an order arrives in the vault | not shipped — [unreal-0.8.1] | supported — [revit-0.2.0] | not shipped — no `autocad` release yet |
 | Re-join a Prepare the host was closed during | not shipped — [unreal-0.8.1] | supported — [revit-0.2.0] | not shipped — no `autocad` release yet |
 | Each bundle's thumbnail in the vault | not shipped — [unreal-0.8.1] | not shipped — [revit-1.0.0] | not shipped — no `autocad` release yet |
+| Open the web curator on the extent the project already knows | not shipped — [unreal-0.8.1] | not shipped — [revit-1.0.0] | not shipped — no `autocad` release yet |
 
 ## Importing a bundle
 

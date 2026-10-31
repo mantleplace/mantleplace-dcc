@@ -118,6 +118,31 @@ bool FMantlePlaceImportProvenanceTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("content root survives"), Read.ContentRoot, Written.ContentRoot);
 		TestEqual(TEXT("job id survives"), Read.JobId, Written.JobId);
 
+		// The order's extent (Open in curator): none unless the importer copied one from the manifest.
+		TestFalse(TEXT("a record with no extent reads as having none"), Read.bHasExtent);
+		FRecord WithExtent = Written;
+		WithExtent.bHasExtent = true;
+		WithExtent.Extent.West = -97.75;
+		WithExtent.Extent.South = 30.25;
+		WithExtent.Extent.East = -97.73;
+		WithExtent.Extent.North = 30.27;
+		FRecord ReadExtent;
+		TestTrue(TEXT("a record with an extent parses back"), FromJson(ToJson(WithExtent), ReadExtent));
+		TestTrue(TEXT("the extent survives"), ReadExtent.bHasExtent);
+		TestEqual(TEXT("west survives"), ReadExtent.Extent.West, -97.75);
+		TestEqual(TEXT("south survives"), ReadExtent.Extent.South, 30.25);
+		TestEqual(TEXT("east survives"), ReadExtent.Extent.East, -97.73);
+		TestEqual(TEXT("north survives"), ReadExtent.Extent.North, 30.27);
+
+		// A bad extent costs the record its extent, never the record: re-import still depends on it.
+		FRecord BadExtent;
+		TestTrue(TEXT("an inverted extent leaves the record readable"),
+			FromJson(TEXT("{\"identity\":\"ord-11112222-3333\",\"bbox\":{\"west\":-97.73,\"south\":30.25,\"east\":-97.75,\"north\":30.27}}"), BadExtent));
+		TestFalse(TEXT("and reads as no extent"), BadExtent.bHasExtent);
+		TestTrue(TEXT("an incomplete extent leaves the record readable"),
+			FromJson(TEXT("{\"identity\":\"ord-11112222-3333\",\"bbox\":{\"west\":-97.75}}"), BadExtent));
+		TestFalse(TEXT("and reads as no extent either"), BadExtent.bHasExtent);
+
 		// The full identity is what round-trips, not the truncation — the collision check compares
 		// it, so a record that stored only eight characters could not answer the question.
 		TestTrue(TEXT("the full identity is stored"), Read.Identity.Len() > 8);

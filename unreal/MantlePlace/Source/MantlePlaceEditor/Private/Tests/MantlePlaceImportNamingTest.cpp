@@ -252,6 +252,9 @@ bool FMantlePlaceImportNamingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("foliage label"),
 			ActorLabel(EActorKind::Foliage, Identity), FString(TEXT("MP_Foliage_a1b2c3d4")));
 
+		TestEqual(TEXT("Extent box label (no identity: it belongs to no import)"),
+			ExtentBoxLabel(), FString(TEXT("MP_ExtentBox")));
+
 		TestEqual(TEXT("road spline prefix"),
 			RoadSplineLabelPrefix(Identity), FString(TEXT("MP_RoadSpline_a1b2c3d4_")));
 		TestEqual(TEXT("road spline label"),

@@ -74,6 +74,7 @@ private:
 	FText GetAuthButtonText() const;
 	bool IsAuthButtonEnabled() const;
 	FReply OnSendFeedbackClicked();
+	FReply OnOpenInCuratorClicked();
 	FReply OnRefreshClicked();
 	void UpdateHeaderState();
 

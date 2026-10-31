@@ -2,11 +2,15 @@
 
 #include "Slate/SMantlePlaceVaultPanel.h"
 
+#include "Editor.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "HAL/PlatformProcess.h"
 #include "Interfaces/IPluginManager.h"
+#include "MantlePlaceCuratorExtentLogic.h"
 #include "MantlePlaceEditorStyle.h"
+#include "MantlePlaceExtentBox.h"
 #include "MantlePlaceFeedbackLogic.h"
+#include "MantlePlaceLevelExtent.h"
 #include "MantlePlacePalette.h"
 #include "MantlePlaceImporterLibrary.h"
 #include "MantlePlaceVaultPanelController.h"
@@ -68,6 +72,68 @@ namespace
 		{
 			FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
 		}
+	}
+
+	/**
+	 * Open the web curator at the link FMantlePlaceCuratorExtentLogic builds: on the extent when the
+	 * level supplied one, plain otherwise. The same configurable web-app host the vault API uses.
+	 */
+	void OpenCuratorLink(const FMantlePlaceResolvedExtent& Resolved)
+	{
+		const FString Url = FMantlePlaceCuratorExtentLogic::BuildCuratorUrl(GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, Resolved);
+		if (!Url.IsEmpty())
+		{
+			FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
+		}
+	}
+
+	/**
+	 * A level with no extent source: offer to place an Extent box (or, when the level already has one
+	 * that is not located yet, to select it), or to open the plain curator. Never blocks; it stays until
+	 * one of its three buttons is pressed, because the choice is the point.
+	 */
+	void ShowNoExtentPrompt(UWorld* World)
+	{
+		const bool bHasBox = MantlePlaceLevelExtent::ExtentBoxes(World).Num() > 0;
+		const TSharedRef<TWeakPtr<SNotificationItem>> Shown = MakeShared<TWeakPtr<SNotificationItem>>();
+		const auto Close = [Shown]()
+		{
+			if (const TSharedPtr<SNotificationItem> Notification = Shown->Pin())
+			{
+				Notification->ExpireAndFadeout();
+			}
+		};
+		const FSimpleDelegate PlaceBox = FSimpleDelegate::CreateLambda([World = TWeakObjectPtr<UWorld>(World), Close]()
+		{
+			Close();
+			if (MantlePlaceLevelExtent::PlaceExtentBox(World.Get()) != nullptr)
+			{
+				FNotificationInfo Info(LOCTEXT("ExtentBoxPlaced", "Extent box ready"));
+				Info.SubText = LOCTEXT("ExtentBoxPlacedSub", "Set its Center Longitude and Center Latitude in Details, scale it over your site, then press Open in curator again.");
+				Info.ExpireDuration = 9.f;
+				Info.bFireAndForget = true;
+				FSlateNotificationManager::Get().AddNotification(Info);
+			}
+		});
+		const FSimpleDelegate OpenPlain = FSimpleDelegate::CreateLambda([Close]()
+		{
+			Close();
+			OpenCuratorLink(FMantlePlaceResolvedExtent());
+		});
+		const FSimpleDelegate Dismiss = FSimpleDelegate::CreateLambda([Close]() { Close(); });
+
+		FNotificationInfo Info(LOCTEXT("NoExtentTitle", "This level has no extent to open the curator on"));
+		Info.SubText = bHasBox
+			? LOCTEXT("NoExtentSubBox", "The Extent box is not located yet. Select it and set its Center Longitude and Center Latitude, or open the curator and draw the extent there.")
+			: LOCTEXT("NoExtentSub", "It has no Mantle Place import, georeference or Extent box. Place an Extent box over your site, or open the curator and draw the extent there.");
+		Info.bFireAndForget = false;
+		Info.bUseSuccessFailIcons = false;
+		Info.ButtonDetails.Add(FNotificationButtonInfo(
+			bHasBox ? LOCTEXT("NoExtentSelectBox", "Select Extent box") : LOCTEXT("NoExtentPlaceBox", "Place Extent box"),
+			FText::GetEmpty(), PlaceBox, SNotificationItem::CS_None));
+		Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("NoExtentOpenPlain", "Open the curator"), FText::GetEmpty(), OpenPlain, SNotificationItem::CS_None));
+		Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("NoExtentDismiss", "Dismiss"), FText::GetEmpty(), Dismiss, SNotificationItem::CS_None));
+		*Shown = FSlateNotificationManager::Get().AddNotification(Info);
 	}
 
 	/** Where the order ids the post-import prompt has already asked about are kept (per project, per machine). */
@@ -343,6 +409,27 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 			[
 				SNew(STextBlock)
 				.Text(LOCTEXT("SendFeedback", "Send Feedback"))
+				.Font(FMantlePlaceEditorStyle::GetFont(EFont::Small))
+				.ColorAndOpacity(FSlateColor(MantlePlacePalette::White()))
+			]
+		]
+
+		// Open in curator: opens the web curator on the extent the level already knows (a previous import,
+		// the level's georeference, a Cesium georeference, or an Extent box). Needs no sign-in.
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(0.f, 0.f, FMantlePlaceEditorStyle::S2, 0.f)
+		[
+			SNew(SButton)
+			.Tag(TEXT("MantlePlace.Vault.OpenInCurator"))
+			.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Secondary"))
+			.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
+			.ToolTipText(LOCTEXT("OpenInCuratorTip", "Open the Mantle Place curator in your browser on this level's extent, drawn and ready. No account needed."))
+			.OnClicked(this, &SMantlePlaceVaultPanel::OnOpenInCuratorClicked)
+			[
+				SNew(STextBlock)
+				.Text(LOCTEXT("OpenInCurator", "Open in curator"))
 				.Font(FMantlePlaceEditorStyle::GetFont(EFont::Small))
 				.ColorAndOpacity(FSlateColor(MantlePlacePalette::White()))
 			]
@@ -882,6 +969,21 @@ bool SMantlePlaceVaultPanel::IsAuthButtonEnabled() const
 FReply SMantlePlaceVaultPanel::OnSendFeedbackClicked()
 {
 	OpenFeedbackLink(FString());
+	return FReply::Handled();
+}
+
+FReply SMantlePlaceVaultPanel::OnOpenInCuratorClicked()
+{
+	UWorld* World = GEditor != nullptr ? GEditor->GetEditorWorldContext().World() : nullptr;
+	const FMantlePlaceResolvedExtent Resolved = MantlePlaceLevelExtent::Resolve(World);
+	if (!Resolved.IsSet())
+	{
+		ShowNoExtentPrompt(World);
+		return FReply::Handled();
+	}
+	OpenCuratorLink(Resolved);
+	ShowToast(FString::Printf(TEXT("Opening the curator on the extent from %s."),
+		*FMantlePlaceCuratorExtentLogic::DescribeSource(Resolved.Source)), true);
 	return FReply::Handled();
 }
 
