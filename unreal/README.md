@@ -31,6 +31,10 @@ What this plugin does not do yet, and what it leaves out on purpose, is the
 2. Extract it into your project's `Plugins/` folder (create the folder if the project has none).
 3. Open the project. If the editor asks to enable the plugin, accept, then restart when prompted.
 
+The plugin is also listed on Fab, free:
+[Mantle Place — Real-World Terrain, Imagery, Buildings, Roads & Land Cover](https://www.fab.com/listings/6d7cdbd3-4d9e-48ba-982a-f4aa07d078e4).
+A Fab version can trail the newest GitHub release by the length of Fab's review.
+
 The prebuilt binary is **Windows only** today. Any other platform, or any other engine version, is a
 source build: see [Building](../README.md#building) in the root README.
 
