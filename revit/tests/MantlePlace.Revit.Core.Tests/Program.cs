@@ -95,6 +95,7 @@ exitCode |= RealtimeFramesTests.Run();
 exitCode |= RealtimeClientTests.Run();
 exitCode |= PlatformApiTests.Run();
 exitCode |= ConnectedHostTests.Run();
+exitCode |= CuratorExtentTests.Run();
 
 if (exitCode == 0)
 {

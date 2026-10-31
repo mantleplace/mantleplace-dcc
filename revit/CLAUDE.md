@@ -186,6 +186,10 @@ there moves the standard first. Title Case is Revit's; a host construct keeps it
   to report next, one window at a time), `ConnectedHostService.cs` and `ExportBundleFetcher.cs` in
   `Client` (the channel, the routes and the vault fetch, all off Revit's thread), and in the shim only
   `RevitExportImportHost.cs` and the export path through `BundleImportEventHandler`.
+- Opening the web curator on the extent the project knows (the order id in the provenance record, the
+  vault record's `extent`, else the site location and a size) → `CuratorExtent.cs` in `Core` decides it
+  and builds the link, `VaultListingReader` reads the record's `extent`, and `OpenInCuratorCommand.cs`
+  in the shim reads the model and opens the browser. The link's one `from` value is `revit`.
 - How this plugin behaves and how to build it → [`README.md`](./README.md).
 - Whether this plugin supports a feature, and why not → the
   [host support matrix](../docs/host-support.md). A change that adds, narrows or drops a feature
