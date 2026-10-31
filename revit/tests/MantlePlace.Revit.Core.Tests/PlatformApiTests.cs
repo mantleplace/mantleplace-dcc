@@ -235,6 +235,58 @@ internal static class PlatformApiTests
             }
         });
 
+        run.Case("generated enums are written and read by their spec spelling, not the C# name", () =>
+        {
+            Body3 order = new()
+            {
+                Extent = new Extent { West = -1, South = -1, East = 1, North = 1 },
+                ExpectedPriceCents = 0,
+                Payment = Body3Payment.Credit,
+            };
+            JsonNode written = JsonNode.Parse(JsonSerializer.Serialize(order))!;
+            run.Equal(written["payment"]!.GetValue<string>(), "credit", "the order's payment is written as credit");
+
+            Body3 back = JsonSerializer.Deserialize<Body3>("""{"extent":{"west":-1,"south":-1,"east":1,"north":1},"expectedPriceCents":0,"payment":"free"}""")!;
+            run.Equal(back.Payment, Body3Payment.Free, "payment free reads back");
+
+            Body6 status = JsonSerializer.Deserialize<Body6>("""{"status":"waiting_for_bundle"}""")!;
+            run.Equal(status.Status, Body6Status.Waiting_for_bundle, "a multi-word status reads by its spec spelling");
+            run.Equal(JsonNode.Parse(JsonSerializer.Serialize(status))!["status"]!.GetValue<string>(), "waiting_for_bundle", "and writes it");
+
+            bool refused = false;
+            try
+            {
+                JsonSerializer.Deserialize<Body3>("""{"payment":"Credit"}""");
+            }
+            catch (JsonException)
+            {
+                refused = true;
+            }
+
+            run.True(refused, "the C# spelling is not a payment the platform serves");
+        });
+
+        run.Case("no generated enum property keeps the stock converter, and each enum round-trips", () =>
+        {
+            string? folder = RepoTree.Find("revit/src/MantlePlace.PlatformApi/Generated");
+            string? file = folder is null ? null : Path.Combine(folder, "PlatformApiClient.g.cs");
+            run.True(file is not null, "the generated client is found");
+            run.False(File.ReadAllText(file!).Contains("JsonStringEnumConverter", StringComparison.Ordinal), "no JsonStringEnumConverter is left");
+
+            JsonSerializerOptions options = new();
+            options.Converters.Add(new EnumMemberJsonConverterFactory());
+            foreach (Type type in typeof(PlatformApiClient).Assembly.GetTypes().Where(t => t.IsEnum && t.Namespace == "MantlePlace.PlatformApi"))
+            {
+                foreach (object value in Enum.GetValues(type))
+                {
+                    string expected = type.GetField(value.ToString()!)!.GetCustomAttribute<System.Runtime.Serialization.EnumMemberAttribute>()!.Value!;
+                    string json = JsonSerializer.Serialize(value, type, options);
+                    run.Equal(json, "\"" + expected + "\"", type.Name + "." + value + " is written as its EnumMember value");
+                    run.True(Equals(JsonSerializer.Deserialize(json, type, options), value), type.Name + "." + value + " reads back");
+                }
+            }
+        });
+
         return run.Report("platform api");
     }
 
