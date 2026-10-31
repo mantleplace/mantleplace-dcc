@@ -2016,13 +2016,13 @@ namespace MantlePlace.PlatformApi
         /// A stable, machine-readable code a client branches on. Codes are append-only.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("code")]
-        public string Code { get; set; } = default!;
+        public string? Code { get; set; } = default!;
 
         /// <summary>
         /// Extra context for a person debugging; not stable.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("detail")]
-        public string Detail { get; set; } = default!;
+        public string? Detail { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -2167,7 +2167,7 @@ namespace MantlePlace.PlatformApi
         public string Format { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("view")]
-        public View View { get; set; } = default!;
+        public View? View { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -2189,18 +2189,18 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("claimToken")]
         [System.ComponentModel.DataAnnotations.StringLength(int.MaxValue, MinimumLength = 1)]
-        public string ClaimToken { get; set; } = default!;
+        public string? ClaimToken { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("source")]
         [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<Body5Source>))]
-        public Body5Source Source { get; set; } = MantlePlace.PlatformApi.Body5Source.Curator;
+        public Body5Source? Source { get; set; } = MantlePlace.PlatformApi.Body5Source.Curator;
 
         [System.Text.Json.Serialization.JsonPropertyName("remove")]
-        public bool Remove { get; set; } = false;
+        public bool? Remove { get; set; } = false;
 
         [System.Text.Json.Serialization.JsonPropertyName("bundleJobId")]
         [System.ComponentModel.DataAnnotations.RegularExpression(@"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$")]
-        public System.Guid BundleJobId { get; set; } = default!;
+        public System.Guid? BundleJobId { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -2229,15 +2229,15 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("progress")]
         [System.ComponentModel.DataAnnotations.Range(0, 100)]
-        public int Progress { get; set; } = default!;
+        public int? Progress { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("reason")]
         [System.ComponentModel.DataAnnotations.RegularExpression(@"^[a-z0-9_]{1,64}$")]
-        public string Reason { get; set; } = default!;
+        public string? Reason { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("message")]
         [System.ComponentModel.DataAnnotations.StringLength(1000)]
-        public string Message { get; set; } = default!;
+        public string? Message { get; set; } = default!;
 
     }
 
@@ -2384,13 +2384,13 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("creditBalanceCents")]
         [System.ComponentModel.DataAnnotations.Range(-9007199254740991L, 9007199254740991L)]
-        public long CreditBalanceCents { get; set; } = default!;
+        public long? CreditBalanceCents { get; set; } = default!;
 
         /// <summary>
         /// Only with a valid bearer: the account is under the free-bundle cap.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeSlotOpen")]
-        public bool FreeSlotOpen { get; set; } = default!;
+        public bool? FreeSlotOpen { get; set; } = default!;
 
     }
 
@@ -2449,13 +2449,13 @@ namespace MantlePlace.PlatformApi
         /// A stable, machine-readable code a client branches on. Codes are append-only.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("code")]
-        public string Code { get; set; } = default!;
+        public string? Code { get; set; } = default!;
 
         /// <summary>
         /// Extra context for a person debugging; not stable.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("detail")]
-        public string Detail { get; set; } = default!;
+        public string? Detail { get; set; } = default!;
 
         /// <summary>
         /// The web curator on this extent (/curator#aoi=W,S,E,N&amp;from=&lt;client&gt;), where the curator can finish the order, by card if need be.
@@ -2468,7 +2468,7 @@ namespace MantlePlace.PlatformApi
         /// With price_changed only: the current Quote.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("quote")]
-        public Quote Quote { get; set; } = default!;
+        public Quote? Quote { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -2496,13 +2496,13 @@ namespace MantlePlace.PlatformApi
         /// A stable, machine-readable code a client branches on. Codes are append-only.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("code")]
-        public string Code { get; set; } = default!;
+        public string? Code { get; set; } = default!;
 
         /// <summary>
         /// Extra context for a person debugging; not stable.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("detail")]
-        public string Detail { get; set; } = default!;
+        public string? Detail { get; set; } = default!;
 
         /// <summary>
         /// The web curator on this extent (/curator#aoi=W,S,E,N&amp;from=&lt;client&gt;), where the curator can finish the order, by card if need be.
@@ -2515,7 +2515,7 @@ namespace MantlePlace.PlatformApi
         /// With price_changed only: the current Quote.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("quote")]
-        public Quote2 Quote { get; set; } = default!;
+        public Quote2? Quote { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -2543,13 +2543,13 @@ namespace MantlePlace.PlatformApi
         /// A stable, machine-readable code a client branches on. Codes are append-only.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("code")]
-        public string Code { get; set; } = default!;
+        public string? Code { get; set; } = default!;
 
         /// <summary>
         /// Extra context for a person debugging; not stable.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("detail")]
-        public string Detail { get; set; } = default!;
+        public string? Detail { get; set; } = default!;
 
         /// <summary>
         /// The web curator on this extent (/curator#aoi=W,S,E,N&amp;from=&lt;client&gt;), where the curator can finish the order, by card if need be.
@@ -2562,7 +2562,7 @@ namespace MantlePlace.PlatformApi
         /// With price_changed only: the current Quote.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("quote")]
-        public Quote3 Quote { get; set; } = default!;
+        public Quote3? Quote { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -2604,7 +2604,7 @@ namespace MantlePlace.PlatformApi
         /// With a host view: the view block of the view manifest.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("view")]
-        public View2 View { get; set; } = default!;
+        public View2? View { get; set; } = default!;
 
         /// <summary>
         /// With a host view: the size of the view.
@@ -2657,10 +2657,10 @@ namespace MantlePlace.PlatformApi
         public DeliveryModel DeliveryModel { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("deliveryStateUnknown")]
-        public bool DeliveryStateUnknown { get; set; } = default!;
+        public bool? DeliveryStateUnknown { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("manifestVersion")]
-        public ManifestVersion ManifestVersion { get; set; } = default!;
+        public ManifestVersion? ManifestVersion { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("delivered")]
         // TODO(system.text.json): Add ItemConverterType with enum converter when supported
@@ -2683,7 +2683,7 @@ namespace MantlePlace.PlatformApi
         public LastFailed LastFailed { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("lastAttempt")]
-        public LastAttempt LastAttempt { get; set; } = default!;
+        public LastAttempt? LastAttempt { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("pendingRetryTokens")]
         // TODO(system.text.json): Add ItemConverterType with enum converter when supported
@@ -2809,7 +2809,7 @@ namespace MantlePlace.PlatformApi
         /// The level wanted of each entry of the host block; the key * is the rest.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("levels")]
-        public System.Collections.Generic.IDictionary<string, Anonymous> Levels { get; set; } = default!;
+        public System.Collections.Generic.IDictionary<string, Anonymous>? Levels { get; set; } = default!;
 
     }
 
@@ -3001,13 +3001,13 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("creditBalanceCents")]
         [System.ComponentModel.DataAnnotations.Range(-9007199254740991L, 9007199254740991L)]
-        public long CreditBalanceCents { get; set; } = default!;
+        public long? CreditBalanceCents { get; set; } = default!;
 
         /// <summary>
         /// Only with a valid bearer: the account is under the free-bundle cap.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeSlotOpen")]
-        public bool FreeSlotOpen { get; set; } = default!;
+        public bool? FreeSlotOpen { get; set; } = default!;
 
     }
 
@@ -3072,13 +3072,13 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("creditBalanceCents")]
         [System.ComponentModel.DataAnnotations.Range(-9007199254740991L, 9007199254740991L)]
-        public long CreditBalanceCents { get; set; } = default!;
+        public long? CreditBalanceCents { get; set; } = default!;
 
         /// <summary>
         /// Only with a valid bearer: the account is under the free-bundle cap.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeSlotOpen")]
-        public bool FreeSlotOpen { get; set; } = default!;
+        public bool? FreeSlotOpen { get; set; } = default!;
 
     }
 
@@ -3143,13 +3143,13 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("creditBalanceCents")]
         [System.ComponentModel.DataAnnotations.Range(-9007199254740991L, 9007199254740991L)]
-        public long CreditBalanceCents { get; set; } = default!;
+        public long? CreditBalanceCents { get; set; } = default!;
 
         /// <summary>
         /// Only with a valid bearer: the account is under the free-bundle cap.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeSlotOpen")]
-        public bool FreeSlotOpen { get; set; } = default!;
+        public bool? FreeSlotOpen { get; set; } = default!;
 
     }
 
@@ -3225,13 +3225,13 @@ namespace MantlePlace.PlatformApi
         /// The order extent, so a host can hand the web curator the extent of its import. Present on every bundle that carries one.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("extent")]
-        public Extent6 Extent { get; set; } = default!;
+        public Extent6? Extent { get; set; } = default!;
 
         /// <summary>
         /// Present only when the bundle can start an adjacent order.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("links")]
-        public Links Links { get; set; } = default!;
+        public Links? Links { get; set; } = default!;
 
     }
 

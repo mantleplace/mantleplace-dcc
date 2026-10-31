@@ -1,0 +1,21 @@
+{
+  "operationId": "getQuote",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/quote",
+    "query": {
+      "extent": "-150.02,-40.02,-150,-40"
+    },
+    "headers": {
+      "Mantle-Place-Client": "revit/1.0.0",
+      "Authorization": "Bearer corpus-access-token"
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": "No elevation covers this extent.",
+      "code": "elevation_unavailable_for_aoi"
+    }
+  }
+}
