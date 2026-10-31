@@ -1,0 +1,30 @@
+{
+  "operationId": "placeOrder",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/orders",
+    "headers": {
+      "Mantle-Place-Client": "revit/1.0.0",
+      "Authorization": "Bearer corpus-access-token",
+      "Idempotency-Key": "corpus-0123456789abcdef"
+    },
+    "body": {
+      "extent": {
+        "west": -122.42,
+        "south": 37.7,
+        "east": -122.4,
+        "north": 37.72
+      },
+      "expectedPriceCents": 1234,
+      "payment": "credit"
+    }
+  },
+  "response": {
+    "status": 402,
+    "body": {
+      "error": "Your Credit does not cover this order.",
+      "code": "insufficient_credit",
+      "handoffUrl": "https://mantle.place/curator#aoi=-122.42,37.7,-122.4,37.72&from=revit"
+    }
+  }
+}

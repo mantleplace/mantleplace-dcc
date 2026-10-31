@@ -1,0 +1,30 @@
+{
+  "operationId": "placeOrder",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/orders",
+    "headers": {
+      "Mantle-Place-Client": "revit/1.0.0",
+      "Authorization": "Bearer corpus-access-token",
+      "Idempotency-Key": "corpus-0123456789abcdef"
+    },
+    "body": {
+      "extent": {
+        "west": -122.401,
+        "south": 37.7,
+        "east": -122.4,
+        "north": 37.701
+      },
+      "expectedPriceCents": 0,
+      "payment": "free"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "You hold the most free bundles an account may.",
+      "code": "free_cap_reached",
+      "handoffUrl": "https://mantle.place/curator#aoi=-122.401,37.7,-122.4,37.701&from=revit"
+    }
+  }
+}

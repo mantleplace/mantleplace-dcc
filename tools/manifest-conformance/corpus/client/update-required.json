@@ -1,0 +1,23 @@
+{
+  "operationId": "getQuote",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/quote",
+    "query": {
+      "extent": "-122.42,37.7,-122.4,37.72"
+    },
+    "headers": {
+      "Mantle-Place-Client": "unreal/0.8.1"
+    }
+  },
+  "response": {
+    "status": 426,
+    "body": {
+      "error": "Update the Mantle Place plugin.",
+      "code": "client_update_required",
+      "client": "unreal",
+      "version": "0.8.1",
+      "minimumVersion": "0.9.0"
+    }
+  }
+}

@@ -6,6 +6,7 @@
 
 #include "MantlePlaceAuthLogic.h"
 #include "MantlePlaceClientLogic.h"
+#include "Tests/MantlePlaceConformanceCorpus.h"
 
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IPluginManager.h"
@@ -122,6 +123,103 @@ bool FMantlePlaceClientUpdateRequiredTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("sign-in: a 426 never discards the stored session"),
 		FMantlePlaceAuthLogic::IsDefinitiveRejection(426, UpdateBody));
 
+	return true;
+}
+
+// The shared corpus' `client` group (HPS-40, HPS-41): the 426 client_update_required exchange, held
+// to the served spec's ClientUpdateRequired schema by check_manifest_conformance.py. Each case is a
+// request and the platform's answer; this host's half is reading the answer, so the response's
+// status and body go to the same parser every Platform API call's answer goes through.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceClientConformanceTest,
+	"MantlePlace.Client.Conformance",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceClientConformanceTest::RunTest(const FString& Parameters)
+{
+	using namespace MantlePlaceConformanceCorpus;
+	using FLogic = FMantlePlaceClientLogic;
+
+	static const TCHAR* const ConsumedExpectationKeys[] = {
+		TEXT("status"),
+		TEXT("code"),
+		TEXT("sentVersion"),
+		TEXT("minimumVersion"),
+	};
+
+	TArray<FCase> Cases;
+	FString LoadError;
+	if (!LoadGroup(TEXT("client"), Cases, LoadError))
+	{
+		AddError(LoadError);
+		return false;
+	}
+	if (!TestTrue(TEXT("the client group holds a case"), Cases.Num() > 0))
+	{
+		return false;
+	}
+
+	TSet<FString> Driven;
+	for (const FCase& Case : Cases)
+	{
+		const TSharedPtr<FJsonObject>* Response = nullptr;
+		const TSharedPtr<FJsonObject>* Body = nullptr;
+		if (!Case.PayloadObject.IsValid() || !Case.PayloadObject->TryGetObjectField(TEXT("response"), Response)
+			|| !(*Response)->TryGetObjectField(TEXT("body"), Body))
+		{
+			AddError(FString::Printf(TEXT("[%s] the exchange has no response body"), *Case.Id));
+			continue;
+		}
+		const int32 Status = static_cast<int32>((*Response)->GetNumberField(TEXT("status")));
+		FString BodyText;
+		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&BodyText);
+		FJsonSerializer::Serialize(Body->ToSharedRef(), Writer);
+
+		FMantlePlaceClientUpdate Update;
+		const bool bIsUpdate = FLogic::ParseClientUpdateRequired(Status, BodyText, Update);
+		Driven.Add(Case.Id);
+
+		int32 WantStatus = 0;
+		if (WantsInt(Case, TEXT("status"), WantStatus))
+		{
+			TestEqual(*FString::Printf(TEXT("[%s] status"), *Case.Id), Status, WantStatus);
+		}
+		FString WantCode;
+		if (WantsString(Case, TEXT("code"), WantCode))
+		{
+			TestEqual(*FString::Printf(TEXT("[%s] read as an update exactly when the code is client_update_required"), *Case.Id),
+				bIsUpdate, Status == 426 && WantCode == FLogic::UpdateRequiredCode());
+		}
+		FString WantSent;
+		if (WantsString(Case, TEXT("sentVersion"), WantSent))
+		{
+			TestEqual(*FString::Printf(TEXT("[%s] the version sent"), *Case.Id), Update.SentVersion, WantSent);
+			TestTrue(*FString::Printf(TEXT("[%s] the sentence names it"), *Case.Id), Update.Message.Contains(WantSent));
+		}
+		FString WantMinimum;
+		if (WantsString(Case, TEXT("minimumVersion"), WantMinimum))
+		{
+			TestEqual(*FString::Printf(TEXT("[%s] the minimum"), *Case.Id), Update.MinimumVersion, WantMinimum);
+			TestTrue(*FString::Printf(TEXT("[%s] the sentence names it"), *Case.Id), Update.Message.Contains(WantMinimum));
+		}
+		if (bIsUpdate)
+		{
+			TestTrue(*FString::Printf(TEXT("[%s] the sentence carries the download link"), *Case.Id),
+				Update.Message.Contains(FLogic::DownloadUrl()));
+			TestFalse(*FString::Printf(TEXT("[%s] the stored session survives it"), *Case.Id),
+				FMantlePlaceAuthLogic::IsDefinitiveRejection(Status, BodyText));
+		}
+
+		for (const FString& Problem : UnassertedExpectations(Case, ConsumedExpectationKeys))
+		{
+			AddError(FString::Printf(TEXT("[%s] %s"), *Case.Id, *Problem));
+		}
+	}
+
+	for (const FString& Missing : UndrivenCases(Cases, Driven))
+	{
+		AddError(FString::Printf(TEXT("corpus case '%s' loaded but nothing drove it (HPS-41)"), *Missing));
+	}
 	return true;
 }
 

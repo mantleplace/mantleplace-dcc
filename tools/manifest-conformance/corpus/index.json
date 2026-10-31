@@ -12,7 +12,8 @@
     "",
     "Case fields:",
     "  id              stable, dotted, never renumbered — host suites name it in failures.",
-    "  group           manifest | vault | auth | cache | digest | projection | bundle.",
+    "  group           manifest | vault | auth | cache | digest | projection | bundle |",
+    "                  platform | client.",
     "  file            path relative to corpus/.",
     "  expect          accept  — the parser MUST accept and produce `expectations`.",
     "                  reject  — the parser MUST refuse; `errorContains` if the message matters.",
@@ -2389,6 +2390,127 @@
       "expect": "accept",
       "stagedSchema": true,
       "reason": "A validator ignores the __MACOSX and .DS_Store entries archive tools add on their own (format.md §10.2). Read as entries, each would break a 2.0 rule; ignored, none is reported. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`)."
+    },
+    {
+      "id": "platform.quote.public",
+      "group": "platform",
+      "file": "platform/quote-public.json",
+      "expect": "accept",
+      "reason": "A Quote asked with no bearer is the public Quote: price, coverage and licence, and no account fields. The Quote is public, so a signed-out curator sees a price.",
+      "expectations": {
+        "priceCents": 1234,
+        "coverage": "covered",
+        "accountFields": false
+      }
+    },
+    {
+      "id": "platform.quote.signedIn",
+      "group": "platform",
+      "file": "platform/quote-signed-in.json",
+      "expect": "accept",
+      "reason": "A Quote asked with a valid bearer also carries the account Credit balance and whether a free-tier slot is open, so the host can say before ordering whether Credit covers the price.",
+      "expectations": {
+        "priceCents": 1234,
+        "coverage": "covered",
+        "accountFields": true,
+        "creditBalanceCents": 5000,
+        "freeSlotOpen": true
+      }
+    },
+    {
+      "id": "platform.quote.invalidBearerIgnored",
+      "group": "platform",
+      "file": "platform/quote-invalid-bearer.json",
+      "expect": "accept",
+      "reason": "An invalid or expired bearer is ignored and the public Quote comes back, never a 401: the Quote must not fail because a stored session went stale.",
+      "expectations": {
+        "priceCents": 1234,
+        "coverage": "degraded",
+        "accountFields": false
+      }
+    },
+    {
+      "id": "platform.quote.invalidExtent",
+      "group": "platform",
+      "file": "platform/quote-invalid-extent.json",
+      "expect": "reject",
+      "reason": "An extent that is not four numbers is refused 400 invalid_extent; the host reads the code rather than a sentence.",
+      "expectations": {
+        "status": 400,
+        "code": "invalid_extent"
+      }
+    },
+    {
+      "id": "platform.quote.uncovered",
+      "group": "platform",
+      "file": "platform/quote-uncovered.json",
+      "expect": "reject",
+      "reason": "An extent with no elevation coverage is refused 422 with its own code, never quoted as degraded: degraded means a probe flaked, uncovered means it cannot be ordered.",
+      "expectations": {
+        "status": 422,
+        "code": "elevation_unavailable_for_aoi"
+      }
+    },
+    {
+      "id": "platform.order.priceChanged",
+      "group": "platform",
+      "file": "platform/order-price-changed.json",
+      "expect": "reject",
+      "reason": "An order whose expectedPriceCents is not the current price is refused 409 price_changed with the current Quote and the handoff URL; nothing is charged, and the host shows the new price rather than ordering at it.",
+      "expectations": {
+        "status": 409,
+        "code": "price_changed",
+        "handoffUrl": "https://mantle.place/curator#aoi=-122.42,37.7,-122.4,37.72&from=revit",
+        "quotePriceCents": 1300
+      }
+    },
+    {
+      "id": "platform.order.insufficientCredit",
+      "group": "platform",
+      "file": "platform/order-insufficient-credit.json",
+      "expect": "reject",
+      "reason": "An order the Credit balance does not cover is refused 402 insufficient_credit with the handoff URL, where the curator can finish the order on the web.",
+      "expectations": {
+        "status": 402,
+        "code": "insufficient_credit",
+        "handoffUrl": "https://mantle.place/curator#aoi=-122.42,37.7,-122.4,37.72&from=revit"
+      }
+    },
+    {
+      "id": "platform.order.freeCapReached",
+      "group": "platform",
+      "file": "platform/order-free-cap-reached.json",
+      "expect": "reject",
+      "reason": "A free order from an account already at the free-bundle cap is refused 409 free_cap_reached with the handoff URL; the same status as price_changed, so the host branches on the code.",
+      "expectations": {
+        "status": 409,
+        "code": "free_cap_reached",
+        "handoffUrl": "https://mantle.place/curator#aoi=-122.401,37.7,-122.4,37.701&from=revit"
+      }
+    },
+    {
+      "id": "platform.order.idempotencyKeyMissing",
+      "group": "platform",
+      "file": "platform/order-idempotency-key-missing.json",
+      "expect": "reject",
+      "reason": "An order sent without an Idempotency-Key is refused 400 idempotency_key_required, so a retry can never order twice. A conforming client never sends one: the key is required by the spec.",
+      "expectations": {
+        "status": 400,
+        "code": "idempotency_key_required"
+      }
+    },
+    {
+      "id": "client.updateRequired",
+      "group": "client",
+      "file": "client/update-required.json",
+      "expect": "reject",
+      "reason": "A client below the minimum version the platform serves for it is answered 426 client_update_required on any call, with the version it sent and the minimum. The host shows an update prompt, never an error, and keeps the stored session.",
+      "expectations": {
+        "status": 426,
+        "code": "client_update_required",
+        "sentVersion": "0.8.1",
+        "minimumVersion": "0.9.0"
+      }
     }
   ]
 }

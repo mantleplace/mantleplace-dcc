@@ -5,8 +5,15 @@
     "gate fails on ANY difference from this file \u2014 a host losing a case is a",
     "regression, a new covered case is an unrecorded improvement. Both are",
     "recorded deliberately: rerun with --update-baseline and commit the diff.",
-    "Maintainer-owned: propose changes by pull request."
+    "Maintainer-owned: propose changes by pull request.",
+    "`platformApi` names the Platform API spec (info.version and the sha256",
+    "of its canonical text) the platform and client cases were checked",
+    "against; the gate fails when the vendored spec is another."
   ],
+  "platformApi": {
+    "version": "1",
+    "sha256": "a0837a1cdac86d0fc91e391190604235aa4337334243ab7ce112079c7dce2124"
+  },
   "cases": {
     "auth.browserPageVectors": [
       "revit",
@@ -68,6 +75,10 @@
       "unreal"
     ],
     "cache.validityTruthTable": [
+      "revit",
+      "unreal"
+    ],
+    "client.updateRequired": [
       "revit",
       "unreal"
     ],
@@ -348,6 +359,33 @@
     "manifest.verticalDatumsIgnored": [
       "revit",
       "unreal"
+    ],
+    "platform.order.freeCapReached": [
+      "revit"
+    ],
+    "platform.order.idempotencyKeyMissing": [
+      "revit"
+    ],
+    "platform.order.insufficientCredit": [
+      "revit"
+    ],
+    "platform.order.priceChanged": [
+      "revit"
+    ],
+    "platform.quote.invalidBearerIgnored": [
+      "revit"
+    ],
+    "platform.quote.invalidExtent": [
+      "revit"
+    ],
+    "platform.quote.public": [
+      "revit"
+    ],
+    "platform.quote.signedIn": [
+      "revit"
+    ],
+    "platform.quote.uncovered": [
+      "revit"
     ],
     "projection.lonLatToUtm": [
       "revit",

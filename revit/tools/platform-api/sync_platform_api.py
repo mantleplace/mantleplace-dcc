@@ -38,7 +38,9 @@ VENDORED_SPEC = GENERATED / "openapi.json"
 VENDORED_CLIENT = GENERATED / "PlatformApiClient.g.cs"
 
 # The client header is applied once, by PlatformTransport, to every request; excluding it here keeps
-# it out of every generated signature, so no call site can forget it or send a second one.
+# it out of every generated signature, so no call site can forget it or send a second one. Optional
+# properties are nullable so an absent member reads as absent: a public Quote has no Credit balance,
+# which is not a balance of 0 (the corpus case platform.quote.public pins it).
 GENERATOR_OPTIONS = [
     "/namespace:MantlePlace.PlatformApi",
     "/className:PlatformApiClient",
@@ -50,6 +52,7 @@ GENERATOR_OPTIONS = [
     "/InjectHttpClient:true",
     "/DisposeHttpClient:false",
     "/GenerateExceptionClasses:true",
+    "/GenerateOptionalPropertiesAsNullable:true",
     "/ExcludedParameterNames:Mantle-Place-Client",
 ]
 

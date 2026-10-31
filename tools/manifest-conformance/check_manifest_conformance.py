@@ -71,6 +71,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import platform_cases
+
 SCHEMA_BASE_URL = "https://mantle.place/.well-known/schemas/bundle-manifest"
 SCHEMA_URL = SCHEMA_BASE_URL + "/{version}.json"
 
@@ -115,7 +117,8 @@ _PLANNED_HOSTS = frozenset({"autocad"})
 
 #: The documented corpus groups. A typo'd group silently excludes a case from every host suite
 #: that dispatches on it, so it is checked rather than trusted.
-_CORPUS_GROUPS = frozenset({"manifest", "vault", "auth", "cache", "digest", "projection", "bundle"})
+_CORPUS_GROUPS = frozenset({"manifest", "vault", "auth", "cache", "digest", "projection", "bundle",
+                            *platform_cases.PLATFORM_GROUPS})
 
 #: Every host entry must carry these. A host that omits one is a silent hole in the gate, so this
 #: is checked before anything is fetched.
@@ -362,7 +365,7 @@ def read_corpus_version() -> int | None:
 
 
 def check_corpus(entries: list[tuple[str, dict]] | None = None,
-                 update_baseline: bool = False) -> list[str]:
+                 update_baseline: bool = False, served_spec: dict | None = None) -> list[str]:
     """Offline integrity check of the shared conformance corpus. Returns failure lines.
 
     With `entries` (the FULL host roster, never a `--host`-filtered slice), also validates the
@@ -442,6 +445,22 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
         )
 
     failures.extend(check_selftest(required=entries is not None))
+
+    # The Platform API exchanges (`platform`, `client`) are held to the spec's own schemas: the
+    # vendored copy always, offline, and the served copy too when a live run fetched it.
+    vendored = platform_cases.load_vendored_spec()
+    failures.extend(platform_cases.check_platform_cases(raw_cases, _CORPUS, vendored, "the vendored spec"))
+    if served_spec is not None:
+        failures.extend(platform_cases.check_platform_cases(raw_cases, _CORPUS, served_spec, "the served spec"))
+        served, held = platform_cases.spec_identity(served_spec), platform_cases.spec_identity(vendored)
+        if served != held:
+            failures.append(
+                f"FAIL: the served Platform API spec (sha256 {served['sha256'][:12]}...) is not the "
+                f"vendored one (sha256 {held['sha256'][:12]}...). Run "
+                "`python revit/tools/platform-api/sync_platform_api.py`, re-check the platform and "
+                "client cases against it, and raise the records."
+            )
+
     if entries is not None:
         # Never record a baseline from a corpus that does not pass its own integrity checks: a
         # case dropped for a bad `appliesTo` would be written out MISSING and become permanently
@@ -453,6 +472,13 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
             )
             return failures
         failures.extend(check_coverage(raw_cases, entries, update_baseline))
+        if not update_baseline and _BASELINE.is_file():
+            try:
+                baseline_doc = json.loads(_BASELINE.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                baseline_doc = {}  # check_coverage has already reported it
+            failures.extend(platform_cases.check_records(
+                platform_cases.spec_identity(vendored), baseline_doc, entries))
     return failures
 
 
@@ -810,7 +836,11 @@ def check_coverage(raw_cases: list[dict], entries: list[tuple[str, dict]],
                         "regression, a new covered case is an unrecorded improvement. Both are",
                         "recorded deliberately: rerun with --update-baseline and commit the diff.",
                         "Maintainer-owned: propose changes by pull request.",
+                        "`platformApi` names the Platform API spec (info.version and the sha256",
+                        "of its canonical text) the platform and client cases were checked",
+                        "against; the gate fails when the vendored spec is another.",
                     ],
+                    "platformApi": platform_cases.spec_identity(platform_cases.load_vendored_spec()),
                     "cases": {k: coverage[k] for k in sorted(coverage)},
                 },
                 indent=2,
@@ -1150,7 +1180,13 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_corpus:
         # The full roster, never the --host-filtered slice: coverage is a property of the whole
         # corpus, and a filtered run must not read as a coverage regression.
-        failures.extend(check_corpus(full_entries))
+        served_spec = None
+        if args.mode == "live":
+            served_spec = platform_cases.fetch_served_spec()
+            if served_spec is None:
+                failures.append(f"FAIL: could not fetch the served Platform API spec at "
+                                f"{platform_cases.SERVED_SPEC_URL}.")
+        failures.extend(check_corpus(full_entries, served_spec=served_spec))
 
     # The whole ledger, never the --host-filtered slice: the changelog describes the contract. In
     # pinned mode the ledger is not read, so the versions the whole roster pins stand in for it.
