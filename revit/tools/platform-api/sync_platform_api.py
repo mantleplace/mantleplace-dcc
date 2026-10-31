@@ -72,6 +72,19 @@ def lf(text: str) -> str:
     return text.replace("\r\n", "\n")
 
 
+# NSwag's System.Text.Json output puts JsonStringEnumConverter<T> on every enum property. That
+# converter ignores [EnumMember] and writes the C# name ("Credit") where the spec serves "credit",
+# and the framework's fix (JsonStringEnumMemberName) needs .NET 9 while the client targets net8.0.
+# MantlePlace.PlatformApi/EnumMemberJsonConverter.cs honours EnumMember; this swaps it in so a
+# regeneration keeps the fix.
+STOCK_ENUM_CONVERTER = "System.Text.Json.Serialization.JsonStringEnumConverter<"
+ENUM_MEMBER_CONVERTER = "MantlePlace.PlatformApi.EnumMemberJsonConverter<"
+
+
+def honour_enum_member(client_text: str) -> str:
+    return client_text.replace(STOCK_ENUM_CONVERTER, ENUM_MEMBER_CONVERTER)
+
+
 def generate(spec_text: str) -> str:
     """Runs the pinned generator over the spec and returns the client source."""
     subprocess.run(["dotnet", "tool", "restore"], cwd=REVIT, check=True, stdout=subprocess.DEVNULL)
@@ -86,7 +99,7 @@ def generate(spec_text: str) -> str:
             check=True,
             stdout=subprocess.DEVNULL,
         )
-        return lf(client_path.read_text(encoding="utf-8-sig"))
+        return honour_enum_member(lf(client_path.read_text(encoding="utf-8-sig")))
 
 
 def differs(label: str, path: Path, wanted: str) -> bool:

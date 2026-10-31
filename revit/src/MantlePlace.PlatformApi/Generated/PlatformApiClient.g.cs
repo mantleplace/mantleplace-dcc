@@ -2141,7 +2141,7 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("payment")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<Body3Payment>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Body3Payment>))]
         public Body3Payment Payment { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
@@ -2192,7 +2192,7 @@ namespace MantlePlace.PlatformApi
         public string? ClaimToken { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("source")]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<Body5Source>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Body5Source>))]
         public Body5Source? Source { get; set; } = MantlePlace.PlatformApi.Body5Source.Curator;
 
         [System.Text.Json.Serialization.JsonPropertyName("remove")]
@@ -2224,7 +2224,7 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("status")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<Body6Status>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Body6Status>))]
         public Body6Status Status { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("progress")]
@@ -2369,7 +2369,7 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("coverage")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<Response4Coverage>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Response4Coverage>))]
         public Response4Coverage Coverage { get; set; } = default!;
 
         /// <summary>
@@ -2716,7 +2716,7 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("host")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<Response16Host>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Response16Host>))]
         public Response16Host Host { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("targetConnectionId")]
@@ -2729,7 +2729,7 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("status")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<Response16Status>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Response16Status>))]
         public Response16Status Status { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("progress")]
@@ -2986,7 +2986,7 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("coverage")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<QuoteCoverage>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<QuoteCoverage>))]
         public QuoteCoverage Coverage { get; set; } = default!;
 
         /// <summary>
@@ -3057,7 +3057,7 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("coverage")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<Quote2Coverage>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Quote2Coverage>))]
         public Quote2Coverage Coverage { get; set; } = default!;
 
         /// <summary>
@@ -3128,7 +3128,7 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("coverage")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<Quote3Coverage>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Quote3Coverage>))]
         public Quote3Coverage Coverage { get; set; } = default!;
 
         /// <summary>
@@ -3180,7 +3180,7 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("status")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<BundlesStatus>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<BundlesStatus>))]
         public BundlesStatus Status { get; set; } = default!;
 
         /// <summary>
@@ -3839,7 +3839,7 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("host")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<ExportsHost>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<ExportsHost>))]
         public ExportsHost Host { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("targetConnectionId")]
@@ -3852,7 +3852,7 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("status")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<ExportsStatus>))]
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<ExportsStatus>))]
         public ExportsStatus Status { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("progress")]
