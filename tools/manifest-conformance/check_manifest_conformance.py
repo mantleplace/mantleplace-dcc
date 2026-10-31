@@ -107,6 +107,12 @@ _SELFTEST_CLASSES = frozenset({
 #: Keys in verified-against.json that are documentation, not hosts.
 _NON_HOST_KEYS = frozenset({"$comment"})
 
+#: Hosts whose corpus cases are written before the host exists. A case's `appliesTo` may name one,
+#: and no registered host covers it, so the coverage baseline records it as `[]`. This is not a
+#: roster: a host registers in verified-against.json from its first commit (HPS-38), and registering
+#: removes it from this set in the same change. `autocad` is here until its plugin lands.
+_PLANNED_HOSTS = frozenset({"autocad"})
+
 #: The documented corpus groups. A typo'd group silently excludes a case from every host suite
 #: that dispatches on it, so it is checked rather than trusted.
 _CORPUS_GROUPS = frozenset({"manifest", "vault", "auth", "cache", "digest", "projection", "bundle"})
@@ -754,7 +760,7 @@ def check_coverage(raw_cases: list[dict], entries: list[tuple[str, dict]],
         if not case_id or group not in _CORPUS_GROUPS:
             continue  # integrity failures already reported by check_corpus
         applies_to = case.get("appliesTo")
-        if applies_to is not None and applies_to not in hosts:
+        if applies_to is not None and applies_to not in set(hosts) | _PLANNED_HOSTS:
             failures.append(
                 f"FAIL: corpus case '{case_id}' has appliesTo={applies_to!r}, which is not a "
                 "registered host. A scoped case must name a real entry in verified-against.json."

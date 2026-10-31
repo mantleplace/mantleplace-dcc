@@ -936,6 +936,22 @@ class CoverageRatchetTest(unittest.TestCase):
         failures = gate.check_coverage(cases, self.entries, update_baseline=True)
         self.assertTrue(any("appliesTo" in f and "rhino" in f for f in failures))
 
+    def test_applies_to_may_name_a_planned_host_that_covers_nothing_yet(self) -> None:
+        """A host's cases land before the host does. A planned host is named in the gate, not in
+        verified-against.json (adding a key there is a schema-level change), and a case scoped to
+        it is covered by no registered host until the host registers."""
+        planned = sorted(gate._PLANNED_HOSTS)[0]
+        cases = self._CASES + [{"id": "manifest.p", "group": "manifest", "file": "p.json",
+                                "expect": "accept", "reason": "r", "appliesTo": planned}]
+        recorded = self._expected()
+        recorded["manifest.p"] = []
+        self._write_baseline(recorded)
+        self.assertEqual([], gate.check_coverage(cases, self.entries))
+
+    def test_a_planned_host_is_not_a_registered_one(self) -> None:
+        self.assertEqual(frozenset({"autocad"}), gate._PLANNED_HOSTS)
+        self.assertFalse(gate._PLANNED_HOSTS & {"revit", "unreal", "blender"})
+
     def test_a_host_without_groups_cannot_be_covered(self) -> None:
         entry = _host_entry()
         del entry["groups"]

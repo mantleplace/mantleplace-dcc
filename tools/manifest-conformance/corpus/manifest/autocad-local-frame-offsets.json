@@ -1,0 +1,93 @@
+{
+  "version": "1.18.0",
+  "location": {
+    "time_zone": {
+      "iana": "America/Denver",
+      "utc_offset_standard_h": -7,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    }
+  },
+  "delivery": {
+    "unit_system": "imperial",
+    "tier": "local_ft",
+    "linear_unit": "ft",
+    "horizontal_epsg": 2231,
+    "local_origin": {
+      "lon": -105.64620798739834,
+      "lat": 36.27254939041837,
+      "utm_epsg": 32613,
+      "easting_m": 441959.5,
+      "northing_m": 4014372.5
+    }
+  },
+  "job_id": "autocad-local-frame",
+  "order_id": "ord-autocad-local-frame-1",
+  "hosts": {
+    "autocad": {
+      "host_min_version": "2025",
+      "file_frame": {
+        "type": "local",
+        "base_crs": "EPSG:32613",
+        "origin": {
+          "easting": 441959.5,
+          "northing": 4014372.5,
+          "linear_unit": "m"
+        },
+        "horizontal_unit": "ft",
+        "vertical_unit": "ft"
+      },
+      "contours": {
+        "path": "Surface/Contours.dxf",
+        "horizontal_frame": "local_enu",
+        "vertical_reference": "absolute",
+        "horizontal_units": "ft",
+        "vertical_units": "ft",
+        "vertical_datum": "EGM2008-orthometric",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "surface": {
+        "path": "Surface/Terrain.xml",
+        "format": "landxml",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "horizontal_frame": "local_enu",
+        "horizontal_units": "ft",
+        "vertical_units": "ft",
+        "vertical_reference": "absolute",
+        "vertical_datum": "EGM2008-orthometric"
+      },
+      "aerial": {
+        "path": "Imagery/Aerial.png",
+        "format": "png-rgb-8bit",
+        "width": 2400,
+        "height": 1920,
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "insertion": {
+          "x": -2000.5,
+          "y": -1600.25,
+          "width": 4000.0,
+          "height": 3200.0,
+          "rotation_deg": 0.0
+        }
+      },
+      "readiness": {
+        "contours": {
+          "present": true
+        },
+        "surface": {
+          "present": true,
+          "requires": "civil3d"
+        },
+        "aerial": {
+          "present": true
+        }
+      }
+    }
+  },
+  "elevation": {
+    "contours": {
+      "units": "ft",
+      "vertical_datum": "EGM2008-orthometric"
+    }
+  }
+}

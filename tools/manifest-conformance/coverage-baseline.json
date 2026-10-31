@@ -75,6 +75,10 @@
       "revit",
       "unreal"
     ],
+    "manifest.autocadCompleteBlock": [],
+    "manifest.autocadContoursAbsentReason": [],
+    "manifest.autocadLocalFrameOffsets": [],
+    "manifest.autocadSurfaceAbsentNeedsCivil3d": [],
     "manifest.baseOnDemand": [
       "revit",
       "unreal"
