@@ -971,13 +971,16 @@ suite).
 
 ## 8. Shared code — the trigger, and the reason there isn't any yet (`HPS-43`)
 
-**`HPS-43` — No shared shipped-implementation code ships until a second host of the same language
-exists, and the .NET SDK is extracted from Revit's shipped implementation when Rhino kicks off —
-never speculatively.**
+**`HPS-43` — No shared shipped-implementation code ships until a second plugin host in the same
+language exists. AutoCAD is that host, and the first form of sharing is a source include of the Revit
+plugin's host-free files, with no shared binary.** A fuller .NET SDK is extracted from shipped code only
+when a further host asks for it — never speculatively.
 
 The reasoning is worth keeping attached to the rule: an SDK designed before its
-second consumer exists encodes one host's assumptions and then has to be un-encoded. Extracting from
-working, shipped Revit code means the abstraction is answering questions two hosts actually asked.
+second consumer exists encodes one host's assumptions and then has to be un-encoded. Including the
+working, shipped Revit files at the AutoCAD plugin's build means the shared code is answering questions two
+hosts actually asked, and a source include ships inside each host's own binary, so no host depends on a
+shared one.
 
 The trigger's scope is shipped protocol code only. The conformance harness is **not** inside it:
 corpus readers are re-implemented per host permanently (`HPS-46`), and one .NET host is no design
@@ -986,7 +989,7 @@ pressure — the trigger MUST NOT fire early on the harness's account.
 Until that trigger fires, the share model is **specifications plus this corpus** — which is what
 every rule above is.
 
-_Enforcer:_ `doc-only` (the trigger is a decision-log entry at Rhino kickoff).
+_Enforcer:_ `doc-only` (the trigger is a decision-log entry when a further host asks for more than the source include).
 
 ---
 
@@ -1325,7 +1328,7 @@ the parser and the planner, compared with what the ground records, unstated agai
 stated datum outranking the version.
 
 **`HPS-54` — A host is a fixed-frame host or an order-frame host, and says which in its own
-`CLAUDE.md`.** Both kinds are the glossary's, and so is which of the two hosts is which; what this
+`CLAUDE.md`.** Both kinds are the glossary's, and so is which of the hosts is which (Unreal is a fixed-frame host; Revit and `autocad` are order-frame hosts); what this
 rule adds is that a host **says it itself**, in its own onboarding document, where anyone working in
 that tree reads it before touching placement rather than one document further out.
 

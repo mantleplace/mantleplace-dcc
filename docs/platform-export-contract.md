@@ -57,7 +57,7 @@ presence and never writes it.
 ```ts
 interface ConnectedHost {
   protocol: 1; // the wire protocol this plugin speaks
-  host: 'unreal' | 'revit';
+  host: 'unreal' | 'revit' | 'autocad';
   hostVersion: string; // the host program's version
   pluginVersion: string;
   document: string | null; // open project or document; null when none is open
@@ -202,7 +202,7 @@ Move one export forward along section 4.
 interface ExportDto {
   id: string;
   orderId: string;
-  host: 'unreal' | 'revit';
+  host: 'unreal' | 'revit' | 'autocad';
   targetConnectionId: string;
   target: { document: string | null; machine: string | null; pluginVersion: string | null };
   status:
