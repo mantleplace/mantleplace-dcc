@@ -147,6 +147,7 @@ void SMantlePlaceVaultPanel::Construct(const FArguments& InArgs)
 	Controller->OnImportPhase.AddSP(this, &SMantlePlaceVaultPanel::HandleImportPhase);
 	Controller->OnImportFinished.AddSP(this, &SMantlePlaceVaultPanel::HandleImportFinished);
 	Controller->OnAuthChanged.AddSP(this, &SMantlePlaceVaultPanel::HandleAuthChanged);
+	Controller->OnClientUpdateRequired.AddSP(this, &SMantlePlaceVaultPanel::HandleClientUpdateRequired);
 
 	ModeOptions.Add(MakeShared<FString>(TEXT("Landscape")));
 	ModeOptions.Add(MakeShared<FString>(TEXT("Mesh")));
@@ -983,6 +984,48 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::OnGenerateModeWidget(TSharedPtr<FStr
 		.Tag(FName(*FString::Printf(TEXT("MantlePlace.Vault.ImportModeOption.%s"), *Mode)))
 		.Text(FText::FromString(Mode))
 		.Font(FMantlePlaceEditorStyle::GetFont(EFont::Body));
+}
+
+void SMantlePlaceVaultPanel::HandleClientUpdateRequired(const FMantlePlaceClientUpdate& Update)
+{
+	// Not a sign-in problem and not a network one: the platform is up, the session is fine, and this plugin
+	// is below the minimum it serves. Say so once, with the way to the newer plugin. The refused call
+	// reports the same sentence through its own failure path, so the list or the import line says it too.
+	if (bUpdatePromptShown)
+	{
+		return;
+	}
+	bUpdatePromptShown = true;
+
+	const FString DownloadUrl = Update.DownloadUrl;
+	const TSharedRef<TWeakPtr<SNotificationItem>> Shown = MakeShared<TWeakPtr<SNotificationItem>>();
+	const FSimpleDelegate Download = FSimpleDelegate::CreateLambda([DownloadUrl, Shown]()
+	{
+		FPlatformProcess::LaunchURL(*DownloadUrl, nullptr, nullptr);
+		if (const TSharedPtr<SNotificationItem> Notification = Shown->Pin())
+		{
+			Notification->ExpireAndFadeout();
+		}
+	});
+	const FSimpleDelegate Dismiss = FSimpleDelegate::CreateLambda([Shown]()
+	{
+		if (const TSharedPtr<SNotificationItem> Notification = Shown->Pin())
+		{
+			Notification->ExpireAndFadeout();
+		}
+	});
+
+	FNotificationInfo Info(LOCTEXT("UpdateRequiredTitle", "Mantle Place needs an update"));
+	Info.SubText = FText::FromString(Update.Message);
+	Info.bFireAndForget = false;
+	Info.bUseSuccessFailIcons = true;
+	Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("UpdateRequiredDownload", "Download update"), FText::GetEmpty(), Download, SNotificationItem::CS_Fail));
+	Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("UpdateRequiredDismiss", "Dismiss"), FText::GetEmpty(), Dismiss, SNotificationItem::CS_Fail));
+	*Shown = FSlateNotificationManager::Get().AddNotification(Info);
+	if (const TSharedPtr<SNotificationItem> Notification = Shown->Pin())
+	{
+		Notification->SetCompletionState(SNotificationItem::CS_Fail);
+	}
 }
 
 void SMantlePlaceVaultPanel::ShowToast(const FString& Message, bool bSuccess) const

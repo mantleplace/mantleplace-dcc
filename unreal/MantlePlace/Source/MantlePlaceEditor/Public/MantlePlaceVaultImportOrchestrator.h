@@ -9,6 +9,7 @@
 #include "MantlePlaceBundleCacheTypes.h" // runtime: FMantlePlaceDownloadProgress
 #include "MantlePlaceImportTypes.h"      // editor:  EMantlePlaceImportMode / FMantlePlaceImportResult
 #include "MantlePlaceAuthTypes.h"        // runtime: EMantlePlaceAuthState (auth-changed relay)
+#include "MantlePlaceClientLogic.h"     // runtime: FMantlePlaceClientUpdate (426 client_update_required relay)
 #include "MantlePlaceVaultImportOrchestrator.generated.h"
 
 class UMantlePlaceAuthSystemBase;
@@ -83,6 +84,13 @@ public:
 	 */
 	UPROPERTY(BlueprintAssignable, Category = "Mantle Place|Vault")
 	FMantlePlaceOnAuthChangedBP OnAuthChanged;
+
+	/**
+	 * The platform said this plugin is too old (HTTP 426 `client_update_required`) to the auth source or
+	 * the vault client. Relayed as a native delegate (FMantlePlaceClientUpdate is not a USTRUCT), so the
+	 * C++ panel controller binds it; the surface offers the update at Update.DownloadUrl.
+	 */
+	FMantlePlaceOnClientUpdateRequiredNative OnClientUpdateRequiredNative;
 
 	/**
 	 * Wire an explicit signed-in auth source (for a headless caller or a test that has no editor
@@ -229,6 +237,7 @@ private:
 
 	//~ Native-delegate handlers bound on the vault client / bundle cache / auth source.
 	void HandleAuthStateChangedNative(EMantlePlaceAuthState NewState);
+	void HandleClientUpdateRequiredNative(const FMantlePlaceClientUpdate& Update);
 	void HandleVaultListedNative(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message);
 	void HandleMaterializeStartedNative(bool bSuccess, const FMantlePlaceMaterializeStart& Start, const FString& Message);
 	void HandleMaterializeStatusNative(bool bOk, const FMantlePlaceMaterializeStatus& Status, const FString& Message);

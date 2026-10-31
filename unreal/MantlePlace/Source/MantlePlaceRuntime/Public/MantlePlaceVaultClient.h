@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "MantlePlaceVaultTypes.h"
+#include "MantlePlaceClientLogic.h"
 #include "MantlePlaceVaultClient.generated.h"
 
 class IHttpRequest;
@@ -197,6 +198,13 @@ public:
 	FMantlePlaceOnMaterializeStartedNative OnMaterializeStartedNative;
 
 	/**
+	 * The platform answered a call with HTTP 426 `client_update_required`: this plugin is below the
+	 * minimum it serves. Fired once per such answer, before the failing completion signal; the surface
+	 * offers the update from FMantlePlaceClientUpdate::DownloadUrl.
+	 */
+	FMantlePlaceOnClientUpdateRequiredNative OnClientUpdateRequiredNative;
+
+	/**
 	 * The tokens the in-flight status poll measures delivery against.
 	 *
 	 * Held on the client because the status response is a delivery-state document with no status
@@ -266,6 +274,13 @@ private:
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	void HandleMaterializeStatusResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
+
+	/**
+	 * If this response is the platform asking for a newer plugin, broadcast it, put the curator-facing
+	 * sentence in OutMessage and return true; the caller then fails the call with that message and
+	 * does nothing else (no token renewal: the session is fine).
+	 */
+	bool TryHandleClientUpdate(int32 ResponseCode, const FString& Content, FString& OutMessage);
 
 	/** Fire the native delegate + the Blueprint event together (single source of truth per signal). */
 	void NotifyVaultListed(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message);

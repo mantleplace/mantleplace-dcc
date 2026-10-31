@@ -45,6 +45,7 @@ private:
 	void HandleImportPhase(const FString& Phase, const FString& Message, float Fraction);
 	void HandleImportFinished(bool bSuccess, const FMantlePlaceImportResult& Result);
 	void HandleAuthChanged(EMantlePlaceAuthState NewState);
+	void HandleClientUpdateRequired(const FMantlePlaceClientUpdate& Update);
 
 	//~ Construction helpers.
 	TSharedRef<SWidget> BuildHeader();
@@ -99,6 +100,8 @@ private:
 	FString SearchQuery;
 	/** True while a local-zip import is running (routes progress to LocalStatus + disables local Import). */
 	bool bLocalImportInFlight = false;
+	/** True once the update prompt has been shown: every call the platform refuses says so, the curator is told once. */
+	bool bUpdatePromptShown = false;
 
 	//~ List <-> detail navigation.
 	TSharedPtr<SWidgetSwitcher> ViewSwitcher;

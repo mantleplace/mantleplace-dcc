@@ -245,6 +245,12 @@ Fab pre-submit list is in [`README.md`](README.md#packaging-a-release).
 - **[`.clang-format`](.clang-format) is for new code only**; nothing checks it and a reformat sweep
   is refused ([CONTRIBUTING.md](../CONTRIBUTING.md)).
 - **No credentials in a `.uasset`, ever** — a URL in a Blueprint's class defaults is in the file.
+- **Every Platform API request is made by `FMantlePlaceClientHttp::CreateRequest`.** It sets
+  `Mantle-Place-Client: unreal/<plugin version>`; a direct `FHttpModule::CreateRequest` in the auth or
+  vault client sends a call that names no client, and `unreal/tools/test_platform_requests_carry_client_header.py`
+  fails CI on it. An HTTP 426 `client_update_required` is an update prompt (`FMantlePlaceClientUpdate`,
+  `OnClientUpdateRequiredNative`), never a sign-in or network failure and never a reason to drop the
+  stored session. The spec is served at `https://mantle.place/api/v1/openapi.json`.
 
 ## Where knowledge lives
 
