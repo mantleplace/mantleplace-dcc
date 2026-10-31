@@ -31,6 +31,9 @@ planned it.
   is settled: one release track per host, tagged `<host>-<version>`
   ([ADR 0001](docs/adr/0001-per-host-release-tracks.md)). It cannot run in public CI, because it needs a
   licensed install this repository must not put on a runner.
+- **AutoCAD plugin** — a plugin host, `autocad`, covering plain AutoCAD and Civil 3D, released on its own
+  `autocad-<version>` track by the same method as Revit ([ADR 0001](docs/adr/0001-per-host-release-tracks.md)).
+  Its first release is `autocad-1.0.0` ([ADR 0018, Amendment A1](docs/adr/0018-the-revit-track-goes-to-1-0-0-for-its-storefront.md)).
 - **Unreal quickstart tutorial** — the missing walk-through from empty project to imported site,
   plus the README's screenshot and GIF slots filled with real captures.
 

@@ -18,8 +18,9 @@ format-served host, and never both.
 _Avoid_: application, editor, target, integration
 
 **Plugin host**:
-A DCC host this repository ships a Mantle Place plugin for. Currently Unreal Engine, Revit and Blender. Every
-fixed-frame host and every order-frame host is a plugin host.
+A DCC host this repository ships a Mantle Place plugin for. Currently Unreal Engine, Revit and Blender, and the
+AutoCAD family, host id `autocad`, which covers plain AutoCAD and Civil 3D as one host (Civil 3D is a part of it,
+not a separate host). Every fixed-frame host and every order-frame host is a plugin host.
 _Avoid_: supported host, plugin target, integration
 
 **Format-served host**:
@@ -289,7 +290,7 @@ Unreal is one: the content made for it is metric on an imperial order.
 _Avoid_: metric host, metric-only plugin
 
 **Order-frame host**:
-A plugin host whose host frame follows the order's delivery instead of staying fixed. Revit is one.
+A plugin host whose host frame follows the order's delivery instead of staying fixed. Revit and `autocad` are.
 _Avoid_: imperial host, unit-aware plugin
 
 ### What a bundle carries

@@ -6,7 +6,8 @@ description: How a host release is cut and written up — the cut checklist both
 # Cutting a release
 
 Each host has its own track, tagged `<host>-<version>` with no `v`
-([ADR 0001](adr/0001-per-host-release-tracks.md)). The pure-Python `mpb` reader is a third track, tagged
+([ADR 0001](adr/0001-per-host-release-tracks.md)). The AutoCAD host, `autocad`, has its own track, `autocad-<version>`, cut by the same method as Revit's
+([ADR 0018, Amendment A1](adr/0018-the-revit-track-goes-to-1-0-0-for-its-storefront.md)). The pure-Python `mpb` reader is a further track, tagged
 `mpb-<version>` and published to PyPI by `release-mpb.yml`, the one release built in public CI
 ([ADR 0017](adr/0017-the-mpb-reader-is-a-ci-published-python-track.md)). How a host's zip is built and gated is that host's
 own: [`unreal/README.md` ▸ Packaging a release](../unreal/README.md#packaging-a-release) and
@@ -22,7 +23,7 @@ both share: the cut order, the title and the body.
 4. **Download the published asset and check it**: its sha256 matches the body, and it installs and
    loads in a project or host that never built the plugin. Record the result in the body.
 5. **Submit to the storefront** the same day where the host has one (Fab for Unreal, the Autodesk
-   storefront for Revit), from the same asset, or, where the storefront compiles the plugin itself
+   storefront for Revit and `autocad`), from the same asset, or, where the storefront compiles the plugin itself
    (Fab), from a Source zip built from the same commit.
 
 ## Title

@@ -36,3 +36,14 @@ every later Revit release is 1.x or above.
 - A reader comparing the two tracks must not read the major version as maturity. The [host support matrix](../host-support.md), not the version, says what each host does.
 - Revit users upgrading from 0.2.0 see a jump to 1.0.0 with no break in behaviour beyond what that
   release's body lists.
+
+## Amendment A1 — any storefront track starts at 1.0.0
+
+Date: 2026-10-31
+
+The reasoning above is about the Autodesk storefront, not about Revit. So the rule generalises: any
+track published to the Autodesk storefront starts at 1.0.0, and never begins at 0.x. The AutoCAD track,
+`autocad`, covering plain AutoCAD and Civil 3D, starts at `autocad-1.0.0`; from then on it follows
+ordinary semver and never returns to 0.x. Its tag equals the version declared in its build, as the
+Revit track's does. The Revit decision, Unreal's numbering and ADR 0001's independent tracks are
+unchanged.
