@@ -397,6 +397,13 @@ renderer-neutral.
   bundle was clipped to its crop window. The hand-made half is the manifest's pointer and
   `file_frame`; the contour files are the bundles' own. What is settled headlessly is everything
   else — `PublishedContourReader`, `PublishedContours` and `ContourIdentity`.
+- **Open in Curator's calls are compiled and unexecuted.** `Schema.Lookup` over the provenance schema,
+  `SiteLocation.Latitude`, `Longitude` and `PlaceName` read on the command's thread, and a
+  `TaskDialog` with four command links have not run in a real Revit; nor has the command's bounded
+  wait on the vault listing. What is settled headlessly is everything that decides anything:
+  `CuratorExtents`, `CuratorLink` and the listing's `extent`. A project nobody located may still carry the
+  site location its template ships with, which the plugin cannot tell from a chosen one: the size
+  dialog names it (`PlaceName`) for the curator to see, and only exactly 0, 0 is refused as unlocated.
 - **The plugin is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
   issue and reaches for their storage.** It writes Revit elements sized as published, with names a
   renderer recognises (a water body's and a road surface's layer word, `GroundLayerWords`), and leaves a renderer's own storage to the curator —

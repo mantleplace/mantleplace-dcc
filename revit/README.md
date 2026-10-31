@@ -118,6 +118,15 @@ like part of the host. The words, the colour and which render of the mark a head
 `WindowLabels`, `BrandPalette` and `MarkRenders` in the pure core, so the suite checks them without a
 Revit licence.
 
+`Mantle Place ▸ Bundles ▸ Open in Curator` opens the web curator in your browser, at
+`https://mantle.place/curator#aoi=W,S,E,N&from=revit`, with the extent the project already knows drawn
+and ready. The extent is the first of: the extent of the order this project was imported from (the
+order id the import left on Project Information, looked up in your vault, so it needs you signed in),
+or the project's site latitude and longitude with a size you pick from a short list (500 m to 4 km a
+side). A project with neither opens the plain curator. It changes nothing in the project and works with
+no project open. Which of those applies, the sizes and the link are `CuratorExtents` and `CuratorLink`
+in `Core`, asserted headlessly; the shim only reads the order id and the site location out of the model.
+
 `Mantle Place ▸ Bundles ▸ Import Bundle` takes a bundle you already downloaded and:
 
 - refuses anything below manifest **MPB 1.0.0**, and anything whose MAJOR is above the newest it

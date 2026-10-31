@@ -789,6 +789,22 @@ public sealed class MantlePlaceApplication : IExternalApplication
         RibbonImagery.Give(handover, RibbonGlyph.PrepareForHandover);
         GiveHelp(handover);
 
+        PushButton curator = (PushButton)panel.AddItem(new PushButtonData(
+            "MantlePlaceOpenInCurator",
+            "Open in\nCurator",
+            assemblyPath,
+            typeof(OpenInCuratorCommand).FullName)
+        {
+            ToolTip = "Open the web curator on the extent this project already knows.",
+            LongDescription =
+                "Opens the Mantle Place curator in your browser with the extent drawn and ready. The extent "
+                + "is the one of the order this project was imported from, read from your vault, or else the "
+                + "project's site location, with a size you choose. A project with neither opens the plain "
+                + "curator. Nothing in your project changes.",
+        });
+        RibbonImagery.Give(curator, RibbonGlyph.OpenInCurator);
+        GiveHelp(curator);
+
         // Everything after this call lands in the slide-out rather than on the panel face, and the
         // panel grows the small unfold arrow at its foot that opens it. The two buttons above are
         // how a curator gets content in; the two below are what they reach for when that went wrong,

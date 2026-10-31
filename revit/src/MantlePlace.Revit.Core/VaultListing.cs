@@ -67,6 +67,13 @@ public sealed class VaultBundle
 
     public IReadOnlyList<BundleDownloadFormat> DownloadFormats { get; init; } = [];
 
+    /// <summary>
+    /// The order's extent in degrees, as the vault record states it; <c>null</c> when the row carried
+    /// none, or not all four bounds as numbers. Unknown, never <c>0,0,0,0</c> (<c>HPS-20</c>): it is what
+    /// Open in Curator hands the web curator to draw.
+    /// </summary>
+    public CuratorExtent? Extent { get; init; }
+
     /// <summary>Whether this row can be downloaded right now.</summary>
     public bool IsDownloadable => Status == BundleStatus.Available;
 }
@@ -192,7 +199,21 @@ public static class VaultListingReader
         Sha256 = row.OptionalStr("sha256"),
         Formats = ReadStrings(row, "formats"),
         DownloadFormats = ReadDownloadFormats(row),
+        Extent = ReadExtent(row),
     };
+
+    /// <summary>
+    /// All four bounds or nothing: a partial extent drawn from three of four would be a guess the
+    /// curator could not tell from a fact.
+    /// </summary>
+    private static CuratorExtent? ReadExtent(JsonElement row)
+        => row.Object("extent") is { } extent
+            && extent.OptionalDouble("west") is { } west
+            && extent.OptionalDouble("south") is { } south
+            && extent.OptionalDouble("east") is { } east
+            && extent.OptionalDouble("north") is { } north
+                ? new CuratorExtent(west, south, east, north)
+                : null;
 
     /// <summary>
     /// <c>null</c> when the row's <c>layers</c> is absent or null — nothing is known, and no flag
