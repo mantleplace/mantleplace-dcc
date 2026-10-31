@@ -216,6 +216,23 @@ _Avoid_: session id, client id, host id
 
 ### Orders and builds
 
+**Platform API**:
+The `/api/v1/` surface of mantle.place that the first-party plugins call — sign-in, the vault, Quotes,
+orders, exports — described by the spec it serves. Each call names its client and version, and a client
+older than the platform serves is told to update rather than given an error.
+_Avoid_: backend, server API, REST API, public API
+
+**Quote**:
+What an extent would cost before any order exists: its area, price and coverage, from the same price
+checkout uses. Nothing is stored, so a Quote has no id and no expiry.
+_Avoid_: estimate, price check, preview
+
+**Extent box**:
+A box a curator places over their site in a host's scene, to name an extent for the curator or a Quote
+when the scene has no Mantle Place import or georeference to name it. It is not an import's: it carries
+no identity and is never replaced by one.
+_Avoid_: AOI box, bounds, selection box
+
 These two were one word for a long time, and a host plugin that keys anything on the wrong one
 duplicates a curator's content instead of replacing it.
 

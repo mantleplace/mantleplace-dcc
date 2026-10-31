@@ -1,7 +1,6 @@
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
+using MantlePlace.PlatformApi;
 using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Client;
@@ -48,7 +47,7 @@ public sealed class AuthSession : IDisposable
     /// <summary>The single stored secret. One key, so sign-out has one thing to clear.</summary>
     private const string RefreshTokenKey = "refresh-token";
 
-    private static readonly HttpClient Http = new();
+    private readonly HttpMessageHandler? _handler;
 
     private readonly MantlePlaceEndpoints _endpoints;
     private readonly ISecretStore _secrets;
@@ -59,10 +58,14 @@ public sealed class AuthSession : IDisposable
     private string _refreshToken = string.Empty;
     private DateTimeOffset _expiresAt = DateTimeOffset.MinValue;
 
-    public AuthSession(MantlePlaceEndpoints endpoints, ISecretStore secrets)
+    /// <param name="endpoints">Where the platform is.</param>
+    /// <param name="secrets">Where the refresh token is kept.</param>
+    /// <param name="handler">A message handler for the grant calls, for tests; the shared one when <c>null</c>.</param>
+    public AuthSession(MantlePlaceEndpoints endpoints, ISecretStore secrets, HttpMessageHandler? handler = null)
     {
         _endpoints = endpoints;
         _secrets = secrets;
+        _handler = handler;
     }
 
     /// <summary>Raised whenever <see cref="State"/> changes.</summary>
@@ -441,7 +444,11 @@ public sealed class AuthSession : IDisposable
             ["code_verifier"] = verifier,
         });
 
-        return await PostGrantAsync(_endpoints.TokenEndpointUrl, body, cancellationToken)
+        return await PostGrantAsync(
+                PlatformApiCalls.OriginOf(_endpoints.TokenEndpointUrl),
+                (api, ct) => api.ExchangeNativeAuthCodeAsync(new Body(), ct),
+                body,
+                cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -456,30 +463,35 @@ public sealed class AuthSession : IDisposable
             ["refresh_token"] = refreshToken,
         });
 
-        return await PostGrantAsync(_endpoints.RefreshEndpointUrl, body, cancellationToken)
+        return await PostGrantAsync(
+                PlatformApiCalls.OriginOf(_endpoints.RefreshEndpointUrl),
+                (api, ct) => api.RefreshNativeSessionAsync(new Body2(), ct),
+                body,
+                cancellationToken)
             .ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Posts a grant request and applies the response. <c>null</c> on success.
+    /// Posts a grant request, through the generated Platform API client, and applies the response.
+    /// <c>null</c> on success.
     /// </summary>
+    /// <remarks>
+    /// A 426 <c>client_update_required</c> is an update, not a rejection: it is never definitive, so
+    /// the stored session is kept for the updated plugin to renew, and the failure says update.
+    /// </remarks>
     private async Task<GrantFailure?> PostGrantAsync(
-        string url,
+        string baseUrl,
+        Func<PlatformApiClient, CancellationToken, Task> operation,
         string body,
         CancellationToken cancellationToken)
     {
-        using HttpRequestMessage request = new(HttpMethod.Post, url)
-        {
-            Content = new StringContent(body, Encoding.UTF8, "application/json"),
-        };
-
         string responseBody;
         int status;
         try
         {
-            using HttpResponseMessage response = await Http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            status = (int)response.StatusCode;
-            responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            (status, responseBody) = await PlatformApiCalls.For(baseUrl, _handler)
+                .SendAsync(operation, null, cancellationToken, body)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -489,6 +501,11 @@ public sealed class AuthSession : IDisposable
         {
             // Nothing was rejected -- nothing was answered. Transient by definition.
             return new GrantFailure($"Could not reach mantle.place: {ex.Message}", IsDefinitive: false);
+        }
+
+        if (ClientUpdatePrompt.MinimumVersionOf(status, responseBody) is { } minimumVersion)
+        {
+            return new GrantFailure(ClientUpdatePrompt.Sentence(minimumVersion), IsDefinitive: false);
         }
 
         if (TokenGrants.TryParse(responseBody, out TokenGrant? grant) is { } failure)

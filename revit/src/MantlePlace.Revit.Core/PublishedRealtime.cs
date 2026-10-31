@@ -19,9 +19,6 @@ namespace MantlePlace.Revit.Core;
 /// </remarks>
 public static class PublishedRealtime
 {
-    /// <summary>The route's path on the platform base.</summary>
-    public const string Path = "/api/v1/realtime";
-
     /// <summary>
     /// Reads the route's body. <c>true</c> when both values are usable; otherwise <c>false</c> with the
     /// reason in <paramref name="whyNot"/>, in a sentence that names neither value.

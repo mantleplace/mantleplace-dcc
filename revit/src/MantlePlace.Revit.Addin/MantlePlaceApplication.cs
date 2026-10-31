@@ -670,6 +670,8 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load();
         _endpoints = endpoints;
+        // Before the first Platform API call (the restore below), so a 426 on it is heard.
+        ClientUpdateDialog.Attach();
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
         _vault = new VaultClient(endpoints, _session);
         _cache = new BundleCache();
@@ -907,6 +909,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         PrepareNotifier.Forget();
         RibbonImagery.Forget();
+        ClientUpdateDialog.Detach();
 
         if (_uiDispatcher is not null)
         {
