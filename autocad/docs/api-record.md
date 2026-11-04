@@ -114,6 +114,10 @@ AutoCAD block for the run; 2025 and 2026 are still unproven.
 
 ## What this does not yet cover
 
+- **A vault send in 2027.** The live check ran local bundles only. Sign-in, the vault and the
+  connected host with a session were not run: they need a signed-in account and the web vault (#511).
+- **The ribbon panel in 2027.** No Mantle Place panel showed and the ribbon held two "Add-ins"
+  tabs (#542).
 - **A drawing in feet**, with a foot-based zone and a metric DEM.
 - **The plugin's own load path in 2025 and 2026**, and in plain AutoCAD; 2027's is above.
 - **A .NET 8 build.** Every install here, 2025 and 2026 included, runs .NET 10 after its updates, and
