@@ -52,9 +52,10 @@ A case with `appliesTo` asserts one host's manifest block; every other host skip
 `appliesTo` names a host registered in `verified-against.json`, or a planned one whose plugin has not
 landed (`_PLANNED_HOSTS` in `check_manifest_conformance.py`). No registered host covers a planned
 host's case, so the baseline records it as `[]` until the host registers; registering removes the name
-from that set and updates the baseline. `autocad` is the one planned host today: its `hosts.autocad`
-cases (`manifest.autocad*`) assert only values the block states, so a plain AutoCAD reader and a
-Civil 3D reader both run them.
+from that set and updates the baseline. No host is planned today. `autocad` registered with its plugin
+tree without the `manifest` group (it has no reader of the `hosts.autocad` block yet), so its
+`hosts.autocad` cases (`manifest.autocad*`) are still asserted by no host; they assert only values the
+block states, so a plain AutoCAD reader and a Civil 3D reader both run them once one exists.
 
 Numeric tolerances are stated in the case (`landscapeSpawnToleranceCm`, `toleranceMetres`); do not
 invent tighter ones, and do not compare floats exactly.

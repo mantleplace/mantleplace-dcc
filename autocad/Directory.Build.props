@@ -1,0 +1,92 @@
+<Project>
+
+  <!--
+    Shared MSBuild properties for the Mantle Place AutoCAD plugin.
+
+    Two rules worth knowing before adding a project here:
+
+      1. NO NUGET PACKAGES, the Revit tree's rule and for its reason: the pure core and its
+         conformance suite restore offline with zero third-party references, so a hosted runner builds
+         and tests them with no registry in the way (HPS-03).
+
+      2. The AutoCAD and Civil 3D APIs are referenced from a local install, never vendored and never
+         redistributed. The two API directories below are overridable:
+             dotnet build -p:AutoCadApiDirNet8="C:\path\to\net8\api" -p:AutoCadApiDirNet10="C:\Program Files\Autodesk\AutoCAD 2027"
+  -->
+
+  <PropertyGroup>
+    <!--
+      The AutoCAD plugin's version, and its ONE home. It flows into every assembly, into the bundle
+      manifest's AppVersion and each component entry, and into the release tag and asset name, which
+      are `autocad-<this>` and `MantlePlace-AutoCad-<this>.zip`: string equality, no `v`, no second
+      place to forget (docs/adr/0001-per-host-release-tracks.md).
+
+      It starts at 1.0.0 because the Autodesk storefront refuses a version that starts with 0
+      (docs/adr/0018-the-revit-track-goes-to-1-0-0-for-its-storefront.md, Amendment A1). The package
+      script fails when the manifest's version and this one differ.
+    -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CA1303</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      Where the Revit plugin's host-free sources live. The Core, the Client and the generated Platform
+      API client compile into MantlePlace.AutoCad.Core by source include, so no assembly is shared
+      between the two plugins (autocad/CLAUDE.md).
+    -->
+    <RevitSourceDir>$(MSBuildThisFileDirectory)..\revit\src\</RevitSourceDir>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      The two AutoCAD installs the plugin shell compiles against, one per build.
+
+      The .NET 8 build serves 2025 and 2026 and compiles against the OLDEST supported API (2025); the
+      .NET 10 build serves 2027 and compiles against 2027's. A .NET 8 project cannot reference an API
+      assembly built for .NET 10 (CS1705), and an updated 2025 or 2026 install runs .NET 10, so the
+      .NET 8 build needs a 2025 API directory that still references .NET 8: an un-updated install or
+      the ObjectARX SDK's managed assemblies. Point AutoCadApiDirNet8 at one. Only the shell and the
+      Civil 3D part read these; the core and its tests need no AutoCAD.
+    -->
+    <AutoCadApiDirNet8 Condition="'$(AutoCadApiDirNet8)' == ''">$(ProgramFiles)\Autodesk\AutoCAD 2025</AutoCadApiDirNet8>
+    <AutoCadApiDirNet10 Condition="'$(AutoCadApiDirNet10)' == ''">$(ProgramFiles)\Autodesk\AutoCAD 2027</AutoCadApiDirNet10>
+  </PropertyGroup>
+
+  <!--
+    The dirty marker, as revit/Directory.Build.props explains it: the SDK appends the source commit to
+    the informational version, and this appends "-dirty" after the sha when anything under autocad/ is
+    modified, staged or untracked, so two builds naming one commit are not mistaken for the same code.
+    BuildIdentity (compiled in from the Revit Core) is the one reader of this shape.
+  -->
+  <Target Name="MarkDirtySourceRevision"
+          AfterTargets="InitializeSourceControlInformation"
+          BeforeTargets="GetAssemblyVersion"
+          Condition="'$(SourceRevisionId)' != '' and !$(SourceRevisionId.EndsWith('-dirty'))">
+    <Exec Command="git status --porcelain --untracked-files=all -- &quot;$(MSBuildThisFileDirectory).&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low"
+          ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_MantlePlaceAutoCadStatus" />
+      <Output TaskParameter="ExitCode" PropertyName="_MantlePlaceAutoCadStatusExit" />
+    </Exec>
+    <PropertyGroup Condition="'$(_MantlePlaceAutoCadStatusExit)' == '0' and '$(_MantlePlaceAutoCadStatus)' != ''">
+      <SourceRevisionId>$(SourceRevisionId)-dirty</SourceRevisionId>
+    </PropertyGroup>
+  </Target>
+
+</Project>

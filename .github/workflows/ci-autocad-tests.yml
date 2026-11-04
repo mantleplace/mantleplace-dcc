@@ -1,0 +1,68 @@
+# AutoCAD pure-core tests: the headless half of the AutoCAD plugin's triad.
+#
+# HPS-42: conformance tests run headless, with no DCC application required. The plugin compiles
+# Revit's host-free Core, Client and PlatformApi sources by include (autocad/CLAUDE.md), so this job
+# builds that compiled-in code and drives the shared conformance corpus over it, plus the plugin's
+# own decisions: the AutoCAD bundle manifest and the Civil 3D presence test.
+#
+# The shell (MantlePlace.AutoCad.Addin) and the Civil 3D part (MantlePlace.AutoCad.Civil3d) reference
+# the Autodesk assemblies from a local install and are deliberately NOT built here: a hosted runner
+# has no AutoCAD, and there is no honest way to fake one. They are compiled on a developer machine
+# (`dotnet build autocad/MantlePlace.AutoCad.slnx`) and proven by a real launch, not by CI. Skipping
+# them silently would be the failure mode this comment exists to prevent, so: skipped, on purpose,
+# and this is where that is written down.
+#
+# Two runtimes, because the plugin ships two builds: AutoCAD and Civil 3D 2025 and 2026 run .NET 8,
+# 2027 runs .NET 10. The suite runs on both, the same way the Revit one does.
+#
+# Hosted runner, and no NuGet restore: the tree has zero package references
+# (autocad/Directory.Build.props), so this job cannot be broken by a registry outage.
+name: ci-autocad-tests
+
+on:
+  # NO path filter on pull_request, deliberately: docs/agents/ci.md says why (a path-filtered check
+  # that never reports blocks the merge when it is made required). The job restores nothing and
+  # costs under a minute.
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - "autocad/**"
+      # The plugin compiles these sources in, so a change to them changes this tree.
+      - "revit/src/**"
+      - "revit/tests/**"
+      - "tools/manifest-conformance/corpus/**"
+      - "tools/manifest-conformance/verified-against.json"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-autocad-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  autocad-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false # the suite reads JSON vectors and C#; no binary payload is involved
+
+      # The 8.0 runtime comes first so the 10.0 SDK from global.json stays the one that drives the build.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: autocad/global.json
+
+      - name: Build the compiled-in sources and the suite
+        run: dotnet build autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.AutoCad.Core.Tests.csproj -c Release
+
+      # The corpus is checked into this repo, and the reader FAILS rather than skips when it cannot
+      # reach it (HPS-40). A green run here therefore means cases actually ran.
+      - name: Drive the shared conformance corpus and the plugin's cases on .NET 8 (AutoCAD and Civil 3D 2025, 2026)
+        run: dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.AutoCad.Core.Tests.csproj -c Release -f net8.0 --no-build
+
+      - name: Drive the shared conformance corpus and the plugin's cases on .NET 10 (AutoCAD and Civil 3D 2027)
+        run: dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.AutoCad.Core.Tests.csproj -c Release -f net10.0 --no-build

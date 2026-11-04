@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The AutoCAD plugin's headless suite (HPS-42). No AutoCAD, no Civil 3D, no NuGet, no test
+    framework: `dotnet run` over the Revit suite's harness, exiting non-zero on the first failing
+    assertion set.
+
+    TWO target frameworks, and running both is the point: the shipped plugin is a .NET 8 build for
+    AutoCAD and Civil 3D 2025 and 2026 and a .NET 10 build for 2027, so the suite runs on both runtimes.
+
+    It COMPILES IN the Revit suite's harness and its conformance runners, by source include, and runs
+    the ones for the corpus groups this host claims (verified-against.json, `autocad`). The runners
+    read the corpus at run time, find the repository root by climbing out of this project's output
+    folder, and assert against the Core, Client and Platform API sources this host also compiles, so
+    a green run here is the shared files passing under this host's two runtimes. Revit's other tests
+    stay Revit's: they pin Revit behaviour, and ci-revit-tests runs them.
+
+    This host's own cases are in this folder: the manifest's host parameter and the presence-gate
+    decision.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>MantlePlace.AutoCad.Tests</RootNamespace>
+    <AssemblyName>MantlePlace.AutoCad.Core.Tests</AssemblyName>
+    <RevitTestsDir>$(MSBuildThisFileDirectory)..\..\..\revit\tests\MantlePlace.Revit.Core.Tests\</RevitTestsDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(RevitTestsDir)**\*.cs" Exclude="$(RevitTestsDir)Program.cs;$(RevitTestsDir)obj\**;$(RevitTestsDir)bin\**" LinkBase="Shared\Revit.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MantlePlace.AutoCad.Core\MantlePlace.AutoCad.Core.csproj" />
+  </ItemGroup>
+
+</Project>

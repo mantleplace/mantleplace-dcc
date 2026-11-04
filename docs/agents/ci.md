@@ -5,8 +5,8 @@ description: The pull-request gates this repository runs, the jobs behind them, 
 
 # CI
 
-Eleven workflows live here, all on free hosted runners. Six run on every pull request:
-`ci-manifest-conformance`, `ci-revit-tests`, `ci-public-hygiene`, `ci-unreal-naming`,
+Twelve workflows live here, all on free hosted runners. Seven run on every pull request:
+`ci-manifest-conformance`, `ci-revit-tests`, `ci-autocad-tests`, `ci-public-hygiene`, `ci-unreal-naming`,
 `ci-brand-assets` and `ci-blender-tests`. The other five are not pull-request gates: `release-mpb.yml` (below),
 `ci-platform-api.yml` and `manifest-drift.yml` (both below), `stale.yml`
 and `ci-tracker-hygiene.yml`. The last two are tracker hygiene — the second runs on issue and comment
@@ -46,7 +46,10 @@ gh api repos/mantleplace/mantleplace-dcc/branches/main/protection
 (`conformance`), `ci-revit-tests` (`pure-core` and `pure-core-windows`) and `ci-public-hygiene`
 (`references`). `ci-brand-assets` reports on every pull request but is not required, by construction
 (above). `ci-blender-tests` (`blender-core`, the Blender plugin's pure core) reports on every pull
-request and is not required yet; making it required is a branch-protection change.
+request and is not required yet; making it required is a branch-protection change. `ci-autocad-tests`
+(`autocad-core`, the AutoCAD plugin's pure core on .NET 8 and .NET 10) is in the same state: it reports
+on every pull request and is not required yet. It does not build the shell or the Civil 3D part, which
+need the Autodesk assemblies; `autocad/README.md` says how a developer machine does.
 
 ## Rules for every workflow
 
@@ -80,6 +83,7 @@ pwsh -NoProfile -File tools/public-hygiene/Test-PowerShellParses.ps1
 (cd tools/unreal-naming && python -m unittest discover -p "test_*.py")
 (cd tools/brand-assets && python -m unittest discover -p "test_*.py")
 python -m unittest discover -s blender/tests -t blender
+dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.AutoCad.Core.Tests.csproj -f net8.0    # and -f net10.0
 python revit/tools/platform-api/sync_platform_api.py --check                    # fetches the served spec; needs the .NET SDK
 python tools/public-hygiene/check_public_references.py --stdin --label "PR body" < pr-body.md
 ```
@@ -87,7 +91,8 @@ python tools/public-hygiene/check_public_references.py --stdin --label "PR body"
 The last line checks a pull request body before it is published; the same `--stdin` takes a
 title or a commit message. The branch-name and commit-range runs are the opt-in pre-push hook's
 (`git config core.hooksPath .githooks`). The Revit suite's build and run lines live in
-[`revit/README.md` ▸ Build and test](../../revit/README.md#build-and-test). On Windows, a one-off
+[`revit/README.md` ▸ Build and test](../../revit/README.md#build-and-test), the AutoCAD suite's in
+[`autocad/README.md` ▸ Build and test](../../autocad/README.md#build-and-test). On Windows, a one-off
 `json.load` over the corpus needs `encoding="utf-8"` (or `PYTHONUTF8=1`); the checkers already
 pass it.
 

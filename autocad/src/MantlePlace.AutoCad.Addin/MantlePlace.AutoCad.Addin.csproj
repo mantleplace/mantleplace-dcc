@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The AutoCAD plugin's shell: the one assembly the bundle's PackageContents.xml names, which
+    AutoCAD loads at startup. IMPURE and AutoCAD: it references the host's managed API and nothing
+    else of Autodesk's. It references NO Civil 3D assembly, so it loads in plain AutoCAD and in
+    Civil 3D's "as AutoCAD" mode; it decides whether Civil 3D is in the process and only then loads
+    MantlePlace.AutoCad.Civil3d (the presence test, autocad/docs/api-record.md).
+
+    Two builds from one source, because AutoCAD and Civil 3D 2025 and 2026 run .NET 8 and 2027 runs
+    .NET 10. Each compiles against its own API directory (Directory.Build.props): CS1705 stops a
+    .NET 8 project referencing an API built for .NET 10, so building the .NET 8 target on a machine
+    whose 2025 install has been updated to .NET 10 needs -p:AutoCadApiDirNet8 pointed at an API that
+    still references .NET 8. CI never builds this project: a hosted runner has no AutoCAD, and there
+    is no honest way to fake it. It is compiled on a developer machine and proven by loading it.
+
+    Not PrivateAssets-copied: the Autodesk assemblies are referenced with Private=false so none is
+    ever copied into the bundle (they are not redistributable).
+  -->
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
+    <RootNamespace>MantlePlace.AutoCad.Addin</RootNamespace>
+    <AssemblyName>MantlePlace.AutoCad.Addin</AssemblyName>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <NoWarn>$(NoWarn);CA1416;MSB3277</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MantlePlace.AutoCad.Core\MantlePlace.AutoCad.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The Civil 3D part is built beside the shell and shipped in the same folder, but never referenced:
+       a reference would make AutoCAD resolve Civil 3D assemblies when the shell loads. -->
+  <ItemGroup>
+    <ProjectReference Include="..\MantlePlace.AutoCad.Civil3d\MantlePlace.AutoCad.Civil3d.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <Reference Include="accoremgd"><HintPath>$(AutoCadApiDirNet8)\accoremgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="acdbmgd"><HintPath>$(AutoCadApiDirNet8)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <Reference Include="accoremgd"><HintPath>$(AutoCadApiDirNet10)\accoremgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="acdbmgd"><HintPath>$(AutoCadApiDirNet10)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+</Project>

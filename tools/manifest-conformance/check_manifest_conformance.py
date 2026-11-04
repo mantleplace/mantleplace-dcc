@@ -112,8 +112,8 @@ _NON_HOST_KEYS = frozenset({"$comment"})
 #: Hosts whose corpus cases are written before the host exists. A case's `appliesTo` may name one,
 #: and no registered host covers it, so the coverage baseline records it as `[]`. This is not a
 #: roster: a host registers in verified-against.json from its first commit (HPS-38), and registering
-#: removes it from this set in the same change. `autocad` is here until its plugin lands.
-_PLANNED_HOSTS = frozenset({"autocad"})
+#: removes it from this set in the same change. Empty today: `autocad` registered with its plugin tree.
+_PLANNED_HOSTS: frozenset[str] = frozenset()
 
 #: The documented corpus groups. A typo'd group silently excludes a case from every host suite
 #: that dispatches on it, so it is checked rather than trusted.

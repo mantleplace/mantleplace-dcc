@@ -1,0 +1,9 @@
+<Project>
+
+  <!--
+    Deliberately empty. The spike is a throwaway developer tool (README.md) and builds with its own
+    project settings; this file stops it inheriting the plugin tree's version and strict warnings
+    from ../../Directory.Build.props.
+  -->
+
+</Project>

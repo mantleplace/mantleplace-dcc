@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The AutoCAD plugin's host-free half: everything that needs neither AutoCAD nor Civil 3D, so a
+    hosted runner builds and tests it with no Autodesk install (HPS-42).
+
+    It is the Revit plugin's Core, Client and generated Platform API client COMPILED IN BY SOURCE
+    INCLUDE, plus this folder's own files (the Civil 3D presence decision). Nothing is shared as an
+    assembly: the Revit tree ships its own assemblies, this one ships its own, and the two cannot
+    drift apart in a binary they both load. A change to a shared file is a change to both plugins and
+    is tested by both suites (ci-revit-tests, ci-autocad-tests).
+
+    The included files stay in their MantlePlace.Revit.* namespaces: renaming them would fork the
+    source this exists to share. AutoCAD-only code lives in the MantlePlace.AutoCad namespace.
+
+    Two targets, the two runtimes the plugin loads on: .NET 8 for AutoCAD and Civil 3D 2025 and 2026,
+    .NET 10 for 2027. Both build on a hosted runner; the suite runs on both.
+  -->
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>MantlePlace.AutoCad</RootNamespace>
+    <AssemblyName>MantlePlace.AutoCad.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(RevitSourceDir)MantlePlace.Revit.Core\**\*.cs" Exclude="$(RevitSourceDir)MantlePlace.Revit.Core\obj\**;$(RevitSourceDir)MantlePlace.Revit.Core\bin\**" LinkBase="Shared\Revit.Core" />
+    <Compile Include="$(RevitSourceDir)MantlePlace.Revit.Client\**\*.cs" Exclude="$(RevitSourceDir)MantlePlace.Revit.Client\obj\**;$(RevitSourceDir)MantlePlace.Revit.Client\bin\**" LinkBase="Shared\Revit.Client" />
+    <Compile Include="$(RevitSourceDir)MantlePlace.PlatformApi\**\*.cs" Exclude="$(RevitSourceDir)MantlePlace.PlatformApi\obj\**;$(RevitSourceDir)MantlePlace.PlatformApi\bin\**" LinkBase="Shared\PlatformApi" />
+  </ItemGroup>
+
+</Project>

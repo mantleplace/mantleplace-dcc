@@ -171,7 +171,7 @@ and imagery beside the imported Landscape.*
 The layout, directory by directory, is in [`CLAUDE.md`](CLAUDE.md#layout), which keeps it current.
 
 Start with each host's own docs: [`unreal/README.md`](unreal/README.md) for Unreal,
-[`revit/README.md`](revit/README.md) for Revit, and [`blender/README.md`](blender/README.md) for the
+[`revit/README.md`](revit/README.md) for Revit, [`autocad/README.md`](autocad/README.md) for AutoCAD and Civil 3D, and [`blender/README.md`](blender/README.md) for the
 Blender plugin, which reads a bundle on disk and does not sign in. Sign-in is shared by both hosts and documented once,
 in [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md).
 
@@ -187,6 +187,14 @@ dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.
 Building the plugin shim itself needs Revit 2025's API present — see
 [`revit/README.md`](revit/README.md#build-and-test) for why the *oldest* supported version is the
 compile target.
+
+**AutoCAD and Civil 3D** — no Autodesk install needed for the tests, which run on both
+runtimes the plugin ships for ([`autocad/README.md`](autocad/README.md#build-and-test)):
+
+```bash
+dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.AutoCad.Core.Tests.csproj -f net8.0
+dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.AutoCad.Core.Tests.csproj -f net10.0
+```
 
 **Unreal** — drop `unreal/MantlePlace/` into a UE 5.8 project's `Plugins/` directory and let the
 editor build it. Its engine dependencies are Epic's built-in Interchange, PCG and SQLiteCore.

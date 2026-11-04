@@ -23,7 +23,7 @@ if (string.IsNullOrWhiteSpace(informational))
 }
 
 string version = BuildIdentity.Parse(informational).Version;
-string manifest = AutodeskBundleManifest.Build(version, AutodeskBundleManifest.SupportedRevitYears);
+string manifest = AutodeskBundleManifest.Build(version, AutodeskBundleManifest.SupportedRevitYears, BundleHost.Revit);
 
 // No BOM, LF endings as built: Autodesk's loader reads it as plain UTF-8.
 File.WriteAllText(args[0], manifest, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
