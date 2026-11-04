@@ -91,23 +91,31 @@ Neither the zone route nor the surface route failed in any year, so neither is c
   Which file the bundle names for the surface therefore moves the surface by half a cell, and the
   plugin should be checked against the format the bundle actually ships.
 
-## Called by the plugin, not yet run
+## Called by the plugin
 
 The import's Civil 3D half makes three calls the spike did not run when it was first recorded. The
-probe (`Invoke-Civil3dProbe.ps1`) now exercises each of them; until a run is recorded here, each
-is unproven in a host.
+plugin's live check ran each of them in Civil 3D 2027 (window, Civil 3D launcher) on 2026-11-04, from
+the installed bundle, importing a cached Texas Central (US foot) order whose manifest was given an
+AutoCAD block for the run; 2025 and 2026 are still unproven.
 
-| Call | Why the plugin makes it |
-|---|---|
-| `GeoCoordinateSystem.Create(zoneCode).EPSGcode` | The block states the order's frame as an EPSG code and Civil 3D's zone as its library code, so the zone is compared through AutoCAD's own library and never through a spelling the plugin maps. The probe also records whether setting the zone writes the drawing's geographic location. |
-| `TinSurface.CreateFromLandXML(db, name, path, surfaceName)` | The block's terrain source is LandXML (format.md §6.9), which `AddDEMFile` does not read. The three-parameter overload is obsolete. The probe writes a US-foot LandXML with and without its `<CoordinateSystem>` element and a metric one, so a run shows whether Civil 3D places the points as written or transforms or scales them into the drawing. |
-| `CivilDocument.GetSurfaceIds()` | The surface's name is unique in the drawing, so a second import of an order gets a numbered name. |
+| Call | Why the plugin makes it | 2027 |
+|---|---|---|
+| `GeoCoordinateSystem.Create(zoneCode).EPSGcode` | The block states the order's frame as an EPSG code and Civil 3D's zone as its library code, so the zone is compared through AutoCAD's own library and never through a spelling the plugin maps. | worked: `NSRS11.TX-CF` gave 6578 and `TX83-NCF` gave 2276, so the order went in under the first and was refused under the second |
+| `TinSurface.CreateFromLandXML(db, name, path, surfaceName)` | The block's terrain source is LandXML (format.md §6.9), which `AddDEMFile` does not read. The three-parameter overload is obsolete. | worked: 75,302 points, placed as written (US-foot coordinates and heights, the LandXML's own extents), with and without the drawing's zone set |
+| `CivilDocument.GetSurfaceIds()` | The surface's name is unique in the drawing, so a second import of an order gets a numbered name. | worked: the second import into one drawing built `...-2` |
+
+- **Setting the zone sets the geographic location.** In a drawing whose zone the run set, the plan
+  read the drawing's geographic location as that same code, so the geolocation check and the zone
+  check agreed.
+- **The bundle's load path.** The shell loaded at startup from `%APPDATA%\Autodesk\ApplicationPlugins`
+  once `PackageContents.xml` gave each year its own `Components` group: with all three years'
+  requirements in one group the autoloader registered the bundle and loaded nothing. An unsigned
+  build there raises AutoCAD's "Unsigned Executable File" prompt (two of them under `SECURELOAD` 1).
 
 ## What this does not yet cover
 
 - **A drawing in feet**, with a foot-based zone and a metric DEM.
-- **The plugin's own load path**, a bundle under `ApplicationPlugins` whose assembly is loaded at
-  startup, rather than a `NETLOAD` from a script.
+- **The plugin's own load path in 2025 and 2026**, and in plain AutoCAD; 2027's is above.
 - **A .NET 8 build.** Every install here, 2025 and 2026 included, runs .NET 10 after its updates, and
   its API assemblies reference .NET 10, so a .NET 8 project cannot compile against them (`CS1705`).
   The probe builds each year against that year's installed API, at the framework its own runtime
