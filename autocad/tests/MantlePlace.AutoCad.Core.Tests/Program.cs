@@ -16,6 +16,7 @@ exitCode |= ProjectionConformanceTests.Run();
 exitCode |= PlatformConformanceTests.Run();
 exitCode |= AutoCadManifestConformanceTests.Run();
 exitCode |= AutoCadImportPlanTests.Run();
+exitCode |= LandXmlSurfaceTests.Run();
 exitCode |= AutoCadBundleManifestTests.Run();
 exitCode |= PresenceTests.Run();
 exitCode |= HostIdentityTests.Run();

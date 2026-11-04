@@ -1,6 +1,8 @@
-// The spike's Civil 3D half: the zone read and compare, then a TIN surface from each DEM the driver
-// wrote, once through AddDEMFile(path) and once through its coordinate-system overload. Every call is
-// recorded as worked, did nothing or threw, in the host's own words.
+// The spike's Civil 3D half: the zone read and compare, what AutoCAD's coordinate library says each
+// zone code is in EPSG and whether the zone is the drawing's geographic location, then a TIN surface
+// from each DEM the driver wrote, once through AddDEMFile(path) and once through its coordinate-system
+// overload, and one from each LandXML it wrote through CreateFromLandXML. Every call is recorded as
+// worked, did nothing or threw, in the host's own words.
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.Civil.ApplicationServices;
@@ -19,6 +21,7 @@ public static class Civil3dPart
         string mismatch = Env("MISMATCH_ZONE");
         string demZone = Env("DEM_ZONE");
         string[] dems = Env("DEMS").Split(';', StringSplitOptions.RemoveEmptyEntries);
+        string[] landXmls = Env("LANDXMLS").Split(';', StringSplitOptions.RemoveEmptyEntries);
 
         line("## Zone");
         line("");
@@ -42,6 +45,7 @@ public static class Civil3dPart
         string? fresh = Read("fresh drawing");
         Compare(line, fresh, zone);
         Read("after that compare (unchanged?)");
+        GeoLocation(line, "fresh drawing");
 
         Call(line, "`SettingsUnitZone.GetAllCodes()`", SettingsUnitZone.GetAllCodes, codes =>
             $"{codes.Length} codes; `{zone}` among them: {codes.Contains(zone)}; `{demZone}` among them: {codes.Contains(demZone)}{(codes.Length > 0 ? $"; first `{codes[0]}`" : "")}"
@@ -60,6 +64,15 @@ public static class Civil3dPart
         Compare(line, set, zone);
         Compare(line, set, mismatch);
         Read("after both compares (unchanged?)");
+        GeoLocation(line, "after the fixture");
+
+        line("");
+        line("## Zone codes in EPSG");
+        line("");
+        foreach (string code in new[] { fresh ?? "", zone, mismatch, demZone })
+        {
+            Call(line, $"`GeoCoordinateSystem.Create(\"{code}\")`", () => GeoCoordinateSystem.Create(code), cs => $"ID `{cs.ID}`, EPSG {cs.EPSGcode}, unit `{cs.UnitScale}`");
+        }
 
         line("");
         line("## Surface");
@@ -72,7 +85,62 @@ public static class Civil3dPart
             Surface(line, dem, demZone);
         }
 
+        line("");
+        line("## LandXML surface");
+        line("");
+        foreach (string landXml in landXmls)
+        {
+            LandXmlSurface(line, landXml);
+        }
+
         Read("after the surfaces (unchanged?)");
+    }
+
+    private static void GeoLocation(Action<string> line, string when)
+    {
+        Database db = Application.DocumentManager.MdiActiveDocument.Database;
+        Call(line, $"`Database.GeoDataObject`, {when}", () =>
+        {
+            ObjectId id;
+            try
+            {
+                id = db.GeoDataObject;
+            }
+            catch (Autodesk.AutoCAD.Runtime.Exception ex)
+            {
+                return $"none (threw {ex.ErrorStatus})";
+            }
+
+            if (id.IsNull)
+            {
+                return "none (null id)";
+            }
+
+            using Transaction tr = db.TransactionManager.StartOpenCloseTransaction();
+            var data = (GeoLocationData)tr.GetObject(id, OpenMode.ForRead);
+            string cs = data.CoordinateSystem ?? "";
+            return $"a GeoLocationData, coordinate system `{(cs.Length > 60 ? cs[..60] + "..." : cs)}`";
+        }, s => s);
+    }
+
+    private static void LandXmlSurface(Action<string> line, string path)
+    {
+        string label = $"`TinSurface.CreateFromLandXML(db, name, path, \"Terrain\")`, {Path.GetFileName(path)}";
+        Database db = Application.DocumentManager.MdiActiveDocument.Database;
+        try
+        {
+            using Transaction tr = db.TransactionManager.StartTransaction();
+            ObjectId id = TinSurface.CreateFromLandXML(db, "MP probe landxml " + Path.GetFileNameWithoutExtension(path), path, "Terrain");
+            var surface = (TinSurface)tr.GetObject(id, OpenMode.ForRead);
+            GeneralSurfaceProperties p = surface.GetGeneralProperties();
+            string verdict = p.NumberOfPoints > 0 ? "worked" : "did nothing";
+            line($"- {label}: **{verdict}**, {p.NumberOfPoints} points, X {p.MinimumCoordinateX:F2} to {p.MaximumCoordinateX:F2}, Y {p.MinimumCoordinateY:F2} to {p.MaximumCoordinateY:F2}, Z {p.MinimumElevation:F2} to {p.MaximumElevation:F2}");
+            tr.Commit();
+        }
+        catch (System.Exception ex)
+        {
+            line($"- {label}: **threw** `{ex.GetType().Name}: {ex.Message}`");
+        }
     }
 
     private static void Compare(Action<string> line, string? drawing, string order)

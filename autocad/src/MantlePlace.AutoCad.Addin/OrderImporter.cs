@@ -29,12 +29,19 @@ internal sealed record OrderImportResult(AutoCadImportPlan Plan, string Summary,
 /// <para>
 /// The aerial is an external reference, as every AutoCAD raster image is, so its file is extracted to the
 /// order's retained cache folder (<see cref="ExtractionLifetime.Retained"/>), which a later import of
-/// another order does not touch. The contours file is read and dropped.
+/// another order does not touch. The contours file is read and dropped, and so is the surface's LandXML
+/// once Civil 3D has built the surface from it.
+/// </para>
+/// <para>
+/// <b>Civil 3D is observed through its part alone.</b> When the presence test lets the part load, the part
+/// reads the drawing's coordinate zone (never sets it) and builds the surface; when it does not (plain
+/// AutoCAD, or Civil 3D's "as AutoCAD" launcher), the plan is plain AutoCAD's and says the surface needs
+/// Civil 3D. A part that fails to load is the second case, not a crash.
 /// </para>
 /// </remarks>
 internal static class OrderImporter
 {
-    internal static OrderImportResult Import(Document document, string zipPath, bool civil3dLoaded)
+    internal static OrderImportResult Import(Document document, string zipPath, PresenceVerdict presence)
     {
         using LocalBundleArchive archive = LocalBundleArchive.Open(zipPath);
 
@@ -48,10 +55,30 @@ internal static class OrderImporter
         }
 
         Database database = document.Database;
+        Type? civil3d = Civil3dPartLoader.Load(presence, out _);
+        DrawingZone? zone = null;
+        if (civil3d is not null)
+        {
+            try
+            {
+                zone = DrawingObservations.Zone(Civil3dPartLoader.ReadZoneCode(civil3d, database));
+            }
+#pragma warning disable CA1031 // A zone that cannot be read refuses the import; it never takes AutoCAD down.
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                AutoCadImportPlan unread = new()
+                {
+                    Refusal = $"Civil 3D could not say this drawing's coordinate zone ({ex.Message}), so it cannot be shown to be the order's. Nothing was imported.",
+                };
+                return new OrderImportResult(unread, unread.Summary(), false);
+            }
+        }
+
         AutoCadImportPlan plan = AutoCadImportPlanner.Plan(
             manifestText,
             DrawingObservations.Geolocation(database),
-            civil3dLoaded);
+            zone);
 
         if (plan.IsRefused)
         {
@@ -96,6 +123,12 @@ internal static class OrderImporter
                 outcomes[AutoCadPart.Aerial] = Run(AutoCadPart.Aerial, () => PlaceAerial(database, image, aerial, plan.OrderId), aerial.Sentence, ref placedAnything);
             }
 
+            if (civil3d is not null && files.TryGetValue(AutoCadPart.Surface, out string? landXml))
+            {
+                PlannedPart surface = plan.Part(AutoCadPart.Surface);
+                outcomes[AutoCadPart.Surface] = Run(AutoCadPart.Surface, () => BuildSurface(database, civil3d, landXml, surface, plan.OrderId), null, ref placedAnything);
+            }
+
             if (files.TryGetValue(AutoCadPart.Contours, out string? dxf))
             {
                 PlannedPart contours = plan.Part(AutoCadPart.Contours);
@@ -127,6 +160,41 @@ internal static class OrderImporter
         {
             return AutoCadImportPlanner.FailedSentence(kind, $"its file could not be read ({io.Message}).");
         }
+        catch (Exception refused) when (refused is ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            // What Civil 3D's managed API throws for a file it will not build from.
+            return AutoCadImportPlanner.FailedSentence(kind, $"the host refused it ({refused.GetType().Name}: {refused.Message}).");
+        }
+    }
+
+    /// <summary>
+    /// The surface as a Civil 3D TIN surface on its layer, built by Civil 3D from the block's LandXML. The
+    /// zone check has already shown the drawing's zone to be the order's, or the drawing to have none.
+    /// </summary>
+    private static string BuildSurface(Database database, Type civil3d, string landXmlPath, PlannedPart part, string orderId)
+    {
+        string? landXmlSurface;
+        using (StreamReader reader = File.OpenText(landXmlPath))
+        {
+            if (LandXmlSurface.TryReadName(reader, out landXmlSurface) is { } problem)
+            {
+                throw new PartRefusedException(problem + ".");
+            }
+        }
+
+        using (Transaction transaction = database.TransactionManager.StartTransaction())
+        {
+            _ = EnsureLayer(database, transaction, part.Layer);
+            transaction.Commit();
+        }
+
+        (string name, int points) = Civil3dPartLoader.BuildSurfaceFromLandXml(civil3d, database, AutoCadImportPlanner.SurfaceName(orderId), landXmlPath, landXmlSurface!, part.Layer);
+        if (points == 0)
+        {
+            throw new PartRefusedException($"Civil 3D built {name} from {part.Path} and read no points into it.");
+        }
+
+        return AutoCadImportPlanner.SurfacePlacedSentence(part, name, points);
     }
 
     /// <summary>The contours as lightweight polylines on their layer, each at its published height.</summary>

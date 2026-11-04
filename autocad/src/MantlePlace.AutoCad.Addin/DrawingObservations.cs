@@ -16,6 +16,31 @@ namespace MantlePlace.AutoCad.Addin;
 /// </remarks>
 internal static class DrawingObservations
 {
+    /// <summary>
+    /// The drawing's Civil 3D coordinate zone, from the code the Civil 3D part read: the code as read, and
+    /// the EPSG code AutoCAD's own coordinate library gives for it. Civil 3D's zone codes are that
+    /// library's codes, so the code is never mapped here; a code with no zone, or one AutoCAD gives no EPSG
+    /// code for, is reported with none, and the plan decides.
+    /// </summary>
+    internal static DrawingZone Zone(string code)
+    {
+        DrawingZone zone = new(code ?? string.Empty, null);
+        if (!zone.IsSet)
+        {
+            return zone;
+        }
+
+        try
+        {
+            GeoCoordinateSystem system = GeoCoordinateSystem.Create(code);
+            return zone with { Epsg = system.EPSGcode > 0 ? system.EPSGcode : null };
+        }
+        catch (Autodesk.AutoCAD.Runtime.Exception)
+        {
+            return zone;
+        }
+    }
+
     internal static DrawingGeolocation Geolocation(Database database)
     {
         ObjectId id;

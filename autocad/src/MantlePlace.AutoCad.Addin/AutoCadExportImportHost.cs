@@ -121,8 +121,8 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
 
         try
         {
-            bool civil3d = Presence.MayLoadCivil3dPart(Presence.Decide(HostObservations.Observe()));
-            OrderImportResult result = OrderImporter.Import(document, zipPath, civil3d);
+            PresenceVerdict presence = Presence.Decide(HostObservations.Observe());
+            OrderImportResult result = OrderImporter.Import(document, zipPath, presence);
 
             window.ShowOutcome(result.Summary);
             MantlePlaceApplication.Say(result.Summary);

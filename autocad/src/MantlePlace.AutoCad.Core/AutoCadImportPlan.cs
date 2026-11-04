@@ -25,6 +25,9 @@ public static class AutoCadLayers
 
     /// <summary>The aerial image's layer.</summary>
     public const string Aerial = "MantlePlace-Aerial";
+
+    /// <summary>The Civil 3D surface's layer.</summary>
+    public const string Surface = "MantlePlace-Surface";
 }
 
 /// <summary>
@@ -41,6 +44,25 @@ public sealed record DrawingGeolocation(bool IsSet, string CoordinateSystem, int
 
     /// <summary>A drawing whose geographic location names <paramref name="coordinateSystem"/>.</summary>
     public static DrawingGeolocation Located(string coordinateSystem, int? epsg) => new(true, coordinateSystem ?? string.Empty, epsg);
+}
+
+/// <summary>
+/// What the Civil 3D part observed of the drawing's coordinate zone: the code Civil 3D's drawing settings
+/// name (<c>SettingsUnitZone.CoordinateSystemCode</c>), and the EPSG code AutoCAD's own coordinate library
+/// gives for that code, if any. Read only: the plugin never sets the zone.
+/// </summary>
+/// <param name="Code">The zone code, in Civil 3D's own spelling (<c>CO83-NF</c>), or <see cref="NoZoneCode"/>.</param>
+/// <param name="Epsg">The EPSG code AutoCAD gives for the zone, or <c>null</c> when it gives none.</param>
+public sealed record DrawingZone(string Code, int? Epsg)
+{
+    /// <summary>The code a drawing with no coordinate zone reads (autocad/docs/api-record.md).</summary>
+    public const string NoZoneCode = ".";
+
+    /// <summary>A Civil 3D drawing with no coordinate zone.</summary>
+    public static DrawingZone None { get; } = new(NoZoneCode, null);
+
+    /// <summary>Whether the drawing has a zone: a code that is neither blank nor <see cref="NoZoneCode"/>.</summary>
+    public bool IsSet => !string.IsNullOrWhiteSpace(Code) && !string.Equals(Code, NoZoneCode, StringComparison.Ordinal);
 }
 
 /// <summary>One part of the plan: placed, or skipped with the sentence that says why.</summary>
@@ -183,17 +205,19 @@ public static class AutoCadBundleEntries
 /// insertion. A file the block does not show to be in its frame is skipped, never reprojected (HPS-53).
 /// </para>
 /// <para>
-/// The one fact taken from the drawing is its geographic location, and only to refuse: a location in
-/// another coordinate system than the order's means the order's coordinates mean something else in this
-/// drawing, so nothing is imported and the refusal names both. A drawing with none set is placed at the
-/// order's coordinates, and a notice says so; the plugin never sets the location for the user (the Civil
-/// 3D spike's rule for the drawing zone, autocad/docs/api-record.md). A local frame's files are offsets
-/// in no coordinate system, so no geographic location agrees with them.
+/// The facts taken from the drawing are its geographic location and, in Civil 3D, its coordinate zone, and
+/// only to refuse: either one in another coordinate system than the order's means the order's coordinates
+/// mean something else in this drawing, so nothing is imported and the refusal names both. A drawing with
+/// neither set is placed at the order's coordinates, and a notice says so; the plugin never sets either for
+/// the user (the Civil 3D spike's rule, autocad/docs/api-record.md). The zone is compared by the EPSG code
+/// AutoCAD's own coordinate library gives for it, never by a spelling this plugin maps. A local frame's
+/// files are offsets in no coordinate system, so no location or zone agrees with them.
 /// </para>
 /// <para>
 /// Parts are decided apart: an absent one is skipped with its stated reason, echoed and never matched on
-/// (format.md §6.1), and the others are planned as usual. The surface is Civil 3D's; plain AutoCAD says it
-/// needs Civil 3D from its own verdict, and Civil 3D names it and says building it is not in this plugin yet.
+/// (format.md §6.1), and the others are planned as usual. The surface is Civil 3D's; plain AutoCAD, and
+/// Civil 3D's "as AutoCAD" mode, say it needs Civil 3D from its own verdict, and Civil 3D builds it as a TIN
+/// surface from the block's terrain source.
 /// </para>
 /// </remarks>
 public static class AutoCadImportPlanner
@@ -212,12 +236,16 @@ public static class AutoCadImportPlanner
     private const string AbsoluteHeights = "absolute";
     private const string EpsgPrefix = "EPSG:";
 
-    /// <summary>Reads <paramref name="manifestJson"/> and plans it. Never throws.</summary>
-    public static AutoCadImportPlan Plan(string manifestJson, DrawingGeolocation drawing, bool civil3dLoaded)
-        => Plan(AutoCadBlockReader.Read(manifestJson), drawing, civil3dLoaded);
+    /// <summary>
+    /// Reads <paramref name="manifestJson"/> and plans it. Never throws. <paramref name="civil3d"/> is the
+    /// drawing's zone when the Civil 3D part is on, and <c>null</c> in plain AutoCAD and in Civil 3D's
+    /// "as AutoCAD" mode, where the part is off.
+    /// </summary>
+    public static AutoCadImportPlan Plan(string manifestJson, DrawingGeolocation drawing, DrawingZone? civil3d)
+        => Plan(AutoCadBlockReader.Read(manifestJson), drawing, civil3d);
 
     /// <summary>Plans an already read manifest.</summary>
-    public static AutoCadImportPlan Plan(AutoCadBlockRead read, DrawingGeolocation drawing, bool civil3dLoaded)
+    public static AutoCadImportPlan Plan(AutoCadBlockRead read, DrawingGeolocation drawing, DrawingZone? civil3d)
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(drawing);
@@ -241,6 +269,19 @@ public static class AutoCadImportPlanner
             return new AutoCadImportPlan { OrderId = orderId, JobId = jobId, Frame = frame, Refusal = refusal };
         }
 
+        if (civil3d is not null && ZoneRefusal(frame, civil3d) is { } zoneRefusal)
+        {
+            return new AutoCadImportPlan { OrderId = orderId, JobId = jobId, Frame = frame, Refusal = zoneRefusal };
+        }
+
+        List<string> notices = [LocationNotice(frame, drawing)];
+        if (civil3d is not null && ZoneNotice(frame, civil3d) is { } zoneNotice)
+        {
+            notices.Add(zoneNotice);
+        }
+
+        notices.Add(UnitsNotice(frame));
+
         return new AutoCadImportPlan
         {
             OrderId = orderId,
@@ -249,10 +290,10 @@ public static class AutoCadImportPlanner
             Parts =
             [
                 PlanContours(block, frame),
-                PlanSurface(block, civil3dLoaded),
+                PlanSurface(block, frame, civil3d is not null),
                 PlanAerial(block, frame),
             ],
-            Notices = [LocationNotice(frame, drawing), UnitsNotice(frame)],
+            Notices = notices,
         };
     }
 
@@ -266,6 +307,19 @@ public static class AutoCadImportPlanner
         return string.Create(
             CultureInfo.InvariantCulture,
             $"Contours: {placed} polylines placed on {part.Layer}, each at its height in {UnitWords(part.VerticalUnits)}.");
+    }
+
+    /// <summary>The name a built surface is given: spelled out, and carrying the order's id.</summary>
+    public static string SurfaceName(string orderId) =>
+        "MantlePlace-Surface-" + string.Concat((orderId ?? string.Empty).Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '-'));
+
+    /// <summary>What the user is told about a built surface, with its name and the points Civil 3D read.</summary>
+    public static string SurfacePlacedSentence(PlannedPart part, string name, int points)
+    {
+        ArgumentNullException.ThrowIfNull(part);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{Label(AutoCadPart.Surface)}: built as {name}, a TIN surface of {points} points from {part.Path}, on {part.Layer}.");
     }
 
     /// <summary>The words a unit token is shown in, or <c>null</c> for a token this plugin does not know.</summary>
@@ -345,6 +399,54 @@ public static class AutoCadImportPlanner
 
         return null;
     }
+
+    private static string? ZoneRefusal(AutoCadFileFrame frame, DrawingZone zone)
+    {
+        if (!zone.IsSet)
+        {
+            return null;
+        }
+
+        const string Remedy = "Nothing was imported. Import into a drawing whose Civil 3D zone is the order's, or into one with none set; "
+            + "the plugin does not change the zone.";
+
+        if (string.Equals(frame.Type, AutoCadFileFrame.Local, StringComparison.Ordinal))
+        {
+            return $"This drawing's Civil 3D coordinate zone is {ZoneSetting(zone)}, and this order's files are offsets about a local "
+                + $"origin on {frame.BaseCrs}, in no coordinate system, so the drawing's zone cannot be theirs. "
+                + "Nothing was imported. Import it into a drawing with no zone set; the plugin does not change the zone.";
+        }
+
+        int orderEpsg = EpsgOf(frame.Crs)!.Value;
+        if (zone.Epsg is not { } zoneEpsg)
+        {
+            return $"This drawing's Civil 3D coordinate zone is {zone.Code}, which AutoCAD gives no EPSG code for, so it cannot be "
+                + $"shown to be the order's {frame.Crs}. {Remedy}";
+        }
+
+        return zoneEpsg == orderEpsg
+            ? null
+            : $"This drawing's Civil 3D coordinate zone is {ZoneSetting(zone)}, and the order is in {frame.Crs}: placing it here "
+                + $"would put the site in the wrong place. {Remedy}";
+    }
+
+    private static string? ZoneNotice(AutoCadFileFrame frame, DrawingZone zone)
+    {
+        if (string.Equals(frame.Type, AutoCadFileFrame.Local, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return zone.IsSet
+            ? $"This drawing's Civil 3D coordinate zone, {ZoneSetting(zone)}, is the order's coordinate system."
+            : $"This drawing has no Civil 3D coordinate zone, so the order is placed at its own coordinates, in {frame.Crs}. "
+                + "Set the zone to that coordinate system in Drawing Settings to tie it to the map; the plugin does not set it for you.";
+    }
+
+    private static string ZoneSetting(DrawingZone zone) =>
+        zone.Epsg is { } epsg
+            ? string.Create(CultureInfo.InvariantCulture, $"{zone.Code} (EPSG:{epsg})")
+            : zone.Code;
 
     private static string LocationNotice(AutoCadFileFrame frame, DrawingGeolocation drawing)
     {
@@ -497,7 +599,7 @@ public static class AutoCadImportPlanner
             $"Contours: placed as polylines on {AutoCadLayers.Contours}, each at its height in {UnitWords(pointer!.VerticalUnits)} ({pointer.VerticalDatum}).");
     }
 
-    private static PlannedPart PlanSurface(AutoCadBlock block, bool civil3dLoaded)
+    private static PlannedPart PlanSurface(AutoCadBlock block, AutoCadFileFrame frame, bool civil3dLoaded)
     {
         PartReadiness verdict = block.SurfaceReadiness;
         AutoCadPointer? pointer = block.Surface;
@@ -530,11 +632,17 @@ public static class AutoCadImportPlanner
             return Skip(AutoCadPart.Surface, verdict, pointer, $"{label}: not imported, because its format \"{pointer.Format}\" is one this plugin does not know.");
         }
 
-        return Skip(
+        if (OutOfFrame(pointer, frame, hasHeights: true) is { } why)
+        {
+            return Skip(AutoCadPart.Surface, verdict, pointer, $"{label}: not imported, because {why}.");
+        }
+
+        return Placed(
             AutoCadPart.Surface,
             verdict,
             pointer,
-            $"{label}: not imported. Building a surface from {pointer.Path} is not built into this plugin yet; the file is in the bundle.");
+            AutoCadLayers.Surface,
+            $"{label}: built as a TIN surface from {pointer.Path} on {AutoCadLayers.Surface}, heights in {UnitWords(pointer.VerticalUnits)} ({pointer.VerticalDatum}).");
     }
 
     private static PlannedPart PlanAerial(AutoCadBlock block, AutoCadFileFrame frame)

@@ -105,8 +105,8 @@ internal static class AutoCadManifestConformanceTests
             return;
         }
 
-        AutoCadImportPlan plain = AutoCadImportPlanner.Plan(corpusCase.Payload, DrawingGeolocation.None, civil3dLoaded: false);
-        AutoCadImportPlan civil = AutoCadImportPlanner.Plan(corpusCase.Payload, DrawingGeolocation.None, civil3dLoaded: true);
+        AutoCadImportPlan plain = AutoCadImportPlanner.Plan(corpusCase.Payload, DrawingGeolocation.None, civil3d: null);
+        AutoCadImportPlan civil = AutoCadImportPlanner.Plan(corpusCase.Payload, DrawingGeolocation.None, civil3d: DrawingZone.None);
 
         run.False(plain.IsRefused, $"planned in plain AutoCAD (refused with: {plain.Refusal})");
         run.False(civil.IsRefused, $"planned in Civil 3D (refused with: {civil.Refusal})");
@@ -115,9 +115,11 @@ internal static class AutoCadManifestConformanceTests
         AssertExpectations(run, corpusCase, civil, "Civil 3D");
 
         // What every plan of an AutoCAD case holds, whatever the case asserts.
+        run.False(plain.Part(AutoCadPart.Surface).Place, "plain AutoCAD never places the surface: it needs Civil 3D");
+        run.Equal(civil.Part(AutoCadPart.Surface).Place, civil.Part(AutoCadPart.Surface).Present, "Civil 3D builds the surface exactly when the bundle ships it");
+
         foreach (AutoCadImportPlan plan in new[] { plain, civil })
         {
-            run.False(plan.Part(AutoCadPart.Surface).Place, "the surface is never placed by this plugin yet");
             run.Equal(plan.HorizontalUnit, plan.Frame.HorizontalUnit, "the drawing's X/Y unit is the block's file frame unit");
             run.Equal(plan.VerticalUnit, plan.Frame.VerticalUnit, "the heights' unit is the block's file frame unit");
         }
