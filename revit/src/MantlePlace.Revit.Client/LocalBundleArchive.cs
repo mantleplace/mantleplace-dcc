@@ -218,8 +218,40 @@ public sealed class LocalBundleArchive : IDisposable
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+
+        // A retained file can be held open by the host that placed it (AutoCAD keeps an attached image
+        // open while any drawing shows it), so rewriting it on a second import of the order throws.
+        // When it is already the published file, byte for byte by its digest, it is the file to use.
+        if (lifetime == ExtractionLifetime.Retained && !string.IsNullOrWhiteSpace(expectedSha256) && IsAlready(destination, expectedSha256))
+        {
+            return destination;
+        }
+
         entry.ExtractToFile(destination, overwrite: true);
         return destination;
+    }
+
+    /// <summary>Whether <paramref name="path"/> exists and its SHA-256 is <paramref name="sha256"/>, read without taking a lock the host would refuse.</summary>
+    private static bool IsAlready(string path, string sha256)
+    {
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            using FileStream existing = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return Sha256Digest.Equal(Sha256Digest.OfStream(existing), sha256);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

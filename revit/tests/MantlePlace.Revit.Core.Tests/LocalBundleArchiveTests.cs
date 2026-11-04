@@ -153,6 +153,25 @@ internal static class LocalBundleArchiveTests
             run.True(File.Exists(retainedPath), "retained survives — links point into it (HPS-44)");
         });
 
+        run.Case("a retained file a host holds open is reused when it is already the published one", () =>
+        {
+            // A live Civil 3D 2027 run imported one order into a second drawing while the first still
+            // showed its aerial: AutoCAD held the retained image open and the rewrite threw IOException.
+            string zip = WriteBundle(Path.Combine(sandbox, "h", "download.zip"), OrderId);
+            using LocalBundleArchive archive = LocalBundleArchive.Open(zip, Path.Combine(sandbox, "h", "cache"));
+            string first = archive.Extract("Surface/SurfacePoints.csv", ExtractionLifetime.Retained, PointsSha256);
+
+            using (new FileStream(first, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                string again = archive.Extract("Surface/SurfacePoints.csv", ExtractionLifetime.Retained, PointsSha256);
+                run.Equal(again, first, "the same file, not rewritten under the host's lock");
+            }
+
+            File.WriteAllText(first, "not the published bytes");
+            archive.Extract("Surface/SurfacePoints.csv", ExtractionLifetime.Retained, PointsSha256);
+            run.Equal(File.ReadAllText(first), PointsCsv, "a file that is not the published one is still replaced");
+        });
+
         run.Case("entries keep their sub-path so two same-named files cannot overwrite each other", () =>
         {
             string zip = WriteBundle(Path.Combine(sandbox, "h", "download.zip"), OrderId);
