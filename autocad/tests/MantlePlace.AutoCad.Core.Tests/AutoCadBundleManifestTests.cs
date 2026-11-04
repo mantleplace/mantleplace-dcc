@@ -62,9 +62,31 @@ internal static class AutoCadBundleManifestTests
                 "two folders");
         });
 
+        run.Case("each year is its own Components group, the one requirement first, because AutoCAD reads one requirement per group", () =>
+        {
+            // A live run in Civil 3D 2027 loaded nothing from a single group holding all three years'
+            // requirements: the autoloader registered the bundle and loaded no component. Split into one
+            // group per year, as every Autodesk-shipped bundle on the machine is laid out, it loaded.
+            XElement[] groups = [.. Parse("1.0.0", Years).Root!.Elements("Components")];
+
+            run.Equal(groups.Length, 3, "one Components group per year");
+            string[] series = ["R25.0", "R25.1", "R26.0"];
+            for (int i = 0; i < groups.Length; i++)
+            {
+                XElement[] requirements = [.. groups[i].Elements("RuntimeRequirements")];
+                run.Equal(requirements.Length, 1, $"{Years[i]}: its group carries one requirement");
+                run.True(groups[i].FirstNode == requirements[0], $"{Years[i]}: the requirement opens its group");
+                run.Equal(Attr(requirements[0], "SeriesMin"), series[i], $"{Years[i]}: the group is that year's");
+                run.Equal(
+                    string.Join(",", groups[i].Elements("ComponentEntry").Select(e => Attr(e, "ModuleName"))),
+                    AutodeskBundleManifest.ModulePathFor(BundleHost.AutoCad, Years[i]) + "," + AutodeskBundleManifest.AutoCadCuixModulePath,
+                    $"{Years[i]}: the group holds that year's assembly and the CUIX file, nothing else");
+            }
+        });
+
         run.Case("AutoCAD and Civil 3D 2025 to 2027 are each declared with explicit series bounds", () =>
         {
-            XElement[] requirements = [.. Parse("1.0.0", Years).Root!.Element("Components")!.Elements("RuntimeRequirements")];
+            XElement[] requirements = [.. Parse("1.0.0", Years).Root!.Elements("Components").Elements("RuntimeRequirements")];
 
             run.Equal(requirements.Length, 3, "one runtime requirement per year");
 
@@ -80,7 +102,7 @@ internal static class AutoCadBundleManifestTests
 
         run.Case("2025 and 2026 load the .NET 8 build and 2027 loads the .NET 10 build", () =>
         {
-            XElement components = Parse("1.0.0", Years).Root!.Element("Components")!;
+            XElement[] components = [.. Parse("1.0.0", Years).Root!.Elements("Components")];
             XElement[] requirements = [.. components.Elements("RuntimeRequirements")];
             XElement[] entries = [.. components.Elements("ComponentEntry").Where(entry => Attr(entry, "ModuleName")!.EndsWith(".dll", StringComparison.Ordinal))];
 
@@ -109,7 +131,7 @@ internal static class AutoCadBundleManifestTests
 
         run.Case("every year also names the partial CUIX file, right after its assembly, so the panel loads with the plugin", () =>
         {
-            XElement components = Parse("1.0.0", Years).Root!.Element("Components")!;
+            XElement[] components = [.. Parse("1.0.0", Years).Root!.Elements("Components")];
             XElement[] cuix = [.. components.Elements("ComponentEntry").Where(entry => Attr(entry, "ModuleName")!.EndsWith(".cuix", StringComparison.Ordinal))];
 
             run.Equal(cuix.Length, 3, "one CUIX entry per year");
