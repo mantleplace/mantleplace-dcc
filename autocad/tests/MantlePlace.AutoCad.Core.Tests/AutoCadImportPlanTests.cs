@@ -32,7 +32,82 @@ internal static class AutoCadImportPlanTests
         JsonObject Block(JsonObject manifest) => (JsonObject)manifest["hosts"]!["autocad"]!;
 
         AutoCadImportPlan Plan(JsonObject manifest, DrawingGeolocation drawing, bool civil3d = false) =>
-            AutoCadImportPlanner.Plan(manifest.ToJsonString(), drawing, civil3d);
+            AutoCadImportPlanner.Plan(manifest.ToJsonString(), drawing, civil3d ? DrawingZone.None : null);
+
+        AutoCadImportPlan InZone(JsonObject manifest, DrawingZone zone) =>
+            AutoCadImportPlanner.Plan(manifest.ToJsonString(), DrawingGeolocation.None, zone);
+
+        // --- Civil 3D: the drawing's coordinate zone against the order's frame ---
+
+        run.Case("in Civil 3D a drawing whose zone is the order's CRS places, and a notice says they agree", () =>
+        {
+            AutoCadImportPlan plan = InZone(Fixture(Complete), new DrawingZone("CO83-NF", 2231));
+
+            run.False(plan.IsRefused, $"planned ({plan.Refusal})");
+            run.True(plan.Notices.Any(n => n.Contains("Civil 3D coordinate zone", StringComparison.Ordinal)
+                && n.Contains("CO83-NF", StringComparison.Ordinal)), "the notice names the zone: " + string.Join(" | ", plan.Notices));
+        });
+
+        run.Case("in Civil 3D a drawing whose zone is another CRS refuses, naming both, and plans nothing", () =>
+        {
+            AutoCadImportPlan plan = InZone(Fixture(Complete), new DrawingZone("CO83-CF", 2232));
+
+            run.True(plan.IsRefused, "refused");
+            run.Contains(plan.Refusal, "CO83-CF", "the drawing's zone code");
+            run.Contains(plan.Refusal, "EPSG:2232", "the drawing's CRS");
+            run.Contains(plan.Refusal, "EPSG:2231", "the order's CRS");
+            run.Contains(plan.Refusal, "Nothing was imported", "what happened");
+            run.Contains(plan.Refusal, "does not change the zone", "and that the zone is left alone");
+            run.True(plan.Parts.All(p => !p.Place), "no part is placed");
+        });
+
+        run.Case("in Civil 3D a zone AutoCAD gives no EPSG code for refuses rather than guessing", () =>
+        {
+            AutoCadImportPlan plan = InZone(Fixture(Complete), new DrawingZone("MY-CUSTOM-ZONE", null));
+
+            run.True(plan.IsRefused, "refused");
+            run.Contains(plan.Refusal, "MY-CUSTOM-ZONE", "the zone, named");
+            run.Contains(plan.Refusal, "EPSG:2231", "the order's CRS");
+        });
+
+        run.Case("in Civil 3D a drawing with no zone places at the order's coordinates, and a notice says the zone is not set for you", () =>
+        {
+            foreach (string code in new[] { DrawingZone.NoZoneCode, string.Empty })
+            {
+                AutoCadImportPlan plan = InZone(Fixture(Complete), new DrawingZone(code, null));
+
+                run.False(plan.IsRefused, $"planned for '{code}' ({plan.Refusal})");
+                run.True(plan.Notices.Any(n => n.Contains("no Civil 3D coordinate zone", StringComparison.Ordinal)
+                    && n.Contains("EPSG:2231", StringComparison.Ordinal)
+                    && n.Contains("does not set it", StringComparison.Ordinal)), "the notice: " + string.Join(" | ", plan.Notices));
+            }
+        });
+
+        run.Case("in Civil 3D a local-frame order refuses a drawing with a zone, and places into one with none", () =>
+        {
+            AutoCadImportPlan zoned = InZone(Fixture(LocalFrame), new DrawingZone("UTM84-13N", 32613));
+            AutoCadImportPlan none = InZone(Fixture(LocalFrame), DrawingZone.None);
+
+            run.True(zoned.IsRefused, "a zone cannot be a local frame's");
+            run.Contains(zoned.Refusal, "UTM84-13N", "the zone, named");
+            run.False(none.IsRefused, $"no zone places ({none.Refusal})");
+        });
+
+        run.Case("plain AutoCAD reads no zone and is never refused for one", () =>
+        {
+            AutoCadImportPlan plan = AutoCadImportPlanner.Plan(Fixture(Complete).ToJsonString(), DrawingGeolocation.None, civil3d: null);
+
+            run.False(plan.IsRefused, $"planned ({plan.Refusal})");
+            run.False(plan.Notices.Any(n => n.Contains("Civil 3D coordinate zone", StringComparison.Ordinal)), "no zone notice");
+        });
+
+        run.Case("the geographic location is still checked in Civil 3D, beside the zone", () =>
+        {
+            AutoCadImportPlan plan = AutoCadImportPlanner.Plan(Fixture(Complete).ToJsonString(), DrawingGeolocation.Located("UTM83-13", 26913), new DrawingZone("CO83-NF", 2231));
+
+            run.True(plan.IsRefused, "refused on the location");
+            run.Contains(plan.Refusal, "EPSG:26913", "the location's CRS");
+        });
 
         // --- The drawing's geographic location against the order's frame ---
 
@@ -238,13 +313,69 @@ internal static class AutoCadImportPlanTests
             run.Contains(surface.Sentence, ReadinessReasons.ClauseFor("not_selected")!, "the reason, shown");
         });
 
-        run.Case("in Civil 3D the surface is named and not built, saying so", () =>
+        run.Case("in Civil 3D the surface is built as a TIN surface from the block's terrain source, on its layer", () =>
         {
             PlannedPart surface = Plan(Fixture(Complete), DrawingGeolocation.None, civil3d: true).Part(AutoCadPart.Surface);
 
-            run.False(surface.Place, "not placed");
+            run.True(surface.Place, $"placed ({surface.Sentence})");
+            run.Equal(surface.Path, "Surface/Terrain.xml", "from the block's own pointer");
+            run.Equal(surface.Layer, AutoCadLayers.Surface, "on the surface layer");
+            run.Contains(surface.Sentence, "TIN surface", "what it becomes");
             run.Contains(surface.Sentence, "Surface/Terrain.xml", "the file, named");
-            run.Contains(surface.Sentence, "not built", "why");
+        });
+
+        run.Case("in Civil 3D's \"as AutoCAD\" mode the part is off, so the surface is unavailable, as in plain AutoCAD", () =>
+        {
+            // The shell passes no zone when the presence test says the part may not load (InstalledNotLoaded),
+            // so the plan is plain AutoCAD's.
+            PlannedPart surface = Plan(Fixture(Complete), DrawingGeolocation.None, civil3d: false).Part(AutoCadPart.Surface);
+
+            run.False(surface.Place, "skipped");
+            run.Contains(surface.Sentence, "needs Civil 3D", "why");
+        });
+
+        run.Case("in Civil 3D a surface not shown to be in the block's frame is skipped, never reprojected", () =>
+        {
+            JsonObject manifest = Fixture(Complete);
+            Block(manifest)["surface"]!["horizontal_frame"] = "local_enu";
+
+            PlannedPart surface = Plan(manifest, DrawingGeolocation.None, civil3d: true).Part(AutoCadPart.Surface);
+
+            run.False(surface.Place, "skipped");
+            run.Contains(surface.Sentence, "HPS-53", "why");
+        });
+
+        run.Case("in Civil 3D a surface whose height unit is not the frame's is skipped, never converted", () =>
+        {
+            JsonObject manifest = Fixture(Complete);
+            Block(manifest)["surface"]!["vertical_units"] = "m";
+
+            PlannedPart surface = Plan(manifest, DrawingGeolocation.None, civil3d: true).Part(AutoCadPart.Surface);
+
+            run.False(surface.Place, "skipped");
+            run.Contains(surface.Sentence, "does not convert", "why");
+        });
+
+        run.Case("in Civil 3D a surface format the plugin does not know is declined, naming it", () =>
+        {
+            JsonObject manifest = Fixture(Complete);
+            Block(manifest)["surface"]!["format"] = "geotiff-dem";
+
+            PlannedPart surface = Plan(manifest, DrawingGeolocation.None, civil3d: true).Part(AutoCadPart.Surface);
+
+            run.False(surface.Place, "skipped");
+            run.Contains(surface.Sentence, "geotiff-dem", "the format, named");
+        });
+
+        run.Case("the surface's name is spelled out and carries the order, and a built surface says its point count", () =>
+        {
+            AutoCadImportPlan plan = Plan(Fixture(Complete), DrawingGeolocation.None, civil3d: true);
+
+            run.Equal(AutoCadImportPlanner.SurfaceName(plan.OrderId), "MantlePlace-Surface-ord-autocad-complete-1", "the name");
+            run.Equal(AutoCadImportPlanner.SurfaceName("a/b c"), "MantlePlace-Surface-a-b-c", "an id's other characters become dashes");
+            string built = AutoCadImportPlanner.SurfacePlacedSentence(plan.Part(AutoCadPart.Surface), "MantlePlace-Surface-x", 1234);
+            run.Contains(built, "1234 points", "the count");
+            run.Contains(built, "MantlePlace-Surface-x", "the name");
         });
 
         run.Case("a surface needing a host part the plugin does not know is unavailable here", () =>
@@ -284,7 +415,7 @@ internal static class AutoCadImportPlanTests
         });
 
         run.Case("text that is not JSON is refused, not thrown", () =>
-            run.True(AutoCadImportPlanner.Plan("{not json", DrawingGeolocation.None, civil3dLoaded: false).IsRefused, "refused"));
+            run.True(AutoCadImportPlanner.Plan("{not json", DrawingGeolocation.None, civil3d: null).IsRefused, "refused"));
 
         run.Case("a summary lists what was placed and what was skipped, with reasons", () =>
         {

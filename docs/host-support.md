@@ -44,17 +44,21 @@ release replaces each with a status and a link. The `autocad` column is in that 
 the host it is built from, or names why it differs, and a row's `not applicable` is the same
 reason Revit gives (the capability has no meaning in a host that has no streaming layer or no landscape material).
 
-Thirteen rows of the `autocad` column are built in the tree and not yet released, so each still reads `not shipped` until the first
+Fourteen rows of the `autocad` column are built in the tree and not yet released, so each still reads `not shipped` until the first
 release replaces it. Five are the account and vault rows: sign in and out, search the vault, remove a download, the notice when an
-order arrives, and receive a bundle sent from the web vault, which now imports it and reports the import back. Eight are import rows:
+order arrives, and receive a bundle sent from the web vault, which now imports it and reports the import back. Nine are import rows:
 import a complete order in one press, refuse a manifest version outside the supported range,
 refuse a bundle whose bytes do not match its published digest, say the bundle's unit system and delivery CRS, say what a bundle holds
-that an import cannot place and why, place content at the published georeference, refuse a file that is not in the host frame, and
-published contours. Four of them differ from Revit. "List, prepare and download your orders" is the listing alone (no Prepare, no
+that an import cannot place and why, place content at the published georeference, refuse a file that is not in the host frame,
+terrain, and published contours. Five of them differ from Revit. "List, prepare and download your orders" is the listing alone (no Prepare, no
 download). "Import a complete order in one press" is the one press of an export sent from the web vault; it places what the order's
-`hosts.autocad` block names, the contours and the aerial image, and the Civil 3D surface is named and not built. "Place content at the
+`hosts.autocad` block names: the contours, the aerial image and, in Civil 3D only, the surface. "Place content at the
 published georeference" places at the order's coordinates and refuses a drawing whose geographic location is in another coordinate
-system. "Published contours" are polylines on a layer. The aerial image is placed at its published insertion, which is not the imagery
+system; in Civil 3D it also refuses a drawing whose coordinate zone is in another one, and never sets the zone. That zone check is
+Civil 3D-only because the zone is a Civil 3D drawing setting, which plain AutoCAD does not have. "Terrain" is a Civil 3D TIN surface
+built from the order's LandXML, and it is Civil 3D-only because a TIN surface is a Civil 3D object: plain AutoCAD, and Civil 3D
+started with its "as AutoCAD" launcher, have nothing to build it as, so there the import says the surface needs Civil 3D and goes
+on with the rest. "Published contours" are polylines on a layer. The aerial image is placed at its published insertion, which is not the imagery
 drape Revit's row means, so "Imagery drape" stays not built. Every other row that places content, including parcels and zoning and the
 site linework, and the Prepare-ended notice and the re-join, are not built.
 

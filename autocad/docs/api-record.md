@@ -91,6 +91,18 @@ Neither the zone route nor the surface route failed in any year, so neither is c
   Which file the bundle names for the surface therefore moves the surface by half a cell, and the
   plugin should be checked against the format the bundle actually ships.
 
+## Called by the plugin, not yet run
+
+The import's Civil 3D half makes three calls the spike did not run when it was first recorded. The
+probe (`Invoke-Civil3dProbe.ps1`) now exercises each of them; until a run is recorded here, each
+is unproven in a host.
+
+| Call | Why the plugin makes it |
+|---|---|
+| `GeoCoordinateSystem.Create(zoneCode).EPSGcode` | The block states the order's frame as an EPSG code and Civil 3D's zone as its library code, so the zone is compared through AutoCAD's own library and never through a spelling the plugin maps. The probe also records whether setting the zone writes the drawing's geographic location. |
+| `TinSurface.CreateFromLandXML(db, name, path, surfaceName)` | The block's terrain source is LandXML (format.md §6.9), which `AddDEMFile` does not read. The three-parameter overload is obsolete. The probe writes a US-foot LandXML with and without its `<CoordinateSystem>` element and a metric one, so a run shows whether Civil 3D places the points as written or transforms or scales them into the drawing. |
+| `CivilDocument.GetSurfaceIds()` | The surface's name is unique in the drawing, so a second import of an order gets a numbered name. |
+
 ## What this does not yet cover
 
 - **A drawing in feet**, with a foot-based zone and a metric DEM.

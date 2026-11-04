@@ -73,6 +73,33 @@ if ($translate) {
     $env:PROJ_LIB, $env:PROJ_DATA = $saved
 }
 
+# Synthetic LandXML surfaces, shaped as the platform writes them (northing easting elevation, a
+# <Units> element, and a <CoordinateSystem> naming the EPSG code): a 3 by 3 grid in California zone
+# III in US feet, with and without that element, and one in UTM zone 10 north in metres.
+function Write-LandXml([string]$Path, [string]$UnitElement, [string]$Unit, [string]$Epsg, [double]$East, [double]$North, [double]$Step) {
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add('<?xml version="1.0" encoding="UTF-8"?>')
+    $lines.Add('<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2" language="English" readOnly="false">')
+    $lines.Add("  <Units><$UnitElement linearUnit=`"$Unit`" areaUnit=`"squareFoot`" volumeUnit=`"cubicYard`" temperatureUnit=`"celsius`" pressureUnit=`"milliBars`"/></Units>")
+    if ($Epsg) { $lines.Add("  <CoordinateSystem epsgCode=`"$Epsg`"/>") }
+    $lines.Add('  <Application name="Mantle Place probe" version="1"/>')
+    $lines.Add('  <Surfaces><Surface name="Terrain"><Definition surfType="TIN"><Pnts>')
+    $id = 1
+    for ($r = 0; $r -lt 3; $r++) { for ($c = 0; $c -lt 3; $c++) { $lines.Add(('    <P id="{0}">{1:F4} {2:F4} {3:F4}</P>' -f $id, ($North + $r * $Step), ($East + $c * $Step), (100 + $r + 2 * $c))); $id++ } }
+    $lines.Add('  </Pnts><Faces>')
+    for ($r = 0; $r -lt 2; $r++) { for ($c = 0; $c -lt 2; $c++) { $a = $r * 3 + $c + 1; $lines.Add("    <F>$a $($a + 1) $($a + 4)</F>"); $lines.Add("    <F>$a $($a + 4) $($a + 3)</F>") } }
+    $lines.Add('  </Faces></Definition></Surface></Surfaces>')
+    $lines.Add('</LandXML>')
+    [IO.File]::WriteAllLines($Path, $lines)
+}
+$landXmls = @(
+    (Join-Path $runDir 'surface-ftus-epsg2227.xml'),
+    (Join-Path $runDir 'surface-ftus-no-cs.xml'),
+    (Join-Path $runDir 'surface-m-epsg26910.xml'))
+Write-LandXml $landXmls[0] 'Imperial' 'USSurveyFoot' '2227' 6005000 2110000 100
+Write-LandXml $landXmls[1] 'Imperial' 'USSurveyFoot' '' 6005000 2110000 100
+Write-LandXml $landXmls[2] 'Metric' 'meter' '26910' 550000 4180000 30
+
 $lispDir = $built.Replace('\', '\\')
 $script = Join-Path $runDir 'probe.scr'
 [IO.File]::WriteAllLines($script, @(
@@ -88,6 +115,7 @@ $env:MANTLEPLACE_C3D_PROBE_ZONE = $Zone
 $env:MANTLEPLACE_C3D_PROBE_MISMATCH_ZONE = $MismatchZone
 $env:MANTLEPLACE_C3D_PROBE_DEM_ZONE = $DemZone
 $env:MANTLEPLACE_C3D_PROBE_DEMS = $dems -join ';'
+$env:MANTLEPLACE_C3D_PROBE_LANDXMLS = $landXmls -join ';'
 $env:MANTLEPLACE_C3D_PROBE_FORCE = $(if ($Force) { '1' } else { '' })
 
 # The launchers' own switches, as the Start menu shortcuts carry them.
@@ -114,7 +142,7 @@ try {
 finally {
     if (-not $hostProcess.HasExited) { Stop-Process -Id $hostProcess.Id -Force }
     'MANTLEPLACE_C3D_PROBE_DIR', 'MANTLEPLACE_C3D_PROBE_LABEL', 'MANTLEPLACE_C3D_PROBE_ZONE', 'MANTLEPLACE_C3D_PROBE_MISMATCH_ZONE',
-    'MANTLEPLACE_C3D_PROBE_DEM_ZONE', 'MANTLEPLACE_C3D_PROBE_DEMS', 'MANTLEPLACE_C3D_PROBE_FORCE' | ForEach-Object { Remove-Item "env:$_" -ErrorAction SilentlyContinue }
+    'MANTLEPLACE_C3D_PROBE_DEM_ZONE', 'MANTLEPLACE_C3D_PROBE_DEMS', 'MANTLEPLACE_C3D_PROBE_LANDXMLS', 'MANTLEPLACE_C3D_PROBE_FORCE' | ForEach-Object { Remove-Item "env:$_" -ErrorAction SilentlyContinue }
 }
 $result = Join-Path $runDir 'result.md'
 if (Test-Path $result) { Get-Content $result } else { Write-Output "no result.md after $([int]$clock.Elapsed.TotalSeconds) s"; if (Test-Path $log) { Get-Content $log -Encoding Unicode | Where-Object { $_.Trim() } | Select-Object -Last 30 } }

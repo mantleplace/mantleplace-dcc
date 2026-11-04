@@ -2,7 +2,8 @@
 
 A throwaway probe of the Civil 3D calls the AutoCAD plugin will rest on: reading the drawing's
 coordinate zone and comparing it with the order's, building a TIN surface from a DEM through
-`AddDEMFile` and its coordinate-system overload, and telling Civil 3D loaded in the process from
+`AddDEMFile` and its coordinate-system overload and from a LandXML file through `CreateFromLandXML`,
+and telling Civil 3D loaded in the process from
 Civil 3D installed with its "as AutoCAD" launcher running. What it found is the plugin's API record,
 [`../../docs/api-record.md`](../../docs/api-record.md). A developer tool for this machine's Civil 3D:
 nothing here ships, and CI neither builds nor runs it (no hosted runner has AutoCAD).
@@ -51,8 +52,14 @@ when GDAL's `gdal_translate` is on `PATH`, as a GeoTIFF too. No real data is use
 2. **Zone.** Reads `CoordinateSystemCode`, compares it with `-Zone` and reads it again. Then, as a
    fixture only and in a drawing never saved, sets the order's zone, so that a match and a mismatch can
    both be compared; the plugin never sets it.
-3. **Surface.** For each DEM, one TIN surface through `AddDEMFile(path)` and one through
+3. **Zone codes in EPSG.** For the fresh drawing's code and each code given, what
+   `GeoCoordinateSystem.Create` says it is, and whether the drawing has a geographic location before
+   and after the fixture sets the zone.
+4. **Surface.** For each DEM, one TIN surface through `AddDEMFile(path)` and one through
    `AddDEMFile(path, code, false, 0)`, each rebuilt and read back: points, extents and elevations.
+   Then one TIN surface through `CreateFromLandXML` from each synthetic LandXML file: a 3 by 3 grid
+   in California zone III US feet with and without a `<CoordinateSystem>` element, and one in UTM
+   zone 10 north metres.
 
 Each call is recorded as worked, did nothing or threw, in the host's own words. The host is launched
 with the variables the probe reads, and the probe is inert without them.

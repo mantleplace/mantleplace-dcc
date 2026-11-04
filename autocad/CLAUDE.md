@@ -95,7 +95,11 @@ key this suite must assert, or it fails.
   the drawing's geographic location refuses the import. The shell (`OrderImporter`) observes the
   location (`DrawingObservations`), verifies every file before drawing anything, and applies the plan
   verbatim. The window an export from the web opens (`AutoCadExportImportHost`) has the Import button;
-  closing it before the press ends the export as cancelled. The surface is planned and not built.
+  closing it before the press ends the export as cancelled.
+- **Civil 3D adds the zone check and the surface, through its part alone.** When the presence test
+  lets the part load, it reads the drawing's zone code (never sets it), which the shell resolves to an
+  EPSG code through AutoCAD's own library for the plan to compare, and it builds the TIN surface from
+  the block's LandXML (`TinSurface.CreateFromLandXML`). Part off, the plan is plain AutoCAD's.
 
 ## Commands
 

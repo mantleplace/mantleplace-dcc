@@ -43,9 +43,13 @@ is worked out in AutoCAD:
   states them. The drawing's own unit setting is not read or changed.
 - **Where it lands.** In a drawing with no geographic location, the order goes in at its own
   coordinates and a notice says so. In a drawing whose geographic location is in another coordinate
-  system, the import refuses, names both, and places nothing. The plugin never sets the location.
-- **What is skipped.** A part the bundle does not carry is skipped with the bundle's own reason. The
-  Civil 3D surface is named and not built yet; in plain AutoCAD it says it needs Civil 3D. Public-record
+  system, the import refuses, names both, and places nothing. In Civil 3D the drawing's coordinate
+  zone is checked the same way, by the EPSG code AutoCAD gives for it. The plugin never sets the
+  location or the zone.
+- **The surface, in Civil 3D only.** Civil 3D builds a TIN surface from the order's LandXML, on the
+  `MantlePlace-Surface` layer. In plain AutoCAD, and in Civil 3D started as AutoCAD, the import says
+  the surface needs Civil 3D and places the rest.
+- **What is skipped.** A part the bundle does not carry is skipped with the bundle's own reason. Public-record
   layers and site linework are not in the order's AutoCAD block, so they are not imported.
 - **Checked first.** Every file is matched to its published digest before anything is drawn; a
   mismatch places nothing.
