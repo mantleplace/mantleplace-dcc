@@ -78,7 +78,7 @@ public static class ConnectedHosts
     public const int Protocol = 1;
 
     /// <summary>The host id the platform's contract names for this plugin.</summary>
-    public const string HostId = "revit";
+    public const string HostId = HostIdentity.Id;
 
     /// <summary>The payload this plugin announces, for the document that is open (or none).</summary>
     public static ConnectedHost Announce(

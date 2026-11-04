@@ -41,8 +41,15 @@ new capability adds a row with a cell for every host.
 
 A host with no release yet has no release to link: its cells say `not shipped` and that no release of the host exists, and the first
 release replaces each with a status and a link. The `autocad` column is in that state. Each of its rows either matches Revit's,
-the host it is built from, or names why it differs; none names a difference yet, and a row's `not applicable` is the same
+the host it is built from, or names why it differs, and a row's `not applicable` is the same
 reason Revit gives (the capability has no meaning in a host that has no streaming layer or no landscape material).
+
+Five rows of the `autocad` column are built in the tree and not yet released, so each still reads `not shipped` until the first
+release replaces it: sign in and out, search the vault, remove a download, the notice when an order arrives, and receive a bundle sent
+from the web vault. Two of them differ from Revit. The plugin has no hook into a drawing yet, so "List, prepare and download your orders"
+is the listing alone (no Prepare, no download), and "Receive a bundle sent from the web vault" fetches and verifies the bundle and
+answers the export as cancelled without importing it. Every row that places content, and the Prepare-ended notice and the re-join,
+are not built.
 
 Every cell but `not applicable` is a status, an em dash and one or more links: the release it comes
 from, by its tag, or an ADR by a path relative to this file, so the docs-integrity gate checks it. A

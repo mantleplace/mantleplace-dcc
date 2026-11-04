@@ -23,11 +23,20 @@
     <RootNamespace>MantlePlace.AutoCad.Addin</RootNamespace>
     <AssemblyName>MantlePlace.AutoCad.Addin</AssemblyName>
     <EnableDynamicLoading>true</EnableDynamicLoading>
+    <UseWPF>true</UseWPF>
     <NoWarn>$(NoWarn);CA1416;MSB3277</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MantlePlace.AutoCad.Core\MantlePlace.AutoCad.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The monogram renders the windows draw: the Revit plugin's files, linked rather than copied so no
+       second binary is committed. They are embedded and read as streams (ResourceImages), because a
+       pack URI does not find an assembly AutoCAD loaded into a load context of its own. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\revit\src\MantlePlace.Revit.Addin\Resources\MantlePlaceMark_*.png"
+                      LogicalName="MantlePlace.AutoCad.Addin.Resources.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!-- The Civil 3D part is built beside the shell and shipped in the same folder, but never referenced:
@@ -40,11 +49,13 @@
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
     <Reference Include="accoremgd"><HintPath>$(AutoCadApiDirNet8)\accoremgd.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="acdbmgd"><HintPath>$(AutoCadApiDirNet8)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="acmgd"><HintPath>$(AutoCadApiDirNet8)\acmgd.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <Reference Include="accoremgd"><HintPath>$(AutoCadApiDirNet10)\accoremgd.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="acdbmgd"><HintPath>$(AutoCadApiDirNet10)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="acmgd"><HintPath>$(AutoCadApiDirNet10)\acmgd.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
 </Project>

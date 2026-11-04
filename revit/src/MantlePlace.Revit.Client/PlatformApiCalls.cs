@@ -1,5 +1,6 @@
 using System.Reflection;
 using MantlePlace.PlatformApi;
+using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Client;
 
@@ -22,7 +23,7 @@ namespace MantlePlace.Revit.Client;
 public static class PlatformApiCalls
 {
     /// <summary>The client's name in the platform's list.</summary>
-    public const string ClientName = "revit";
+    public const string ClientName = HostIdentity.Id;
 
     /// <summary>The <c>Mantle-Place-Client</c> value every call carries.</summary>
     public static string ClientHeader { get; } = PlatformClientHeader.For(

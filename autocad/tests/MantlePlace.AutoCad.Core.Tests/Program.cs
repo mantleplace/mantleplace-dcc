@@ -16,6 +16,10 @@ exitCode |= ProjectionConformanceTests.Run();
 exitCode |= PlatformConformanceTests.Run();
 exitCode |= AutoCadBundleManifestTests.Run();
 exitCode |= PresenceTests.Run();
+exitCode |= HostIdentityTests.Run();
+exitCode |= PlugInsPanelTests.Run();
+exitCode |= ExportReceiptTests.Run();
+exitCode |= AboutPageTests.Run();
 
 if (exitCode == 0)
 {

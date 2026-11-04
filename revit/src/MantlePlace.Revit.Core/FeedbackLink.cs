@@ -22,7 +22,7 @@ namespace MantlePlace.Revit.Core;
 public static class FeedbackLink
 {
     /// <summary><c>dcc-</c> plus this host's directory name; matches <c>^[a-z0-9-]{1,40}$</c>.</summary>
-    public const string Source = "dcc-revit";
+    public const string Source = "dcc-" + HostIdentity.Id;
 
     /// <summary>The site, when the configured address is unusable: a feedback link beats no link.</summary>
     public const string DefaultSite = "https://mantle.place";
