@@ -18,6 +18,9 @@ public sealed class PublishedContour
     public required bool IsClosed { get; init; }
 
     public required IReadOnlyList<ContourVertex> Vertices { get; init; }
+
+    /// <summary>The layer the file puts the polyline on (group 8), verbatim; <c>0</c>, DXF's default, when it names none.</summary>
+    public string Layer { get; init; } = "0";
 }
 
 /// <summary>
@@ -41,6 +44,11 @@ public sealed class PublishedContour
 /// being dropped: another entity type, a bulge (an arc, not a segment), or an extrusion other than
 /// +Z (the vertices would then be in an object coordinate system, not world X/Y). A silently dropped
 /// entity is a contour missing from the site with nothing on screen to say so.
+/// </para>
+/// <para>
+/// The same reader takes any drawing of flat polylines the AutoCAD block points at (the public-record
+/// layers and the site linework, format.md §6.10): the drawing's name names the file in what the
+/// user is told, and each polyline keeps the layer the file puts it on (group 8).
 /// </para>
 /// <para>
 /// The one exception is a label: <c>TEXT</c> and <c>MTEXT</c> are skipped and counted, never
@@ -67,8 +75,19 @@ public static class PublishedContourReader
     /// <param name="skippedLabels">How many <c>TEXT</c> and <c>MTEXT</c> labels were passed over.</param>
     /// <returns><c>null</c> on success, or a user-facing reason the file could not be read.</returns>
     public static string? TryParse(TextReader dxf, out IReadOnlyList<PublishedContour>? contours, out int skippedLabels)
+        => TryParse(dxf, "contours", out contours, out skippedLabels);
+
+    /// <summary>Parses any drawing of flat polylines, streaming, naming it <paramref name="drawing"/> in a refusal.</summary>
+    /// <param name="dxf">The file.</param>
+    /// <param name="drawing">What the user calls the file (<c>contours</c>, <c>parcels</c>), as in "the parcels DXF".</param>
+    /// <param name="contours">The polylines, in file order.</param>
+    /// <param name="skippedLabels">How many <c>TEXT</c> and <c>MTEXT</c> labels were passed over.</param>
+    /// <returns><c>null</c> on success, or a user-facing reason the file could not be read.</returns>
+    public static string? TryParse(TextReader dxf, string drawing, out IReadOnlyList<PublishedContour>? contours, out int skippedLabels)
     {
         ArgumentNullException.ThrowIfNull(dxf);
+        ArgumentNullException.ThrowIfNull(drawing);
+        string name = $"The {drawing} DXF";
         contours = null;
         skippedLabels = 0;
 
@@ -85,14 +104,14 @@ public static class PublishedContourReader
 
             if (dxf.ReadLine() is not { } valueLine)
             {
-                return $"The contours DXF is malformed: the group code on line {pairStart} has no value.";
+                return $"{name} is malformed: the group code on line {pairStart} has no value.";
             }
 
             lineNumber++;
 
             if (!int.TryParse(codeLine.AsSpan().Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int code))
             {
-                return $"The contours DXF is malformed: line {pairStart} is not a group code.";
+                return $"{name} is malformed: line {pairStart} is not a group code.";
             }
 
             string value = valueLine.Trim();
@@ -121,7 +140,7 @@ public static class PublishedContourReader
                         inEntities = false;
                         break;
                     case "LWPOLYLINE" when inEntities:
-                        current = new Polyline();
+                        current = new Polyline(name);
                         break;
                     case var label when inEntities && SkippedEntityKinds.Contains(label):
                         // Its own group codes, the 10/20 insertion point included, fall through
@@ -131,8 +150,8 @@ public static class PublishedContourReader
                     default:
                         if (inEntities)
                         {
-                            return $"The contours DXF carries a {value} entity, which this plugin does not read: "
-                                + "only LWPOLYLINE contours are placed, and dropping it would leave a gap.";
+                            return $"{name} carries a {value} entity, which this plugin does not read: "
+                                + "only LWPOLYLINE polylines are placed, and dropping it would leave a gap.";
                         }
 
                         break;
@@ -168,7 +187,7 @@ public static class PublishedContourReader
 
         if (read.Count == 0)
         {
-            return "The contours DXF carries no LWPOLYLINE contours, so there are none in it to draw.";
+            return $"{name} carries no LWPOLYLINE polylines, so there are none in it to draw.";
         }
 
         contours = read;
@@ -176,9 +195,10 @@ public static class PublishedContourReader
     }
 
     /// <summary>One <c>LWPOLYLINE</c> while its group codes are being read.</summary>
-    private sealed class Polyline
+    private sealed class Polyline(string name)
     {
         private readonly List<ContourVertex> _vertices = [];
+        private string _layer = "0";
         private double? _pendingX;
         private int? _declaredCount;
         private int _flags;
@@ -193,10 +213,14 @@ public static class PublishedContourReader
         {
             switch (code)
             {
+                case 8:
+                    _layer = value;
+                    return null;
+
                 case 10:
                     if (_pendingX is not null)
                     {
-                        return "The contours DXF is malformed: an LWPOLYLINE vertex has an X and no Y.";
+                        return $"{name} is malformed: an LWPOLYLINE vertex has an X and no Y.";
                     }
 
                     if (Number(value, lineNumber, out double x) is { } xError)
@@ -210,7 +234,7 @@ public static class PublishedContourReader
                 case 20:
                     if (_pendingX is not { } pendingX)
                     {
-                        return "The contours DXF is malformed: an LWPOLYLINE vertex has a Y and no X.";
+                        return $"{name} is malformed: an LWPOLYLINE vertex has a Y and no X.";
                     }
 
                     if (Number(value, lineNumber, out double y) is { } yError)
@@ -234,13 +258,13 @@ public static class PublishedContourReader
 
                     return bulge == 0.0
                         ? null
-                        : "The contours DXF has an LWPOLYLINE with an arc segment (a bulge), which this plugin "
-                            + "does not draw: a contour is placed as straight segments only.";
+                        : $"{name} has an LWPOLYLINE with an arc segment (a bulge), which this plugin "
+                            + "does not draw: a polyline is placed as straight segments only.";
 
                 case 70:
                     if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _flags))
                     {
-                        return $"The contours DXF is malformed: line {lineNumber} is not an integer.";
+                        return $"{name} is malformed: line {lineNumber} is not an integer.";
                     }
 
                     return null;
@@ -248,7 +272,7 @@ public static class PublishedContourReader
                 case 90:
                     if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int count))
                     {
-                        return $"The contours DXF is malformed: line {lineNumber} is not an integer.";
+                        return $"{name} is malformed: line {lineNumber} is not an integer.";
                     }
 
                     _declaredCount = count;
@@ -272,12 +296,12 @@ public static class PublishedContourReader
 
             if (_pendingX is not null)
             {
-                return "The contours DXF is malformed: an LWPOLYLINE vertex has an X and no Y.";
+                return $"{name} is malformed: an LWPOLYLINE vertex has an X and no Y.";
             }
 
             if (_declaredCount is { } declared && declared != _vertices.Count)
             {
-                return $"The contours DXF is malformed: an LWPOLYLINE declares {declared} vertices and carries "
+                return $"{name} is malformed: an LWPOLYLINE declares {declared} vertices and carries "
                     + $"{_vertices.Count}.";
             }
 
@@ -285,7 +309,7 @@ public static class PublishedContourReader
             // else genuinely rotates the vertices out of world X/Y.
             if (_extrusionX != 0.0 || _extrusionY != 0.0 || _extrusionZ != 1.0)
             {
-                return "The contours DXF has an LWPOLYLINE whose extrusion is not +Z, so its vertices are "
+                return $"{name} has an LWPOLYLINE whose extrusion is not +Z, so its vertices are "
                     + "not world coordinates and this plugin cannot place it.";
             }
 
@@ -295,13 +319,14 @@ public static class PublishedContourReader
                 Elevation = _elevation,
                 IsClosed = (_flags & ClosedFlag) != 0,
                 Vertices = _vertices,
+                Layer = _layer.Length == 0 ? "0" : _layer,
             };
             return null;
         }
 
-        private static string? Number(string value, long lineNumber, out double number)
+        private string? Number(string value, long lineNumber, out double number)
             => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number) && double.IsFinite(number)
                 ? null
-                : $"The contours DXF is malformed: line {lineNumber} is not a finite number.";
+                : $"{name} is malformed: line {lineNumber} is not a finite number.";
     }
 }

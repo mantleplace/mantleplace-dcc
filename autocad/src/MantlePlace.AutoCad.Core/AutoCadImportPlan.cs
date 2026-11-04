@@ -4,7 +4,7 @@ using MantlePlace.Revit.Core;
 
 namespace MantlePlace.AutoCad;
 
-/// <summary>The three parts of an AutoCAD order (format.md §6.9).</summary>
+/// <summary>The parts of an AutoCAD order (format.md §6.9, §6.10).</summary>
 public enum AutoCadPart
 {
     /// <summary>The published contour linework, placed as polylines.</summary>
@@ -15,6 +15,12 @@ public enum AutoCadPart
 
     /// <summary>The aerial image, placed at its published insertion.</summary>
     Aerial,
+
+    /// <summary>The public-record layers, each placed as polylines on its own layer (from 1.19.0).</summary>
+    Records,
+
+    /// <summary>The site linework, placed as polylines on the layers the file names (from 1.19.0).</summary>
+    Linework,
 }
 
 /// <summary>The layers an import puts its content on. Names are spelled out (root CLAUDE.md, naming).</summary>
@@ -28,7 +34,49 @@ public static class AutoCadLayers
 
     /// <summary>The Civil 3D surface's layer.</summary>
     public const string Surface = "MantlePlace-Surface";
+
+    /// <summary>The site linework's layer, and the stem of the layers the file names.</summary>
+    public const string Linework = "MantlePlace-Linework";
+
+    /// <summary>The stem of each public-record layer's own layer.</summary>
+    public const string RecordsStem = "MantlePlace-Records-";
+
+    /// <summary>The characters AutoCAD refuses in a layer name.</summary>
+    private const string RefusedInLayerName = "<>/\\\":;?*|,=`";
+
+    /// <summary>The layer a public-record layer goes on: the stem and the record's name, as the block states it.</summary>
+    public static string Record(string name) => RecordsStem + Safe(name);
+
+    /// <summary>
+    /// The layer a linework polyline goes on: under <see cref="Linework"/>, by the layer the file puts it on,
+    /// and the linework layer itself for DXF's default layer <c>0</c> or none.
+    /// </summary>
+    public static string LineworkLayer(string fileLayer) =>
+        string.IsNullOrEmpty(fileLayer) || string.Equals(fileLayer, "0", StringComparison.Ordinal)
+            ? Linework
+            : $"{Linework}-{Safe(fileLayer)}";
+
+    /// <summary>A name with every character AutoCAD refuses in a layer name, and any control character, made a dash.</summary>
+    private static string Safe(string name) =>
+        string.Concat((name ?? string.Empty).Select(c => char.IsControl(c) || RefusedInLayerName.Contains(c, StringComparison.Ordinal) ? '-' : c));
 }
+
+/// <summary>One file a placed part goes in from: its pointer's values, verbatim, and the layer it goes on.</summary>
+/// <param name="Name">The record layer's name, as the block states it.</param>
+/// <param name="Path">The archive path.</param>
+/// <param name="Sha256">The digest the file is checked against before anything is drawn.</param>
+/// <param name="HorizontalFrame">The file's horizontal frame, as stated.</param>
+/// <param name="HorizontalUnits">The file's X/Y unit token, from its pointer.</param>
+/// <param name="VerticalUnits">The file's height unit token, from its pointer.</param>
+/// <param name="Layer">The layer it goes on.</param>
+public sealed record PlannedFile(
+    string Name,
+    string Path,
+    string Sha256,
+    string HorizontalFrame,
+    string HorizontalUnits,
+    string VerticalUnits,
+    string Layer);
 
 /// <summary>
 /// What the shell observed of the drawing's geographic location: whether one is set, the coordinate
@@ -80,6 +128,9 @@ public sealed class PlannedPart
     /// <summary>The verdict's own <c>present</c>.</summary>
     public required bool Ready { get; init; }
 
+    /// <summary>Whether the block states a verdict for the part at all; a block from before the part existed states none.</summary>
+    public bool VerdictStated { get; init; }
+
     /// <summary>The verdict's stated reason, verbatim, or <c>null</c>.</summary>
     public string? Reason { get; init; }
 
@@ -112,12 +163,15 @@ public sealed class PlannedPart
 
     /// <summary>The aerial's insertion, verbatim, when the block publishes one.</summary>
     public AerialInsertion? Insertion { get; init; }
+
+    /// <summary>The public-record layers' files, in the order the block lists them; empty for every other part.</summary>
+    public IReadOnlyList<PlannedFile> Files { get; init; } = [];
 }
 
 /// <summary>What one press does to the drawing: refuse, or place these parts and skip those, saying why.</summary>
 public sealed class AutoCadImportPlan
 {
-    private static readonly AutoCadPart[] Order = [AutoCadPart.Contours, AutoCadPart.Surface, AutoCadPart.Aerial];
+    private static readonly AutoCadPart[] Order = [AutoCadPart.Contours, AutoCadPart.Surface, AutoCadPart.Aerial, AutoCadPart.Records, AutoCadPart.Linework];
 
     /// <summary>The order this bundle is, still named on a refusal (HPS-37).</summary>
     public string OrderId { get; init; } = string.Empty;
@@ -140,7 +194,7 @@ public sealed class AutoCadImportPlan
     /// <summary>The unit the placed heights are in: the block's.</summary>
     public string VerticalUnit => Frame.VerticalUnit;
 
-    /// <summary>The three parts, in the order they are placed. Empty on a refusal.</summary>
+    /// <summary>The parts, in the order the summary lists them. Empty on a refusal.</summary>
     public IReadOnlyList<PlannedPart> Parts { get; init; } = [];
 
     /// <summary>What the user is told beside the parts: where the order lands, in which units.</summary>
@@ -292,6 +346,8 @@ public static class AutoCadImportPlanner
                 PlanContours(block, frame),
                 PlanSurface(block, frame, civil3d is not null),
                 PlanAerial(block, frame),
+                PlanRecords(block, frame),
+                PlanLinework(block, frame),
             ],
             Notices = notices,
         };
@@ -307,6 +363,24 @@ public static class AutoCadImportPlanner
         return string.Create(
             CultureInfo.InvariantCulture,
             $"Contours: {placed} polylines placed on {part.Layer}, each at its height in {UnitWords(part.VerticalUnits)}.");
+    }
+
+    /// <summary>What the user is told about placed public-record layers, with the count that went in.</summary>
+    public static string RecordsPlacedSentence(PlannedPart part, int placed)
+    {
+        ArgumentNullException.ThrowIfNull(part);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{Label(AutoCadPart.Records)}: {placed} polylines placed on {part.Files.Count} layers ({string.Join(", ", part.Files.Select(f => f.Layer))}).");
+    }
+
+    /// <summary>What the user is told about placed site linework, with the count that went in and the layers it went on.</summary>
+    public static string LineworkPlacedSentence(PlannedPart part, int placed, int layers)
+    {
+        ArgumentNullException.ThrowIfNull(part);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{Label(AutoCadPart.Linework)}: {placed} polylines placed on {layers} layers under {part.Layer}.");
     }
 
     /// <summary>The name a built surface is given: spelled out, and carrying the order's id.</summary>
@@ -473,11 +547,17 @@ public static class AutoCadImportPlanner
     {
         AutoCadPart.Contours => "Contours",
         AutoCadPart.Surface => "Civil 3D surface",
+        AutoCadPart.Records => "Public-record layers",
+        AutoCadPart.Linework => "Site linework",
         _ => "Aerial image",
     };
 
     /// <summary>The part's verdict and pointer, before anything particular to the part is decided.</summary>
     private static PlannedPart? Absent(AutoCadPart kind, PartReadiness verdict, AutoCadPointer? pointer)
+        => Absent(kind, verdict, pointer, pointer is not null);
+
+    /// <summary>As above, for a part whose files are not one pointer: <paramref name="namesFile"/> says whether the block names any.</summary>
+    private static PlannedPart? Absent(AutoCadPart kind, PartReadiness verdict, AutoCadPointer? pointer, bool namesFile)
     {
         string label = Label(kind);
 
@@ -492,9 +572,9 @@ public static class AutoCadImportPlanner
             return Skip(kind, verdict, pointer, $"{label}: not in this bundle: {clause}.");
         }
 
-        return pointer is null
-            ? Skip(kind, verdict, pointer, $"{label}: not imported. The bundle says it is ready but names no file for it.")
-            : null;
+        return namesFile
+            ? null
+            : Skip(kind, verdict, pointer, $"{label}: not imported. The bundle says it is ready but names no file for it.");
     }
 
     private static PlannedPart Skip(AutoCadPart kind, PartReadiness verdict, AutoCadPointer? pointer, string sentence) => new()
@@ -503,6 +583,7 @@ public static class AutoCadImportPlanner
         Place = false,
         Present = verdict.Present && pointer is not null,
         Ready = verdict.Present,
+        VerdictStated = verdict.Stated,
         Reason = verdict.Reason,
         Requires = verdict.Requires,
         Sentence = sentence,
@@ -521,6 +602,7 @@ public static class AutoCadImportPlanner
         Place = true,
         Present = true,
         Ready = true,
+        VerdictStated = true,
         Reason = verdict.Reason,
         Requires = verdict.Requires,
         Sentence = sentence,
@@ -539,7 +621,12 @@ public static class AutoCadImportPlanner
         string.Equals(frame.Type, AutoCadFileFrame.Local, StringComparison.Ordinal) ? LocalEnu : AbsoluteProjected;
 
     /// <summary>Why a file is not shown to be in the block's frame and units, or <c>null</c>.</summary>
-    private static string? OutOfFrame(AutoCadPointer pointer, AutoCadFileFrame frame, bool hasHeights)
+    /// <remarks>
+    /// <paramref name="absoluteHeights"/> asks, beside both units, that the heights be stated as real heights,
+    /// as the contours' and the surface's are. The records and the linework state their two units and no
+    /// height reference (format.md §6.10), so for them the units alone are checked.
+    /// </remarks>
+    private static string? OutOfFrame(AutoCadPointer pointer, AutoCadFileFrame frame, bool hasHeights, bool absoluteHeights = true)
     {
         if (!string.Equals(pointer.HorizontalFrame, FrameWord(frame), StringComparison.Ordinal))
         {
@@ -571,7 +658,7 @@ public static class AutoCadImportPlanner
             return $"its height unit is {pointer.VerticalUnits}, not the frame's {frame.VerticalUnit}, and the plugin does not convert";
         }
 
-        return string.Equals(pointer.VerticalReference, AbsoluteHeights, StringComparison.Ordinal)
+        return !absoluteHeights || string.Equals(pointer.VerticalReference, AbsoluteHeights, StringComparison.Ordinal)
             ? null
             : $"its heights are \"{pointer.VerticalReference}\", not absolute";
     }
@@ -679,5 +766,80 @@ public static class AutoCadImportPlanner
             string.Create(
                 CultureInfo.InvariantCulture,
                 $"{label}: placed on {AutoCadLayers.Aerial}, its lower-left corner at {insertion.X}, {insertion.Y}, {insertion.Width} by {insertion.Height} {UnitWords(frame.HorizontalUnit)}, rotated {insertion.RotationDeg} degrees."));
+    }
+
+    /// <summary>The public-record layers, each on its own layer.</summary>
+    /// <remarks>
+    /// The set is placed whole or not at all, as the producer publishes it (format.md §6.10): a layer the block
+    /// does not show to be in its frame and units skips every record layer, naming it, and the other parts are
+    /// decided apart. Each layer goes on its own layer, named by the record's name as the block states it.
+    /// </remarks>
+    private static PlannedPart PlanRecords(AutoCadBlock block, AutoCadFileFrame frame)
+    {
+        PartReadiness verdict = block.RecordsReadiness;
+        IReadOnlyList<AutoCadRecordLayer> layers = block.Records ?? [];
+        string label = Label(AutoCadPart.Records);
+
+        if (Absent(AutoCadPart.Records, verdict, null, layers.Count > 0) is { } absent)
+        {
+            return absent;
+        }
+
+        foreach (AutoCadRecordLayer layer in layers)
+        {
+            if (OutOfFrame(layer.Pointer, frame, hasHeights: true, absoluteHeights: false) is { } why)
+            {
+                return Skip(AutoCadPart.Records, verdict, null, $"{label}: not imported, because the {layer.Name} layer: {why}.");
+            }
+        }
+
+        List<PlannedFile> files = [.. layers.Select(l => new PlannedFile(
+            l.Name,
+            l.Pointer.Path,
+            l.Pointer.Sha256,
+            l.Pointer.HorizontalFrame,
+            l.Pointer.HorizontalUnits,
+            l.Pointer.VerticalUnits,
+            AutoCadLayers.Record(l.Name)))];
+
+        return new PlannedPart
+        {
+            Kind = AutoCadPart.Records,
+            Place = true,
+            Present = true,
+            Ready = true,
+            VerdictStated = true,
+            Reason = verdict.Reason,
+            Sentence = $"{label}: placed as polylines, each on its own layer ({string.Join(", ", files.Select(f => f.Layer))}), in {UnitWords(frame.HorizontalUnit)}.",
+            HorizontalFrame = files[0].HorizontalFrame,
+            HorizontalUnits = files[0].HorizontalUnits,
+            VerticalUnits = files[0].VerticalUnits,
+            Files = files,
+        };
+    }
+
+    /// <summary>The site linework, as polylines under its layer, by the layers the drawing names.</summary>
+    private static PlannedPart PlanLinework(AutoCadBlock block, AutoCadFileFrame frame)
+    {
+        PartReadiness verdict = block.LineworkReadiness;
+        AutoCadPointer? pointer = block.Linework;
+        string label = Label(AutoCadPart.Linework);
+
+        if (Absent(AutoCadPart.Linework, verdict, pointer) is { } absent)
+        {
+            return absent;
+        }
+
+        if (OutOfFrame(pointer!, frame, hasHeights: true, absoluteHeights: false) is { } why)
+        {
+            return Skip(AutoCadPart.Linework, verdict, pointer, $"{label}: not imported, because {why}.");
+        }
+
+        return Placed(
+            AutoCadPart.Linework,
+            verdict,
+            pointer!,
+            AutoCadLayers.Linework,
+            $"{label}: placed as polylines under {AutoCadLayers.Linework}, on the layers the drawing names, in {UnitWords(frame.HorizontalUnit)}.");
     }
 }

@@ -210,6 +210,25 @@ internal static class PublishedContourTests
         {
             run.Contains(PublishedContourReader.TryParse(new StringReader(Entities()), out _), "no LWPOLYLINE", "refused");
         });
+
+        run.Case("each polyline keeps the layer the file puts it on, and DXF's default where it names none", () =>
+        {
+            string unnamed = "0\nLWPOLYLINE\n90\n2\n70\n0\n10\n1.0\n20\n2.0\n10\n3.0\n20\n4.0\n";
+            string dxf = Entities(Polyline("0", false, (0.0, 0.0), (1.0, 1.0)), unnamed);
+
+            run.Equal(PublishedContourReader.TryParse(new StringReader(dxf), out IReadOnlyList<PublishedContour>? read), null, "read");
+            run.Equal(read?[0].Layer, "Contours", "the layer the file names");
+            run.Equal(read?[1].Layer, "0", "layer 0 when none is named");
+        });
+
+        run.Case("a refusal names the drawing it was asked to read", () =>
+        {
+            string reason = PublishedContourReader.TryParse(new StringReader(Entities()), "parcels", out _, out _) ?? string.Empty;
+
+            run.Contains(reason, "The parcels DXF", "the drawing, named");
+            run.False(reason.Contains("contours", StringComparison.Ordinal), "and not called contours");
+            run.Contains(PublishedContourReader.TryParse(new StringReader(Entities()), out _), "The contours DXF", "the contours keep their name");
+        });
     }
 
     private static void RunPlacementCases(TestRun run)

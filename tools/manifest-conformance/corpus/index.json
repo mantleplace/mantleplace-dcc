@@ -1497,6 +1497,82 @@
       }
     },
     {
+      "id": "manifest.autocadRecordsLineworkPresent",
+      "group": "manifest",
+      "file": "manifest/autocad-records-linework-present.json",
+      "expect": "accept",
+      "manifestVersion": "1.19.0",
+      "appliesTo": "autocad",
+      "reason": "From 1.19.0 the AutoCAD block points at the public-record layers and the site linework (format.md §6.10), each file with its own horizontal frame and its X/Y and height units stated apart, as the contours state theirs. The fixture is a State Plane delivery: two record layers, `parcels` and `zoning`, and the linework, all in the block's `file_frame`, with X/Y in ftUS and heights in ft. The reader asserts each record layer by name, path, frame and both units in the order the block lists them, and the linework's pointer the same way: a reader that takes a unit from the drawing, from the frame alone or from the shared `layout` reports one of them wrongly. The neutral `layout` also names a wetlands drawing the block does not; a reader that finds record layers by scanning `layout` or the `Records/` folder lists three layers here, not two. The case asserts only what the block states, so a plain AutoCAD reader and a Civil 3D reader both run it.",
+      "expectations": {
+        "jobId": "autocad-records-linework",
+        "orderId": "ord-autocad-records-linework-1",
+        "autocadRecordsPresent": true,
+        "autocadRecordsLayers": [
+          {
+            "name": "parcels",
+            "path": "Records/Parcels/Parcels.dxf",
+            "horizontalFrame": "absolute_projected",
+            "horizontalUnits": "ftUS",
+            "verticalUnits": "ft"
+          },
+          {
+            "name": "zoning",
+            "path": "Records/Zoning/Zoning.dxf",
+            "horizontalFrame": "absolute_projected",
+            "horizontalUnits": "ftUS",
+            "verticalUnits": "ft"
+          }
+        ],
+        "autocadLineworkPresent": true,
+        "autocadLineworkPath": "Drawings/Linework.dxf",
+        "autocadLineworkHorizontalFrame": "absolute_projected",
+        "autocadLineworkHorizontalUnits": "ftUS",
+        "autocadLineworkVerticalUnits": "ft",
+        "autocadReadinessRecordsPresent": true,
+        "autocadReadinessLineworkPresent": true,
+        "autocadContoursPath": "Surface/Contours.dxf"
+      }
+    },
+    {
+      "id": "manifest.autocadRecordsLineworkNotReady",
+      "group": "manifest",
+      "file": "manifest/autocad-records-linework-not-ready.json",
+      "expect": "accept",
+      "manifestVersion": "1.19.0",
+      "appliesTo": "autocad",
+      "reason": "A 1.19.0 block whose public records and site linework did not ship says why at `hosts.autocad.readiness.records` and `readiness.linework`, and carries no pointer for either (format.md §6.10). The reader reports both absent with the stated reason, echoed and never matched on (format.md §6.1), and imports the rest: a part that is not ready is a notice, never a failure. The neutral `layout` still names a delivered parcels drawing; a reader that falls back to it places a file the block never showed to be in its frame. The contours beside them are present and read normally, so neither absence takes the rest of the block with it.",
+      "expectations": {
+        "jobId": "autocad-records-linework-not-ready",
+        "orderId": "ord-autocad-records-linework-not-ready-1",
+        "autocadRecordsPresent": false,
+        "autocadRecordsAbsentReason": "not_produced",
+        "autocadLineworkPresent": false,
+        "autocadLineworkAbsentReason": "not_selected",
+        "autocadReadinessRecordsPresent": false,
+        "autocadReadinessLineworkPresent": false,
+        "autocadContoursPath": "Surface/Contours.dxf"
+      }
+    },
+    {
+      "id": "manifest.autocadRecordsLineworkAbsent",
+      "group": "manifest",
+      "file": "manifest/autocad-records-linework-absent.json",
+      "expect": "accept",
+      "manifestVersion": "1.18.0",
+      "appliesTo": "autocad",
+      "reason": "A bundle built before 1.19.0 carries an AutoCAD block with no public-record or linework pointer and no verdict for either (format.md §6.10). That is a well-formed block, not an error: the reader reports both absent, says the bundle states no verdict for them rather than assuming them there, and imports the parts the block does carry. The fixture is a 1.18.0 block with its contours present; a reader that refuses the block for the missing entries, or treats the missing verdict as a failure, refuses an order it can place.",
+      "expectations": {
+        "jobId": "autocad-records-linework-absent",
+        "orderId": "ord-autocad-records-linework-absent-1",
+        "autocadRecordsPresent": false,
+        "autocadRecordsVerdictStated": false,
+        "autocadLineworkPresent": false,
+        "autocadLineworkVerdictStated": false,
+        "autocadContoursPath": "Surface/Contours.dxf"
+      }
+    },
+    {
       "id": "manifest.foliageTypeUnknownValue",
       "group": "manifest",
       "file": "manifest/foliage-type-unknown-value.json",

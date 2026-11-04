@@ -76,6 +76,11 @@ public sealed record AutoCadPointer(
     int PixelHeight,
     AerialInsertion? Insertion);
 
+/// <summary>One public-record layer the block lists (format.md §6.10): its name, and its file's pointer.</summary>
+/// <param name="Name">The record layer's name, verbatim (<c>parcels</c>).</param>
+/// <param name="Pointer">The layer's file, with the frame and units it states for itself.</param>
+public sealed record AutoCadRecordLayer(string Name, AutoCadPointer Pointer);
+
 /// <summary>The <c>hosts.autocad</c> block, read and not interpreted.</summary>
 public sealed class AutoCadBlock
 {
@@ -91,6 +96,12 @@ public sealed class AutoCadBlock
     /// <summary>The aerial pointer, or <c>null</c>.</summary>
     public AutoCadPointer? Aerial { get; init; }
 
+    /// <summary>The public-record layers, in the order the block lists them, or <c>null</c> when it carries no <c>records</c> (from 1.19.0).</summary>
+    public IReadOnlyList<AutoCadRecordLayer>? Records { get; init; }
+
+    /// <summary>The site linework pointer, or <c>null</c> (from 1.19.0).</summary>
+    public AutoCadPointer? Linework { get; init; }
+
     /// <summary>The contours' verdict.</summary>
     public required PartReadiness ContoursReadiness { get; init; }
 
@@ -99,6 +110,12 @@ public sealed class AutoCadBlock
 
     /// <summary>The aerial's verdict.</summary>
     public required PartReadiness AerialReadiness { get; init; }
+
+    /// <summary>The public-record layers' verdict, one for the set; unstated on a block from before 1.19.0.</summary>
+    public PartReadiness RecordsReadiness { get; init; } = PartReadiness.Unstated;
+
+    /// <summary>The site linework's verdict; unstated on a block from before 1.19.0.</summary>
+    public PartReadiness LineworkReadiness { get; init; } = PartReadiness.Unstated;
 }
 
 /// <summary>What reading a manifest for AutoCAD gave: the shared facts, and this host's block or why there is none.</summary>
@@ -169,9 +186,13 @@ public static class AutoCadBlockReader
                 Contours = ReadPointer(block.Object("contours")),
                 Surface = ReadPointer(block.Object("surface")),
                 Aerial = ReadPointer(block.Object("aerial")),
+                Records = ReadRecords(block.Object("records")),
+                Linework = ReadPointer(block.Object("linework")),
                 ContoursReadiness = ReadVerdict(readiness?.Object("contours")),
                 SurfaceReadiness = ReadVerdict(readiness?.Object("surface")),
                 AerialReadiness = ReadVerdict(readiness?.Object("aerial")),
+                RecordsReadiness = ReadVerdict(readiness?.Object("records")),
+                LineworkReadiness = ReadVerdict(readiness?.Object("linework")),
             },
         };
     }
@@ -225,6 +246,29 @@ public static class AutoCadBlockReader
             p.OptionalInt("width") ?? 0,
             p.OptionalInt("height") ?? 0,
             insertion);
+    }
+
+    /// <summary>The record layers as listed; an entry that is not an object is skipped, and the planner sees only what is there.</summary>
+    private static List<AutoCadRecordLayer>? ReadRecords(JsonElement? records)
+    {
+        if (records is not { } r)
+        {
+            return null;
+        }
+
+        List<AutoCadRecordLayer> layers = [];
+        if (r.TryGetProperty("layers", out JsonElement list) && list.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement layer in list.EnumerateArray())
+            {
+                if (layer.ValueKind == JsonValueKind.Object && ReadPointer(layer) is { } pointer)
+                {
+                    layers.Add(new AutoCadRecordLayer(layer.Str("name"), pointer));
+                }
+            }
+        }
+
+        return layers;
     }
 
     private static PartReadiness ReadVerdict(JsonElement? verdict)
