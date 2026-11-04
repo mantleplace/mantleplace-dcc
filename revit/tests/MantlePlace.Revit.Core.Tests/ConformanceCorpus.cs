@@ -67,6 +67,9 @@ internal static class ConformanceCorpus
 
         internal string Reason { get; init; } = string.Empty;
 
+        /// <summary>The host the case is scoped to, or empty when it binds every host (HPS-41).</summary>
+        internal string AppliesTo { get; init; } = string.Empty;
+
         /// <summary>Raw text of the vector file — what the parser under test is handed.</summary>
         internal required string Payload { get; init; }
 
@@ -141,6 +144,15 @@ internal static class ConformanceCorpus
     /// </summary>
     /// <returns><c>null</c> on success, or the reason the group is unusable.</returns>
     internal static string? LoadGroup(string group, out List<CorpusCase> cases)
+        => LoadGroupFor(group, HostKey, out cases);
+
+    /// <summary>
+    /// Loads every case in <paramref name="group"/> that applies to <paramref name="hostKey"/>: the
+    /// seam a second host built from these sources uses to claim a group under its own key, as the
+    /// AutoCAD plugin does with its <c>hosts.autocad</c> cases.
+    /// </summary>
+    /// <returns><c>null</c> on success, or the reason the group is unusable.</returns>
+    internal static string? LoadGroupFor(string group, string hostKey, out List<CorpusCase> cases)
     {
         if (FindCorpusDirectory() is not { } root)
         {
@@ -150,7 +162,7 @@ internal static class ConformanceCorpus
                 + "without it cannot assert HPS-40 conformance.";
         }
 
-        return LoadGroup(group, root, out cases);
+        return LoadGroup(group, root, hostKey, out cases);
     }
 
     /// <summary>
@@ -168,6 +180,10 @@ internal static class ConformanceCorpus
     /// </remarks>
     /// <returns><c>null</c> on success, or the reason the group is unusable.</returns>
     internal static string? LoadGroup(string group, string root, out List<CorpusCase> cases)
+        => LoadGroup(group, root, HostKey, out cases);
+
+    /// <summary>As <see cref="LoadGroup(string, string, out List{CorpusCase})"/>, for a named host.</summary>
+    internal static string? LoadGroup(string group, string root, string hostKey, out List<CorpusCase> cases)
     {
         cases = [];
 
@@ -207,7 +223,7 @@ internal static class ConformanceCorpus
                 // An absent appliesTo means the case binds every host (HPS-41).
                 if (entry.TryGetProperty("appliesTo", out JsonElement appliesTo)
                     && appliesTo.ValueKind == JsonValueKind.String
-                    && !string.Equals(appliesTo.GetString(), HostKey, StringComparison.Ordinal))
+                    && !string.Equals(appliesTo.GetString(), hostKey, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -250,6 +266,7 @@ internal static class ConformanceCorpus
                     Expect = ReadString(entry, "expect"),
                     ErrorContains = ReadString(entry, "errorContains"),
                     Reason = ReadString(entry, "reason"),
+                    AppliesTo = ReadString(entry, "appliesTo"),
                     Payload = payload,
                     Expectations = entry.TryGetProperty("expectations", out JsonElement exp)
                         && exp.ValueKind == JsonValueKind.Object
@@ -266,7 +283,7 @@ internal static class ConformanceCorpus
 
         if (cases.Count == 0)
         {
-            return $"corpus group '{group}' resolved to zero cases for host '{HostKey}' — a suite that asserts "
+            return $"corpus group '{group}' resolved to zero cases for host '{hostKey}' — a suite that asserts "
                 + "nothing reports green for the wrong reason (HPS-40)";
         }
 

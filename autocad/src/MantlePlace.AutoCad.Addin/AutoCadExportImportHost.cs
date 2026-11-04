@@ -1,3 +1,4 @@
+using MantlePlace.AutoCad;
 using MantlePlace.Revit.Client;
 using MantlePlace.Revit.Core;
 
@@ -16,9 +17,10 @@ namespace MantlePlace.AutoCad.Addin;
 /// </para>
 /// <para>
 /// Revit opens an import window here. This opens <see cref="ReceivedExportWindow"/>, which says the
-/// bundle arrived and was checked, and that importing is not in the plugin yet. Closing it ends the
-/// export as the web's <c>cancelled</c>, the same ending as a Revit user closing the import window
-/// before pressing Import.
+/// bundle arrived and was checked; its Import button places the order in the active drawing
+/// (<see cref="OrderImporter"/>), and the web hears the import begin and end. Closing the window before
+/// the press ends the export as the web's <c>cancelled</c>, the same ending as a Revit user closing the
+/// import window before pressing Import.
 /// </para>
 /// </remarks>
 internal sealed class AutoCadExportImportHost : IExportImportHost
@@ -60,6 +62,12 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
         try
         {
             ReceivedExportWindow window = new(export, zipPath, MantlePlaceApplication.MainWindowHandle());
+            bool began = false;
+            window.ImportRequested += (_, _) =>
+            {
+                began = true;
+                RunImport(export, zipPath, window, connected);
+            };
             window.Closed += (_, _) =>
             {
                 _window = null;
@@ -68,8 +76,13 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
                     _holding = null;
                 }
 
-                // Nothing was imported, so this is the window going before an import started.
-                connected?.ImportEnded(export.Id, ImportEnding.DismissedBeforeStart, string.Empty);
+                // After an import the web has heard how it ended; before one, this is the window going
+                // before an import started.
+                if (!began)
+                {
+                    connected?.ImportEnded(export.Id, ImportEnding.DismissedBeforeStart, string.Empty);
+                }
+
                 connected?.TurnFree();
             };
 
@@ -90,6 +103,42 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
 
             connected?.ImportRefused(export.Id, ExportReasons.WindowFailed, $"AutoCAD could not open the window for this export ({ex.Message}).");
             connected?.TurnFree();
+        }
+    }
+
+    /// <summary>On AutoCAD's UI thread: the one press. The window shows what happened, and so does the web.</summary>
+    private static void RunImport(HostExport export, string zipPath, ReceivedExportWindow window, ConnectedHostService? connected)
+    {
+        connected?.ImportBegan(export.Id);
+
+        if (Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.MdiActiveDocument is not { } document)
+        {
+            const string NoDrawing = "AutoCAD has no drawing open to import into. Nothing was imported.";
+            window.ShowOutcome(NoDrawing);
+            connected?.ImportEnded(export.Id, ImportEnding.Failed, NoDrawing);
+            return;
+        }
+
+        try
+        {
+            bool civil3d = Presence.MayLoadCivil3dPart(Presence.Decide(HostObservations.Observe()));
+            OrderImportResult result = OrderImporter.Import(document, zipPath, civil3d);
+
+            window.ShowOutcome(result.Summary);
+            MantlePlaceApplication.Say(result.Summary);
+            connected?.ImportEnded(
+                export.Id,
+                result.PlacedAnything ? ImportEnding.Imported : ImportEnding.Failed,
+                result.PlacedAnything ? string.Empty : result.Summary);
+        }
+#pragma warning disable CA1031 // An import that throws is reported to the user and the web, never left to take AutoCAD down.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            string failed = $"The import stopped on an error: {ex.Message}. What it placed before the error stays in the drawing.";
+            window.ShowOutcome(failed);
+            connected?.ImportEnded(export.Id, ImportEnding.Failed, failed);
+            MantlePlaceApplication.SayFault(ex);
         }
     }
 }
