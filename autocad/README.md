@@ -3,11 +3,33 @@
 The AutoCAD plugin: plain AutoCAD and Civil 3D, 2025, 2026 and 2027, as one plugin. Civil 3D's part
 loads only when Civil 3D is running.
 
-**Status:** the plugin's tree and its packaging. The shell loads and says what it is
-(`MANTLEPLACEABOUT` names the version, the .NET it runs on and whether the Civil 3D part is on); it
-does not import a Mantle Place bundle yet. Which features each plugin supports, beside every other
-host, is the [host support matrix](../docs/host-support.md). Agents: read [`CLAUDE.md`](CLAUDE.md)
+**Status:** the plugin's tree and its packaging. The shell loads, signs you in, lists and searches
+your vault, tells you when an order arrives, and receives an export sent from the web vault; it does
+not import a Mantle Place bundle into a drawing yet. Which features each plugin supports, beside every
+other host, is the [host support matrix](../docs/host-support.md). Agents: read [`CLAUDE.md`](CLAUDE.md)
 first.
+
+## Commands
+
+The bundle puts a **Mantle Place** panel on the ribbon's **Plug-Ins** tab (named **Add-ins** from
+AutoCAD 2025), from a partial customization file. F1 over any of its buttons opens this page. Each
+command can also be typed at the command line. The panel carries the Mantle Place monogram and no
+other logo.
+
+| Button | Command | What it does |
+| --- | --- | --- |
+| Sign In | `MANTLEPLACESIGNIN` | Opens your browser to sign in; AutoCAD never sees your password. A small window waits for the browser and stays out of the way. Signing in here signs you in for every Mantle Place plugin on this machine. |
+| Sign Out | `MANTLEPLACESIGNOUT` | Drops the session and forgets the stored credential. |
+| Vault | `MANTLEPLACEVAULT` | The bundles you keep, with a search box, which of them are on this machine, removing a local copy, and reporting a problem with one. Needs you signed in. There is no Prepare, download or import in AutoCAD yet. |
+| Send Feedback | `MANTLEPLACEFEEDBACK` | The Mantle Place feedback form in your browser. It needs no account. Only this plugin's version and your AutoCAD year go with the link: nothing from your drawing, and nothing about you. |
+| About | `MANTLEPLACEABOUT` | Which build is loaded, whether the Civil 3D part is on, whether you are signed in, and a link to the [privacy page](https://mantle.place/privacy). |
+
+**Notices.** When an order turns up in your vault that you did not ask this plugin to look at, a small
+notice appears in a corner of AutoCAD's window; clicking it opens the vault on that bundle.
+
+**Exports from the web.** While you are signed in, this AutoCAD appears as a destination in your web
+vault. Sending an export to it fetches the bundle, checks it, and opens a window saying where it is.
+Nothing is placed in the drawing, and closing the window ends the export as cancelled.
 
 ## How it is built
 
@@ -33,8 +55,9 @@ dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.Au
 dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.AutoCad.Core.Tests.csproj -f net10.0
 ```
 
-It runs the shared conformance corpus over the compiled-in sources, plus the AutoCAD bundle manifest
-and the Civil 3D presence decision.
+It runs the shared conformance corpus over the compiled-in sources, plus the AutoCAD bundle manifest,
+the partial customization file, the host identity the platform is told, the export receipt, the About
+text and the Civil 3D presence decision.
 
 Building the shell and the Civil 3D part needs the Autodesk assemblies. `AutoCadApiDirNet10`
 (default `C:\Program Files\Autodesk\AutoCAD 2027`) is the install the .NET 10 build compiles

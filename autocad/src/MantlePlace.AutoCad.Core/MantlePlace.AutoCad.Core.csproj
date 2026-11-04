@@ -21,6 +21,9 @@
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <RootNamespace>MantlePlace.AutoCad</RootNamespace>
     <AssemblyName>MantlePlace.AutoCad.Core</AssemblyName>
+
+    <!-- Tells the shared Revit sources which plugin they are in: HostIdentity answers "autocad" here. -->
+    <DefineConstants>$(DefineConstants);MANTLEPLACE_AUTOCAD</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

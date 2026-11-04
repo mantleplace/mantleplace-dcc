@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Client;
 
@@ -34,7 +35,7 @@ public sealed class MantlePlaceEndpoints
     /// in the same order they always did.
     /// </para>
     /// </remarks>
-    public string WebLoginUrl { get; init; } = "https://mantle.place/auth/native?host=revit";
+    public string WebLoginUrl { get; init; } = "https://mantle.place/auth/native?host=" + HostIdentity.Id;
 
     /// <summary>The PKCE code→token exchange.</summary>
     public string TokenEndpointUrl { get; init; } = "https://mantle.place/api/v1/auth/native/token";

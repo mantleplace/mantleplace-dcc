@@ -54,6 +54,9 @@ public static class AutodeskBundleManifest
     /// <summary>The AutoCAD plugin's entry assembly, the one module AutoCAD loads from each build folder.</summary>
     public const string AutoCadModuleFileName = "MantlePlace.AutoCad.Addin.dll";
 
+    /// <summary>The AutoCAD plugin's partial CUIX file, the ribbon panel AutoCAD loads from the bundle, relative to the bundle root.</summary>
+    public const string AutoCadCuixModulePath = "./Contents/MantlePlace.cuix";
+
     /// <summary>The monogram render the package script copies in, by its name in the add-in's Resources.</summary>
     public const string IconSourceFileName = "MantlePlaceMark_48.png";
 
@@ -184,6 +187,11 @@ public static class AutodeskBundleManifest
                     new XAttribute("SeriesMin", series),
                     new XAttribute("SeriesMax", series)),
                 ComponentEntryFor(profile, host, year, version));
+
+            if (host == BundleHost.AutoCad)
+            {
+                components.Add(CuixEntryFor(profile, version));
+            }
         }
 
         XElement root = new(
@@ -232,6 +240,19 @@ public static class AutodeskBundleManifest
 
         return entry;
     }
+
+    // The panel is a customization file, not an assembly: AutoCAD merges a bundle's CUIX into its
+    // ribbon on load, so it carries no AppType. It sits under the year's runtime requirement, after
+    // the assembly, which is how the format pairs an entry with the release it is for.
+    private static XElement CuixEntryFor(HostProfile profile, string version)
+        => new(
+            "ComponentEntry",
+            new XAttribute("AppName", profile.AppName + " ribbon panel"),
+            new XAttribute("Version", version),
+            new XAttribute("ModuleName", AutoCadCuixModulePath),
+            new XAttribute("AppDescription", "The Mantle Place panel on the Plug-Ins tab."),
+            new XAttribute("LoadOnCommandInvocation", "False"),
+            new XAttribute("LoadOnAutoCADStartup", "True"));
 
     private static HostProfile ProfileOf(BundleHost host) => host switch
     {

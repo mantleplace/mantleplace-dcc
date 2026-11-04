@@ -75,6 +75,24 @@ tests, and refresh the baseline in the same change.
   release is gated by a real launch in each of 2025, 2026 and 2027 (a .NET 8 host run is the
   release check, not part of this tree's CI).
 
+## Host identity, windows and the ribbon
+
+- **The platform is told `autocad`, from one place.** `HostIdentity.Id` in Revit's `Core` is `revit`
+  there and `autocad` here (`MANTLEPLACE_AUTOCAD`, defined by `MantlePlace.AutoCad.Core.csproj`); the
+  sign-in route, the `Mantle-Place-Client` header, the connected-host presence and the feedback
+  `source` all read it. A shared source that spells `revit` out makes this plugin a second Revit to the
+  platform.
+- **Windows are copied from Revit's, not shared.** The Addin's WPF windows (sign-in, vault browser,
+  notice) are built in code and read the monogram from embedded resources (`ResourceImages`), linked
+  from Revit's `Resources` so no binary is committed twice. The vault browser has no Prepare, download
+  or import: those are hooks into a drawing and are not known yet. Put them back when they are.
+- **The ribbon is a partial CUIX, not ribbon code.** `CuixPackage` (Core) writes it, `PlugInsPanel`
+  lists the commands, and `PackageContents.xml` loads it per year. F1 is each macro's tooltip help
+  source. How the host reads either was not proven headless; the release check on the ticket does.
+- **An export from the web is received, not imported.** `AutoCadExportImportHost` opens a window that
+  says where the verified bundle is and that nothing was placed; closing it ends the export as
+  cancelled. Replace it with an importer when there is one.
+
 ## Commands
 
 - **Build and test** -> [`README.md` > Build and test](./README.md#build-and-test), the one home.
