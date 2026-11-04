@@ -175,10 +175,19 @@ public static class AutodeskBundleManifest
 
         HostProfile profile = ProfileOf(host);
 
-        XElement components = new("Components");
+        // AutoCAD's autoloader reads one RuntimeRequirements per Components group: given every year's
+        // in one group it registered the bundle and loaded nothing (a live Civil 3D 2027 run), so each
+        // AutoCAD year is its own group, as Autodesk's own bundles are. Revit's layout is unchanged.
+        List<XElement> groups = [new XElement("Components")];
         foreach (int year in years)
         {
             string series = SeriesFor(host, year);
+            if (host == BundleHost.AutoCad && groups[^1].HasElements)
+            {
+                groups.Add(new XElement("Components"));
+            }
+
+            XElement components = groups[^1];
             components.Add(
                 new XElement(
                     "RuntimeRequirements",
@@ -209,7 +218,7 @@ public static class AutodeskBundleManifest
                 "CompanyDetails",
                 new XAttribute("Name", Vendor),
                 new XAttribute("Url", VendorUrl)),
-            components);
+            groups);
 
         return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" + root.ToString() + "\n";
     }

@@ -90,6 +90,29 @@ internal static class PublishedContourTests
             run.Within(contours[0].Elevation, 0.0, 0.0, "zero");
         });
 
+        run.Case("a paper-space entity is a sheet's, not the drawing's: skipped, never placed or refused", () =>
+        {
+            // The platform's site linework DXF carries its plan sheets' VIEWPORTs (and their frames) in
+            // ENTITIES with group 67 = 1. A live Civil 3D 2027 import refused the whole drawing on them.
+            string viewport = "0\nVIEWPORT\n5\n10A1\n100\nAcDbEntity\n67\n1\n8\nVIEWPORTS\n10\n24.0\n20\n12.0\n";
+            string sheetFrame = Polyline("0", closed: true, (0, 0), (17, 0), (17, 11))
+                .Replace("0\nLWPOLYLINE\n", "0\nLWPOLYLINE\n67\n1\n", StringComparison.Ordinal);
+            string dxf = Entities(viewport, Polyline("3", closed: false, (1, 2), (3, 4)), sheetFrame);
+
+            run.Equal(PublishedContourReader.TryParse(new StringReader(dxf), out IReadOnlyList<PublishedContour>? contours), null, "read");
+            run.Equal(contours!.Count, 1, "only the model-space polyline");
+            run.Equal(contours[0].ElevationText, "3", "and it is the model one");
+        });
+
+        run.Case("a model-space entity this reader cannot place still refuses the file, by name", () =>
+        {
+            string dxf = Entities(Polyline("3", closed: false, (1, 2), (3, 4)), "0\nPOINT\n8\nHistoric\n67\n0\n10\n1.0\n20\n2.0\n");
+
+            run.True(
+                PublishedContourReader.TryParse(new StringReader(dxf), out _)?.Contains("a POINT entity", StringComparison.Ordinal) == true,
+                "named, as before");
+        });
+
         run.Case("an LWPOLYLINE outside ENTITIES is not a contour", () =>
         {
             // ⛔ Geometry in BLOCKS is a definition placed by an INSERT with its own transform.
