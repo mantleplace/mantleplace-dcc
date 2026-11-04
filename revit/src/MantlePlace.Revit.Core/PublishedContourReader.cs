@@ -43,7 +43,8 @@ public sealed class PublishedContour
 /// Anything in <c>ENTITIES</c> this reader cannot place exactly refuses the file by name rather than
 /// being dropped: another entity type, a bulge (an arc, not a segment), or an extrusion other than
 /// +Z (the vertices would then be in an object coordinate system, not world X/Y). A silently dropped
-/// entity is a contour missing from the site with nothing on screen to say so.
+/// entity is a contour missing from the site with nothing on screen to say so. A paper-space entity
+/// (group 67 = 1, a plan sheet's viewport or frame) is not the drawing's and is skipped either way.
 /// </para>
 /// <para>
 /// The same reader takes any drawing of flat polylines the AutoCAD block points at (the public-record
@@ -93,6 +94,8 @@ public static class PublishedContourReader
 
         List<PublishedContour> read = [];
         Polyline? current = null;
+        string? unreadable = null;
+        bool paperSpace = false;
         bool inEntities = false;
         bool expectSectionName = false;
         long lineNumber = 0;
@@ -118,17 +121,30 @@ public static class PublishedContourReader
 
             if (code == 0)
             {
+                // An entity is judged at its end, once its group 67 has been seen: a paper-space one is a
+                // sheet's (a viewport, a title frame), not the drawing's, and is neither placed nor refused.
                 if (current is not null)
                 {
-                    if (current.Finish(out PublishedContour? contour) is { } polylineError)
+                    if (!paperSpace)
                     {
-                        return polylineError;
+                        if (current.Finish(out PublishedContour? contour) is { } polylineError)
+                        {
+                            return polylineError;
+                        }
+
+                        read.Add(contour!);
                     }
 
-                    read.Add(contour!);
                     current = null;
                 }
 
+                if (unreadable is not null && !paperSpace)
+                {
+                    return Unreadable(name, unreadable);
+                }
+
+                unreadable = null;
+                paperSpace = false;
                 expectSectionName = false;
 
                 switch (value)
@@ -150,8 +166,7 @@ public static class PublishedContourReader
                     default:
                         if (inEntities)
                         {
-                            return $"{name} carries a {value} entity, which this plugin does not read: "
-                                + "only LWPOLYLINE polylines are placed, and dropping it would leave a gap.";
+                            unreadable = value;
                         }
 
                         break;
@@ -169,13 +184,24 @@ public static class PublishedContourReader
                 continue;
             }
 
+            if (code == 67 && (current is not null || unreadable is not null))
+            {
+                paperSpace = string.Equals(value, "1", StringComparison.Ordinal);
+                continue;
+            }
+
             if (current is not null && current.Take(code, value, lineNumber) is { } valueError)
             {
                 return valueError;
             }
         }
 
-        if (current is not null)
+        if (unreadable is not null && !paperSpace)
+        {
+            return Unreadable(name, unreadable);
+        }
+
+        if (current is not null && !paperSpace)
         {
             if (current.Finish(out PublishedContour? trailing) is { } trailingError)
             {
@@ -193,6 +219,10 @@ public static class PublishedContourReader
         contours = read;
         return null;
     }
+
+    private static string Unreadable(string name, string kind)
+        => $"{name} carries a {kind} entity, which this plugin does not read: "
+            + "only LWPOLYLINE polylines are placed, and dropping it would leave a gap.";
 
     /// <summary>One <c>LWPOLYLINE</c> while its group codes are being read.</summary>
     private sealed class Polyline(string name)
