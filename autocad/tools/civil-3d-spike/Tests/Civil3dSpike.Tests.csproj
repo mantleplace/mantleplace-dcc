@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Headless tests of the spike's two pure decisions (../Shared/): the zone comparison and the
+    presence verdict. No AutoCAD, no Civil 3D, no NuGet. Both frameworks run, as the plugin's suite
+    will. Run it from autocad/tools/civil-3d-spike/Tests with "dotnet run -f net8.0", then net10.0.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>MantlePlace.AutoCad.Civil3dSpike.Tests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" />
+  </ItemGroup>
+
+</Project>

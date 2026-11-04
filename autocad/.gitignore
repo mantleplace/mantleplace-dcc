@@ -1,0 +1,4 @@
+# AutoCAD host: .NET build output. Host-specific, as revit/.gitignore is.
+
+bin/
+obj/
