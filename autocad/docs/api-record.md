@@ -1,0 +1,103 @@
+# AutoCAD API record: what has run
+
+The compiler proves that a member exists and how it is shaped; it says nothing about what AutoCAD or
+Civil 3D does when the member runs. This file records which calls the AutoCAD plugin will make that
+have **run inside a real host**, in which years, and how. It starts with the Civil 3D spike
+([`../tools/civil-3d-spike/`](../tools/civil-3d-spike/README.md)), run before any plugin code was
+written. Add to it when an import proves or disproves a call.
+
+Each entry is **worked**, **did nothing** (no exception, no effect) or **threw**, per year. The spike
+ran on 2026-11-03 on the build machine, with these installs, all on .NET 10.0.12:
+
+| Year | AutoCAD | Civil 3D | Runs |
+|---|---|---|---|
+| 2027 | 26.0.118 (2027.1) | 13.9.1308 (2027.1) | console and window, both launchers |
+| 2026 | 25.1.179 (2026.1.2) | 13.8.1873 (2026.2.3) | console, both launchers; window, Civil 3D |
+| 2025 | 25.0.189 (2025.1.4) | 13.7.1519 (2025.2.7) | console, both launchers |
+
+"Console" is `accoreconsole.exe`, "window" is `acad.exe`, and each was started with its Start menu
+launcher's switches: Civil 3D's (`/ld AecBase.dbx`, the Civil 3D profile, `/product C3D`) or the
+"as AutoCAD" one (`/product ACAD`), over the same install folder.
+
+## The presence test
+
+**The plugin loads its Civil 3D part only when `AeccLand.dbx`, Civil 3D's land module, is a loaded
+module of the process** (`GetModuleHandle("AeccLand.dbx")` is not null). That is the test in
+`Presence.Decide`, and it is the one observation that held in every run, console and window alike:
+
+| Observation | Civil 3D, window | Civil 3D, console | "As AutoCAD", either |
+|---|---|---|---|
+| `AeccLand.dbx` loaded | true | true | false |
+| `AecBase.dbx` loaded | true | true | false |
+| Aec modules in `SystemObjects.DynamicLinker.GetLoadedModules()` | 89 to 91 | 23 to 26 | 0 |
+| `AeccDbMgd` a loaded managed assembly | true | **false** | false |
+| `PRODUCT` | `AutoCAD` | `AutoCAD` | `AutoCAD` |
+| `C3D\AeccDbMgd.dll` on disk beside the host | true | true | **true** |
+
+- **Files on disk say nothing.** The "as AutoCAD" launcher runs the same `acad.exe` over the same
+  folder, so every installed-file test reads true there.
+- **`PRODUCT` says `AutoCAD` in Civil 3D too**, so it cannot decide.
+- **`AeccDbMgd` is not loaded in Civil 3D's console** until something calls into it, so a managed
+  assembly test would turn the Civil 3D part off there. In the window it was loaded by the time the
+  probe ran.
+- **`AecBase.dbx` alone is not Civil 3D**: it is the shared base of the AutoCAD verticals, which load
+  it too.
+- **Decide at first use, not at load.** The probe ran from a startup script, after the host had
+  finished starting. Whether `AeccLand.dbx` is already loaded when a bundle's assembly initialises at
+  startup was not tested, so the plugin decides when a command first needs the Civil 3D part.
+- **A wrong verdict degrades, it does not crash.** Loading the Civil 3D part under the "as AutoCAD"
+  launcher threw `FileNotFoundException` for `AeccDbMgd` (2025, 2026 and 2027, console; 2027,
+  window), the probe caught it, and the host carried on.
+
+## Calls
+
+| Call | 2025 | 2026 | 2027 |
+|---|---|---|---|
+| `CivilApplication.ActiveDocument` | worked | worked | worked |
+| `CivilDocument.Settings.DrawingSettings.UnitZoneSettings` | worked | worked | worked |
+| `SettingsUnitZone.CoordinateSystemCode`, read | worked | worked | worked |
+| `SettingsUnitZone.GetAllCodes()` | worked | worked | worked |
+| `SettingsUnitZone.GetCoordinateSystemByCode(code)` | worked | worked | worked |
+| `SettingsUnitZone.CoordinateSystemCode`, set (the probe's fixture, never the plugin) | worked | worked | worked |
+| `TinSurface.Create(Database, string)` | worked | worked | worked |
+| `SurfaceDefinitionDEMFiles.AddDEMFile(path)`, ASCII grid and GeoTIFF | worked | worked | worked |
+| `SurfaceDefinitionDEMFiles.AddDEMFile(path, code, false, 0)`, ASCII grid and GeoTIFF | worked | worked | worked |
+| `TinSurface.Rebuild()`, `GetGeneralProperties()` | worked | worked | worked |
+
+Neither the zone route nor the surface route failed in any year, so neither is cut from the plugin's
+1.0. What the calls did:
+
+- **A fresh drawing's zone reads `.`**, not an empty string. `.` is also the first code
+  `GetAllCodes()` returns: it is Civil 3D's "no coordinate system". `ZoneCheck` treats it as no zone
+  and refuses, saying so.
+- **The codes are Civil 3D's own library codes, not EPSG codes, and they are irregular.** California
+  zone III in US feet is `CA83IIIF`, with no hyphen, beside `CA83-IVF` for zone IV. `CA83-IIIF` is not
+  a code: `GetCoordinateSystemByCode` and the setter both threw `ArgumentException` ("Value does not
+  fall within the expected range"). The library holds 9,607 codes in 2025, 9,714 in 2026 and 9,715 in
+  2027. So the code the plugin compares must reach it already in Civil 3D's spelling, and the
+  comparison is exact: the plugin never maps one spelling to another.
+- **Reading and comparing never changed the zone.** Every run read the code again after each
+  comparison and after the surfaces, and it was unchanged.
+- **`AddDEMFile(path)` places the grid as written**, in its own coordinates, whatever the drawing's
+  zone.
+- **The overload transforms into the drawing's zone, expressed in the drawing's unit.** A DEM in
+  `UTM83-10` metres, added to a metric drawing whose zone is `CA83IIIF` (a US-foot zone), landed at
+  California zone III coordinates **in metres**: all four extents matched, to the centimetre, a GDAL
+  transform of the grid's corner points to the metre-based zone III frame. Elevations came through
+  unchanged. A drawing in feet
+  was not run, so whether the overload also scales elevations there is still open.
+- **A GeoTIFF's points sit half a cell from the ASCII grid's.** From one grid, the ASCII grid's
+  points start at the first cell's centre (15 m in from the corner) and the GeoTIFF's at its corner.
+  Which file the bundle names for the surface therefore moves the surface by half a cell, and the
+  plugin should be checked against the format the bundle actually ships.
+
+## What this does not yet cover
+
+- **A drawing in feet**, with a foot-based zone and a metric DEM.
+- **The plugin's own load path**, a bundle under `ApplicationPlugins` whose assembly is loaded at
+  startup, rather than a `NETLOAD` from a script.
+- **A .NET 8 build.** Every install here, 2025 and 2026 included, runs .NET 10 after its updates, and
+  its API assemblies reference .NET 10, so a .NET 8 project cannot compile against them (`CS1705`).
+  The probe builds each year against that year's installed API, at the framework its own runtime
+  configs name. Whether a .NET 8 assembly built against the original 2025 API loads in these updated
+  hosts was not tested.

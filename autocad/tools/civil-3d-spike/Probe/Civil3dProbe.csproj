@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The spike's AutoCAD-only half (../README.md): a scratch add-in, never shipped. It references no
+    Civil 3D assembly, so it loads in plain AutoCAD and in Civil 3D's "as AutoCAD" mode; it decides
+    whether Civil 3D is loaded in the process and only then loads the Civil 3D half (../Civil/).
+    It builds against the installed API of the year it runs in, at the framework that install's own
+    runtime configs name (an updated 2025 or 2026 install is .NET 10, not the .NET 8 it shipped on):
+    Invoke-Civil3dProbe.ps1 passes AcadYear, AcadDir and AcadFramework.
+  -->
+
+  <PropertyGroup>
+    <AcadYear Condition="'$(AcadYear)' == ''">2027</AcadYear>
+    <AcadDir Condition="'$(AcadDir)' == ''">$(ProgramFiles)\Autodesk\AutoCAD $(AcadYear)</AcadDir>
+    <AcadFramework Condition="'$(AcadFramework)' == ''">net10.0-windows</AcadFramework>
+    <TargetFramework>$(AcadFramework)</TargetFramework>
+    <AssemblyName>MantlePlace.Scratch.Civil3dProbe</AssemblyName>
+    <RootNamespace>MantlePlace.AutoCad.Civil3dSpike</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);CA1416;MSB3277</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" />
+    <Compile Include="Civil3dProbe.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="accoremgd"><HintPath>$(AcadDir)\accoremgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="acdbmgd"><HintPath>$(AcadDir)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The spike's Civil 3D half (../README.md): the only assembly here that references Civil 3D, loaded
+    by the probe only after its presence test says Civil 3D is loaded in the process, as the plugin's
+    Civil 3D part will be. Built against the same year as ../Probe/.
+  -->
+
+  <PropertyGroup>
+    <AcadYear Condition="'$(AcadYear)' == ''">2027</AcadYear>
+    <AcadDir Condition="'$(AcadDir)' == ''">$(ProgramFiles)\Autodesk\AutoCAD $(AcadYear)</AcadDir>
+    <AcadFramework Condition="'$(AcadFramework)' == ''">net10.0-windows</AcadFramework>
+    <TargetFramework>$(AcadFramework)</TargetFramework>
+    <AssemblyName>MantlePlace.Scratch.Civil3dPart</AssemblyName>
+    <RootNamespace>MantlePlace.AutoCad.Civil3dSpike</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);CA1416;MSB3277</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" />
+    <Compile Include="Civil3dPart.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="accoremgd"><HintPath>$(AcadDir)\accoremgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="acdbmgd"><HintPath>$(AcadDir)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AecBaseMgd"><HintPath>$(AcadDir)\ACA\AecBaseMgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AeccDbMgd"><HintPath>$(AcadDir)\C3D\AeccDbMgd.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+</Project>
