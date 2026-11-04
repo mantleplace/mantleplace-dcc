@@ -24,13 +24,14 @@ internal sealed record OrderImportResult(AutoCadImportPlan Plan, string Summary,
 /// <para>
 /// <b>Everything is checked before anything is drawn</b> (HPS-26): each placed part's file is found and
 /// its bytes matched to its published digest first, and a mismatch refuses the whole import with nothing
-/// in the drawing. The aerial goes in before the contours so the linework draws over the image.
+/// in the drawing. The aerial goes in before the contours so the linework draws over the image, and the
+/// public-record layers and the site linework go in last, over both.
 /// </para>
 /// <para>
 /// The aerial is an external reference, as every AutoCAD raster image is, so its file is extracted to the
 /// order's retained cache folder (<see cref="ExtractionLifetime.Retained"/>), which a later import of
-/// another order does not touch. The contours file is read and dropped, and so is the surface's LandXML
-/// once Civil 3D has built the surface from it.
+/// another order does not touch. The contours, record and linework drawings are read and dropped, and so
+/// is the surface's LandXML once Civil 3D has built the surface from it.
 /// </para>
 /// <para>
 /// <b>Civil 3D is observed through its part alone.</b> When the presence test lets the part load, the part
@@ -87,31 +88,54 @@ internal static class OrderImporter
 
         // Found and verified, all of them, before the drawing is touched.
         Dictionary<AutoCadPart, string> files = [];
+        List<(PlannedFile File, string Path)> recordFiles = [];
         Dictionary<AutoCadPart, string> outcomes = [];
         foreach (PlannedPart part in plan.Parts.Where(p => p.Place))
         {
-            if (AutoCadBundleEntries.Resolve(archive.EntryNames, part.Path) is not { } entry)
+            // The records are several files, one per layer; every other part is one.
+            IEnumerable<(string Path, string Sha256, PlannedFile? File)> wanted = part.Kind == AutoCadPart.Records
+                ? part.Files.Select(f => (f.Path, f.Sha256, (PlannedFile?)f))
+                : [(part.Path, part.Sha256, null)];
+
+            List<(PlannedFile File, string Path)> extracted = [];
+            foreach ((string path, string sha256, PlannedFile? file) in wanted)
             {
-                outcomes[part.Kind] = AutoCadImportPlanner.FailedSentence(part.Kind, $"the bundle does not hold {part.Path}.");
-                continue;
+                if (AutoCadBundleEntries.Resolve(archive.EntryNames, path) is not { } entry)
+                {
+                    outcomes[part.Kind] = AutoCadImportPlanner.FailedSentence(part.Kind, $"the bundle does not hold {path}.");
+                    extracted.Clear();
+                    break;
+                }
+
+                ExtractionLifetime lifetime = part.Kind == AutoCadPart.Aerial ? ExtractionLifetime.Retained : ExtractionLifetime.Transient;
+                string local;
+                try
+                {
+                    local = archive.Extract(entry, lifetime, sha256);
+                }
+                catch (InvalidOperationException integrity)
+                {
+                    AutoCadImportPlan refused = new()
+                    {
+                        OrderId = plan.OrderId,
+                        JobId = plan.JobId,
+                        Frame = plan.Frame,
+                        Refusal = integrity.Message,
+                    };
+                    return new OrderImportResult(refused, refused.Summary(), false);
+                }
+
+                if (file is null)
+                {
+                    files[part.Kind] = local;
+                }
+                else
+                {
+                    extracted.Add((file, local));
+                }
             }
 
-            ExtractionLifetime lifetime = part.Kind == AutoCadPart.Aerial ? ExtractionLifetime.Retained : ExtractionLifetime.Transient;
-            try
-            {
-                files[part.Kind] = archive.Extract(entry, lifetime, part.Sha256);
-            }
-            catch (InvalidOperationException integrity)
-            {
-                AutoCadImportPlan refused = new()
-                {
-                    OrderId = plan.OrderId,
-                    JobId = plan.JobId,
-                    Frame = plan.Frame,
-                    Refusal = integrity.Message,
-                };
-                return new OrderImportResult(refused, refused.Summary(), false);
-            }
+            recordFiles.AddRange(extracted);
         }
 
         bool placedAnything = false;
@@ -133,6 +157,18 @@ internal static class OrderImporter
             {
                 PlannedPart contours = plan.Part(AutoCadPart.Contours);
                 outcomes[AutoCadPart.Contours] = Run(AutoCadPart.Contours, () => PlaceContours(database, dxf, contours), null, ref placedAnything);
+            }
+
+            if (recordFiles.Count > 0)
+            {
+                PlannedPart records = plan.Part(AutoCadPart.Records);
+                outcomes[AutoCadPart.Records] = Run(AutoCadPart.Records, () => PlaceRecords(database, recordFiles, records), null, ref placedAnything);
+            }
+
+            if (files.TryGetValue(AutoCadPart.Linework, out string? linework))
+            {
+                PlannedPart lines = plan.Part(AutoCadPart.Linework);
+                outcomes[AutoCadPart.Linework] = Run(AutoCadPart.Linework, () => PlaceLinework(database, linework, lines), null, ref placedAnything);
             }
         }
 
@@ -200,35 +236,87 @@ internal static class OrderImporter
     /// <summary>The contours as lightweight polylines on their layer, each at its published height.</summary>
     private static string PlaceContours(Database database, string dxfPath, PlannedPart part)
     {
-        IReadOnlyList<PublishedContour>? contours;
-        using (StreamReader reader = File.OpenText(dxfPath))
-        {
-            if (PublishedContourReader.TryParse(reader, out contours) is { } problem)
-            {
-                throw new PartRefusedException(problem);
-            }
-        }
+        IReadOnlyList<PublishedContour> contours = ReadPolylines(dxfPath, "contours");
+
+        using Transaction transaction = database.TransactionManager.StartTransaction();
+        int placed = AppendPolylines(database, transaction, contours, _ => part.Layer);
+        transaction.Commit();
+        return AutoCadImportPlanner.ContoursPlacedSentence(part, placed);
+    }
+
+    /// <summary>
+    /// Each public-record layer's polylines on that layer's own layer, as its file holds them. Every file is
+    /// read before anything is drawn, so a file the reader refuses leaves no record layer half placed.
+    /// </summary>
+    private static string PlaceRecords(Database database, IReadOnlyList<(PlannedFile File, string Path)> files, PlannedPart part)
+    {
+        List<(PlannedFile File, IReadOnlyList<PublishedContour> Polylines)> read = [.. files.Select(f => (f.File, ReadPolylines(f.Path, f.File.Name)))];
 
         int placed = 0;
         using Transaction transaction = database.TransactionManager.StartTransaction();
-        ObjectId layer = EnsureLayer(database, transaction, part.Layer);
-        BlockTableRecord model = (BlockTableRecord)transaction.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
-
-        foreach (PublishedContour contour in contours!)
+        foreach ((PlannedFile file, IReadOnlyList<PublishedContour> polylines) in read)
         {
-            if (contour.Vertices.Count < 2)
+            placed += AppendPolylines(database, transaction, polylines, _ => file.Layer);
+        }
+
+        transaction.Commit();
+        return AutoCadImportPlanner.RecordsPlacedSentence(part, placed);
+    }
+
+    /// <summary>The site linework's polylines under its layer, each on the layer the drawing puts it on.</summary>
+    private static string PlaceLinework(Database database, string dxfPath, PlannedPart part)
+    {
+        IReadOnlyList<PublishedContour> polylines = ReadPolylines(dxfPath, "site linework");
+
+        using Transaction transaction = database.TransactionManager.StartTransaction();
+        int placed = AppendPolylines(database, transaction, polylines, p => AutoCadLayers.LineworkLayer(p.Layer));
+        transaction.Commit();
+
+        int layers = polylines.Where(p => p.Vertices.Count >= 2).Select(p => AutoCadLayers.LineworkLayer(p.Layer)).Distinct(StringComparer.Ordinal).Count();
+        return AutoCadImportPlanner.LineworkPlacedSentence(part, placed, layers);
+    }
+
+    /// <summary>A drawing of flat polylines, read whole; a file the reader refuses refuses the part, by name.</summary>
+    private static IReadOnlyList<PublishedContour> ReadPolylines(string dxfPath, string drawing)
+    {
+        using StreamReader reader = File.OpenText(dxfPath);
+        return PublishedContourReader.TryParse(reader, drawing, out IReadOnlyList<PublishedContour>? polylines, out _) is { } problem
+            ? throw new PartRefusedException(problem)
+            : polylines!;
+    }
+
+    /// <summary>
+    /// Lightweight polylines into model space, vertices and elevation as the file holds them, each on the layer
+    /// <paramref name="layerFor"/> names. Returns how many went in; a polyline of fewer than two vertices is no line.
+    /// </summary>
+    private static int AppendPolylines(Database database, Transaction transaction, IReadOnlyList<PublishedContour> polylines, Func<PublishedContour, string> layerFor)
+    {
+        BlockTableRecord model = (BlockTableRecord)transaction.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
+        Dictionary<string, ObjectId> layers = new(StringComparer.Ordinal);
+
+        int placed = 0;
+        foreach (PublishedContour source in polylines)
+        {
+            if (source.Vertices.Count < 2)
             {
                 continue;
             }
 
-            Polyline polyline = new();
-            for (int i = 0; i < contour.Vertices.Count; i++)
+            string name = layerFor(source);
+            if (!layers.TryGetValue(name, out ObjectId layer))
             {
-                polyline.AddVertexAt(i, new Point2d(contour.Vertices[i].X, contour.Vertices[i].Y), 0, 0, 0);
+                layer = EnsureLayer(database, transaction, name);
+                layers[name] = layer;
             }
 
-            polyline.Closed = contour.IsClosed;
-            polyline.Elevation = contour.Elevation;
+            Polyline polyline = new();
+            for (int i = 0; i < source.Vertices.Count; i++)
+            {
+                polyline.AddVertexAt(i, new Point2d(source.Vertices[i].X, source.Vertices[i].Y), 0, 0, 0);
+            }
+
+            polyline.Closed = source.IsClosed;
+            polyline.Elevation = source.Elevation;
             polyline.LayerId = layer;
 
             _ = model.AppendEntity(polyline);
@@ -236,8 +324,7 @@ internal static class OrderImporter
             placed++;
         }
 
-        transaction.Commit();
-        return AutoCadImportPlanner.ContoursPlacedSentence(part, placed);
+        return placed;
     }
 
     /// <summary>The aerial at its published insertion: lower-left corner, ground size, rotation about that corner.</summary>

@@ -15,6 +15,9 @@ internal static class AutoCadImportPlanTests
     private const string ContoursAbsent = "manifest/autocad-contours-absent.json";
     private const string LocalFrame = "manifest/autocad-local-frame-offsets.json";
     private const string SurfaceAbsent = "manifest/autocad-surface-absent.json";
+    private const string RecordsPresent = "manifest/autocad-records-linework-present.json";
+    private const string RecordsNotReady = "manifest/autocad-records-linework-not-ready.json";
+    private const string RecordsAbsent = "manifest/autocad-records-linework-absent.json";
 
     internal static int Run()
     {
@@ -387,6 +390,121 @@ internal static class AutoCadImportPlanTests
 
             run.False(surface.Place, "skipped");
             run.Contains(surface.Sentence, "infraworks", "the part, named");
+        });
+
+        // --- The public-record layers and the site linework (format.md §6.10) ---
+
+        run.Case("each public-record layer is placed on its own layer, from the block's pointer", () =>
+        {
+            PlannedPart records = Plan(Fixture(RecordsPresent), DrawingGeolocation.None).Part(AutoCadPart.Records);
+
+            run.True(records.Place, records.Sentence);
+            run.Equal(records.Files.Count, 2, "the two layers the block lists");
+            run.Equal(records.Files[0].Layer, "MantlePlace-Records-parcels", "parcels, spelled out");
+            run.Equal(records.Files[1].Layer, "MantlePlace-Records-zoning", "zoning");
+            run.Equal(records.Files[0].Sha256, "4444444444444444444444444444444444444444444444444444444444444444", "the digest it is checked against");
+            run.Contains(records.Sentence, "parcels", "the layers, named");
+            run.Contains(records.Sentence, "zoning", "the layers, named");
+        });
+
+        run.Case("the site linework is placed as polylines, its layers under the linework layer", () =>
+        {
+            PlannedPart linework = Plan(Fixture(RecordsPresent), DrawingGeolocation.None).Part(AutoCadPart.Linework);
+
+            run.True(linework.Place, linework.Sentence);
+            run.Equal(linework.Path, "Drawings/Linework.dxf", "the block's pointer");
+            run.Equal(linework.Layer, AutoCadLayers.Linework, "the linework layer");
+            run.Equal(AutoCadLayers.LineworkLayer("Roads"), "MantlePlace-Linework-Roads", "a layer the file names goes under it");
+            run.Equal(AutoCadLayers.LineworkLayer("0"), AutoCadLayers.Linework, "layer 0 is the linework layer itself");
+            run.Equal(AutoCadLayers.LineworkLayer(string.Empty), AutoCadLayers.Linework, "and so is no layer");
+        });
+
+        run.Case("a layer name carries only characters AutoCAD accepts in one", () =>
+        {
+            run.Equal(AutoCadLayers.Record("flood/zones:a"), "MantlePlace-Records-flood-zones-a", "slash and colon become dashes");
+            run.Equal(AutoCadLayers.LineworkLayer("Roads <minor>"), "MantlePlace-Linework-Roads -minor-", "angle brackets too, spaces kept");
+        });
+
+        run.Case("a record layer not in the block's units skips the records, naming it, and the linework still goes in", () =>
+        {
+            JsonObject manifest = Fixture(RecordsPresent);
+            Block(manifest)["records"]!["layers"]![1]!["horizontal_units"] = "m";
+
+            AutoCadImportPlan plan = Plan(manifest, DrawingGeolocation.None);
+            PlannedPart records = plan.Part(AutoCadPart.Records);
+
+            run.False(plan.IsRefused, "a skipped part is not a refusal");
+            run.False(records.Place, "skipped: the set is placed whole or not at all");
+            run.Contains(records.Sentence, "zoning", "the layer, named");
+            run.Contains(records.Sentence, "does not convert", "why");
+            run.True(plan.Part(AutoCadPart.Linework).Place, "the linework is decided apart");
+        });
+
+        run.Case("a record layer in another frame is skipped, never reprojected (HPS-53)", () =>
+        {
+            JsonObject manifest = Fixture(RecordsPresent);
+            Block(manifest)["records"]!["layers"]![0]!["horizontal_frame"] = "local_enu";
+
+            PlannedPart records = Plan(manifest, DrawingGeolocation.None).Part(AutoCadPart.Records);
+
+            run.False(records.Place, "skipped");
+            run.Contains(records.Sentence, "HPS-53", "why");
+        });
+
+        run.Case("linework whose height unit the plugin does not know is skipped, naming it", () =>
+        {
+            JsonObject manifest = Fixture(RecordsPresent);
+            Block(manifest)["linework"]!["vertical_units"] = "furlong";
+
+            PlannedPart linework = Plan(manifest, DrawingGeolocation.None).Part(AutoCadPart.Linework);
+
+            run.False(linework.Place, "skipped");
+            run.Contains(linework.Sentence, "furlong", "the unit, named");
+        });
+
+        run.Case("records the verdict calls present but with no layer listed are skipped, not guessed", () =>
+        {
+            JsonObject manifest = Fixture(RecordsPresent);
+            Block(manifest)["records"]!["layers"] = new JsonArray();
+
+            PlannedPart records = Plan(manifest, DrawingGeolocation.None).Part(AutoCadPart.Records);
+
+            run.False(records.Place, "skipped");
+            run.Contains(records.Sentence, "names no file", "why");
+        });
+
+        run.Case("records and linework that are not ready are notices with the bundle's reasons, and the rest is planned", () =>
+        {
+            AutoCadImportPlan plan = Plan(Fixture(RecordsNotReady), DrawingGeolocation.None);
+            string summary = plan.Summary();
+
+            run.False(plan.IsRefused, "not a failure");
+            run.True(plan.Part(AutoCadPart.Contours).Place, "the contours still go in");
+            run.Contains(summary, "Public-record layers: not in this bundle: " + ReadinessReasons.ClauseFor("not_produced"), "the records' reason");
+            run.Contains(summary, "Site linework: not in this bundle: " + ReadinessReasons.ClauseFor("not_selected"), "the linework's reason");
+        });
+
+        run.Case("a block from before 1.19.0 has neither, says the bundle gave no verdict, and imports the rest", () =>
+        {
+            AutoCadImportPlan plan = Plan(Fixture(RecordsAbsent), DrawingGeolocation.None);
+
+            run.False(plan.IsRefused, "not a failure");
+            run.True(plan.Part(AutoCadPart.Contours).Place, "the contours still go in");
+            run.Contains(plan.Part(AutoCadPart.Records).Sentence, "states no verdict", "the records");
+            run.Contains(plan.Part(AutoCadPart.Linework).Sentence, "states no verdict", "the linework");
+        });
+
+        run.Case("placed records and linework say what went in", () =>
+        {
+            AutoCadImportPlan plan = Plan(Fixture(RecordsPresent), DrawingGeolocation.None);
+
+            string records = AutoCadImportPlanner.RecordsPlacedSentence(plan.Part(AutoCadPart.Records), 17);
+            string linework = AutoCadImportPlanner.LineworkPlacedSentence(plan.Part(AutoCadPart.Linework), 230, 4);
+
+            run.Contains(records, "17 polylines", "the count");
+            run.Contains(records, "2 layers", "over the record layers");
+            run.Contains(linework, "230 polylines", "the count");
+            run.Contains(linework, "4 layers", "over the file's layers");
         });
 
         // --- The block itself ---

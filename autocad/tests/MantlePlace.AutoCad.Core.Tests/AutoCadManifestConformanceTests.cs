@@ -58,6 +58,19 @@ internal static class AutoCadManifestConformanceTests
         "autocadReadinessContoursPresent",
         "autocadReadinessSurfacePresent",
         "autocadReadinessAerialPresent",
+        "autocadRecordsPresent",
+        "autocadRecordsAbsentReason",
+        "autocadRecordsVerdictStated",
+        "autocadRecordsLayers",
+        "autocadReadinessRecordsPresent",
+        "autocadLineworkPresent",
+        "autocadLineworkAbsentReason",
+        "autocadLineworkVerdictStated",
+        "autocadLineworkPath",
+        "autocadLineworkHorizontalFrame",
+        "autocadLineworkHorizontalUnits",
+        "autocadLineworkVerticalUnits",
+        "autocadReadinessLineworkPresent",
     ];
 
     internal static int Run()
@@ -127,6 +140,11 @@ internal static class AutoCadManifestConformanceTests
         foreach (string problem in ConformanceCorpus.UnassertedExpectations(corpusCase, ConsumedExpectationKeys))
         {
             run.Fail($"{problem} (HPS-46).");
+        }
+
+        foreach (string problem in ConformanceCorpus.UnassertedNestedExpectations(corpusCase))
+        {
+            run.Fail(problem);
         }
     }
 
@@ -229,6 +247,96 @@ internal static class AutoCadManifestConformanceTests
         if (ConformanceCorpus.WantsBool(corpusCase, "autocadReadinessAerialPresent", out bool aerialReady))
         {
             run.Equal(aerial.Ready, aerialReady, $"{host}: the aerial's verdict");
+        }
+
+        AssertRecords(run, corpusCase, plan.Part(AutoCadPart.Records), host);
+        AssertLinework(run, corpusCase, plan.Part(AutoCadPart.Linework), host);
+    }
+
+    private static void AssertRecords(TestRun run, CorpusCase corpusCase, PlannedPart records, string host)
+    {
+        if (ConformanceCorpus.WantsBool(corpusCase, "autocadRecordsPresent", out bool present))
+        {
+            run.Equal(records.Present, present, $"{host}: the public-record layers are present");
+            run.Equal(records.Place, present, $"{host}: the public-record layers are placed exactly when present ({records.Sentence})");
+        }
+
+        AssertAbsentReason(run, corpusCase, "autocadRecordsAbsentReason", records, host);
+        AssertVerdictStated(run, corpusCase, "autocadRecordsVerdictStated", records, host);
+
+        if (ConformanceCorpus.WantsRows(corpusCase, "autocadRecordsLayers", out IReadOnlyList<ExpectationNode> rows))
+        {
+            run.Equal(records.Files.Count, rows.Count, $"{host}: the record layers the block lists, and no others");
+            for (int i = 0; i < rows.Count; i++)
+            {
+                ExpectationNode row = rows[i];
+                PlannedFile? file = i < records.Files.Count ? records.Files[i] : null;
+                string where = $"{host}: autocadRecordsLayers[{i}]";
+                run.Equal(file?.Name, row.Str("name"), $"{where}.name");
+                run.Equal(file?.Path, row.Str("path"), $"{where}.path");
+                run.Equal(file?.HorizontalFrame, row.Str("horizontalFrame"), $"{where}.horizontalFrame");
+                run.Equal(file?.HorizontalUnits, row.Str("horizontalUnits"), $"{where}.horizontalUnits, from the pointer");
+                run.Equal(file?.VerticalUnits, row.Str("verticalUnits"), $"{where}.verticalUnits, from the pointer");
+                run.Equal(file?.Layer, AutoCadLayers.Record(row.Str("name") ?? string.Empty), $"{where}: on its own layer");
+            }
+        }
+
+        if (ConformanceCorpus.WantsBool(corpusCase, "autocadReadinessRecordsPresent", out bool ready))
+        {
+            run.Equal(records.Ready, ready, $"{host}: the public-record layers' verdict");
+        }
+    }
+
+    private static void AssertLinework(TestRun run, CorpusCase corpusCase, PlannedPart linework, string host)
+    {
+        if (ConformanceCorpus.WantsBool(corpusCase, "autocadLineworkPresent", out bool present))
+        {
+            run.Equal(linework.Present, present, $"{host}: the site linework is present");
+            run.Equal(linework.Place, present, $"{host}: the site linework is placed exactly when present ({linework.Sentence})");
+        }
+
+        AssertAbsentReason(run, corpusCase, "autocadLineworkAbsentReason", linework, host);
+        AssertVerdictStated(run, corpusCase, "autocadLineworkVerdictStated", linework, host);
+
+        if (ConformanceCorpus.WantsString(corpusCase, "autocadLineworkPath", out string path))
+        {
+            run.Equal(linework.Path, path, $"{host}: the linework's path");
+            run.Equal(linework.Layer, AutoCadLayers.Linework, $"{host}: the linework's layer");
+        }
+
+        if (ConformanceCorpus.WantsString(corpusCase, "autocadLineworkHorizontalFrame", out string frame))
+        {
+            run.Equal(linework.HorizontalFrame, frame, $"{host}: the linework's horizontal frame");
+        }
+
+        if (ConformanceCorpus.WantsString(corpusCase, "autocadLineworkHorizontalUnits", out string x))
+        {
+            run.Equal(linework.HorizontalUnits, x, $"{host}: the linework's X/Y unit, from the pointer");
+        }
+
+        if (ConformanceCorpus.WantsString(corpusCase, "autocadLineworkVerticalUnits", out string z))
+        {
+            run.Equal(linework.VerticalUnits, z, $"{host}: the linework's height unit, from the pointer");
+        }
+
+        if (ConformanceCorpus.WantsBool(corpusCase, "autocadReadinessLineworkPresent", out bool ready))
+        {
+            run.Equal(linework.Ready, ready, $"{host}: the linework's verdict");
+        }
+    }
+
+    private static void AssertVerdictStated(TestRun run, CorpusCase corpusCase, string key, PlannedPart part, string host)
+    {
+        if (!ConformanceCorpus.WantsBool(corpusCase, key, out bool stated))
+        {
+            return;
+        }
+
+        run.Equal(part.VerdictStated, stated, $"{host}: {key}");
+        if (!stated)
+        {
+            run.False(part.Place, $"{host}: a part with no verdict is skipped");
+            run.Contains(part.Sentence, "states no verdict", $"{host}: and says the bundle gave none");
         }
     }
 

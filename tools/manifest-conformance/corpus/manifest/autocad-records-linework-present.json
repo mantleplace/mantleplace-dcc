@@ -1,0 +1,98 @@
+{
+  "version": "1.19.0",
+  "location": {
+    "time_zone": {
+      "iana": "America/Denver",
+      "utc_offset_standard_h": -7,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    }
+  },
+  "delivery": {
+    "unit_system": "imperial",
+    "tier": "sp_ftus",
+    "horizontal_epsg": 2231,
+    "linear_unit": "ftUS",
+    "label": "NAD83 / Colorado North (ftUS)"
+  },
+  "job_id": "autocad-records-linework",
+  "order_id": "ord-autocad-records-linework-1",
+  "layout": {
+    "parcels_dxf": "Records/Parcels/Parcels.dxf",
+    "zoning_dxf": "Records/Zoning/Zoning.dxf",
+    "wetlands_dxf": "Records/Wetlands/Wetlands.dxf"
+  },
+  "hosts": {
+    "autocad": {
+      "host_min_version": "2025",
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:2231",
+        "horizontal_unit": "ftUS",
+        "vertical_unit": "ft"
+      },
+      "contours": {
+        "path": "Surface/Contours.dxf",
+        "horizontal_frame": "absolute_projected",
+        "vertical_reference": "absolute",
+        "horizontal_units": "ftUS",
+        "vertical_units": "ft",
+        "vertical_datum": "NAVD88 (GEOID18)",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "records": {
+        "layers": [
+          {
+            "name": "parcels",
+            "path": "Records/Parcels/Parcels.dxf",
+            "horizontal_frame": "absolute_projected",
+            "horizontal_units": "ftUS",
+            "vertical_units": "ft",
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          {
+            "name": "zoning",
+            "path": "Records/Zoning/Zoning.dxf",
+            "horizontal_frame": "absolute_projected",
+            "horizontal_units": "ftUS",
+            "vertical_units": "ft",
+            "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        ]
+      },
+      "linework": {
+        "path": "Drawings/Linework.dxf",
+        "horizontal_frame": "absolute_projected",
+        "horizontal_units": "ftUS",
+        "vertical_units": "ft",
+        "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "readiness": {
+        "contours": {
+          "present": true
+        },
+        "surface": {
+          "present": false,
+          "reason": "not_selected",
+          "requires": "civil3d"
+        },
+        "aerial": {
+          "present": false,
+          "reason": "not_selected"
+        },
+        "records": {
+          "present": true
+        },
+        "linework": {
+          "present": true
+        }
+      }
+    }
+  },
+  "elevation": {
+    "contours": {
+      "units": "ft",
+      "vertical_datum": "NAVD88 (GEOID18)"
+    }
+  }
+}

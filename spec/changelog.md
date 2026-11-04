@@ -132,6 +132,28 @@ name every file by the six rules; write `file_entries` with a frame, a role, a l
 for every file; give a licence as an SPDX expression; ship a STAC Item beside the manifest; and
 state version `2.0.0` as a JSON string.
 
+### 1.19.0 — the AutoCAD block's public-record layers and site linework (additive minor; not yet published)
+
+Two parts are added to `hosts.autocad`, a MINOR under [compatibility](compatibility.md) §2. Nothing is
+removed, re-typed or re-meant, and every host floor at 1.0.0 reads it: a reader that does not read
+`hosts.autocad` is unaffected, and one that does and predates these members ignores them as unknown
+members. The first-party plugins' re-pin follows when the schema is published, as for 1.18.0.
+[`format.md`](format.md) §6.10 explains the members; this entry lists them.
+
+- **`records`**, the public-record layers in the block's `file_frame`, as `records.layers`: each a
+  `name` and a pointer to its drawing (`path`, `sha256`, `horizontal_frame`, `horizontal_units`,
+  `vertical_units`), its X/Y unit and its heights' unit stated apart. The set is all or nothing.
+- **`linework`**, a pointer to the site linework drawing with the same members and no `name`. Present
+  only when the drawing is in the block's `file_frame`.
+- **`readiness.records`** and **`readiness.linework`**, a §6.1 verdict each; `records` is one verdict
+  for the set.
+
+What a reader does differently: a reader of `hosts.autocad` that places these takes both units from
+the pointer and not from the drawing, finds the drawings through the block and never through
+`layout` or a folder, and treats a part that is not ready as a notice, not a failure. A bundle built
+before 1.19.0 carries neither part and no verdict for either, and a reader says the bundle states none
+and places the rest.
+
 ### 1.18.0 — the AutoCAD host block, for AutoCAD and Civil 3D (additive minor; not yet published)
 
 One block is added: `hosts.autocad`, a new `hosts.<hostId>` sub-block, which is a MINOR under

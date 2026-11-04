@@ -105,6 +105,15 @@
     "manifest.autocadLocalFrameOffsets": [
       "autocad"
     ],
+    "manifest.autocadRecordsLineworkAbsent": [
+      "autocad"
+    ],
+    "manifest.autocadRecordsLineworkNotReady": [
+      "autocad"
+    ],
+    "manifest.autocadRecordsLineworkPresent": [
+      "autocad"
+    ],
     "manifest.autocadSurfaceAbsentNeedsCivil3d": [
       "autocad"
     ],

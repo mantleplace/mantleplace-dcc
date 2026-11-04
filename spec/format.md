@@ -612,6 +612,36 @@ whether or not the file shipped, so the answer is the same on an order whose sur
 What a host does with a part it cannot show to be in its frame is the host standard's (`HPS-52`,
 `HPS-53`), not this document's.
 
+### 6.10 The AutoCAD block's public records and site linework (from 1.19.0)
+
+From 1.19.0 the AutoCAD block carries two parts more, each with its own pointer and its own readiness
+verdict, so a plugin can place the order's public-record layers and its site linework as drawings,
+from its own block and nothing else (§4.2):
+
+- **`hosts.autocad.records`** lists the public-record layers in the block's `file_frame`, one entry
+  per layer in `records.layers`. Each entry is a `name`, the record layer it is (`parcels`,
+  `zoning`), and a pointer to that layer's drawing: `path`, `sha256`, `horizontal_frame`
+  (`absolute_projected`, or offsets about the origin), and `horizontal_units` for X and Y and
+  `vertical_units` for any heights the drawing carries, **stated apart**, as the contours state
+  theirs (§6.9). The names grow additively, and a reader places a name it does not know under that
+  name. The set is all or nothing: a layer missing from it is one the order delivers no drawing for,
+  and the record pointers ([changelog](changelog.md), 1.11.0) say who holds a record a bundle does
+  not deliver; a layer whose drawing is not in the frame withholds the whole set, and the verdict
+  says the records are absent and why.
+- **`hosts.autocad.linework`** names the site linework drawing, with the same members as a record
+  layer's pointer but no `name`. It is present only when the drawing is in the block's `file_frame`.
+
+A reader takes both units from the pointer, never from the drawing, which states one unit for all
+of it, and never from the neutral `layout` or a folder: a drawing `layout` names that the block does
+not is not one the block has shown to be in its frame (§3).
+
+**Readiness.** `hosts.autocad.readiness` states `records` and `linework` beside the three parts of
+§6.9, each as the §6.1 verdict: `present`, and when not, the stated `reason`, echoed and never
+matched on. `records` is one verdict for the set, not one per layer. A part that is not ready is a
+notice to the user, never a reason to refuse the order. A bundle built before 1.19.0 carries neither
+pointer and neither verdict, which is a well-formed block: a reader says the bundle states no
+verdict for them and places the parts it does carry.
+
 ## 7. The sidecar manifest
 
 The vault publishes a versioned copy of the manifest beside the zip, so that a listing can show a

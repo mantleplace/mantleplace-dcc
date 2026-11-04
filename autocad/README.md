@@ -49,8 +49,14 @@ is worked out in AutoCAD:
 - **The surface, in Civil 3D only.** Civil 3D builds a TIN surface from the order's LandXML, on the
   `MantlePlace-Surface` layer. In plain AutoCAD, and in Civil 3D started as AutoCAD, the import says
   the surface needs Civil 3D and places the rest.
-- **What is skipped.** A part the bundle does not carry is skipped with the bundle's own reason. Public-record
-  layers and site linework are not in the order's AutoCAD block, so they are not imported.
+- **Public-record layers**, such as parcels and zoning, as polylines, each record on its own
+  `MantlePlace-Records-<name>` layer.
+- **Site linework**, as polylines under the `MantlePlace-Linework` layer, each on a layer named for the
+  one the drawing puts it on (`MantlePlace-Linework-Roads`).
+- **What is skipped.** A part the bundle does not carry is skipped with the bundle's own reason, and the
+  rest goes in. A bundle made before the AutoCAD block carried public-record layers and site linework
+  names neither, and the import says so. A drawing holding something other than polylines (a hatch, an
+  arc) is skipped by name rather than placed in part.
 - **Checked first.** Every file is matched to its published digest before anything is drawn; a
   mismatch places nothing.
 
