@@ -49,6 +49,13 @@ Read `index.json`, iterate `cases`, and dispatch on `group` + `expect`:
 
 A case with `appliesTo` asserts one host's manifest block; every other host skips it (`HPS-41`).
 
+`appliesTo` names a host registered in `verified-against.json`, or a planned one whose plugin has not
+landed (`_PLANNED_HOSTS` in `check_manifest_conformance.py`). No registered host covers a planned
+host's case, so the baseline records it as `[]` until the host registers; registering removes the name
+from that set and updates the baseline. `autocad` is the one planned host today: its `hosts.autocad`
+cases (`manifest.autocad*`) assert only values the block states, so a plain AutoCAD reader and a
+Civil 3D reader both run them.
+
 Numeric tolerances are stated in the case (`landscapeSpawnToleranceCm`, `toleranceMetres`); do not
 invent tighter ones, and do not compare floats exactly.
 
@@ -122,6 +129,30 @@ The 2.0 cases hold every 2.0 bundle to the folder allowlist and the naming rules
 whole, each rule a validator can check has a case that breaks it, and the allowlist's two
 warnings, an unlisted folder and a stray root file, are accept cases.
 
+## The Platform API groups (`platform/`, `client/`)
+
+These two groups hold **exchanges** with the Platform API, not documents a parser reads: one request
+a host sends and the answer the platform gives. `platform` holds the Quote and the order refusals;
+`client` holds the answer any call can get, `client_update_required`. A case file is:
+
+| Field | What it holds |
+| --- | --- |
+| `operationId` | the operation in the served spec (`https://mantle.place/api/v1/openapi.json`) |
+| `request` | `method`, `path`, and the `query`, `headers` and JSON `body` the host sends; `omits` names a required parameter the case leaves out on purpose |
+| `response` | the `status` and JSON `body` the platform answers with |
+
+A host replays the request through its client against a stub that answers with the response, and
+asserts what it sent and what it read. `expect` is `accept` for a success and `reject` for a
+refusal; `expectations` name the values read (`status`, `code`, `handoffUrl`, and so on).
+
+`check_manifest_conformance.py` holds every case to the spec's own schemas: the operation, its
+parameters, the request body, the status and the response body (`platform_cases.py`). A pull
+request reads the vendored copy beside the generated .NET client, which `ci-platform-api` keeps
+equal to the served one; the scheduled live run reads the served copy too. The spec the cases were
+checked against is recorded twice, as its `info.version` and the sha256 of its canonical text: in
+`coverage-baseline.json` (`platformApi`) and in each claiming host's `verifiedAgainstPlatformApi`.
+When the spec moves, the gate fails until the cases are re-checked and both records raised.
+
 ## The self-test corpus (`self-test/`)
 
 `self-test/` holds deliberately broken index and case fixtures that every host's corpus **reader**
@@ -144,6 +175,7 @@ host may ever consume.
 | `digest`     | `MantlePlaceSha256Test.cpp` + the cache suite (NIST FIPS 180-4 known answers)                                     |
 | `projection` | `MantlePlaceRoadSplinesLogicTest.cpp` (`mesh.origin` of the reference fixture)                                    |
 | `bundle`     | written for the bundle validator; the manifests start from the platform's minimal readiness-only manifest          |
+| `platform`, `client` | written against the served Platform API spec; synthetic values throughout                          |
 
 "Lifted from" means the _assertions_ came from those files, not that every fixture is byte-identical
 to its C++ literal. Where a vector was renamed or padded for readability (placeholder sha values,

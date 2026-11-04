@@ -1,0 +1,57 @@
+# Manifest drift tracker: when the published bundle-manifest schema moves past verified-against.json,
+# keep ONE open tracking issue naming the new version, so the drift surfaces once instead of turning
+# every run red. The conformance gate's scheduled live run still reports the detail; this files it.
+#
+# Equal pins: nothing happens. Ahead: the open issue carrying the marker is edited, else one is opened.
+name: manifest-drift
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: manifest-drift
+  cancel-in-progress: false
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test the drift report
+        run: python -m unittest discover -s tools/manifest-conformance -p "test_drift_report.py" -v
+
+      - name: Compare the published schema with verified-against.json
+        run: python tools/manifest-conformance/drift_report.py > "$RUNNER_TEMP/drift.json"
+
+      - name: Open or update the one tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/drift.json" ]; then
+            echo "Pins are level with the published schema; nothing to do."
+            exit 0
+          fi
+          title=$(jq -r .title "$RUNNER_TEMP/drift.json")
+          jq -r .body "$RUNNER_TEMP/drift.json" > "$RUNNER_TEMP/drift-body.md"
+          existing=$(gh issue list --state open --search '"manifest-drift-tracker" in:body' \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --title "$title" --body-file "$RUNNER_TEMP/drift-body.md"
+            echo "Updated issue #$existing."
+          else
+            gh issue create --title "$title" --body-file "$RUNNER_TEMP/drift-body.md"
+          fi

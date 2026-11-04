@@ -281,6 +281,9 @@ namespace MantlePlaceImportNaming
 	/** `MP_<Kind>_<shortIdentity>`. See ADR 0003 for why the abbreviation is allowed here. */
 	FString ActorLabel(EActorKind Kind, const FString& Identity);
 
+	/** `MP_ExtentBox` -- the label of an Extent box placed for Open in curator. Not an import's: no identity, no tag. */
+	FString ExtentBoxLabel();
+
 	/** `MP_RoadSpline_<shortIdentity>_` — the common prefix of every road spline label. */
 	FString RoadSplineLabelPrefix(const FString& Identity);
 

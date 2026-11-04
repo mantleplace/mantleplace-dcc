@@ -31,6 +31,10 @@ What this plugin does not do yet, and what it leaves out on purpose, is the
 2. Extract it into your project's `Plugins/` folder (create the folder if the project has none).
 3. Open the project. If the editor asks to enable the plugin, accept, then restart when prompted.
 
+The plugin is also listed on Fab, free:
+[Mantle Place — Real-World Terrain, Imagery, Buildings, Roads & Land Cover](https://www.fab.com/listings/6d7cdbd3-4d9e-48ba-982a-f4aa07d078e4).
+A Fab version can trail the newest GitHub release by the length of Fab's review.
+
 The prebuilt binary is **Windows only** today. Any other platform, or any other engine version, is a
 source build: see [Building](../README.md#building) in the root README.
 
@@ -47,6 +51,25 @@ source build: see [Building](../README.md#building) in the root README.
   An order built on demand is prepared first, as before.
 - **Browse...** — pick a bundle `.zip` you downloaded from [mantle.place](https://mantle.place),
   leave the mode at *Landscape*, and press **Import**.
+
+## Open in curator
+
+**Open in curator** (in the panel's header) opens the web curator in your browser on the extent your
+level already knows, drawn and ready: `https://mantle.place/curator#aoi=W,S,E,N&from=unreal`. It needs
+no account. The extent comes from the first of these the level has:
+
+1. **A previous Mantle Place import** — the extent the plugin recorded when it imported the order
+   (imports made before this version recorded none; import the order again to give a level one).
+2. **The level's georeferencing** — Epic's GeoReferencing system actor, if the plugin is on and the
+   level has one: the extent is the box around the level's landscape and static meshes.
+3. **A Cesium georeference** — a Cesium for Unreal georeference actor, read the same way. Cesium stays
+   optional: the plugin does not depend on it, and nothing streams from Cesium or from Mantle Place.
+4. **An Extent box** — place a **Mantle Place Extent Box** (the panel offers to when the level has
+   nothing else), set its **Center Longitude** and **Center Latitude** in Details (degrees), and scale
+   it over your site: X is east-west, Y is north-south, and rotation is ignored.
+
+A level with none of them offers to place an Extent box, or to open the plain curator
+(`https://mantle.place/curator`) so you can draw the extent there.
 
 ## Save your work
 
@@ -162,8 +185,8 @@ against the Source zip before an upload:
 - Every module in the descriptor carries a `PlatformAllowList`.
 - No `Binaries`, `Intermediate`, `Saved` or `Build` folder anywhere in the plugin.
 - No path from the plugin folder down is longer than 170 characters.
-- The zip uploaded to the storefront is the same asset as the GitHub release's, built from the same
-  commit.
+- The zip uploaded to the storefront is the Source zip built from the release's own commit, not the
+  GitHub release's Win64 asset.
 
 For anything deeper — building, testing, naming, what a change here must not do — read
 [`CLAUDE.md`](CLAUDE.md) in this folder and the root [`README.md`](../README.md).

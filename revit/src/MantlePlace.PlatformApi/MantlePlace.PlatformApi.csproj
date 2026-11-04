@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Platform API client, host-neutral: no Revit API, no host type, nothing a second .NET host
+    could not take as it is (HPS-43 extracts shared code from shipped code, and this is shaped to be
+    that code).
+
+    Generated/ is vendored output of revit/tools/platform-api/sync_platform_api.py: the spec the
+    platform serves and the NSwag client generated from it. Never edit either by hand; run the
+    script. Its check fails when the vendored copy is not what the served spec generates.
+
+    The hand-written half is small on purpose: PlatformTransport (the one place a request is sent,
+    the client header on every one, the 426 update notice) and PlatformClientHeader.
+
+    NO NUGET PACKAGES, same as the rest of the tree (../../Directory.Build.props): the generated
+    client uses System.Net.Http and System.Text.Json only. The generator is a dotnet tool
+    (../../.config/dotnet-tools.json) that runs at sync time, never a package this assembly restores.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>MantlePlace.PlatformApi</RootNamespace>
+    <AssemblyName>MantlePlace.PlatformApi</AssemblyName>
+  </PropertyGroup>
+
+</Project>

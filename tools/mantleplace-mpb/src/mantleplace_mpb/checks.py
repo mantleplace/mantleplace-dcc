@@ -89,8 +89,16 @@ def _outside_view(manifest: dict, path: str) -> bool:
     if not isinstance(view, dict) or not isinstance(files, dict):
         return False
     parts = view.get("parts")
+    if not isinstance(parts, list):
+        return False
     entry = files.get(path)
-    return isinstance(parts, list) and isinstance(entry, dict) and entry.get("part") not in parts
+    if isinstance(entry, dict):
+        return entry.get("part") not in parts
+    # A folder pointer: outside the view when every file under it is held by a part the view
+    # leaves out, and at least one such file exists.
+    prefix = path.rstrip("/") + "/"
+    under = [e for name, e in files.items() if name.startswith(prefix)]
+    return bool(under) and all(isinstance(e, dict) and e.get("part") not in parts for e in under)
 
 
 def check_pointers(manifest: dict, bundle: Bundle, report: Report, fold_case: bool = False) -> None:

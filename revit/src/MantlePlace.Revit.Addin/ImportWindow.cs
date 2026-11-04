@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using MantlePlace.Revit.Client;
 using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Addin;
@@ -75,6 +76,15 @@ internal sealed partial class ImportWindow : Window
         IsReadOnly = true,
         TextWrapping = TextWrapping.Wrap,
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        Margin = new Thickness(0, 8, 0, 0),
+        Visibility = Visibility.Collapsed,
+    };
+
+    // Under the report once the import has ended: "Did this import come in right?" with Yes and No, each a
+    // link to the web form (ImportFeedbackPrompt, HPS-56). Empty and collapsed unless the run asked.
+    private readonly StackPanel _ask = new()
+    {
+        Orientation = Orientation.Horizontal,
         Margin = new Thickness(0, 8, 0, 0),
         Visibility = Visibility.Collapsed,
     };
@@ -218,7 +228,8 @@ internal sealed partial class ImportWindow : Window
     /// <param name="view">The run as it ended, or <c>null</c> for one that never began.</param>
     /// <param name="outcome">How a cancelled run ended, in one line; <c>null</c> otherwise.</param>
     /// <param name="report">The closing report.</param>
-    internal void ShowFinished(ImportRunView? view, string? outcome, string report)
+    /// <param name="ask">What Yes and No open, when this import asks "Did this import come in right?"; otherwise <c>null</c>.</param>
+    internal void ShowFinished(ImportRunView? view, string? outcome, string report, ImportFeedbackLinks? ask = null)
     {
         if (_finished)
         {
@@ -245,10 +256,51 @@ internal sealed partial class ImportWindow : Window
         _close.Visibility = Visibility.Visible;
         _close.IsEnabled = true;
 
+        if (ask is not null && !_closeWhenFinished)
+        {
+            ShowAsk(ask);
+        }
+
         if (_closeWhenFinished)
         {
             Close();
         }
+    }
+
+    /// <summary>
+    /// The one-line question under the report. Never blocking: the report, Close and the rest of the
+    /// window work as they did, and the line goes on a press of any of its three buttons, or with the
+    /// window. The bundle is already remembered as asked about (<see cref="FeedbackAskedStore"/>), so
+    /// none of these brings it back.
+    /// </summary>
+    private void ShowAsk(ImportFeedbackLinks links)
+    {
+        _ask.Children.Clear();
+        _ask.Children.Add(new TextBlock
+        {
+            Text = ImportFeedbackPrompt.Question,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 12, 0),
+        });
+        _ask.Children.Add(AskButton(ImportFeedbackPrompt.Yes, links.Yes));
+        _ask.Children.Add(AskButton(ImportFeedbackPrompt.No, links.No));
+        _ask.Children.Add(AskButton(ImportFeedbackPrompt.Dismiss, link: null));
+        _ask.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>A button that opens <paramref name="link"/> in the system browser, if it has one, and takes the line away.</summary>
+    private Button AskButton(string face, string? link)
+    {
+        Button button = new() { Content = face, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 2, 12, 2) };
+        button.Click += (_, _) =>
+        {
+            _ask.Visibility = Visibility.Collapsed;
+            if (link is not null && !ShellLauncher.TryOpen(link, out string refused))
+            {
+                _note($"The feedback link could not be opened: {refused}");
+            }
+        };
+        return button;
     }
 
     /// <summary>Brings the window forward, for a second click on Import Bundle — never over a Revit modal.</summary>
@@ -344,8 +396,10 @@ internal sealed partial class ImportWindow : Window
         BrandChrome.AddHeader(root, WindowLabels.ImportHeading);
         DockPanel.SetDock(top, Dock.Top);
         DockPanel.SetDock(buttons, Dock.Bottom);
+        DockPanel.SetDock(_ask, Dock.Bottom);
         root.Children.Add(top);
         root.Children.Add(buttons);
+        root.Children.Add(_ask);
         root.Children.Add(_report);
         return root;
     }

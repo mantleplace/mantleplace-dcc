@@ -69,6 +69,19 @@ sub-struct in `MantlePlaceManifestBlocks.h` held as a member of `FMantlePlaceVau
 entry in `MakeAll`. `Parse`, the integrity chain and the orchestration do not change. The registry is
 an explicit ordered list on purpose: no discovery, no reflection.
 
+## Open in curator
+
+The panel's **Open in curator** opens `https://mantle.place/curator#aoi=W,S,E,N&from=unreal` on an
+extent the level already knows. **Every decision is in `FMantlePlaceCuratorExtentLogic`** (Runtime):
+the four sources in order (a previous import's provenance record, the native georeference, a Cesium
+georeference, an `AMantlePlaceExtentBox`), the rounding and the link. `MantlePlaceLevelExtent`
+(Editor) only reads the engine into that logic's state. The native and Cesium georeferences are read
+**by reflection** (a class found by name, a function called by name): they are not module
+dependencies and must never become ones, so the plugin builds and loads with either absent
+(`MantlePlace.CuratorExtent.LevelRead` exercises a read only when its plugin is enabled in the
+project, and says so when it is not). The plugin copies the manifest's own `bbox` into the
+provenance record (`bbox`, WGS84 degrees); it never computes one.
+
 ## Reading a bundle: 1.x and 2.0, by pointer, regardless of case
 
 The plugin reads MPB 1.x and 2.0 (`MantlePlaceMaxSupportedManifestMajor`; the floor stays 1.0.0) with
@@ -245,6 +258,12 @@ Fab pre-submit list is in [`README.md`](README.md#packaging-a-release).
 - **[`.clang-format`](.clang-format) is for new code only**; nothing checks it and a reformat sweep
   is refused ([CONTRIBUTING.md](../CONTRIBUTING.md)).
 - **No credentials in a `.uasset`, ever** — a URL in a Blueprint's class defaults is in the file.
+- **Every Platform API request is made by `FMantlePlaceClientHttp::CreateRequest`.** It sets
+  `Mantle-Place-Client: unreal/<plugin version>`; a direct `FHttpModule::CreateRequest` in the auth or
+  vault client sends a call that names no client, and `unreal/tools/test_platform_requests_carry_client_header.py`
+  fails CI on it. An HTTP 426 `client_update_required` is an update prompt (`FMantlePlaceClientUpdate`,
+  `OnClientUpdateRequiredNative`), never a sign-in or network failure and never a reason to drop the
+  stored session. The spec is served at `https://mantle.place/api/v1/openapi.json`.
 
 ## Where knowledge lives
 

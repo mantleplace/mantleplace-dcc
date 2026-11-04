@@ -12,7 +12,8 @@
     "",
     "Case fields:",
     "  id              stable, dotted, never renumbered — host suites name it in failures.",
-    "  group           manifest | vault | auth | cache | digest | projection | bundle.",
+    "  group           manifest | vault | auth | cache | digest | projection | bundle |",
+    "                  platform | client.",
     "  file            path relative to corpus/.",
     "  expect          accept  — the parser MUST accept and produce `expectations`.",
     "                  reject  — the parser MUST refuse; `errorContains` if the message matters.",
@@ -1399,6 +1400,103 @@
       }
     },
     {
+      "id": "manifest.autocadCompleteBlock",
+      "group": "manifest",
+      "file": "manifest/autocad-complete-block.json",
+      "expect": "accept",
+      "manifestVersion": "1.18.0",
+      "appliesTo": "autocad",
+      "reason": "A reader of `hosts.autocad` (MPB 1.18.0, format.md §6.9) takes every value from the block and derives none. The fixture is a State Plane delivery with all three parts present: the contours, the Civil 3D surface and the aerial with its insertion already worked out. The reader asserts the file frame, both contour units read from the pointer (X/Y in ftUS, heights in ft, stated apart: a reader that takes one unit from the drawing or from `elevation.contours` reports the heights in the wrong one), the surface's own format word and its `requires` verdict, and the insertion verbatim: a lower-left corner, the ground size of the whole image and a rotation, never an insertion point or a scale worked out from a pixel size. A `hosts.revit` block beside it states a different frame and a different contours file on purpose; a reader that takes whichever block it finds first reports the wrong path. The case is scoped to the host id, so a plain AutoCAD reader and a Civil 3D reader both run it, and it asserts nothing either reader decides for itself.",
+      "expectations": {
+        "jobId": "autocad-complete",
+        "orderId": "ord-autocad-complete-1",
+        "autocadFileFrameType": "projected",
+        "autocadFileFrameCrs": "EPSG:2231",
+        "autocadFileFrameHorizontalUnit": "ftUS",
+        "autocadFileFrameVerticalUnit": "ft",
+        "autocadContoursPath": "Surface/Contours.dxf",
+        "autocadContoursHorizontalFrame": "absolute_projected",
+        "autocadContoursHorizontalUnits": "ftUS",
+        "autocadContoursVerticalUnits": "ft",
+        "autocadSurfacePath": "Surface/Terrain.xml",
+        "autocadSurfaceFormat": "landxml",
+        "autocadSurfaceRequires": "civil3d",
+        "autocadAerialPath": "Imagery/Aerial.png",
+        "autocadAerialInsertionX": 3159000.5,
+        "autocadAerialInsertionY": 1721000.25,
+        "autocadAerialInsertionWidth": 4000.0,
+        "autocadAerialInsertionHeight": 3200.0,
+        "autocadAerialInsertionRotationDeg": 0.25,
+        "autocadReadinessContoursPresent": true,
+        "autocadReadinessSurfacePresent": true,
+        "autocadReadinessAerialPresent": true
+      }
+    },
+    {
+      "id": "manifest.autocadContoursAbsentReason",
+      "group": "manifest",
+      "file": "manifest/autocad-contours-absent.json",
+      "expect": "accept",
+      "manifestVersion": "1.18.0",
+      "appliesTo": "autocad",
+      "reason": "The contours pointer is present only when the published file is in the block's `file_frame` (format.md §6.9), and a block without it says why at `hosts.autocad.readiness.contours`. The fixture carries no `hosts.autocad.contours` while the shared `elevation.contours` still states a unit and a datum: the reader must report the contours absent with the stated reason, echoed and never matched on (format.md §6.1), and must not fall back to the shared pointer, which names no horizontal frame and so cannot show the file to be in the host's. The surface and the aerial verdicts are read apart from it, so a reader that lets one part's absence close the others reports the surface wrongly. An absent part is a well-formed block, not an error.",
+      "expectations": {
+        "jobId": "autocad-contours-absent",
+        "orderId": "ord-autocad-contours-absent-1",
+        "autocadContoursPresent": false,
+        "autocadContoursAbsentReason": "not_produced",
+        "autocadSurfacePath": "Surface/Terrain.xml",
+        "autocadReadinessSurfacePresent": true,
+        "autocadReadinessAerialPresent": false,
+        "autocadAerialAbsentReason": "not_selected"
+      }
+    },
+    {
+      "id": "manifest.autocadSurfaceAbsentNeedsCivil3d",
+      "group": "manifest",
+      "file": "manifest/autocad-surface-absent.json",
+      "expect": "accept",
+      "manifestVersion": "1.18.0",
+      "appliesTo": "autocad",
+      "reason": "A plain AutoCAD order ships no Civil 3D surface, and the reader must be able to say so from its own block alone (format.md §6.9). The fixture has no `hosts.autocad.surface`, and `readiness.surface` carries the stated reason and `requires: civil3d`, which is on the verdict whether or not the file shipped, so the answer is the same here as on an order that does carry a surface. The reader asserts the surface absent, the reason echoed, and the host part the verdict names; a reader that goes looking in another host's block, or reads the missing pointer as an error, fails. The contours beside it are present and read normally, so an absent surface does not take the rest of the block with it.",
+      "expectations": {
+        "jobId": "autocad-surface-absent",
+        "orderId": "ord-autocad-surface-absent-1",
+        "autocadSurfacePresent": false,
+        "autocadSurfaceAbsentReason": "not_selected",
+        "autocadSurfaceRequires": "civil3d",
+        "autocadContoursPath": "Surface/Contours.dxf",
+        "autocadReadinessContoursPresent": true
+      }
+    },
+    {
+      "id": "manifest.autocadLocalFrameOffsets",
+      "group": "manifest",
+      "file": "manifest/autocad-local-frame-offsets.json",
+      "expect": "accept",
+      "manifestVersion": "1.18.0",
+      "appliesTo": "autocad",
+      "reason": "Where the delivery has no projected CRS in its unit, the block's `file_frame` is local and every file in it is east/north offsets about an origin that is part of the frame's identity (format.md §4.2, §6.9). The fixture is a `local_ft` delivery: the origin is in metres on the UTM grid, the files are in international feet, and no `crs` is named because the files are in none. The reader asserts the frame type, its base CRS and the origin's own unit kept apart from the files' unit, the contours and the surface as `local_enu` offsets in feet, and the aerial's insertion verbatim, negative offsets included. A reader that treats the base CRS as the files' CRS, converts the origin into feet before it is asked to, or reprojects the image, is wrong by a unit and nothing fails loudly.",
+      "expectations": {
+        "jobId": "autocad-local-frame",
+        "orderId": "ord-autocad-local-frame-1",
+        "autocadFileFrameType": "local",
+        "autocadFileFrameBaseCrs": "EPSG:32613",
+        "autocadFileFrameOriginLinearUnit": "m",
+        "autocadFileFrameHorizontalUnit": "ft",
+        "autocadFileFrameVerticalUnit": "ft",
+        "autocadContoursHorizontalFrame": "local_enu",
+        "autocadContoursHorizontalUnits": "ft",
+        "autocadContoursVerticalUnits": "ft",
+        "autocadSurfaceHorizontalFrame": "local_enu",
+        "autocadAerialInsertionX": -2000.5,
+        "autocadAerialInsertionY": -1600.25,
+        "autocadAerialInsertionWidth": 4000.0,
+        "autocadAerialInsertionHeight": 3200.0,
+        "autocadAerialInsertionRotationDeg": 0.0
+      }
+    },
+    {
       "id": "manifest.foliageTypeUnknownValue",
       "group": "manifest",
       "file": "manifest/foliage-type-unknown-value.json",
@@ -2292,6 +2390,127 @@
       "expect": "accept",
       "stagedSchema": true,
       "reason": "A validator ignores the __MACOSX and .DS_Store entries archive tools add on their own (format.md §10.2). Read as entries, each would break a 2.0 rule; ignored, none is reported. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`)."
+    },
+    {
+      "id": "platform.quote.public",
+      "group": "platform",
+      "file": "platform/quote-public.json",
+      "expect": "accept",
+      "reason": "A Quote asked with no bearer is the public Quote: price, coverage and licence, and no account fields. The Quote is public, so a signed-out curator sees a price.",
+      "expectations": {
+        "priceCents": 1234,
+        "coverage": "covered",
+        "accountFields": false
+      }
+    },
+    {
+      "id": "platform.quote.signedIn",
+      "group": "platform",
+      "file": "platform/quote-signed-in.json",
+      "expect": "accept",
+      "reason": "A Quote asked with a valid bearer also carries the account Credit balance and whether a free-tier slot is open, so the host can say before ordering whether Credit covers the price.",
+      "expectations": {
+        "priceCents": 1234,
+        "coverage": "covered",
+        "accountFields": true,
+        "creditBalanceCents": 5000,
+        "freeSlotOpen": true
+      }
+    },
+    {
+      "id": "platform.quote.invalidBearerIgnored",
+      "group": "platform",
+      "file": "platform/quote-invalid-bearer.json",
+      "expect": "accept",
+      "reason": "An invalid or expired bearer is ignored and the public Quote comes back, never a 401: the Quote must not fail because a stored session went stale.",
+      "expectations": {
+        "priceCents": 1234,
+        "coverage": "degraded",
+        "accountFields": false
+      }
+    },
+    {
+      "id": "platform.quote.invalidExtent",
+      "group": "platform",
+      "file": "platform/quote-invalid-extent.json",
+      "expect": "reject",
+      "reason": "An extent that is not four numbers is refused 400 invalid_extent; the host reads the code rather than a sentence.",
+      "expectations": {
+        "status": 400,
+        "code": "invalid_extent"
+      }
+    },
+    {
+      "id": "platform.quote.uncovered",
+      "group": "platform",
+      "file": "platform/quote-uncovered.json",
+      "expect": "reject",
+      "reason": "An extent with no elevation coverage is refused 422 with its own code, never quoted as degraded: degraded means a probe flaked, uncovered means it cannot be ordered.",
+      "expectations": {
+        "status": 422,
+        "code": "elevation_unavailable_for_aoi"
+      }
+    },
+    {
+      "id": "platform.order.priceChanged",
+      "group": "platform",
+      "file": "platform/order-price-changed.json",
+      "expect": "reject",
+      "reason": "An order whose expectedPriceCents is not the current price is refused 409 price_changed with the current Quote and the handoff URL; nothing is charged, and the host shows the new price rather than ordering at it.",
+      "expectations": {
+        "status": 409,
+        "code": "price_changed",
+        "handoffUrl": "https://mantle.place/curator#aoi=-122.42,37.7,-122.4,37.72&from=revit",
+        "quotePriceCents": 1300
+      }
+    },
+    {
+      "id": "platform.order.insufficientCredit",
+      "group": "platform",
+      "file": "platform/order-insufficient-credit.json",
+      "expect": "reject",
+      "reason": "An order the Credit balance does not cover is refused 402 insufficient_credit with the handoff URL, where the curator can finish the order on the web.",
+      "expectations": {
+        "status": 402,
+        "code": "insufficient_credit",
+        "handoffUrl": "https://mantle.place/curator#aoi=-122.42,37.7,-122.4,37.72&from=revit"
+      }
+    },
+    {
+      "id": "platform.order.freeCapReached",
+      "group": "platform",
+      "file": "platform/order-free-cap-reached.json",
+      "expect": "reject",
+      "reason": "A free order from an account already at the free-bundle cap is refused 409 free_cap_reached with the handoff URL; the same status as price_changed, so the host branches on the code.",
+      "expectations": {
+        "status": 409,
+        "code": "free_cap_reached",
+        "handoffUrl": "https://mantle.place/curator#aoi=-122.401,37.7,-122.4,37.701&from=revit"
+      }
+    },
+    {
+      "id": "platform.order.idempotencyKeyMissing",
+      "group": "platform",
+      "file": "platform/order-idempotency-key-missing.json",
+      "expect": "reject",
+      "reason": "An order sent without an Idempotency-Key is refused 400 idempotency_key_required, so a retry can never order twice. A conforming client never sends one: the key is required by the spec.",
+      "expectations": {
+        "status": 400,
+        "code": "idempotency_key_required"
+      }
+    },
+    {
+      "id": "client.updateRequired",
+      "group": "client",
+      "file": "client/update-required.json",
+      "expect": "reject",
+      "reason": "A client below the minimum version the platform serves for it is answered 426 client_update_required on any call, with the version it sent and the minimum. The host shows an update prompt, never an error, and keeps the stored session.",
+      "expectations": {
+        "status": 426,
+        "code": "client_update_required",
+        "sentVersion": "0.8.1",
+        "minimumVersion": "0.9.0"
+      }
     }
   ]
 }

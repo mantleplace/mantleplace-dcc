@@ -69,15 +69,21 @@ bool FMantlePlaceFeedbackLogic::IsValidOrderId(const FString& OrderId)
 	return true;
 }
 
-FString FMantlePlaceFeedbackLogic::BuildFeedbackUrl(const FString& BaseUrl, const FString& PluginVersion, const FString& HostVersion, const FString& OrderId)
+bool FMantlePlaceFeedbackLogic::IsValidRating(const FString& Rating)
+{
+	// Exactly the two tokens, case-sensitive: "UP", " up" and "up\n" are not the token.
+	return Rating.Equals(TEXT("up"), ESearchCase::CaseSensitive) || Rating.Equals(TEXT("down"), ESearchCase::CaseSensitive);
+}
+
+FString FMantlePlaceFeedbackLogic::BuildFeedbackUrl(const FString& BaseUrl, const FString& PluginVersion, const FString& HostVersion, const FString& OrderId, const FString& Rating)
 {
 	if (!FMantlePlaceAuthLogic::IsValidBaseUrl(BaseUrl))
 	{
 		return FString();
 	}
 
-	// Every value appended below is a fixed word, a validated version (digits and dots) or a
-	// validated UUID (hex and hyphens), so none needs percent-encoding.
+	// Every value appended below is a fixed word, a validated version (digits and dots), a
+	// validated UUID (hex and hyphens) or one of the two rating tokens, so none needs percent-encoding.
 	FString Url = FMantlePlaceVaultLogic::NormalizeBaseUrl(BaseUrl) + TEXT("/feedback?source=") + Source();
 	if (IsValidVersion(PluginVersion))
 	{
@@ -91,5 +97,38 @@ FString FMantlePlaceFeedbackLogic::BuildFeedbackUrl(const FString& BaseUrl, cons
 	{
 		Url += TEXT("&order=") + OrderId;
 	}
+	if (IsValidRating(Rating))
+	{
+		Url += TEXT("&rating=") + Rating;
+	}
 	return Url;
+}
+
+bool FMantlePlaceFeedbackLogic::ShouldAskAboutImport(bool bImportSucceeded, const FString& OrderId, const TArray<FString>& AskedOrderIds)
+{
+	if (!bImportSucceeded || !IsValidOrderId(OrderId))
+	{
+		return false;
+	}
+	for (const FString& Asked : AskedOrderIds)
+	{
+		if (Asked.Equals(OrderId, ESearchCase::IgnoreCase))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+void FMantlePlaceFeedbackLogic::RememberAsked(const FString& OrderId, TArray<FString>& AskedOrderIds)
+{
+	if (!IsValidOrderId(OrderId) || !ShouldAskAboutImport(/*bImportSucceeded*/ true, OrderId, AskedOrderIds))
+	{
+		return;
+	}
+	AskedOrderIds.Add(OrderId.ToLower());
+	if (AskedOrderIds.Num() > MaxAskedOrders)
+	{
+		AskedOrderIds.RemoveAt(0, AskedOrderIds.Num() - MaxAskedOrders);
+	}
 }

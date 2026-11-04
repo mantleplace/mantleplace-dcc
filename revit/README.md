@@ -88,8 +88,8 @@ failed with a reason and the plugin's own message. Closing the window before `Im
 cancelled, and cancelling from the vault closes a window not yet started. A bundle sent while another
 import is open waits its turn and opens when that one ends. The bundle is fetched through the vault's
 own routes and download folder, so one already downloaded is not fetched again, and a bundle whose
-version this plugin cannot read fails as unsupported. With the channel not configured
-([Configuration](#configuration)), Revit stays off it and `Download` in the vault is the way in.
+version this plugin cannot read fails as unsupported. With the channel's location and key
+unobtainable ([Configuration](#configuration)), Revit stays off it and `Download` in the vault is the way in.
 What the connected host did is logged to `%LOCALAPPDATA%\MantlePlace\connected-host.log`.
 
 Downloads are written to `bundle.zip.part`, hashed, and renamed over `bundle.zip` only once they
@@ -103,6 +103,12 @@ nothing itself: the link carries only `source=dcc-revit`, this plugin's version 
 version (`hv`) and, for a bundle, its order id (`order`) — never an address, a name, text or a token.
 `FeedbackLink` in the pure core builds it, and a version that is not digits and dots is left out.
 
+**Once a bundle has imported, the import window asks "Did this import come in right?"** with `Yes`, `No`
+and `Dismiss`. `Yes` and `No` open the same web form with your answer (`rating=up` or `rating=down`)
+already chosen; opening it records nothing, and the answer is stored only when you press send there.
+A bundle is asked about once on this machine, however the line ends — `feedback-asked.json` beside the
+bundle cache remembers which — and an import that failed, was cancelled or names no order is not asked.
+
 **Every window this plugin opens is headed by the mark and its purpose** — `Vault`, `Sign In`,
 `Bundle Import` —
 and their button faces are Title Case, the same rule the ribbon follows and for the same reason. The
@@ -111,6 +117,15 @@ everything else keeps Revit's own chrome, because a plugin that paints its own w
 like part of the host. The words, the colour and which render of the mark a header slot gets are
 `WindowLabels`, `BrandPalette` and `MarkRenders` in the pure core, so the suite checks them without a
 Revit licence.
+
+`Mantle Place ▸ Bundles ▸ Open in Curator` opens the web curator in your browser, at
+`https://mantle.place/curator#aoi=W,S,E,N&from=revit`, with the extent the project already knows drawn
+and ready. The extent is the first of: the extent of the order this project was imported from (the
+order id the import left on Project Information, looked up in your vault, so it needs you signed in),
+or the project's site latitude and longitude with a size you pick from a short list (500 m to 4 km a
+side). A project with neither opens the plain curator. It changes nothing in the project and works with
+no project open. Which of those applies, the sizes and the link are `CuratorExtents` and `CuratorLink`
+in `Core`, asserted headlessly; the shim only reads the order id and the site location out of the model.
 
 `Mantle Place ▸ Bundles ▸ Import Bundle` takes a bundle you already downloaded and:
 
@@ -280,6 +295,37 @@ back, so nothing in the project changes; use it when a bundle import is refused 
 say enough. `Logs` shows the most recent import or probe log in File Explorer. `Probe Terrain`
 used to sit on the panel face beside `Vault` and `Import Bundle`, where a first-time user read a
 diagnostic as a third way to import.
+
+### Terrain accuracy by Revit version
+
+**Revit 2026 and 2027 place every check point within 1 m of the published ground on every bundle measured;
+Revit 2025 holds 2 m, not 1 m.** The check points are 64 of the bundle's `hosts.revit.toposurface_points`,
+taken evenly through the file, which a TIN import never reads ([the verify check](tools/timing/README.md#verifying-an-import)).
+Measured on four MPB 2.0 bundles, two in metres and two in US survey feet on State Plane, 64 check points each,
+one run per Revit year, the largest gap between a check point and the ground the toposolid reports over it:
+
+| Bundle | Revit 2025 | Revit 2026 | Revit 2027 |
+| --- | --- | --- | --- |
+| Metres, larger (74,995 terrain points) | 1.586 m, 1 point over 1 m | 0.705 m | 0.438 m |
+| Metres, smaller (63,252 points in its points file) | 0.594 m | 0.584 m | 0.251 m |
+| US survey feet, steeper (80,940 points in its points file) | 1.106 m, 1 point over 1 m | 0.999 m | 0.727 m |
+| US survey feet, gentler (90,557 points in its points file) | 0.300 m | 0.300 m | 0.687 m |
+
+On the larger metric bundle the next-worst 2025 points are 0.946 m and 0.700 m, and the median is 0.094 m
+(2026: 0.071 m); one point in 64 is what puts 2025 over the bar. The steeper foot bundle's worst 2026 point
+sits at the bar itself.
+
+**Why 2025 cannot hold 1 m.** The plugin builds the terrain the same way in all three versions: one
+`Toposolid.Create` call from the same vertices of `Surface/Surface.dxf`, with no version-dependent sample,
+stride or point budget; there is no `TopographySurface` in it. The difference is Revit's: given the tens of thousands of
+vertices in the file, the toposolid Revit stores keeps 10,000 of them in Revit 2025 and about 20,000 in 2026 and 2027,
+read from its slab shape editor on the three bundles probed, whatever the file's own count. Its faces
+tessellate to match: 39,800 triangles in Revit 2025 against 79,706 in 2026 and 79,628 in 2027 on the larger
+metric bundle. A fixed vertex budget, halved in 2025, is a coarser surface between the published points, and
+the import has no step that differs by version and nothing that can ask Revit for a larger budget.
+
+`verify_report.py` holds Revit 2025 to 2 m, the measured 1.586 m rounded up, and 2026 and 2027 to 1 m.
+Four bundles are a small sample, and one 2026 point is at the bar: a check point past it is a finding, not noise.
 
 ### Sharing a project: ODbL content and Prepare for Handover
 
@@ -882,10 +928,12 @@ One optional file remains: `%LOCALAPPDATA%\MantlePlace\config.json`, overrides l
 compiled defaults when it is present, and nothing installs it. Every key in it is an override for one
 of those defaults (`webLoginUrl`, `tokenEndpointUrl`, `refreshEndpointUrl`, `apiBaseUrl`,
 `realtimeUrl`, `realtimePublishableKey`, `loopbackPorts`, `callbackPath`, `signInTimeoutSeconds`) and is
-how a dev build points at a non-production stack. `realtimeUrl` and `realtimePublishableKey` are the
-exception to "nothing is required": the platform has not published where the connected host's Realtime
-socket is, so both default to empty, and with either missing the connected host stays off, logs one line
-saying so, and joins no channel. `loopbackPorts` is the `HPS-06a` override: leave it out and the OS assigns
+how a dev build points at a non-production stack. `realtimeUrl` and `realtimePublishableKey` have no
+compiled default: the platform publishes both on a public route, and with neither set the
+connected host reads them from there when it first joins, so a moved socket needs no new release. Setting
+either one means the route is not asked, and with only one set the connected host stays off. With the route
+unreachable or its answer unusable it also stays off, logs one line saying why (never the key), and joins no
+channel until the next launch. `loopbackPorts` is the `HPS-06a` override: leave it out and the OS assigns
 the sign-in callback port, which is what keeps sign-in clear of Windows' shifting reserved ranges
 and lets Revit and Unreal be signed in at the same time. Absent or malformed, the file is ignored
 and the defaults stand — this is read during Revit's load of a plugin, where throwing costs the ribbon

@@ -2,17 +2,22 @@
 
 #include "Slate/SMantlePlaceVaultPanel.h"
 
+#include "Editor.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "HAL/PlatformProcess.h"
 #include "Interfaces/IPluginManager.h"
+#include "MantlePlaceCuratorExtentLogic.h"
 #include "MantlePlaceEditorStyle.h"
+#include "MantlePlaceExtentBox.h"
 #include "MantlePlaceFeedbackLogic.h"
+#include "MantlePlaceLevelExtent.h"
 #include "MantlePlacePalette.h"
 #include "MantlePlaceImporterLibrary.h"
 #include "MantlePlaceVaultPanelController.h"
 #include "MantlePlaceVaultClient.h"
 #include "MantlePlaceVaultRowView.h"
 #include "MantlePlaceVaultTypes.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Misc/EngineVersion.h"
 #include "Slate/SMantlePlaceVaultDetail.h"
 #include "Slate/SMantlePlaceVaultRow.h"
@@ -48,10 +53,12 @@ namespace
 	/**
 	 * Open the web Feedback form in the system browser (HPS-56). The link itself is decided by the
 	 * pure FMantlePlaceFeedbackLogic; this only gathers the two version strings and opens the result.
-	 * OrderId is empty for the general Send Feedback, the bundle's order id for Report a problem.
-	 * Needs no sign-in: the form is public.
+	 * OrderId is empty for the general Send Feedback, the bundle's order id for Report a problem and
+	 * for the post-import prompt. Rating is empty except on that prompt, where it is `up` or `down`;
+	 * the builder drops anything else. Opening the link records nothing: the web form stores the
+	 * rating only when the curator presses send. Needs no sign-in: the form is public.
 	 */
-	void OpenFeedbackLink(const FString& OrderId)
+	void OpenFeedbackLink(const FString& OrderId, const FString& Rating = FString())
 	{
 		const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("MantlePlace"));
 		const FString PluginVersion = Plugin.IsValid() ? Plugin->GetDescriptor().VersionName : FString();
@@ -60,11 +67,139 @@ namespace
 
 		// The same configurable web-app host the vault API uses (DefaultGame.ini), compiled-in default.
 		const FString Url = FMantlePlaceFeedbackLogic::BuildFeedbackUrl(
-			GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, PluginVersion, HostVersion, OrderId);
+			GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, PluginVersion, HostVersion, OrderId, Rating);
 		if (!Url.IsEmpty())
 		{
 			FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
 		}
+	}
+
+	/**
+	 * Open the web curator at the link FMantlePlaceCuratorExtentLogic builds: on the extent when the
+	 * level supplied one, plain otherwise. The same configurable web-app host the vault API uses.
+	 */
+	void OpenCuratorLink(const FMantlePlaceResolvedExtent& Resolved)
+	{
+		const FString Url = FMantlePlaceCuratorExtentLogic::BuildCuratorUrl(GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, Resolved);
+		if (!Url.IsEmpty())
+		{
+			FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
+		}
+	}
+
+	/**
+	 * A level with no extent source: offer to place an Extent box (or, when the level already has one
+	 * that is not located yet, to select it), or to open the plain curator. Never blocks; it stays until
+	 * one of its three buttons is pressed, because the choice is the point.
+	 */
+	void ShowNoExtentPrompt(UWorld* World)
+	{
+		const bool bHasBox = MantlePlaceLevelExtent::ExtentBoxes(World).Num() > 0;
+		const TSharedRef<TWeakPtr<SNotificationItem>> Shown = MakeShared<TWeakPtr<SNotificationItem>>();
+		const auto Close = [Shown]()
+		{
+			if (const TSharedPtr<SNotificationItem> Notification = Shown->Pin())
+			{
+				Notification->ExpireAndFadeout();
+			}
+		};
+		const FSimpleDelegate PlaceBox = FSimpleDelegate::CreateLambda([World = TWeakObjectPtr<UWorld>(World), Close]()
+		{
+			Close();
+			if (MantlePlaceLevelExtent::PlaceExtentBox(World.Get()) != nullptr)
+			{
+				FNotificationInfo Info(LOCTEXT("ExtentBoxPlaced", "Extent box ready"));
+				Info.SubText = LOCTEXT("ExtentBoxPlacedSub", "Set its Center Longitude and Center Latitude in Details, scale it over your site, then press Open in curator again.");
+				Info.ExpireDuration = 9.f;
+				Info.bFireAndForget = true;
+				FSlateNotificationManager::Get().AddNotification(Info);
+			}
+		});
+		const FSimpleDelegate OpenPlain = FSimpleDelegate::CreateLambda([Close]()
+		{
+			Close();
+			OpenCuratorLink(FMantlePlaceResolvedExtent());
+		});
+		const FSimpleDelegate Dismiss = FSimpleDelegate::CreateLambda([Close]() { Close(); });
+
+		FNotificationInfo Info(LOCTEXT("NoExtentTitle", "This level has no extent to open the curator on"));
+		Info.SubText = bHasBox
+			? LOCTEXT("NoExtentSubBox", "The Extent box is not located yet. Select it and set its Center Longitude and Center Latitude, or open the curator and draw the extent there.")
+			: LOCTEXT("NoExtentSub", "It has no Mantle Place import, georeference or Extent box. Place an Extent box over your site, or open the curator and draw the extent there.");
+		Info.bFireAndForget = false;
+		Info.bUseSuccessFailIcons = false;
+		Info.ButtonDetails.Add(FNotificationButtonInfo(
+			bHasBox ? LOCTEXT("NoExtentSelectBox", "Select Extent box") : LOCTEXT("NoExtentPlaceBox", "Place Extent box"),
+			FText::GetEmpty(), PlaceBox, SNotificationItem::CS_None));
+		Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("NoExtentOpenPlain", "Open the curator"), FText::GetEmpty(), OpenPlain, SNotificationItem::CS_None));
+		Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("NoExtentDismiss", "Dismiss"), FText::GetEmpty(), Dismiss, SNotificationItem::CS_None));
+		*Shown = FSlateNotificationManager::Get().AddNotification(Info);
+	}
+
+	/** Where the order ids the post-import prompt has already asked about are kept (per project, per machine). */
+	const TCHAR* const AskedSection = TEXT("MantlePlace.Feedback");
+	const TCHAR* const AskedKey = TEXT("AskedOrder");
+
+	/**
+	 * "Did this import come in right?" (HPS-56): a small toast after a finished import with Yes, No and
+	 * Dismiss. Yes and No each open the Feedback form at the same link with `rating=up` / `rating=down`;
+	 * Dismiss opens nothing. It never blocks: it fades by itself, and the bundle was already recorded as
+	 * asked about, so none of the three brings it back. No feedback UI of our own: two buttons that open a URL.
+	 */
+	void ShowImportFeedbackPrompt(const FString& OrderId)
+	{
+		const TSharedRef<TWeakPtr<SNotificationItem>> Shown = MakeShared<TWeakPtr<SNotificationItem>>();
+		const auto Close = [Shown]()
+		{
+			if (const TSharedPtr<SNotificationItem> Notification = Shown->Pin())
+			{
+				Notification->ExpireAndFadeout();
+			}
+		};
+		const auto Answer = [OrderId, Close](const FString& Rating)
+		{
+			return FSimpleDelegate::CreateLambda([OrderId, Rating, Close]()
+			{
+				if (!Rating.IsEmpty())
+				{
+					OpenFeedbackLink(OrderId, Rating);
+				}
+				Close();
+			});
+		};
+
+		FNotificationInfo Info(LOCTEXT("ImportFeedbackQuestion", "Did this import come in right?"));
+		Info.bFireAndForget = true;
+		Info.ExpireDuration = 30.0f;
+		Info.FadeOutDuration = 0.5f;
+		Info.bUseSuccessFailIcons = false;
+		Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("ImportFeedbackYes", "Yes"), FText::GetEmpty(), Answer(TEXT("up")), SNotificationItem::CS_None));
+		Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("ImportFeedbackNo", "No"), FText::GetEmpty(), Answer(TEXT("down")), SNotificationItem::CS_None));
+		Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("ImportFeedbackDismiss", "Dismiss"), FText::GetEmpty(), Answer(FString()), SNotificationItem::CS_None));
+		*Shown = FSlateNotificationManager::Get().AddNotification(Info);
+	}
+
+	/**
+	 * Ask about a finished import's bundle, at most once per bundle. The decision and the list are the
+	 * pure FMantlePlaceFeedbackLogic's; this only keeps the list in the project's editor config and
+	 * writes it before the question is shown, so a line the curator ignores is not asked again.
+	 */
+	void MaybeAskAboutImport(bool bImportSucceeded, const FString& OrderId)
+	{
+		if (GConfig == nullptr)
+		{
+			return; // no place to remember the answer, so no question: never twice.
+		}
+		TArray<FString> Asked;
+		GConfig->GetArray(AskedSection, AskedKey, Asked, GEditorPerProjectIni);
+		if (!FMantlePlaceFeedbackLogic::ShouldAskAboutImport(bImportSucceeded, OrderId, Asked))
+		{
+			return;
+		}
+		FMantlePlaceFeedbackLogic::RememberAsked(OrderId, Asked);
+		GConfig->SetArray(AskedSection, AskedKey, Asked, GEditorPerProjectIni);
+		GConfig->Flush(false, GEditorPerProjectIni);
+		ShowImportFeedbackPrompt(OrderId);
 	}
 }
 
@@ -78,6 +213,7 @@ void SMantlePlaceVaultPanel::Construct(const FArguments& InArgs)
 	Controller->OnImportPhase.AddSP(this, &SMantlePlaceVaultPanel::HandleImportPhase);
 	Controller->OnImportFinished.AddSP(this, &SMantlePlaceVaultPanel::HandleImportFinished);
 	Controller->OnAuthChanged.AddSP(this, &SMantlePlaceVaultPanel::HandleAuthChanged);
+	Controller->OnClientUpdateRequired.AddSP(this, &SMantlePlaceVaultPanel::HandleClientUpdateRequired);
 
 	ModeOptions.Add(MakeShared<FString>(TEXT("Landscape")));
 	ModeOptions.Add(MakeShared<FString>(TEXT("Mesh")));
@@ -273,6 +409,27 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 			[
 				SNew(STextBlock)
 				.Text(LOCTEXT("SendFeedback", "Send Feedback"))
+				.Font(FMantlePlaceEditorStyle::GetFont(EFont::Small))
+				.ColorAndOpacity(FSlateColor(MantlePlacePalette::White()))
+			]
+		]
+
+		// Open in curator: opens the web curator on the extent the level already knows (a previous import,
+		// the level's georeference, a Cesium georeference, or an Extent box). Needs no sign-in.
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(0.f, 0.f, FMantlePlaceEditorStyle::S2, 0.f)
+		[
+			SNew(SButton)
+			.Tag(TEXT("MantlePlace.Vault.OpenInCurator"))
+			.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Secondary"))
+			.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
+			.ToolTipText(LOCTEXT("OpenInCuratorTip", "Open the Mantle Place curator in your browser on this level's extent, drawn and ready. No account needed."))
+			.OnClicked(this, &SMantlePlaceVaultPanel::OnOpenInCuratorClicked)
+			[
+				SNew(STextBlock)
+				.Text(LOCTEXT("OpenInCurator", "Open in curator"))
 				.Font(FMantlePlaceEditorStyle::GetFont(EFont::Small))
 				.ColorAndOpacity(FSlateColor(MantlePlacePalette::White()))
 			]
@@ -627,6 +784,9 @@ void SMantlePlaceVaultPanel::HandleImportPhase(const FString& Phase, const FStri
 
 void SMantlePlaceVaultPanel::HandleImportFinished(bool bSuccess, const FMantlePlaceImportResult& Result)
 {
+	// The imported bundle's order id, before the active row is released. A local-zip import has no row,
+	// so it has no order id and asks nothing.
+	const FString ImportedOrderId = ActiveItemPtr.IsValid() ? ActiveItemPtr->OrderId : FString();
 	if (HeaderStatus.IsValid())
 	{
 		HeaderStatus->SetText(FText::FromString(Result.Message));
@@ -645,6 +805,9 @@ void SMantlePlaceVaultPanel::HandleImportFinished(bool bSuccess, const FMantlePl
 	ShowToast(Result.Message.IsEmpty()
 		? (bSuccess ? TEXT("Import complete.") : TEXT("Import failed."))
 		: Result.Message, bSuccess);
+
+	// HPS-56: "Did this import come in right?", once per bundle, after a successful import.
+	MaybeAskAboutImport(bSuccess, ImportedOrderId);
 }
 
 void SMantlePlaceVaultPanel::HandleAuthChanged(EMantlePlaceAuthState NewState)
@@ -809,6 +972,21 @@ FReply SMantlePlaceVaultPanel::OnSendFeedbackClicked()
 	return FReply::Handled();
 }
 
+FReply SMantlePlaceVaultPanel::OnOpenInCuratorClicked()
+{
+	UWorld* World = GEditor != nullptr ? GEditor->GetEditorWorldContext().World() : nullptr;
+	const FMantlePlaceResolvedExtent Resolved = MantlePlaceLevelExtent::Resolve(World);
+	if (!Resolved.IsSet())
+	{
+		ShowNoExtentPrompt(World);
+		return FReply::Handled();
+	}
+	OpenCuratorLink(Resolved);
+	ShowToast(FString::Printf(TEXT("Opening the curator on the extent from %s."),
+		*FMantlePlaceCuratorExtentLogic::DescribeSource(Resolved.Source)), true);
+	return FReply::Handled();
+}
+
 FReply SMantlePlaceVaultPanel::OnRefreshClicked()
 {
 	if (Controller.IsValid())
@@ -908,6 +1086,48 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::OnGenerateModeWidget(TSharedPtr<FStr
 		.Tag(FName(*FString::Printf(TEXT("MantlePlace.Vault.ImportModeOption.%s"), *Mode)))
 		.Text(FText::FromString(Mode))
 		.Font(FMantlePlaceEditorStyle::GetFont(EFont::Body));
+}
+
+void SMantlePlaceVaultPanel::HandleClientUpdateRequired(const FMantlePlaceClientUpdate& Update)
+{
+	// Not a sign-in problem and not a network one: the platform is up, the session is fine, and this plugin
+	// is below the minimum it serves. Say so once, with the way to the newer plugin. The refused call
+	// reports the same sentence through its own failure path, so the list or the import line says it too.
+	if (bUpdatePromptShown)
+	{
+		return;
+	}
+	bUpdatePromptShown = true;
+
+	const FString DownloadUrl = Update.DownloadUrl;
+	const TSharedRef<TWeakPtr<SNotificationItem>> Shown = MakeShared<TWeakPtr<SNotificationItem>>();
+	const FSimpleDelegate Download = FSimpleDelegate::CreateLambda([DownloadUrl, Shown]()
+	{
+		FPlatformProcess::LaunchURL(*DownloadUrl, nullptr, nullptr);
+		if (const TSharedPtr<SNotificationItem> Notification = Shown->Pin())
+		{
+			Notification->ExpireAndFadeout();
+		}
+	});
+	const FSimpleDelegate Dismiss = FSimpleDelegate::CreateLambda([Shown]()
+	{
+		if (const TSharedPtr<SNotificationItem> Notification = Shown->Pin())
+		{
+			Notification->ExpireAndFadeout();
+		}
+	});
+
+	FNotificationInfo Info(LOCTEXT("UpdateRequiredTitle", "Mantle Place needs an update"));
+	Info.SubText = FText::FromString(Update.Message);
+	Info.bFireAndForget = false;
+	Info.bUseSuccessFailIcons = true;
+	Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("UpdateRequiredDownload", "Download update"), FText::GetEmpty(), Download, SNotificationItem::CS_Fail));
+	Info.ButtonDetails.Add(FNotificationButtonInfo(LOCTEXT("UpdateRequiredDismiss", "Dismiss"), FText::GetEmpty(), Dismiss, SNotificationItem::CS_Fail));
+	*Shown = FSlateNotificationManager::Get().AddNotification(Info);
+	if (const TSharedPtr<SNotificationItem> Notification = Shown->Pin())
+	{
+		Notification->SetCompletionState(SNotificationItem::CS_Fail);
+	}
 }
 
 void SMantlePlaceVaultPanel::ShowToast(const FString& Message, bool bSuccess) const

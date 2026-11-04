@@ -72,8 +72,7 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
 
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(15);
 
-    private readonly string _location;
-    private readonly string _publishableKey;
+    private readonly Func<Task<RealtimeValues>>? _resolve;
     private readonly string _connectionId;
     private readonly Action<string> _log;
     private readonly Func<int, TimeSpan> _backoff;
@@ -85,6 +84,10 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
     private bool _stopped;
     private bool _offLogged;
     private int _state = (int)RealtimeState.Off;
+
+    // Set at construction, or by the loop once the published route has answered.
+    private string _location;
+    private string _publishableKey;
 
     // Owned by the loop once it runs.
     private string _wireTopic = string.Empty;
@@ -100,27 +103,52 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
     /// <param name="log">Where the client's one-line notes go.</param>
     /// <param name="backoff">The wait before the nth retry, for tests; <see cref="RealtimeChannel.Backoff"/> when <c>null</c>.</param>
     /// <param name="heartbeatInterval">For tests; <see cref="DefaultHeartbeatInterval"/> when <c>null</c>.</param>
+    /// <param name="resolve">
+    /// Where the location and key come from when none was given: asked once, on the client's own thread
+    /// after <see cref="Start"/>, so Revit's thread never waits on the network. When it answers a reason,
+    /// the client logs it and stays off. <c>null</c> keeps the given values as they are.
+    /// </param>
     public RealtimeClient(
         string location,
         string publishableKey,
         string connectionId,
         Action<string> log,
         Func<int, TimeSpan>? backoff = null,
-        TimeSpan? heartbeatInterval = null)
+        TimeSpan? heartbeatInterval = null,
+        Func<Task<RealtimeValues>>? resolve = null)
     {
         _location = location ?? string.Empty;
         _publishableKey = publishableKey ?? string.Empty;
+        _resolve = resolve;
         _connectionId = connectionId ?? throw new ArgumentNullException(nameof(connectionId));
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _backoff = backoff ?? RealtimeChannel.Backoff;
         _heartbeat = heartbeatInterval ?? DefaultHeartbeatInterval;
     }
 
-    /// <summary>The client for the configured endpoints and this launch's connection id.</summary>
-    public static RealtimeClient For(MantlePlaceEndpoints endpoints, string connectionId, Action<string> log)
+    /// <summary>
+    /// The client for the endpoints and this launch's connection id: the local override when one is set,
+    /// otherwise the location and key the platform publishes (<see cref="RealtimeLocator"/>).
+    /// </summary>
+    /// <param name="endpoints">The loaded endpoints.</param>
+    /// <param name="connectionId">This launch's connection id.</param>
+    /// <param name="log">Where the client's one-line notes go.</param>
+    /// <param name="routeHandler">For tests: the handler the published route is read through.</param>
+    public static RealtimeClient For(
+        MantlePlaceEndpoints endpoints,
+        string connectionId,
+        Action<string> log,
+        HttpMessageHandler? routeHandler = null)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        return new RealtimeClient(endpoints.RealtimeUrl, endpoints.RealtimePublishableKey, connectionId, log);
+        return RealtimeLocator.HasOverride(endpoints)
+            ? new RealtimeClient(endpoints.RealtimeUrl, endpoints.RealtimePublishableKey, connectionId, log)
+            : new RealtimeClient(
+                string.Empty,
+                string.Empty,
+                connectionId,
+                log,
+                resolve: () => RealtimeLocator.ResolveAsync(endpoints, routeHandler));
     }
 
     /// <summary>
@@ -161,7 +189,7 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
                 return true;
             }
 
-            if (RealtimeChannel.WhyOff(_location, _publishableKey) is { } off)
+            if (_resolve is null && RealtimeChannel.WhyOff(_location, _publishableKey) is { } off)
             {
                 LogOffOnce(off);
                 return false;
@@ -241,6 +269,29 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
         int attempt = 0;
         try
         {
+            if (_resolve is not null)
+            {
+                SetState(RealtimeState.Connecting);
+                Task<RealtimeValues> asking = _resolve();
+                if (!await IdleUntilAsync(asking).ConfigureAwait(false))
+                {
+                    SetState(RealtimeState.Stopped);
+                    return;
+                }
+
+                RealtimeValues values = await asking.ConfigureAwait(false);
+                if (values.WhyNot is not null)
+                {
+                    // Off for this launch, as an unconfigured install is: the next launch asks again.
+                    SetState(RealtimeState.Off);
+                    _log(values.WhyNot);
+                    return;
+                }
+
+                _location = values.Location;
+                _publishableKey = values.PublishableKey;
+            }
+
             while (true)
             {
                 SetState(RealtimeState.Connecting);

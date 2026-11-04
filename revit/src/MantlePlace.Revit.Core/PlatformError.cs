@@ -126,6 +126,8 @@ public static class PlatformErrors
     public static string? Refusal(int status, string body)
         => status is >= 200 and < 300
             ? null
+            : ClientUpdatePrompt.MinimumVersionOf(status, body) is { } minimumVersion
+                ? ClientUpdatePrompt.Sentence(minimumVersion)
             : FromBody(body) is { } platformError
                 ? platformError.Sentence
                 : $"mantle.place refused this request (HTTP {status}) and gave no reason.";

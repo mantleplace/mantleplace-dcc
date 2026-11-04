@@ -37,6 +37,9 @@ public enum RibbonGlyph
 
     /// <summary>Remove the ODbL content and leave the credit, so the project is safe to hand over.</summary>
     PrepareForHandover,
+
+    /// <summary>Open the web curator on the extent the project already knows.</summary>
+    OpenInCurator,
 }
 
 /// <summary>
@@ -64,7 +67,7 @@ public static class RibbonGlyphs
 
     /// <summary>Every command with a glyph — what the headless suite iterates.</summary>
     public static IReadOnlyList<RibbonGlyph> All { get; } =
-        [RibbonGlyph.Vault, RibbonGlyph.ImportBundle, RibbonGlyph.ProbeTerrain, RibbonGlyph.OpenLogs, RibbonGlyph.PrepareForHandover];
+        [RibbonGlyph.Vault, RibbonGlyph.ImportBundle, RibbonGlyph.ProbeTerrain, RibbonGlyph.OpenLogs, RibbonGlyph.PrepareForHandover, RibbonGlyph.OpenInCurator];
 
     /// <summary>Both themes — the same, for the same reason.</summary>
     public static IReadOnlyList<RibbonTheme> Themes { get; } = [RibbonTheme.Light, RibbonTheme.Dark];
@@ -104,6 +107,7 @@ public static class RibbonGlyphs
         RibbonGlyph.ProbeTerrain => "ProbeTerrain",
         RibbonGlyph.OpenLogs => "OpenLogs",
         RibbonGlyph.PrepareForHandover => "PrepareForHandover",
+        RibbonGlyph.OpenInCurator => "OpenInCurator",
         _ => throw new ArgumentOutOfRangeException(nameof(glyph), glyph, "no glyph is rendered for this command"),
     };
 

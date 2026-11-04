@@ -607,6 +607,16 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 		Record.SchemeVersion = MantlePlaceImportProvenance::CurrentSchemeVersion;
 		Record.ContentRoot = ContentRoot;
 		Record.JobId = Manifest.JobId;
+		// The manifest's own top-level `bbox` (WGS84 degrees), carried as stated so Open in curator can
+		// open the web curator on this order's extent later. Copied, never computed.
+		if (Manifest.Cesium.bHasBbox)
+		{
+			Record.Extent.West = Manifest.Cesium.BboxWestDeg;
+			Record.Extent.South = Manifest.Cesium.BboxSouthDeg;
+			Record.Extent.East = Manifest.Cesium.BboxEastDeg;
+			Record.Extent.North = Manifest.Cesium.BboxNorthDeg;
+			Record.bHasExtent = Record.Extent.IsValid();
+		}
 		if (!MantlePlaceImportProvenance::Write(Record))
 		{
 			// Non-fatal, and said out loud rather than swallowed: the import is complete and

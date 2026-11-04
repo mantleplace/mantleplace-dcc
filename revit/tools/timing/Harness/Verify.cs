@@ -100,9 +100,16 @@ internal static class Verify
         string path = points.GetProperty("path").GetString()!;
         string frame = points.TryGetProperty("horizontal_frame", out JsonElement f) ? f.GetString() ?? "" : "";
         string units = points.TryGetProperty("units", out JsonElement u) ? u.GetString() ?? "" : "";
-        if (units != "m" || (frame != "local_enu" && frame != "absolute_projected"))
+        // A foot delivery's points are read in its own foot: the survey point the import set is the US survey foot's
+        // metres on a ftUS delivery, and a State Plane easting read as international feet lands about a metre off.
+        double toMetres = units switch { "m" => 1.0, "ftUS" => 1200.0 / 3937.0, "ft" => 0.3048, _ => 0.0 };
+        if (toMetres == 0.0)
         {
-            return new { skipped = $"the points are '{frame}' in '{units}'; this check reads local_enu or absolute_projected in m" };
+            return new { skipped = $"the points are '{frame}' in '{units}'; this check reads m, ft or ftUS" };
+        }
+        if (frame != "local_enu" && frame != "absolute_projected")
+        {
+            return new { skipped = $"the points are '{frame}' in '{units}'; this check reads local_enu or absolute_projected" };
         }
 
         List<double[]> all = [];
@@ -128,8 +135,9 @@ internal static class Verify
         {
             double e = frame == "local_enu" ? east + all[i][0] : all[i][0];
             double n = frame == "local_enu" ? north + all[i][1] : all[i][1];
-            double? measured = ground?.At(e * FeetPerMetre, n * FeetPerMetre) / FeetPerMetre;
-            csv.Append(Invariant, $"{i},{e:F3},{n:F3},{all[i][2]:F3},{(measured is { } m ? m.ToString("F3", Invariant) : "")}\n");
+            double em = e * toMetres, nm = n * toMetres;
+            double? measured = ground?.At(em * FeetPerMetre, nm * FeetPerMetre) / FeetPerMetre;
+            csv.Append(Invariant, $"{i},{em:F3},{nm:F3},{all[i][2] * toMetres:F3},{(measured is { } m ? m.ToString("F3", Invariant) : "")}\n");
         }
 
         File.WriteAllText(Path.Combine(dir, "placement.csv"), csv.ToString());

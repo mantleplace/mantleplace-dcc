@@ -1,6 +1,5 @@
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
+using MantlePlace.PlatformApi;
 using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Client;
@@ -51,27 +50,33 @@ public readonly record struct CompleteDownload(
 /// </para>
 /// <para>
 /// Every parse this makes lives in <c>MantlePlace.Revit.Core</c>; what is here is HTTP and the
-/// polling loop.
+/// polling loop. Every route is the generated Platform API client's (<see cref="PlatformApiCalls"/>).
 /// </para>
 /// </remarks>
 public sealed class VaultClient
 {
-    private static readonly HttpClient Http = new();
+    /// <summary>The presigned storage link's reader. Storage, not the Platform API: no client header.</summary>
+    private static readonly HttpClient Storage = new();
 
     private readonly MantlePlaceEndpoints _endpoints;
     private readonly AuthSession _session;
+    private readonly HttpMessageHandler? _handler;
 
-    public VaultClient(MantlePlaceEndpoints endpoints, AuthSession session)
+    /// <param name="endpoints">Where the platform is.</param>
+    /// <param name="session">The sign-in.</param>
+    /// <param name="handler">A message handler for the Platform API calls, for tests; the shared one when <c>null</c>.</param>
+    public VaultClient(MantlePlaceEndpoints endpoints, AuthSession session, HttpMessageHandler? handler = null)
     {
         _endpoints = endpoints;
         _session = session;
+        _handler = handler;
     }
 
     /// <summary>Lists the curator's bundles.</summary>
     public async Task<(VaultListing? Listing, string? Error)> ListAsync(CancellationToken cancellationToken)
     {
         (int status, string body, string? error) = await SendAsync(
-            HttpMethod.Get, BundlesUrl(), null, cancellationToken).ConfigureAwait(false);
+            (api, ct) => api.ListVaultBundlesAsync(ct), null, cancellationToken).ConfigureAwait(false);
 
         if (error is not null || Refusal(status, body) is { } refusal && (error = refusal) is not null)
         {
@@ -102,8 +107,7 @@ public sealed class VaultClient
         }
 
         (int status, string body, string? error) = await SendAsync(
-            HttpMethod.Post,
-            MaterializeUrl(orderId),
+            (api, ct) => api.MaterializeVaultBundleFormatsAsync(orderId, new Body5(), ct),
             MaterializeJobs.BuildRequestBody(scope),
             cancellationToken).ConfigureAwait(false);
 
@@ -140,8 +144,7 @@ public sealed class VaultClient
     public async Task<ImportRouteDecision> RouteImportAsync(string orderId, CancellationToken cancellationToken)
     {
         (int status, string body, string? error) = await SendAsync(
-            HttpMethod.Post,
-            MaterializeUrl(orderId),
+            (api, ct) => api.MaterializeVaultBundleFormatsAsync(orderId, new Body5(), ct),
             MaterializeJobs.BuildRequestBody(MaterializeJobs.HostScope),
             cancellationToken).ConfigureAwait(false);
 
@@ -165,8 +168,7 @@ public sealed class VaultClient
         ArgumentNullException.ThrowIfNull(say);
 
         (int status, string body, string? error) = await SendAsync(
-            HttpMethod.Post,
-            DownloadUrl(bundle.OrderId),
+            (api, ct) => api.GetVaultBundleDownloadAsync(bundle.OrderId, new Body4(), ct),
             HostViews.BuildRequestBody(),
             cancellationToken).ConfigureAwait(false);
 
@@ -270,7 +272,7 @@ public sealed class VaultClient
         CancellationToken cancellationToken)
     {
         (int status_, string body, string? error) = await SendAsync(
-            HttpMethod.Get, MaterializeUrl(orderId), null, cancellationToken).ConfigureAwait(false);
+            (api, ct) => api.GetVaultBundleMaterializeStatusAsync(orderId, ct), null, cancellationToken).ConfigureAwait(false);
 
         if (error is not null || Refusal(status_, body) is { } refusal && (error = refusal) is not null)
         {
@@ -352,8 +354,7 @@ public sealed class VaultClient
     public async Task<VaultResult<PresignedDownload>> PresignAsync(string orderId, CancellationToken cancellationToken)
     {
         (int status, string body, string? error) = await SendAsync(
-            HttpMethod.Post,
-            DownloadUrl(orderId),
+            (api, ct) => api.GetVaultBundleDownloadAsync(orderId, new Body4(), ct),
             PresignedDownloads.BuildRequestBody(),
             cancellationToken).ConfigureAwait(false);
 
@@ -421,7 +422,7 @@ public sealed class VaultClient
     private static Func<Stream, CancellationToken, Task> StreamFrom(string url)
         => async (destination, token) =>
         {
-            using HttpResponseMessage response = await Http
+            using HttpResponseMessage response = await Storage
                 .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token)
                 .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
@@ -433,14 +434,6 @@ public sealed class VaultClient
     /// <summary>The single-flight status: a refusal everywhere except the materialize start.</summary>
     private const int Conflict = 409;
 
-    private string BundlesUrl() => Base() + "/api/v1/vault/bundles";
-
-    private string MaterializeUrl(string orderId)
-        => Base() + "/api/v1/vault/bundles/" + AuthUrls.PercentEncode(orderId) + "/materialize";
-
-    private string DownloadUrl(string orderId)
-        => Base() + "/api/v1/vault/bundles/" + AuthUrls.PercentEncode(orderId) + "/download";
-
     /// <summary>
     /// <c>HPS-19</c>: trimmed, trailing slashes stripped, and validated to have a host before use.
     /// </summary>
@@ -450,8 +443,8 @@ public sealed class VaultClient
             + MantlePlaceEndpoints.ConfigPath + ".");
 
     /// <summary>
-    /// One request, with the bearer token attached. Reports the status code alongside the body so
-    /// the caller decides what a non-2xx means.
+    /// One Platform API call, with the bearer token attached. Reports the status code alongside the
+    /// body so the caller decides what a non-2xx means.
     /// </summary>
     /// <remarks>
     /// <c>Error</c> is set only when there was no response at all. Whether a response that arrived
@@ -459,8 +452,7 @@ public sealed class VaultClient
     /// legitimately reads a 409 as a success (<c>HPS-24</c>).
     /// </remarks>
     private async Task<(int Status, string Body, string? Error)> SendAsync(
-        HttpMethod method,
-        string url,
+        Func<PlatformApiClient, CancellationToken, Task> operation,
         string? jsonBody,
         CancellationToken cancellationToken,
         bool isRetry = false)
@@ -474,27 +466,18 @@ public sealed class VaultClient
             if (!isRetry && _session.CanRenewSession
                 && (await _session.RefreshAsync(cancellationToken).ConfigureAwait(false)).Succeeded)
             {
-                return await SendAsync(method, url, jsonBody, cancellationToken, isRetry: true)
+                return await SendAsync(operation, jsonBody, cancellationToken, isRetry: true)
                     .ConfigureAwait(false);
             }
 
             return (0, string.Empty, "Sign in to Mantle Place first.");
         }
 
-        using HttpRequestMessage request = new(method, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        if (jsonBody is not null)
-        {
-            request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-        }
-
         try
         {
-            using HttpResponseMessage response = await Http.SendAsync(request, cancellationToken)
+            (int status, string body) = await PlatformApiCalls.For(Base(), _handler)
+                .SendAsync(operation, accessToken, cancellationToken, jsonBody)
                 .ConfigureAwait(false);
-            string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
             // An access token that aged out mid-session looks exactly like this. Renew once and send
             // the request again, rather than handing the curator "sign in first" while a perfectly
@@ -509,14 +492,14 @@ public sealed class VaultClient
             // renewal is in flight -- a second caller gets Abandoned and reports the refusal rather
             // than starting a competing refresh, because two refreshes present the same token and a
             // rotating platform rejects the second as already-used.
-            if ((int)response.StatusCode == 401 && !isRetry && _session.CanRenewSession
+            if (status == 401 && !isRetry && _session.CanRenewSession
                 && (await _session.RefreshAsync(cancellationToken).ConfigureAwait(false)).Succeeded)
             {
-                return await SendAsync(method, url, jsonBody, cancellationToken, isRetry: true)
+                return await SendAsync(operation, jsonBody, cancellationToken, isRetry: true)
                     .ConfigureAwait(false);
             }
 
-            return ((int)response.StatusCode, body, null);
+            return (status, body, null);
         }
         catch (HttpRequestException ex)
         {

@@ -14,9 +14,9 @@ namespace MantlePlace.Revit.Core;
 /// the curator came from. The shim only opens what <see cref="Build"/> returns.
 /// </para>
 /// <para>
-/// ⛔ <b>Nothing else goes in the URL.</b> The four parameters are the whole vocabulary: no address,
-/// no name, no free text, no token. A version or order id that fails its pattern is <b>left out</b>,
-/// never sent raw, so a value that is not what it claims to be cannot ride along in the query.
+/// ⛔ <b>Nothing else goes in the URL.</b> The five parameters are the whole vocabulary: no address,
+/// no name, no free text, no token. A version, order id or rating that fails its pattern is <b>left
+/// out</b>, never sent raw, so a value that is not what it claims to be cannot ride along in the query.
 /// </para>
 /// </remarks>
 public static class FeedbackLink
@@ -26,6 +26,12 @@ public static class FeedbackLink
 
     /// <summary>The site, when the configured address is unusable: a feedback link beats no link.</summary>
     public const string DefaultSite = "https://mantle.place";
+
+    /// <summary>The <c>rating</c> the import prompt's Yes sends.</summary>
+    public const string RatingUp = "up";
+
+    /// <summary>The <c>rating</c> the import prompt's No sends.</summary>
+    public const string RatingDown = "down";
 
     // \z, not $: .NET's $ also matches before a trailing newline, and "1.2\n" is not a version.
     private static readonly Regex VersionPattern = new(
@@ -38,8 +44,9 @@ public static class FeedbackLink
     /// <param name="siteBaseUrl">The deployment this plugin talks to; unusable falls back to <see cref="DefaultSite"/>.</param>
     /// <param name="pluginVersion">This add-in's version, digits and dots only (see <see cref="ReleaseVersion"/>).</param>
     /// <param name="hostVersion">The running Revit's version number — <c>2025</c>, <c>2026</c>, <c>2027</c>.</param>
-    /// <param name="orderId">The bundle's order id, for <c>Report a Problem</c> only; omitted unless a UUID.</param>
-    public static string Build(string? siteBaseUrl, string? pluginVersion, string? hostVersion, string? orderId = null)
+    /// <param name="orderId">The bundle's order id, for <c>Report a Problem</c> and the import prompt only; omitted unless a UUID.</param>
+    /// <param name="rating">The import prompt's answer, exactly <see cref="RatingUp"/> or <see cref="RatingDown"/>; anything else is omitted.</param>
+    public static string Build(string? siteBaseUrl, string? pluginVersion, string? hostVersion, string? orderId = null, string? rating = null)
     {
         StringBuilder link = new();
         link.Append(AuthUrls.NormaliseBaseUrl(siteBaseUrl) ?? DefaultSite);
@@ -55,15 +62,31 @@ public static class FeedbackLink
             link.Append("&hv=").Append(hostVersion);
         }
 
-        if (orderId is not null
-            && Guid.TryParseExact(orderId, "D", out Guid order)
-            && order != Guid.Empty)
+        if (OrderIdOf(orderId) is { } order)
         {
-            link.Append("&order=").Append(order.ToString("D", CultureInfo.InvariantCulture));
+            link.Append("&order=").Append(order);
+        }
+
+        // Ordinal and exact: "UP", " up" and "up" plus a newline are not the token, and are not sent.
+        if (rating is RatingUp or RatingDown)
+        {
+            link.Append("&rating=").Append(rating);
         }
 
         return link.ToString();
     }
+
+    /// <summary>
+    /// The order id in its canonical lower-case form, or <c>null</c> when it is not a UUID (or is the
+    /// empty one): the one test of what may ride in <c>order</c>, and the key the import prompt
+    /// remembers a bundle by.
+    /// </summary>
+    public static string? OrderIdOf(string? orderId)
+        => orderId is not null
+            && Guid.TryParseExact(orderId, "D", out Guid order)
+            && order != Guid.Empty
+                ? order.ToString("D", CultureInfo.InvariantCulture)
+                : null;
 
     /// <summary>
     /// The version without the build metadata an informational version carries

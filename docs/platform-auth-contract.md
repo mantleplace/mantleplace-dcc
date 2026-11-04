@@ -44,7 +44,7 @@ packaging time and whose absence, unreadability or malformation falls back to th
 rather than throwing. Neither host's override is a secret; it is a way to point somewhere else.
 
 **Native login** — `WebLoginUrl`, default `https://mantle.place/auth/native?host=<hostId>`: Unreal
-sends `?host=unreal`, Revit `?host=revit`.
+sends `?host=unreal`, Revit `?host=revit`, AutoCAD `?host=autocad`.
 
 `host` is optional and **display-only**. The sign-in page reads it to name the editor in its
 heading, its credential prompt and its tab title instead of saying "the application"; the value is

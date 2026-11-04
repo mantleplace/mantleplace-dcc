@@ -1,74 +1,189 @@
 ---
 name: triage-labels
-description: The labels this repository's tracker uses itself: the states and categories an issue carries, the `waiting` state, the `spec` label a parent spec carries in place of a state, the `host:*` labels and the `public-hygiene` label. Read before applying, removing or reasoning about a label.
+description: The labels this repository's tracker uses: the issue types, the one state label, the `blocked:` family, the Brief and comment format, and the orthogonal labels. Read before applying, removing or reasoning about a label.
 ---
 
-# Triage labels
+# Triage labels and the tracker convention
 
-The engineering skills speak in terms of canonical triage roles. This file lists the label strings
-this tracker uses for them, and the labels that are this repository's own. Any other label on the
-tracker is the skills' general vocabulary, not restated here.
+This repo's issue tracker follows the Mantle Place tracker convention, copied here by `/bootstrap` so
+the repo needs nothing else. Where a skill names a triage role, use the label string in the state table
+below. This text overrides the tracker text of an upstream skill such as `/triage`: its labels, its
+comment disclaimer, its titles.
 
-## States
+## Vocabulary
 
-| Label             | Meaning                                                                   |
-| ----------------- | ------------------------------------------------------------------------- |
-| `needs-triage`    | Maintainer needs to evaluate this issue                                   |
-| `needs-info`      | Waiting on the reporter for more information                              |
-| `ready-for-agent` | Fully specified, ready for an AFK agent                                   |
-| `ready-for-human` | Requires human implementation                                             |
-| `waiting`         | Parked until the trigger its own body names                               |
-| `wontfix`         | Will not be actioned                                                      |
-
-`waiting` marks an issue parked until a trigger its own body names: an observation, a platform change,
-a real bundle to design against. Un-park it by removing the label and saying in a comment whether the
-trigger fired or the maintainer chose to bring the item forward. It is not exempt from the stale job;
-a waiting issue whose trigger is long-lived wants `pinned` as well.
-
-## Categories
-
-`bug` (something is broken) and `enhancement` (new feature or improvement).
-
-Every triaged issue carries exactly one category and one state, except a parent spec.
-
-## Spec
-
-`spec` marks a parent spec: an effort that spans several pull requests. It carries its category and
-`spec`, and **no state** — `spec` takes the state's place. Its tickets are native sub-issues, each a
-normal triaged issue with its own category and state. The parent closes when its last sub-issue
-closes. A spec one pull request can deliver is its own ticket and gets no `spec` label.
-
-## `public-hygiene`
-
-Applied and removed by `ci-tracker-hygiene`, never by hand. It means this issue's own text cites
-something only a private repository can resolve ([`public-surface.md`](public-surface.md)). It is
-orthogonal to the states, and it clears itself once the text is edited — removing it manually hides a
-finding rather than fixing one.
-
-## Host labels
-
-Which plugin an issue is about. **Orthogonal to category and state, and more than one may apply** —
-a change to the shared spec or the conformance corpus lands on several hosts at once.
-
-| Label | Host |
+| Term | Meaning |
 | --- | --- |
-| `host:unreal` | Mantle Place for Unreal |
-| `host:revit` | Mantle Place for Revit |
-| `host:rhino` | Mantle Place for Rhino |
-| `host:blender` | Mantle Place for Blender |
-| `host:max` | Mantle Place for 3ds Max |
-| `host:all` | Cross-host: every plugin host, or the shared spec, tools and corpus |
+| Issue | any GitHub issue |
+| Spec | a parent issue |
+| Ticket | a sub-issue of a Spec that one PR delivers |
+| Decision ticket | a child of a Map |
+| Map | a `wayfinder:map` issue |
 
-`host:all` is not "I don't know which" — that is an unlabelled host, and it is a `needs-triage`
-signal. Use `host:all` when the answer is genuinely every host: the spec, the conformance corpus,
-`tools/`, the workflows, the repo's own documentation.
+## Issue types
 
-Labels exist for all five hosts so an issue filed against a future host has somewhere to go; a label
-is not a folder, and the rule that a top-level folder appears only with real content is untouched by
-this. The bug-report template asks for the host as a required dropdown, but an issue form cannot turn
-that answer into a label. Applying it is a triage step.
+Kind is the org issue type, not a label. The `mantleplace` org has seven, shown as a badge in the
+list and filterable with `type:`:
 
-## Deleting a label
+| Type | For |
+| --- | --- |
+| Bug | something is broken |
+| Feature | new capability or improvement |
+| Task | a unit of work that is neither of those |
+| Chore | upkeep with no user-visible change |
+| Spec | a parent issue |
+| Map | a `wayfinder:map` issue |
+| Decision | a child of a Map |
 
-Don't, if anything has ever carried it. Removing a label strips it from every issue that used it,
-including closed ones, and the tracker is the only record that it was ever applied.
+Every issue has exactly one type. A Map's children are typed Decision. The labels
+`wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling` and `wayfinder:task` stay as
+sub-kind tags, and `wayfinder:map` stays, because upstream `/map` reads them. The retired labels
+`bug`, `enhancement` and `spec` became types.
+
+## State
+
+**Every issue carries exactly one state label.** `ready-for-agent` is the only state that means
+"start a session". Everything that cannot be started wears a `blocked:` label.
+
+| Role | Label | Colour | Meaning |
+| --- | --- | --- | --- |
+| `needs-triage` | `needs-triage` | `fbca04` | maintainer needs to evaluate this issue |
+| `needs-info` | `needs-info` | `fbca04` | waiting on the reporter for more information |
+| `ready-for-agent` | `ready-for-agent` | `0e8a16` | fully specified, and nothing blocks it |
+| `blocked:issue` | `blocked:issue` | `d93f0b` | another issue lands first |
+| `blocked:date` | `blocked:date` | `d93f0b` | nothing to do until a date |
+| `blocked:founder` | `blocked:founder` | `d93f0b` | a manual step only the founder can do |
+| `blocked:decision` | `blocked:decision` | `d93f0b` | a founder judgment call |
+| `blocked:external` | `blocked:external` | `d93f0b` | a vendor, an app review or a customer |
+
+Colours: `ready-for-agent` green `0e8a16`, `needs-*` yellow `fbca04`, all `blocked:*` red-orange
+`d93f0b`. One visual family per meaning.
+
+- A founder-only task takes `blocked:founder`.
+- `ready-for-agent` with an open native blocker is wrong: the issue is `blocked:issue`.
+- `wontfix` is gone: close the issue as "not planned".
+- `ready-for-human`, `waiting`, `waiting:date` and `deferred` are retired, each became the matching
+  `blocked:` state.
+- A parent Spec carries its type and a state like any issue; it is never grabbed by an agent, and it
+  closes when its last ticket does.
+- Blocked states clear themselves: `land` moves the dependants of a closed ticket from
+  `blocked:issue` to `ready-for-agent`, and a daily workflow wakes `blocked:date` issues on their
+  date and reconciles any missed `blocked:issue`. The daily job is `.github/workflows/tracker-daily.yml`,
+  which runs the kit's `unblock` script (`--dry-run` lists the moves) with the org token in the repo secret
+  `TRACKER_TOKEN`; a date is due on the day itself, and a `Then:` that names a `blocked:` state is left
+  for a person.
+
+## Orthogonal labels
+
+`host:*`, `user-request`, `documentation`, `public-hygiene`, `wayfinder:*` and a repo's CI labels
+are not states and not kinds. They stay, and they are the only per-repo additions. `documentation`
+is an area tag: a docs issue is a Task or Chore plus `documentation`.
+
+## Titles
+
+- Form: `<Area>: <imperative summary>` in sentence case, about 70 characters at most. The area is
+  optional.
+- No kind prefix. `Spec:` and `Grill:` are retired, because the type badge shows in the list.
+- State appears in a title in one place only: a `blocked:date` issue ends ` — until YYYY-MM-DD`
+  (spaced em dash). A label cannot carry a date without label sprawl, so the suffix is the canonical
+  copy of the date. Setting `blocked:date` adds it; setting any other state strips it.
+
+## The Brief
+
+Every issue opens with a Brief for the founder, under `## Brief`, followed by a `---` divider and
+then the robot sections. The markup is exact:
+
+```
+## Brief
+
+**What:** <one sentence: the outcome for a user or the founder>
+**Why:** <one sentence: why it matters now>
+**Waiting on:** <what clears it, and who or when>. Then: `<next state>`
+
+---
+```
+
+- `Waiting on` is present only while the state is `blocked:*`. Each state change rewrites that line
+  or removes it.
+- `Then:` names the state the issue moves to once cleared, and the daily workflow reads it. With no
+  `Then:`, the next state is `ready-for-agent`.
+- No paths in the Brief. Write it so a newcomer could follow it.
+
+## Body order
+
+- **Spec:** Brief, then the `/spec` template sections.
+- **Ticket:** Brief, then `## What to build` (with the `**Agent tier:** light|standard|heavy` line)
+  and `## Acceptance criteria`.
+- **Map:** Brief, then the `/map` sections.
+
+Native sub-issue and blocked-by links are the only copy of parent and blockers; they work across
+repos within the org. A body carries no `## Parent` or `## Blocked by` section. A ticket without an
+`**Agent tier:**` line is refused.
+
+## Comments
+
+An agent comment has this shape:
+
+```
+<tag> <one plain sentence: the outcome>
+
+<details><summary>Detail</summary>
+
+<the detail>
+
+<!-- mp:comment tag=<tag-name> -->
+_Generated by AI._
+</details>
+```
+
+- **First line.** One plain sentence starting with one of the tags `✅ Landed`, `🔄 Progress`,
+  `⛔ Blocked`, `❓ Needs you`, `📋 Breakdown`, `🧭 Handoff` or `🔍 Triage`.
+- **Body.** The detail goes inside `<details><summary>Detail</summary> … </details>`.
+- **Footer.** Inside the details, the AI disclaimer `_Generated by AI._` and the hidden marker
+  `<!-- mp:comment tag=<tag-name> -->` (the tag lower-cased, one word: `landed`, `progress`,
+  `blocked`, `needs-you`, `breakdown`, `handoff`, `triage`), so scripts find agent comments by the
+  marker, not by sniffing for disclaimer text.
+
+PR comments use the same format, through the kit's `pr-comment`.
+
+## Pull requests
+
+A PR body gains a one-line Brief above `Closes #N`, and nothing else in it changes:
+
+```
+**Brief:** <what this changes and why, in one line>
+```
+
+## Writing through `issue`
+
+The kit's `issue` script (`create`, `state`, `brief`, `comment`) is the choke point: skills and
+sessions create, relabel and comment through it rather than each embedding the format. It refuses a
+title that breaks the rules, a missing type, a missing tier on a ticket, a `blocked:date` without a
+date, and a state outside this vocabulary. A refusal is status `fail` with every reason in
+`data.refused` and nothing written.
+
+- `issue create --title … --type … --state … --what … --why …` writes the title, type, one state label and
+  the Brief, then the native sub-issue (`--parent`) and blocked-by (`--blocked-by`) links.
+- `issue state --issue n --state …` moves the one state label, adds or strips the ` — until` suffix, and
+  rewrites or removes the Brief's Waiting on line.
+- `issue brief --issue n …` rewrites the Brief; `issue comment --issue n --tag … --body-uri …` posts the
+  house comment, the first line of the text being its outcome.
+- A ticket is a `--parent` issue whose type is not Decision; it needs `--tier` or a tier line in its body.
+
+## The startable query
+
+The bookmarked org query lists only what a session can start, each result showing its type badge:
+
+```
+org:mantleplace is:open label:ready-for-agent -is:blocked
+```
+
+`next` counts a ticket as startable only when it is `ready-for-agent` with no open native blocker,
+and flags each open issue that does not conform: no type, not exactly one state, no Brief, a
+`blocked:date` without a title suffix, `ready-for-agent` with an open blocker, or a body copy of
+`## Parent` or `## Blocked by`.
+
+## Repo-local labels
+
+A repo documents its local labels in its own label page,
+which holds only a pointer here and those labels. Nothing in a repo's local labels may be a state.

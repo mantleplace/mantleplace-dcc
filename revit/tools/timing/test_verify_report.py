@@ -83,10 +83,44 @@ class PlacementCases(unittest.TestCase):
         folder = run_dir("0,1,2,100.0,102.5\n", verify_record())
         self.assertFalse(verify_report.judge(folder)["placement"]["pass"])
 
+    def test_revit_2025_holds_its_own_wider_tolerance(self):
+        folder = run_dir("0,1,2,100.0,101.6\n", verify_record())
+        write(os.path.join(folder, "meta.json"), json.dumps({"year": "2025"}))
+        placement = verify_report.judge(folder)["placement"]
+        self.assertTrue(placement["pass"])
+        self.assertEqual(placement["tolerance_m"], verify_report.PLACEMENT_TOLERANCE_2025_M)
+
+    def test_revit_2025_still_fails_past_its_own_tolerance(self):
+        folder = run_dir("0,1,2,100.0,102.5\n", verify_record())
+        write(os.path.join(folder, "meta.json"), json.dumps({"year": "2025"}))
+        self.assertFalse(verify_report.judge(folder)["placement"]["pass"])
+
+    def test_revit_2026_and_2027_keep_the_one_metre_bar(self):
+        for year in ("2026", "2027"):
+            folder = run_dir("0,1,2,100.0,101.6\n", verify_record())
+            write(os.path.join(folder, "meta.json"), json.dumps({"year": year}))
+            placement = verify_report.judge(folder)["placement"]
+            self.assertFalse(placement["pass"], year)
+            self.assertEqual(placement["tolerance_m"], 1.0)
+
+    def test_a_run_folder_without_a_year_keeps_the_one_metre_bar(self):
+        folder = run_dir("0,1,2,100.0,101.6\n", verify_record())
+        self.assertFalse(verify_report.judge(folder)["placement"]["pass"])
+
     def test_the_frame_check_compares_the_internal_origin_with_the_manifest_origin(self):
         moved = verify_record(internal_origin_in_shared_m=[1000.0, 2003.0, 0.0])
         self.assertFalse(verify_report.judge(run_dir("0,1,2,1,1\n", moved))["frame"]["pass"])
         self.assertTrue(verify_report.judge(run_dir("0,1,2,1,1\n", verify_record()))["frame"]["pass"])
+
+    def test_the_frame_check_reads_a_foot_origin_in_its_own_foot(self):
+        # A State Plane easting: the two feet differ by about a metre here, so the wrong one fails.
+        east, north = 1449621.322926113, 542689.5776930021
+        us = verify_record(origin_projected={"east": east, "north": north, "unit": "ftUS"},
+                           internal_origin_in_shared_m=[east * 1200 / 3937, north * 1200 / 3937, 0.0])
+        self.assertTrue(verify_report.judge(run_dir("0,1,2,1,1\n", us))["frame"]["pass"])
+        international = verify_record(origin_projected={"east": east, "north": north, "unit": "ft"},
+                                      internal_origin_in_shared_m=[east * 1200 / 3937, north * 1200 / 3937, 0.0])
+        self.assertFalse(verify_report.judge(run_dir("0,1,2,1,1\n", international))["frame"]["pass"])
 
 
 class LinkCases(unittest.TestCase):

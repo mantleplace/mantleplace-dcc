@@ -246,6 +246,28 @@ class ThePointerRule(Case):
         self.assertPasses(report)
         self.assertIn("pointer.outside-view", self.codes(report, "info"))
 
+    def _folder_cut(self, files: dict) -> object:
+        document = manifest(layout={**LAYOUT, "drawings": "Drawings/"}, files=files,
+                            view={"kind": "standard", "parts": ["core"]})
+        return self.run_folder(bundle_files(document))
+
+    def test_a_folder_another_view_holds_is_not_missing(self) -> None:
+        report = self._folder_cut({
+            "Drawings/a.dxf": {"part": "drawings", "size_bytes": 1, "sha256": "a" * 64},
+            "Drawings/b.dxf": {"part": "drawings", "size_bytes": 1, "sha256": "b" * 64}})
+        self.assertPasses(report)
+        self.assertIn("pointer.outside-view", self.codes(report, "info"))
+
+    def test_a_folder_with_nothing_under_it_is_missing(self) -> None:
+        report = self._folder_cut({})
+        self.assertIn("pointer.missing", self.codes(report))
+
+    def test_a_folder_with_a_file_missing_from_a_carried_part_is_missing(self) -> None:
+        report = self._folder_cut({
+            "Drawings/a.dxf": {"part": "drawings", "size_bytes": 1, "sha256": "a" * 64},
+            "Drawings/b.dxf": {"part": "core", "size_bytes": 1, "sha256": "b" * 64}})
+        self.assertIn("pointer.missing", self.codes(report))
+
 
 class TheHashes(Case):
     def test_a_matching_hash_is_verified(self) -> None:

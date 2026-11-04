@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/MantlePlace.Revit.Core/MantlePlace.Revit.Core.csproj" />
+    <Project Path="src/MantlePlace.PlatformApi/MantlePlace.PlatformApi.csproj" />
     <Project Path="src/MantlePlace.Revit.Client/MantlePlace.Revit.Client.csproj" />
     <Project Path="src/MantlePlace.Revit.Addin/MantlePlace.Revit.Addin.csproj" />
   </Folder>

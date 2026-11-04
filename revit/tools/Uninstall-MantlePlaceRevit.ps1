@@ -153,7 +153,8 @@ else {
     }
     else {
         $answer = Read-Host 'Delete it too? Bundles you downloaded will have to be downloaded again. [y/N]'
-        $remove = ($answer.Trim() -match '^(y|yes)$')
+        # Read-Host returns null, not '', when there is no console to read (Uninstall.cmd < nul).
+        $remove = ("$answer".Trim() -match '^(y|yes)$')
     }
 
     if ($remove) {

@@ -69,6 +69,7 @@ exitCode |= AuthClientTests.Run();
 exitCode |= AccountRibbonTests.Run();
 exitCode |= HelpLinksTests.Run();
 exitCode |= FeedbackLinkTests.Run();
+exitCode |= ImportFeedbackPromptTests.Run();
 exitCode |= RibbonImageryTests.Run();
 exitCode |= WindowLabelsTests.Run();
 exitCode |= ImportWindowStackingTests.Run();
@@ -92,7 +93,10 @@ exitCode |= ExportProtocolTests.Run();
 exitCode |= ExportsClientTests.Run();
 exitCode |= RealtimeFramesTests.Run();
 exitCode |= RealtimeClientTests.Run();
+exitCode |= PlatformApiTests.Run();
+exitCode |= PlatformConformanceTests.Run();
 exitCode |= ConnectedHostTests.Run();
+exitCode |= CuratorExtentTests.Run();
 
 if (exitCode == 0)
 {

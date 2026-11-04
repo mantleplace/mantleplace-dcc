@@ -19,6 +19,11 @@ namespace MantlePlaceImportProvenance
 		const TCHAR* const KeyScheme = TEXT("scheme_version");
 		const TCHAR* const KeyContentRoot = TEXT("content_root");
 		const TCHAR* const KeyJobId = TEXT("job_id");
+		const TCHAR* const KeyBbox = TEXT("bbox");
+		const TCHAR* const KeyWest = TEXT("west");
+		const TCHAR* const KeySouth = TEXT("south");
+		const TCHAR* const KeyEast = TEXT("east");
+		const TCHAR* const KeyNorth = TEXT("north");
 	}
 
 	EVerdict Classify(
@@ -100,6 +105,15 @@ namespace MantlePlaceImportProvenance
 		Root->SetNumberField(KeyScheme, Record.SchemeVersion);
 		Root->SetStringField(KeyContentRoot, Record.ContentRoot);
 		Root->SetStringField(KeyJobId, Record.JobId);
+		if (Record.bHasExtent && Record.Extent.IsValid())
+		{
+			const TSharedRef<FJsonObject> Bbox = MakeShared<FJsonObject>();
+			Bbox->SetNumberField(KeyWest, Record.Extent.West);
+			Bbox->SetNumberField(KeySouth, Record.Extent.South);
+			Bbox->SetNumberField(KeyEast, Record.Extent.East);
+			Bbox->SetNumberField(KeyNorth, Record.Extent.North);
+			Root->SetObjectField(KeyBbox, Bbox);
+		}
 
 		FString Out;
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Out);
@@ -130,6 +144,23 @@ namespace MantlePlaceImportProvenance
 		}
 		Root->TryGetStringField(KeyContentRoot, Parsed.ContentRoot);
 		Root->TryGetStringField(KeyJobId, Parsed.JobId);
+
+		// The extent is optional and never makes a record unreadable: a record from an earlier build
+		// has none, and a bad one reads as none rather than as a refusal to re-import.
+		const TSharedPtr<FJsonObject>* BboxObject = nullptr;
+		if (Root->TryGetObjectField(KeyBbox, BboxObject) && BboxObject != nullptr && BboxObject->IsValid())
+		{
+			FMantlePlaceExtent Extent;
+			if ((*BboxObject)->TryGetNumberField(KeyWest, Extent.West)
+				&& (*BboxObject)->TryGetNumberField(KeySouth, Extent.South)
+				&& (*BboxObject)->TryGetNumberField(KeyEast, Extent.East)
+				&& (*BboxObject)->TryGetNumberField(KeyNorth, Extent.North)
+				&& Extent.IsValid())
+			{
+				Parsed.bHasExtent = true;
+				Parsed.Extent = Extent;
+			}
+		}
 
 		OutRecord = MoveTemp(Parsed);
 		return true;

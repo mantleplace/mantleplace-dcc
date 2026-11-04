@@ -75,14 +75,21 @@ void UMantlePlaceVaultImportOrchestrator::EnsureAuthDelegateBound()
 	if (UMantlePlaceAuthSystemBase* Prev = BoundAuthSystem.Get())
 	{
 		Prev->OnAuthStateChangedNative.RemoveAll(this);
+		Prev->OnClientUpdateRequiredNative.RemoveAll(this);
 	}
 	AuthSystem->OnAuthStateChangedNative.AddUObject(this, &UMantlePlaceVaultImportOrchestrator::HandleAuthStateChangedNative);
+	AuthSystem->OnClientUpdateRequiredNative.AddUObject(this, &UMantlePlaceVaultImportOrchestrator::HandleClientUpdateRequiredNative);
 	BoundAuthSystem = AuthSystem;
 }
 
 void UMantlePlaceVaultImportOrchestrator::HandleAuthStateChangedNative(EMantlePlaceAuthState NewState)
 {
 	OnAuthChanged.Broadcast(NewState);
+}
+
+void UMantlePlaceVaultImportOrchestrator::HandleClientUpdateRequiredNative(const FMantlePlaceClientUpdate& Update)
+{
+	OnClientUpdateRequiredNative.Broadcast(Update);
 }
 
 void UMantlePlaceVaultImportOrchestrator::EnsureClients()
@@ -110,6 +117,7 @@ void UMantlePlaceVaultImportOrchestrator::EnsureClients()
 	{
 		VaultClient = NewObject<UMantlePlaceVaultClient>(this);
 		VaultClient->OnVaultListedNative.AddUObject(this, &UMantlePlaceVaultImportOrchestrator::HandleVaultListedNative);
+		VaultClient->OnClientUpdateRequiredNative.AddUObject(this, &UMantlePlaceVaultImportOrchestrator::HandleClientUpdateRequiredNative);
 		VaultClient->OnPresignedUrlReadyNative.AddUObject(this, &UMantlePlaceVaultImportOrchestrator::HandlePresignedNative);
 		VaultClient->OnMaterializeStartedNative.AddUObject(this, &UMantlePlaceVaultImportOrchestrator::HandleMaterializeStartedNative);
 		VaultClient->OnMaterializeStatusNative.AddUObject(this, &UMantlePlaceVaultImportOrchestrator::HandleMaterializeStatusNative);

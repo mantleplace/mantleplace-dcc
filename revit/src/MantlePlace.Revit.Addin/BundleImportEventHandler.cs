@@ -600,12 +600,35 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         End(import);
     }
 
+    /// <summary>
+    /// What the "Did this import come in right?" line opens for Yes and No, or <c>null</c> when this
+    /// import asks nothing (<c>HPS-56</c>).
+    /// </summary>
+    /// <remarks>
+    /// Only with a window to show it in, and the bundle is remembered as asked about the moment it is
+    /// decided here, so a line the curator ignores is not asked again. The decision is
+    /// <see cref="ImportFeedbackPrompt"/>'s; the store only keeps it.
+    /// </remarks>
+    private ImportFeedbackLinks? FeedbackAsk(ActiveImport import)
+    {
+        if (_window is null)
+        {
+            return null;
+        }
+
+        ImportEnding ending = ImportEndings.Of(import.Failed, import.Staged is not null, import.Staged?.WasCancelled ?? false);
+        return ActiveImport.AskedStore.Claim(ending, import.OrderId) is { } order
+            ? FeedbackLauncher.ImportLinks(order)
+            : null;
+    }
+
     private void End(ActiveImport import)
     {
         _window?.ShowFinished(
             import.Staged is { } staged ? ImportRunView.Of(staged) : null,
             import.Staged?.Outcome,
-            import.Summary ?? string.Empty);
+            import.Summary ?? string.Empty,
+            FeedbackAsk(import));
         import.Dispose();
 
         bool fromVault = _fromVault;

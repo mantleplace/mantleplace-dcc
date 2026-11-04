@@ -44,6 +44,28 @@ class FeedbackUrlTests(unittest.TestCase):
         params = query(feedback_url("0.1.0", "5.2.0", order_id="someone@example.com"))[1]
         self.assertNotIn("order", params)
 
+    def test_the_import_prompt_sends_its_rating_as_up_or_down(self):
+        order = "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"
+        for rating in ("up", "down"):
+            with self.subTest(rating=rating):
+                params = query(feedback_url("0.1.0", "5.2.0", order_id=order, rating=rating))[1]
+                self.assertEqual(params["rating"], [rating])
+                self.assertEqual(params["order"], [order])
+
+    def test_a_rating_that_is_not_exactly_up_or_down_is_left_out(self):
+        for bad in ("UP", "Down", "yes", "no", "1", "", " up", "up ", "up&x=1", "up\n", None, 1, True):
+            with self.subTest(bad=bad):
+                self.assertNotIn("rating", query(feedback_url("0.1.0", "5.2.0", rating=bad))[1])
+
+    def test_the_general_action_sends_no_rating(self):
+        self.assertNotIn("rating", query(feedback_url("0.1.0", "5.2.0"))[1])
+
+    def test_no_parameter_outside_the_five_is_ever_emitted(self):
+        url = feedback_url("0.1.0&email=a@b.c", "5.2.0", order_id="x&name=me", rating="up&token=1")
+        self.assertEqual(set(query(url)[1]), {"source", "hv"})
+        url = feedback_url("0.1.0", "5.2.0", "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b", "down")
+        self.assertEqual(set(query(url)[1]), {"source", "v", "hv", "order", "rating"})
+
 
 if __name__ == "__main__":
     unittest.main()

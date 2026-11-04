@@ -15,6 +15,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
     private const string TabName = "Mantle Place";
 
     private static AuthSession? _session;
+    private static SessionRenewer? _renewer;
     private static MantlePlaceEndpoints? _endpoints;
     private static VaultClient? _vault;
     private static BundleCache? _cache;
@@ -669,6 +670,8 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load();
         _endpoints = endpoints;
+        // Before the first Platform API call (the restore below), so a 426 on it is heard.
+        ClientUpdateDialog.Attach();
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
         _vault = new VaultClient(endpoints, _session);
         _cache = new BundleCache();
@@ -786,6 +789,22 @@ public sealed class MantlePlaceApplication : IExternalApplication
         RibbonImagery.Give(handover, RibbonGlyph.PrepareForHandover);
         GiveHelp(handover);
 
+        PushButton curator = (PushButton)panel.AddItem(new PushButtonData(
+            "MantlePlaceOpenInCurator",
+            "Open in\nCurator",
+            assemblyPath,
+            typeof(OpenInCuratorCommand).FullName)
+        {
+            ToolTip = "Open the web curator on the extent this project already knows.",
+            LongDescription =
+                "Opens the Mantle Place curator in your browser with the extent drawn and ready. The extent "
+                + "is the one of the order this project was imported from, read from your vault, or else the "
+                + "project's site location, with a size you choose. A project with neither opens the plain "
+                + "curator. Nothing in your project changes.",
+        });
+        RibbonImagery.Give(curator, RibbonGlyph.OpenInCurator);
+        GiveHelp(curator);
+
         // Everything after this call lands in the slide-out rather than on the panel face, and the
         // panel grows the small unfold arrow at its foot that opens it. The two buttons above are
         // how a curator gets content in; the two below are what they reach for when that went wrong,
@@ -836,6 +855,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
         // including before this line; reading the session here rather than trusting the event means
         // a transition that landed while the ribbon was still being built is not missed.
         _session.StateChanged += OnAuthStateChanged;
+
+        // Renews ahead of each lapse: the connected host's channel makes no route call to renew on.
+        _renewer = new SessionRenewer(_session);
         _watcher.Ended += OnPrepareEnded;
         _news.Arrived += OnNewsArrived;
         _news.Listed += OnVaultListed;
@@ -903,6 +925,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         PrepareNotifier.Forget();
         RibbonImagery.Forget();
+        ClientUpdateDialog.Detach();
 
         if (_uiDispatcher is not null)
         {
@@ -916,6 +939,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
         {
             _session.StateChanged -= OnAuthStateChanged;
         }
+
+        _renewer?.Dispose();
+        _renewer = null;
 
         _accountButton = null;
         _accountFace = null;

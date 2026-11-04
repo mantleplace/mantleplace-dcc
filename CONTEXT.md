@@ -18,8 +18,9 @@ format-served host, and never both.
 _Avoid_: application, editor, target, integration
 
 **Plugin host**:
-A DCC host this repository ships a Mantle Place plugin for. Currently Unreal Engine, Revit and Blender. Every
-fixed-frame host and every order-frame host is a plugin host.
+A DCC host this repository ships a Mantle Place plugin for. Currently Unreal Engine, Revit and Blender, and the
+AutoCAD family, host id `autocad`, which covers plain AutoCAD and Civil 3D as one host (Civil 3D is a part of it,
+not a separate host). Every fixed-frame host and every order-frame host is a plugin host.
 _Avoid_: supported host, plugin target, integration
 
 **Format-served host**:
@@ -196,14 +197,16 @@ _Avoid_: subset, partial bundle, export, package
 **Export**:
 A kept bundle handed from the web vault to a connected host. It is a record that names a bundle and
 a target, carries no file and no URL, and moves through a lifecycle the plugin and the web advance
-between them; the plugin fetches the bundle itself.
-_Avoid_: push, send-to-host, transfer
+between them; the plugin fetches the bundle itself. The curator chooses the target in the **To** row
+of the Download step.
+_Avoid_: send, push, open in, sync, send-to-host, transfer
 
 **Connected host**:
 A running host program with the plugin, signed in as the curator, that has announced itself on the
 curator's private channel and can receive exports. One that cannot reach the channel stays off, and
-the curator still has Download.
-_Avoid_: live host, online host, listener
+the curator still has Download. It exists only while its host is open; nothing waits for a host that
+is not.
+_Avoid_: live host, online host, listener, instance, session, device
 
 **Connection id**:
 The random id a plugin generates once per host launch and announces as its presence key; an export
@@ -212,6 +215,23 @@ signed-in programs.
 _Avoid_: session id, client id, host id
 
 ### Orders and builds
+
+**Platform API**:
+The `/api/v1/` surface of mantle.place that the first-party plugins call — sign-in, the vault, Quotes,
+orders, exports — described by the spec it serves. Each call names its client and version, and a client
+older than the platform serves is told to update rather than given an error.
+_Avoid_: backend, server API, REST API, public API
+
+**Quote**:
+What an extent would cost before any order exists: its area, price and coverage, from the same price
+checkout uses. Nothing is stored, so a Quote has no id and no expiry.
+_Avoid_: estimate, price check, preview
+
+**Extent box**:
+A box a curator places over their site in a host's scene, to name an extent for the curator or a Quote
+when the scene has no Mantle Place import or georeference to name it. It is not an import's: it carries
+no identity and is never replaced by one.
+_Avoid_: AOI box, bounds, selection box
 
 These two were one word for a long time, and a host plugin that keys anything on the wrong one
 duplicates a curator's content instead of replacing it.
@@ -289,7 +309,7 @@ Unreal is one: the content made for it is metric on an imperial order.
 _Avoid_: metric host, metric-only plugin
 
 **Order-frame host**:
-A plugin host whose host frame follows the order's delivery instead of staying fixed. Revit is one.
+A plugin host whose host frame follows the order's delivery instead of staying fixed. Revit and `autocad` are.
 _Avoid_: imperial host, unit-aware plugin
 
 ### What a bundle carries

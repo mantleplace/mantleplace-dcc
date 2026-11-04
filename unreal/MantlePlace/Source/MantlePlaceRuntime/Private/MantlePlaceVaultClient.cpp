@@ -4,6 +4,7 @@
 
 #include "MantlePlaceVaultLogic.h"
 #include "MantlePlaceAuthLogic.h"
+#include "MantlePlaceClientLogic.h"
 #include "MantlePlaceAuthSystemBase.h"
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
@@ -171,9 +172,7 @@ void UMantlePlaceVaultClient::ListVault()
 
 	const FString Url = FMantlePlaceVaultLogic::BuildListBundlesUrl(VaultApiBaseUrl);
 
-	ActiveRequest = FHttpModule::Get().CreateRequest();
-	ActiveRequest->SetVerb(TEXT("GET"));
-	ActiveRequest->SetURL(Url);
+	ActiveRequest = FMantlePlaceClientHttp::CreateRequest(TEXT("GET"), Url);
 	ActiveRequest->SetHeader(TEXT("Accept"), TEXT("application/json"));
 	ActiveRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *Jwt));
 
@@ -254,9 +253,7 @@ void UMantlePlaceVaultClient::MintDownload(const FString& OrderId, const FString
 		? FMantlePlaceVaultLogic::BuildViewDownloadBody()
 		: FMantlePlaceVaultLogic::BuildDownloadBody(Format);
 
-	ActiveRequest = FHttpModule::Get().CreateRequest();
-	ActiveRequest->SetVerb(TEXT("POST"));
-	ActiveRequest->SetURL(Url);
+	ActiveRequest = FMantlePlaceClientHttp::CreateRequest(TEXT("POST"), Url);
 	ActiveRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	ActiveRequest->SetHeader(TEXT("Accept"), TEXT("application/json"));
 	ActiveRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *Jwt));
@@ -294,7 +291,8 @@ void UMantlePlaceVaultClient::ProbePresignedUrl(const FString& Url)
 
 	CancelActiveRequest();
 
-	ActiveRequest = FHttpModule::Get().CreateRequest();
+	// The presigned R2 URL is storage, not the Platform API: no client header goes there.
+	ActiveRequest = FHttpModule::Get().CreateRequest(); // not a Platform API call
 	ActiveRequest->SetVerb(TEXT("GET"));
 	ActiveRequest->SetURL(Url);
 	// Ranged GET (1 byte): the R2 URL is SigV4-signed for GET, so a HEAD would fail the
@@ -338,6 +336,15 @@ void UMantlePlaceVaultClient::HandleListResponse(
 
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
+		// Too old for the platform: neither a sign-in failure (the session is fine) nor a network
+		// failure. Broadcast it so the surface can offer the update, and fail the call with the same words.
+		FString UpdateMessage;
+		if (TryHandleClientUpdate(ResponseCode, Content, UpdateMessage))
+		{
+			NotifyVaultListed(false, Empty, UpdateMessage);
+			return;
+		}
+
 		// An expired access token looks exactly like this. Renew once and run the operation again;
 		// LastOperation is how it was sent, captured before it went out.
 		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
@@ -394,6 +401,15 @@ void UMantlePlaceVaultClient::HandleDownloadResponse(
 
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
+		// Too old for the platform: neither a sign-in failure (the session is fine) nor a network
+		// failure. Broadcast it so the surface can offer the update, and fail the call with the same words.
+		FString UpdateMessage;
+		if (TryHandleClientUpdate(ResponseCode, Content, UpdateMessage))
+		{
+			NotifyPresigned(false, Empty, UpdateMessage);
+			return;
+		}
+
 		// An expired access token looks exactly like this. Renew once and run the operation again;
 		// LastOperation is how it was sent, captured before it went out.
 		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
@@ -538,9 +554,7 @@ void UMantlePlaceVaultClient::SendMaterializeRequest(const FString& OrderId, con
 
 	const FString Url = FMantlePlaceVaultLogic::BuildMaterializeUrl(VaultApiBaseUrl, OrderId);
 
-	ActiveRequest = FHttpModule::Get().CreateRequest();
-	ActiveRequest->SetVerb(TEXT("POST"));
-	ActiveRequest->SetURL(Url);
+	ActiveRequest = FMantlePlaceClientHttp::CreateRequest(TEXT("POST"), Url);
 	ActiveRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	ActiveRequest->SetHeader(TEXT("Accept"), TEXT("application/json"));
 	ActiveRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *Jwt));
@@ -603,9 +617,7 @@ void UMantlePlaceVaultClient::GetMaterializeStatus(const FString& OrderId, const
 
 	const FString Url = FMantlePlaceVaultLogic::BuildMaterializeUrl(VaultApiBaseUrl, OrderId);
 
-	ActiveRequest = FHttpModule::Get().CreateRequest();
-	ActiveRequest->SetVerb(TEXT("GET"));
-	ActiveRequest->SetURL(Url);
+	ActiveRequest = FMantlePlaceClientHttp::CreateRequest(TEXT("GET"), Url);
 	ActiveRequest->SetHeader(TEXT("Accept"), TEXT("application/json"));
 	ActiveRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *Jwt));
 
@@ -659,6 +671,15 @@ void UMantlePlaceVaultClient::HandleMaterializeStartResponse(
 	const bool bAcceptedCode = EHttpResponseCodes::IsOk(ResponseCode) || ResponseCode == EHttpResponseCodes::Conflict;
 	if (!bAcceptedCode)
 	{
+		// Too old for the platform: neither a sign-in failure (the session is fine) nor a network
+		// failure. Broadcast it so the surface can offer the update, and fail the call with the same words.
+		FString UpdateMessage;
+		if (TryHandleClientUpdate(ResponseCode, Content, UpdateMessage))
+		{
+			NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), UpdateMessage);
+			return;
+		}
+
 		// An expired access token looks exactly like this. Renew once and run the operation again;
 		// LastOperation is how it was sent, captured before it went out.
 		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
@@ -726,6 +747,15 @@ void UMantlePlaceVaultClient::HandleMaterializeStatusResponse(
 
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
+		// Too old for the platform: neither a sign-in failure (the session is fine) nor a network
+		// failure. Broadcast it so the surface can offer the update, and fail the call with the same words.
+		FString UpdateMessage;
+		if (TryHandleClientUpdate(ResponseCode, Content, UpdateMessage))
+		{
+			NotifyMaterializeStatus(false, Empty, UpdateMessage);
+			return;
+		}
+
 		// An expired access token looks exactly like this. Renew once and run the operation again;
 		// LastOperation is how it was sent, captured before it went out.
 		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
@@ -752,6 +782,20 @@ void UMantlePlaceVaultClient::HandleMaterializeStatusResponse(
 	}
 
 	NotifyMaterializeStatus(true, Status, Status.Message);
+}
+
+bool UMantlePlaceVaultClient::TryHandleClientUpdate(int32 ResponseCode, const FString& Content, FString& OutMessage)
+{
+	FMantlePlaceClientUpdate Update;
+	if (!FMantlePlaceClientLogic::ParseClientUpdateRequired(ResponseCode, Content, Update))
+	{
+		return false;
+	}
+	UE_LOG(LogMantlePlaceVault, Warning, TEXT("The platform requires a newer plugin (sent %s, minimum %s)."),
+	       *Update.SentVersion, *Update.MinimumVersion);
+	OutMessage = Update.Message;
+	OnClientUpdateRequiredNative.Broadcast(Update);
+	return true;
 }
 
 void UMantlePlaceVaultClient::NotifyVaultListed(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message)

@@ -1,0 +1,31 @@
+{
+  "operationId": "placeOrder",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/orders",
+    "headers": {
+      "Mantle-Place-Client": "revit/1.0.0",
+      "Authorization": "Bearer corpus-access-token"
+    },
+    "body": {
+      "extent": {
+        "west": -122.42,
+        "south": 37.7,
+        "east": -122.4,
+        "north": 37.72
+      },
+      "expectedPriceCents": 1234,
+      "payment": "credit"
+    },
+    "omits": [
+      "Idempotency-Key"
+    ]
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "An Idempotency-Key header is required.",
+      "code": "idempotency_key_required"
+    }
+  }
+}

@@ -29,6 +29,7 @@ the SVGs are the files Tabler publishes, unedited. The version taken was **3.46.
 | Probe Terrain | [`ruler-measure.svg`](./ruler-measure.svg) | measuring, and changing nothing — the label already says *Terrain* |
 | Open Logs | [`logs.svg`](./logs.svg) | lines of record, and at 16 px the only glyph in the set that is nothing but straight rules |
 | Prepare for Handover | [`package-export.svg`](./package-export.svg) | the box of Import Bundle with its arrow leaving: the bundle going out to a client |
+| Open in Curator | [`map-pin.svg`](./map-pin.svg) | a pin on a map: the place the project already is, handed to the web curator to draw |
 
 The Account button is not in that table: its face is the mark, and the mark is rendered somewhere
 else entirely, from something that is not here.
@@ -72,8 +73,8 @@ each picture is one element — the raised bundle in `Vault`, the descending arr
 ```
 
 [`Render-RibbonIcons.ps1`](../../../../tools/Render-RibbonIcons.ps1) writes every
-`<Command><Theme>_<size>.png` in the folder above from the SVGs in this one — five commands, two
-themes, two sizes, twenty files.
+`<Command><Theme>_<size>.png` in the folder above from the SVGs in this one — six commands, two
+themes, two sizes, twenty-four files.
 [`Render-TooltipVignettes.ps1`](../../../../tools/Render-TooltipVignettes.ps1) writes every
 `<Command>Vignette<Theme>.png` — two commands, two themes, one size, four files. **Both are how
 those files are regenerated, not build steps**: nothing in the build, the packaging script or CI

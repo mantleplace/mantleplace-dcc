@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 
+#include "MantlePlaceCuratorExtentLogic.h"
+
 /**
  * What the importer remembers about a folder it created, so that re-importing can tell whether that
  * folder is ITS folder before it force-deletes the contents.
@@ -48,6 +50,14 @@ namespace MantlePlaceImportProvenance
 
 		/** The job that produced the imported bundle. Provenance only; never keyed on. */
 		FString JobId;
+
+		/**
+		 * The bundle's AOI in WGS84 degrees, copied from its manifest's `bbox` (never computed here),
+		 * so Open in curator can open the web curator on the extent a level was imported for. Absent
+		 * on a record an earlier build wrote, and on a bundle whose manifest states no usable `bbox`.
+		 */
+		bool bHasExtent = false;
+		FMantlePlaceExtent Extent;
 	};
 
 	/** What an existing folder means for the import about to happen. */

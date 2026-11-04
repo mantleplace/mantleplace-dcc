@@ -1,0 +1,35 @@
+{
+  "operationId": "getQuote",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/quote",
+    "query": {
+      "extent": "-122.42,37.7,-122.4,37.72"
+    },
+    "headers": {
+      "Mantle-Place-Client": "revit/1.0.0",
+      "Authorization": "Bearer corpus-expired-token"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "extent": {
+        "west": -122.42,
+        "south": 37.7,
+        "east": -122.4,
+        "north": 37.72
+      },
+      "areaKm2": 3.91,
+      "priceCents": 1234,
+      "currency": "usd",
+      "pricingConfigVersion": 7,
+      "freeEligible": false,
+      "coverage": "degraded",
+      "licence": {
+        "line": "Synthetic licence line for the conformance corpus.",
+        "url": "https://example.com/licence-terms"
+      }
+    }
+  }
+}

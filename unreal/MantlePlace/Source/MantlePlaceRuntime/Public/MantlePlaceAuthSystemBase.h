@@ -6,6 +6,7 @@
 #include "UObject/Object.h"
 #include "Containers/Ticker.h"
 #include "MantlePlaceAuthTypes.h"
+#include "MantlePlaceClientLogic.h"
 #include "MantlePlaceAuthSystemBase.generated.h"
 
 class IHttpRequest;
@@ -196,6 +197,13 @@ public:
 	 * finished, so it can replay the request that provoked it.
 	 */
 	FMantlePlaceOnTokenRefreshedNative OnTokenRefreshedNative;
+
+	/**
+	 * The platform answered a sign-in or refresh with HTTP 426 `client_update_required`: this plugin is
+	 * below the minimum it serves. Fired before the failing sign-in/refresh signal; the session is NOT
+	 * discarded (the credential was never judged), and the surface offers the update.
+	 */
+	FMantlePlaceOnClientUpdateRequiredNative OnClientUpdateRequiredNative;
 
 	/**
 	 * True while a refresh or restore is in flight.

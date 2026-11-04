@@ -18,7 +18,7 @@ from __future__ import annotations
 #: MAJOR.MINOR.PATCH is the MPB manifest version the conformance corpus is written against;
 #: `.postN` marks a release that changes this package and not the suite. `release_check.py` and
 #: the tests hold it there.
-__version__ = "1.15.0"
+__version__ = "1.18.0"
 
 from .reader import (  # noqa: E402
     BundleError,

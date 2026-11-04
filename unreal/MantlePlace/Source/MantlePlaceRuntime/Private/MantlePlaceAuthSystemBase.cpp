@@ -3,6 +3,7 @@
 #include "MantlePlaceAuthSystemBase.h"
 
 #include "MantlePlaceAuthLogic.h"
+#include "MantlePlaceClientLogic.h"
 #include "MantlePlaceSecretStore.h"
 
 #include "HttpModule.h"
@@ -233,9 +234,7 @@ void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FStri
 	// Defensively drop any stale request before launching a new one.
 	CancelActiveRequest();
 
-	ActiveRequest = FHttpModule::Get().CreateRequest();
-	ActiveRequest->SetVerb(TEXT("POST"));
-	ActiveRequest->SetURL(Url);
+	ActiveRequest = FMantlePlaceClientHttp::CreateRequest(TEXT("POST"), Url);
 	ActiveRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
 	ActiveRequest->SetHeader(TEXT("Accept"), TEXT("application/json"));
 	ActiveRequest->SetContentAsString(Body);
@@ -278,6 +277,18 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 
 	const int32 ResponseCode = Response->GetResponseCode();
 	const FString Content = Response->GetContentAsString();
+
+	// Axis 1b: the platform answered, and what it said is "update the plugin". Not a verdict on the
+	// credential (so never definitive: the stored session survives) and not a connectivity problem.
+	FMantlePlaceClientUpdate Update;
+	if (FMantlePlaceClientLogic::ParseClientUpdateRequired(ResponseCode, Content, Update))
+	{
+		UE_LOG(LogMantlePlaceAuth, Warning, TEXT("The platform requires a newer plugin (sent %s, minimum %s)."),
+			*Update.SentVersion, *Update.MinimumVersion);
+		OnClientUpdateRequiredNative.Broadcast(Update);
+		HandleAuthFailure(Update.Message, Kind, /*bDefinitive=*/false);
+		return;
+	}
 
 	// Axis 2: HTTP error code — surface the error message if present.
 	if (!EHttpResponseCodes::IsOk(ResponseCode))

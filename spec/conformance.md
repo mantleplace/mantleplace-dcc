@@ -78,7 +78,8 @@ service contract.
   finding codes a bundle validator must reach on it. It holds a validator, not a reader, so no
   reader claims it; [`mantleplace-mpb`](../tools/mantleplace-mpb/README.md) (`mpb validate`) is
   the validator it holds today.
-- **`vault`, `auth`** — the Mantle Place vault's REST and OAuth behaviour. First-party plugin
+- **`vault`, `auth`, `platform`, `client`** — the Mantle Place vault's REST and OAuth behaviour,
+  and the Platform API's Quote, order and client-version answers. First-party plugin
   obligations, not interchange. A reader that only opens bundles from disk does not claim them, and
   is fully conforming without them.
 

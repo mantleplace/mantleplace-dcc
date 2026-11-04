@@ -1,6 +1,5 @@
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
+using MantlePlace.PlatformApi;
 using MantlePlace.Revit.Core;
 
 namespace MantlePlace.Revit.Client;
@@ -120,11 +119,9 @@ public sealed class ExportsClient : IExportRoutes
     /// <summary>The longest single wait honoured, whatever the platform asks.</summary>
     public const int MaxRetryAfterMs = 30_000;
 
-    private static readonly HttpClient SharedHttp = new();
-
     private readonly MantlePlaceEndpoints _endpoints;
     private readonly IBearerSession _session;
-    private readonly HttpClient _http;
+    private readonly HttpMessageHandler? _handler;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
     /// <param name="endpoints">Where the routes are.</param>
@@ -139,7 +136,7 @@ public sealed class ExportsClient : IExportRoutes
     {
         _endpoints = endpoints ?? throw new ArgumentNullException(nameof(endpoints));
         _session = session ?? throw new ArgumentNullException(nameof(session));
-        _http = handler is null ? SharedHttp : new HttpClient(handler, disposeHandler: false);
+        _handler = handler;
         _delay = delay ?? Task.Delay;
     }
 
@@ -148,8 +145,8 @@ public sealed class ExportsClient : IExportRoutes
         string connectionId,
         CancellationToken cancellationToken)
     {
-        string url = Base() + "/api/v1/exports?connectionId=" + AuthUrls.PercentEncode(connectionId);
-        (ExportCall<string> call, string body) = await SendAsync(HttpMethod.Get, url, null, cancellationToken)
+        (ExportCall<string> call, string body) = await SendAsync(
+            (api, ct) => api.ListPendingExportsAsync(connectionId, ct), null, cancellationToken)
             .ConfigureAwait(false);
         if (!call.Succeeded)
         {
@@ -180,9 +177,10 @@ public sealed class ExportsClient : IExportRoutes
             return ExportCall<HostExport>.Of(ExportCallOutcome.RefusedLocally, refused);
         }
 
-        string url = Base() + "/api/v1/exports/" + AuthUrls.PercentEncode(current.Id) + "/advance";
         (ExportCall<string> call, string body) = await SendAsync(
-            HttpMethod.Post, url, ExportLifecycle.BuildBody(connectionId, transition), cancellationToken)
+            (api, ct) => api.AdvanceExportAsync(current.Id, new Body6(), ct),
+            ExportLifecycle.BuildBody(connectionId, transition),
+            cancellationToken)
             .ConfigureAwait(false);
         if (!call.Succeeded)
         {
@@ -197,9 +195,9 @@ public sealed class ExportsClient : IExportRoutes
 
     private string Base() => _endpoints.ApiBaseUrl.TrimEnd('/');
 
+    /// <summary>One Platform API call through the generated client, with the renewal and 429 rules above.</summary>
     private async Task<(ExportCall<string> Call, string Body)> SendAsync(
-        HttpMethod method,
-        string url,
+        Func<PlatformApiClient, CancellationToken, Task> operation,
         string? jsonBody,
         CancellationToken cancellationToken)
     {
@@ -227,18 +225,9 @@ public sealed class ExportsClient : IExportRoutes
             string body;
             try
             {
-                using HttpRequestMessage request = new(method, url);
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                if (jsonBody is not null)
-                {
-                    request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                }
-
-                using HttpResponseMessage response = await _http.SendAsync(request, cancellationToken)
+                (status, body) = await PlatformApiCalls.For(Base(), _handler)
+                    .SendAsync(operation, accessToken, cancellationToken, jsonBody)
                     .ConfigureAwait(false);
-                status = (int)response.StatusCode;
-                body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             }
             catch (HttpRequestException ex)
             {

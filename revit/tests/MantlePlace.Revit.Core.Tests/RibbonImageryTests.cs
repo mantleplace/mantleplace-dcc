@@ -165,6 +165,26 @@ internal static class RibbonImageryTests
             }
         });
 
+        run.Case("every render that is there draws something", () =>
+        {
+            // A file can be present, correctly named and the right size and still be a blank button:
+            // a render written by a rasteriser that drew nothing is a valid PNG whose every pixel is
+            // zero, and the Prepare for Handover glyphs shipped that way. Nothing else here can see it.
+            if (FindResourcesDirectory() is not { } resources)
+            {
+                return;
+            }
+
+            foreach ((string name, _) in EveryName())
+            {
+                string path = Path.Combine(resources, name);
+                if (File.Exists(path))
+                {
+                    run.True(DrawsSomething(path), $"{name} is blank -- every pixel is transparent");
+                }
+            }
+        });
+
         run.Case("a vignette's file name carries its command and its theme, and no size", () =>
         {
             run.Equal(
@@ -292,6 +312,48 @@ internal static class RibbonImageryTests
 
     /// <summary>Locates the add-in's <c>Resources</c> directory, or <c>null</c>.</summary>
     private static string? FindResourcesDirectory() => RepoTree.Find(ResourcesRelativePath);
+
+    /// <summary>
+    /// Whether any pixel of a PNG is not zero, read from its inflated image data.
+    /// </summary>
+    /// <remarks>
+    /// The rows need no unfiltering for this one question. Every PNG filter predicts a byte from
+    /// bytes before it, so an image whose bytes are all zero filters to zeros, and the first non-zero
+    /// byte of any other image is predicted from zeros and so survives filtering as itself. The one
+    /// byte per row that names the filter is skipped.
+    /// </remarks>
+    private static bool DrawsSomething(string path)
+    {
+        byte[] png = File.ReadAllBytes(path);
+        int height = (png[20] << 24) | (png[21] << 16) | (png[22] << 8) | png[23];
+        using MemoryStream compressed = new();
+        for (int at = 8; at + 8 <= png.Length;)
+        {
+            int length = (png[at] << 24) | (png[at + 1] << 16) | (png[at + 2] << 8) | png[at + 3];
+            if (png[at + 4] == 'I' && png[at + 5] == 'D' && png[at + 6] == 'A' && png[at + 7] == 'T')
+            {
+                compressed.Write(png, at + 8, length);
+            }
+
+            at += 12 + length;
+        }
+
+        compressed.Position = 0;
+        using System.IO.Compression.ZLibStream inflate = new(compressed, System.IO.Compression.CompressionMode.Decompress);
+        using MemoryStream raw = new();
+        inflate.CopyTo(raw);
+        byte[] rows = raw.ToArray();
+        int stride = rows.Length / height;
+        for (int i = 0; i < rows.Length; i++)
+        {
+            if (i % stride != 0 && rows[i] != 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static bool Throws(Action body)
     {

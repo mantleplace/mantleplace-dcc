@@ -7,6 +7,7 @@
 #include "MantlePlaceVaultTypes.h"   // FMantlePlaceVaultItem
 #include "MantlePlaceImportTypes.h"  // FMantlePlaceImportResult
 #include "MantlePlaceAuthTypes.h"    // EMantlePlaceAuthState
+#include "MantlePlaceClientLogic.h"  // FMantlePlaceClientUpdate
 #include "MantlePlaceVaultPanelController.generated.h"
 
 class UMantlePlaceVaultImportOrchestrator;
@@ -42,6 +43,9 @@ public:
 	FMantlePlaceOnImportFinished OnImportFinished;
 	FMantlePlaceOnAuthChanged OnAuthChanged;
 
+	/** The platform asked for a newer plugin (HTTP 426 client_update_required); the panel offers the update. */
+	FMantlePlaceOnClientUpdateRequiredNative OnClientUpdateRequired;
+
 	/** Create the orchestrator and bind its dynamic delegates (idempotent). Does not list. */
 	void Initialize();
 
@@ -73,6 +77,7 @@ private:
 	UFUNCTION() void HandleImportPhase(const FString& Phase, const FString& Message, float Fraction);
 	UFUNCTION() void HandleImportFinished(bool bSuccess, const FMantlePlaceImportResult& Result);
 	UFUNCTION() void HandleAuthChanged(EMantlePlaceAuthState NewState);
+	void HandleClientUpdateRequired(const FMantlePlaceClientUpdate& Update);
 
 	UPROPERTY()
 	TObjectPtr<UMantlePlaceVaultImportOrchestrator> Orchestrator;

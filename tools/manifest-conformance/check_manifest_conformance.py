@@ -51,6 +51,13 @@ Two further offline legs:
   committed baseline. Any difference fails; `--update-baseline` records a deliberate change as a
   reviewable diff. Coverage drift surfaced in review once; it surfaces at the gate now.
 
+**Two modes.** `--mode live` (the default, and what the scheduled job runs) holds each pin against
+what the platform publishes right now, so it goes red when the platform publishes ahead of
+`verified-against.json`. `--mode pinned` (what pull requests run) compares only against the pins:
+each host's entry, its corpus review, its consumer's declared floor, and a changelog entry for each
+pinned semver version. It fetches nothing, so a publication that landed after a pull request was
+opened cannot fail it; the drift is the scheduled job's to report.
+
 Exit 0 == conformant. Exit 1 == drift. Exit 2 == could not check (network/parse).
 """
 
@@ -63,6 +70,8 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+import platform_cases
 
 SCHEMA_BASE_URL = "https://mantle.place/.well-known/schemas/bundle-manifest"
 SCHEMA_URL = SCHEMA_BASE_URL + "/{version}.json"
@@ -100,9 +109,16 @@ _SELFTEST_CLASSES = frozenset({
 #: Keys in verified-against.json that are documentation, not hosts.
 _NON_HOST_KEYS = frozenset({"$comment"})
 
+#: Hosts whose corpus cases are written before the host exists. A case's `appliesTo` may name one,
+#: and no registered host covers it, so the coverage baseline records it as `[]`. This is not a
+#: roster: a host registers in verified-against.json from its first commit (HPS-38), and registering
+#: removes it from this set in the same change. `autocad` is here until its plugin lands.
+_PLANNED_HOSTS = frozenset({"autocad"})
+
 #: The documented corpus groups. A typo'd group silently excludes a case from every host suite
 #: that dispatches on it, so it is checked rather than trusted.
-_CORPUS_GROUPS = frozenset({"manifest", "vault", "auth", "cache", "digest", "projection", "bundle"})
+_CORPUS_GROUPS = frozenset({"manifest", "vault", "auth", "cache", "digest", "projection", "bundle",
+                            *platform_cases.PLATFORM_GROUPS})
 
 #: Every host entry must carry these. A host that omits one is a silent hole in the gate, so this
 #: is checked before anything is fetched.
@@ -349,7 +365,7 @@ def read_corpus_version() -> int | None:
 
 
 def check_corpus(entries: list[tuple[str, dict]] | None = None,
-                 update_baseline: bool = False) -> list[str]:
+                 update_baseline: bool = False, served_spec: dict | None = None) -> list[str]:
     """Offline integrity check of the shared conformance corpus. Returns failure lines.
 
     With `entries` (the FULL host roster, never a `--host`-filtered slice), also validates the
@@ -429,6 +445,22 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
         )
 
     failures.extend(check_selftest(required=entries is not None))
+
+    # The Platform API exchanges (`platform`, `client`) are held to the spec's own schemas: the
+    # vendored copy always, offline, and the served copy too when a live run fetched it.
+    vendored = platform_cases.load_vendored_spec()
+    failures.extend(platform_cases.check_platform_cases(raw_cases, _CORPUS, vendored, "the vendored spec"))
+    if served_spec is not None:
+        failures.extend(platform_cases.check_platform_cases(raw_cases, _CORPUS, served_spec, "the served spec"))
+        served, held = platform_cases.spec_identity(served_spec), platform_cases.spec_identity(vendored)
+        if served != held:
+            failures.append(
+                f"FAIL: the served Platform API spec (sha256 {served['sha256'][:12]}...) is not the "
+                f"vendored one (sha256 {held['sha256'][:12]}...). Run "
+                "`python revit/tools/platform-api/sync_platform_api.py`, re-check the platform and "
+                "client cases against it, and raise the records."
+            )
+
     if entries is not None:
         # Never record a baseline from a corpus that does not pass its own integrity checks: a
         # case dropped for a bad `appliesTo` would be written out MISSING and become permanently
@@ -440,6 +472,13 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
             )
             return failures
         failures.extend(check_coverage(raw_cases, entries, update_baseline))
+        if not update_baseline and _BASELINE.is_file():
+            try:
+                baseline_doc = json.loads(_BASELINE.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                baseline_doc = {}  # check_coverage has already reported it
+            failures.extend(platform_cases.check_records(
+                platform_cases.spec_identity(vendored), baseline_doc, entries))
     return failures
 
 
@@ -747,7 +786,7 @@ def check_coverage(raw_cases: list[dict], entries: list[tuple[str, dict]],
         if not case_id or group not in _CORPUS_GROUPS:
             continue  # integrity failures already reported by check_corpus
         applies_to = case.get("appliesTo")
-        if applies_to is not None and applies_to not in hosts:
+        if applies_to is not None and applies_to not in set(hosts) | _PLANNED_HOSTS:
             failures.append(
                 f"FAIL: corpus case '{case_id}' has appliesTo={applies_to!r}, which is not a "
                 "registered host. A scoped case must name a real entry in verified-against.json."
@@ -797,7 +836,11 @@ def check_coverage(raw_cases: list[dict], entries: list[tuple[str, dict]],
                         "regression, a new covered case is an unrecorded improvement. Both are",
                         "recorded deliberately: rerun with --update-baseline and commit the diff.",
                         "Maintainer-owned: propose changes by pull request.",
+                        "`platformApi` names the Platform API spec (info.version and the sha256",
+                        "of its canonical text) the platform and client cases were checked",
+                        "against; the gate fails when the vendored spec is another.",
                     ],
+                    "platformApi": platform_cases.spec_identity(platform_cases.load_vendored_spec()),
                     "cases": {k: coverage[k] for k in sorted(coverage)},
                 },
                 indent=2,
@@ -846,58 +889,12 @@ def check_coverage(raw_cases: list[dict], entries: list[tuple[str, dict]],
     return failures
 
 
-def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tuple[list[str], int | None]:
-    """Verify one host. Returns `(failure lines, pinned version or None)`."""
+def _check_floor(host: str, entry: dict, pinned: str) -> tuple[list[str], str | None]:
+    """The offline half of a host check: its declared version floor against its own pin.
+
+    Reads only the consumer's source, so it runs identically in both modes.
+    """
     failures: list[str] = []
-
-    missing = [f for f in _REQUIRED_HOST_FIELDS if f not in entry]
-    if missing:
-        return [
-            f"FAIL: host '{host}' in verified-against.json is missing {', '.join(missing)}.\n"
-            f"      Every host declares its own floor source and tests (HPS-39)."
-        ], None
-
-    pinned = version_key(entry["verifiedAgainstManifestVersion"])
-    tests = entry["tests"]
-    if pinned is None:
-        return [
-            f"FAIL [{host}]: verifiedAgainstManifestVersion="
-            f"{entry['verifiedAgainstManifestVersion']!r} is not a manifest version.\n"
-            "      Use the integer pre-history form (19) or the MPB semver form (\"1.0.0\")."
-        ], None
-
-    pinned_corpus = int(entry["verifiedAgainstCorpusVersion"])
-    if corpus_version is not None and pinned_corpus < corpus_version:
-        failures.append(
-            f"FAIL [{host}]: corpus is at corpusVersion={corpus_version}; {host} is only "
-            f"reviewed against corpusVersion={pinned_corpus}.\n"
-            f"      A corpus-shape bump can change what a case field means. Confirm {tests}\n"
-            f"      still reads the corpus correctly, then raise verifiedAgainstCorpusVersion in\n"
-            f"      the '{host}' entry of verified-against.json."
-        )
-    elif corpus_version is not None and pinned_corpus > corpus_version:
-        failures.append(
-            f"FAIL [{host}]: {host} claims verifiedAgainstCorpusVersion={pinned_corpus}, above "
-            f"the corpus's actual corpusVersion={corpus_version}. The pin cannot be ahead of the "
-            "corpus it describes."
-        )
-
-    schema = fetch_schema(pinned)
-    if schema is None:
-        failures.append(
-            f"FAIL [{host}]: pinned manifest {describe(pinned)} is not published at "
-            f"{SCHEMA_URL.format(version=pinned)}.\n"
-            "      Either the pin is wrong or a published schema was withdrawn."
-        )
-        return failures, pinned
-
-    schema_const = schema.get("properties", {}).get("version", {}).get("const")
-    if version_key(schema_const) != pinned:
-        failures.append(
-            f"FAIL [{host}]: schema {describe(pinned)} declares version.const={schema_const!r}. "
-            "The published artifact is not self-consistent."
-        )
-
     floor, floor_path, pattern = read_declared_floor(host, entry)
     if floor is None:
         failures.append(
@@ -923,6 +920,35 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
             "      Ordering alone would allow this, but a reader gating on an integer floor reads a\n"
             "      semver version as 0 and refuses it. Move the floor across the break with the pin\n"
             f"      ({entry['floorSource']['path']}), or pin this host back to the era it reads."
+        )
+    return failures, floor
+
+
+def _check_live(host: str, entry: dict, pinned: str) -> tuple[list[str], str, str, bool]:
+    """The network half of a host check: the pin against what the platform publishes right now.
+
+    Returns `(failures, staged_note, patch_note, unpublished)`; `unpublished` means the pinned
+    schema is not served, so nothing further can be said about the host. Only the live mode runs this: it is the part
+    that turns red when the platform publishes ahead of `verified-against.json` with no commit
+    landing here, which is drift worth a scheduled alarm and not a reason to block a pull request.
+    """
+    failures: list[str] = []
+    tests = entry["tests"]
+
+    schema = fetch_schema(pinned)
+    if schema is None:
+        failures.append(
+            f"FAIL [{host}]: pinned manifest {describe(pinned)} is not published at "
+            f"{SCHEMA_URL.format(version=pinned)}.\n"
+            "      Either the pin is wrong or a published schema was withdrawn."
+        )
+        return failures, "", "", True
+
+    schema_const = schema.get("properties", {}).get("version", {}).get("const")
+    if version_key(schema_const) != pinned:
+        failures.append(
+            f"FAIL [{host}]: schema {describe(pinned)} declares version.const={schema_const!r}. "
+            "The published artifact is not self-consistent."
         )
 
     staged_note = ""
@@ -991,9 +1017,66 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None) -> tup
             f"      {tests}), then raise verifiedAgainstManifestVersion in the '{host}' entry of\n"
             f"      verified-against.json and refresh its `evidence` to say what was exercised."
         )
+    return failures, staged_note, patch_note, False
+
+
+def check_host(host: str, entry: dict, corpus_version: int | None = None,
+               live: bool = True) -> tuple[list[str], int | None]:
+    """Verify one host. Returns `(failure lines, pinned version or None)`.
+
+    `live=True` also holds the pin against the platform's published schema and freeze ledger.
+    `live=False` is the pull-request mode: the host's entry, its corpus review and its consumer's
+    declared floor are checked against each other and nothing is fetched.
+    """
+    failures: list[str] = []
+
+    missing = [f for f in _REQUIRED_HOST_FIELDS if f not in entry]
+    if missing:
+        return [
+            f"FAIL: host '{host}' in verified-against.json is missing {', '.join(missing)}.\n"
+            f"      Every host declares its own floor source and tests (HPS-39)."
+        ], None
+
+    pinned = version_key(entry["verifiedAgainstManifestVersion"])
+    tests = entry["tests"]
+    if pinned is None:
+        return [
+            f"FAIL [{host}]: verifiedAgainstManifestVersion="
+            f"{entry['verifiedAgainstManifestVersion']!r} is not a manifest version.\n"
+            "      Use the integer pre-history form (19) or the MPB semver form (\"1.0.0\")."
+        ], None
+
+    pinned_corpus = int(entry["verifiedAgainstCorpusVersion"])
+    if corpus_version is not None and pinned_corpus < corpus_version:
+        failures.append(
+            f"FAIL [{host}]: corpus is at corpusVersion={corpus_version}; {host} is only "
+            f"reviewed against corpusVersion={pinned_corpus}.\n"
+            f"      A corpus-shape bump can change what a case field means. Confirm {tests}\n"
+            f"      still reads the corpus correctly, then raise verifiedAgainstCorpusVersion in\n"
+            f"      the '{host}' entry of verified-against.json."
+        )
+    elif corpus_version is not None and pinned_corpus > corpus_version:
+        failures.append(
+            f"FAIL [{host}]: {host} claims verifiedAgainstCorpusVersion={pinned_corpus}, above "
+            f"the corpus's actual corpusVersion={corpus_version}. The pin cannot be ahead of the "
+            "corpus it describes."
+        )
+
+    staged_note = patch_note = ""
+    if live:
+        live_failures, staged_note, patch_note, unpublished = _check_live(host, entry, pinned)
+        failures.extend(live_failures)
+        if unpublished:
+            return failures, pinned
+
+    floor_failures, floor = _check_floor(host, entry, pinned)
+    failures.extend(floor_failures)
 
     if not failures:
-        if staged_note:
+        if not live:
+            print(f"OK [{host}]: pinned at manifest {describe(pinned)}; entry, corpus review and "
+                  "consumer floor agree (pinned mode, nothing fetched).")
+        elif staged_note:
             print(f"OK [{host}]: verified against manifest {describe(pinned)}, staged.")
             print(staged_note)
         elif patch_note:
@@ -1040,6 +1123,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to verified-against.json. Exists so the multi-host loop is testable.",
     )
     parser.add_argument(
+        "--mode",
+        choices=("live", "pinned"),
+        default="live",
+        help="live (default): hold each pin against the platform's published schema and freeze "
+             "ledger; for the scheduled job and a manual drift check. pinned: compare only against "
+             "verified-against.json, the corpus and each consumer's declared floor, with no network; "
+             "for pull requests, which must not go red because the platform published ahead.",
+    )
+    parser.add_argument(
         "--skip-corpus",
         action="store_true",
         help="Skip the offline conformance-corpus integrity check.",
@@ -1082,18 +1174,31 @@ def main(argv: list[str] | None = None) -> int:
 
     failures: list[str] = []
     for host, entry in entries:
-        host_failures, _ = check_host(host, entry, corpus_version)
+        host_failures, _ = check_host(host, entry, corpus_version, live=args.mode == "live")
         failures.extend(host_failures)
 
     if not args.skip_corpus:
         # The full roster, never the --host-filtered slice: coverage is a property of the whole
         # corpus, and a filtered run must not read as a coverage regression.
-        failures.extend(check_corpus(full_entries))
+        served_spec = None
+        if args.mode == "live":
+            served_spec = platform_cases.fetch_served_spec()
+            if served_spec is None:
+                failures.append(f"FAIL: could not fetch the served Platform API spec at "
+                                f"{platform_cases.SERVED_SPEC_URL}.")
+        failures.extend(check_corpus(full_entries, served_spec=served_spec))
 
-    # The whole ledger, never the --host-filtered slice: the changelog describes the contract.
-    failures.extend(
-        check_changelog(fetch_published_versions(), _CHANGELOG.read_text(encoding="utf-8"))
-    )
+    # The whole ledger, never the --host-filtered slice: the changelog describes the contract. In
+    # pinned mode the ledger is not read, so the versions the whole roster pins stand in for it.
+    if args.mode == "live":
+        changelog_versions = fetch_published_versions()
+    else:
+        changelog_versions = sorted(
+            {k for _, e in full_entries
+             if (k := version_key(e.get("verifiedAgainstManifestVersion"))) is not None},
+            key=sort_key,
+        )
+    failures.extend(check_changelog(changelog_versions, _CHANGELOG.read_text(encoding="utf-8")))
 
     if failures:
         for line in failures:
@@ -1105,7 +1210,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     corpus_note = "corpus skipped" if args.skip_corpus else "conformance corpus intact"
-    print(f"OK: {len(entries)} host(s) conformant; {corpus_note}.")
+    mode_note = "against the pins, nothing fetched" if args.mode == "pinned" else "against the live schema"
+    print(f"OK: {len(entries)} host(s) conformant {mode_note}; {corpus_note}.")
     return 0
 
 

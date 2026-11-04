@@ -1,0 +1,61 @@
+{
+  "version": "1.18.0",
+  "location": {
+    "time_zone": {
+      "iana": "America/Denver",
+      "utc_offset_standard_h": -7,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    }
+  },
+  "delivery": {
+    "unit_system": "imperial",
+    "tier": "sp_ftus",
+    "horizontal_epsg": 2231,
+    "linear_unit": "ftUS",
+    "label": "NAD83 / Colorado North (ftUS)"
+  },
+  "job_id": "autocad-contours-absent",
+  "order_id": "ord-autocad-contours-absent-1",
+  "hosts": {
+    "autocad": {
+      "host_min_version": "2025",
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:2231",
+        "horizontal_unit": "ftUS",
+        "vertical_unit": "ft"
+      },
+      "surface": {
+        "path": "Surface/Terrain.xml",
+        "format": "landxml",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "horizontal_frame": "absolute_projected",
+        "horizontal_units": "ftUS",
+        "vertical_units": "ft",
+        "vertical_reference": "absolute",
+        "vertical_datum": "NAVD88 (GEOID18)"
+      },
+      "readiness": {
+        "contours": {
+          "present": false,
+          "reason": "not_produced"
+        },
+        "surface": {
+          "present": true,
+          "requires": "civil3d"
+        },
+        "aerial": {
+          "present": false,
+          "reason": "not_selected"
+        }
+      }
+    }
+  },
+  "elevation": {
+    "contours": {
+      "units": "ft",
+      "vertical_datum": "NAVD88 (GEOID18)"
+    }
+  }
+}
