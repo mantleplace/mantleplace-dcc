@@ -246,21 +246,28 @@ internal static class OrderImporter
 
     /// <summary>
     /// Each public-record layer's polylines on that layer's own layer, as its file holds them. Every file is
-    /// read before anything is drawn, so a file the reader refuses leaves no record layer half placed.
+    /// read before anything is drawn. A file the reader refuses (a <c>POINT</c> entity is the usual one) is left
+    /// out on its own, named in what the user is told, and the other layers still go in; only a set with no
+    /// readable layer refuses the part.
     /// </summary>
     private static string PlaceRecords(Database database, IReadOnlyList<(PlannedFile File, string Path)> files, PlannedPart part)
     {
-        List<(PlannedFile File, IReadOnlyList<PublishedContour> Polylines)> read = [.. files.Select(f => (f.File, ReadPolylines(f.Path, f.File.Name)))];
+        AutoCadRecordSet set = AutoCadRecordSet.Read([.. files.Select(f => f.File)], f => File.OpenText(files.First(x => ReferenceEquals(x.File, f)).Path));
+
+        if (set.Layers.Count == 0)
+        {
+            throw new PartRefusedException(set.RefusalSentence());
+        }
 
         int placed = 0;
         using Transaction transaction = database.TransactionManager.StartTransaction();
-        foreach ((PlannedFile file, IReadOnlyList<PublishedContour> polylines) in read)
+        foreach (ReadRecordLayer layer in set.Layers)
         {
-            placed += AppendPolylines(database, transaction, polylines, _ => file.Layer);
+            placed += AppendPolylines(database, transaction, layer.Polylines, _ => layer.File.Layer);
         }
 
         transaction.Commit();
-        return AutoCadImportPlanner.RecordsPlacedSentence(part, placed);
+        return AutoCadImportPlanner.RecordsPlacedSentence(part, placed, set.Refused);
     }
 
     /// <summary>The site linework's polylines under its layer, each on the layer the drawing puts it on.</summary>

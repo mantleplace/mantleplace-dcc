@@ -56,7 +56,9 @@ is worked out in AutoCAD:
 - **What is skipped.** A part the bundle does not carry is skipped with the bundle's own reason, and the
   rest goes in. A bundle made before the AutoCAD block carried public-record layers and site linework
   names neither, and the import says so. A drawing holding something other than polylines (a hatch, an
-  arc) is skipped by name rather than placed in part.
+  arc) is skipped by name rather than placed in part. That is per record layer: a record file holding
+  points (the contamination and historic-places layers) is left out by name and the other record
+  layers still go in.
 - **Checked first.** Every file is matched to its published digest before anything is drawn; a
   mismatch places nothing.
 

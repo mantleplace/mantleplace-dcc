@@ -365,13 +365,21 @@ public static class AutoCadImportPlanner
             $"Contours: {placed} polylines placed on {part.Layer}, each at its height in {UnitWords(part.VerticalUnits)}.");
     }
 
-    /// <summary>What the user is told about placed public-record layers, with the count that went in.</summary>
-    public static string RecordsPlacedSentence(PlannedPart part, int placed)
+    /// <summary>
+    /// What the user is told about placed public-record layers, with the count that went in. A layer the reader
+    /// refused is left out of the layers placed and named, with its reason.
+    /// </summary>
+    public static string RecordsPlacedSentence(PlannedPart part, int placed, IReadOnlyList<RefusedRecordLayer>? refused = null)
     {
         ArgumentNullException.ThrowIfNull(part);
-        return string.Create(
+        refused ??= [];
+        List<string> layers = [.. part.Files.Where(f => !refused.Any(r => string.Equals(r.Name, f.Name, StringComparison.Ordinal))).Select(f => f.Layer)];
+        string sentence = string.Create(
             CultureInfo.InvariantCulture,
-            $"{Label(AutoCadPart.Records)}: {placed} polylines placed on {part.Files.Count} layers ({string.Join(", ", part.Files.Select(f => f.Layer))}).");
+            $"{Label(AutoCadPart.Records)}: {placed} polylines placed on {layers.Count} layers ({string.Join(", ", layers)}).");
+        return refused.Count == 0
+            ? sentence
+            : $"{sentence} Not placed: {string.Join(" ", refused.Select(r => $"{r.Name} ({r.Why})"))}";
     }
 
     /// <summary>What the user is told about placed site linework, with the count that went in and the layers it went on.</summary>
