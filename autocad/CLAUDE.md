@@ -58,9 +58,10 @@ tools/                            Packaging, deploy, the manifest writer, the Ci
 
 The Host Plugin Standard is normative; rules are cited by `HPS-NN` id in the code. This host
 registered in [`verified-against.json`](../tools/manifest-conformance/verified-against.json) from its
-first commit (`HPS-38`/`39`); it claims every corpus group except `manifest` until a reader of the
-`hosts.autocad` block exists (`HPS-41`). When it gains one, claim the group, add the reader's
-tests, and refresh the baseline in the same change.
+first commit (`HPS-38`/`39`) and claims every corpus group (`HPS-41`). The `manifest` group runs under
+the `autocad` key: its `hosts.autocad` cases drive the import plan (`AutoCadImportPlanner`), and the
+host-invariant cases drive the shared reader the plan reads through. A case added to the group is a
+key this suite must assert, or it fails.
 
 ## Packaging and install
 
@@ -85,13 +86,16 @@ tests, and refresh the baseline in the same change.
 - **Windows are copied from Revit's, not shared.** The Addin's WPF windows (sign-in, vault browser,
   notice) are built in code and read the monogram from embedded resources (`ResourceImages`), linked
   from Revit's `Resources` so no binary is committed twice. The vault browser has no Prepare, download
-  or import: those are hooks into a drawing and are not known yet. Put them back when they are.
+  or import yet: an order comes into a drawing through an export sent from the web vault.
 - **The ribbon is a partial CUIX, not ribbon code.** `CuixPackage` (Core) writes it, `PlugInsPanel`
   lists the commands, and `PackageContents.xml` loads it per year. F1 is each macro's tooltip help
   source. How the host reads either was not proven headless; the release check on the ticket does.
-- **An export from the web is received, not imported.** `AutoCadExportImportHost` opens a window that
-  says where the verified bundle is and that nothing was placed; closing it ends the export as
-  cancelled. Replace it with an importer when there is one.
+- **An import is one press, planned in Core.** `AutoCadImportPlanner` decides everything from the
+  `hosts.autocad` block: what is placed, where, in which units, what is skipped and why, and whether
+  the drawing's geographic location refuses the import. The shell (`OrderImporter`) observes the
+  location (`DrawingObservations`), verifies every file before drawing anything, and applies the plan
+  verbatim. The window an export from the web opens (`AutoCadExportImportHost`) has the Import button;
+  closing it before the press ends the export as cancelled. The surface is planned and not built.
 
 ## Commands
 

@@ -32,12 +32,14 @@ public sealed class LocalBundleArchive : IDisposable
 
     private LocalBundleArchive(
         ZipArchive archive,
+        string? manifestText,
         BundleManifest? manifest,
         BundleCacheLayout layout,
         string scratchDirectory)
     {
         _archive = archive;
         _scratchDirectory = scratchDirectory;
+        ManifestText = manifestText;
         Manifest = manifest;
         Layout = layout;
         EntryNames = [.. archive.Entries.Select(entry => entry.FullName)];
@@ -49,6 +51,12 @@ public sealed class LocalBundleArchive : IDisposable
     /// bundle is too old", a refusal the manifest itself explains.
     /// </summary>
     public BundleManifest? Manifest { get; }
+
+    /// <summary>
+    /// The manifest's text as the zip holds it, or <c>null</c> when there is none: for a host whose own
+    /// block this reader does not read (the AutoCAD plugin reads <c>hosts.autocad</c> from it).
+    /// </summary>
+    public string? ManifestText { get; }
 
     /// <summary>
     /// Where this bundle's files live, keyed by its <see cref="BundleManifest.FilingKey"/> where the
@@ -84,7 +92,7 @@ public sealed class LocalBundleArchive : IDisposable
             layout.Key.Stem + "-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(scratch);
 
-        return new LocalBundleArchive(archive, manifest, layout, scratch);
+        return new LocalBundleArchive(archive, manifestText, manifest, layout, scratch);
     }
 
     /// <summary>

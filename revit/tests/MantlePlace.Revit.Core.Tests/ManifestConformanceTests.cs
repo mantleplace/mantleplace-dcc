@@ -93,7 +93,11 @@ internal static partial class ManifestConformanceTests
         return run.Report("manifest conformance");
     }
 
-    private static void DriveCase(TestRun run, CorpusCase corpusCase)
+    /// <remarks>
+    /// Internal so the AutoCAD suite, which compiles these sources in, can drive the host-invariant
+    /// cases of the group it claims through the same shared reader (its own block's cases it drives itself).
+    /// </remarks>
+    internal static void DriveCase(TestRun run, CorpusCase corpusCase)
     {
         // The group's id-dispatched cases: their `expect: "vector"` rows drive one decision each —
         // the materialization verdict (HPS-47), the published foliage type (format.md §4.4) —

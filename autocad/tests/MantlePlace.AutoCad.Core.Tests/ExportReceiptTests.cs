@@ -3,7 +3,7 @@ using MantlePlace.Revit.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>What the user is told when an export arrives: that it arrived, where, and that nothing was imported.</summary>
+/// <summary>What the user is told when an export arrives: that it arrived, where, and that Import places it.</summary>
 internal static class ExportReceiptTests
 {
     private static HostExport Export() => new(
@@ -21,13 +21,18 @@ internal static class ExportReceiptTests
             run.Contains(text, @"C:\cache\order-77\bundle.zip", "where it is");
         });
 
-        run.Case("the receipt says plainly that nothing was placed in the drawing", () =>
+        run.Case("the receipt says nothing is placed until Import is pressed, and what closing does", () =>
         {
             string text = ExportReceipt.Describe(Export(), @"C:\cache\bundle.zip");
 
-            run.Contains(text, "nothing was placed in your drawing", "no silent success");
+            run.Contains(text, "Press Import", "the one press");
+            run.Contains(text, "order's own coordinates", "where it lands");
+            run.Contains(text, "without importing", "closing before the press");
             run.Contains(text, "cancelled", "and what closing the window does to the export");
         });
+
+        run.Case("the window's button is the shared Import label", () =>
+            run.Equal(ExportReceipt.ImportButton, WindowLabels.Import, "one word for one action (HPS-51)"));
 
         run.Case("a blank path is still a sentence", () =>
             run.Contains(ExportReceipt.Describe(Export(), " "), "in the bundle cache", "no empty 'at '"));

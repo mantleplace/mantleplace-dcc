@@ -4,8 +4,8 @@ The AutoCAD plugin: plain AutoCAD and Civil 3D, 2025, 2026 and 2027, as one plug
 loads only when Civil 3D is running.
 
 **Status:** the plugin's tree and its packaging. The shell loads, signs you in, lists and searches
-your vault, tells you when an order arrives, and receives an export sent from the web vault; it does
-not import a Mantle Place bundle into a drawing yet. Which features each plugin supports, beside every
+your vault, tells you when an order arrives, and imports an order sent from the web vault into the
+active drawing, at the order's own coordinates and units. Which features each plugin supports, beside every
 other host, is the [host support matrix](../docs/host-support.md). Agents: read [`CLAUDE.md`](CLAUDE.md)
 first.
 
@@ -20,7 +20,7 @@ other logo.
 | --- | --- | --- |
 | Sign In | `MANTLEPLACESIGNIN` | Opens your browser to sign in; AutoCAD never sees your password. A small window waits for the browser and stays out of the way. Signing in here signs you in for every Mantle Place plugin on this machine. |
 | Sign Out | `MANTLEPLACESIGNOUT` | Drops the session and forgets the stored credential. |
-| Vault | `MANTLEPLACEVAULT` | The bundles you keep, with a search box, which of them are on this machine, removing a local copy, and reporting a problem with one. Needs you signed in. There is no Prepare, download or import in AutoCAD yet. |
+| Vault | `MANTLEPLACEVAULT` | The bundles you keep, with a search box, which of them are on this machine, removing a local copy, and reporting a problem with one. Needs you signed in. There is no Prepare or download in AutoCAD yet: an order comes into a drawing as an export sent from the web vault. |
 | Send Feedback | `MANTLEPLACEFEEDBACK` | The Mantle Place feedback form in your browser. It needs no account. Only this plugin's version and your AutoCAD year go with the link: nothing from your drawing, and nothing about you. |
 | About | `MANTLEPLACEABOUT` | Which build is loaded, whether the Civil 3D part is on, whether you are signed in, and a link to the [privacy page](https://mantle.place/privacy). |
 
@@ -29,7 +29,26 @@ notice appears in a corner of AutoCAD's window; clicking it opens the vault on t
 
 **Exports from the web.** While you are signed in, this AutoCAD appears as a destination in your web
 vault. Sending an export to it fetches the bundle, checks it, and opens a window saying where it is.
-Nothing is placed in the drawing, and closing the window ends the export as cancelled.
+Pressing **Import** places the whole order in the active drawing in one go, and the window then says
+what went in and what did not, with each reason. Closing the window without importing ends the export
+as cancelled.
+
+**What an import places.** Everything comes from the order's AutoCAD block in the bundle, and nothing
+is worked out in AutoCAD:
+
+- **Contours**, as polylines on the `MantlePlace-Contours` layer, each at its published height.
+- **The aerial image**, on the `MantlePlace-Aerial` layer, at the corner, size and rotation the bundle
+  publishes. The image is a file AutoCAD links to; it stays in the order's folder in the bundle cache.
+- **Units** are the order's: coordinates in its X/Y unit and heights in its height unit, as the bundle
+  states them. The drawing's own unit setting is not read or changed.
+- **Where it lands.** In a drawing with no geographic location, the order goes in at its own
+  coordinates and a notice says so. In a drawing whose geographic location is in another coordinate
+  system, the import refuses, names both, and places nothing. The plugin never sets the location.
+- **What is skipped.** A part the bundle does not carry is skipped with the bundle's own reason. The
+  Civil 3D surface is named and not built yet; in plain AutoCAD it says it needs Civil 3D. Public-record
+  layers and site linework are not in the order's AutoCAD block, so they are not imported.
+- **Checked first.** Every file is matched to its published digest before anything is drawn; a
+  mismatch places nothing.
 
 ## How it is built
 

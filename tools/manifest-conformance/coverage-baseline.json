@@ -96,15 +96,25 @@
       "revit",
       "unreal"
     ],
-    "manifest.autocadCompleteBlock": [],
-    "manifest.autocadContoursAbsentReason": [],
-    "manifest.autocadLocalFrameOffsets": [],
-    "manifest.autocadSurfaceAbsentNeedsCivil3d": [],
+    "manifest.autocadCompleteBlock": [
+      "autocad"
+    ],
+    "manifest.autocadContoursAbsentReason": [
+      "autocad"
+    ],
+    "manifest.autocadLocalFrameOffsets": [
+      "autocad"
+    ],
+    "manifest.autocadSurfaceAbsentNeedsCivil3d": [
+      "autocad"
+    ],
     "manifest.baseOnDemand": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.basemapFilesIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -112,6 +122,7 @@
       "unreal"
     ],
     "manifest.bundlePartsIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -137,22 +148,27 @@
       "unreal"
     ],
     "manifest.fidelityLevelsIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.fileEntryNoRole": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.fileEntryUnknownRole": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.fileEntryVerticalCrsApart": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.fileFramesIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -163,10 +179,12 @@
       "unreal"
     ],
     "manifest.foliageTypeUnknownValue": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.foliageVocabularyIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -174,6 +192,7 @@
       "unreal"
     ],
     "manifest.hazardLayersIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -181,14 +200,17 @@
       "unreal"
     ],
     "manifest.hostFramesIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.locationBlockIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.materializationSignals": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -199,6 +221,7 @@
       "unreal"
     ],
     "manifest.partialDeliveryIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -209,10 +232,12 @@
       "unreal"
     ],
     "manifest.recordPointersIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.recordsFolderIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -220,10 +245,12 @@
       "unreal"
     ],
     "manifest.reject.majorAhead": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.notJson": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -234,54 +261,67 @@
       "revit"
     ],
     "manifest.reject.unversioned": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.v13": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.v14": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.v16": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.v17": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.v18": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.v19": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.v6": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.v7": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.versionIntegerString": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.versionLeadingZero": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.versionPartial": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.reject.versionPrerelease": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -322,10 +362,12 @@
       "revit"
     ],
     "manifest.roadSplinesGeojsonWins": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.roadSplinesGpkgOnly": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -333,10 +375,12 @@
       "unreal"
     ],
     "manifest.siteBriefIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.sourcePointersIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -359,14 +403,17 @@
       "unreal"
     ],
     "manifest.vectorLayerUnknownName": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.vectorLayerVocabulary": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "manifest.verticalDatumsIgnored": [
+      "autocad",
       "revit",
       "unreal"
     ],
