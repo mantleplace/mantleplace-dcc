@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MantlePlace.AutoCad.Core/MantlePlace.AutoCad.Core.csproj" />
+    <Project Path="src/MantlePlace.AutoCad.Civil3d/MantlePlace.AutoCad.Civil3d.csproj" />
+    <Project Path="src/MantlePlace.AutoCad.Addin/MantlePlace.AutoCad.Addin.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/WriteBundleManifest/WriteBundleManifest.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.AutoCad.Core.Tests.csproj" />
+  </Folder>
+</Solution>

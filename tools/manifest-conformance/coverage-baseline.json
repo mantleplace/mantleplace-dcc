@@ -16,26 +16,32 @@
   },
   "cases": {
     "auth.browserPageVectors": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "auth.callbackQueryVectors": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "auth.pkceVectors": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "auth.rejectionClassification": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "auth.stateMachine": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "auth.tokenResponseVectors": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -71,18 +77,22 @@
     "bundle.versionInvalid": [],
     "bundle.versionUnpublished": [],
     "cache.keySanitisation": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "cache.validityTruthTable": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "client.updateRequired": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "digest.sha256Vectors": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -361,65 +371,83 @@
       "unreal"
     ],
     "platform.order.freeCapReached": [
+      "autocad",
       "revit"
     ],
     "platform.order.idempotencyKeyMissing": [
+      "autocad",
       "revit"
     ],
     "platform.order.insufficientCredit": [
+      "autocad",
       "revit"
     ],
     "platform.order.priceChanged": [
+      "autocad",
       "revit"
     ],
     "platform.quote.invalidBearerIgnored": [
+      "autocad",
       "revit"
     ],
     "platform.quote.invalidExtent": [
+      "autocad",
       "revit"
     ],
     "platform.quote.public": [
+      "autocad",
       "revit"
     ],
     "platform.quote.signedIn": [
+      "autocad",
       "revit"
     ],
     "platform.quote.uncovered": [
+      "autocad",
       "revit"
     ],
     "projection.lonLatToUtm": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.download.missingUrl": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.download.presigned": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.downloadRequestBody": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.errorBodyPrecedence": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.list.empty": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.list.fullAndLegacy": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.list.skipsMalformedRows": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.list.thumbnailNeverBreaksARow": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -427,26 +455,32 @@
       "unreal"
     ],
     "vault.list.wrongTopLevelKey": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.materialize.activeJobWithoutId": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.materialize.alreadyRunning": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.materialize.coalesced": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.materialize.deliveryVectors": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.materialize.noop": [
+      "autocad",
       "revit",
       "unreal"
     ],
@@ -457,26 +491,32 @@
       "unreal"
     ],
     "vault.materialize.startNoJobId": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.materialize.started": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.materialize.statusVectors": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.materializeTokenList": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.reject.notJson": [
+      "autocad",
       "revit",
       "unreal"
     ],
     "vault.statusWordBuckets": [
+      "autocad",
       "revit",
       "unreal"
     ]

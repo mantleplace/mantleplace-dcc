@@ -106,5 +106,30 @@
       "client",
       "platform"
     ]
+  },
+  "autocad": {
+    "verifiedAgainstManifestVersion": "2.0.0",
+    "verifiedAgainstCorpusVersion": 3,
+    "verifiedAgainstPlatformApi": {
+      "version": "1",
+      "sha256": "a0837a1cdac86d0fc91e391190604235aa4337334243ab7ce112079c7dce2124"
+    },
+    "evidence": "The AutoCAD plugin tree compiles the Revit host-free Core, Client and PlatformApi sources by source include (no shared assembly), so its manifest reader and its version floor are those files, and its headless suite (autocad/tests/MantlePlace.AutoCad.Core.Tests, run on net8.0 and net10.0 by ci-autocad-tests) runs the corpus runners of the groups below over them: vault, auth, cache, digest, projection, and platform with client. The `manifest` group is NOT claimed: the plugin has no reader of the `hosts.autocad` block yet, so the four corpus cases scoped to `autocad` are asserted by no host (HPS-41), and the host-invariant manifest cases are asserted by the Revit and Unreal suites that own a reader. The plugin's own cases cover the AutoCAD bundle manifest (host parameter, series bounds, the build each year loads) and the Civil 3D presence decision. Pins are the same as the Revit key because the parser is the same file; they move together when that file is re-exercised.",
+    "consumer": "revit/src/MantlePlace.Revit.Core/BundleManifestReader.cs",
+    "floorSource": {
+      "path": "revit/src/MantlePlace.Revit.Core/ManifestVersions.cs",
+      "pattern": "MinSupportedManifestVersion\\s*=\\s*\"([0-9.]+)\""
+    },
+    "tests": "autocad/tests/MantlePlace.AutoCad.Core.Tests/Program.cs",
+    "owner": "Mantle Place maintainers",
+    "groups": [
+      "vault",
+      "auth",
+      "cache",
+      "digest",
+      "projection",
+      "client",
+      "platform"
+    ]
   }
 }

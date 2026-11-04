@@ -1,4 +1,15 @@
-# AutoCAD host: .NET build output. Host-specific, as revit/.gitignore is.
+# AutoCAD host: .NET build output and release zips. Host-specific, as revit/.gitignore is.
 
 bin/
 obj/
+
+# Visual Studio / Rider local state. *.slnx IS tracked (it is the solution of record).
+.vs/
+*.sln
+*.suo
+*.user
+.idea/
+
+# Release zips built by tools/Package-MantlePlaceAutoCad.ps1. A built plugin is never committed
+# (see the root CLAUDE.md on binaries); its home is a GitHub release.
+dist/

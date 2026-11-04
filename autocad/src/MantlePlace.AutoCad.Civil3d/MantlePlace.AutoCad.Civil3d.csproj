@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The AutoCAD plugin's Civil 3D part: the only assembly in the tree that references a Civil 3D
+    assembly. The shell (../MantlePlace.AutoCad.Addin) loads it only behind the presence test, which is
+    Civil 3D's land module being a loaded module of the process (Presence in MantlePlace.AutoCad.Core,
+    autocad/docs/api-record.md). Under AutoCAD alone it is never loaded, and a wrong verdict degrades
+    to a FileNotFoundException for AeccDbMgd that the shell catches.
+
+    Same two builds and the same API directories as the shell (../MantlePlace.AutoCad.Addin).
+    CI never builds it; see that project's comment for why.
+  -->
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
+    <RootNamespace>MantlePlace.AutoCad.Civil3d</RootNamespace>
+    <AssemblyName>MantlePlace.AutoCad.Civil3d</AssemblyName>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <NoWarn>$(NoWarn);CA1416;MSB3277</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MantlePlace.AutoCad.Core\MantlePlace.AutoCad.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <Reference Include="accoremgd"><HintPath>$(AutoCadApiDirNet8)\accoremgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="acdbmgd"><HintPath>$(AutoCadApiDirNet8)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AecBaseMgd"><HintPath>$(AutoCadApiDirNet8)\ACA\AecBaseMgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AeccDbMgd"><HintPath>$(AutoCadApiDirNet8)\C3D\AeccDbMgd.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <Reference Include="accoremgd"><HintPath>$(AutoCadApiDirNet10)\accoremgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="acdbmgd"><HintPath>$(AutoCadApiDirNet10)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AecBaseMgd"><HintPath>$(AutoCadApiDirNet10)\ACA\AecBaseMgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AeccDbMgd"><HintPath>$(AutoCadApiDirNet10)\C3D\AeccDbMgd.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+</Project>

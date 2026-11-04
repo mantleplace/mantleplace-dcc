@@ -940,17 +940,21 @@ class CoverageRatchetTest(unittest.TestCase):
         """A host's cases land before the host does. A planned host is named in the gate, not in
         verified-against.json (adding a key there is a schema-level change), and a case scoped to
         it is covered by no registered host until the host registers."""
-        planned = sorted(gate._PLANNED_HOSTS)[0]
+        planned = "blender"
         cases = self._CASES + [{"id": "manifest.p", "group": "manifest", "file": "p.json",
                                 "expect": "accept", "reason": "r", "appliesTo": planned}]
         recorded = self._expected()
         recorded["manifest.p"] = []
         self._write_baseline(recorded)
-        self.assertEqual([], gate.check_coverage(cases, self.entries))
+        with mock.patch.object(gate, "_PLANNED_HOSTS", frozenset({planned})):
+            self.assertEqual([], gate.check_coverage(cases, self.entries))
 
     def test_a_planned_host_is_not_a_registered_one(self) -> None:
-        self.assertEqual(frozenset({"autocad"}), gate._PLANNED_HOSTS)
-        self.assertFalse(gate._PLANNED_HOSTS & {"revit", "unreal", "blender"})
+        """`autocad` registered with its plugin tree, so it left the planned set (the corpus README
+        says registering does that)."""
+        self.assertEqual(frozenset(), gate._PLANNED_HOSTS)
+        registered = json.loads(gate._PINNED.read_text(encoding="utf-8"))
+        self.assertIn("autocad", registered)
 
     def test_a_host_without_groups_cannot_be_covered(self) -> None:
         entry = _host_entry()

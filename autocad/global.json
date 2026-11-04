@@ -1,0 +1,19 @@
+{
+  "$comment": [
+    "One SDK for the whole tree: the 10.0 SDK builds every target here, net8.0 and net10.0 (the core,",
+    "the suite) and net8.0-windows and net10.0-windows (the AutoCAD shell and the Civil 3D part).",
+    "",
+    "The plugin ships two builds because AutoCAD and Civil 3D 2025 and 2026 run .NET 8 and 2027 runs",
+    ".NET 10. A .NET 8 project cannot reference an API assembly built for .NET 10 (CS1705), so each",
+    "build compiles against its own API directory (Directory.Build.props).",
+    "",
+    "rollForward latestFeature keeps this on 10.0.x: a machine with a newer 10.0 patch band builds",
+    "without editing this file, and a machine with only 8/9 fails loudly instead of silently",
+    "skipping a target."
+  ],
+  "sdk": {
+    "version": "10.0.302",
+    "rollForward": "latestFeature",
+    "allowPrerelease": false
+  }
+}

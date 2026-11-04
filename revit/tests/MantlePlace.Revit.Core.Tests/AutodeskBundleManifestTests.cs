@@ -100,16 +100,16 @@ internal static class AutodeskBundleManifestTests
 
         run.Case("a version is never blank and a range is never empty", () =>
         {
-            run.Throws<ArgumentException>(() => AutodeskBundleManifest.Build(" ", [2025]), "blank version");
-            run.Throws<ArgumentException>(() => AutodeskBundleManifest.Build("1.0.0", []), "no years");
-            run.Throws<ArgumentException>(() => AutodeskBundleManifest.Build("1.0.0", [2025, 2025]), "a repeated year");
+            run.Throws<ArgumentException>(() => AutodeskBundleManifest.Build(" ", [2025], BundleHost.Revit), "blank version");
+            run.Throws<ArgumentException>(() => AutodeskBundleManifest.Build("1.0.0", [], BundleHost.Revit), "no years");
+            run.Throws<ArgumentException>(() => AutodeskBundleManifest.Build("1.0.0", [2025, 2025], BundleHost.Revit), "a repeated year");
         });
 
         run.Case("the build is deterministic, and a new version gets a new product code", () =>
         {
-            string first = AutodeskBundleManifest.Build("1.0.0", [2025, 2026]);
+            string first = AutodeskBundleManifest.Build("1.0.0", [2025, 2026], BundleHost.Revit);
 
-            run.Equal(AutodeskBundleManifest.Build("1.0.0", [2025, 2026]), first, "same input, same bytes");
+            run.Equal(AutodeskBundleManifest.Build("1.0.0", [2025, 2026], BundleHost.Revit), first, "same input, same bytes");
 
             string a = Attr(Parse("1.0.0", [2025]).Root!, "ProductCode") ?? string.Empty;
             string b = Attr(Parse("1.0.1", [2025]).Root!, "ProductCode") ?? string.Empty;
@@ -138,7 +138,7 @@ internal static class AutodeskBundleManifestTests
                 .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion).Version;
 
     private static XDocument Parse(string version, int[] years)
-        => XDocument.Parse(AutodeskBundleManifest.Build(version, years));
+        => XDocument.Parse(AutodeskBundleManifest.Build(version, years, BundleHost.Revit));
 
     private static string? Attr(XElement element, string name) => (string?)element.Attribute(name);
 }

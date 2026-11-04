@@ -15,7 +15,7 @@ to this repository; nothing a contributor needs lives only in that standard.
 The card a workflow agent reads in place of this file. `mantleplace/mantleplace-dcc` is git, Apache 2.0,
 and everything in it is world-readable.
 
-- **Editable:** `unreal/`, `revit/`, `spec/`, `tools/`, `docs/`, `.githooks/`, `.github/workflows/` and the
+- **Editable:** `unreal/`, `revit/`, `autocad/`, `spec/`, `tools/`, `docs/`, `.githooks/`, `.github/workflows/` and the
   root files, as a pull request. New top-level paths are a DCC host or a cross-host concern, nothing else;
   names are spelled out (`mantleplace`, never `mp`).
 - **Not editable:** the auth flow (PKCE, loopback listener, token grant, auth state machine) and the secret
@@ -155,8 +155,9 @@ That bounds *logic*. Which repository a piece of *work* belongs to is
 - **At session start, run `./tools/local-install/Check-LocalInstall.ps1`.** `current` and `preview`
   need nothing; `stale` or `unverified` means a bug seen in the host is not yet evidence about the
   code.
-- **A session that merges a PR touching `revit/`, `unreal/` or `blender/` deploys from `main` before it
+- **A session that merges a PR touching `revit/`, `autocad/`, `unreal/` or `blender/` deploys from `main` before it
   finishes**: pull `main`, run `revit/tools/Deploy-MantlePlaceRevit.ps1`,
+  `autocad/tools/Deploy-MantlePlaceAutoCad.ps1`,
   `unreal/tools/Refresh-UnrealInstall.ps1` and `blender/tools/Install-BlenderAddon.ps1`, and report each stamp. A refused deploy is reported as a
   leftover, never skipped silently (the host files say when one refuses).
 - **A preview from a branch happens only when the founder asks in that session.** It is stamped as a
@@ -222,7 +223,7 @@ Most facts already have exactly one home. Find it before writing a fact down any
   [`docs/platform-export-contract.md`](docs/platform-export-contract.md) — cross-host; the platform's
   copy wins a disagreement.
 - **Building, testing, or what a host writes into a *user's* project** → that host's own `CLAUDE.md`
-  ([`unreal/`](unreal/CLAUDE.md), [`revit/`](revit/CLAUDE.md), [`blender/`](blender/CLAUDE.md)), read before touching that host.
+  ([`unreal/`](unreal/CLAUDE.md), [`revit/`](revit/CLAUDE.md), [`autocad/`](autocad/CLAUDE.md), [`blender/`](blender/CLAUDE.md)), read before touching that host.
 - **What the plugins do, and how to build them** → [`README.md`](README.md).
 - **Governance, and what this repo refuses** → [`CONTRIBUTING.md`](CONTRIBUTING.md) (merge bar, DCO,
   patches declined unread), [`SECURITY.md`](SECURITY.md) — **the auth flow (PKCE, the loopback
