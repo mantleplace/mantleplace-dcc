@@ -3,6 +3,9 @@
 #include "MantlePlaceAutomationLibrary.h"
 
 #include "Framework/Application/SlateApplication.h"
+#include "MantlePlaceCuratorExtentLogic.h"
+#include "MantlePlaceExtentBox.h"
+#include "MantlePlaceLevelExtent.h"
 #include "Layout/WidgetPath.h"
 #include "Types/ISlateMetaData.h"
 #include "Widgets/SWidget.h"
@@ -174,4 +177,60 @@ TArray<FName> UMantlePlaceAutomationLibrary::ListReachableWidgetTags()
 		}
 	});
 	return Tags;
+}
+
+namespace
+{
+	EMantlePlaceCuratorSource ToCuratorSource(EMantlePlaceExtentSource Source)
+	{
+		switch (Source)
+		{
+		case EMantlePlaceExtentSource::PriorImport:
+			return EMantlePlaceCuratorSource::PriorImport;
+		case EMantlePlaceExtentSource::NativeGeoreference:
+			return EMantlePlaceCuratorSource::NativeGeoreference;
+		case EMantlePlaceExtentSource::CesiumGeoreference:
+			return EMantlePlaceCuratorSource::CesiumGeoreference;
+		case EMantlePlaceExtentSource::ExtentBox:
+			return EMantlePlaceCuratorSource::ExtentBox;
+		case EMantlePlaceExtentSource::None:
+			break;
+		}
+		return EMantlePlaceCuratorSource::None;
+	}
+} // namespace
+
+FMantlePlaceCuratorResolution UMantlePlaceAutomationLibrary::ResolveCuratorExtent()
+{
+	return ResolveCuratorExtentInWorld(MantlePlaceLevelExtent::EditorWorld());
+}
+
+FMantlePlaceCuratorResolution UMantlePlaceAutomationLibrary::ResolveCuratorExtentInWorld(UWorld* World)
+{
+	// The button's own two calls, and nothing of its own: Resolve decides, CuratorUrl builds the link.
+	const FMantlePlaceResolvedExtent Resolved = MantlePlaceLevelExtent::Resolve(World);
+
+	FMantlePlaceCuratorResolution Result;
+	Result.Source = ToCuratorSource(Resolved.Source);
+	Result.SourceDescription = FMantlePlaceCuratorExtentLogic::DescribeSource(Resolved.Source);
+	Result.bHasExtent = Resolved.IsSet();
+	if (Resolved.IsSet())
+	{
+		Result.West = Resolved.Extent.West;
+		Result.South = Resolved.Extent.South;
+		Result.East = Resolved.Extent.East;
+		Result.North = Resolved.Extent.North;
+	}
+	Result.Url = MantlePlaceLevelExtent::CuratorUrl(Resolved);
+	return Result;
+}
+
+AActor* UMantlePlaceAutomationLibrary::PlaceExtentBox()
+{
+	return PlaceExtentBoxInWorld(MantlePlaceLevelExtent::EditorWorld());
+}
+
+AActor* UMantlePlaceAutomationLibrary::PlaceExtentBoxInWorld(UWorld* World)
+{
+	return MantlePlaceLevelExtent::PlaceExtentBox(World);
 }

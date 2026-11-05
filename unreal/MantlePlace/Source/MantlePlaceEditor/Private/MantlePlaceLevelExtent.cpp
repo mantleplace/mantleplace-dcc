@@ -10,6 +10,7 @@
 #include "MantlePlaceExtentBox.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportProvenance.h"
+#include "MantlePlaceVaultClient.h"
 #include "ScopedTransaction.h"
 #include "UObject/UnrealType.h"
 #include "WorldPartition/WorldPartition.h"
@@ -283,6 +284,16 @@ namespace MantlePlaceLevelExtent
 	FMantlePlaceResolvedExtent Resolve(UWorld* World)
 	{
 		return FMantlePlaceCuratorExtentLogic::Resolve(Gather(World));
+	}
+
+	UWorld* EditorWorld()
+	{
+		return GEditor != nullptr ? GEditor->GetEditorWorldContext().World() : nullptr;
+	}
+
+	FString CuratorUrl(const FMantlePlaceResolvedExtent& Resolved)
+	{
+		return FMantlePlaceCuratorExtentLogic::BuildCuratorUrl(GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, Resolved);
 	}
 
 	AMantlePlaceExtentBox* PlaceExtentBox(UWorld* World)
