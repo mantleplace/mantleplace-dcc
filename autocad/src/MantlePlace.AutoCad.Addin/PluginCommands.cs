@@ -7,7 +7,7 @@ using MantlePlace.Revit.Core;
 namespace MantlePlace.AutoCad.Addin;
 
 /// <summary>
-/// The shell's commands: the five the Add-ins tab panel types (<see cref="PlugInsPanel.Commands"/>).
+/// The shell's commands: the five the Mantle Place tab panel types (<see cref="PlugInsPanel.Commands"/>).
 /// </summary>
 /// <remarks>
 /// <para>

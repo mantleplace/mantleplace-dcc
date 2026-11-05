@@ -44,9 +44,10 @@ release replaces each with a status and a link. The `autocad` column is in that 
 the host it is built from, or names why it differs, and a row's `not applicable` is the same
 reason Revit gives (the capability has no meaning in a host that has no streaming layer or no landscape material).
 
-Sixteen rows of the `autocad` column are built in the tree and not yet released, so each still reads `not shipped` until the first
-release replaces it. Five are the account and vault rows: sign in and out, search the vault, remove a download, the notice when an
-order arrives, and receive a bundle sent from the web vault, which now imports it and reports the import back. Eleven are import rows:
+Seventeen rows of the `autocad` column are built in the tree and not yet released, so each still reads `not shipped` until the first
+release replaces it. Six are the account, vault and ribbon rows: sign in and out, search the vault, remove a download, the notice when an
+order arrives, receive a bundle sent from the web vault, which now imports it and reports the import back, and a `Mantle Place` tab
+of its own on the ribbon, as Revit has, in Civil 3D and plain AutoCAD alike. Eleven are import rows:
 import a complete order in one press, refuse a manifest version outside the supported range,
 refuse a bundle whose bytes do not match its published digest, say the bundle's unit system and delivery CRS, say what a bundle holds
 that an import cannot place and why, place content at the published georeference, refuse a file that is not in the host frame,
@@ -88,6 +89,7 @@ edited in the same pull request that updates the release.
 | Receive a bundle sent from the web vault, and report its import back | not shipped — [unreal-0.8.1] | partial — [revit-1.0.0] | not shipped — no `autocad` release yet |
 | Each bundle's thumbnail in the vault | not shipped — [unreal-0.8.1] | not shipped — [revit-1.0.0] | not shipped — no `autocad` release yet |
 | Open the web curator on the extent the project already knows | not shipped — [unreal-0.8.1] | not shipped — [revit-1.0.0] | not shipped — no `autocad` release yet |
+| A `Mantle Place` tab of its own on the host's ribbon or menu bar (`HPS-57`) | not shipped — [unreal-0.8.1] | supported — [revit-0.1.0] | not shipped — no `autocad` release yet |
 
 ## Importing a bundle
 
