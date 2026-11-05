@@ -1,6 +1,7 @@
 using MantlePlace.Revit.Client;
 using MantlePlace.Revit.Core;
 using MantlePlace.Revit.Core.Tests;
+using System.Text.Json;
 
 namespace MantlePlace.AutoCad.Tests;
 
@@ -43,6 +44,26 @@ internal static class HostIdentityTests
 
         run.Case("a feedback link says which host it came from", () =>
             run.Contains(FeedbackLink.Build("https://mantle.place", "1.0.0", "2026"), "source=dcc-autocad", "the form's source tag"));
+
+        run.Case("the host-view request names autocad, so the platform cuts this host's files", () =>
+        {
+            using JsonDocument body = JsonDocument.Parse(HostViews.BuildRequestBody());
+            JsonElement view = body.RootElement.GetProperty("view");
+
+            run.Equal(view.GetProperty("host").GetString(), "autocad", "the view asked for is this plugin's own");
+            run.False(HostViews.BuildRequestBody().Contains("revit", StringComparison.Ordinal), "and nowhere Revit's");
+        });
+
+        run.Case("a view cut from hosts.autocad is enough: nothing is read from outside that block", () =>
+        {
+            HostViews.TryParse(
+                """{"url":"https://r2.example/v.zip","expiresAt":"","view":{"partial":false,"parts":["elevation.surface_dxf@MAX","elevation.landxml@MAX"]}}""",
+                out HostViewLink link);
+
+            run.Equal(HostViews.ReadOutsideHostBlock.Count, 0, "this import reads only its own block");
+            run.True(HostViews.Decide(link, ["elevation.landxml", "landcover.tree_points_csv"]) == ViewFetch.View,
+                "the view, not the whole bundle, because the tree points are Revit's to read");
+        });
 
         return run.Report("Host identity");
     }
