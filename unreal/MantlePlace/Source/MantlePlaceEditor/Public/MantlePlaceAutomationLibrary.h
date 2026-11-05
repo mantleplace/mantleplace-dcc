@@ -7,6 +7,65 @@
 
 #include "MantlePlaceAutomationLibrary.generated.h"
 
+class AActor;
+class UWorld;
+
+/** Where Open in curator's extent came from. Mirrors EMantlePlaceExtentSource, value for value. */
+UENUM(BlueprintType)
+enum class EMantlePlaceCuratorSource : uint8
+{
+	/** The level holds no source: the plain curator opens. */
+	None,
+	/** A previous Mantle Place import's provenance record. */
+	PriorImport,
+	/** The level's native georeferencing (Epic's GeoReferencing system actor). */
+	NativeGeoreference,
+	/** A Cesium georeference actor. */
+	CesiumGeoreference,
+	/** A Mantle Place Extent box. */
+	ExtentBox,
+};
+
+/** What the Open in curator button would act on, read without opening anything. */
+USTRUCT(BlueprintType)
+struct FMantlePlaceCuratorResolution
+{
+	GENERATED_BODY()
+
+	/** The source that supplied the extent; None when the level has none. */
+	UPROPERTY(BlueprintReadOnly, Category = "MantlePlace|Automation")
+	EMantlePlaceCuratorSource Source = EMantlePlaceCuratorSource::None;
+
+	/** The source in words, as the button's toast says it ("the Extent box"). */
+	UPROPERTY(BlueprintReadOnly, Category = "MantlePlace|Automation")
+	FString SourceDescription;
+
+	/** True when Source is not None, i.e. West/South/East/North hold an extent. */
+	UPROPERTY(BlueprintReadOnly, Category = "MantlePlace|Automation")
+	bool bHasExtent = false;
+
+	/** The extent in WGS84 degrees; all zero when bHasExtent is false. */
+	UPROPERTY(BlueprintReadOnly, Category = "MantlePlace|Automation")
+	double West = 0.0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MantlePlace|Automation")
+	double South = 0.0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MantlePlace|Automation")
+	double East = 0.0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "MantlePlace|Automation")
+	double North = 0.0;
+
+	/**
+	 * The link the button opens. With no source it is the plain curator link, the one the no-extent
+	 * prompt's "Open the curator" opens (the button itself shows that prompt and opens nothing). Empty
+	 * when the configured web-app host is not http(s), which means "open nothing".
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "MantlePlace|Automation")
+	FString Url;
+};
+
 /**
  * Editor-scripting access to the plugin's tagged Slate widgets.
  *
@@ -58,4 +117,28 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "MantlePlace|Automation")
 	static bool GetTaggedWidgetText(FName Tag, FString& OutText);
+
+	/**
+	 * Open in curator, without the click and without a browser: resolve the current editor world's
+	 * extent exactly as the panel's button does (MantlePlaceLevelExtent::Resolve, the same sources in
+	 * the same order) and return the source, the W,S,E,N extent and the link the button would open
+	 * (MantlePlaceLevelExtent::CuratorUrl). Opens nothing and changes nothing.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MantlePlace|Automation")
+	static FMantlePlaceCuratorResolution ResolveCuratorExtent();
+
+	/** ResolveCuratorExtent over any world. Not a UFUNCTION: the automation test hands it a throwaway world. */
+	static FMantlePlaceCuratorResolution ResolveCuratorExtentInWorld(UWorld* World);
+
+	/**
+	 * Place an Extent box in the current editor level, as the no-extent prompt's "Place Extent box"
+	 * does (MantlePlaceLevelExtent::PlaceExtentBox: one undo transaction, at the middle of the level's
+	 * bounds or the origin, labelled and selected). A level that already has one gets that one selected
+	 * and returned instead of a second. Returns the box, or null without an editor world.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MantlePlace|Automation")
+	static AActor* PlaceExtentBox();
+
+	/** PlaceExtentBox over any world. Not a UFUNCTION. */
+	static AActor* PlaceExtentBoxInWorld(UWorld* World);
 };

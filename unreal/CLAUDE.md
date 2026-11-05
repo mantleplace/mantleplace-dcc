@@ -82,6 +82,14 @@ dependencies and must never become ones, so the plugin builds and loads with eit
 project, and says so when it is not). The plugin copies the manifest's own `bbox` into the
 provenance record (`bbox`, WGS84 degrees); it never computes one.
 
+**Editor Python reaches it** through `UMantlePlaceAutomationLibrary`: `resolve_curator_extent()`
+returns the source, the W,S,E,N extent and the link the button opens, and opens no browser;
+`place_extent_box()` places the box the no-extent prompt's **Place Extent box** places. Both call
+`MantlePlaceLevelExtent` (`Resolve`, `CuratorUrl`, `PlaceExtentBox`), the code the panel calls, so a
+change to the button goes through them; never copy it into the library
+(`MantlePlace.CuratorExtent.ScriptEntry`). With no source the link is the plain curator, the one the
+prompt's **Open the curator** opens.
+
 ## Reading a bundle: 1.x and 2.0, by pointer, regardless of case
 
 The plugin reads MPB 1.x and 2.0 (`MantlePlaceMaxSupportedManifestMajor`; the floor stays 1.0.0) with

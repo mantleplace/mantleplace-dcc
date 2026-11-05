@@ -80,7 +80,7 @@ namespace
 	 */
 	void OpenCuratorLink(const FMantlePlaceResolvedExtent& Resolved)
 	{
-		const FString Url = FMantlePlaceCuratorExtentLogic::BuildCuratorUrl(GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, Resolved);
+		const FString Url = MantlePlaceLevelExtent::CuratorUrl(Resolved);
 		if (!Url.IsEmpty())
 		{
 			FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
@@ -974,7 +974,7 @@ FReply SMantlePlaceVaultPanel::OnSendFeedbackClicked()
 
 FReply SMantlePlaceVaultPanel::OnOpenInCuratorClicked()
 {
-	UWorld* World = GEditor != nullptr ? GEditor->GetEditorWorldContext().World() : nullptr;
+	UWorld* World = MantlePlaceLevelExtent::EditorWorld();
 	const FMantlePlaceResolvedExtent Resolved = MantlePlaceLevelExtent::Resolve(World);
 	if (!Resolved.IsSet())
 	{

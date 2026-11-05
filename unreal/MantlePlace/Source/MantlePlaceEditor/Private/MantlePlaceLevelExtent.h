@@ -54,6 +54,16 @@ namespace MantlePlaceLevelExtent
 	/** Gather, then decide. */
 	FMantlePlaceResolvedExtent Resolve(UWorld* World);
 
+	/** The editor's current world, the one Open in curator reads; null when there is no editor. */
+	UWorld* EditorWorld();
+
+	/**
+	 * The link Open in curator opens for `Resolved`: FMantlePlaceCuratorExtentLogic::BuildCuratorUrl over
+	 * the configured web-app host (the one the vault API uses). Empty means "open nothing". The panel's
+	 * button and the script entry both take the link from here, so they cannot disagree.
+	 */
+	FString CuratorUrl(const FMantlePlaceResolvedExtent& Resolved);
+
 	/**
 	 * Place an Extent box (a transaction, so undo removes it) at the middle of the level's bounds
 	 * or the origin, label it, and select it so Details shows where to locate it. A level that
