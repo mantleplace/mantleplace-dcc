@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace MantlePlace.Revit.Core;
 
 /// <summary>
-/// The presence entry this plugin announces on the curator's private channel, one per Revit launch
+/// The presence entry this plugin announces on the curator's private channel, one per launch of this plugin
 /// (export protocol 1: the platform export contract, section 2).
 /// </summary>
 /// <param name="Protocol">The wire protocol this plugin speaks.</param>
@@ -102,8 +102,8 @@ public static class ConnectedHosts
 /// </summary>
 /// <remarks>
 /// <para>
-/// One per Revit launch — not per sign-in, and not kept across launches — so an export addressed to
-/// a Revit that has since closed cannot find this one. It is the presence key and the only thing that
+/// One per launch of this plugin — not per sign-in, and not kept across launches — so an export addressed to
+/// a host that has since closed cannot find this one. It is the presence key and the only thing that
 /// scopes an export to a plugin, so it is treated as visible to every signed-in program of the
 /// curator, never as a secret.
 /// </para>
@@ -115,7 +115,7 @@ public static class ConnectedHosts
 public sealed class ConnectionIdSource
 {
     /// <summary>The contract bounds an id to 1 to 200 characters; this one is far inside it.</summary>
-    public const string Prefix = "revit-";
+    public const string Prefix = HostIdentity.Id + "-";
 
     private static readonly Lazy<ConnectionIdSource> Process = new(() => new ConnectionIdSource());
 
@@ -127,6 +127,6 @@ public sealed class ConnectionIdSource
     /// <summary>The id of this source, the same on every read.</summary>
     public string Id { get; }
 
-    /// <summary>The process's source: its <see cref="Id"/> is this Revit launch's connection id.</summary>
+    /// <summary>The process's source: its <see cref="Id"/> is this plugin launch's connection id.</summary>
     public static ConnectionIdSource ThisLaunch => Process.Value;
 }

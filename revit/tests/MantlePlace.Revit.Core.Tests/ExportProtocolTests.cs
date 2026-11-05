@@ -136,6 +136,7 @@ internal static class ExportProtocolTests
 
             run.True(id.Length is >= 1 and <= 200, "1 to 200 characters");
             run.True(id.StartsWith(ConnectionIdSource.Prefix, StringComparison.Ordinal), "and carries its prefix");
+            run.True(id.StartsWith(HostIdentity.Id + "-", StringComparison.Ordinal), "and starts with the host id and a hyphen");
             run.True(id.All(c => char.IsAsciiLetterOrDigit(c) || c == '-'), "and is safe in a URL and a filter");
         });
     }
