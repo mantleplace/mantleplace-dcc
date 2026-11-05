@@ -5,14 +5,21 @@
     nothing else. Decisions live in MantlePlace.Revit.Core and I/O lives in MantlePlace.Revit.Client,
     which is why almost everything this plugin does can be asserted without a Revit licence (HPS-42).
 
-    net8.0-windows, compiled against Revit 2025's API — the OLDEST version supported, not the newest
-    installed. Autodesk's .NET floors: Revit 2024 is .NET Framework 4.8 (out of scope — System.Text.Json
-    is a NuGet package there, which the zero-dependency doctrine forbids), 2025 and 2026 are .NET 8,
-    2027 is .NET 10. A single net8.0-windows assembly built against the 2025 API loads in all three
-    supported hosts; building against 2027 would pin the plugin to 2027 alone. Compiling against the
-    floor and relying on Revit's forward compatibility is the standard multi-version add-in pattern,
-    and the load check in each of 2025/2026/2027 is a release step, not an inference — see the PR
-    that introduced this.
+    Compiled against Revit 2025's API — the OLDEST version supported, not the newest installed.
+    Autodesk's .NET floors: Revit 2024 is .NET Framework 4.8 (out of scope — System.Text.Json is a
+    NuGet package there, which the zero-dependency doctrine forbids), 2025 and 2026 shipped on .NET 8,
+    2027 is .NET 10, and the 2025.5 and 2026.5 updates moved 2025 and 2026 to .NET 10 as well.
+    Compiling against the floor and relying on Revit's forward compatibility is the standard
+    multi-version add-in pattern, and the load check in each of 2025/2026/2027 is a release step, not
+    an inference.
+
+    The target framework follows the API it compiles against, read from that install's own
+    RevitAPI.runtimeconfig.json: an API on .NET 8 builds net8.0-windows, which loads in every
+    supported host; an API on .NET 10 builds net10.0-windows, which loads in every host on .NET 10
+    and not in a 2025 or 2026 install that has not taken its .5 update. The rule is fixed by the
+    compiler, not chosen: a net8.0 project referencing an API built for .NET 10 fails with CS1705.
+    The output path carries no framework folder, so the deploy and package scripts read one place
+    whichever it is; Deploy-MantlePlaceRevit.ps1 skips a Revit whose runtime is older than the build's.
 
     The Revit API assemblies are referenced from the local install with Private=false: they are
     supplied by the host process at run time and MUST NOT be copied to the output or redistributed.
@@ -21,7 +28,16 @@
   -->
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <RevitApiRuntimeConfig>$(RevitApiDir)\RevitAPI.runtimeconfig.json</RevitApiRuntimeConfig>
+    <RevitApiTargetFramework>net8.0-windows</RevitApiTargetFramework>
+  </PropertyGroup>
+  <PropertyGroup Condition="Exists('$(RevitApiRuntimeConfig)')">
+    <RevitApiTargetFramework Condition="$([System.IO.File]::ReadAllText('$(RevitApiRuntimeConfig)').Contains('&quot;net10.0&quot;'))">net10.0-windows</RevitApiTargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework>$(RevitApiTargetFramework)</TargetFramework>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <RootNamespace>MantlePlace.Revit.Addin</RootNamespace>
     <AssemblyName>MantlePlace.Revit.Addin</AssemblyName>
     <UseWPF>true</UseWPF>

@@ -12,10 +12,12 @@ here in a line, and its detail lives in the document it links.
 
 - **Hosts:** Autodesk Revit **2025, 2026 and 2027**.
 - **Compile target: Revit 2025's API** (`C:\Program Files\Autodesk\Revit 2025`), the oldest
-  supported — not the newest installed. 2025/2026 run **.NET 8**, 2027 runs **.NET 10**, and one
-  `net8.0-windows` assembly built against 2025's API loads in all three. The reverse fails: a
-  `net8.0` project referencing Revit _2027_'s `RevitAPI.dll` errors with **`CS1705`**. So
-  `RevitApiDir` pins the supported range, and raising it silently drops hosts. Revit 2024 is out of
+  supported — not the newest installed. 2025/2026 shipped on **.NET 8** and moved to **.NET 10** in
+  their .5 updates; 2027 runs .NET 10. A `net8.0` project referencing an API built for .NET 10 errors
+  with **`CS1705`**, so **the shim's target framework follows the API in `RevitApiDir`** (its
+  `RevitAPI.runtimeconfig.json`): `net8.0-windows` against an un-updated 2025, `net10.0-windows`
+  against 2025.5 ([`README.md` ▸ Build and test](./README.md#build-and-test)). `RevitApiDir` pins
+  the supported API, and raising it silently drops hosts. Revit 2024 is out of
   range (.NET Framework 4.8, where `System.Text.Json` is a package). The compile target forbids a **member** absent from 2025's API, by
   reflection or otherwise; a 2025 member whose shape differs in 2026 and later may be used when the
   element is asked what it accepts (`SubDivisionMaterial`). **Never branch on the version number.**
@@ -53,7 +55,7 @@ and datum refusals.
 src/MantlePlace.Revit.Core/    PURE. No Revit API, no I/O, no NuGet. net8.0.
 src/MantlePlace.PlatformApi/   HOST-NEUTRAL. The generated Platform API client and its transport. net8.0.
 src/MantlePlace.Revit.Client/  IMPURE, but not Revit. HTTP, cache, zip, secrets. net8.0.
-src/MantlePlace.Revit.Addin/   IMPURE and Revit. Ribbon, transactions. net8.0-windows.
+src/MantlePlace.Revit.Addin/   IMPURE and Revit. Ribbon, transactions. The .NET of the API it compiles against.
 tests/MantlePlace.Revit.Core.Tests/   Headless, over Core AND Client. net8.0 + net10.0.
 ```
 
@@ -77,7 +79,7 @@ is the `ci-platform-api` job; never edit `Generated/` by hand. `Client` calls it
 reading of the answer stay `Core`'s, where the corpus pins them. A suite case fails if `Client`
 builds a route or a request by hand.
 
-`Core`, `PlatformApi` and `Client` stay `net8.0`; do not raise the target framework without a reason: Revit 2025 and 2026 run .NET 8, and the next .NET host extracts
+`Core`, `PlatformApi` and `Client` stay `net8.0`; do not raise the target framework without a reason: an un-updated Revit 2025 or 2026 runs .NET 8, and the next .NET host extracts
 its shared code **from this shipped code** (`HPS-43`). The suite multi-targets `net8.0;net10.0` and
 CI runs both — the cheapest honest test of the three-versions-from-one-build bet.
 
