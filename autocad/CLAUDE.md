@@ -87,9 +87,11 @@ key this suite must assert, or it fails.
   notice) are built in code and read the monogram from embedded resources (`ResourceImages`), linked
   from Revit's `Resources` so no binary is committed twice. The vault browser has no Prepare, download
   or import yet: an order comes into a drawing through an export sent from the web vault.
-- **The ribbon is a partial CUIX, not ribbon code.** `CuixPackage` (Core) writes it, `PlugInsPanel`
-  lists the commands, and `PackageContents.xml` loads it per year. F1 is each macro's tooltip help
-  source. How the host reads either was not proven headless; the release check on the ticket does.
+- **The ribbon panel is built in code, on the host's own Add-ins tab.** `PlugInsPanel` (Core) lists
+  the commands and decides the tab, by identifier (`CIVIL.ID_Civil3DAddins`, then `ACAD.RBN_00012112`);
+  `PluginRibbon` (shell) adds the panel and adds it again after each workspace change. Not a partial
+  CUIX: its tab is its own group's, so the host shows it as a second "Add-ins" tab
+  ([`docs/api-record.md`](docs/api-record.md)). F1 is each button's tooltip help source.
 - **An import is one press, planned in Core.** `AutoCadImportPlanner` decides everything from the
   `hosts.autocad` block: what is placed, where, in which units, what is skipped and why, and whether
   the drawing's geographic location refuses the import. The shell (`OrderImporter`) observes the

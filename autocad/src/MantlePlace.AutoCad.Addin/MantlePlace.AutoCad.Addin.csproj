@@ -2,8 +2,8 @@
 
   <!--
     The AutoCAD plugin's shell: the one assembly the bundle's PackageContents.xml names, which
-    AutoCAD loads at startup. IMPURE and AutoCAD: it references the host's managed API and nothing
-    else of Autodesk's. It references NO Civil 3D assembly, so it loads in plain AutoCAD and in
+    AutoCAD loads at startup. IMPURE and AutoCAD: it references the host's managed API and its ribbon
+    assemblies (AcWindows, AdWindows), and nothing else of Autodesk's. It references NO Civil 3D assembly, so it loads in plain AutoCAD and in
     Civil 3D's "as AutoCAD" mode; it decides whether Civil 3D is in the process and only then loads
     MantlePlace.AutoCad.Civil3d (the presence test, autocad/docs/api-record.md).
 
@@ -50,12 +50,16 @@
     <Reference Include="accoremgd"><HintPath>$(AutoCadApiDirNet8)\accoremgd.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="acdbmgd"><HintPath>$(AutoCadApiDirNet8)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="acmgd"><HintPath>$(AutoCadApiDirNet8)\acmgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AcWindows"><HintPath>$(AutoCadApiDirNet8)\AcWindows.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AdWindows"><HintPath>$(AutoCadApiDirNet8)\AdWindows.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <Reference Include="accoremgd"><HintPath>$(AutoCadApiDirNet10)\accoremgd.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="acdbmgd"><HintPath>$(AutoCadApiDirNet10)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="acmgd"><HintPath>$(AutoCadApiDirNet10)\acmgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AcWindows"><HintPath>$(AutoCadApiDirNet10)\AcWindows.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AdWindows"><HintPath>$(AutoCadApiDirNet10)\AdWindows.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
 </Project>

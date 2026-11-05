@@ -11,8 +11,8 @@ first.
 
 ## Commands
 
-The bundle puts a **Mantle Place** panel on the ribbon's **Plug-Ins** tab (named **Add-ins** from
-AutoCAD 2025), from a partial customization file. F1 over any of its buttons opens this page. Each
+The plugin puts a **Mantle Place** panel on the ribbon's **Add-ins** tab, the host's own (Civil 3D's
+in Civil 3D). F1 over any of its buttons opens this page. Each
 command can also be typed at the command line. The panel carries the Mantle Place monogram and no
 other logo.
 
@@ -87,7 +87,7 @@ dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.Au
 ```
 
 It runs the shared conformance corpus over the compiled-in sources, plus the AutoCAD bundle manifest,
-the partial customization file, the host identity the platform is told, the export receipt, the About
+the ribbon panel and the tab it goes on, the host identity the platform is told, the export receipt, the About
 text and the Civil 3D presence decision.
 
 Building the shell and the Civil 3D part needs the Autodesk assemblies. `AutoCadApiDirNet10`
