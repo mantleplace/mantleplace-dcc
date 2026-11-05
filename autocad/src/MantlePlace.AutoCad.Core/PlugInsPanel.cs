@@ -2,8 +2,8 @@ namespace MantlePlace.AutoCad;
 
 /// <summary>Where F1 over a Mantle Place command in AutoCAD or Civil 3D sends a curator.</summary>
 /// <remarks>
-/// One constant, held in the pure core so a test can pin it; the partial CUIX file hands it to every
-/// command. Without it F1 over our buttons opens AutoCAD's own help, which knows nothing of them. The
+/// One constant, held in the pure core so a test can pin it; the shell hands it to every button's
+/// tooltip. Without it F1 over our buttons opens AutoCAD's own help, which knows nothing of them. The
 /// page is the AutoCAD plugin's README in the public repository, which lists every command and is
 /// versioned with the code the command belongs to.
 /// </remarks>
@@ -15,27 +15,42 @@ public static class AutoCadHelp
 
 /// <summary>One command on the plugin's ribbon panel.</summary>
 /// <param name="Command">The registered command name, which is what the button types.</param>
-/// <param name="Label">The button's text, which is also the macro's name.</param>
+/// <param name="Label">The button's text.</param>
 /// <param name="Tooltip">One line the ribbon shows over the button.</param>
-/// <param name="Key">A short word the file's identifiers are built from.</param>
+/// <param name="Key">A short word the button's identifier and help topic are built from.</param>
 public sealed record PanelCommand(string Command, string Label, string Tooltip, string Key)
 {
-    /// <summary>The macro's identifier in the CUIX file.</summary>
-    public string MacroId => "ID_MANTLEPLACE_" + Key;
-
-    /// <summary>The button's identifier in the CUIX file.</summary>
+    /// <summary>The button's identifier on the ribbon.</summary>
     public string ButtonId => "MANTLEPLACE_BTN_" + Key;
+
+    /// <summary>The topic F1 over the button hands the help page, beside <see cref="AutoCadHelp.PageUrl"/>.</summary>
+    public string HelpTopic => Key.ToLowerInvariant();
 }
 
+/// <summary>One tab the shell found on the host's ribbon.</summary>
+/// <param name="Id">The tab's identifier, which the host builds as <c>MENUGROUP.UID</c> from its customization files.</param>
+/// <param name="PanelIds">The identifiers of the panels on it.</param>
+public sealed record RibbonTabSeen(string Id, IReadOnlyList<string> PanelIds);
+
+/// <summary>Where the panel goes.</summary>
+/// <param name="TabId">The tab's identifier.</param>
+/// <param name="HostTab">True when the tab is the host's own; false when the shell must make the plugin's tab.</param>
+public sealed record PanelPlacement(string TabId, bool HostTab);
+
 /// <summary>
-/// The plugin's ribbon panel, as the partial CUIX file declares it: which commands, in which order,
-/// on which of the host's tabs.
+/// The plugin's ribbon panel: which commands, in which order, and which of the ribbon's tabs it goes on.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A partial CUIX file is how a bundle puts a panel on the ribbon without any ribbon code in the
-/// shell. The panel goes onto the host's Plug-Ins tab (the tab AutoCAD 2025 and later names Add-ins)
-/// by giving the partial a tab of the same identifier, which AutoCAD merges with the main file's.
+/// The shell builds the panel in code and adds it to the host's own Add-ins tab (the tab AutoCAD named
+/// Plug-Ins before 2025). It was a partial CUIX file once, and the host cannot merge that: a tab in a
+/// partial file is its own customization group's, so a tab given the Add-ins tab's UID came up as
+/// <c>MANTLEPLACE.RBN_00012112</c>, a second "Add-ins" tab beside the host's, in Civil 3D 2027 and in
+/// AutoCAD 2027 alike (<c>autocad/docs/api-record.md</c>).
+/// </para>
+/// <para>
+/// The host's tab is found by its identifier, never its title, which is translated. Civil 3D's
+/// workspaces show Civil 3D's own Add-ins tab and not AutoCAD's, so each host's is named.
 /// </para>
 /// <para>
 /// The commands are the shell's <c>CommandMethod</c> names. A ribbon button cannot show the session,
@@ -44,20 +59,20 @@ public sealed record PanelCommand(string Command, string Label, string Tooltip, 
 /// </remarks>
 public static class PlugInsPanel
 {
-    /// <summary>The identifier of the host's Plug-Ins tab in AutoCAD's main customization file.</summary>
-    public const string TabId = "RBN_00012112";
+    /// <summary>
+    /// The hosts' Add-ins tabs, as the ribbon names them, in the order they are preferred: Civil 3D's
+    /// (<c>ID_Civil3DAddins</c> in its <c>CIVIL</c> group), then AutoCAD's (<c>RBN_00012112</c> in <c>ACAD</c>).
+    /// </summary>
+    public static IReadOnlyList<string> HostTabIds { get; } = ["CIVIL.ID_Civil3DAddins", "ACAD.RBN_00012112"];
 
-    /// <summary>The text the host gives that tab.</summary>
-    public const string TabText = "Add-ins";
+    /// <summary>The panel's identifier on the ribbon, which is how the shell knows it is already there.</summary>
+    public const string PanelId = "MANTLEPLACE_PANEL";
 
-    /// <summary>The panel's title.</summary>
+    /// <summary>The identifier of the plugin's own tab, made only when no host Add-ins tab is on the ribbon.</summary>
+    public const string OwnTabId = "MANTLEPLACE_TAB";
+
+    /// <summary>The panel's title, and the title of the plugin's own tab when one is made.</summary>
     public const string PanelText = "Mantle Place";
-
-    /// <summary>The customization group's name, which every identifier the file adds sits under.</summary>
-    public const string GroupName = "MANTLEPLACE";
-
-    /// <summary>The partial file's name inside the bundle's <c>Contents</c> folder.</summary>
-    public const string FileName = "MantlePlace.cuix";
 
     /// <summary>The panel's commands, left to right.</summary>
     public static IReadOnlyList<PanelCommand> Commands { get; } =
@@ -71,7 +86,32 @@ public static class PlugInsPanel
 
     /// <summary>
     /// The monogram renders the buttons use, small then large. They are the Revit plugin's own files
-    /// (the one logo the plugins show), copied in by the package script, never stored a second time.
+    /// (the one logo the plugins show), embedded in the shell, never stored a second time.
     /// </summary>
     public static IReadOnlyList<string> ImageSources { get; } = ["MantlePlaceMark_16.png", "MantlePlaceMark_32.png"];
+
+    /// <summary>Where the panel goes on a ribbon holding <paramref name="tabs"/>, or null when it is already on one.</summary>
+    /// <remarks>
+    /// The host rebuilds its ribbon from its customization files on a workspace change, which drops a
+    /// panel added in code, so the shell asks again each time; null is what makes that safe to repeat.
+    /// </remarks>
+    public static PanelPlacement? Place(IReadOnlyList<RibbonTabSeen> tabs)
+    {
+        ArgumentNullException.ThrowIfNull(tabs);
+
+        if (tabs.Any(tab => tab.PanelIds.Contains(PanelId, StringComparer.Ordinal)))
+        {
+            return null;
+        }
+
+        foreach (string id in HostTabIds)
+        {
+            if (tabs.Any(tab => string.Equals(tab.Id, id, StringComparison.Ordinal)))
+            {
+                return new PanelPlacement(id, HostTab: true);
+            }
+        }
+
+        return new PanelPlacement(OwnTabId, HostTab: false);
+    }
 }

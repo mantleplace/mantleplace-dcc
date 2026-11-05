@@ -7,7 +7,7 @@ using MantlePlace.Revit.Core;
 namespace MantlePlace.AutoCad.Addin;
 
 /// <summary>
-/// The shell's commands: the five the Plug-Ins tab panel types (<see cref="PlugInsPanel.Commands"/>).
+/// The shell's commands: the five the Add-ins tab panel types (<see cref="PlugInsPanel.Commands"/>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -17,7 +17,7 @@ namespace MantlePlace.AutoCad.Addin;
 /// a callback is) is in the shared sources; these are the buttons.
 /// </para>
 /// <para>
-/// The names are registered here and listed again in the pure core, which the CUIX file is built from;
+/// The names are registered here and listed again in the pure core, which the ribbon panel is built from;
 /// a command added here and not there has no button, and one there and not here types an unknown command.
 /// The shell is not built in CI, so the two are checked by loading it (the release check on the ticket).
 /// </para>

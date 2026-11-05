@@ -15,9 +15,9 @@ namespace MantlePlace.AutoCad.Addin;
 /// </para>
 /// <para>
 /// Copied from the Revit plugin's notifier and cut to the notice that needs no Prepare: there is no
-/// Prepare-ended notice because the plugin has no Prepare, and no badge because a CUIX button cannot
-/// carry one. ⛔ AutoCAD's UI thread only, every member: <see cref="VaultNewsChecker.Arrived"/> is raised
-/// on the thread pool and <see cref="MantlePlaceApplication"/> hops before calling in.
+/// Prepare-ended notice because the plugin has no Prepare, and no badge on the Vault button.
+/// ⛔ AutoCAD's UI thread only, every member: <see cref="VaultNewsChecker.Arrived"/> is raised on the
+/// thread pool and <see cref="MantlePlaceApplication"/> hops before calling in.
 /// </para>
 /// </remarks>
 internal static class ArrivalNotifier

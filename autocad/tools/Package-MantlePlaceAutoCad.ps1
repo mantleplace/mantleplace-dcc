@@ -214,7 +214,6 @@ New-Item -ItemType Directory -Path $iconDir -Force | Out-Null
 Copy-Item -LiteralPath $iconSource -Destination $iconDir
 
 # ---------------------------------------------------------------------------
-# MantlePlace.cuix, the ribbon panel, is written by the same tool and from the same function family.
 # PackageContents.xml: built by the core's pure function from the version the build was compiled
 # with, then checked against the declared one and against what is in the bundle. A mismatch means the
 # build is stale (or the wrong one is being packaged), and a manifest that names a module the bundle
@@ -222,9 +221,7 @@ Copy-Item -LiteralPath $iconSource -Destination $iconDir
 # than no zip.
 # ---------------------------------------------------------------------------
 $bundleManifestPath = Join-Path $bundleRoot $bundleManifestFileName
-$cuixPath = Join-Path $contents 'MantlePlace.cuix'
-$markFolder = Join-Path $repoRoot 'revit/src/MantlePlace.Revit.Addin/Resources'
-$null = & dotnet run --project $manifestWriterProject -c $Configuration --no-build -- $bundleManifestPath $cuixPath $markFolder
+$null = & dotnet run --project $manifestWriterProject -c $Configuration --no-build -- $bundleManifestPath
 if ($LASTEXITCODE -ne 0) {
     throw "Writing $bundleManifestFileName failed with exit code $LASTEXITCODE. If the tool is not built, run without -SkipBuild first."
 }

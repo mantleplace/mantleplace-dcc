@@ -104,6 +104,7 @@ internal static class MantlePlaceApplication
         _connected.Attach(new AutoCadExportImportHost());
 
         AcApplication.DocumentManager.DocumentBecameCurrent += OnDocumentBecameCurrent;
+        PluginRibbon.Attach();
 
         // Subscribed before the restore, so a transition it makes is not missed.
         _session.StateChanged += OnAuthStateChanged;
@@ -122,6 +123,7 @@ internal static class MantlePlaceApplication
     internal static void Stop()
     {
         AcApplication.DocumentManager.DocumentBecameCurrent -= OnDocumentBecameCurrent;
+        PluginRibbon.Detach();
 
         // Leaves the channel before the window goes, so no export is opened behind it. Bounded: the
         // client waits at most two seconds for the leave to be answered, and AutoCAD's close waits no

@@ -79,8 +79,8 @@ internal static class AutoCadBundleManifestTests
                 run.Equal(Attr(requirements[0], "SeriesMin"), series[i], $"{Years[i]}: the group is that year's");
                 run.Equal(
                     string.Join(",", groups[i].Elements("ComponentEntry").Select(e => Attr(e, "ModuleName"))),
-                    AutodeskBundleManifest.ModulePathFor(BundleHost.AutoCad, Years[i]) + "," + AutodeskBundleManifest.AutoCadCuixModulePath,
-                    $"{Years[i]}: the group holds that year's assembly and the CUIX file, nothing else");
+                    AutodeskBundleManifest.ModulePathFor(BundleHost.AutoCad, Years[i]),
+                    $"{Years[i]}: the group holds that year's assembly, nothing else");
             }
         });
 
@@ -129,29 +129,15 @@ internal static class AutoCadBundleManifestTests
             run.Equal(AutodeskBundleManifest.AutoCadNet10Folder, "net10", "the .NET 10 build's folder");
         });
 
-        run.Case("every year also names the partial CUIX file, right after its assembly, so the panel loads with the plugin", () =>
+        run.Case("neither manifest names a customization file: the shell builds the panel", () =>
         {
-            XElement[] components = [.. Parse("1.0.0", Years).Root!.Elements("Components")];
-            XElement[] cuix = [.. components.Elements("ComponentEntry").Where(entry => Attr(entry, "ModuleName")!.EndsWith(".cuix", StringComparison.Ordinal))];
-
-            run.Equal(cuix.Length, 3, "one CUIX entry per year");
-            for (int i = 0; i < cuix.Length; i++)
-            {
-                run.Equal(Attr(cuix[i], "ModuleName"), AutodeskBundleManifest.AutoCadCuixModulePath, $"{Years[i]} names the one file");
-                run.Equal(
-                    Attr((XElement)cuix[i].PreviousNode!, "ModuleName"),
-                    AutodeskBundleManifest.ModulePathFor(BundleHost.AutoCad, Years[i]),
-                    $"{Years[i]}: it follows the assembly, under the same requirement");
-                run.Equal(Attr(cuix[i], "LoadOnAutoCADStartup"), "True", $"{Years[i]} loads at startup");
-            }
-
-            run.Equal(AutodeskBundleManifest.AutoCadCuixModulePath, "./Contents/" + PlugInsPanel.FileName, "the file the package script writes");
-        });
-
-        run.Case("Revit's manifest names no CUIX file", () =>
+            // A partial CUIX cannot add a panel to a tab in the host's main file: AutoCAD and Civil 3D
+            // 2027 showed its tab as a second "Add-ins" tab (autocad/docs/api-record.md).
+            run.False(AutodeskBundleManifest.Build("1.0.0", Years, BundleHost.AutoCad).Contains(".cuix", StringComparison.OrdinalIgnoreCase), "AutoCAD's names none");
             run.False(
-                AutodeskBundleManifest.Build("1.0.0", [2026], BundleHost.Revit).Contains(".cuix", StringComparison.Ordinal),
-                "a CUIX is AutoCAD's"));
+                AutodeskBundleManifest.Build("1.0.0", [2026], BundleHost.Revit).Contains(".cuix", StringComparison.OrdinalIgnoreCase),
+                "nor Revit's");
+        });
 
         run.Case("the supported years are the three the plugin supports, for both hosts", () =>
         {

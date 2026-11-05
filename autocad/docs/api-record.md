@@ -112,12 +112,29 @@ AutoCAD block for the run; 2025 and 2026 are still unproven.
   requirements in one group the autoloader registered the bundle and loaded nothing. An unsigned
   build there raises AutoCAD's "Unsigned Executable File" prompt (two of them under `SECURELOAD` 1).
 
+## The ribbon panel
+
+Read live on 2026-11-04 in 2027, window mode, from the installed bundle, in Civil 3D (Civil 3D
+launcher) and in plain AutoCAD (the same install's AutoCAD launcher); 2025 and 2026 are unproven.
+
+- **The ribbon names a tab `MENUGROUP.UID`.** Civil 3D's Add-ins tab is `CIVIL.ID_Civil3DAddins`
+  and plain AutoCAD's is `ACAD.RBN_00012112`. Civil 3D's workspaces show its own tab and not
+  AutoCAD's, so the plugin names both (`PlugInsPanel.HostTabIds`).
+- **A partial CUIX cannot put a panel on either.** The plugin's first partial file gave its tab the
+  UID `RBN_00012112`; the host read it as `MANTLEPLACE.RBN_00012112`, a second "Add-ins" tab beside
+  its own, in both hosts. The profile also held a copy of the partial in its `Support` folder, listed
+  in the main file's partial menus, which still loaded after the bundle stopped naming it;
+  `CUIUNLOAD MANTLEPLACE` removes it from a machine that ran that build.
+- **A panel built in code on the host's tab works.** In both hosts the panel sat on the host's
+  Add-ins tab beside App Manager, with all five buttons, their monogram, tooltip and help topic, and
+  the ribbon held one Add-ins tab. Pressing About ran `MANTLEPLACEABOUT` and opened its window. A
+  round trip to another workspace (Planning and Analysis in Civil 3D, 3D Modeling in AutoCAD) and
+  back left the panel where it was, once.
+
 ## What this does not yet cover
 
 - **A vault send in 2027.** The live check ran local bundles only. Sign-in, the vault and the
   connected host with a session were not run: they need a signed-in account and the web vault.
-- **The ribbon panel in 2027.** No Mantle Place panel showed and the ribbon held two "Add-ins"
-  tabs.
 - **A drawing in feet**, with a foot-based zone and a metric DEM.
 - **The plugin's own load path in 2025 and 2026**, and in plain AutoCAD; 2027's is above.
 - **A .NET 8 build.** Every install here, 2025 and 2026 included, runs .NET 10 after its updates, and
