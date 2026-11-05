@@ -142,7 +142,7 @@ public enum ViewFetch
 }
 
 /// <summary>
-/// Revit's download view: the request, the response, and whether the view is enough.
+/// The host's download view (Revit's or AutoCAD's): the request, the response, and whether the view is enough.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -164,14 +164,20 @@ public enum ViewFetch
 public static class HostViews
 {
     /// <summary>
-    /// The tokens whose files Revit's import reads from outside <c>hosts.revit</c>.
+    /// The tokens whose files this host's import reads from outside its own <c>hosts.&lt;host&gt;</c> block.
     /// </summary>
     /// <remarks>
-    /// One entry today. The list grows only when a step that reads such a file lands, by the same
-    /// rule as <see cref="MaterializeJobs.RevitTokens"/>; a file that moves into the host block
-    /// leaves it.
+    /// Per host. Revit has one entry today, and the list grows only when a step that reads such a file
+    /// lands, by the same rule as <see cref="MaterializeJobs.RevitTokens"/>; a file that moves into the
+    /// host block leaves it. AutoCAD has none: its import reads <c>hosts.autocad</c>'s pointers and
+    /// nothing else, so a view cut from that block is always enough.
     /// </remarks>
-    public static IReadOnlyList<string> ReadOutsideHostBlock { get; } = ["landcover.tree_points_csv"];
+    public static IReadOnlyList<string> ReadOutsideHostBlock { get; } =
+#if MANTLEPLACE_AUTOCAD
+        [];
+#else
+        ["landcover.tree_points_csv"];
+#endif
 
     /// <summary>
     /// The level asked of every entry of the host block: <c>"*"</c> is "every entry not named".
@@ -184,10 +190,10 @@ public static class HostViews
     /// </remarks>
     public const string EveryEntryLevel = "MAX";
 
-    /// <summary>The presign request body for Revit's view (platform route <c>POST …/download</c>).</summary>
+    /// <summary>The presign request body for this host's view (platform route <c>POST …/download</c>).</summary>
     public static string BuildRequestBody()
         => "{\"format\":\"" + PresignedDownloads.WholeBundleFormat
-            + "\",\"view\":{\"host\":\"" + BundleManifestReader.HostKey
+            + "\",\"view\":{\"host\":\"" + HostIdentity.Id
             + "\",\"levels\":{\"*\":\"" + EveryEntryLevel + "\"}}}";
 
     /// <summary>Parses the view presign response. A body with no <c>url</c> is a refusal.</summary>
