@@ -10,8 +10,9 @@
     only NuGet restore in the whole Revit tree. If this suite ever grows past a few hundred
     assertions, swapping TestHarness for xUnit is a contained change — nothing else references it.
 
-    TWO target frameworks, and running both is the point. The shipped add-in is one net8.0-windows
-    assembly that Revit 2025 and 2026 load on .NET 8 and Revit 2027 loads on .NET 10. That is a
+    TWO target frameworks, and running both is the point. The Core and Client the add-in carries are
+    net8.0, and Revit loads them on .NET 8 (an un-updated 2025 or 2026) or .NET 10 (2025.5, 2026.5
+    and 2027). That is a
     forward-compatibility bet, and a bet is worth exactly as much as the test behind it, so the suite
     runs on both runtimes rather than on whichever one is convenient. Cheap here — seconds, and one
     extra SDK on the runner.

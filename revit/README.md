@@ -10,8 +10,9 @@ release floor below. What each release changed is on the
 permanent fallback. Which features this plugin supports, beside every other host, and why any is
 missing, is the [host support matrix](../docs/host-support.md); this page says how each one behaves.
 
-**Supported hosts:** Revit **2025, 2026 and 2027**, from one `net8.0-windows` build. See
-[Build and test](#build-and-test) for why the compile target is the oldest of the three.
+**Supported hosts:** Revit **2025, 2026 and 2027**, from one build. See
+[Build and test](#build-and-test) for why the compile target is the oldest of the three, and why
+that build's .NET follows the 2025 install it is compiled against.
 
 ## What it does today
 
@@ -667,13 +668,22 @@ the hosted runner like anything else.
 ## Build and test
 
 **The shim compiles against Revit 2025's API — the oldest version supported, not the newest
-installed.** Autodesk's .NET floors are Revit 2025 and 2026 on **.NET 8** and Revit 2027 on
-**.NET 10**, and one `net8.0-windows` assembly built against the 2025 API loads in all three. The
-reverse does not hold and the compiler says so: a net8.0 project referencing Revit _2027_'s
-`RevitAPI.dll` fails with `CS1705`. So the referenced API version is what pins the supported range,
-and aiming `RevitApiDir` at a newer install silently drops the older hosts — which is why
+installed.** Revit 2025 and 2026 shipped on **.NET 8** and Revit 2027 on **.NET 10**; the 2025.5 and
+2026.5 updates moved 2025 and 2026 to .NET 10 too. A net8.0 project cannot reference an API built for
+.NET 10 — the compiler stops it with `CS1705` — so **the shim's target framework follows the API it
+compiles against**, read from that install's `RevitAPI.runtimeconfig.json`:
+
+| `RevitApiDir` holds | The shim builds | It loads in |
+| --- | --- | --- |
+| a 2025 API on .NET 8 (before 2025.5) | `net8.0-windows` | every supported Revit |
+| a 2025 API on .NET 10 (2025.5 and later) | `net10.0-windows` | every Revit on .NET 10: 2025.5+, 2026.5+, 2027 |
+
+The referenced API version still pins the supported members, and aiming `RevitApiDir` at a newer
+install silently allows members 2025 lacks — which is why
 [`Directory.Build.props`](./Directory.Build.props) defaults it to 2025 and the shim errors with one
-sentence when that install is missing.
+sentence when that install is missing. The output lands in `bin/<Configuration>/` with no framework
+folder, so the deploy and package scripts read one place either way, and the deploy skips, with a
+stated reason, any Revit whose own runtime is older than the build's.
 
 Revit 2024 is deliberately out of range: it is .NET Framework 4.8, where `System.Text.Json` is a
 NuGet package, and the tree takes no packages.
@@ -760,8 +770,8 @@ a dirty tree, or a commit this clone has never seen). It fetches first; `-NoFetc
 ./tools/Deploy-MantlePlaceRevit.ps1 -Launch
 ```
 
-`-Launch` starts Revit (`-LaunchVersion`, 2027 by default: the one host where a .NET 8 assembly runs
-under a .NET 10 runtime, so the leg that shows a difference first) with
+`-Launch` starts Revit (`-LaunchVersion`, 2027 by default: the newest host, and the one furthest from
+the 2025 API the build compiles against, so the leg that shows a difference first) with
 `DOTNET_MODIFIABLE_ASSEMBLIES=debug`. Attach Visual Studio or Rider to that `Revit.exe`, edit a
 method body in `Core` or `Client`, and Hot Reload applies it to the running plugin — no deploy, no
 restart. That covers the behaviour behind the buttons. It does not cover the buttons: `OnStartup`
@@ -772,8 +782,8 @@ signature. A Revit started from the Start menu has no such variable and simply c
 
 **One build, three hosts, and that is a claim to be tested rather than assumed.** Before a release,
 drop the same output into each folder above, launch that Revit, and confirm the ribbon appears and an
-import completes. The 2027 leg is the one that matters most: it is the only one where a .NET 8
-assembly is loaded by a .NET 10 runtime. Check the ribbon in **both UI themes** while you are there —
+import completes. The 2027 leg is the one that matters most: it is the furthest from the 2025 API the
+build compiles against. Check the ribbon in **both UI themes** while you are there —
 Revit has had two since 2024, the icons are picked per theme, and the failure mode is a panel of
 invisible buttons rather than an error.
 

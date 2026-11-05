@@ -20,7 +20,7 @@ namespace MantlePlace.Revit.Addin;
 /// </para>
 /// <para>
 /// The Revit version is asked of the running application rather than assumed, because one
-/// <c>net8.0-windows</c> build loads in three of them and "which Revit" is the other half of the
+/// build loads in three of them and "which Revit" is the other half of the
 /// same question.
 /// </para>
 /// <para>

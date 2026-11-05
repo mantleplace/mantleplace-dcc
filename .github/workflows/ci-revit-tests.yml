@@ -48,8 +48,8 @@ jobs:
         with:
           lfs: false # the suite reads JSON vectors and C#; no binary payload is involved
 
-      # Two runtimes, because the shipped add-in is ONE net8.0-windows assembly that Revit 2025 and
-      # 2026 load on .NET 8 and Revit 2027 loads on .NET 10. Supporting three Revit versions from one
+      # Two runtimes, because the add-in's net8.0 Core and Client are loaded on .NET 8 by an
+      # un-updated Revit 2025 or 2026 and on .NET 10 by every later one. Supporting three Revit versions from one
       # build is a forward-compatibility bet; running the suite on both runtimes is the cheapest
       # honest test of it. The 8.0 runtime comes first so the 10.0 SDK from global.json stays the
       # one that drives the build.

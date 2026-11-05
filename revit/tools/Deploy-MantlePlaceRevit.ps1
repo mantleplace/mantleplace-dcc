@@ -33,9 +33,12 @@
     source tree to drift from. The staleness hazard above is a maintainer problem, not yours; this
     script is here because one step beats three.
 
-    One build serves Revit 2025, 2026 and 2027: the shim is a single net8.0-windows assembly
-    compiled against the OLDEST supported API (2025). Do not "upgrade" RevitApiDir to a newer
-    install -- that silently drops the older hosts (CS1705 explains why, in revit/CLAUDE.md).
+    One build serves Revit 2025, 2026 and 2027: the shim is a single assembly compiled against the
+    OLDEST supported API (2025). Do not "upgrade" RevitApiDir to a newer install -- that silently
+    drops the older hosts (CS1705 explains why, in revit/CLAUDE.md). Its target framework follows
+    that API's runtime, so a build against an updated 2025 is .NET 10, and a Revit whose own
+    runtime is older than the build's is skipped with a stated reason rather than handed a plugin
+    it cannot load.
 
     Windows PowerShell 5.1 compatible, deliberately. That is what is on a curator machine by
     default; PowerShell 7 is not. No ternaries, no null-coalescing, no pipeline chain operators --
@@ -58,8 +61,8 @@
     Install whatever is already in bin/ without rebuilding. Source-tree path only.
 
 .PARAMETER Launch
-    After installing, start Revit -LaunchVersion (2027 by default: the only host where a .NET 8
-    assembly runs under a .NET 10 runtime, so the leg that surfaces a difference first). A Debug
+    After installing, start Revit -LaunchVersion (2027 by default: the newest host, furthest from
+    the 2025 API the build compiles against, so the leg that surfaces a difference first). A Debug
     source-tree deploy launches it with DOTNET_MODIFIABLE_ASSEMBLIES=debug, which is what lets a
     debugger attached to that Revit apply Hot Reload: edit a method body in the Client or Core, and
     the running plugin takes it without a restart. What Hot Reload cannot do is re-run OnStartup,
@@ -193,7 +196,7 @@ else {
     $revitRoot = Split-Path -Parent $PSScriptRoot
     $solution = Join-Path $revitRoot 'MantlePlace.Revit.slnx'
     $addinProject = Join-Path $revitRoot 'src/MantlePlace.Revit.Addin'
-    $source = Join-Path $addinProject "bin/$Configuration/net8.0-windows"
+    $source = Join-Path $addinProject "bin/$Configuration"
 
     if (-not $SkipBuild) {
         Write-Host "Building $Configuration ..." -ForegroundColor Cyan
@@ -260,12 +263,37 @@ if ([string]::IsNullOrWhiteSpace($version)) {
 
 $addinsRoot = Join-Path $env:APPDATA 'Autodesk/Revit/Addins'
 
+# The .NET major a runtimeconfig.json names in its tfm ("net10.0" -> 10), or $null when the file is
+# absent or says nothing readable. Read from the build's own file and from each installed Revit's
+# RevitAPI.runtimeconfig.json: the runtime is a fact of the install, never inferred from its year.
+function Get-RuntimeMajor([string]$path) {
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    try {
+        $tfm = (Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).runtimeOptions.tfm
+    }
+    catch {
+        return $null
+    }
+    if ($tfm -match '^net(\d+)\.') { return [int]$Matches[1] }
+    return $null
+}
+
+$buildRuntime = Get-RuntimeMajor (Join-Path $source 'MantlePlace.Revit.Addin.runtimeconfig.json')
+$skipped = @()
+
 # Read once, before the loop: one run is one install, and Check-RevitInstall.ps1 groups the add-ins
 # folders by their stamps. A clock read per folder crossed a second between two of them and made
 # the check report one deploy as folders that disagree.
 $installedAt = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
 
 foreach ($revitVersion in $RevitVersions) {
+    $hostRuntime = Get-RuntimeMajor (Join-Path $env:ProgramFiles "Autodesk\Revit $revitVersion\RevitAPI.runtimeconfig.json")
+    if ($null -ne $buildRuntime -and $null -ne $hostRuntime -and $hostRuntime -lt $buildRuntime) {
+        Write-Host "Skipped Revit $revitVersion -- it runs .NET $hostRuntime and this build is .NET $buildRuntime, which it cannot load. Install its latest update, or build against a .NET $hostRuntime API (revit/README.md)." -ForegroundColor Yellow
+        $skipped += $revitVersion
+        continue
+    }
+
     $destination = Join-Path $addinsRoot $revitVersion
     if (-not (Test-Path -LiteralPath $destination)) {
         New-Item -ItemType Directory -Path $destination -Force | Out-Null
@@ -316,6 +344,10 @@ if (-not $fromRelease) {
     if ($null -ne $sourceSha -and $sourceBranch -ne 'main') {
         Write-Host '  This is a preview, not main. The install returns to main when a session deploys after a merge.' -ForegroundColor Yellow
     }
+}
+
+if ($skipped.Count -gt 0) {
+    Write-Host "  Not installed for Revit $($skipped -join ', '): its runtime is older than this build's." -ForegroundColor Yellow
 }
 
 Write-Host ''
