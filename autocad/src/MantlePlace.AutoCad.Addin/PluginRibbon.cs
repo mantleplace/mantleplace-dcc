@@ -8,15 +8,16 @@ using AcApplication = Autodesk.AutoCAD.ApplicationServices.Application;
 namespace MantlePlace.AutoCad.Addin;
 
 /// <summary>
-/// Puts the Mantle Place panel on the host's Add-ins tab, and puts it back each time the host rebuilds
-/// its ribbon.
+/// Puts the Mantle Place panel on a Mantle Place tab of the plugin's own, and puts it back each time the
+/// host rebuilds its ribbon.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Built in code because a partial CUIX file cannot do it: its tab is its own customization group's, so
 /// AutoCAD and Civil 3D 2027 showed it as a second "Add-ins" tab beside their own
-/// (<c>autocad/docs/api-record.md</c>). Which tab, and whether the panel is already there, is
-/// <see cref="PlugInsPanel.Place"/> in the pure core; this reads the ribbon's tabs and adds the panel.
+/// (<c>autocad/docs/api-record.md</c>). Which tab, whether it must be made and whether the panel is
+/// already there is <see cref="PlugInsPanel.Place"/> in the pure core; this reads the ribbon's tabs,
+/// makes the tab when told to, and adds the panel.
 /// </para>
 /// <para>
 /// The host builds its ribbon from its customization files at startup, after this assembly
@@ -101,10 +102,10 @@ internal static class PluginRibbon
                 return;
             }
 
-            RibbonTab? tab = ribbon.Tabs.FirstOrDefault(candidate => string.Equals(candidate.Id, placement.TabId, StringComparison.Ordinal));
+            RibbonTab? tab = placement.MakeTab ? null : ribbon.Tabs.FirstOrDefault(candidate => string.Equals(candidate.Id, placement.TabId, StringComparison.Ordinal));
             if (tab is null)
             {
-                tab = new RibbonTab { Id = PlugInsPanel.OwnTabId, Title = PlugInsPanel.PanelText, Name = PlugInsPanel.PanelText };
+                tab = new RibbonTab { Id = PlugInsPanel.OwnTabId, Title = PlugInsPanel.TabText, Name = PlugInsPanel.TabText };
                 ribbon.Tabs.Add(tab);
             }
 

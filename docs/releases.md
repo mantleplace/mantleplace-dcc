@@ -72,3 +72,11 @@ Previous: [<previous tag>](https://github.com/mantleplace/mantleplace-dcc/releas
   ([public-surface.md](agents/public-surface.md)).
 - **No internals a user cannot act on**: test names, file counts, build flags and timings stay in the
   pull request unless they change what the user should do.
+
+## The `autocad` track's notes
+
+- **The ribbon tab.** The plugin's panel is on a `Mantle Place` tab of its own, as Revit's is
+  (`HPS-57`), and not on the host's Add-ins tab. The Autodesk storefront's publishing guidance has
+  pointed apps at the Plug-ins / Add-ins tab, so the store reviewer may ask for it there. Moving it
+  back is the one choice in `PlugInsPanel.Place` (`autocad/src/MantlePlace.AutoCad.Core/PlugInsPanel.cs`),
+  which would name the host's tab in place of the plugin's.

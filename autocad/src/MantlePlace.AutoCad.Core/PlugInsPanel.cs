@@ -28,60 +28,62 @@ public sealed record PanelCommand(string Command, string Label, string Tooltip, 
 }
 
 /// <summary>One tab the shell found on the host's ribbon.</summary>
-/// <param name="Id">The tab's identifier, which the host builds as <c>MENUGROUP.UID</c> from its customization files.</param>
+/// <param name="Id">The tab's identifier; the host builds a customization-file tab's as <c>MENUGROUP.UID</c>.</param>
 /// <param name="PanelIds">The identifiers of the panels on it.</param>
 public sealed record RibbonTabSeen(string Id, IReadOnlyList<string> PanelIds);
 
 /// <summary>Where the panel goes.</summary>
 /// <param name="TabId">The tab's identifier.</param>
-/// <param name="HostTab">True when the tab is the host's own; false when the shell must make the plugin's tab.</param>
-public sealed record PanelPlacement(string TabId, bool HostTab);
+/// <param name="MakeTab">True when the shell must make the tab first; false when it is already on the ribbon.</param>
+public sealed record PanelPlacement(string TabId, bool MakeTab);
 
 /// <summary>
 /// The plugin's ribbon panel: which commands, in which order, and which of the ribbon's tabs it goes on.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The shell builds the panel in code and adds it to the host's own Add-ins tab (the tab AutoCAD named
-/// Plug-Ins before 2025). It was a partial CUIX file once, and the host cannot merge that: a tab in a
-/// partial file is its own customization group's, so a tab given the Add-ins tab's UID came up as
-/// <c>MANTLEPLACE.RBN_00012112</c>, a second "Add-ins" tab beside the host's, in Civil 3D 2027 and in
-/// AutoCAD 2027 alike (<c>autocad/docs/api-record.md</c>).
+/// The shell builds the panel in code and puts it on a <c>Mantle Place</c> tab of the plugin's own, as
+/// Revit's ribbon does (<c>HPS-57</c>), so a curator moving between hosts looks in one place. It was
+/// the host's Add-ins tab once (the tab AutoCAD named Plug-Ins before 2025); and before that a partial
+/// CUIX file, which the host cannot merge: a tab in a partial file is its own customization group's,
+/// so a tab given the Add-ins tab's UID came up as <c>MANTLEPLACE.RBN_00012112</c>, a second
+/// "Add-ins" tab beside the host's, in Civil 3D 2027 and in AutoCAD 2027 alike
+/// (<c>autocad/docs/api-record.md</c>).
 /// </para>
 /// <para>
-/// The host's tab is found by its identifier, never its title, which is translated. Civil 3D's
-/// workspaces show Civil 3D's own Add-ins tab and not AutoCAD's, so each host's is named.
+/// The tab is found by its identifier, never its title, which is translated. The Autodesk storefront's
+/// guidance has pointed apps at the host's Add-ins tab, so a reviewer may ask for it back; the whole
+/// of that change is the one choice in <see cref="Place"/>, which would name the host's tab
+/// (<c>CIVIL.ID_Civil3DAddins</c> in Civil 3D, <c>ACAD.RBN_00012112</c> in AutoCAD) in place of
+/// <see cref="OwnTabId"/>.
 /// </para>
 /// <para>
-/// The commands are the shell's <c>CommandMethod</c> names. A ribbon button cannot show the session,
-/// so sign-in and sign-out are two buttons where Revit's Account face is one.
+/// The commands are the shell's <c>CommandMethod</c> names, in <c>HPS-51</c>'s order. A ribbon button
+/// cannot show the session, so sign-in and sign-out are two buttons where Revit's Account face is one.
 /// </para>
 /// </remarks>
 public static class PlugInsPanel
 {
-    /// <summary>
-    /// The hosts' Add-ins tabs, as the ribbon names them, in the order they are preferred: Civil 3D's
-    /// (<c>ID_Civil3DAddins</c> in its <c>CIVIL</c> group), then AutoCAD's (<c>RBN_00012112</c> in <c>ACAD</c>).
-    /// </summary>
-    public static IReadOnlyList<string> HostTabIds { get; } = ["CIVIL.ID_Civil3DAddins", "ACAD.RBN_00012112"];
-
     /// <summary>The panel's identifier on the ribbon, which is how the shell knows it is already there.</summary>
     public const string PanelId = "MANTLEPLACE_PANEL";
 
-    /// <summary>The identifier of the plugin's own tab, made only when no host Add-ins tab is on the ribbon.</summary>
+    /// <summary>The identifier of the plugin's own tab.</summary>
     public const string OwnTabId = "MANTLEPLACE_TAB";
 
-    /// <summary>The panel's title, and the title of the plugin's own tab when one is made.</summary>
+    /// <summary>The title of the plugin's own tab (<c>HPS-57</c>).</summary>
+    public const string TabText = "Mantle Place";
+
+    /// <summary>The panel's title.</summary>
     public const string PanelText = "Mantle Place";
 
-    /// <summary>The panel's commands, left to right.</summary>
+    /// <summary>The panel's commands, left to right, in the order <c>HPS-51</c>'s table lists the actions.</summary>
     public static IReadOnlyList<PanelCommand> Commands { get; } =
     [
         new("MANTLEPLACESIGNIN", "Sign In", "Sign in to your Mantle Place account in your browser.", "SIGNIN"),
         new("MANTLEPLACESIGNOUT", "Sign Out", "Sign out and clear the session stored on this machine.", "SIGNOUT"),
         new("MANTLEPLACEVAULT", "Vault", "Browse and search the bundles in your Mantle Place vault.", "VAULT"),
-        new("MANTLEPLACEFEEDBACK", "Send Feedback", "Open the Mantle Place feedback form in your browser.", "FEEDBACK"),
         new("MANTLEPLACEABOUT", "About", "Show which Mantle Place build is loaded and whether you are signed in.", "ABOUT"),
+        new("MANTLEPLACEFEEDBACK", "Send Feedback", "Open the Mantle Place feedback form in your browser.", "FEEDBACK"),
     ];
 
     /// <summary>
@@ -94,6 +96,8 @@ public static class PlugInsPanel
     /// <remarks>
     /// The host rebuilds its ribbon from its customization files on a workspace change, which drops a
     /// panel added in code, so the shell asks again each time; null is what makes that safe to repeat.
+    /// The plugin's tab is made only when it is not on the ribbon, so a rebuild that kept the tab and
+    /// dropped the panel puts the panel back and never adds a second tab.
     /// </remarks>
     public static PanelPlacement? Place(IReadOnlyList<RibbonTabSeen> tabs)
     {
@@ -104,14 +108,7 @@ public static class PlugInsPanel
             return null;
         }
 
-        foreach (string id in HostTabIds)
-        {
-            if (tabs.Any(tab => string.Equals(tab.Id, id, StringComparison.Ordinal)))
-            {
-                return new PanelPlacement(id, HostTab: true);
-            }
-        }
-
-        return new PanelPlacement(OwnTabId, HostTab: false);
+        bool ownTabIsThere = tabs.Any(tab => string.Equals(tab.Id, OwnTabId, StringComparison.Ordinal));
+        return new PanelPlacement(OwnTabId, MakeTab: !ownTabIsThere);
     }
 }

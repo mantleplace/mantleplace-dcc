@@ -11,8 +11,8 @@ first.
 
 ## Commands
 
-The plugin puts a **Mantle Place** panel on the ribbon's **Add-ins** tab, the host's own (Civil 3D's
-in Civil 3D). F1 over any of its buttons opens this page. Each
+The plugin puts a **Mantle Place** tab of its own on the ribbon, as Revit does, holding a **Mantle Place** panel;
+the host's Add-ins tab is left as it is (Civil 3D and plain AutoCAD alike). F1 over any of its buttons opens this page. Each
 command can also be typed at the command line. The panel carries the Mantle Place monogram and no
 other logo.
 
@@ -21,8 +21,8 @@ other logo.
 | Sign In | `MANTLEPLACESIGNIN` | Opens your browser to sign in; AutoCAD never sees your password. A small window waits for the browser and stays out of the way. Signing in here signs you in for every Mantle Place plugin on this machine. |
 | Sign Out | `MANTLEPLACESIGNOUT` | Drops the session and forgets the stored credential. |
 | Vault | `MANTLEPLACEVAULT` | The bundles you keep, with a search box, which of them are on this machine, removing a local copy, and reporting a problem with one. Needs you signed in. There is no Prepare or download in AutoCAD yet: an order comes into a drawing as an export sent from the web vault. |
-| Send Feedback | `MANTLEPLACEFEEDBACK` | The Mantle Place feedback form in your browser. It needs no account. Only this plugin's version and your AutoCAD year go with the link: nothing from your drawing, and nothing about you. |
 | About | `MANTLEPLACEABOUT` | Which build is loaded, whether the Civil 3D part is on, whether you are signed in, and a link to the [privacy page](https://mantle.place/privacy). |
+| Send Feedback | `MANTLEPLACEFEEDBACK` | The Mantle Place feedback form in your browser. It needs no account. Only this plugin's version and your AutoCAD year go with the link: nothing from your drawing, and nothing about you. |
 
 **Notices.** When an order turns up in your vault that you did not ask this plugin to look at, a small
 notice appears in a corner of AutoCAD's window; clicking it opens the vault on that bundle.

@@ -119,7 +119,8 @@ launcher) and in plain AutoCAD (the same install's AutoCAD launcher); 2025 and 2
 
 - **The ribbon names a tab `MENUGROUP.UID`.** Civil 3D's Add-ins tab is `CIVIL.ID_Civil3DAddins`
   and plain AutoCAD's is `ACAD.RBN_00012112`. Civil 3D's workspaces show its own tab and not
-  AutoCAD's, so the plugin names both (`PlugInsPanel.HostTabIds`).
+  AutoCAD's. The plugin named both while its panel went on the host's tab; the way back to it is the
+  one choice in `PlugInsPanel.Place`.
 - **A partial CUIX cannot put a panel on either.** The plugin's first partial file gave its tab the
   UID `RBN_00012112`; the host read it as `MANTLEPLACE.RBN_00012112`, a second "Add-ins" tab beside
   its own, in both hosts. The profile also held a copy of the partial in its `Support` folder, listed
@@ -130,9 +131,20 @@ launcher) and in plain AutoCAD (the same install's AutoCAD launcher); 2025 and 2
   the ribbon held one Add-ins tab. Pressing About ran `MANTLEPLACEABOUT` and opened its window. A
   round trip to another workspace (Planning and Analysis in Civil 3D, 3D Modeling in AutoCAD) and
   back left the panel where it was, once.
+- **It now goes on a tab of the plugin's own.** `HPS-57` asks every host with a ribbon for a
+  `Mantle Place` tab, as Revit has, so `PlugInsPanel.Place` names `MANTLEPLACE_TAB` (title and name
+  `Mantle Place`) and the shell makes it when the ribbon lacks it; the host's Add-ins tab is no
+  longer named. The tab is created in code, so its identifier is the plugin's own and the host does
+  not prefix it with a menu group (the partial CUIX's tab was read as `MANTLEPLACE.RBN_00012112`).
+  A rebuild that keeps the tab and drops the panel puts the panel back, and a second
+  `WorkspaceLoaded` adds neither a tab nor a panel. The headless tests pin the decision; the live
+  ribbon is not yet read for the new tab (below).
 
 ## What this does not yet cover
 
+- **The `Mantle Place` tab, live.** The decision is pinned headless and the branch builds against
+  2027's API, but the tab, its five buttons and a second workspace load have not yet been read on a
+  running Civil 3D 2027 or AutoCAD 2027. The panel on the host's Add-ins tab (above) is what was read.
 - **A vault send in 2027.** The live check ran local bundles only. Sign-in, the vault and the
   connected host with a session were not run: they need a signed-in account and the web vault.
 - **A drawing in feet**, with a foot-based zone and a metric DEM.

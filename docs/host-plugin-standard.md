@@ -69,6 +69,7 @@ host met the contract for real:
 | **v1.18** | `HPS-51` gains an eleventh action, choosing each category's fidelity level before a bundle import runs. MPB 1.9.0 lets a bundle publish RAW, MAX, MED and MIN of a deliverable, and Revit's import window grew a level beside each checklist row; the reference host's chooser is roadmapped against the same bundles, so its words were fixed here before either host named them — the glossary's `Fidelity Level`, and a level that is another said to be the same in place rather than hidden |
 | **v1.19** | `HPS-56` — every host carries a Send Feedback action from its first release. A curator who hits a problem inside a host had no route to tell Mantle Place from where they were; the web app's Feedback form needs no account and takes an image, but no plugin linked to it and nothing made a new host carry the link |
 | **v1.20** | `HPS-56` gains the `rating` parameter and the post-import prompt, "Did this import come in right?". The moment right after an import is when a curator has an opinion about a bundle, and the only route to say so was the general `Send Feedback` action: a one-tap answer there gets far more replies than a general link, and the rule that a host carries no feedback form of its own stays whole, because the answer is two links to the web form |
+| **v1.21** | `HPS-57` — every host with a ribbon or a top-level menu gives Mantle Place a tab (or top-level menu) of its own, named `Mantle Place`. Revit had a Mantle Place tab and AutoCAD put a panel on the host's Add-ins tab, so a curator moving between hosts looked in two places for the same actions |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -1204,6 +1205,23 @@ in-host form are not part of this rule.
 
 _Enforcer:_ `agent-review`, plus the pure-core test of the link builder.
 
+**`HPS-57` — A host with a ribbon or a top-level menu gives Mantle Place a tab, or a top-level menu,
+of its own, named `Mantle Place`.** The tab holds the shared actions the host offers (`HPS-51`), in
+the order that rule's table lists them (`Sign In`, `Sign Out`, `Vault`, `Import Bundle`, `About Mantle
+Place`, `Send Feedback`, whichever the host has), and the host-specific actions after them. A curator
+who uses Mantle Place in more than one host finds it in the same place in each, and does not look for
+it among the host's own tabs or menus. The plugin does not put its panel on a tab the host owns
+(an Add-ins or Plug-ins tab, a Tools menu): a tab the host owns is the host's to rename, merge and
+rebuild, and a plugin's panel on it is one more panel among many. A host with **no ribbon and no
+top-level menu** to give states where its panel lives instead, in its own `CLAUDE.md`.
+
+The failure attached to this rule: Revit had a `Mantle Place` tab, and AutoCAD put a `Mantle Place`
+panel on the host's Add-ins tab, so a curator moving between the two looked in two places. Revit
+already conforms. AutoCAD's panel moved to a tab of its own with this rule.
+
+_Enforcer:_ `agent-review`, plus a pure-core test where a host has moved the tab decision out of its
+shim (AutoCAD's `PlugInsPanel.Place`).
+
 ---
 
 ## 11. Frames and placement (`HPS-52` … `HPS-54`)
@@ -1376,6 +1394,7 @@ records that eviction is deliberately explicit-only.
 | The host's frame kind, declared in its own `CLAUDE.md` (`HPS-54`)                                                                                                                                          | `agent-review`                                         |
 | The bounds on a vault listing nobody asked for (`HPS-55`)                                                                                                                                                  | `agent-review`; a pure-core test where a host has one  |
 | Every host carries Send Feedback, its link and the post-import prompt (`HPS-56`) | `agent-review`, plus a pure-core test of the link builder and of the prompt's once-per-bundle rule |
+| A host with a ribbon or a top-level menu gives Mantle Place a tab of its own (`HPS-57`) | `agent-review`; a pure-core test where a host has one |
 
 Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS-33`) appear in both rows —
 the corpus proves the behaviour, review catches the shape a vector cannot see. `HPS-53` appears twice

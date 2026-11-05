@@ -87,11 +87,15 @@ key this suite must assert, or it fails.
   notice) are built in code and read the monogram from embedded resources (`ResourceImages`), linked
   from Revit's `Resources` so no binary is committed twice. The vault browser has no Prepare, download
   or import yet: an order comes into a drawing through an export sent from the web vault.
-- **The ribbon panel is built in code, on the host's own Add-ins tab.** `PlugInsPanel` (Core) lists
-  the commands and decides the tab, by identifier (`CIVIL.ID_Civil3DAddins`, then `ACAD.RBN_00012112`);
-  `PluginRibbon` (shell) adds the panel and adds it again after each workspace change. Not a partial
-  CUIX: its tab is its own group's, so the host shows it as a second "Add-ins" tab
-  ([`docs/api-record.md`](docs/api-record.md)). F1 is each button's tooltip help source.
+- **The ribbon panel is built in code, on a `Mantle Place` tab of the plugin's own** (`HPS-57`), as
+  Revit's is, in Civil 3D and plain AutoCAD alike. `PlugInsPanel` (Core) lists the commands, in
+  `HPS-51`'s order, and decides the tab (`Place`: the plugin's tab, made when the ribbon lacks it);
+  `PluginRibbon` (shell) makes the tab and adds the panel, and adds it again after each workspace
+  change without a second tab or panel. The host's Add-ins tab is left alone. Not a partial CUIX: its
+  tab is its own group's, so the host shows it as a second "Add-ins" tab
+  ([`docs/api-record.md`](docs/api-record.md)). F1 is each button's tooltip help source. The
+  storefront's guidance has pointed apps at the Add-ins tab; the way back is the one choice in
+  `PlugInsPanel.Place` ([`docs/releases.md`](../docs/releases.md)).
 - **An import is one press, planned in Core.** `AutoCadImportPlanner` decides everything from the
   `hosts.autocad` block: what is placed, where, in which units, what is skipped and why, and whether
   the drawing's geographic location refuses the import. The shell (`OrderImporter`) observes the
