@@ -22,15 +22,14 @@ history, not contract.
 
 ## Semver era
 
-### 2.0.0 — the open site-context standard: a profile over open formats, placed by every file's frame, in one layout (major; not yet published)
+### 2.0.0 — the open site-context standard: a profile over open formats, placed by every file's frame, in one layout (major; published and frozen)
 
 The first major of the semver era, and the first version written for readers outside Mantle Place. It
 removes, moves, renames and narrows members and files, which [compatibility](compatibility.md) §2
 defines as a MAJOR, and it is the version from which the 2.x promise (compatibility §8) holds.
 [`format.md`](format.md) §9 to §12 describe it; this entry lists what moved and what a 1.x consumer
 does about it. The schema owns the member-level list, and where it and this entry differ the schema
-is right. It is staged: served at `2.0.0.json` for readers before any order uses it, and not yet in
-the freeze ledger.
+is right. It is served at `2.0.0.json` and is in the freeze ledger.
 
 **What a 2.0 bundle is.**
 
@@ -78,7 +77,7 @@ the freeze ledger.
 - **STAC.** `Metadata/stac-item.json` is new: the bundle as a valid STAC 1.1.0 Item, generated from the
   manifest.
 
-**Members, against 1.15.0.** As the staged schema states them:
+**Members, against 1.15.0.** As the schema states them:
 
 - **Required now.** `file_entries`, and in each entry `frame`, `odbl_role`, `license` and
   `sources`; `location.site_origin`; `layout.stac_item`. A file with no spatial frame (the README,
@@ -101,7 +100,7 @@ the freeze ledger.
 - **Left to the validator.** No two archive paths differ only by case, and a basename never names
   two different things; neither can be a schema pattern.
 
-**Stated before 2.0.0 is published: an untabled GeoPackage row.** A GeoPackage row of
+**Stated when 2.0.0 was published: an untabled GeoPackage row.** A GeoPackage row of
 `vector.layers` that lists no `tables` holds exactly one feature table. The producer names it in
 PascalCase after the file stem (`RoadSplines`), not after the layer (`road_splines`), and a reader
 reads that one table whatever it is called and never the only table of a file that holds several
@@ -132,12 +131,12 @@ name every file by the six rules; write `file_entries` with a frame, a role, a l
 for every file; give a licence as an SPDX expression; ship a STAC Item beside the manifest; and
 state version `2.0.0` as a JSON string.
 
-### 1.19.0 — the AutoCAD block's public-record layers and site linework (additive minor; not yet published)
+### 1.19.0 — the AutoCAD block's public-record layers and site linework (additive minor; published and frozen 2026-11-05)
 
 Two parts are added to `hosts.autocad`, a MINOR under [compatibility](compatibility.md) §2. Nothing is
 removed, re-typed or re-meant, and every host floor at 1.0.0 reads it: a reader that does not read
 `hosts.autocad` is unaffected, and one that does and predates these members ignores them as unknown
-members. The first-party plugins' re-pin follows when the schema is published, as for 1.18.0.
+members. Each host's pin lives in `tools/manifest-conformance/verified-against.json`.
 [`format.md`](format.md) §6.10 explains the members; this entry lists them.
 
 - **`records`**, the public-record layers in the block's `file_frame`, as `records.layers`: each a
@@ -154,13 +153,13 @@ the pointer and not from the drawing, finds the drawings through the block and n
 before 1.19.0 carries neither part and no verdict for either, and a reader says the bundle states none
 and places the rest.
 
-### 1.18.0 — the AutoCAD host block, for AutoCAD and Civil 3D (additive minor; not yet published)
+### 1.18.0 — the AutoCAD host block, for AutoCAD and Civil 3D (additive minor; published and frozen 2026-11-05)
 
 One block is added: `hosts.autocad`, a new `hosts.<hostId>` sub-block, which is a MINOR under
 [compatibility](compatibility.md) §2. Nothing is removed, re-typed or re-meant, and every host floor
 at 1.0.0 reads it: a reader that does not know the host id ignores the block and infers nothing from
-its absence, as for any host id (compatibility §3, [`format.md`](format.md) §4.2). The first-party
-plugins' re-pin follows when the schema is published. [`format.md`](format.md) §6.9 explains the
+its absence, as for any host id (compatibility §3, [`format.md`](format.md) §4.2). A reader of a later
+`hosts.autocad` reads 1.18.0 blocks as its subset. [`format.md`](format.md) §6.9 explains the
 members; this entry lists them.
 
 - **One host.** The id is `autocad` for AutoCAD and Civil 3D alike. Civil 3D is a part of the host,
