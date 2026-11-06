@@ -75,7 +75,8 @@ move (the arithmetic spec §6.8 gives a reader for offset files, taken relative 
 bundle's top-level collection and objects carry `mantleplace_bundle`: its own origin, the offset in
 metres it was moved by, and whether it is the anchor. A bundle is left at its own offsets, with one
 warning that names the reason, when its CRS or `z_reference` differs from the anchor's, when it has
-no applied origin, or when it is more than 16,384 m from the anchor on any axis. That limit is where
+no applied origin, or when it is farther from the anchor on any axis than `MAX_OFFSET_M` in
+[`core/anchor.py`](mantleplace_blender/core/anchor.py). That limit is where
 Blender's 32-bit object positions stop resolving a millimetre, so a seam never opens by more than
 that. Matching heights across tile seams is platform-side work, and importing the same bundle twice
 is not handled.
