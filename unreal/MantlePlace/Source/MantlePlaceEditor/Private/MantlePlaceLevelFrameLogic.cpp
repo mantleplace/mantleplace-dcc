@@ -19,7 +19,7 @@ FString Unescape(const FString& Text)
 	return Text.Replace(TEXT("%7C"), TEXT("|")).Replace(TEXT("%25"), TEXT("%"));
 }
 
-FString Shown(const FString& Text)
+FString ShownOrNone(const FString& Text)
 {
 	return Text.IsEmpty() ? FString(TEXT("(none stated)")) : Text;
 }
@@ -179,7 +179,7 @@ FMantlePlaceFramePlan FMantlePlaceLevelFrameLogic::Plan(
 		return MakeCentred(ThisOrigin, EMantlePlaceFrameRefusal::DatumDiffers,
 			Intro + FString::Printf(TEXT("its vertical datum is %s and the level's is %s. The plugin offsets only "
 										 "bundles stated on the same vertical datum, and converts nothing."),
-				*Shown(ThisOrigin.VerticalDatum), *Shown(Anchor.VerticalDatum)) + Outro);
+				*ShownOrNone(ThisOrigin.VerticalDatum), *ShownOrNone(Anchor.VerticalDatum)) + Outro);
 	}
 
 	const double EastM = ThisOrigin.EastingM - AnchorEastingM;
