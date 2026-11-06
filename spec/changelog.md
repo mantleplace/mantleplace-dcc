@@ -136,7 +136,7 @@ state version `2.0.0` as a JSON string.
 Two parts are added to `hosts.autocad`, a MINOR under [compatibility](compatibility.md) §2. Nothing is
 removed, re-typed or re-meant, and every host floor at 1.0.0 reads it: a reader that does not read
 `hosts.autocad` is unaffected, and one that does and predates these members ignores them as unknown
-members. The AutoCAD plugin is pinned to 1.19.0.
+members. Each host's pin lives in `tools/manifest-conformance/verified-against.json`.
 [`format.md`](format.md) §6.10 explains the members; this entry lists them.
 
 - **`records`**, the public-record layers in the block's `file_frame`, as `records.layers`: each a
@@ -158,8 +158,8 @@ and places the rest.
 One block is added: `hosts.autocad`, a new `hosts.<hostId>` sub-block, which is a MINOR under
 [compatibility](compatibility.md) §2. Nothing is removed, re-typed or re-meant, and every host floor
 at 1.0.0 reads it: a reader that does not know the host id ignores the block and infers nothing from
-its absence, as for any host id (compatibility §3, [`format.md`](format.md) §4.2). The AutoCAD plugin is
-pinned to 1.19.0 and reads 1.18.0 blocks as its subset. [`format.md`](format.md) §6.9 explains the
+its absence, as for any host id (compatibility §3, [`format.md`](format.md) §4.2). A reader of a later
+`hosts.autocad` reads 1.18.0 blocks as its subset. [`format.md`](format.md) §6.9 explains the
 members; this entry lists them.
 
 - **One host.** The id is `autocad` for AutoCAD and Civil 3D alike. Civil 3D is a part of the host,
