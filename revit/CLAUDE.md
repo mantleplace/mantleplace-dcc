@@ -31,7 +31,7 @@ here in a line, and its detail lives in the document it links.
   its own frame, and the planner places those first (`HPS-52`). The first bundle's survey point is the
   project's **anchor** and is never reset: a later bundle is built at the difference of the two
   published points, only for one EPSG code and one angle, and is otherwise refused whole
-  (`AdjacentBundle` in the core; a position the importer builds goes through `SitePoint`, so a new
+  (`AdjacentBundle` in the core; a position the plugin builds goes through `SitePoint`, so a new
   layer must too).
 - **Role:** host #2, and the Host Plugin Standard's debugger. Where the four-layer shape does not
   fit .NET, that is a finding to file against the standard, not a thing to quietly work around.

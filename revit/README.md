@@ -183,7 +183,7 @@ in `Core`, asserted headlessly; the shim only reads the order id and the site lo
   absolute and are not offset. That is done only for one EPSG code and one angle to true north (zero),
   and within [`AdjacentBundle.MaxOffsetM`](src/MantlePlace.Revit.Core/AdjacentBundle.cs) of the
   anchor; a bundle that is not is refused whole, with one message naming the reason, and the project
-  is untouched. The decision is the pure core's; the add-in only applies it, to every layer's
+  is untouched. The decision is the pure core's; the Revit plugin only applies it, to every layer's
   positions and to the IFC and DXF links;
 - sets the project's **site location** — Manage ▸ Location, which is what places the sun in every
   view and renderer — from the latitude and longitude in `hosts.revit.georeference.origin`, verbatim,
