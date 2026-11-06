@@ -34,6 +34,9 @@ FEATURES_KEY = "features_usdz"
 #: The 2.0 fixed name of each layout key (§10.3), tried only where the manifest lists that path.
 FIXED_NAMES = {CONTEXT_KEY: "Site/Context.usdz", FEATURES_KEY: "Site/Features.usdz"}
 
+#: The scene custom property that holds a site origin whole; the first bundle's is the anchor.
+ANCHOR_KEY = "mantleplace_site_origin"
+
 #: A site origin's projected unit, as the schema names it, as a factor to metres.
 ORIGIN_UNITS = {"m": 1.0, "ft": 0.3048, "usft": 1200 / 3937}
 _AXIS_ORDERS = frozenset({"east-north", "north-east"})
@@ -171,7 +174,7 @@ def scene_properties(georeference: Georeference) -> dict:
     """
     g = georeference
     properties: dict = {
-        "mantleplace_site_origin": {
+        ANCHOR_KEY: {
             "crs": g.crs_code or _crs_text(g.crs),
             "x": g.x,
             "y": g.y,

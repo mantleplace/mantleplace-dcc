@@ -67,6 +67,20 @@ floats, which at a projected northing of four million metres are only good to ha
 the reason the format stores offsets at all (spec §6.8), and moving the site would throw away what
 the format kept.
 
+**Importing several bundles.** The first bundle whose site origin is applied is the scene's
+**anchor**: `mantleplace_site_origin` and the GIS keys above are its, and a later import never
+overwrites them. A later bundle is moved by its site origin's projected `x`, `y` and `z` minus the
+anchor's, each read in its own unit, so bundles ordered side by side sit edge to edge with no manual
+move (the arithmetic spec §6.8 gives a reader for offset files, taken relative to the anchor). Each
+bundle's top-level collection and objects carry `mantleplace_bundle`: its own origin, the offset in
+metres it was moved by, and whether it is the anchor. A bundle is left at its own offsets, with one
+warning that names the reason, when its CRS or `z_reference` differs from the anchor's, when it has
+no applied origin, or when it is farther from the anchor on any axis than `MAX_OFFSET_M` in
+[`core/anchor.py`](mantleplace_blender/core/anchor.py). That limit is where
+Blender's 32-bit object positions stop resolving a millimetre, so a seam never opens by more than
+that. Matching heights across tile seams is platform-side work, and importing the same bundle twice
+is not handled.
+
 **What it never does.** It does not reproject, convert a unit, or shift a height between datums. Where
 the site origin is missing, is in another CRS than `Context.usdz`, or `Context.usdz` states a frame
 the plugin cannot read, the site still comes in, at the origin, and the import says the origin was not
@@ -86,7 +100,7 @@ The plugin is the triad every Mantle Place plugin is built as:
 
 | Part | Where | Needs Blender |
 | --- | --- | --- |
-| the pure core: version, pointers, frames, site origin, the composed stage, the feedback link, zip and folder reading | [`mantleplace_blender/core/`](mantleplace_blender/core/) | no |
+| the pure core: version, pointers, frames, site origin, the composed stage, the feedback link, zip and folder reading, the anchor and offset | [`mantleplace_blender/core/`](mantleplace_blender/core/) | no |
 | the host shim: operators, menus, preferences, Blender's USD import | [`mantleplace_blender/shim.py`](mantleplace_blender/shim.py) | yes |
 | the headless test of the core | [`tests/`](tests/) | no |
 
@@ -104,6 +118,14 @@ so it is run by hand:
 ```bash
 blender --background --factory-startup --python-exit-code 1 \
     --python blender/tests/headless/run_headless.py -- path/to/bundle.zip
+```
+
+`run_adjacent.py` needs no bundle: it generates three small adjacent bundles and a set of ones that
+must not be offset, imports them into one scene, and prints the measured seam between each pair:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 \
+    --python blender/tests/headless/run_adjacent.py
 ```
 
 ## Working on it

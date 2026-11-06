@@ -16,8 +16,10 @@ from dataclasses import dataclass, field
 import bpy
 from bpy.props import BoolProperty, StringProperty
 from bpy_extras.io_utils import ImportHelper
+from mathutils import Vector
 
 from .core import VERSION
+from .core.anchor import ANCHOR_KEY, BUNDLE_KEY, Placement, bundle_record, decide_placement
 from .core.bundle import BundleRefused, Plan, plan_import, scene_properties, wrapper_stage
 from .core.feedback import feedback_url
 from .core.source import open_bundle, remove_tree
@@ -31,6 +33,7 @@ class ImportResult:
     plan: Plan
     objects: list = field(default_factory=list)
     notes: list = field(default_factory=list)
+    placement: Placement | None = None
 
 
 def import_bundle(context: bpy.types.Context, path: str, include_features: bool = True) -> ImportResult:
@@ -50,6 +53,7 @@ def import_bundle(context: bpy.types.Context, path: str, include_features: bool 
             handle.write(wrapper_stage(context_file, features_file))
 
         before = set(bpy.data.objects)
+        before_collections = set(bpy.data.collections)
         # Textures are packed into the .blend, so the scratch folder can go once this returns.
         outcome = bpy.ops.wm.usd_import(
             filepath=root,
@@ -61,10 +65,13 @@ def import_bundle(context: bpy.types.Context, path: str, include_features: bool 
         if "FINISHED" not in outcome:
             raise BundleRefused("Blender's USD import did not finish; see the system console.")
         result = ImportResult(plan, [o for o in bpy.data.objects if o not in before], notes)
+        collections = [c for c in bpy.data.collections if c not in before_collections]
     finally:
         remove_tree(scratch)
 
-    _place(context.scene, plan)
+    result.placement = _place(context.scene, plan, result.objects, collections)
+    if result.placement.note:
+        result.notes.append(result.placement.note)
     return result
 
 
@@ -76,20 +83,45 @@ def _take(bundle, plan: Plan, archive_path: str, scratch: str, notes: list) -> s
     return local
 
 
-def _place(scene: bpy.types.Scene, plan: Plan) -> None:
-    """Make the scene's world origin the site origin, in metres, and say so on the scene.
+def _place(scene: bpy.types.Scene, plan: Plan, objects: list, collections: list) -> Placement:
+    """Put the imported objects where the scene's anchor says, and record where they came from.
 
-    The geometry is left at its offsets. Blender stores object transforms as 32-bit floats, which
-    at a projected northing are coarser than half a metre, which is exactly why the files are
-    offsets (spec/format.md §6.8); moving the site to its full coordinates would lose what the
-    format kept.
+    The first bundle whose site origin is applied is the scene's anchor: the scene states its
+    origin and its geometry stays at its offsets. Blender stores object transforms as 32-bit
+    floats, which at a projected northing are coarser than half a metre, which is exactly why the
+    files are offsets (spec/format.md §6.8); moving the site to its full coordinates would lose what
+    the format kept. A later bundle is moved only by its small difference from the anchor, which
+    the core decides (`core.anchor`); the scene's own record is never overwritten.
     """
     scene.unit_settings.system = "METRIC"
     scene.unit_settings.scale_length = 1.0
-    if plan.georeference is None:
-        return
-    for key, value in scene_properties(plan.georeference).items():
-        scene[key] = value
+    georeference = plan.georeference
+    placement = decide_placement(_scene_anchor(scene), georeference)
+    if georeference is None:
+        return placement
+    if placement.anchor:
+        for key, value in scene_properties(georeference).items():
+            scene[key] = value
+
+    created = set(objects)
+    roots = [o for o in objects if o.parent not in created]
+    if any(placement.offset):
+        offset = Vector(placement.offset)
+        for obj in roots:  # children follow their parents
+            obj.location += offset
+        bpy.context.view_layer.update()  # world matrices are stale until the depsgraph runs
+
+    record = bundle_record(georeference, placement)
+    nested = {child for collection in collections for child in collection.children}
+    for datablock in [*(c for c in collections if c not in nested), *roots]:
+        datablock[BUNDLE_KEY] = record
+    return placement
+
+
+def _scene_anchor(scene: bpy.types.Scene) -> object:
+    """The scene's anchor record as a plain dict, or None where no bundle has anchored it."""
+    value = scene.get(ANCHOR_KEY)
+    return value.to_dict() if hasattr(value, "to_dict") else value
 
 
 class MANTLEPLACE_OT_import_bundle(bpy.types.Operator, ImportHelper):
@@ -115,7 +147,18 @@ class MANTLEPLACE_OT_import_bundle(bpy.types.Operator, ImportHelper):
             return {"CANCELLED"}
         for note in result.notes:
             self.report({"WARNING"}, note)
-        placed = "placed at its site origin" if result.plan.georeference else "not placed"
+        placement = result.placement
+        if result.plan.georeference is None:
+            placed = "not placed"
+        elif placement.anchor:
+            placed = "placed at its site origin"
+        elif any(placement.offset):
+            east, north, up = placement.offset
+            placed = f"placed beside the first bundle ({east:.3f}, {north:.3f}, {up:.3f} m)"
+        elif placement.note:
+            placed = "left at its own offsets"
+        else:
+            placed = "placed at the first bundle's site origin"
         self.report({"INFO"}, f"Imported {len(result.objects)} objects, {placed}.")
         return {"FINISHED"}
 

@@ -22,7 +22,10 @@ are in [`README.md`](README.md); this file is what a change here must not break.
   places one frame: the frame `file_entries` states for `Context.usdz`, as offsets from the site
   origin. It applies `location.site_origin.projected` only when that point is in the Context file's
   CRS, and never reprojects, converts a unit or shifts a datum (`HPS-53`); a file it cannot place is
-  a named note, and the geometry still comes in at the origin.
+  a named note, and the geometry still comes in at the origin. A later bundle in the same scene is
+  moved only by the difference of two published `projected` points (`core/anchor.py`), when both
+  share a CRS code and a `z_reference`; the first applied origin is the scene's anchor and is never
+  overwritten.
 - **Releases:** none yet. A first release is its own track, `blender-<version>`
   ([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)); the column in
   [`docs/host-support.md`](../docs/host-support.md) arrives with it, since every status there links
@@ -37,6 +40,7 @@ mantleplace_blender/shim.py          IMPURE. bpy: operators, menus, preferences,
 mantleplace_blender/blender_manifest.toml   the extension manifest
 tests/test_*.py                      headless, over the core; CI runs them (ci-blender-tests)
 tests/headless/run_headless.py       inside Blender --background, against a real bundle, by hand
+tests/headless/run_adjacent.py       inside Blender --background, generated adjacent bundles, by hand
 tools/                               the HPS-50 install tool and check script
 ```
 
@@ -69,6 +73,8 @@ the core hands it. **Always with `--background`**: never open a Blender window f
 python -m unittest discover -s blender/tests -t blender
 blender --background --factory-startup --python-exit-code 1 \
     --python blender/tests/headless/run_headless.py -- <bundle.zip>
+blender --background --factory-startup --python-exit-code 1 \
+    --python blender/tests/headless/run_adjacent.py
 ```
 
 `--factory-startup` keeps the run off the machine's own preferences and add-ons. To try the
