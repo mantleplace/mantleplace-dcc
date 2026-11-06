@@ -103,7 +103,7 @@ internal sealed partial class RevitBundleImporter
 
         if (result.ElementId != ElementId.InvalidElementId)
         {
-            RevitLinkInstance.Create(_document, result.ElementId);
+            MoveToAnchor(RevitLinkInstance.Create(_document, result.ElementId).Id, "IFC site link");
         }
 
         if (!CommitAndReport(transaction, swallower))
@@ -212,7 +212,7 @@ internal sealed partial class RevitBundleImporter
 
         ImportFailureSwallower swallower = new("Placing the existing IFC site link");
         using Transaction transaction = BeginTransaction("Mantle Place: place IFC site link", swallower);
-        RevitLinkInstance.Create(_document, linkTypeId);
+        MoveToAnchor(RevitLinkInstance.Create(_document, linkTypeId).Id, "IFC site link");
 
         if (CommitAndReport(transaction, swallower))
         {

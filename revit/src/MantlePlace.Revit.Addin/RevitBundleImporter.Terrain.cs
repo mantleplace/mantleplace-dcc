@@ -186,8 +186,8 @@ internal sealed partial class RevitBundleImporter
         foreach (SurfacePoint point in points)
         {
             revitPoints.Add(new XYZ(
-                ToInternalFeet(point.X, metresPerUnit),
-                ToInternalFeet(point.Y, metresPerUnit),
+                ToInternalFeet(point.X, metresPerUnit) + MetresToInternal(Anchoring.OffsetEastM),
+                ToInternalFeet(point.Y, metresPerUnit) + MetresToInternal(Anchoring.OffsetNorthM),
                 ToInternalFeet(point.Z, metresPerUnit)));
         }
 
@@ -620,6 +620,11 @@ internal sealed partial class RevitBundleImporter
         ImportFailureSwallower swallower = new("Linking the surface DXF");
         using Transaction transaction = BeginTransaction("Mantle Place: link surface DXF", swallower);
         bool linked = _document.Link(dxfPath, options, null, out ElementId linkId);
+        if (linked && linkId != ElementId.InvalidElementId)
+        {
+            MoveToAnchor(linkId, "surface DXF link");
+        }
+
         if (!CommitAndReport(transaction, swallower))
         {
             // The swallower already said why. Reporting the work below as done would be a lie:

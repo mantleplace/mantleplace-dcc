@@ -29,10 +29,17 @@ internal static class TreeInstances
     /// should know stands at the family's default size or at its level's elevation.
     /// </para>
     /// </remarks>
-    internal static FamilyInstance Place(Document document, FamilySymbol symbol, Level level, SiteTreePoint tree, out bool sized)
+    internal static FamilyInstance Place(
+        Document document,
+        FamilySymbol symbol,
+        Level level,
+        SiteTreePoint tree,
+        out bool sized,
+        double offsetEastM = 0.0,
+        double offsetNorthM = 0.0)
     {
         double ground = MetresToInternal(tree.GroundElevationM);
-        XYZ location = new(MetresToInternal(tree.EastM), MetresToInternal(tree.NorthM), ground);
+        XYZ location = new(MetresToInternal(tree.EastM + offsetEastM), MetresToInternal(tree.NorthM + offsetNorthM), ground);
 
         FamilyInstance instance = document.Create.NewFamilyInstance(location, symbol, level, StructuralType.NonStructural);
 

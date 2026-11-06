@@ -359,8 +359,8 @@ internal sealed partial class RevitBundleImporter
                 SiteVertex from = vertices[index];
                 SiteVertex to = vertices[(index + 1) % vertices.Count];
                 edges.Add(Line.CreateBound(
-                    new XYZ(MetresToInternal(from.EastM), MetresToInternal(from.NorthM), z),
-                    new XYZ(MetresToInternal(to.EastM), MetresToInternal(to.NorthM), z)));
+                    SitePoint(from.EastM, from.NorthM, z),
+                    SitePoint(to.EastM, to.NorthM, z)));
             }
 
             return CurveLoop.Create(edges);

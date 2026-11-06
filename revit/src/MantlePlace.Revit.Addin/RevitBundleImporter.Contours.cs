@@ -98,10 +98,10 @@ internal sealed partial class RevitBundleImporter
                 // repeats that rule against the unit round-trip — from the last point DRAWN, so the
                 // line stays continuous — since a Line under tolerance throws rather than failing
                 // quietly.
-                XYZ start = new(MetresToInternal(piece[0].EastM), MetresToInternal(piece[0].NorthM), z);
+                XYZ start = SitePoint(piece[0].EastM, piece[0].NorthM, z);
                 for (int index = 1; index < piece.Count; index++)
                 {
-                    XYZ end = new(MetresToInternal(piece[index].EastM), MetresToInternal(piece[index].NorthM), z);
+                    XYZ end = SitePoint(piece[index].EastM, piece[index].NorthM, z);
                     if (start.DistanceTo(end) <= _document.Application.ShortCurveTolerance)
                     {
                         continue;

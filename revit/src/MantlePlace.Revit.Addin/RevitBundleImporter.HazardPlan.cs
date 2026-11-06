@@ -307,7 +307,7 @@ internal sealed partial class RevitBundleImporter
                 TextNote.Create(
                     _document,
                     plan.Id,
-                    new XYZ(MetresToInternal(placement.TextEastM), MetresToInternal(placement.NorthM), z),
+                    SitePoint(placement.TextEastM, placement.NorthM, z),
                     rows[index].Text,
                     textType);
             }
@@ -327,11 +327,11 @@ internal sealed partial class RevitBundleImporter
     /// Annotation crop off, so the key's text — annotation — shows beside the swatches the model crop
     /// takes in. A plan's crop box is in model coordinates in plan, so the rectangle goes in as it is.
     /// </remarks>
-    private static void SetCrop(ViewPlan plan, FootprintExtent rectangle)
+    private void SetCrop(ViewPlan plan, FootprintExtent rectangle)
     {
         BoundingBoxXYZ box = plan.CropBox;
-        box.Min = new XYZ(MetresToInternal(rectangle.MinEastM), MetresToInternal(rectangle.MinNorthM), box.Min.Z);
-        box.Max = new XYZ(MetresToInternal(rectangle.MaxEastM), MetresToInternal(rectangle.MaxNorthM), box.Max.Z);
+        box.Min = SitePoint(rectangle.MinEastM, rectangle.MinNorthM, box.Min.Z);
+        box.Max = SitePoint(rectangle.MaxEastM, rectangle.MaxNorthM, box.Max.Z);
         plan.CropBox = box;
         plan.CropBoxActive = true;
         plan.CropBoxVisible = true;
@@ -424,21 +424,21 @@ internal sealed partial class RevitBundleImporter
         => element.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS) is { IsReadOnly: false } comments
            && comments.Set(stamp);
 
-    private static FootprintExtent? ExtentOf(Element element, View view)
+    private FootprintExtent? ExtentOf(Element element, View view)
         => element.get_BoundingBox(view) is { } box
             ? new FootprintExtent(
-                InternalToMetres(box.Min.X),
-                InternalToMetres(box.Min.Y),
-                InternalToMetres(box.Max.X),
-                InternalToMetres(box.Max.Y))
+                InternalToMetres(box.Min.X) - Anchoring.OffsetEastM,
+                InternalToMetres(box.Min.Y) - Anchoring.OffsetNorthM,
+                InternalToMetres(box.Max.X) - Anchoring.OffsetEastM,
+                InternalToMetres(box.Max.Y) - Anchoring.OffsetNorthM)
             : null;
 
-    private static CurveLoop Rectangle(FootprintExtent extent, double z)
+    private CurveLoop Rectangle(FootprintExtent extent, double z)
     {
-        XYZ a = new(MetresToInternal(extent.MinEastM), MetresToInternal(extent.MinNorthM), z);
-        XYZ b = new(MetresToInternal(extent.MaxEastM), MetresToInternal(extent.MinNorthM), z);
-        XYZ c = new(MetresToInternal(extent.MaxEastM), MetresToInternal(extent.MaxNorthM), z);
-        XYZ d = new(MetresToInternal(extent.MinEastM), MetresToInternal(extent.MaxNorthM), z);
+        XYZ a = SitePoint(extent.MinEastM, extent.MinNorthM, z);
+        XYZ b = SitePoint(extent.MaxEastM, extent.MinNorthM, z);
+        XYZ c = SitePoint(extent.MaxEastM, extent.MaxNorthM, z);
+        XYZ d = SitePoint(extent.MinEastM, extent.MaxNorthM, z);
         return CurveLoop.Create([Line.CreateBound(a, b), Line.CreateBound(b, c), Line.CreateBound(c, d), Line.CreateBound(d, a)]);
     }
 }

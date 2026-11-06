@@ -104,7 +104,7 @@ internal sealed partial class RevitBundleImporter
     /// with no Z has no elevation this host may invent — dropping it is the <c>HPS-20</c> reading and
     /// zero would put the road two kilometres below the site.
     /// </remarks>
-    private static bool TryVertex(SiteVertex vertex, out XYZ point)
+    private bool TryVertex(SiteVertex vertex, out XYZ point)
     {
         point = XYZ.Zero;
         if (vertex.ElevationM is not { } elevation)
@@ -112,7 +112,7 @@ internal sealed partial class RevitBundleImporter
             return false;
         }
 
-        point = new XYZ(MetresToInternal(vertex.EastM), MetresToInternal(vertex.NorthM), MetresToInternal(elevation));
+        point = SitePoint(vertex.EastM, vertex.NorthM, MetresToInternal(elevation));
         return true;
     }
 }

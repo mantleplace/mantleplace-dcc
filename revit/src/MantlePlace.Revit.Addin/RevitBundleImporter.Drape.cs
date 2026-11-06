@@ -213,8 +213,12 @@ internal sealed partial class RevitBundleImporter
 
         double minXm = InternalToMetres(box.Min.X);
         double minYm = InternalToMetres(box.Min.Y);
-        DrapeOffset anchor = DrapeAnchor.For(placement, smoothed, minXm, minYm);
-        Trace("  " + DrapeAnchor.Describe(label, placement, smoothed, minXm, minYm, anchor));
+
+        // The element's corner is read from the document, where this bundle stands at its offset from
+        // the project origin; the image's corner is in the bundle's own frame. Both go to the same one.
+        DrapePlacement inDocument = placement.Shifted(Anchoring.OffsetEastM, Anchoring.OffsetNorthM);
+        DrapeOffset anchor = DrapeAnchor.For(inDocument, smoothed, minXm, minYm);
+        Trace("  " + DrapeAnchor.Describe(label, inDocument, smoothed, minXm, minYm, anchor));
         return anchor;
     }
 

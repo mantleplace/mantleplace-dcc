@@ -70,7 +70,7 @@ import with nobody there to choose, the unattended path, brings in every row at 
 
 | Step | Manifest source | Becomes | Measured cost |
 |---|---|---|---|
-| Shared coordinates | `hosts.revit.georeference.origin.projected`, else `delivery.local_origin` | The project's survey point | `Measured(SetSharedCoordinates)`, timed with the next two |
+| Shared coordinates | `hosts.revit.georeference.origin.projected`, else `delivery.local_origin` | The project's survey point, set by the first bundle only. A later bundle in the same project is built at its offset from that point, or refused ([Revit README](../revit/README.md)) | `Measured(SetSharedCoordinates)`, timed with the next two |
 | Site location | `hosts.revit.georeference.origin.lat` and `.lon`, and `location.time_zone`. No fallback | The project's site location and time zone | `Measured(SetSiteLocation)` |
 | Site context view | None | A 3D view and a view filter over everything an import stamped | `Measured(SiteContextView)`, made before the subdivisions. Made after them, as it was on the measured order, it cost tens of seconds in Revit 2026 and 2027 |
 | Attribution and provenance | `attribution.sources[]`, `order_id`, `job_id`, `version` | A drafting view of credits, and the provenance record ([ADR 0011](adr/0011-revit-provenance-record-and-attribution-note-identity.md)) | `Measured(AttributionAndProvenance)` |

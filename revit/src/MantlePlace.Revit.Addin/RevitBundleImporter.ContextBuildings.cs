@@ -202,7 +202,7 @@ internal sealed partial class RevitBundleImporter
                 continue;
             }
 
-            if (geometry.Count == 0 || TryCreateDirectShape(category, geometry, ContextBuildingName) is not { } shape)
+            if (geometry.Count == 0 || TryCreateDirectShape(category, AtAnchor(geometry), ContextBuildingName) is not { } shape)
             {
                 unbuilt++;
                 continue;
@@ -222,6 +222,22 @@ internal sealed partial class RevitBundleImporter
         return CommitAndReport(transaction, swallower)
             ? new BuildingChunkResult(true, created, unstamped, unbuilt)
             : new BuildingChunkResult(false, 0, 0, 0);
+    }
+
+    /// <summary>
+    /// The solids as they stand in the document: the site model's own coordinates are the bundle's
+    /// frame, so a bundle built at an offset (<see cref="Anchoring"/>) has them translated by it.
+    /// </summary>
+    private List<GeometryObject> AtAnchor(List<GeometryObject> geometry)
+    {
+        if (!Anchoring.MovesGeometry)
+        {
+            return geometry;
+        }
+
+        Transform move = Transform.CreateTranslation(
+            new XYZ(MetresToInternal(Anchoring.OffsetEastM), MetresToInternal(Anchoring.OffsetNorthM), 0.0));
+        return [.. geometry.Select(item => item is Solid solid ? SolidUtils.CreateTransformed(solid, move) : item)];
     }
 
     /// <summary>

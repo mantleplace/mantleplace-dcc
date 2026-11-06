@@ -28,7 +28,11 @@ here in a line, and its detail lives in the document it links.
   frame is a per-order fact. A file built in the AOI's metric UTM zone for the fixed-frame host (the
   shared drape bites) is not in this frame on a State Plane delivery, and is skipped with a stated
   reason (`HPS-53`), never reprojected. This host's block carries its own drape and vector layers in
-  its own frame, and the planner places those first (`HPS-52`).
+  its own frame, and the planner places those first (`HPS-52`). The first bundle's survey point is the
+  project's **anchor** and is never reset: a later bundle is built at the difference of the two
+  published points, only for one EPSG code and one angle, and is otherwise refused whole
+  (`AdjacentBundle` in the core; a position the importer builds goes through `SitePoint`, so a new
+  layer must too).
 - **Role:** host #2, and the Host Plugin Standard's debugger. Where the four-layer shape does not
   fit .NET, that is a finding to file against the standard, not a thing to quietly work around.
 - **Releases:** their own track, tagged `revit-<version>` with no `v`
