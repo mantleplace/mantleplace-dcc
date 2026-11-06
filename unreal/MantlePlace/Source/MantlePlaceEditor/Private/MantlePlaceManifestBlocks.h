@@ -70,6 +70,8 @@ struct FMantlePlaceGeoreferenceBlock
 	int32 Epsg = 0;
 	FString CrsProjected;             // georeference.crs_projected verbatim ("EPSG:32613"): this host's
 	                                  // frame, the one a pointer's stated `crs` is compared against (HPS-53)
+	bool bHasOrigin = false;          // origin.utm stated an easting and a northing; false leaves the two
+	                                  // numbers below at zero, which is not a statement of anything
 	double OriginEastingM = 0.0;
 	double OriginNorthingM = 0.0;
 	double GroundOrthometricHM = 0.0; // elevation at the centroid (= mesh ground z=0 reference)

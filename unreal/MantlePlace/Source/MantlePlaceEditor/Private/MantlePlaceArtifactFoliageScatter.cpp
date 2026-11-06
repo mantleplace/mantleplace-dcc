@@ -70,6 +70,17 @@ public:
 			return;
 		}
 
+		if (Ctx.Manifest.HasLevelOffset())
+		{
+			// The scatter samples its rasters and clips its points about the world origin, which is
+			// where a bundle sits only when it is the level's anchor. Placing it at an offset would
+			// read the wrong texels, so it is left out and said so (a later change can carry the offset).
+			Ctx.Log.Add(TEXT("Foliage scatter skipped: this bundle is placed beside another import in the level, "
+				"and the scatter samples its coverage rasters about the world origin. The tree-point table is "
+				"imported and placed at the offset."));
+			return;
+		}
+
 		MantlePlaceFoliageScatter::FInputs Inputs;
 		Inputs.TreePoints = Ctx.TreePointsTable;
 		Inputs.CanopyHeight = Ctx.CoverageTextures.FindRef(TEXT("canopy_height"));

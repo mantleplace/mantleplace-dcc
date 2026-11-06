@@ -93,6 +93,10 @@ void FMantlePlaceImportContext::Claim(AActor* Actor, const FString& Label) const
 	const auto Mark = [&](AActor* Marked)
 	{
 		Marked->Tags.AddUnique(Tag);
+		if (!FrameTag.IsEmpty())
+		{
+			Marked->Tags.AddUnique(FName(*MantlePlaceImportNaming::FrameTag(FrameTag)));
+		}
 		for (const FName& Extra : ExtraTags)
 		{
 			Marked->Tags.AddUnique(Extra);
@@ -796,4 +800,56 @@ void MantlePlaceImportOrchestration::RunFinalize(const FHandlers& Handlers, FMan
 			Handler->Finalize(Context);
 		}
 	}
+}
+
+TArray<FMantlePlaceLevelImportTag> MantlePlaceImportOrchestration::ReadLevelImports(UWorld* World)
+{
+	TArray<FMantlePlaceLevelImportTag> Found;
+	if (World == nullptr)
+	{
+		return Found;
+	}
+	const FString ImportPrefix = MantlePlaceImportNaming::ImportTagPrefix();
+	const FString FramePrefix = MantlePlaceImportNaming::FrameTagPrefix();
+	const auto Read = [&](const TArray<FName>& Tags)
+	{
+		FMantlePlaceLevelImportTag Import;
+		bool bImport = false;
+		for (const FName& Tag : Tags)
+		{
+			const FString Text = Tag.ToString();
+			if (Text.StartsWith(ImportPrefix))
+			{
+				Import.Identity = Text.RightChop(ImportPrefix.Len());
+				bImport = true;
+			}
+			else if (Text.StartsWith(FramePrefix))
+			{
+				Import.FrameValue = Text.RightChop(FramePrefix.Len());
+			}
+		}
+		if (bImport && !Import.Identity.IsEmpty())
+		{
+			Found.Add(Import);
+		}
+	};
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		Read(It->Tags);
+	}
+	if (UWorldPartition* WorldPartition = World->GetWorldPartition())
+	{
+		FWorldPartitionHelpers::ForEachActorDescInstance(WorldPartition, AActor::StaticClass(),
+			[&Read](const FWorldPartitionActorDescInstance* Desc)
+			{
+				if (Desc != nullptr && !Desc->IsLoaded()
+					&& !MantlePlaceWorldPartitionLogic::IsDestroyedThisSession(ReadDescriptorPackage(*Desc)))
+				{
+					Read(Desc->GetTags());
+				}
+				return true;
+			});
+	}
+	return Found;
 }

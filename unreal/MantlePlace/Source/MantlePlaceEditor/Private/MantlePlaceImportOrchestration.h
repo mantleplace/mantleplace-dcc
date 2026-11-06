@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "MantlePlaceArtifactHandler.h"
+#include "MantlePlaceLevelFrameLogic.h"
 #include "WorldPartition/WorldPartitionHandle.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogMantlePlaceImport, Log, All);
@@ -136,6 +137,16 @@ FString ExplainUnloadedPriorActors(UWorld* World, const FString& Identity);
  * non-partitioned level nothing at all.
  */
 FString LoadUnloadedPriorActors(UWorld* World, const FString& Identity, FPriorActorLoad& OutLoad);
+
+/**
+ * Every Mantle Place import in the level, as FMantlePlaceLevelFrameLogic::Plan reads it: one entry per
+ * tagged actor, carrying the import's identity and the frame tag it was given (empty for an import made
+ * before frames were recorded). Loaded actors, and in a World Partition level the descriptors of the
+ * unloaded ones, which record tags without loading anything. A descriptor whose actor was destroyed this
+ * session is not an import: it lingers until the next save, and counting it would keep an anchor alive
+ * after the last import was deleted. Read BEFORE the wipe, so nothing here depends on what the wipe removes.
+ */
+TArray<FMantlePlaceLevelImportTag> ReadLevelImports(UWorld* World);
 
 /** Each included handler's Prepare / Import / Finalize, in registry order. */
 void RunPrepare(const FHandlers& Handlers, FMantlePlaceImportContext& Context);

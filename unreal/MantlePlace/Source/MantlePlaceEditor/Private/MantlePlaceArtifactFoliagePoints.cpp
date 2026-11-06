@@ -198,6 +198,15 @@ public:
 			Ctx.bAllRequestedSucceeded = false;
 			return;
 		}
+		if (Outcome == EMantlePlaceTreePointsOutcome::Parsed)
+		{
+			// The rows were read and checked in the bundle's own frame (the HPS-53 extent test is
+			// against this block's landscape about its origin); only now do they move to the level's.
+			for (FMantlePlaceTreePointRow& Row : Rows)
+			{
+				Row.Position = Manifest.ToLevelFrame(Row.Position);
+			}
+		}
 		if (Outcome != EMantlePlaceTreePointsOutcome::Parsed)
 		{
 			// A drifted column contract stays a SKIP, as it always has been. It says the ETL

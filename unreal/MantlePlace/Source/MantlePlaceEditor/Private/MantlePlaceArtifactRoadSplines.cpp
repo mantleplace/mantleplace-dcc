@@ -208,12 +208,13 @@ public:
 				continue;
 			}
 			// The actor made its own spline as its root; the published points go in as the world-space
-			// positions they already are.
+			// positions they already are, moved by the level offset when the level holds another import.
 			USplineComponent* SplineComponent = SplineActor->Spline;
 			SplineComponent->ClearSplinePoints(/*bUpdateSpline*/ false);
 			for (const FVector& Point : Road.PointsUeCm)
 			{
-				SplineComponent->AddSplinePoint(Point, ESplineCoordinateSpace::World, /*bUpdateSpline*/ false);
+				SplineComponent->AddSplinePoint(
+					Ctx.Manifest.ToLevelFrame(Point), ESplineCoordinateSpace::World, /*bUpdateSpline*/ false);
 			}
 			SplineComponent->UpdateSpline();
 

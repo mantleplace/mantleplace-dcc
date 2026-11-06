@@ -74,6 +74,18 @@ struct FMantlePlaceVaultManifest
 	                                 // Pick-and-Process); empty if absent
 	FMantlePlaceDeliveryFacts Delivery; // the top-level `delivery` block, for DISPLAY only -- see the type
 
+	// location.site_origin.vertical_datum verbatim ("NAVD88 (GEOID18)"); empty if absent. The order's
+	// vertical datum, read for ONE purpose: a second bundle is placed beside the first only when both
+	// state the same one (FMantlePlaceLevelFrameLogic). Nothing is placed from it, and the site origin's
+	// point is never read: it is not stated to be this host's frame origin.
+	FString SiteVerticalDatum;
+
+	// Where this import sits relative to the level's anchor, in metres east and north: decided by
+	// FMantlePlaceLevelFrameLogic before anything is placed, zero for an import into an empty level.
+	// Set once by the importer; every placement below goes through ToLevelFrame.
+	double LevelOffsetEastM = 0.0;
+	double LevelOffsetNorthM = 0.0;
+
 	// What the manifest states about each file's terms (MPB 1.14.0 `file_entries`, keyed by archive path)
 	// and the credit it words (`attribution.sources[]`). Read for ONE purpose: telling ODbL content from
 	// the rest, and crediting it (MantlePlaceOdblLogic). A file with no entry reads as `database`.
@@ -117,6 +129,18 @@ struct FMantlePlaceVaultManifest
 	 * projected->UE axis mapping lives: North -> +X, East -> +Y, Up -> +Z.
 	 */
 	static FVector ProjectedToUeCm(double DeltaEastingM, double DeltaNorthingM, double UpM);
+
+	/** Record the horizontal offset this import is placed at from the level's anchor. */
+	void SetLevelOffsetM(double EastM, double NorthM);
+	bool HasLevelOffset() const;
+
+	/**
+	 * Bundle-local UE cm (the frame ProjectedToUeCm gives, the georeference origin at 0,0) into the
+	 * level's frame: the horizontal level offset added, the height untouched. The ONE helper every
+	 * placement goes through -- the Landscape spawn, mesh locations, tree-point rows, road spline points
+	 * and public-record points -- so a new placement that forgets it is the only way to miss the offset.
+	 */
+	FVector ToLevelFrame(const FVector& FrameLocalUeCm) const;
 
 	/** The AOI's full span in UE world cm, in UE axis order (X = North, Y = East). The manifest's
 	 *  grid axes are named the other way round, so this is where that swap is applied once. */

@@ -83,6 +83,38 @@ is what the stale-actor sweep matches. Labels are user-editable, and matching on
 who renamed an actor in the outliner broke their own next re-import and got a second landscape on
 top of the first.
 
+## Adjacent bundles: one frame for the level
+
+Each bundle's Local Projected Frame puts its own `hosts.unreal.georeference` origin at world origin. A
+level that already holds a Mantle Place import therefore places the next bundle at its **horizontal
+offset** from the level's **anchor**: the difference of the two bundles' published origin easting and
+northing, turned into centimetres by `ProjectedToUeCm`. Nothing is reprojected and nothing is derived;
+`MantlePlaceLevelFrameLogic` decides, `FMantlePlaceVaultManifest::ToLevelFrame` applies.
+
+- **The anchor is the first import's origin.** It is stored on the actors, not beside them: every actor
+  of an import carries a `mantleplace_frame=<value>` tag holding the import's own origin and the offset it
+  was given, so `origin - offset` is the anchor from any one placed import. A third bundle lands against
+  the first two, re-importing a bundle recomputes the offset it had (the anchor bundle's own is zero), and
+  with no placed import left in the level there is no tag and so no anchor. The tag is never matched on
+  by the wipe; that is the import tag's job alone.
+- **Horizontal only.** Heights are already absolute (the Landscape's `location_z_offset_cm`, the mesh's
+  `ground_orthometric_h_m`), so `ToLevelFrame` never moves Z. Matching heights across a seam is the
+  platform's work.
+- **Where it applies:** the Landscape spawn, the terrain mesh and buildings, the tree-point rows, the
+  road spline points and the public-record points. The imagery drape and the coverage rasters are in the
+  bundle's own frame and move with the Landscape, so they need none.
+- **The foliage scatter is skipped** (and the log says so) for a bundle placed at an offset: it samples
+  its rasters and clips its points about the world origin. The tree-point table is still imported, at the
+  offset.
+- **Offset only on equality.** `hosts.unreal.georeference.crs_projected` and
+  `location.site_origin.vertical_datum` are compared as strings (the plugin never works out a zone and never
+  converts a datum), and the offset must be within 100 km. Otherwise the bundle imports centred, as before,
+  with one warning that names the reason. A centred import is tagged as not placed, so it is never taken
+  for the anchor. The datum is read from `location.site_origin` for this equality only; the site
+  origin's point is never read.
+- **Imports made before the tag existed** carry no frame, so they are not placed on one: the next import
+  becomes the anchor and says so.
+
 ## World Partition levels
 
 In a World Partition level the landscape is split, after it is built, into `ALandscapeStreamingProxy`

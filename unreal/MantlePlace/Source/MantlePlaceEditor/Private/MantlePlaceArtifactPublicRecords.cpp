@@ -470,6 +470,9 @@ private:
 				FVector Position = FMantlePlaceVaultManifest::ProjectedToUeCm(
 					Point.X - Manifest.Georef.OriginEastingM, Point.Y - Manifest.Georef.OriginNorthingM, 0.0);
 				Position.Z = FlatZ;
+				// Into the level's frame before the ground is read: the Landscape sits at the level
+				// offset, so its height is asked of the point where it really lies.
+				Position = Manifest.ToLevelFrame(Position);
 				if (Landscape != nullptr)
 				{
 					const TOptional<float> Height = Landscape->GetHeightAtLocation(Position);

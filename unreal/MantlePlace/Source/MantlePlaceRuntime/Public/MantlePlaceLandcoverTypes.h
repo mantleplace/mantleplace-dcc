@@ -27,7 +27,8 @@ enum class EMantlePlaceFoliageType : uint8
  * `FMantlePlaceTreePointsLogic::ColumnContract()` lists them for the test that holds the two
  * together.
  *
- * The importer converts positions into the Local Projected Frame (AOI centroid at world origin,
+ * The importer converts positions into the Local Projected Frame (AOI centroid at world origin, or at the
+ * level offset when the level already holds another import, FMantlePlaceVaultManifest::ToLevelFrame;
  * North -> +X, East -> +Y, 1 uu = 1 cm) and lands the rows in a UDataTable asset -- PCG-ready
  * scatter input the user wires to their own foliage assets. Lives in the Runtime module so a
  * cooked build can still load DataTables that reference this row type.

@@ -87,6 +87,11 @@ struct FMantlePlaceImportContext
 	TArray<FString>& Log;
 
 	FString Identity;
+	/**
+	 * The value of the frame tag every actor of this import carries (MantlePlaceImportNaming::FrameTag):
+	 * where this import was placed against the level's anchor. Empty means the actors carry none.
+	 */
+	FString FrameTag;
 	FString TempDir;
 	FString DestPackagePath;
 	/** The resolved content root; the shared Data Layer assets live beneath it. Empty means the default. */
