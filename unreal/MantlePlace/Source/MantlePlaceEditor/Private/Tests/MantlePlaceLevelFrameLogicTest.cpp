@@ -14,7 +14,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 namespace
 {
-FMantlePlaceFrameOrigin Origin(const TCHAR* Crs, const TCHAR* Datum, double EastingM, double NorthingM)
+FMantlePlaceFrameOrigin MakeOrigin(const TCHAR* Crs, const TCHAR* Datum, double EastingM, double NorthingM)
 {
 	FMantlePlaceFrameOrigin Result;
 	Result.Crs = Crs;
@@ -38,16 +38,16 @@ void AddImport(TArray<FMantlePlaceLevelImportTag>& Level, const TCHAR* Identity,
 }
 
 const TCHAR* const Utm13 = TEXT("EPSG:32613");
-const TCHAR* const Navd = TEXT("NAVD88 (GEOID18)");
+const TCHAR* const NavdGeoid18 = TEXT("NAVD88 (GEOID18)");
 }
 
 bool FMantlePlaceLevelFrameLogicTest::RunTest(const FString& Parameters)
 {
-	const FMantlePlaceFrameOrigin A = Origin(Utm13, Navd, 441959.5, 4014372.5);
+	const FMantlePlaceFrameOrigin A = MakeOrigin(Utm13, NavdGeoid18, 441959.5, 4014372.5);
 	// 1500 m east of A and 200 m south of it: an adjacent tile.
-	const FMantlePlaceFrameOrigin B = Origin(Utm13, Navd, 443459.5, 4014172.5);
+	const FMantlePlaceFrameOrigin B = MakeOrigin(Utm13, NavdGeoid18, 443459.5, 4014172.5);
 	// 3000 m east of A and 100 m north of it: a third tile in the row.
-	const FMantlePlaceFrameOrigin C = Origin(Utm13, Navd, 444959.5, 4014472.5);
+	const FMantlePlaceFrameOrigin C = MakeOrigin(Utm13, NavdGeoid18, 444959.5, 4014472.5);
 
 	// --- An empty level: the first import is the anchor, at the world origin ---------------------
 	TArray<FMantlePlaceLevelImportTag> Level;
@@ -161,34 +161,34 @@ bool FMantlePlaceLevelFrameLogicTest::RunTest(const FString& Parameters)
 			TestFalse(FString::Printf(TEXT("%s: recorded as not placed"), What), Decoded.bPlaced);
 		};
 
-		ExpectCentred(TEXT("different CRS"), Origin(TEXT("EPSG:32614"), Navd, 700000.0, 4014372.5),
+		ExpectCentred(TEXT("different CRS"), MakeOrigin(TEXT("EPSG:32614"), NavdGeoid18, 700000.0, 4014372.5),
 			EMantlePlaceFrameRefusal::CrsDiffers, TEXT("EPSG:32614"));
-		ExpectCentred(TEXT("different datum"), Origin(Utm13, TEXT("EGM2008-orthometric"), 443459.5, 4014172.5),
+		ExpectCentred(TEXT("different datum"), MakeOrigin(Utm13, TEXT("EGM2008-orthometric"), 443459.5, 4014172.5),
 			EMantlePlaceFrameRefusal::DatumDiffers, TEXT("EGM2008-orthometric"));
-		ExpectCentred(TEXT("datum unstated"), Origin(Utm13, TEXT(""), 443459.5, 4014172.5),
+		ExpectCentred(TEXT("datum unstated"), MakeOrigin(Utm13, TEXT(""), 443459.5, 4014172.5),
 			EMantlePlaceFrameRefusal::DatumDiffers, TEXT("(none stated)"));
-		ExpectCentred(TEXT("too far east"), Origin(Utm13, Navd, 441959.5 + 100001.0, 4014372.5),
+		ExpectCentred(TEXT("too far east"), MakeOrigin(Utm13, NavdGeoid18, 441959.5 + 100001.0, 4014372.5),
 			EMantlePlaceFrameRefusal::TooFar, TEXT("100000 m"));
-		ExpectCentred(TEXT("too far south"), Origin(Utm13, Navd, 441959.5, 4014372.5 - 250000.0),
+		ExpectCentred(TEXT("too far south"), MakeOrigin(Utm13, NavdGeoid18, 441959.5, 4014372.5 - 250000.0),
 			EMantlePlaceFrameRefusal::TooFar, TEXT("-250000 m north"));
 
 		FMantlePlaceFrameOrigin Unstated;
 		ExpectCentred(TEXT("no origin"), Unstated, EMantlePlaceFrameRefusal::OriginUnstated, TEXT("no georeference origin"));
-		ExpectCentred(TEXT("no CRS"), Origin(TEXT(""), Navd, 443459.5, 4014172.5),
+		ExpectCentred(TEXT("no CRS"), MakeOrigin(TEXT(""), NavdGeoid18, 443459.5, 4014172.5),
 			EMantlePlaceFrameRefusal::OriginUnstated, TEXT("no projected CRS"));
 	}
 
 	// --- The CRS is a string: equal text is the only match, however alike two zones look -----------
 	{
 		const FMantlePlaceFramePlan Lookalike = FMantlePlaceLevelFrameLogic::Plan(
-			TEXT("orderX"), Origin(TEXT("epsg:32613"), Navd, 443459.5, 4014172.5), Level);
+			TEXT("orderX"), MakeOrigin(TEXT("epsg:32613"), NavdGeoid18, 443459.5, 4014172.5), Level);
 		TestTrue(TEXT("a differently written CRS is a different CRS"), Lookalike.Outcome == EMantlePlaceFrameOutcome::Centred);
 	}
 
 	// --- The limit is inclusive: exactly 100 km offsets ---------------------------------------------
 	{
 		const FMantlePlaceFramePlan AtLimit = FMantlePlaceLevelFrameLogic::Plan(
-			TEXT("orderX"), Origin(Utm13, Navd, 441959.5 + 100000.0, 4014372.5), Level);
+			TEXT("orderX"), MakeOrigin(Utm13, NavdGeoid18, 441959.5 + 100000.0, 4014372.5), Level);
 		TestTrue(TEXT("exactly at the limit: offset"), AtLimit.Outcome == EMantlePlaceFrameOutcome::Offset);
 	}
 
@@ -196,7 +196,7 @@ bool FMantlePlaceLevelFrameLogicTest::RunTest(const FString& Parameters)
 	{
 		TArray<FMantlePlaceLevelImportTag> Mixed = Level;
 		const FMantlePlaceFramePlan Far = FMantlePlaceLevelFrameLogic::Plan(
-			TEXT("orderFar"), Origin(TEXT("EPSG:32614"), Navd, 700000.0, 4014372.5), Level);
+			TEXT("orderFar"), MakeOrigin(TEXT("EPSG:32614"), NavdGeoid18, 700000.0, 4014372.5), Level);
 		AddImport(Mixed, TEXT("orderFar"), Far);
 		const FMantlePlaceFramePlan ReC = FMantlePlaceLevelFrameLogic::Plan(TEXT("orderC"), C, Mixed);
 		TestEqual(TEXT("anchor unchanged by a centred import"), ReC.OffsetEastM, 3000.0, 1e-6);
@@ -232,7 +232,7 @@ bool FMantlePlaceLevelFrameLogicTest::RunTest(const FString& Parameters)
 	{
 		FMantlePlaceFrameRecord In;
 		In.bPlaced = true;
-		In.Origin = Origin(TEXT("EPSG:32613|odd%name"), TEXT("NAVD88 (GEOID18)"), 441959.5, 4014372.5);
+		In.Origin = MakeOrigin(TEXT("EPSG:32613|odd%name"), TEXT("NAVD88 (GEOID18)"), 441959.5, 4014372.5);
 		In.OffsetEastM = 1500.25;
 		In.OffsetNorthM = -200.125;
 		FMantlePlaceFrameRecord Out;
