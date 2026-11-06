@@ -53,20 +53,42 @@ FVector FMantlePlaceVaultManifest::GetLandscapeScale() const
 	return FVector(Heightmap.ScaleYPercent, Heightmap.ScaleXPercent, Heightmap.ScaleZPercent);
 }
 
+void FMantlePlaceVaultManifest::SetLevelOffsetM(double EastM, double NorthM)
+{
+	LevelOffsetEastM = EastM;
+	LevelOffsetNorthM = NorthM;
+}
+
+bool FMantlePlaceVaultManifest::HasLevelOffset() const
+{
+	return LevelOffsetEastM != 0.0 || LevelOffsetNorthM != 0.0;
+}
+
+FVector FMantlePlaceVaultManifest::ToLevelFrame(const FVector& FrameLocalUeCm) const
+{
+	// Horizontal only: every height this host places is already absolute (the Landscape's
+	// location_z_offset_cm, the mesh's ground_orthometric_h_m), so a vertical offset would count it twice.
+	// The offset is two published numbers' difference, turned into cm by the one axis-mapping helper.
+	const FVector Offset = ProjectedToUeCm(LevelOffsetEastM, LevelOffsetNorthM, 0.0);
+	return FrameLocalUeCm + Offset;
+}
+
 FVector FMantlePlaceVaultManifest::GetLandscapeSpawnLocation() const
 {
 	// Mirror the engine's New-Landscape centring: the actor location is the corner; offset it
 	// by half the (scaled) quad span so the AOI centre lands on world (0,0). Identity rotation,
-	// so TransformVector(scale) is a component-wise multiply.
+	// so TransformVector(scale) is a component-wise multiply. In a level that already holds another
+	// import the AOI centre lands on that import's offset instead (ToLevelFrame).
 	const FVector2D AoiSize = GetAoiSizeUeCm();
-	return FVector(-AoiSize.X / 2.0, -AoiSize.Y / 2.0, Heightmap.LocationZOffsetCm);
+	return ToLevelFrame(FVector(-AoiSize.X / 2.0, -AoiSize.Y / 2.0, Heightmap.LocationZOffsetCm));
 }
 
 FVector FMantlePlaceVaultManifest::GetMeshLocation() const
 {
 	// The glb is centroid-local with z=0 at centroid ground; place that at true elevation so it
-	// overlays the Landscape (which encodes true orthometric Z too). XY centroid -> world (0,0).
-	return FVector(0.0, 0.0, Georef.GroundOrthometricHM * 100.0);
+	// overlays the Landscape (which encodes true orthometric Z too). XY centroid -> world (0,0), or
+	// the level offset in a level that already holds another import (ToLevelFrame).
+	return ToLevelFrame(FVector(0.0, 0.0, Georef.GroundOrthometricHM * 100.0));
 }
 
 void FMantlePlaceVaultManifest::GetDrapeWorldRect(FVector2D& OutMin, FVector2D& OutSize) const
@@ -88,6 +110,8 @@ void FMantlePlaceVaultManifest::GetDrapeUvTransform(FVector2D& OutScale, FVector
 	// southward, while landscape-local U is now North and grows northward. The flip belongs after the
 	// scale/offset: those place the grid inside the drape rect, and only then does `1 -` convert a
 	// north-position into a texture coordinate.
+	// The level offset (ToLevelFrame) moves the AOI and the drape alike, so it cancels from every term
+	// below and none of them is shifted: they stay in the bundle's own frame.
 	// Everything below therefore stays in UE (X=North, Y=East) order. The AOI is centred on world (0,0), so its
 	// world rect is AoiMin = (-AoiSize/2), spanning AoiSize; the imagery spans GetDrapeWorldRect(). The
 	// legacy world projection sampled imageryUV = (worldXY - DrapeMin)/DrapeSize. Substituting
@@ -243,6 +267,8 @@ bool ParseGeoreference(const TSharedPtr<FJsonObject>& Unreal, FMantlePlaceGeoref
 		{
 			Georef.OriginEastingM = GetNumber(*UtmPtr, TEXT("easting_m"));
 			Georef.OriginNorthingM = GetNumber(*UtmPtr, TEXT("northing_m"));
+			Georef.bHasOrigin = (*UtmPtr)->HasTypedField<EJson::Number>(TEXT("easting_m"))
+				&& (*UtmPtr)->HasTypedField<EJson::Number>(TEXT("northing_m"));
 			if (Georef.Epsg == 0)
 			{
 				Georef.Epsg = GetInt(*UtmPtr, TEXT("epsg"));
@@ -481,6 +507,15 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	ParseFileLicensing(Root, M.FileLicensing);
 	ParseAttribution(Root, M.Attribution);
 	ParseArchiveView(Root, M.Archive);
+	// The order's vertical datum, verbatim, for ONE purpose: a second bundle is placed beside the first
+	// only when both state the same one (FMantlePlaceLevelFrameLogic). Nothing is placed from it.
+	if (const TSharedPtr<FJsonObject>* LocationPtr = GetObject(Root, TEXT("location")))
+	{
+		if (const TSharedPtr<FJsonObject>* SiteOriginPtr = GetObject(*LocationPtr, TEXT("site_origin")))
+		{
+			M.SiteVerticalDatum = GetString(*SiteOriginPtr, TEXT("vertical_datum"));
+		}
+	}
 
 	// `hosts.unreal` — the one subtree this host reads, and never a sibling's (HPS-33).
 	TSharedPtr<FJsonObject> Unreal;

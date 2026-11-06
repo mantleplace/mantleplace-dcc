@@ -134,6 +134,15 @@ namespace MantlePlaceImportNaming
 	/** The tag prefix alone, for finding this plugin's actors regardless of identity. */
 	FString ImportTagPrefix();
 
+	/**
+	 * `mantleplace_frame=<value>` -- the frame an import was placed in: its georeference origin and the
+	 * horizontal offset it was given from the level's anchor (FMantlePlaceLevelFrameLogic::EncodeFrame).
+	 * Every actor of the import carries it; a later import reads it to find the anchor. Never matched
+	 * on by the wipe, which is the import tag's job alone.
+	 */
+	FString FrameTag(const FString& Value);
+	FString FrameTagPrefix();
+
 	// --- ODbL content ---------------------------------------------------------------------------
 
 	/**

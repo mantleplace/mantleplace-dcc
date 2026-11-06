@@ -142,6 +142,16 @@ namespace MantlePlaceImportNaming
 		return FString::Printf(TEXT("%s="), ImportTagKey);
 	}
 
+	FString FrameTagPrefix()
+	{
+		return TEXT("mantleplace_frame=");
+	}
+
+	FString FrameTag(const FString& Value)
+	{
+		return FrameTagPrefix() + Value;
+	}
+
 	FString OdblFolder(const FString& Identity)
 	{
 		return OutlinerFolder(Identity) / TEXT("ODbL");

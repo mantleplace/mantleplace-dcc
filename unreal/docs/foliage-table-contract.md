@@ -17,7 +17,7 @@ migration.
 
 | Column | Type | Unit and frame | Meaning |
 | --- | --- | --- | --- |
-| `Position` | vector | engine cm, the Local Projected Frame: North is +X, East is +Y, the AOI centroid is the origin | Where the point is. Z is the ground elevation in cm when `bGroundKnown`, else 0 |
+| `Position` | vector | engine cm, the Local Projected Frame: North is +X, East is +Y, the AOI centroid is the origin, or the bundle's offset from the level's first import when the level holds one (`generated-content.md`) | Where the point is. Z is the ground elevation in cm when `bGroundKnown`, else 0 |
 | `FoliageType` | enum `EMantlePlaceFoliageType` | none | What the platform classified the point as: `Tree` or `Shrub` |
 | `HeightM` | float | metres, a height above ground | The canopy height as published (the CHM local maximum at the point) |
 | `HeightCm` | float | engine cm | `HeightM` in the unit a scatter places in |

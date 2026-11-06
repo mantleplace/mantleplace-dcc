@@ -6,6 +6,7 @@
 #include "MantlePlaceCesiumAvailabilityLogic.h"
 #include "MantlePlaceDeliveryLogic.h"
 #include "MantlePlaceImportManifest.h"
+#include "MantlePlaceLevelFrameLogic.h"
 #include "MantlePlaceEditorSettings.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportProvenance.h"
@@ -398,7 +399,8 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	FFileHelper::BufferToString(ManifestText, ManifestBytes.GetData(), ManifestBytes.Num());
 
 	FString ParseError;
-	const FMantlePlaceVaultManifest Manifest = MantlePlaceImportManifest::Parse(ManifestText, ParseError);
+	// Not const: the one thing set on it after the parse is the level offset, once the level has been read.
+	FMantlePlaceVaultManifest Manifest = MantlePlaceImportManifest::Parse(ManifestText, ParseError);
 	Result.JobId = Manifest.JobId;
 	if (!Manifest.bValid)
 	{
@@ -512,6 +514,35 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 			PriorActorLoad.Loaded));
 	}
 
+	// --- Where this bundle goes: beside the imports already in the level, or centred as it always was. ---
+	// Decided before the wipe, from what the level holds now, and before anything is placed. The decision
+	// is FMantlePlaceLevelFrameLogic's: this only reads the level into it and the plan back out.
+	FMantlePlaceFrameOrigin FrameOrigin;
+	FrameOrigin.Crs = Manifest.Georef.CrsProjected;
+	FrameOrigin.VerticalDatum = Manifest.SiteVerticalDatum;
+	FrameOrigin.EastingM = Manifest.Georef.OriginEastingM;
+	FrameOrigin.NorthingM = Manifest.Georef.OriginNorthingM;
+	FrameOrigin.bStated = Manifest.Georef.bHasOrigin;
+	const FMantlePlaceFramePlan FramePlan = FMantlePlaceLevelFrameLogic::Plan(
+		Identity, FrameOrigin, MantlePlaceImportOrchestration::ReadLevelImports(World));
+	Manifest.SetLevelOffsetM(FramePlan.OffsetEastM, FramePlan.OffsetNorthM);
+	if (!FramePlan.Warning.IsEmpty())
+	{
+		Log.Add(FramePlan.Warning);
+		UE_LOG(LogMantlePlaceImport, Warning, TEXT("%s"), *FramePlan.Warning);
+	}
+	if (!FramePlan.Note.IsEmpty())
+	{
+		Log.Add(FramePlan.Note);
+	}
+	if (FramePlan.HasOffset())
+	{
+		const FVector OffsetCm = FMantlePlaceVaultManifest::ProjectedToUeCm(FramePlan.OffsetEastM, FramePlan.OffsetNorthM, 0.0);
+		Log.Add(FString::Printf(
+			TEXT("Placed beside the other import(s) in the level: %.1f m north and %.1f m east of the level's first import."),
+			OffsetCm.X / 100.0, OffsetCm.Y / 100.0));
+	}
+
 	// --- Wipe, assets: a prior import of THIS order goes, a different order's content is refused. ---
 	const FString Refusal = MantlePlaceImportOrchestration::WipePriorAssets(Identity, DestPackagePath, Timeline);
 	if (!Refusal.IsEmpty())
@@ -525,6 +556,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 
 	FMantlePlaceImportContext Context(World, Manifest, &Reader, Selection, Timeline, Result, Log);
 	Context.Identity = Identity;
+	Context.FrameTag = FramePlan.FrameValue;
 	Context.TempDir = TempDir;
 	Context.DestPackagePath = DestPackagePath;
 	Context.ContentRoot = ContentRoot;
