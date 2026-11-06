@@ -338,7 +338,7 @@ internal sealed partial class RevitBundleImporter
         {
             try
             {
-                return TreeInstances.Place(_document, geometry.Symbol!, geometry.Level!, point, out sized);
+                return TreeInstances.Place(_document, geometry.Symbol!, geometry.Level!, point, out sized, Anchoring.OffsetEastM, Anchoring.OffsetNorthM);
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
@@ -396,12 +396,12 @@ internal sealed partial class RevitBundleImporter
     /// of the frame's axes Revit reads as the axis of revolution. The crown's top radius is a small
     /// fraction of its base rather than zero, because a degenerate loop is not a curve loop.
     /// </remarks>
-    private static List<GeometryObject>? BuildTreeGeometry(SiteTreePoint tree)
+    private List<GeometryObject>? BuildTreeGeometry(SiteTreePoint tree)
     {
         double height = MetresToInternal(tree.HeightM);
         double crownRadius = MetresToInternal(tree.CrownRadiusM);
-        double east = MetresToInternal(tree.EastM);
-        double north = MetresToInternal(tree.NorthM);
+        double east = MetresToInternal(tree.EastM + Anchoring.OffsetEastM);
+        double north = MetresToInternal(tree.NorthM + Anchoring.OffsetNorthM);
         double ground = MetresToInternal(tree.GroundElevationM);
 
         double trunkHeight = height * TreeFamily.TrunkHeightFraction;
@@ -431,12 +431,12 @@ internal sealed partial class RevitBundleImporter
     /// The shrub fallback: the family's dome as two stacked blends, at the published dimensions, in
     /// <see cref="ShrubFamily"/>'s proportions.
     /// </summary>
-    private static List<GeometryObject>? BuildShrubGeometry(SiteTreePoint shrub)
+    private List<GeometryObject>? BuildShrubGeometry(SiteTreePoint shrub)
     {
         double height = MetresToInternal(shrub.HeightM);
         double crownRadius = MetresToInternal(shrub.CrownRadiusM);
-        double east = MetresToInternal(shrub.EastM);
-        double north = MetresToInternal(shrub.NorthM);
+        double east = MetresToInternal(shrub.EastM + Anchoring.OffsetEastM);
+        double north = MetresToInternal(shrub.NorthM + Anchoring.OffsetNorthM);
         double ground = MetresToInternal(shrub.GroundElevationM);
         double waist = ground + (height * ShrubFamily.WaistHeightFraction);
 

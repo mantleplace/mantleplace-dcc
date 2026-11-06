@@ -65,6 +65,95 @@ internal sealed partial class RevitBundleImporter
     private static double MetresToInternal(double metres)
         => UnitUtils.ConvertToInternalUnits(metres, UnitTypeId.Meters);
 
+    /// <summary>
+    /// Where this bundle stands against the shared coordinates the project already holds, decided
+    /// when the import was opened (<see cref="AdjacentBundle"/>). Every site-frame position is
+    /// built at this offset from the project origin; it is zero unless the project already held a
+    /// Mantle Place import.
+    /// </summary>
+    internal AnchorDecision Anchoring { get; set; } = new() { Kind = AnchorDecisionKind.FirstBundle };
+
+    /// <summary>The bundle's survey point, for the check that the decision still holds when the import runs.</summary>
+    internal SurveyPointPlacement? IncomingSurveyPoint { get; set; }
+
+    private bool _anchorConfirmed;
+
+    /// <summary>
+    /// A point in the bundle's own frame (metres east and north of its site origin) as a point in the
+    /// document: offset by <see cref="Anchoring"/>, with <paramref name="z"/> left as it is because
+    /// every height is absolute.
+    /// </summary>
+    private XYZ SitePoint(double eastM, double northM, double z)
+        => new(MetresToInternal(eastM + Anchoring.OffsetEastM), MetresToInternal(northM + Anchoring.OffsetNorthM), z);
+
+    /// <summary>
+    /// Moves an element the import placed at the project origin (a link, which Revit puts there) to
+    /// where <see cref="Anchoring"/> says this bundle stands. A refused move is said, not hidden: the
+    /// element would otherwise sit under the first bundle with the log reading like a clean import.
+    /// </summary>
+    private void MoveToAnchor(ElementId id, string what)
+    {
+        if (!Anchoring.MovesGeometry || _document.GetElement(id) is not { } element)
+        {
+            return;
+        }
+
+        bool pinned = element.Pinned;
+        try
+        {
+            if (pinned)
+            {
+                element.Pinned = false;
+            }
+
+            ElementTransformUtils.MoveElement(
+                _document,
+                id,
+                new XYZ(MetresToInternal(Anchoring.OffsetEastM), MetresToInternal(Anchoring.OffsetNorthM), 0.0));
+        }
+        catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
+        {
+            Say($"The {what} could not be moved to where this bundle stands, so it is at the project origin, on top of "
+                + $"the first bundle ({ex.Message}). Move it by hand.");
+        }
+        finally
+        {
+            if (pinned)
+            {
+                element.Pinned = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Before the first step creates anything: the project must still hold what it held when the
+    /// import was opened. Two import windows can be open at once, and the second would otherwise be
+    /// placed against a position the first has since set.
+    /// </summary>
+    private void ConfirmAnchor()
+    {
+        if (_anchorConfirmed)
+        {
+            return;
+        }
+
+        _anchorConfirmed = true;
+        AnchorDecision now = AdjacentBundle.Decide(ProjectAnchorStore.Read(_document), IncomingSurveyPoint);
+        if (now.IsRefusal)
+        {
+            throw new InvalidOperationException(now.Message);
+        }
+
+        if (now.Kind != Anchoring.Kind
+            || Math.Abs(now.OffsetEastM - Anchoring.OffsetEastM) > 1e-6
+            || Math.Abs(now.OffsetNorthM - Anchoring.OffsetNorthM) > 1e-6)
+        {
+            throw new InvalidOperationException(
+                "This project's shared coordinates changed after this import was opened, so nothing was imported. "
+                + "Open the bundle again.");
+        }
+    }
+
     private static double InternalToMetres(double internalUnits)
         => UnitUtils.ConvertFromInternalUnits(internalUnits, UnitTypeId.Meters);
 

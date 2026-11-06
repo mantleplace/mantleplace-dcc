@@ -334,6 +334,21 @@ public sealed class DrapePlacement
 
     /// <summary>Real-world height the image spans, in metres.</summary>
     public double HeightM => TopM - BottomM;
+
+    /// <summary>
+    /// The same image moved by an offset, for a bundle built away from the project origin
+    /// (<see cref="AdjacentBundle"/>): its edges are frame-local, and the element the drape is written
+    /// for is read from the document, where the bundle stands at that offset.
+    /// </summary>
+    public DrapePlacement Shifted(double eastM, double northM) => new()
+    {
+        LeftM = LeftM + eastM,
+        BottomM = BottomM + northM,
+        RightM = RightM + eastM,
+        TopM = TopM + northM,
+        PixelSize = PixelSize,
+        ExtentFromDrapeBlock = ExtentFromDrapeBlock,
+    };
 }
 
 /// <summary>Why a step the bundle might have carried is not in the plan.</summary>

@@ -51,6 +51,7 @@ exitCode |= GroundCutsTests.Run();
 exitCode |= RoadIdentityTests.Run();
 exitCode |= TerrainSmoothingTests.Run();
 exitCode |= DrapeAnchorTests.Run();
+exitCode |= AdjacentBundleTests.Run();
 exitCode |= SurfaceAgreementTests.Run();
 exitCode |= TerrainBaseTests.Run();
 exitCode |= SurfaceSanitiserTests.Run();

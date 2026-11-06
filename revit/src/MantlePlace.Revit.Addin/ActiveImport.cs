@@ -63,7 +63,9 @@ internal sealed class ActiveImport : IDisposable
         BundleManifest manifest,
         BundleImportPlan plan,
         ImportLog log,
-        string zipPath)
+        string zipPath,
+        AnchorDecision anchoring,
+        SurveyPointPlacement? surveyPoint)
     {
         _document = document;
         _archive = archive;
@@ -71,7 +73,11 @@ internal sealed class ActiveImport : IDisposable
         _plan = plan;
         _log = log;
         ZipPath = zipPath;
-        _importer = new RevitBundleImporter(application, document, archive, log.Append);
+        _importer = new RevitBundleImporter(application, document, archive, log.Append)
+        {
+            Anchoring = anchoring,
+            IncomingSurveyPoint = surveyPoint,
+        };
         _importer.CommitStarting += () => Tell(staged => staged.CommitStarted());
         _importer.CommitEnded += () => Tell(staged => staged.CommitEnded());
         _importer.Announced += notice => Tell(staged => staged.Announce(notice));
@@ -210,6 +216,24 @@ internal sealed class ActiveImport : IDisposable
                 out refusal);
         }
 
+        // Where this bundle goes against the shared coordinates the project already holds, decided
+        // before anything exists so a refusal leaves the project exactly as it was.
+        SurveyPointPlacement? surveyPoint = plan.Steps
+            .FirstOrDefault(step => step.Kind == ImportStepKind.SetSharedCoordinates)?.SurveyPoint;
+        AnchorDecision anchoring = AdjacentBundle.Decide(ProjectAnchorStore.Read(document), surveyPoint);
+        if (anchoring.IsRefusal)
+        {
+            archive.Dispose();
+            return Refuse(
+                log,
+                new ImportRefusal(
+                    "This bundle cannot be placed beside the one already in this project.",
+                    anchoring.Message,
+                    true,
+                    ExportReasons.ImportFailed),
+                out refusal);
+        }
+
         // Fail-closed, and BEFORE any element exists: a bundle whose bytes do not match the hashes its
         // own manifest publishes creates nothing at all (⛔HPS-26). The download path already verified
         // on the way in; this covers the zip that arrived some other way. Over the whole plan, not the
@@ -221,7 +245,7 @@ internal sealed class ActiveImport : IDisposable
         }
 
         refusal = null;
-        return new ActiveImport(application, document, archive, manifest, plan, log, zipPath);
+        return new ActiveImport(application, document, archive, manifest, plan, log, zipPath, anchoring, surveyPoint);
     }
 
     /// <summary>

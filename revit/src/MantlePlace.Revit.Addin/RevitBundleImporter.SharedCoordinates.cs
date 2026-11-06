@@ -24,6 +24,15 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
+        // A project that already holds a Mantle Place import keeps its position: this bundle was built
+        // at its offset from it before this step ran, and a second SetProjectPosition here would move
+        // the survey point under the bundle already in the project.
+        if (Anchoring.Kind == AnchorDecisionKind.Offset)
+        {
+            Say(AdjacentBundle.Describe(Anchoring));
+            return;
+        }
+
         GeoOrigin origin = placement.Origin;
         ForgeTypeId originUnit = ToUnitTypeId(origin.LinearUnit);
 
@@ -35,6 +44,10 @@ internal sealed partial class RevitBundleImporter
             UnitUtils.ConvertToInternalUnits(placement.ElevationM, UnitTypeId.Meters),
             placement.AngleRadians);
         _document.ActiveProjectLocation.SetProjectPosition(XYZ.Zero, position);
+
+        // The code the position was set from, kept so a later bundle can be checked against it
+        // (ProjectAnchorStore): Revit holds the point and not the CRS it came from.
+        ProjectAnchorStore.Write(_document, origin.Epsg!.Value);
         if (!CommitAndReport(transaction, swallower))
         {
             // The swallower already said why. Reporting the work below as done would be a lie:

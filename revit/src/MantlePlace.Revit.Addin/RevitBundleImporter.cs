@@ -233,6 +233,7 @@ internal sealed partial class RevitBundleImporter(
     {
         ArgumentNullException.ThrowIfNull(step);
 
+        ConfirmAnchor();
         IEnumerable<StepProgress> work = RunStep(step);
         return OdblContent.IsContained(step.Odbl) ? FiledInOdblContainer(step, work) : work;
     }

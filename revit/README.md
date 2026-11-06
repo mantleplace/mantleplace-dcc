@@ -176,7 +176,15 @@ in `Core`, asserted headlessly; the shim only reads the order id and the site lo
   [ADR 0012](../docs/adr/0012-context-buildings-come-from-the-site-model.md);
 - sets the survey point / shared coordinates from `hosts.revit.georeference.origin.projected` —
   this host's own block — falling back to `delivery.local_origin` on a bundle whose own block
-  publishes no usable origin (`HPS-33`);
+  publishes no usable origin (`HPS-33`). The first Mantle Place bundle imported into a project sets
+  it, and it is the project's **anchor**: a later bundle never moves it, and is built at the
+  difference of the two published survey points instead, so bundles ordered side by side sit edge to
+  edge with no manual move and the first bundle's shared coordinates stay as they were. Heights are
+  absolute and are not offset. That is done only for one EPSG code and one angle to true north (zero),
+  and within [`AdjacentBundle.MaxOffsetM`](src/MantlePlace.Revit.Core/AdjacentBundle.cs) of the
+  anchor; a bundle that is not is refused whole, with one message naming the reason, and the project
+  is untouched. The decision is the pure core's; the Revit plugin only applies it, to every layer's
+  positions and to the IFC and DXF links;
 - sets the project's **site location** — Manage ▸ Location, which is what places the sun in every
   view and renderer — from the latitude and longitude in `hosts.revit.georeference.origin`, verbatim,
   and from nowhere else. The time zone is the bundle's `location.time_zone`, written
