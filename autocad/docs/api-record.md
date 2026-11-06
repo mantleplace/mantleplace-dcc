@@ -140,13 +140,39 @@ launcher) and in plain AutoCAD (the same install's AutoCAD launcher); 2025 and 2
   `WorkspaceLoaded` adds neither a tab nor a panel. The headless tests pin the decision; the live
   ribbon is not yet read for the new tab (below).
 
+## The extended probe (2026-11-05)
+
+The probe was run again with the zone compare and the LandXML surface added, in a window
+(`acad.exe`) with the Civil 3D launcher's switches, on the same three installs, all on .NET 10.0.12.
+In every year Civil 3D loaded (`Civil3dLoaded`) and the same 22 calls worked:
+
+| Call | 2025 | 2026 | 2027 |
+|---|---|---|---|
+| Zone compare, fresh drawing (`.`) against the order's zone | refused, no zone | refused, no zone | refused, no zone |
+| Zone compare, matching zone | proceed | proceed | proceed |
+| Zone compare, other zone | refused, mismatch | refused, mismatch | refused, mismatch |
+| `Database.GeoDataObject`, fresh drawing | worked (none) | worked (none) | worked (none) |
+| `Database.GeoDataObject`, after the fixture zone | worked | worked | worked |
+| `GeoCoordinateSystem.Create(code)`, a library code | worked | worked | worked |
+| `GeoCoordinateSystem.Create(".")` | threw | threw | threw |
+| `TinSurface.CreateFromLandXML(db, name, path, style)`, US feet with and without `<CoordinateSystem>`, metres | worked | worked | worked |
+
+- **The compare never changed the zone.** Read again after each compare and after the surfaces, it
+  was unchanged.
+- **`GeoCoordinateSystem.Create` maps a library code to its EPSG code**: `CA83IIIF` to 2227,
+  `CA83-IVF` to 2228 and `UTM83-10` to 26910. On `.` it throws `eNotApplicable`, so it must be called
+  only after the zone check has refused "no zone".
+- **`CreateFromLandXML` places the points as written.** The US-foot file landed in the same extents
+  with and without its `<CoordinateSystem>` element, so that element does not move the surface.
+- **The first window runs hung as the headless ones had**, with no result after 600 s. They ran once
+  the run folder sat on a path with no 8.3 short name and no other Mantle Place bundle was installed;
+  which of the two was the cause was not isolated.
+
 ## What this does not yet cover
 
 - **The `Mantle Place` tab, live.** The decision is pinned headless and the branch builds against
   2027's API, but the tab, its five buttons and a second workspace load have not yet been read on a
   running Civil 3D 2027 or AutoCAD 2027. The panel on the host's Add-ins tab (above) is what was read.
-- **A vault send in 2027.** The live check ran local bundles only. Sign-in, the vault and the
-  connected host with a session were not run: they need a signed-in account and the web vault.
 - **A drawing in feet**, with a foot-based zone and a metric DEM.
 - **The plugin's own load path in 2025 and 2026**, and in plain AutoCAD; 2027's is above.
 - **A .NET 8 build.** Every install here, 2025 and 2026 included, runs .NET 10 after its updates, and
