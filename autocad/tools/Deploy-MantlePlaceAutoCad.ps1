@@ -53,7 +53,7 @@
     Source-tree path only.
 
 .EXAMPLE
-    ./Deploy-MantlePlaceAutoCad.ps1 -ApiDirNet8 'C:\ObjectARX\2025\inc'
+    ./Deploy-MantlePlaceAutoCad.ps1 -ApiDirNet8 'C:\ObjectARX\2025-net8-api'
     ./Deploy-MantlePlaceAutoCad.ps1 -PayloadDirectory .\MantlePlaceAutoCad.bundle
 #>
 [CmdletBinding()]

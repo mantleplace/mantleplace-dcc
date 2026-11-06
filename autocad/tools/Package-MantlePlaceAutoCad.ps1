@@ -27,9 +27,10 @@
     would execute on the build machine). A release is built on the same private licensed machine that
     runs the Unreal engine-compile gate.
 
-    The .NET 8 build must compile against an API directory that still references .NET 8 (an AutoCAD
-    install that has not been updated to .NET 10, or the ObjectARX SDK's managed assemblies); an
-    updated 2025 or 2026 install fails with CS1705. Pass it with -ApiDirNet8.
+    The .NET 8 build must compile against an API directory that still references .NET 8, Civil 3D's
+    ACA\ and C3D\ assemblies included; an updated 2025 or 2026 install fails with CS1705. What the
+    directory holds, and where each part comes from, is autocad/README.md, "Build and test". Pass it
+    with -ApiDirNet8.
 
     Packaging is not the release gate. Producing this zip proves the plugin COMPILES. What proves it
     works is loading the same output in AutoCAD and Civil 3D 2025, 2026 and 2027 -- in 2025 and 2026
@@ -54,7 +55,7 @@
     The AutoCAD API directory the .NET 8 build compiles against; see above. Default: the 2025 install.
 
 .EXAMPLE
-    ./Package-MantlePlaceAutoCad.ps1 -ApiDirNet8 'C:\ObjectARX\2025\inc'
+    ./Package-MantlePlaceAutoCad.ps1 -ApiDirNet8 'C:\ObjectARX\2025-net8-api'
 #>
 [CmdletBinding()]
 param(
