@@ -113,6 +113,7 @@ edited in the same pull request that updates the release.
 | --- | --- | --- | --- |
 | Place content at the published georeference | supported — [fixed-frame host](host-plugin-standard.md#11-frames-and-placement-hps-52--hps-54), [unreal-0.8.0] | supported — [order-frame host](host-plugin-standard.md#11-frames-and-placement-hps-52--hps-54), [revit-0.2.0] | not shipped — no `autocad` release yet |
 | Refuse a file that is not in the host frame | supported — [unreal-0.6.0] | supported — [revit-0.2.0] | not shipped — no `autocad` release yet |
+| Place a second bundle beside the one already in the level | not shipped — [unreal-0.8.1] | not shipped — [revit-1.0.0] | not shipped — no `autocad` release yet |
 | Site location, sun and time zone | not shipped — [unreal-0.8.1] | supported — [revit-0.1.0] | not shipped — no `autocad` release yet |
 
 ## Terrain and land

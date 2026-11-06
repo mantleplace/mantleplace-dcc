@@ -87,10 +87,20 @@ FMantlePlaceFramePlan FMantlePlaceLevelFrameLogic::Plan(
 	// depend on the order the level happens to list its actors in.
 	TMap<FString, FMantlePlaceFrameRecord> PlacedByIdentity;
 	TSet<FString> OtherIdentities;
+	FMantlePlaceFrameRecord OwnWitness;
+	bool bHaveOwn = false;
 	for (const FMantlePlaceLevelImportTag& Found : InLevel)
 	{
 		if (Found.Identity == ThisIdentity)
 		{
+			// Not a witness while another placed import exists, but the last word on the anchor when
+			// none does: see OwnWitness below.
+			FMantlePlaceFrameRecord Own;
+			if (!bHaveOwn && DecodeFrame(Found.FrameValue, Own) && Own.bPlaced)
+			{
+				OwnWitness = Own;
+				bHaveOwn = true;
+			}
 			continue;
 		}
 		OtherIdentities.Add(Found.Identity);
@@ -106,6 +116,16 @@ FMantlePlaceFramePlan FMantlePlaceLevelFrameLogic::Plan(
 
 	// Nothing placed to measure against: this import is the anchor (or, with no origin to anchor on, is
 	// centred as it always was, and anchors nothing).
+	// The one exception: this bundle's own placed actors carry an offset and no other placed import is
+	// left (the anchor bundle was deleted). Its own tag still says where the anchor was, so it keeps its
+	// offset rather than becoming the anchor and jumping to the world origin.
+	const bool bUseOwnWitness = PlacedByIdentity.Num() == 0 && bHaveOwn
+		&& (OwnWitness.OffsetEastM != 0.0 || OwnWitness.OffsetNorthM != 0.0);
+	if (bUseOwnWitness)
+	{
+		PlacedByIdentity.Add(ThisIdentity, OwnWitness);
+	}
+
 	if (PlacedByIdentity.Num() == 0)
 	{
 		if (!bOriginUsable)

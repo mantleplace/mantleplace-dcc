@@ -105,7 +105,8 @@ class FMantlePlaceLevelFrameLogic
 public:
 	/**
 	 * The largest horizontal offset from the anchor, in metres, that is applied (the larger of the east
-	 * and north distances). 100 km is where a 32-bit float stops resolving a centimetre: float spacing is
+	 * and north distances), measured origin to origin: the far edge of a bundle sits half the bundle's
+	 * extent further out than the origin this cap bounds. 100 km is where a 32-bit float stops resolving a centimetre: float spacing is
 	 * 1 cm from 2^23 cm (83.9 km) to 2^24 cm. The editor, physics and several tools still hold positions
 	 * in single precision, so past it the seam this feature exists to close would be lost in the noise of
 	 * the world position itself. The cap is a refusal threshold; it derives nothing.

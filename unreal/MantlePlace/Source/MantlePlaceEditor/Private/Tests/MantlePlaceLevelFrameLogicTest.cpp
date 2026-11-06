@@ -130,6 +130,15 @@ bool FMantlePlaceLevelFrameLogicTest::RunTest(const FString& Parameters)
 				return OnlyA;
 			}());
 		TestTrue(TEXT("sole import re-imported: anchor"), Only.Outcome == EMantlePlaceFrameOutcome::Anchor);
+
+		// B alone, re-imported, keeps its offset: the anchor bundle A is gone, B's own tag is the witness.
+		const FMantlePlaceFramePlan PlanB = FMantlePlaceLevelFrameLogic::Plan(TEXT("orderB"), B, Level);
+		TArray<FMantlePlaceLevelImportTag> OnlyB;
+		AddImport(OnlyB, TEXT("orderB"), PlanB);
+		const FMantlePlaceFramePlan ReOnlyB = FMantlePlaceLevelFrameLogic::Plan(TEXT("orderB"), B, OnlyB);
+		TestTrue(TEXT("B alone, re-imported, keeps its offset: offset"), ReOnlyB.Outcome == EMantlePlaceFrameOutcome::Offset);
+		TestEqual(TEXT("B alone, re-imported, keeps its offset: east"), ReOnlyB.OffsetEastM, 1500.0, 1e-6);
+		TestEqual(TEXT("B alone, re-imported, keeps its offset: north"), ReOnlyB.OffsetNorthM, -200.0, 1e-6);
 	}
 
 	// --- Every refusal imports centred, with ONE warning naming the reason --------------------------
