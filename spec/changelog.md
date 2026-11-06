@@ -131,12 +131,12 @@ name every file by the six rules; write `file_entries` with a frame, a role, a l
 for every file; give a licence as an SPDX expression; ship a STAC Item beside the manifest; and
 state version `2.0.0` as a JSON string.
 
-### 1.19.0 — the AutoCAD block's public-record layers and site linework (additive minor; not yet published)
+### 1.19.0 — the AutoCAD block's public-record layers and site linework (additive minor; published and frozen 2026-11-05)
 
 Two parts are added to `hosts.autocad`, a MINOR under [compatibility](compatibility.md) §2. Nothing is
 removed, re-typed or re-meant, and every host floor at 1.0.0 reads it: a reader that does not read
 `hosts.autocad` is unaffected, and one that does and predates these members ignores them as unknown
-members. The first-party plugins' re-pin follows when the schema is published, as for 1.18.0.
+members. The AutoCAD plugin is pinned to 1.19.0.
 [`format.md`](format.md) §6.10 explains the members; this entry lists them.
 
 - **`records`**, the public-record layers in the block's `file_frame`, as `records.layers`: each a
@@ -153,13 +153,13 @@ the pointer and not from the drawing, finds the drawings through the block and n
 before 1.19.0 carries neither part and no verdict for either, and a reader says the bundle states none
 and places the rest.
 
-### 1.18.0 — the AutoCAD host block, for AutoCAD and Civil 3D (additive minor; not yet published)
+### 1.18.0 — the AutoCAD host block, for AutoCAD and Civil 3D (additive minor; published and frozen 2026-11-05)
 
 One block is added: `hosts.autocad`, a new `hosts.<hostId>` sub-block, which is a MINOR under
 [compatibility](compatibility.md) §2. Nothing is removed, re-typed or re-meant, and every host floor
 at 1.0.0 reads it: a reader that does not know the host id ignores the block and infers nothing from
-its absence, as for any host id (compatibility §3, [`format.md`](format.md) §4.2). The first-party
-plugins' re-pin follows when the schema is published. [`format.md`](format.md) §6.9 explains the
+its absence, as for any host id (compatibility §3, [`format.md`](format.md) §4.2). The AutoCAD plugin is
+pinned to 1.19.0 and reads 1.18.0 blocks as its subset. [`format.md`](format.md) §6.9 explains the
 members; this entry lists them.
 
 - **One host.** The id is `autocad` for AutoCAD and Civil 3D alike. Civil 3D is a part of the host,

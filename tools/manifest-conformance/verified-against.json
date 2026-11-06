@@ -108,7 +108,7 @@
     ]
   },
   "autocad": {
-    "verifiedAgainstManifestVersion": "2.0.0",
+    "verifiedAgainstManifestVersion": "1.19.0",
     "verifiedAgainstCorpusVersion": 3,
     "verifiedAgainstPlatformApi": {
       "version": "1",
