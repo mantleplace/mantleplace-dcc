@@ -93,8 +93,23 @@ text and the Civil 3D presence decision.
 Building the shell and the Civil 3D part needs the Autodesk assemblies. `AutoCadApiDirNet10`
 (default `C:\Program Files\Autodesk\AutoCAD 2027`) is the install the .NET 10 build compiles
 against; `AutoCadApiDirNet8` (default `...\AutoCAD 2025`) is the one for the .NET 8 build and must
-be a **.NET 8** install: an install updated to .NET 10 fails the .NET 8 build with `CS1705`. Override
+hold **.NET 8** assemblies: one that references .NET 10 fails the .NET 8 build with `CS1705`. Override
 either with `-p:AutoCadApiDirNet8=...` or the packaging scripts' `-ApiDirNet8`.
+
+Once 2025 and 2026 have taken their .NET 10 update, and the Civil 3D Object Enabler updates that go
+with it, an installed copy no longer serves, so the .NET 8 directory is assembled by hand. It needs
+this layout:
+
+| Path in the directory | Where a .NET 8 copy comes from |
+| --- | --- |
+| `accoremgd.dll`, `acdbmgd.dll`, `acmgd.dll` and the other AutoCAD assemblies | The `inc` folder of the ObjectARX 2025 SDK release that is not marked .NET 10 |
+| `ACA\AecBaseMgd.dll`, `C3D\AeccDbMgd.dll` | The original Civil 3D 2025 Object Enabler (2025.0, early 2024); the ObjectARX SDK does not carry them |
+
+The SDK is a self-extracting archive that 7-Zip opens without running it. Autodesk Account offers only
+the latest Object Enabler; on a machine that installed Civil 3D 2025 through Autodesk's installer, the
+original is often still in its package cache under `C:\Autodesk\WI`, as a `pkg.c3doe.tar` whose
+`.adix` is a zip holding both DLLs. Check what a candidate references before using it: one whose
+`System.Runtime` reference is 10.0 is an updated copy.
 
 ## Package and install
 

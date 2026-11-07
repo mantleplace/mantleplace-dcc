@@ -56,8 +56,9 @@
       The .NET 8 build serves 2025 and 2026 and compiles against the OLDEST supported API (2025); the
       .NET 10 build serves 2027 and compiles against 2027's. A .NET 8 project cannot reference an API
       assembly built for .NET 10 (CS1705), and an updated 2025 or 2026 install runs .NET 10, so the
-      .NET 8 build needs a 2025 API directory that still references .NET 8: an un-updated install or
-      the ObjectARX SDK's managed assemblies. Point AutoCadApiDirNet8 at one. Only the shell and the
+      .NET 8 build needs a 2025 API directory that still references .NET 8: an un-updated install, or
+      one assembled from the ObjectARX SDK and the original Civil 3D Object Enabler (README.md, "Build
+      and test"). Point AutoCadApiDirNet8 at one. Only the shell and the
       Civil 3D part read these; the core and its tests need no AutoCAD.
     -->
     <AutoCadApiDirNet8 Condition="'$(AutoCadApiDirNet8)' == ''">$(ProgramFiles)\Autodesk\AutoCAD 2025</AutoCadApiDirNet8>
