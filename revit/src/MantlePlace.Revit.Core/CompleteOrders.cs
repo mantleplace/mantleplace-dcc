@@ -31,7 +31,7 @@ public readonly record struct ImportRouteDecision(
 }
 
 /// <summary>
-/// Complete orders and on-demand orders, told apart by one materialize start.
+/// Complete orders, legacy orders and on-demand orders, told apart by one materialize start.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -40,6 +40,12 @@ public readonly record struct ImportRouteDecision(
 /// order has nothing left to build and answers the no-op; an on-demand order still being built
 /// answers with a job, which is the existing Prepare's to follow. This is the interim answer: when
 /// the listing carries the order's delivery model, it is read instead and the round trip goes.
+/// </para>
+/// <para>
+/// A legacy order, bought before formats were built on demand, has no delivery model, and the
+/// materialize route refuses it with a <c>400 legacy_order</c>. It shipped every format with the
+/// bundle, so it is complete: it goes to the download as a complete order, never to the curator as
+/// an error.
 /// </para>
 /// <para>
 /// ⛔ <b>A <c>503 delivery_state_unknown</c> is "try the download", not a refusal.</b> The platform
@@ -74,8 +80,9 @@ public static class CompleteOrders
     /// </summary>
     /// <remarks>
     /// The body is still read by shape (⛔<c>HPS-24</c>): a 409 goes to the parser, because the
-    /// single-flight response is a join. Only the 503 is read by its code, and only to send it to the
-    /// download rather than to the curator as an error.
+    /// single-flight response is a join. Only the <c>503 delivery_state_unknown</c> and the
+    /// <c>400 legacy_order</c> are read by their codes, and only to send each to the download rather
+    /// than to the curator as an error.
     /// </remarks>
     public static ImportRouteDecision FromStart(int status, string body)
     {
