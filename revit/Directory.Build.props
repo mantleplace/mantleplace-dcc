@@ -26,12 +26,13 @@
       claimed to be a 1.0. Revit's own version series started at 0.1.0 and does not track
       Unreal's: the hosts release on separate clocks and share a contract, not a number.
 
-      It is 1.0.0 because the Autodesk storefront refuses a version that starts with 0, and it never
-      goes back to 0.x (docs/adr/0018-the-revit-track-goes-to-1-0-0-for-its-storefront.md). The
+      It left 0.x at 1.0.0 because the Autodesk storefront refuses a version that starts with 0, and
+      it never goes back (docs/adr/0018-the-revit-track-goes-to-1-0-0-for-its-storefront.md); from
+      there it follows ordinary semver. The
       bundle manifest in the release zip carries this same value, and the package script fails when
       the two differ.
     -->
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <PropertyGroup>
