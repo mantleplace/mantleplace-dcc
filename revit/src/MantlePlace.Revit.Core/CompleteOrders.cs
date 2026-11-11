@@ -60,6 +60,15 @@ public static class CompleteOrders
     /// <summary>The code beside that 503.</summary>
     public const string DeliveryStateUnknownCode = "delivery_state_unknown";
 
+    /// <summary>The status the platform answers an order with no delivery model.</summary>
+    private const int BadRequest = 400;
+
+    /// <summary>
+    /// The code beside that 400: an order bought before formats were built on demand. It shipped
+    /// every format with the bundle, so it is complete, and the materialize route refuses it.
+    /// </summary>
+    public const string LegacyOrderCode = "legacy_order";
+
     /// <summary>
     /// Reads one materialize start — status and body — as the route an Import press takes.
     /// </summary>
@@ -75,6 +84,15 @@ public static class CompleteOrders
             && string.Equals(unknown.Code, DeliveryStateUnknownCode, StringComparison.Ordinal))
         {
             return new ImportRouteDecision(ImportRoute.DownloadView, string.Empty, null);
+        }
+
+        // A legacy order shipped every format, so it has nothing to build: download it as a complete
+        // order whose delivered set is every token the import reads from outside its host block.
+        if (status == BadRequest
+            && PlatformErrors.FromBody(body) is { } legacy
+            && string.Equals(legacy.Code, LegacyOrderCode, StringComparison.Ordinal))
+        {
+            return new ImportRouteDecision(ImportRoute.DownloadView, string.Empty, HostViews.ReadOutsideHostBlock);
         }
 
         if (status != Conflict && PlatformErrors.Refusal(status, body) is { } refusal)
