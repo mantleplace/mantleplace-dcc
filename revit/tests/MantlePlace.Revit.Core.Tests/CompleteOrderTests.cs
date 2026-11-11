@@ -78,6 +78,21 @@ internal static class CompleteOrderTests
             run.True(decision.Delivered is null, "nothing is known about what was delivered");
         });
 
+        run.Case("400 legacy_order: an order that shipped every format downloads as a complete one", () =>
+        {
+            ImportRouteDecision decision = CompleteOrders.FromStart(
+                400, """{"error":"Order is not a vault pick-and-process order","code":"legacy_order"}""");
+
+            run.True(decision.Route == ImportRoute.DownloadView, "downloads, not a refusal");
+            run.True(decision.Delivered is not null, "the delivered set is known");
+            run.True(
+                HostViews.ReadOutsideHostBlock.All(token => decision.Delivered!.Contains(token)),
+                "every token the import reads from outside its block counts as delivered");
+
+            HostViewLink whole = new("https://example.invalid/b.zip", "2026-01-01T00:00:00Z", false, false, [], null, null);
+            run.True(HostViews.Decide(whole, decision.Delivered) == ViewFetch.WholeArchive, "with no view cut, the whole archive is fetched");
+        });
+
         run.Case("a 503 with any other code is a refusal, in the platform's words", () =>
         {
             ImportRouteDecision decision = CompleteOrders.FromStart(503, """{"error":"Down for maintenance","code":"maintenance"}""");
