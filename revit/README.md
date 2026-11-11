@@ -14,7 +14,7 @@ missing, is the [host support matrix](../docs/host-support.md); this page says h
 [Build and test](#build-and-test) for why the compile target is the oldest of the three, and why
 that build's .NET follows the 2025 install it is compiled against. From `revit-1.1.0` the release is
 a .NET 10 build, so Revit 2025 and 2026 need their .5 update; a version without it stays on
-`revit-1.0.0` (#581).
+`revit-1.0.0` ([issue 581](https://github.com/mantleplace/mantleplace-dcc/issues/581)).
 
 ## What it does today
 
