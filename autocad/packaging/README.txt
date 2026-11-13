@@ -4,9 +4,11 @@ Mantle Place for AutoCAD
 The Mantle Place plugin for AutoCAD and Civil 3D 2025, 2026 and 2027. AutoCAD and Civil 3D are one
 plugin: Civil 3D's part loads only when Civil 3D is running.
 
-This release is the plugin's shell. It loads and says what it is; it does not import a Mantle
-Place bundle yet. The command MANTLEPLACEABOUT prints the version that loaded and whether the
-Civil 3D part is on.
+It brings a Mantle Place site into a drawing: send an export from your vault at mantle.place to
+this AutoCAD and press Import in the window that opens. The aerial image, contours, public
+records and site linework are placed in the order's own coordinates and units; in Civil 3D the
+terrain also arrives as a TIN surface. The Mantle Place tab on the ribbon holds the commands, and
+About (MANTLEPLACEABOUT) shows the version that loaded and whether the Civil 3D part is on.
 
 This package is one folder, MantlePlaceAutoCad.bundle. That is an Autodesk application plugin
 bundle, so the same package serves the Autodesk storefront and a hand install. Inside it: this
@@ -43,8 +45,8 @@ you do not need to install .NET: AutoCAD brings its own, and this plugin loads i
    name. You may leave this README, Install.cmd and the script behind; AutoCAD uses only
    PackageContents.xml and Contents.
 
-4. Start AutoCAD or Civil 3D. If it asks whether to load the plugin, answer Always Load. Type
-   MANTLEPLACEABOUT: the command line names the version.
+4. Start AutoCAD or Civil 3D. The plugin is not signed, so AutoCAD asks once whether to load
+   it: answer Always Load. Type MANTLEPLACEABOUT: a window names the version.
 
 If nothing happens, check that PackageContents.xml sits directly inside
 %APPDATA%\Autodesk\ApplicationPlugins\MantlePlaceAutoCad.bundle, not in a sub-folder.
