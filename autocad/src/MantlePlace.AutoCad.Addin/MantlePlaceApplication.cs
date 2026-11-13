@@ -355,12 +355,13 @@ internal static class MantlePlaceApplication
         => OnUiThread(() => ArrivalNotifier.OnArrived(arrivals, VaultBrowser.IsOpen));
 
     /// <summary>The release year AutoCAD reports (2025, 2026, 2027), for the feedback link and the presence payload.</summary>
-    /// <remarks>AutoCAD's version numbers its releases from 25.0 for 2025, so the year is 2000 plus the major part.</remarks>
+    /// <remarks>The version is not a year (2026 is R25.1, 2027 is R26.0); <see cref="HostReleaseYear"/> maps it.</remarks>
     private static string HostYear()
     {
         try
         {
-            return (2000 + AcApplication.Version.Major).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Version version = AcApplication.Version;
+            return HostReleaseYear.From(version.Major, version.Minor);
         }
 #pragma warning disable CA1031 // The host year is a label; its absence is not worth a failed start.
         catch (Exception)
