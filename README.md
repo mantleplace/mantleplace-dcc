@@ -15,8 +15,11 @@ Licensed under [Apache 2.0](LICENSE), except the prose in [`spec/`](spec/), whic
 *Draw the area and watch the price follow it. Every capture on this page is the live platform and the
 released plugin, recorded in one unattended pass.*
 
-The whole pass, as one film (1:48, silent): **[Mantle Place for Unreal Engine: draw a site, own it
-in UE](https://youtu.be/oJJM80M88Rw)**.
+[![Mantle Place film: site context for any site you draw](https://i.ytimg.com/vi/RHiBNw0R4lA/maxresdefault.jpg)](https://youtu.be/RHiBNw0R4lA)
+
+The film (2:00, silent, captions on screen): **[Site context for any site you draw: terrain, imagery,
+buildings and more](https://youtu.be/RHiBNw0R4lA)**. The one-minute cut: [Real-world terrain for
+Unreal Engine, Revit and more: draw your site once](https://youtu.be/YJTj1u8pnbc).
 
 ## What these plugins do
 
