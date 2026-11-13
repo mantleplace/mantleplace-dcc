@@ -24,6 +24,7 @@ exitCode |= HostIdentityTests.Run();
 exitCode |= PlugInsPanelTests.Run();
 exitCode |= ExportReceiptTests.Run();
 exitCode |= AboutPageTests.Run();
+exitCode |= HostReleaseYearTests.Run();
 
 if (exitCode == 0)
 {
