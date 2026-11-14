@@ -12,7 +12,7 @@
   ],
   "platformApi": {
     "version": "1",
-    "sha256": "3af12bb8936dee58b48d653e82d88e125c2d74929dad32754caf6a85bf8ad2cf"
+    "sha256": "bf358fae05af06ab6ee1e64588ceea7f777f162f02b051f40f47c6ed0e6b2861"
   },
   "cases": {
     "auth.browserPageVectors": [
