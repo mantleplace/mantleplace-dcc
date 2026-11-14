@@ -225,7 +225,7 @@ The fifteenth, 1.15.0, restated a pointer rather than adding a member, so its ca
 reading of it: `manifest.revitVectorCarrier` and `manifest.reject.revitCarrierHashMissing`.
 The 2.1.0 and 2.2.0 minors are the first manifest cases stamped 2.x: `manifest.imageryReflectanceIgnored` and
 `manifest.imageryReflectanceNull` (2.1.0), `manifest.heightmapVerticalTierIgnored` (2.2.0) and its Unreal sibling
-`manifest.unrealHeightmapVerticalTier`, which pins the range the importer reads beside the tier members.
+`manifest.unrealHeightmapVerticalTier`, which pins the range the Unreal plugin reads beside the tier members.
 Stamping a newer version onto a fixture that lacks what that version requires would make the
 fixture untrue.
 

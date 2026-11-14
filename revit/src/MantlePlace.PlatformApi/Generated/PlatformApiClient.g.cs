@@ -891,7 +891,7 @@ namespace MantlePlace.PlatformApi
         /// The curator bundles
         /// </summary>
         /// <remarks>
-        /// The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import. A 3.0 bundle also carries mpb3: the level recommended for the asking host and site, the size and counts of Max, Med and Min, and its three Extras, each with the download a signed-in plugin sends. The 3.0 form is published ahead of the behaviour and is not served yet; the examples are for a plugin test double and follow the draft tree of the 3.0 spec, which may still rename files.
+        /// The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import.
         /// </remarks>
         /// <returns>The bundles.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -905,7 +905,7 @@ namespace MantlePlace.PlatformApi
         /// The curator bundles
         /// </summary>
         /// <remarks>
-        /// The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import. A 3.0 bundle also carries mpb3: the level recommended for the asking host and site, the size and counts of Max, Med and Min, and its three Extras, each with the download a signed-in plugin sends. The 3.0 form is published ahead of the behaviour and is not served yet; the examples are for a plugin test double and follow the draft tree of the 3.0 spec, which may still rename files.
+        /// The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import.
         /// </remarks>
         /// <returns>The bundles.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -1012,8 +1012,6 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         /// <remarks>
         /// Mints a presigned URL for one artifact format, or for the whole archive with format bundle. A host that declares view support sends format bundle with a view naming itself, and gets a link to a view holding only the files its host block points at.
-        /// <br/>
-        /// <br/>The 3.0 form (not yet served): format bundle with mpb3 asks for one level (Max, Med or Min; none means Max) and the promised files wanted, by path from the bundle root, or for one Extra by id. There is no file list per host for 3.0, so mpb3 never comes with view. The answer is the same link answer, with sizeBytes. Until the tickets that serve 3.0 land (web #2623 and #2626), every request in the 3.0 form is refused with HTTP 501 and the code mpb3_not_yet_served; every 2.x request and answer is unchanged. When a plugin too old to read 3.0 asks for a 3.0 bundle, it will receive the update answer (HTTP 426, below).
         /// </remarks>
         /// <param name="orderId">The id of an order the signed-in curator owns.</param>
         /// <returns>The link.</returns>
@@ -1029,8 +1027,6 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         /// <remarks>
         /// Mints a presigned URL for one artifact format, or for the whole archive with format bundle. A host that declares view support sends format bundle with a view naming itself, and gets a link to a view holding only the files its host block points at.
-        /// <br/>
-        /// <br/>The 3.0 form (not yet served): format bundle with mpb3 asks for one level (Max, Med or Min; none means Max) and the promised files wanted, by path from the bundle root, or for one Extra by id. There is no file list per host for 3.0, so mpb3 never comes with view. The answer is the same link answer, with sizeBytes. Until the tickets that serve 3.0 land (web #2623 and #2626), every request in the 3.0 form is refused with HTTP 501 and the code mpb3_not_yet_served; every 2.x request and answer is unchanged. When a plugin too old to read 3.0 asks for a 3.0 bundle, it will receive the update answer (HTTP 426, below).
         /// </remarks>
         /// <param name="orderId">The id of an order the signed-in curator owns.</param>
         /// <returns>The link.</returns>
@@ -1103,7 +1099,7 @@ namespace MantlePlace.PlatformApi
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
-                            throw new ApiException<ApiError>("Malformed body or unknown format. A 3.0 request is malformed when it names two levels, a file the tree does not promise, or an Extra that does not exist; or is sent without format bundle, or with a view. Code: invalid_request for the last two.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                            throw new ApiException<ApiError>("Malformed body or unknown format.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 401)
@@ -1148,12 +1144,12 @@ namespace MantlePlace.PlatformApi
                         else
                         if (status_ == 426)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<Response12>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<ClientUpdateRequired>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
-                            throw new ApiException<Response12>("The calling client is below the minimum version the platform serves for it (code client_update_required, as on every route). For a request in the 3.0 form from a plugin too old to read 3.0 bundles, the answer also carries bundleVersion 3.0 and minimumVersion, the lowest version of that client that reads 3.0. Show an update prompt, not an error. Never cached (Cache-Control: no-store). The bundleVersion answer is not served yet: published ahead of the behaviour.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                            throw new ApiException<ClientUpdateRequired>("The calling client is below the minimum version the platform serves for it. Code: client_update_required. Show an update prompt, not an error.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 500)
@@ -1164,16 +1160,6 @@ namespace MantlePlace.PlatformApi
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
                             throw new ApiException<ApiError>("Transient failure; retry. Code: transient.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
-                        }
-                        else
-                        if (status_ == 501)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<ApiError>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            throw new ApiException<ApiError>("A request in the 3.0 form (mpb3), until the platform serves 3.0. Code: mpb3_not_yet_served. Nothing was minted; use the 2.x form or wait.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         {
@@ -1204,7 +1190,7 @@ namespace MantlePlace.PlatformApi
         /// <param name="orderId">The id of an order the signed-in curator owns.</param>
         /// <returns>Nothing to build (noop), or the build already running was joined (coalesced).</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual System.Threading.Tasks.Task<Response13> MaterializeVaultBundleFormatsAsync(string orderId, Body5 body)
+        public virtual System.Threading.Tasks.Task<Response12> MaterializeVaultBundleFormatsAsync(string orderId, Body5 body)
         {
             return MaterializeVaultBundleFormatsAsync(orderId, body, System.Threading.CancellationToken.None);
         }
@@ -1219,7 +1205,7 @@ namespace MantlePlace.PlatformApi
         /// <param name="orderId">The id of an order the signed-in curator owns.</param>
         /// <returns>Nothing to build (noop), or the build already running was joined (coalesced).</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<Response13> MaterializeVaultBundleFormatsAsync(string orderId, Body5 body, System.Threading.CancellationToken cancellationToken)
+        public virtual async System.Threading.Tasks.Task<Response12> MaterializeVaultBundleFormatsAsync(string orderId, Body5 body, System.Threading.CancellationToken cancellationToken)
         {
             if (orderId == null)
                 throw new System.ArgumentNullException("orderId");
@@ -1272,7 +1258,7 @@ namespace MantlePlace.PlatformApi
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 200)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<Response13>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<Response12>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -1282,12 +1268,12 @@ namespace MantlePlace.PlatformApi
                         else
                         if (status_ == 201)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<Response14>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<Response13>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
-                            throw new ApiException<Response14>("A build was queued.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                            throw new ApiException<Response13>("A build was queued.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 400)
@@ -1428,7 +1414,7 @@ namespace MantlePlace.PlatformApi
         /// <param name="orderId">The id of an order the signed-in curator owns.</param>
         /// <returns>The status.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual System.Threading.Tasks.Task<Response15> GetVaultBundleMaterializeStatusAsync(string orderId)
+        public virtual System.Threading.Tasks.Task<Response14> GetVaultBundleMaterializeStatusAsync(string orderId)
         {
             return GetVaultBundleMaterializeStatusAsync(orderId, System.Threading.CancellationToken.None);
         }
@@ -1443,7 +1429,7 @@ namespace MantlePlace.PlatformApi
         /// <param name="orderId">The id of an order the signed-in curator owns.</param>
         /// <returns>The status.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<Response15> GetVaultBundleMaterializeStatusAsync(string orderId, System.Threading.CancellationToken cancellationToken)
+        public virtual async System.Threading.Tasks.Task<Response14> GetVaultBundleMaterializeStatusAsync(string orderId, System.Threading.CancellationToken cancellationToken)
         {
             if (orderId == null)
                 throw new System.ArgumentNullException("orderId");
@@ -1489,7 +1475,7 @@ namespace MantlePlace.PlatformApi
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 200)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<Response15>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<Response14>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -1574,7 +1560,7 @@ namespace MantlePlace.PlatformApi
         /// </remarks>
         /// <returns>The exports.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual System.Threading.Tasks.Task<Response16> ListPendingExportsAsync(string connectionId)
+        public virtual System.Threading.Tasks.Task<Response15> ListPendingExportsAsync(string connectionId)
         {
             return ListPendingExportsAsync(connectionId, System.Threading.CancellationToken.None);
         }
@@ -1588,7 +1574,7 @@ namespace MantlePlace.PlatformApi
         /// </remarks>
         /// <returns>The exports.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<Response16> ListPendingExportsAsync(string connectionId, System.Threading.CancellationToken cancellationToken)
+        public virtual async System.Threading.Tasks.Task<Response15> ListPendingExportsAsync(string connectionId, System.Threading.CancellationToken cancellationToken)
         {
             if (connectionId == null)
                 throw new System.ArgumentNullException("connectionId");
@@ -1635,7 +1621,7 @@ namespace MantlePlace.PlatformApi
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 200)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<Response16>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<Response15>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -1711,7 +1697,7 @@ namespace MantlePlace.PlatformApi
         /// <param name="exportId">The id of an export of the signed-in curator.</param>
         /// <returns>The export after the move.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual System.Threading.Tasks.Task<Response17> AdvanceExportAsync(string exportId, Body6 body)
+        public virtual System.Threading.Tasks.Task<Response16> AdvanceExportAsync(string exportId, Body6 body)
         {
             return AdvanceExportAsync(exportId, body, System.Threading.CancellationToken.None);
         }
@@ -1726,7 +1712,7 @@ namespace MantlePlace.PlatformApi
         /// <param name="exportId">The id of an export of the signed-in curator.</param>
         /// <returns>The export after the move.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<Response17> AdvanceExportAsync(string exportId, Body6 body, System.Threading.CancellationToken cancellationToken)
+        public virtual async System.Threading.Tasks.Task<Response16> AdvanceExportAsync(string exportId, Body6 body, System.Threading.CancellationToken cancellationToken)
         {
             if (exportId == null)
                 throw new System.ArgumentNullException("exportId");
@@ -1779,7 +1765,7 @@ namespace MantlePlace.PlatformApi
                         var status_ = (int)response_.StatusCode;
                         if (status_ == 200)
                         {
-                            var objectResponse_ = await ReadObjectResponseAsync<Response17>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            var objectResponse_ = await ReadObjectResponseAsync<Response16>(response_, headers_, cancellationToken).ConfigureAwait(false);
                             if (objectResponse_.Object == null)
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
@@ -2174,7 +2160,7 @@ namespace MantlePlace.PlatformApi
     {
 
         /// <summary>
-        /// An artifact format, or bundle for the whole archive. glb is the deprecated whole-bundle alias and is still accepted. A view needs bundle, and so does mpb3.
+        /// An artifact format, or bundle for the whole archive. glb is the deprecated whole-bundle alias and is still accepted. A view needs bundle.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("format")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
@@ -2182,12 +2168,6 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("view")]
         public View? View { get; set; } = default!;
-
-        /// <summary>
-        /// The 3.0 form of the request, with format bundle: one level and the promised files wanted, by name, or one Extra. Not served yet: it is refused with HTTP 501 and the code mpb3_not_yet_served. It never comes with view: a 3.0 bundle has no file list per host.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("mpb3")]
-        public Mpb3? Mpb3 { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
@@ -2657,47 +2637,6 @@ namespace MantlePlace.PlatformApi
     public partial class Response12
     {
 
-        [System.Text.Json.Serialization.JsonPropertyName("error")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Error { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("code")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Code { get; set; } = default!;
-
-        /// <summary>
-        /// The client name the request sent.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("client")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Client { get; set; } = default!;
-
-        /// <summary>
-        /// The version the request sent.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("version")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Version { get; set; } = default!;
-
-        /// <summary>
-        /// The lowest version of this client the platform serves. For a 3.0 request, the lowest that reads a 3.0 bundle.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("minimumVersion")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string MinimumVersion { get; set; } = default!;
-
-        /// <summary>
-        /// Present when the request was in the 3.0 form: the bundle version the client cannot read.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("bundleVersion")]
-        public string? BundleVersion { get; set; } = default!;
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response13
-    {
-
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]
@@ -2710,7 +2649,7 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response14
+    public partial class Response13
     {
 
         [System.Text.Json.Serialization.JsonPropertyName("jobId")]
@@ -2724,7 +2663,7 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response15
+    public partial class Response14
     {
 
         [System.Text.Json.Serialization.JsonPropertyName("deliveryModel")]
@@ -2767,7 +2706,7 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response16
+    public partial class Response15
     {
 
         [System.Text.Json.Serialization.JsonPropertyName("exports")]
@@ -2777,7 +2716,7 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Response17
+    public partial class Response16
     {
 
         [System.Text.Json.Serialization.JsonPropertyName("id")]
@@ -2790,8 +2729,8 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("host")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Response17Host>))]
-        public Response17Host Host { get; set; } = default!;
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Response16Host>))]
+        public Response16Host Host { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("targetConnectionId")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
@@ -2803,8 +2742,8 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("status")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Response17Status>))]
-        public Response17Status Status { get; set; } = default!;
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Response16Status>))]
+        public Response16Status Status { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("progress")]
         public double? Progress { get; set; } = default!;
@@ -2884,21 +2823,6 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("levels")]
         public System.Collections.Generic.IDictionary<string, Anonymous>? Levels { get; set; } = default!;
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Mpb3
-    {
-
-        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
-
-        [System.Text.Json.Serialization.JsonExtensionData]
-        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
-        {
-            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
-            set { _additionalProperties = value; }
-        }
 
     }
 
@@ -3360,12 +3284,6 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("links")]
         public Links? Links { get; set; } = default!;
-
-        /// <summary>
-        /// Present only on a 3.0 bundle (not served yet): the recommended level for the asking host and site, the size and counts of each of the three levels, and the Extras. A 2.x bundle has no mpb3 member and every other member is as it was; on a 3.0 bundle, sizeBytes and download.formats describe the Max download.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("mpb3")]
-        public Mpb32? Mpb3 { get; set; } = default!;
 
     }
 
@@ -4012,7 +3930,7 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public enum Response17Host
+    public enum Response16Host
     {
 
         [System.Runtime.Serialization.EnumMember(Value = @"unreal")]
@@ -4042,7 +3960,7 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public enum Response17Status
+    public enum Response16Status
     {
 
         [System.Runtime.Serialization.EnumMember(Value = @"sent")]
@@ -4367,38 +4285,6 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Mpb32
-    {
-
-        [System.Text.Json.Serialization.JsonPropertyName("version")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Version { get; set; } = default!;
-
-        /// <summary>
-        /// The highest level expected to import in about five minutes on the reference machine, for the host that asked (the Mantle-Place-Client header) and this site. The platform works it out; the figures behind it stay private and can change without rebuilding a bundle.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("recommendedLevel")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Mpb32RecommendedLevel>))]
-        public Mpb32RecommendedLevel RecommendedLevel { get; set; } = default!;
-
-        /// <summary>
-        /// All three levels, always: every order builds Max, Med and Min.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("levels")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public Levels Levels { get; set; } = new Levels();
-
-        /// <summary>
-        /// The three Extras, each free.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("extras")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public System.Collections.Generic.ICollection<Extras> Extras { get; set; } = new System.Collections.ObjectModel.Collection<Extras>();
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public enum ExportsHost
     {
 
@@ -4471,68 +4357,6 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public enum Mpb32RecommendedLevel
-    {
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Max")]
-        Max = 0,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Med")]
-        Med = 1,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"Min")]
-        Min = 2,
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Levels
-    {
-
-        [System.Text.Json.Serialization.JsonPropertyName("Max")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public Max Max { get; set; } = new Max();
-
-        [System.Text.Json.Serialization.JsonPropertyName("Med")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public Med Med { get; set; } = new Med();
-
-        [System.Text.Json.Serialization.JsonPropertyName("Min")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public Min Min { get; set; } = new Min();
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Extras
-    {
-
-        [System.Text.Json.Serialization.JsonPropertyName("id")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<ExtrasId>))]
-        public ExtrasId Id { get; set; } = default!;
-
-        /// <summary>
-        /// The name a curator sees: Site Brief, Plan sheets, Terrain tiles.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("name")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Name { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("sizeBytes")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long SizeBytes { get; set; } = default!;
-
-        /// <summary>
-        /// How a signed-in plugin downloads this Extra.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("download")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public Download2 Download { get; set; } = new Download2();
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class Format
     {
 
@@ -4544,242 +4368,6 @@ namespace MantlePlace.PlatformApi
             get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
             set { _additionalProperties = value; }
         }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Max
-    {
-
-        /// <summary>
-        /// The size of the download of this level, every file, as a zip.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("sizeBytes")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long SizeBytes { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("counts")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public Counts Counts { get; set; } = new Counts();
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Med
-    {
-
-        /// <summary>
-        /// The size of the download of this level, every file, as a zip.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("sizeBytes")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long SizeBytes { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("counts")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public Counts2 Counts { get; set; } = new Counts2();
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Min
-    {
-
-        /// <summary>
-        /// The size of the download of this level, every file, as a zip.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("sizeBytes")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long SizeBytes { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("counts")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public Counts3 Counts { get; set; } = new Counts3();
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public enum ExtrasId
-    {
-
-        [System.Runtime.Serialization.EnumMember(Value = @"SiteBrief")]
-        SiteBrief = 0,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"PlanSheets")]
-        PlanSheets = 1,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"TerrainTiles")]
-        TerrainTiles = 2,
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Download2
-    {
-
-        [System.Text.Json.Serialization.JsonPropertyName("method")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Method { get; set; } = default!;
-
-        /// <summary>
-        /// The download route of the bundle.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("path")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Path { get; set; } = default!;
-
-        /// <summary>
-        /// The request that mints the link; the answer is the same link answer as for a level. A signed-in plugin sends it with its bearer, as for the bundle.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("body")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public Body7 Body { get; set; } = new Body7();
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Counts
-    {
-
-        /// <summary>
-        /// Rows across the level CSV files (Trees.csv, Roads.csv). Med is half of Max, Min a quarter.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("rows")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Rows { get; set; } = default!;
-
-        /// <summary>
-        /// Features across the GeoPackages. The georeferenced files are byte-identical at every level, so this is the same at all three.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("features")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Features { get; set; } = default!;
-
-        /// <summary>
-        /// Triangles across the meshes (Terrain.glb, Buildings.glb, Basemap.usdz, Site.usdz). Med is half of Max, Min a quarter.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("triangles")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Triangles { get; set; } = default!;
-
-        /// <summary>
-        /// Pixels of Imagery.png. A grid halves and quarters in linear resolution, so Med holds a quarter of the pixels of Max and Min a sixteenth.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("pixels")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Pixels { get; set; } = default!;
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Counts2
-    {
-
-        /// <summary>
-        /// Rows across the level CSV files (Trees.csv, Roads.csv). Med is half of Max, Min a quarter.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("rows")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Rows { get; set; } = default!;
-
-        /// <summary>
-        /// Features across the GeoPackages. The georeferenced files are byte-identical at every level, so this is the same at all three.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("features")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Features { get; set; } = default!;
-
-        /// <summary>
-        /// Triangles across the meshes (Terrain.glb, Buildings.glb, Basemap.usdz, Site.usdz). Med is half of Max, Min a quarter.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("triangles")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Triangles { get; set; } = default!;
-
-        /// <summary>
-        /// Pixels of Imagery.png. A grid halves and quarters in linear resolution, so Med holds a quarter of the pixels of Max and Min a sixteenth.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("pixels")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Pixels { get; set; } = default!;
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Counts3
-    {
-
-        /// <summary>
-        /// Rows across the level CSV files (Trees.csv, Roads.csv). Med is half of Max, Min a quarter.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("rows")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Rows { get; set; } = default!;
-
-        /// <summary>
-        /// Features across the GeoPackages. The georeferenced files are byte-identical at every level, so this is the same at all three.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("features")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Features { get; set; } = default!;
-
-        /// <summary>
-        /// Triangles across the meshes (Terrain.glb, Buildings.glb, Basemap.usdz, Site.usdz). Med is half of Max, Min a quarter.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("triangles")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Triangles { get; set; } = default!;
-
-        /// <summary>
-        /// Pixels of Imagery.png. A grid halves and quarters in linear resolution, so Med holds a quarter of the pixels of Max and Min a sixteenth.
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("pixels")]
-        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
-        public long Pixels { get; set; } = default!;
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Body7
-    {
-
-        [System.Text.Json.Serialization.JsonPropertyName("format")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Format { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("mpb3")]
-        [System.ComponentModel.DataAnnotations.Required]
-        public Mpb33 Mpb3 { get; set; } = new Mpb33();
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Mpb33
-    {
-
-        [System.Text.Json.Serialization.JsonPropertyName("version")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        public string Version { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("extra")]
-        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
-        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Mpb33Extra>))]
-        public Mpb33Extra Extra { get; set; } = default!;
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
-    public enum Mpb33Extra
-    {
-
-        [System.Runtime.Serialization.EnumMember(Value = @"SiteBrief")]
-        SiteBrief = 0,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"PlanSheets")]
-        PlanSheets = 1,
-
-        [System.Runtime.Serialization.EnumMember(Value = @"TerrainTiles")]
-        TerrainTiles = 2,
 
     }
 
