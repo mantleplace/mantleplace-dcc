@@ -15,6 +15,10 @@
 class UMantlePlaceAuthSystemBase;
 class UMantlePlaceVaultClient;
 class UMantlePlaceBundleCache;
+class FMantlePlaceImportSteps; // MantlePlaceImportStepsLogic.h (editor-internal)
+
+/** An import flow has started: its steps, which the import window shows (native: the steps are a plain class). */
+DECLARE_MULTICAST_DELEGATE_OneParam(FMantlePlaceOnImportStepsNative, TSharedRef<FMantlePlaceImportSteps>);
 
 /** Blueprint-assignable events for the EUW surface (a WidgetBlueprint binds these in its graph). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnVaultListedBP, bool, bSuccess, const TArray<FMantlePlaceVaultItem>&, Bundles, const FString&, Message);
@@ -93,6 +97,14 @@ public:
 	FMantlePlaceOnClientUpdateRequiredNative OnClientUpdateRequiredNative;
 
 	/**
+	 * Fired once when an import flow starts, before any of its work, with the steps it will report into:
+	 * a Download step when the flow fetches the bundle, then the bundle's own once it is open. The panel
+	 * opens the import window on them. Fired before the work because a complete local zip imports
+	 * inside StartLocalImport itself, and a window opened after it returned would open on a finished run.
+	 */
+	FMantlePlaceOnImportStepsNative OnImportStepsNative;
+
+	/**
 	 * Wire an explicit signed-in auth source (for a headless caller or a test that has no editor
 	 * auth-state UI) whose JWT authorizes the vault calls, and construct the clients. Optional: if
 	 * never called, the orchestrator takes the editor's one session from UMantlePlaceAuthSubsystem,
@@ -167,7 +179,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	bool StartLocalImport(const FString& ZipPath, EMantlePlaceImportMode Mode);
 
-	/** Abort an in-flight import (stops polling + any download). Fires OnImportFinished(false). */
+	/**
+	 * Stop an in-flight import. While the bundle is fetched (generating, downloading), stops the polling
+	 * and the download now and fires OnImportFinished(false). Once the import itself runs, the cancel
+	 * takes effect between its steps: the running step finishes, the later ones do not start, and
+	 * OnImportFinished fires when the import returns, with bCancelled set.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	void CancelImport();
 
@@ -231,6 +248,15 @@ private:
 
 	/** Broadcast an OnImportPhase update (and log it). */
 	void EmitPhase(const FString& PhaseLabel, const FString& Message, float Fraction);
+
+	/** A fresh set of steps for the flow that is starting, announced on OnImportStepsNative. */
+	void BeginSteps();
+
+	/** Run the bundle import itself on Path, watched by the flow's steps. */
+	FMantlePlaceImportResult RunBundleImport(const FString& Path);
+
+	/** The steps of the flow in flight; null when idle. The window holds its own reference. */
+	TSharedPtr<FMantlePlaceImportSteps> Steps;
 
 	/** Bind (once) the auth source's native auth-changed delegate, re-broadcasting it as OnAuthChanged. */
 	void EnsureAuthDelegateBound();

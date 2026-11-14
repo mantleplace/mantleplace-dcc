@@ -52,6 +52,19 @@ source build: see [Building](../README.md#building) in the root README.
 - **Browse...** — pick a bundle `.zip` you downloaded from [mantle.place](https://mantle.place),
   leave the mode at *Landscape*, and press **Import**.
 
+Either way the **Bundle Import** window opens and lists the import's steps in order: *Download* when
+the bundle is fetched, *Integrity Check*, then one per thing the bundle builds. Each row reads
+`Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`; a step the import skips says why
+beside it. Under the rows are the step in progress and how long it has run, and `Elapsed` with the
+whole run's time.
+
+**Cancel** stops the import between steps: the step in progress finishes and the steps after it do
+not start. While the bundle downloads, Cancel stops the download at once. What finished stays in the
+level as this order's import, and importing the same bundle again replaces it and completes. While
+the bundle is being imported the window holds the editor's input to itself, as the editor's own
+progress dialogs do, so nothing else can change the level mid-import; during the download the editor
+stays free.
+
 ## Open in curator
 
 **Open in curator** (in the panel's header) opens the web curator in your browser on the extent your

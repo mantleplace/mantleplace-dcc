@@ -31,6 +31,7 @@ public class MantlePlaceEditor : ModuleRules
 				"AssetRegistry", // FAssetRegistryModule::AssetCreated for the landscape layer-info assets
 				"Landscape",     // ALandscapeProxy::Import, ULandscapeInfo, ULandscapeSubsystem
 				"PCG",           // UPCGGraph built at import, UPCGSubsystem partition actors swept at wipe
+				"RHI",           // FRHICommandListImmediate::EndFrame: the import window's Slate tick between steps
 				"RenderCore",    // FlushRenderingCommands (finalize the landscape drape render state)
 				"FileUtilities", // FZipArchiveReader (editor-only, libzip-backed)
 				"ImageWrapper",  // 16-bit grayscale PNG decode

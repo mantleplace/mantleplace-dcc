@@ -9,6 +9,8 @@
 
 DECLARE_LOG_CATEGORY_EXTERN(LogMantlePlaceImport, Log, All);
 
+class FMantlePlaceImportSteps;
+
 /**
  * What ImportVaultPackage orchestrates, one function per step, each testable without a bundle: the
  * integrity gate, the "is there anything to build" gate, the wipe of a prior import, and the walk of
@@ -148,7 +150,25 @@ FString LoadUnloadedPriorActors(UWorld* World, const FString& Identity, FPriorAc
  */
 TArray<FMantlePlaceLevelImportTag> ReadLevelImports(UWorld* World);
 
-/** Each included handler's Prepare / Import / Finalize, in registry order. */
+/**
+ * The import window's rows for the handlers, in registry order: one per
+ * artifact the selection includes and the bundle ships, named for what it builds. One whose payloads
+ * the archive was cut without is listed Not Run, with that reason beside it. An artifact the bundle
+ * does not ship, or the selection leaves out, is not a step of this import and is not listed.
+ */
+void PlanSteps(
+	const FHandlers& Handlers, const FMantlePlaceVaultManifest& Manifest, const FMantlePlaceImportSelection& Selection,
+	FMantlePlaceImportSteps& Steps);
+
+/**
+ * Each included handler's Prepare / Import / Finalize, in registry order.
+ *
+ * With Context.Steps set, a cancel takes effect between handlers, never inside one: before a handler's
+ * Prepare (when it Prepares) and before its Import, the step is asked to Begin, and a refusal puts the
+ * handler in Context.Cut, after which it runs nothing, its Finalize included. The undo transaction, the
+ * actor wipe and the Finalize of every handler that did import still run, so what a cancelled import
+ * leaves is a smaller import, filed and tagged like any other, and a re-import replaces it.
+ */
 void RunPrepare(const FHandlers& Handlers, FMantlePlaceImportContext& Context);
 void RunImport(const FHandlers& Handlers, FMantlePlaceImportContext& Context);
 void RunFinalize(const FHandlers& Handlers, FMantlePlaceImportContext& Context);

@@ -16,6 +16,8 @@ void UMantlePlaceVaultPanelController::Initialize()
 	Orchestrator->OnAuthChanged.AddUniqueDynamic(this, &UMantlePlaceVaultPanelController::HandleAuthChanged);
 	Orchestrator->OnClientUpdateRequiredNative.RemoveAll(this); // a native delegate has no AddUnique: stay idempotent
 	Orchestrator->OnClientUpdateRequiredNative.AddUObject(this, &UMantlePlaceVaultPanelController::HandleClientUpdateRequired);
+	Orchestrator->OnImportStepsNative.RemoveAll(this);
+	Orchestrator->OnImportStepsNative.AddUObject(this, &UMantlePlaceVaultPanelController::HandleImportSteps);
 }
 
 void UMantlePlaceVaultPanelController::Shutdown()
@@ -27,6 +29,7 @@ void UMantlePlaceVaultPanelController::Shutdown()
 		Orchestrator->OnImportFinished.RemoveAll(this);
 		Orchestrator->OnAuthChanged.RemoveAll(this);
 		Orchestrator->OnClientUpdateRequiredNative.RemoveAll(this);
+		Orchestrator->OnImportStepsNative.RemoveAll(this);
 		// Closing the tab mid-import must stop the in-flight poll/download - BeginDestroy alone does not.
 		Orchestrator->CancelImport();
 	}
@@ -35,6 +38,7 @@ void UMantlePlaceVaultPanelController::Shutdown()
 	OnImportFinished.Clear();
 	OnAuthChanged.Clear();
 	OnClientUpdateRequired.Clear();
+	OnImportSteps.Clear();
 	ActiveOrderId.Reset();
 }
 
@@ -104,6 +108,16 @@ bool UMantlePlaceVaultPanelController::StartLocalImport(const FString& ZipPath, 
 	// A local import is not a vault row, so no ActiveOrderId is set (progress shows in the local
 	// section + toasts, not on a list row).
 	return Orchestrator->StartLocalImport(ZipPath, Mode);
+}
+
+void UMantlePlaceVaultPanelController::CancelImport()
+{
+	if (Orchestrator) { Orchestrator->CancelImport(); }
+}
+
+void UMantlePlaceVaultPanelController::HandleImportSteps(TSharedRef<FMantlePlaceImportSteps> Steps)
+{
+	OnImportSteps.Broadcast(Steps);
 }
 
 bool UMantlePlaceVaultPanelController::IsActiveItem(const FMantlePlaceVaultItem& Item) const

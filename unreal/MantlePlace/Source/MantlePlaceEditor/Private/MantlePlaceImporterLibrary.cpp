@@ -11,6 +11,7 @@
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportProvenance.h"
 #include "MantlePlaceImportOrchestration.h"
+#include "MantlePlaceImportStepsLogic.h"
 #include "MantlePlaceImportTiming.h"
 #include "MantlePlaceHLODLogic.h"
 #include "MantlePlaceHLODs.h"
@@ -312,12 +313,37 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackage(
 		FMantlePlaceImportSelection::FromMode(Mode, Settings != nullptr && Settings->bGenerateFoliageScatter));
 }
 
+FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSteps(
+	const FString& ZipPath, EMantlePlaceImportMode Mode, FMantlePlaceImportSteps* Steps)
+{
+	const UMantlePlaceEditorSettings* Settings = GetDefault<UMantlePlaceEditorSettings>();
+	return ImportVaultPackageWithSelection(ZipPath,
+		FMantlePlaceImportSelection::FromMode(Mode, Settings != nullptr && Settings->bGenerateFoliageScatter), Steps);
+}
+
 FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSelection(
 	const FString& ZipPath,
-	const FMantlePlaceImportSelection& Selection)
+	const FMantlePlaceImportSelection& Selection,
+	FMantlePlaceImportSteps* Steps)
 {
 	FMantlePlaceImportResult Result;
 	TArray<FString> Log;
+
+	// The import window's steps, when one is watching. The editor's thread is ours until this returns,
+	// which is what the window needs to know to take input between steps; and every exit, a refusal
+	// included, finishes the run so no row is left reading Importing or Waiting.
+	if (Steps != nullptr)
+	{
+		Steps->SetSynchronous(true);
+	}
+	const FMantlePlaceScopedRestore FinishSteps([Steps]()
+	{
+		if (Steps != nullptr)
+		{
+			Steps->Finish(FPlatformTime::Seconds());
+		}
+	});
+	const FName IntegrityStep(TEXT("integrity_check"));
 
 	// Timing runs for the WHOLE function, including every early return. An import that refuses at
 	// the integrity check is still an import somebody waited on, and "it failed after four minutes"
@@ -422,13 +448,44 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 
 	ZipPhase.Reset();
 
+	// --- The import window's rows: the integrity check, then one per artifact this import builds. ---
+	const MantlePlaceArtifacts::FHandlers Handlers = MantlePlaceArtifacts::MakeAll();
+	if (Steps != nullptr)
+	{
+		Steps->Add(IntegrityStep, TEXT("Integrity Check"));
+		MantlePlaceImportOrchestration::PlanSteps(Handlers, Manifest, Selection, *Steps);
+	}
+
+	// A cancel before anything in the project changed: nothing to undo, nothing to record.
+	const auto CancelledUntouched = [&Result, Steps]()
+	{
+		Steps->Finish(FPlatformTime::Seconds());
+		Result.bCancelled = true;
+		Result.Message = TEXT("Import cancelled before anything was imported. Nothing in the level or the project changed.");
+		return Result;
+	};
+
 	// --- Verify all: the downloaded bytes must match the manifest's declared sha256 before anything
 	// is imported. A corrupt/truncated/tampered download aborts here, creating nothing.
+	if (Steps != nullptr && !Steps->Begin(IntegrityStep, FPlatformTime::Seconds()))
+	{
+		return CancelledUntouched();
+	}
 	FString IntegrityError;
 	if (!MantlePlaceImportOrchestration::VerifyAll(Manifest, Reader, Timeline, IntegrityError, &Log))
 	{
 		Result.Message = FString::Printf(TEXT("Integrity check failed: %s"), *IntegrityError);
 		return Result;
+	}
+	if (Steps != nullptr)
+	{
+		Steps->End(IntegrityStep, true, FPlatformTime::Seconds());
+		// The last boundary before the wipe: past it, a prior import's assets are gone, and stopping
+		// before its actors go too would leave them pointing at nothing.
+		if (Steps->IsCancelRequested())
+		{
+			return CancelledUntouched();
+		}
 	}
 
 	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
@@ -465,7 +522,6 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	// import of a Cesium-terrain-only v8 bundle that ships no Terrain.glb), bail BEFORE the destructive
 	// idempotent wipe below — otherwise we would force-delete a prior import's still-referenced
 	// drape assets (greying out an already-imported Landscape) only to produce nothing.
-	const MantlePlaceArtifacts::FHandlers Handlers = MantlePlaceArtifacts::MakeAll();
 	const FString NothingToImport =
 		MantlePlaceImportOrchestration::ExplainNothingToImport(Handlers, Manifest, Selection);
 	if (!NothingToImport.IsEmpty())
@@ -560,6 +616,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	Context.TempDir = TempDir;
 	Context.DestPackagePath = DestPackagePath;
 	Context.ContentRoot = ContentRoot;
+	Context.Steps = Steps;
 
 	// glTF asset imports run BEFORE the transaction opens, and everything after it is either an
 	// actor operation or an asset creation that deletes nothing.
@@ -613,8 +670,21 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	}
 
 	// --- Report ---
-	Result.bSuccess = Context.bAllRequestedSucceeded && Result.CreatedActors.Num() > 0;
-	if (Result.bSuccess)
+	// A cancel that stopped any step makes this a smaller import, not a failed one: everything that
+	// finished is claimed and tagged like any import's, and the record below is written for it, so a
+	// re-import of this order replaces it and completes.
+	if (Steps != nullptr)
+	{
+		Steps->Finish(FPlatformTime::Seconds());
+		Result.bCancelled = Steps->WasCancelled();
+	}
+	Result.bSuccess = !Result.bCancelled && Context.bAllRequestedSucceeded && Result.CreatedActors.Num() > 0;
+	if (Result.bCancelled)
+	{
+		Log.Add(Steps->DescribeCancel());
+		UE_LOG(LogMantlePlaceImport, Log, TEXT("%s"), *Log.Last());
+	}
+	if (Result.bSuccess || (Result.bCancelled && Result.CreatedActors.Num() > 0))
 	{
 		// Said in the message the user reads, not only in this file's comments: nothing this
 		// importer creates is saved -- there is no SavePackage call in the plugin, every generated
@@ -631,8 +701,10 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	// Record what this folder is, so the next import of a DIFFERENT order that happens to share
 	// these eight characters is refused instead of force-deleting this one. Written only on
 	// success: a record for content that was never created would refuse a later import of the
-	// order that legitimately owns the folder.
-	if (Result.bSuccess)
+	// order that legitimately owns the folder. A cancelled import has created content in it, past the
+	// wipe that proved the folder this order's, so it is recorded too: without the record, the re-import
+	// that completes it would find unrecorded content and refuse.
+	if (Result.bSuccess || Result.bCancelled)
 	{
 		MantlePlaceImportProvenance::FRecord Record;
 		Record.Identity = Identity;

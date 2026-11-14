@@ -19,6 +19,7 @@
 #include "MantlePlaceVaultTypes.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/EngineVersion.h"
+#include "Slate/SMantlePlaceImportWindow.h"
 #include "Slate/SMantlePlaceVaultDetail.h"
 #include "Slate/SMantlePlaceVaultRow.h"
 #include "Styling/CoreStyle.h" // FCoreStyle "NoBorder" (breadcrumb link button)
@@ -214,6 +215,7 @@ void SMantlePlaceVaultPanel::Construct(const FArguments& InArgs)
 	Controller->OnImportFinished.AddSP(this, &SMantlePlaceVaultPanel::HandleImportFinished);
 	Controller->OnAuthChanged.AddSP(this, &SMantlePlaceVaultPanel::HandleAuthChanged);
 	Controller->OnClientUpdateRequired.AddSP(this, &SMantlePlaceVaultPanel::HandleClientUpdateRequired);
+	Controller->OnImportSteps.AddSP(this, &SMantlePlaceVaultPanel::HandleImportSteps);
 
 	ModeOptions.Add(MakeShared<FString>(TEXT("Landscape")));
 	ModeOptions.Add(MakeShared<FString>(TEXT("Mesh")));
@@ -787,6 +789,10 @@ void SMantlePlaceVaultPanel::HandleImportFinished(bool bSuccess, const FMantlePl
 	// The imported bundle's order id, before the active row is released. A local-zip import has no row,
 	// so it has no order id and asks nothing.
 	const FString ImportedOrderId = ActiveItemPtr.IsValid() ? ActiveItemPtr->OrderId : FString();
+	if (ImportWindow.IsValid())
+	{
+		ImportWindow->SetResult(Result.Message);
+	}
 	if (HeaderStatus.IsValid())
 	{
 		HeaderStatus->SetText(FText::FromString(Result.Message));
@@ -808,6 +814,25 @@ void SMantlePlaceVaultPanel::HandleImportFinished(bool bSuccess, const FMantlePl
 
 	// HPS-56: "Did this import come in right?", once per bundle, after a successful import.
 	MaybeAskAboutImport(bSuccess, ImportedOrderId);
+}
+
+void SMantlePlaceVaultPanel::HandleImportSteps(TSharedRef<FMantlePlaceImportSteps> Steps)
+{
+	// One import at a time, so one window: the previous run's summary gives way to the new run.
+	if (ImportWindow.IsValid())
+	{
+		ImportWindow->Close();
+	}
+	ImportWindow = FMantlePlaceImportWindowHost::Open(
+		Steps, FSimpleDelegate::CreateSP(this, &SMantlePlaceVaultPanel::HandleImportWindowCancel));
+}
+
+void SMantlePlaceVaultPanel::HandleImportWindowCancel()
+{
+	if (Controller.IsValid())
+	{
+		Controller->CancelImport();
+	}
 }
 
 void SMantlePlaceVaultPanel::HandleAuthChanged(EMantlePlaceAuthState NewState)

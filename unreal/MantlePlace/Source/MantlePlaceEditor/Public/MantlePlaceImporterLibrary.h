@@ -9,6 +9,7 @@
 
 struct FMantlePlaceVaultManifest; // MantlePlaceImportManifest.h (out-param of ReadVaultManifest)
 struct FMantlePlaceImportSelection; // MantlePlaceArtifactHandler.h (editor-internal)
+class FMantlePlaceImportSteps;      // MantlePlaceImportStepsLogic.h (editor-internal)
 
 /**
  * Entry point for the local-zip vault-package importer. The Editor Utility Widget calls
@@ -40,7 +41,16 @@ public:
 	 * FMantlePlaceImportSelection::FromMode(Mode). Not a UFUNCTION - the selection is a plain struct.
 	 */
 	static FMantlePlaceImportResult ImportVaultPackageWithSelection(
-		const FString& ZipPath, const FMantlePlaceImportSelection& Selection);
+		const FString& ZipPath, const FMantlePlaceImportSelection& Selection, FMantlePlaceImportSteps* Steps = nullptr);
+
+	/**
+	 * ImportVaultPackage, watched by an import window: the bundle's steps are added to Steps as the
+	 * bundle is read, each moves through its states as it runs, and a cancel Steps holds takes effect at
+	 * the next step boundary (FMantlePlaceImportSteps). Steps is finished when this returns. Not a
+	 * UFUNCTION - the steps are a plain class.
+	 */
+	static FMantlePlaceImportResult ImportVaultPackageWithSteps(
+		const FString& ZipPath, EMantlePlaceImportMode Mode, FMantlePlaceImportSteps* Steps);
 
 	/**
 	 * Read + parse a bundle .zip's Metadata/manifest.json WITHOUT importing anything. Lets the local
