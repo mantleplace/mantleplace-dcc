@@ -1,12 +1,21 @@
+using System.Reflection;
+using MantlePlace.AutoCad;
 using MantlePlace.AutoCad.Tests;
-using MantlePlace.Revit.Core.Tests;
+using MantlePlace.Core;
+using MantlePlace.Core.Tests;
 
 // Headless entry point: no AutoCAD, no Civil 3D, no test framework, no network (HPS-42). Non-zero
 // exit on any failing assertion, so CI needs nothing but `dotnet run`.
 //
-// The conformance runners are the Revit suite's, compiled in (the csproj says why). This host claims
+// The conformance runners are the shared suite's, compiled in (the csproj says why). This host claims
 // every corpus group. The `manifest` group runs under this host's own key: the cases scoped to
-// `autocad` drive the import plan, and the host-invariant ones the shared reader it compiles in.
+// `autocad` drive the import plan, and the host-invariant ones the shared reader it references.
+//
+// The suite names itself the way the AutoCAD shell does (MantlePlace.AutoCad.Addin/HostRegistration.cs).
+HostIdentity.Set(
+    AutoCadBlockReader.HostKey,
+    typeof(AutoCadBlockReader).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+
 int exitCode = 0;
 exitCode |= ConformanceCorpusSelfTests.Run();
 exitCode |= VaultConformanceTests.Run();

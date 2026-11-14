@@ -4,8 +4,8 @@ using System.Reflection;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using MantlePlace.AutoCad.Addin;
-using MantlePlace.Revit.Client;
-using MantlePlace.Revit.Core;
+using MantlePlace.Client;
+using MantlePlace.Core;
 
 namespace MantlePlace.AutoCad.Addin;
 

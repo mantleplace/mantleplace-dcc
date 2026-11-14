@@ -457,7 +457,7 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
             failures.append(
                 f"FAIL: the served Platform API spec (sha256 {served['sha256'][:12]}...) is not the "
                 f"vendored one (sha256 {held['sha256'][:12]}...). Run "
-                "`python revit/tools/platform-api/sync_platform_api.py`, re-check the platform and "
+                "`python shared/tools/platform-api/sync_platform_api.py`, re-check the platform and "
                 "client cases against it, and raise the records."
             )
 

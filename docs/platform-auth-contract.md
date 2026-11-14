@@ -37,7 +37,7 @@ hydrated into the consuming project.
 The property names below are the **Unreal** spelling: `UPROPERTY`s on `UMantlePlaceAuthSystemBase`,
 each a public default compiled in and overridable through config to aim the plugin at a
 non-production stack. Revit spells the same three the same way, with the same defaults, in
-[`MantlePlaceEndpoints`](../revit/src/MantlePlace.Revit.Client/MantlePlaceEndpoints.cs) — alongside
+[`MantlePlaceEndpoints`](../shared/src/MantlePlace.Client/MantlePlaceEndpoints.cs) — alongside
 `ApiBaseUrl`, `https://mantle.place`, which is the vault client's base rather than part of sign-in.
 Revit's overrides are read from `%LOCALAPPDATA%\MantlePlace\config.json`, a file nothing produces at
 packaging time and whose absence, unreadability or malformation falls back to the compiled defaults
@@ -119,7 +119,7 @@ A new spelling for "this grant is dead" is therefore a breaking change on the pl
 though nothing in the schema moves: the client reads it as transient and keeps retrying.
 
 Both hosts implement exactly this list — Revit in
-[`TokenGrants.IsDefinitiveRejection`](../revit/src/MantlePlace.Revit.Core/TokenGrant.cs), Unreal in
+[`TokenGrants.IsDefinitiveRejection`](../shared/src/MantlePlace.Core/TokenGrant.cs), Unreal in
 `FMantlePlaceAuthLogic` — so a code added on one side and not the other is a divergence, not a
 host-specific nicety.
 

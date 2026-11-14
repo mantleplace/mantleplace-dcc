@@ -1,8 +1,8 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using MantlePlace.Revit.Client;
-using MantlePlace.Revit.Core;
+using MantlePlace.Client;
+using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
@@ -11,7 +11,7 @@ namespace MantlePlace.Revit.Addin;
 /// <para>
 /// ⛔<c>HPS-05</c>: the system browser, never an embedded webview and never a password field in
 /// Revit. Every decision — PKCE, state validation, which failure a callback is — is made in
-/// <c>MantlePlace.Revit.Core</c> and executed by <c>MantlePlace.Revit.Client</c>. This command is
+/// <c>MantlePlace.Core</c> and executed by <c>MantlePlace.Client</c>. This command is
 /// the button.
 /// </para>
 /// <para>

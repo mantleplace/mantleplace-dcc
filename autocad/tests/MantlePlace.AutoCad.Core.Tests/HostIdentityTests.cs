@@ -1,6 +1,6 @@
-using MantlePlace.Revit.Client;
-using MantlePlace.Revit.Core;
-using MantlePlace.Revit.Core.Tests;
+using MantlePlace.Client;
+using MantlePlace.Core;
+using MantlePlace.Core.Tests;
 using System.Text.Json;
 
 namespace MantlePlace.AutoCad.Tests;

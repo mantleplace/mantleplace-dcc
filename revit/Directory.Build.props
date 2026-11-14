@@ -17,7 +17,7 @@
 
   <PropertyGroup>
     <!--
-      The Revit plugin's version, and its ONE home. It flows into all three assemblies, into the
+      The Revit plugin's version, and its ONE home. It flows into the add-in assembly, into the
       import log and the terrain probe report (PluginVersion), and into the release tag and asset
       name, which are `revit-<this>` and `MantlePlace-Revit-<this>.zip`: string equality, no `v`,
       no second place to forget. See docs/adr/0001-per-host-release-tracks.md.
@@ -65,21 +65,21 @@
     source a build came from. It cannot say whether that source had uncommitted changes, and a
     maintainer iterating locally is dirty most of the time, so two builds naming the same commit
     are not the same code, and nothing on screen says so. This appends "-dirty" after the sha when
-    anything under revit/ is modified, staged or untracked. Scoped to revit/ because that is what
-    the assemblies are built from: a stray edit under unreal/ is not this build's business.
+    anything under revit/ or shared/ is modified, staged or untracked. Scoped to those two because
+    they are what the assemblies are built from: a stray edit under unreal/ is not this build's business.
 
     Runs after the SDK's own source-control step has set SourceRevisionId and before the assembly
     attributes are generated, so it edits the value at the one moment it exists and is not yet
     used. Skipped when there is no sha to append to (no git on PATH, no repository), because a
     marker with nothing to mark is noise. A hosted runner is always clean, so CI never sees it.
 
-    BuildIdentity in MantlePlace.Revit.Core is the one reader of this shape; keep the two together.
+    BuildIdentity in the shared MantlePlace.Core is the one reader of this shape; keep the two together.
   -->
   <Target Name="MarkDirtySourceRevision"
           AfterTargets="InitializeSourceControlInformation"
           BeforeTargets="GetAssemblyVersion"
           Condition="'$(SourceRevisionId)' != '' and !$(SourceRevisionId.EndsWith('-dirty'))">
-    <Exec Command="git status --porcelain --untracked-files=all -- &quot;$(MSBuildThisFileDirectory).&quot;"
+    <Exec Command="git status --porcelain --untracked-files=all -- &quot;$(MSBuildThisFileDirectory).&quot; &quot;$(MSBuildThisFileDirectory)..\shared&quot;"
           WorkingDirectory="$(MSBuildThisFileDirectory)"
           ConsoleToMSBuild="true"
           IgnoreExitCode="true"

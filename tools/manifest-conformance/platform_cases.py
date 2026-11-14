@@ -15,7 +15,7 @@ behaviour the platform does not have:
 - the case's `status` and `code` expectations say what the response says.
 
 Two copies of the spec are read. Pull requests read the vendored copy beside the generated .NET
-client (`revit/src/MantlePlace.PlatformApi/Generated/openapi.json`), which `ci-platform-api` keeps
+client (`shared/src/MantlePlace.PlatformApi/Generated/openapi.json`), which `ci-platform-api` keeps
 equal to the served one, so a pull request fetches nothing. The scheduled live run fetches the
 served copy too.
 
@@ -43,8 +43,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 PLATFORM_GROUPS = frozenset({"platform", "client"})
 
 #: The spec the generated .NET client was generated from, vendored by
-#: revit/tools/platform-api/sync_platform_api.py and kept current by ci-platform-api.
-VENDORED_SPEC = _REPO_ROOT / "revit" / "src" / "MantlePlace.PlatformApi" / "Generated" / "openapi.json"
+#: shared/tools/platform-api/sync_platform_api.py and kept current by ci-platform-api.
+VENDORED_SPEC = _REPO_ROOT / "shared" / "src" / "MantlePlace.PlatformApi" / "Generated" / "openapi.json"
 
 SERVED_SPEC_URL = "https://mantle.place/api/v1/openapi.json"
 

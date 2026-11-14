@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The headless conformance suite (HPS-42). No host, no NuGet, no test framework: `dotnet run`
+    over a ~120-line harness that exits non-zero on the first failing assertion set.
+
+    Why not xUnit. The gate this suite sits beside deliberately uses stdlib unittest "so there is
+    no dependency install to rot" (.github/workflows/ci-manifest-conformance.yml), and the pure
+    core it exercises has zero references by design. A three-package test dependency would be the
+    only NuGet restore in the whole tree. If this suite ever grows past a few hundred
+    assertions, swapping TestHarness for xUnit is a contained change — nothing else references it.
+
+    TWO target frameworks, and running both is the point. The Core and Client a plugin carries are
+    net8.0, and the hosts load them on .NET 8 (an un-updated 2025 or 2026) or .NET 10 (2025.5, 2026.5
+    and 2027). That is a forward-compatibility bet, and a bet is worth exactly as much as the test
+    behind it, so the suite runs on both runtimes rather than on whichever one is convenient.
+
+    It covers the pure core AND the client (I/O, no host). The client is in scope precisely because
+    ⛔HPS-26's promote-by-rename cannot be asserted by a suite that only sees pure functions, and its
+    second enforcer is `automation-test`.
+
+    The suite runs as the Revit plugin (Program.cs sets HostIdentity): its cases were written against
+    that plugin's block and its committed add-in files, and they assert what they did before the
+    shared code moved here. The AutoCAD suite compiles in this suite's harness and conformance
+    runners and drives them as the AutoCAD plugin.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>MantlePlace.Core.Tests</RootNamespace>
+    <AssemblyName>MantlePlace.Core.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MantlePlace.Core\MantlePlace.Core.csproj" />
+    <ProjectReference Include="..\..\src\MantlePlace.Client\MantlePlace.Client.csproj" />
+    <ProjectReference Include="..\..\src\MantlePlace.PlatformApi\MantlePlace.PlatformApi.csproj" />
+  </ItemGroup>
+
+</Project>

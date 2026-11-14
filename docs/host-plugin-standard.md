@@ -864,7 +864,7 @@ privately run build and automation gate for Unreal. Not `ci-manifest-conformance
 gate only checks registration, version-floor and corpus integrity — it never runs a host suite.
 This rule binds the **pure cores only** (`HPS-02`): the shim half of a triad references the host
 application's own assemblies and cannot be built on a hosted runner. `ci-revit-tests` builds and
-tests `MantlePlace.Revit.Core` alone; the `MantlePlace.Revit.Addin` shim's gate is a developer
+tests the shared `MantlePlace.Core` and `MantlePlace.Client` alone; the `MantlePlace.Revit.Addin` shim's gate is a developer
 build plus a developer-run import check in the host. The Unreal gate solves this differently, with a pinned
 private runner that carries its own honest caveat (if that runner is offline the job
 queues rather than failing) — that trade is available to Unreal and is not obviously worth it per
@@ -874,8 +874,8 @@ host.
 
 | Assembly                   | What lives there                                                                     | CI             |
 | -------------------------- | ------------------------------------------------------------------------------------ | -------------- |
-| `MantlePlace.Revit.Core`   | pure protocol                                                                        | built + tested |
-| `MantlePlace.Revit.Client` | I/O that is **not** Revit — HTTP, loopback listener, bundle cache, secret store, zip | built + tested |
+| `MantlePlace.Core`         | pure protocol (shared)                                                               | built + tested |
+| `MantlePlace.Client`       | I/O that is **not** the host — HTTP, loopback listener, bundle cache, secret store, zip (shared) | built + tested |
 | `MantlePlace.Revit.Addin`  | Revit API only — transactions, ribbon, `ExternalEvent`                               | not built      |
 
 The shim was carrying two kinds of impure — "talks to the DCC" and "talks to the disk and the
@@ -974,15 +974,15 @@ suite).
 ## 8. Shared code — the trigger, and the reason there isn't any yet (`HPS-43`)
 
 **`HPS-43` — No shared shipped-implementation code ships until a second plugin host in the same
-language exists. AutoCAD is that host, and the first form of sharing is a source include of the Revit
-plugin's host-free files, with no shared binary.** A fuller .NET SDK is extracted from shipped code only
+language exists. AutoCAD is that host, and the form of sharing is the host-neutral projects in `shared/`,
+moved there from the Revit plugin as shipped, which each host references and ships its own copy of.** A fuller .NET SDK is extracted from shipped code only
 when a further host asks for it — never speculatively.
 
 The reasoning is worth keeping attached to the rule: an SDK designed before its
-second consumer exists encodes one host's assumptions and then has to be un-encoded. Including the
-working, shipped Revit files at the AutoCAD plugin's build means the shared code is answering questions two
-hosts actually asked, and a source include ships inside each host's own binary, so no host depends on a
-shared one.
+second consumer exists encodes one host's assumptions and then has to be un-encoded. Moving the
+working, shipped Revit files into `shared/` unchanged means the shared code is answering questions two
+hosts actually asked, and each host ships its own copy of the shared assemblies, so no host depends on
+another's install.
 
 The trigger's scope is shipped protocol code only. The conformance harness is **not** inside it:
 corpus readers are re-implemented per host permanently (`HPS-46`), and one .NET host is no design
@@ -991,7 +991,7 @@ pressure — the trigger MUST NOT fire early on the harness's account.
 Until that trigger fires, the share model is **specifications plus this corpus** — which is what
 every rule above is.
 
-_Enforcer:_ `doc-only` (the trigger is a decision-log entry when a further host asks for more than the source include).
+_Enforcer:_ `doc-only` (the trigger is a decision-log entry when a further host asks for more than the shared projects).
 
 ---
 

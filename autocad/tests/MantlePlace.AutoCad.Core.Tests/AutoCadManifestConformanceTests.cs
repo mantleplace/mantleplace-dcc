@@ -1,5 +1,5 @@
-using MantlePlace.Revit.Core;
-using MantlePlace.Revit.Core.Tests;
+using MantlePlace.Core;
+using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
@@ -24,7 +24,7 @@ using CorpusCase = ConformanceCorpus.CorpusCase;
 /// </remarks>
 internal static class AutoCadManifestConformanceTests
 {
-    internal const string HostKey = HostIdentity.Id;
+    internal const string HostKey = AutoCadBlockReader.HostKey;
 
     internal static readonly HashSet<string> ConsumedExpectationKeys =
     [

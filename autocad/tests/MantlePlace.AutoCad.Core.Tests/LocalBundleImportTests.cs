@@ -1,8 +1,8 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
-using MantlePlace.Revit.Client;
-using MantlePlace.Revit.Core.Tests;
+using MantlePlace.Client;
+using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 

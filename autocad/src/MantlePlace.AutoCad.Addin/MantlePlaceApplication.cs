@@ -2,8 +2,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows.Threading;
 using Autodesk.AutoCAD.ApplicationServices;
-using MantlePlace.Revit.Client;
-using MantlePlace.Revit.Core;
+using MantlePlace.Client;
+using MantlePlace.Core;
 using AcApplication = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MantlePlace.AutoCad.Addin;

@@ -1,0 +1,117 @@
+using System.Reflection;
+using MantlePlace.Core;
+using MantlePlace.Core.Tests;
+
+// Headless entry point: no host, no test framework, no network (HPS-42). Non-zero exit on any
+// failing assertion, so CI needs nothing but `dotnet run`.
+//
+// The suite runs as the Revit plugin, the host its cases were written against, so it names itself
+// the way the Revit shell does (revit/src/MantlePlace.Revit.Addin/HostRegistration.cs).
+HostIdentity.Set(
+    "revit",
+    typeof(ConformanceCorpus).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+
+int exitCode = 0;
+exitCode |= ManifestConformanceTests.Run();
+exitCode |= ConformanceCorpusSelfTests.Run();
+exitCode |= ManifestReaderTests.Run();
+exitCode |= ManifestMajorTwoTests.Run();
+exitCode |= HostBlockPrecedenceTests.Run();
+exitCode |= ImportPlannerTests.Run();
+exitCode |= ImportLayerTests.Run();
+exitCode |= ImportLayerLinksTests.Run();
+exitCode |= RememberedChoiceTests.Run();
+exitCode |= SurfacePointsTests.Run();
+exitCode |= SurfaceTinTests.Run();
+exitCode |= PublishedContourTests.Run();
+exitCode |= PublishedContourPlanTests.Run();
+exitCode |= SiteVectorTests.Run();
+exitCode |= GeoPackageReaderTests.Run();
+exitCode |= GeoPackageFileTests.Run();
+exitCode |= VectorCarrierPlanTests.Run();
+exitCode |= SiteRingTests.Run();
+exitCode |= HostFramePlacementTests.Run();
+exitCode |= HazardPlanTests.Run();
+exitCode |= ProjectionConformanceTests.Run();
+exitCode |= CacheKeySanitiserTests.Run();
+exitCode |= ImportStepLifetimeTests.Run();
+exitCode |= SiteCompanionPathTests.Run();
+exitCode |= PngHeaderTests.Run();
+exitCode |= SiteBoundaryIdentityTests.Run();
+exitCode |= FootprintExtentTests.Run();
+exitCode |= TerrainIdentityTests.Run();
+exitCode |= HeightDatumTests.Run();
+exitCode |= TreeIdentityTests.Run();
+exitCode |= FidelityLevelTests.Run();
+exitCode |= TreeFamilyTests.Run();
+exitCode |= ShrubFamilyTests.Run();
+exitCode |= PlantingSummaryTests.Run();
+exitCode |= FamilyFileStoreTests.Run();
+exitCode |= AttributionTests.Run();
+exitCode |= OdblContentTests.Run();
+exitCode |= BuildingIdentityTests.Run();
+exitCode |= SiteModelReaderTests.Run();
+exitCode |= SiteContextTests.Run();
+exitCode |= DrapeLayeringTests.Run();
+exitCode |= SubDivisionDrapeTests.Run();
+exitCode |= SubDivisionMaterialTests.Run();
+exitCode |= LandPlanTests.Run();
+exitCode |= GroundCutsTests.Run();
+exitCode |= RoadIdentityTests.Run();
+exitCode |= TerrainSmoothingTests.Run();
+exitCode |= DrapeAnchorTests.Run();
+exitCode |= AdjacentBundleTests.Run();
+exitCode |= SurfaceAgreementTests.Run();
+exitCode |= TerrainBaseTests.Run();
+exitCode |= SurfaceSanitiserTests.Run();
+exitCode |= ImportFailurePolicyTests.Run();
+exitCode |= SlowStepNoticeTests.Run();
+exitCode |= StagedImportTests.Run();
+exitCode |= ImportChunkingTests.Run();
+exitCode |= ReadinessReasonTests.Run();
+exitCode |= LocalBundleArchiveTests.Run();
+exitCode |= OpenLogsTests.Run();
+exitCode |= VectorDocumentSelfTests.Run();
+exitCode |= AddinFaultTests.Run();
+exitCode |= InstalledBuildTests.Run();
+exitCode |= AuthConformanceTests.Run();
+exitCode |= AuthClientTests.Run();
+exitCode |= AccountRibbonTests.Run();
+exitCode |= HelpLinksTests.Run();
+exitCode |= FeedbackLinkTests.Run();
+exitCode |= ImportFeedbackPromptTests.Run();
+exitCode |= RibbonImageryTests.Run();
+exitCode |= WindowLabelsTests.Run();
+exitCode |= ImportWindowStackingTests.Run();
+exitCode |= VaultRowsTests.Run();
+exitCode |= DeliveryHeaderTests.Run();
+exitCode |= VaultConformanceTests.Run();
+exitCode |= MaterializeJobTests.Run();
+exitCode |= CompleteOrderTests.Run();
+exitCode |= PrepareNoticeTests.Run();
+exitCode |= PrepareWatcherTests.Run();
+exitCode |= VaultNewsTests.Run();
+exitCode |= AnnouncedOrderStoreTests.Run();
+exitCode |= VaultNewsCheckerTests.Run();
+exitCode |= InterruptedPreparesTests.Run();
+exitCode |= InterruptedPrepareStoreTests.Run();
+exitCode |= PrepareRejoinerTests.Run();
+exitCode |= CacheConformanceTests.Run();
+exitCode |= BundleCacheTests.Run();
+exitCode |= AutodeskBundleManifestTests.Run();
+exitCode |= ExportProtocolTests.Run();
+exitCode |= ExportsClientTests.Run();
+exitCode |= RealtimeFramesTests.Run();
+exitCode |= RealtimeClientTests.Run();
+exitCode |= PlatformApiTests.Run();
+exitCode |= PlatformConformanceTests.Run();
+exitCode |= ConnectedHostTests.Run();
+exitCode |= CuratorExtentTests.Run();
+exitCode |= ShimWindowTests.Run("revit/src/MantlePlace.Revit.Addin", "shim windows");
+
+if (exitCode == 0)
+{
+    Console.WriteLine("OK: Revit pure cores conform to the shared corpus and the import policy holds.");
+}
+
+return exitCode;

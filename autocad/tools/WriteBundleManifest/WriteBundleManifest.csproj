@@ -2,7 +2,7 @@
 
   <!--
     The package script's way to ask the core for the bundle manifest. The script is PowerShell and
-    the manifest is built by a pure function (AutodeskBundleManifest, compiled in from the Revit
+    the manifest is built by a pure function (AutodeskBundleManifest, from the shared
     plugin's Core), which Windows PowerShell 5.1 cannot load; a one-file console project is the
     smallest honest bridge.
 

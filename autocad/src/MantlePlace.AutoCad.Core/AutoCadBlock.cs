@@ -1,5 +1,5 @@
 using System.Text.Json;
-using MantlePlace.Revit.Core;
+using MantlePlace.Core;
 
 namespace MantlePlace.AutoCad;
 
@@ -151,7 +151,7 @@ public sealed class AutoCadBlockRead
 public static class AutoCadBlockReader
 {
     /// <summary>This host's key under <c>hosts</c>, the id the platform knows the plugin by.</summary>
-    public const string HostKey = HostIdentity.Id;
+    public const string HostKey = "autocad";
 
     /// <summary>Reads the manifest text. Never throws.</summary>
     public static AutoCadBlockRead Read(string manifestJson)

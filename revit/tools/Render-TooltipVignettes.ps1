@@ -18,7 +18,7 @@
     REVIT CAPS A TOOLTIP IMAGE AT 355 PIXELS ON ITS LONGEST SIDE, and enforces it silently: hand it
     more and the picture is clipped or dropped with no error, on a surface that only appears after a
     hover delay. The canvas below is the largest 4:3 that fits. The authority for that number is
-    MantlePlace.Revit.Core.Vignettes.MaxPixels, where the headless suite asserts it against these
+    MantlePlace.Core.Vignettes.MaxPixels, where the headless suite asserts it against these
     files' own PNG headers -- that assertion is the whole agreement between this script and the
     plugin, which is why no literal here is read from there. Change one and the other fails.
 

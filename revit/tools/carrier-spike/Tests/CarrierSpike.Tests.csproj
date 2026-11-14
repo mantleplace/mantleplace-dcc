@@ -15,7 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\MantlePlace.Revit.Core\MantlePlace.Revit.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\shared\src\MantlePlace.Core\MantlePlace.Core.csproj" />
     <Compile Include="..\Readers\*.cs" />
   </ItemGroup>
 

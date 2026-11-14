@@ -2,7 +2,8 @@
 #
 #   ./Build-TimingHarness.ps1 -Tag main-d4f3453 -SourceRoot (./Export-TimingSource.ps1 -Commit d4f3453)
 #
-# SourceRoot is a folder that contains revit\src\MantlePlace.Revit.{Core,Client,Addin}: a `git archive`
+# SourceRoot is a folder that contains revit\src\MantlePlace.Revit.Addin and the Core and Client, in
+# shared\src\MantlePlace.{Core,Client} (or revit\src\MantlePlace.Revit.{Core,Client} before the move): a `git archive`
 # export from Export-TimingSource.ps1 (preferred: it carries the commit in a file called COMMIT at its root), or a
 # git worktree ("-dirty" is appended to the commit when revit/ has changes). The plugin's three source trees and
 # the harness compile into ONE assembly named MantlePlace.Scratch.Timing.<tag>, into <work root>\builds\<tag>\out\.
@@ -27,9 +28,18 @@ $work = Resolve-TimingRoot $WorkRoot
 if ($Tag -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$') { throw "Tag '$Tag' must match ^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$" }
 $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path.TrimEnd('\')
 $tree = Join-Path $SourceRoot 'revit\src'
-foreach ($p in 'MantlePlace.Revit.Core', 'MantlePlace.Revit.Client', 'MantlePlace.Revit.Addin') {
-    if (-not (Test-Path (Join-Path $tree $p))) { throw "$SourceRoot has no revit\src\$p" }
+if (-not (Test-Path (Join-Path $tree 'MantlePlace.Revit.Addin'))) { throw "$SourceRoot has no revit\src\MantlePlace.Revit.Addin" }
+# The Core and Client moved to shared\src under host-neutral names; a source from before the move has them in revit\src.
+$shared = Join-Path $SourceRoot 'shared\src'
+if (Test-Path (Join-Path $shared 'MantlePlace.Core')) {
+    $coreDir = Join-Path $shared 'MantlePlace.Core'; $clientDir = Join-Path $shared 'MantlePlace.Client'; $platformApiDir = Join-Path $shared 'MantlePlace.PlatformApi'
+} else {
+    $coreDir = Join-Path $tree 'MantlePlace.Revit.Core'; $clientDir = Join-Path $tree 'MantlePlace.Revit.Client'; $platformApiDir = Join-Path $tree 'MantlePlace.PlatformApi'
 }
+foreach ($p in $coreDir, $clientDir) {
+    if (-not (Test-Path $p)) { throw "$SourceRoot has no $p" }
+}
+if (-not (Test-Path $platformApiDir)) { $platformApiDir = '' }
 if (-not (Test-Path (Join-Path $RevitApiDir 'RevitAPI.dll'))) { throw "no RevitAPI.dll under $RevitApiDir (the plugin compiles against Revit 2025's API)" }
 
 # The commit the sources are: a COMMIT file (git archive exports have no .git), else git, else the parameter.
@@ -39,7 +49,7 @@ $commitFile = Join-Path $SourceRoot 'COMMIT'
 if (-not $commit -and (Test-Path $commitFile)) { $commit = (Get-Content $commitFile -TotalCount 1).Trim() }
 if (-not $commit -and (Test-Path (Join-Path $SourceRoot '.git'))) {
     $commit = (& git -C $SourceRoot rev-parse HEAD 2>$null | Select-Object -First 1)
-    $status = (& git -C $SourceRoot status --porcelain --untracked-files=all -- revit 2>$null)
+    $status = (& git -C $SourceRoot status --porcelain --untracked-files=all -- revit shared 2>$null)
     if ($status) { $dirty = $true }
 }
 if (-not $commit) { $commit = 'unknown' }
@@ -82,7 +92,7 @@ $log = Join-Path $buildDir 'build.log'
 Write-Host "building tag '$Tag' ($assemblyName) from $SourceRoot @ $commitLabel"
 & dotnet build (Join-Path $proj 'TimingHarness.csproj') -c Release -o $outDir --nologo -v minimal `
     "-p:HarnessTag=$Tag" "-p:HarnessAssemblyName=$assemblyName" "-p:HarnessSourceCommit=$commitLabel" `
-    "-p:Tree=$tree" "-p:RevitApiDir=$RevitApiDir" "-p:HarnessVerify=$verify" 2>&1 | Tee-Object -FilePath $log | Select-Object -Last 25
+    "-p:Tree=$tree" "-p:CoreDir=$coreDir" "-p:ClientDir=$clientDir" "-p:PlatformApiDir=$platformApiDir" "-p:RevitApiDir=$RevitApiDir" "-p:HarnessVerify=$verify" 2>&1 | Tee-Object -FilePath $log | Select-Object -Last 25
 if ($LASTEXITCODE -ne 0) { throw "dotnet build failed (exit $LASTEXITCODE); see $log" }
 $dll = Join-Path $outDir "$assemblyName.dll"
 if (-not (Test-Path $dll)) { throw "build reported success but $dll is missing" }

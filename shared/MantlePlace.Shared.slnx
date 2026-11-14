@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MantlePlace.Core/MantlePlace.Core.csproj" />
+    <Project Path="src/MantlePlace.PlatformApi/MantlePlace.PlatformApi.csproj" />
+    <Project Path="src/MantlePlace.Client/MantlePlace.Client.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj" />
+  </Folder>
+</Solution>

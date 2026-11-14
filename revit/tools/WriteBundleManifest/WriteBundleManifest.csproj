@@ -2,12 +2,12 @@
 
   <!--
     The package script's way to ask the core for the bundle manifest. The script is PowerShell and
-    the manifest is built by a pure function in MantlePlace.Revit.Core, which a .NET 8 assembly
+    the manifest is built by a pure function in MantlePlace.Core, which a .NET 8 assembly
     Windows PowerShell 5.1 cannot load; a one-file console project is the smallest honest bridge.
 
     Not shipped, and not run in CI: the package script is the only caller (it cannot run in CI
     either, tools/Package-MantlePlaceRevit.ps1). The function it calls IS covered, in
-    MantlePlace.Revit.Core.Tests. NO NUGET PACKAGES, same as the rest of the tree.
+    MantlePlace.Core.Tests. NO NUGET PACKAGES, same as the rest of the tree.
   -->
 
   <PropertyGroup>
@@ -18,7 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\MantlePlace.Revit.Core\MantlePlace.Revit.Core.csproj" />
+    <ProjectReference Include="..\..\..\shared\src\MantlePlace.Core\MantlePlace.Core.csproj" />
   </ItemGroup>
 
 </Project>

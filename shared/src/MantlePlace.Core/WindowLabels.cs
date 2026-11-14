@@ -1,0 +1,356 @@
+using System.Globalization;
+
+namespace MantlePlace.Core;
+
+/// <summary>
+/// The words on the windows this plugin opens — the vault, sign-in and import windows: their title
+/// bars, their headings, their button faces and, for the import window, its step rows and their
+/// states.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Here rather than inline in the shim for the reason every other decision in this assembly is
+/// (<c>HPS-02</c>, <c>HPS-42</c>): CI never builds the shim, so a string written there is checked by
+/// review alone. What is left in the shim is assignment onto a <c>Window</c> and a <c>Button</c>.
+/// </para>
+/// <para>
+/// <b>Title Case, because the host is Revit.</b> Ribbon face text already follows it — <c>Vault</c>,
+/// <c>Import Bundle</c> — for the reason set out in <c>revit/CLAUDE.md</c>: every Autodesk tab beside
+/// ours uses it, and a sentence-case verb phrase is what makes a plugin read as somebody's add-in.
+/// The windows the ribbon opens had drifted off it — <c>Prepare for Revit</c> sat beside
+/// <c>Remove download</c> in the same row — so the rule now covers them too.
+/// </para>
+/// <para>
+/// The words themselves are shared with the reference host wherever the action is shared
+/// (<c>HPS-51</c>); only the casing is Revit's. <c>Refresh</c> and <c>Import</c> are the vault
+/// panel's own labels in Unreal, and <see cref="SignInHeading"/> is
+/// <see cref="AccountRibbon.SignInFace"/> rather than a second spelling of it. <c>Vault</c> is one
+/// of the words that table fixes; <c>Prepare for Revit</c> is this host's own, and is not.
+/// </para>
+/// <para>
+/// Not named <c>WindowChrome</c>, which is what it is: WPF already has a
+/// <c>System.Windows.Shell.WindowChrome</c>, for the non-client area of a window, and a shim file
+/// that ever reaches for that one would get <c>CS0104</c> against this. Nothing in the shim builds in
+/// CI, so that collision would surface on one developer's machine and nowhere else.
+/// </para>
+/// </remarks>
+public static partial class WindowLabels
+{
+    /// <summary>
+    /// The vault browser's title bar.
+    /// </summary>
+    /// <remarks>
+    /// Was <c>Mantle Place — your vault</c>. An em dash inside a title bar is a typographic flourish
+    /// that Windows truncates first and that no Autodesk window uses; product then purpose is what
+    /// the rest of the host does.
+    /// </remarks>
+    public const string VaultWindowTitle = "Mantle Place Vault";
+
+    /// <summary>The sign-in window's title bar. Was <c>Mantle Place — signing in</c>.</summary>
+    public const string SignInWindowTitle = "Mantle Place Sign In";
+
+    /// <summary>
+    /// The vault browser's heading, beside the mark.
+    /// </summary>
+    /// <remarks>
+    /// The purpose alone, not the product again: the mark is to its left and the title bar is above
+    /// it, so "Mantle Place" here would be the third saying of it in one window. This is also the
+    /// reference host's heading over the same list.
+    /// </remarks>
+    public const string VaultHeading = "Vault";
+
+    /// <summary>The sign-in window's heading. The ribbon's own word for the action (<see cref="AccountRibbon.SignInFace"/>).</summary>
+    public const string SignInHeading = "Sign In";
+
+    /// <summary>Re-list the vault.</summary>
+    public const string Refresh = "Refresh";
+
+    /// <summary>Materialize this host's deliverables, then download them (<c>HPS-18</c>).</summary>
+    public const string PrepareForRevit = "Prepare for Revit";
+
+    /// <summary>
+    /// Import the downloaded bundle into the active project — the vault window's primary action, and
+    /// the import window's once the checklist is set: the same act, so the same word.
+    /// </summary>
+    public const string Import = "Import";
+
+    /// <summary>Evict this order from the bundle cache (<c>HPS-44</c>). Was <c>Remove download</c>.</summary>
+    public const string RemoveDownload = "Remove Download";
+
+    /// <summary>
+    /// Open the web Feedback form for the selected bundle (<c>HPS-56</c>). <c>HPS-51</c>'s words are
+    /// <c>Report a problem</c>; the casing is Revit's, as for <see cref="RemoveDownload"/>.
+    /// </summary>
+    public const string ReportProblem = "Report a Problem";
+
+    /// <summary>Stop the step in flight. Never the primary action — it undoes rather than does.</summary>
+    public const string Cancel = "Cancel";
+
+    /// <summary>Dismiss a window whose work is over.</summary>
+    public const string Close = "Close";
+
+    /// <summary>
+    /// The label beside the vault window's search field. It narrows the list by area label and
+    /// nothing else (<see cref="VaultRows.Matches"/>); the field's tooltip says so.
+    /// </summary>
+    public const string Search = "Search";
+
+    /// <summary>The search field's tooltip: what it matches, so an order id typed into it failing is not a surprise.</summary>
+    public const string SearchToolTip = "Shows only the bundles whose area label contains this text.";
+
+    /// <summary>A vault row whose listing gave no area. Was <c>area unknown</c>, beside the Title Case words below.</summary>
+    public const string AreaUnknown = "Area Unknown";
+
+    /// <summary>A vault row whose listing gave no size: ⛔<c>HPS-20</c>, unknown and never zero.</summary>
+    public const string SizeUnknown = "Size Unknown";
+
+    /// <summary>A vault row whose listing gave no manifest version.</summary>
+    public const string ManifestVersionUnknown = "Manifest Version Unknown";
+
+    /// <summary>The import window's title bar.</summary>
+    public const string ImportWindowTitle = "Mantle Place Bundle Import";
+
+    /// <summary>
+    /// The import window's heading: the glossary's name for the action, and <c>HPS-51</c>'s word for
+    /// the window that shows it running.
+    /// </summary>
+    public const string ImportHeading = "Bundle Import";
+
+    /// <summary>A step's state, as its row in the import window says it (<c>HPS-51</c>).</summary>
+    public static string StateWord(ImportStepState state) => state switch
+    {
+        ImportStepState.Waiting => "Waiting",
+        ImportStepState.Importing => "Importing",
+        ImportStepState.Done => "Done",
+        ImportStepState.Failed => "Failed",
+        ImportStepState.Cancelled => "Cancelled",
+        ImportStepState.NotRun => "Not Run",
+        _ => state.ToString(),
+    };
+
+    /// <summary>
+    /// A step's row in the import window, and its name in the log's closing line.
+    /// </summary>
+    /// <remarks>
+    /// The glossary's words, not the planner's: a curator waits on "Terrain", not on
+    /// <c>ToposurfaceFromSurfaceTin</c>, and three kinds that each build the one terrain are one row
+    /// to them. The water bodies and road surfaces are both <c>Subdivisions</c>, which is what they
+    /// become (<c>CONTEXT.md</c>), told apart by the layer they were cut from; the land use and land
+    /// cover are each a <c>Plan</c>, the glossary's land plan; the IFC's link is the
+    /// <c>Site Model</c>, and the buildings copied out of it are <c>Context Buildings</c>.
+    /// </remarks>
+    public static string StepName(ImportStepKind kind) => kind switch
+    {
+        ImportStepKind.SetSharedCoordinates => "Shared Coordinates",
+        ImportStepKind.SetSiteLocation => "Site Location",
+        ImportStepKind.SiteContextView => "Site Context View",
+        ImportStepKind.AttributionAndProvenance => "Attribution",
+        _ when ImportLayers.Of(kind) is { } layer => LayerName(layer),
+
+        // A kind added to the planner and never named here still gets a row rather than a throw on
+        // Revit's thread; the test that walks the enum is what makes it get a real name.
+        _ => kind.ToString(),
+    };
+
+    /// <summary>
+    /// A layer's row in the checklist, and the name of the step that builds it — one word for one
+    /// thing, before the import and during it.
+    /// </summary>
+    public static string LayerName(ImportLayer layer) => KnownLayerName(layer) ?? layer.ToString();
+
+    /// <summary>
+    /// A layer's row label, or <c>null</c> for a layer nobody named — which <see cref="LayerName"/> covers
+    /// with the enum's name rather than a throw on Revit's thread. The test that walks the layers reads
+    /// this, so a layer added without a label fails there and names itself; <c>Terrain</c> and
+    /// <c>Planting</c> read the same as their enum names, so the fallback alone could not tell.
+    /// </summary>
+    public static string? KnownLayerName(ImportLayer layer) => layer switch
+    {
+        ImportLayer.Terrain => "Terrain",
+        ImportLayer.PublishedContours => "Published Contours",
+        ImportLayer.ContextBuildings => "Context Buildings",
+        ImportLayer.SiteModel => "Site Model",
+        ImportLayer.RoadCentrelines => "Road Centrelines",
+        ImportLayer.LandUsePlan => "Land Use Plan",
+        ImportLayer.LandCoverPlan => "Land Cover Plan",
+        ImportLayer.WaterSubdivisions => "Water Subdivisions",
+        ImportLayer.RoadSubdivisions => "Road Subdivisions",
+        ImportLayer.Planting => "Planting",
+        ImportLayer.FloodZones => "Flood Zones",
+        ImportLayer.SteepGround => "Steep Ground",
+        ImportLayer.ImageryDrape => "Imagery Drape",
+        _ => null,
+    };
+
+    /// <summary>
+    /// The heading over the checklist, before the steps run (<c>HPS-51</c>).
+    /// </summary>
+    /// <remarks>
+    /// Not <c>Layers</c>, though that is what the rows are to the people who built this. The glossary
+    /// keeps <em>layer</em> off the user's page — a landscape layer block, a paint layer and a vector
+    /// layer are three different things already — and the reference host, whose picker is still to
+    /// come, has landscape layers and data layers of its own on the same screen.
+    /// </remarks>
+    public const string IncludeHeading = "Include";
+
+    /// <summary>
+    /// What a disabled box says beside it: the layer it cannot be imported without (<c>HPS-51</c>).
+    /// </summary>
+    public static string Needs(ImportLayer prerequisite) => $"Needs {LayerName(prerequisite)}";
+
+    /// <summary>
+    /// The heading below the checklist, over what the bundle holds and the import cannot offer
+    /// (<c>HPS-51</c>).
+    /// </summary>
+    public const string UnavailableHeading = "Unavailable";
+
+    /// <summary>
+    /// What the window says under the rows a bundle holds and cannot offer, for one reason — or
+    /// <c>null</c> for a reason the window says nothing about.
+    /// </summary>
+    /// <param name="code">Why the planner skipped the rows.</param>
+    /// <param name="count">How many rows the sentence is said under.</param>
+    /// <remarks>
+    /// <para>
+    /// The curator's register: what is missing and what to do, in the words <c>HPS-51</c> fixes. The
+    /// planner's own sentence, EPSG codes and file paths included, is the log's register and stays
+    /// there (<see cref="SkippedImport.Reason"/>). Decided per code, so every code has a decision a
+    /// test can read.
+    /// </para>
+    /// <para>
+    /// A bundle that <em>says</em> it holds nothing of a layer is silent here: a layer declared
+    /// absent had nothing in the area to give, and road surfaces never derived are not in the vault to
+    /// fetch. A bundle that says nothing of a layer is not — it may have been cut before the order
+    /// asked for it. Nor does a tier another tier replaced, a skip that is no row's, or a choice.
+    /// </para>
+    /// </remarks>
+    public static string? UnavailableReason(SkipReasonCode code, int count)
+    {
+        bool many = count > 1;
+        string these = many ? "these" : "this";
+        string them = many ? "them" : "it";
+
+        return code switch
+        {
+            // A bundle with no origin, or with copies only in a frame this host cannot place, was cut
+            // before the format carried what Revit needs; a re-download is cut again.
+            SkipReasonCode.NoSiteFrame or SkipReasonCode.CoordinateSystemNotSupported or SkipReasonCode.PredatesHostCopy =>
+                $"This bundle was built before Revit could receive {these}. Download the bundle again from your vault to get {them}.",
+            // The bundle says nothing of it: cut before the order asked for it, or with nothing
+            // there to cut. The planner's own sentence sends the curator to the vault; so does this.
+            SkipReasonCode.ArtifactNotInManifest =>
+                $"This bundle does not carry {these}. Add {them} to the order in your vault, then download the bundle again.",
+            SkipReasonCode.EntryNotInArchive =>
+                $"This bundle is missing the {(many ? "files" : "file")} for {these}. Download the bundle again from your vault to get {them}.",
+            SkipReasonCode.UnitNotUnderstood =>
+                $"This bundle measures {these} in a unit this version of Mantle Place cannot read. Update Mantle Place to import {them}.",
+
+            // An extent nothing corroborates and an image nobody can decode are the same fact to the
+            // curator: the photograph cannot be put on the right ground.
+            SkipReasonCode.ExtentNotCorroborated =>
+                $"Mantle Place could not confirm which ground {these} {(many ? "cover" : "covers")}. Download the bundle again from your vault to get {them}.",
+
+            SkipReasonCode.DeclaredAbsent
+                or SkipReasonCode.DerivedLayerNotPublished
+                or SkipReasonCode.SupersededByFallback
+                or SkipReasonCode.FallbackSuppressed
+                or SkipReasonCode.NoSurveyPoint
+                or SkipReasonCode.NoGeographicOrigin
+                or SkipReasonCode.GeographicOriginOutOfRange
+                or SkipReasonCode.LeftOutByChoice
+                or SkipReasonCode.LevelUnavailable => null,
+
+            // A code added to the planner and never decided here shows nothing rather than a guess;
+            // the test that walks the enum is what makes it get a decision.
+            _ => null,
+        };
+    }
+
+    /// <summary>How far a chunked step has got, in the elements it creates: <c>250 of 600</c>.</summary>
+    public static string ProgressText(StepProgress progress)
+        => string.Format(CultureInfo.InvariantCulture, "{0:N0} of {1:N0}", progress.Done, progress.Total);
+
+    /// <summary>
+    /// What the status line says while Revit is inside a commit.
+    /// </summary>
+    /// <remarks>
+    /// Prose, not one of <c>HPS-51</c>'s labels: a status line is bound by the glossary. It names
+    /// Revit as the one working, because that is the truth of it — the plugin has handed Revit the
+    /// transaction and is waiting like the curator is — and it is the same fact the log's notice
+    /// explains at length before the step (<see cref="SlowStepNotice"/>).
+    /// </remarks>
+    public const string RevitIsCommitting = "Revit is committing";
+
+    /// <summary>
+    /// What the status line calls the work after the last step, which belongs to no row: smooth
+    /// shading the terrain, when the drape did not settle it. Prose, like the rest of the line.
+    /// </summary>
+    public const string Finishing = "Finishing";
+
+    /// <summary>How long the step in flight has run, as the window's clock says it: <c>4 min 10 s</c>.</summary>
+    /// <remarks>
+    /// Whole seconds, truncated, so the clock never claims a minute it has not reached. Past an hour
+    /// the seconds are dropped: a step that long is read in minutes. A negative span — a clock read
+    /// across the moment it was reset — reads as nothing elapsed rather than as a minus sign.
+    /// </remarks>
+    public static string Elapsed(TimeSpan elapsed)
+    {
+        long seconds = Math.Max(0L, (long)elapsed.TotalSeconds);
+        return seconds switch
+        {
+            < 60 => string.Format(CultureInfo.InvariantCulture, "{0} s", seconds),
+            < 3_600 => string.Format(CultureInfo.InvariantCulture, "{0} min {1} s", seconds / 60, seconds % 60),
+            _ => string.Format(CultureInfo.InvariantCulture, "{0} h {1} min", seconds / 3_600, seconds % 3_600 / 60),
+        };
+    }
+
+    /// <summary>
+    /// The import window's status line: the step in flight, how far it has got, whether Revit is
+    /// committing it, how long it has run, and a cancel that is waiting for its boundary; or the work
+    /// after the last step. Empty between steps.
+    /// </summary>
+    /// <param name="view">The run, as Revit's thread last posted it.</param>
+    /// <param name="elapsed">How long the step in flight has run, by the window's own clock.</param>
+    /// <remarks>
+    /// A step that is one commit has no count to show, because there is no part of a commit to count;
+    /// its clock is what says it is still going. <see cref="SlowStepNotice"/> is where the log says so.
+    /// </remarks>
+    public static string StatusLine(ImportRunView view, TimeSpan elapsed)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        string name;
+        if (view.Current is { } kind)
+        {
+            name = StepName(kind);
+        }
+        else if (view.Finishing)
+        {
+            name = Finishing;
+        }
+        else
+        {
+            return string.Empty;
+        }
+
+        List<string> parts = [];
+        if (view.Progress is { Total: > 0 } progress)
+        {
+            parts.Add(ProgressText(progress));
+        }
+
+        if (view.Committing)
+        {
+            parts.Add(RevitIsCommitting);
+        }
+
+        parts.Add(Elapsed(elapsed));
+        string line = $"{name}: {string.Join(", ", parts)}";
+
+        // Only over a step: once the steps are over the cancel has landed, and the finishing work is
+        // not something it stops.
+        return view.CancelRequested && view.Current is not null
+            ? line + ". Cancelling at the next step or chunk."
+            : line;
+    }
+}

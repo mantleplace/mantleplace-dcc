@@ -138,9 +138,9 @@ That is what it is for.
 
 The same rule runs over the glyphs, which ship in two sizes rather than five: at 150% the 16 px slot
 wants 24 px, there is no 24 px glyph, so the 32 px render goes in and Revit scales it down. The rule
-is one function — [`RenderSizes`](../../../MantlePlace.Revit.Core/RenderSizes.cs) — and both
-[`MarkRenders`](../../../MantlePlace.Revit.Core/MarkRenders.cs) and
-[`RibbonGlyphs`](../../../MantlePlace.Revit.Core/RibbonGlyphs.cs) are that table expressed over it,
+is one function — [`RenderSizes`](../../../../../shared/src/MantlePlace.Core/RenderSizes.cs) — and both
+[`MarkRenders`](../../../../../shared/src/MantlePlace.Core/MarkRenders.cs) and
+[`RibbonGlyphs`](../../../../../shared/src/MantlePlace.Core/RibbonGlyphs.cs) are that table expressed over it,
 in the pure core where a machine with no Revit licence can assert them.
 
 The window headers are the third caller: `BrandChrome` fills a 32 logical px slot beside each
@@ -152,6 +152,6 @@ system scale once at startup and never again.
 a tooltip image at 355 px on its longest side, so there is no headroom for a second, larger render to
 pick between — a 2× render of a 355 px picture is 710 px, twice what the ribbon accepts. One file per
 theme, at 96 DPI, softened by Revit on a scaled display. `RenderSizes` has nothing to decide, and
-[`Vignettes`](../../../MantlePlace.Revit.Core/Vignettes.cs) carries the cap instead, asserted by the
+[`Vignettes`](../../../../../shared/src/MantlePlace.Core/Vignettes.cs) carries the cap instead, asserted by the
 headless suite against these files' own PNG headers — because an over-large tooltip image is clipped
 or dropped **silently**, on a surface that only appears after a hover delay.

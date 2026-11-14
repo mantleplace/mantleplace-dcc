@@ -304,7 +304,7 @@ foreach ($revitVersion in $RevitVersions) {
         Copy-Item -LiteralPath $file.FullName -Destination $destination -Force
     }
 
-    # The stamp. Schema 1; InstallStamp in MantlePlace.Revit.Core is its one reader, and
+    # The stamp. Schema 1; InstallStamp in MantlePlace.Core is its one reader, and
     # Check-RevitInstall.ps1 its one comparer. installedAt is ISO 8601 with the local offset, as
     # text, because it is read out to a human and never computed on. Key order is fixed so two
     # stamps diff cleanly.

@@ -3,7 +3,7 @@ using System.IO;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using MantlePlace.Revit.Core;
+using MantlePlace.Core;
 using Microsoft.Win32;
 
 namespace MantlePlace.Revit.Addin;
@@ -16,7 +16,7 @@ namespace MantlePlace.Revit.Addin;
 /// The whole command is orchestration — file picker, then an <see cref="ActiveImport"/> handed to
 /// <see cref="BundleImportEventHandler"/> to run staged, with the import window. Every rule it appears
 /// to enforce (the version gate, which topo path wins, whether shared coordinates may be set) is
-/// enforced in <c>MantlePlace.Revit.Core</c> and asserted headlessly there.
+/// enforced in <c>MantlePlace.Core</c> and asserted headlessly there.
 /// </para>
 /// <para>
 /// <b>The picker is skippable, and that is the point.</b> Setting

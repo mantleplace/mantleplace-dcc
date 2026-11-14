@@ -1,6 +1,6 @@
 // UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.IO;
-using MantlePlace.Revit.Core;
+using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 

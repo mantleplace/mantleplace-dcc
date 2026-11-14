@@ -15,7 +15,7 @@ to this repository; nothing a contributor needs lives only in that standard.
 The card a workflow agent reads in place of this file. `mantleplace/mantleplace-dcc` is git, Apache 2.0,
 and everything in it is world-readable.
 
-- **Editable:** `unreal/`, `revit/`, `autocad/`, `spec/`, `tools/`, `docs/`, `.githooks/`, `.github/workflows/` and the
+- **Editable:** `unreal/`, `revit/`, `autocad/`, `shared/`, `spec/`, `tools/`, `docs/`, `.githooks/`, `.github/workflows/` and the
   root files, as a pull request. New top-level paths are a DCC host or a cross-host concern, nothing else;
   names are spelled out (`mantleplace`, never `mp`).
 - **Not editable:** the auth flow (PKCE, loopback listener, token grant, auth state machine) and the secret

@@ -83,7 +83,7 @@ In practice a case is one pull request with these edits:
 2. Its entry in `index.json`, with its `reason`.
 3. Each claiming host's assertions. Revit refuses an expectation key it does not consume, so a new
    key goes into `ConsumedExpectationKeys` in
-   [`ManifestConformanceTests.cs`](../../../revit/tests/MantlePlace.Revit.Core.Tests/ManifestConformanceTests.cs)
+   [`ManifestConformanceTests.cs`](../../../shared/tests/MantlePlace.Core.Tests/ManifestConformanceTests.cs)
    beside the assertion that reads it (`HPS-46`).
 4. When the checker reports changed coverage, `check_manifest_conformance.py --update-baseline`, with
    the `coverage-baseline.json` diff committed for review.

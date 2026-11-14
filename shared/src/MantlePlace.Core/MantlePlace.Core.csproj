@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The PURE half of every triad (HPS-02): protocol behaviour only — parsing, validity decisions,
+    path resolution, state. It references NOTHING: no host API, not a NuGet package. That is what
+    makes the conformance suite runnable on a hosted runner with no host installed (HPS-42).
+
+    Every .NET host plugin references this one project (HPS-43 extracts shared code from shipped
+    code, and this is that code). A decision that differs by host reads HostIdentity, which the
+    host's shell sets at startup; nothing here is compiled differently for one host.
+
+    net8.0 rather than net10.0 on purpose. Nothing here needs .NET 10, and a net8.0 library loads
+    fine inside a net10.0 host; the suite runs on both runtimes to keep that true.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>MantlePlace.Core</RootNamespace>
+    <AssemblyName>MantlePlace.Core</AssemblyName>
+  </PropertyGroup>
+
+</Project>
