@@ -25,7 +25,8 @@ namespace MantlePlace.Revit.Core;
 /// the same module, the <c>.addin</c> inside <c>Contents</c>. AutoCAD: two builds (.NET 8 for 2025
 /// and 2026, .NET 10 for 2027), so each year names the folder of the build it loads. The entries are
 /// one per year either way because the bundle format selects by <c>RuntimeRequirements</c>, and a
-/// year that is not declared is a year the storefront will not install into.
+/// year that is not declared is a year the storefront will not install into. Each year is also its
+/// own <c>Components</c> group, because the host reads only the first requirement of a group.
 /// </para>
 /// </remarks>
 public static class AutodeskBundleManifest
@@ -172,27 +173,24 @@ public static class AutodeskBundleManifest
 
         HostProfile profile = ProfileOf(host);
 
-        // AutoCAD's autoloader reads one RuntimeRequirements per Components group: given every year's
-        // in one group it registered the bundle and loaded nothing (a live Civil 3D 2027 run), so each
-        // AutoCAD year is its own group, as Autodesk's own bundles are. Revit's layout is unchanged.
-        List<XElement> groups = [new XElement("Components")];
+        // Both hosts read one RuntimeRequirements per Components group, so each year is its own
+        // group, as Autodesk's own bundles are. Given every year's in one group, AutoCAD registered
+        // the bundle and loaded nothing (a live Civil 3D 2027 run), and Revit loaded only the first
+        // year's (revit-1.1.0 loaded in 2025 and in neither 2026 nor 2027).
+        List<XElement> groups = [];
         foreach (int year in years)
         {
             string series = SeriesFor(host, year);
-            if (host == BundleHost.AutoCad && groups[^1].HasElements)
-            {
-                groups.Add(new XElement("Components"));
-            }
-
-            XElement components = groups[^1];
-            components.Add(
+            groups.Add(
                 new XElement(
-                    "RuntimeRequirements",
-                    new XAttribute("OS", "Win64"),
-                    new XAttribute("Platform", profile.Platform),
-                    new XAttribute("SeriesMin", series),
-                    new XAttribute("SeriesMax", series)),
-                ComponentEntryFor(profile, host, year, version));
+                    "Components",
+                    new XElement(
+                        "RuntimeRequirements",
+                        new XAttribute("OS", "Win64"),
+                        new XAttribute("Platform", profile.Platform),
+                        new XAttribute("SeriesMin", series),
+                        new XAttribute("SeriesMax", series)),
+                    ComponentEntryFor(profile, host, year, version)));
         }
 
         XElement root = new(
