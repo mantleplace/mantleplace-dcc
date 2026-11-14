@@ -4,8 +4,8 @@ The AutoCAD plugin: plain AutoCAD and Civil 3D, 2025, 2026 and 2027, as one plug
 loads only when Civil 3D is running.
 
 **Status:** the plugin's tree and its packaging. The shell loads, signs you in, lists and searches
-your vault, tells you when an order arrives, and imports an order sent from the web vault into the
-active drawing, at the order's own coordinates and units. Which features each plugin supports, beside every
+your vault, tells you when an order arrives, and imports an order into the active drawing, at the
+order's own coordinates and units: one sent from the web vault, or a bundle zip already on this computer. Which features each plugin supports, beside every
 other host, is the [host support matrix](../docs/host-support.md). Agents: read [`CLAUDE.md`](CLAUDE.md)
 first.
 
@@ -20,7 +20,8 @@ other logo.
 | --- | --- | --- |
 | Sign In | `MANTLEPLACESIGNIN` | Opens your browser to sign in; AutoCAD never sees your password. A small window waits for the browser and stays out of the way. Signing in here signs you in for every Mantle Place plugin on this machine. |
 | Sign Out | `MANTLEPLACESIGNOUT` | Drops the session and forgets the stored credential. |
-| Vault | `MANTLEPLACEVAULT` | The bundles you keep, with a search box, which of them are on this machine, removing a local copy, and reporting a problem with one. Needs you signed in. There is no Prepare or download in AutoCAD yet: an order comes into a drawing as an export sent from the web vault. |
+| Vault | `MANTLEPLACEVAULT` | The bundles you keep, with a search box, which of them are on this machine, removing a local copy, and reporting a problem with one. Needs you signed in. There is no Prepare or download in AutoCAD yet: an order comes into a drawing as an export sent from the web vault, or through Import Bundle. |
+| Import Bundle | `MANTLEPLACEIMPORTBUNDLE` | Asks for a Mantle Place bundle zip on this computer and places it in the active drawing, exactly as Import does for an export from the web: the same checks, the same refusals, the same surface. It needs no account. |
 | About | `MANTLEPLACEABOUT` | Which build is loaded, whether the Civil 3D part is on, whether you are signed in, and a link to the [privacy page](https://mantle.place/privacy). |
 | Send Feedback | `MANTLEPLACEFEEDBACK` | The Mantle Place feedback form in your browser. It needs no account. Only this plugin's version and your AutoCAD year go with the link: nothing from your drawing, and nothing about you. |
 
@@ -32,6 +33,14 @@ vault. Sending an export to it fetches the bundle, checks it, and opens a window
 Pressing **Import** places the whole order in the active drawing in one go, and the window then says
 what went in and what did not, with each reason. Closing the window without importing ends the export
 as cancelled.
+
+**Import Bundle.** A bundle zip you already have (downloaded from the web vault, copied from a
+colleague, or the bundle cache's copy of one sent to this AutoCAD) goes in with **Import Bundle**. Pick
+the zip and the whole order is placed in the active drawing in one go; the command line then says what
+went in and what did not, with each reason, and the same words are written beside the zip in a file
+ending `.mantleplace-import.log`. A file that is not a Mantle Place bundle is refused and nothing is
+placed. With `FILEDIA` set to 0, or from a script, the command asks for the zip's path on the command
+line instead of opening a dialog.
 
 **What an import places.** Everything comes from the order's AutoCAD block in the bundle, and nothing
 is worked out in AutoCAD:
@@ -87,7 +96,8 @@ dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.Au
 ```
 
 It runs the shared conformance corpus over the compiled-in sources, plus the AutoCAD bundle manifest,
-the ribbon panel and the tab it goes on, the host identity the platform is told, the export receipt, the About
+the ribbon panel and the tab it goes on, the host identity the platform is told, the export receipt, what
+Import Bundle refuses and that it reaches the same importer as an export, the About
 text and the Civil 3D presence decision.
 
 Building the shell and the Civil 3D part needs the Autodesk assemblies. `AutoCadApiDirNet10`

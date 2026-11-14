@@ -92,7 +92,7 @@ come from; this table never restates one.
 | 3. Choose a level (`HPS-59`) | planned for the 3.0 reader release | planned for the 3.0 reader release | planned for the 3.0 reader release | planned for the 3.0 reader release |
 | 4. Download (`HPS-18`, `HPS-26`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
 | 5. Import, through the import window (`HPS-60`) | planned for the 3.0 reader release; **named gap: its import window has no per-layer checklist** | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
-| 6. Import a zip from disk, with no account (`HPS-61`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
+| 6. Import a zip from disk, with no account (`HPS-61`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 7. Refuse a version out of range (`HPS-31`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 8a. Show credits (`HPS-62`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
 | 8b. Show notices (`HPS-62`) | planned for the 3.0 reader release | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
