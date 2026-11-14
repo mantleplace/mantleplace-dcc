@@ -1,0 +1,222 @@
+{
+  "job_id": "imagery-reflectance",
+  "bbox": {
+    "west": -105.654086267237,
+    "south": 36.2661988583669,
+    "east": -105.638328573896,
+    "north": 36.278902896836
+  },
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "version": "2.1.0",
+  "location": {
+    "time_zone": {
+      "iana": "America/Denver",
+      "utc_offset_standard_h": -7,
+      "observes_dst": true,
+      "tzdata_version": "2026b"
+    },
+    "site_origin": {
+      "latitude": 36.27254939041837,
+      "longitude": -105.64620798739834,
+      "ellipsoidal_height_m": 2623.1,
+      "datum_height_m": 2640.9,
+      "vertical_datum": "EGM2008-orthometric"
+    }
+  },
+  "licensing": {
+    "basemap": {
+      "class": "produced_work"
+    },
+    "imagery": {
+      "class": "produced_work"
+    },
+    "elevation": {
+      "class": "produced_work"
+    },
+    "cad": {
+      "class": "produced_work"
+    },
+    "site": {
+      "class": "produced_work"
+    },
+    "mesh": {
+      "class": "produced_work"
+    },
+    "cesium_terrain": {
+      "class": "produced_work"
+    },
+    "vector": {
+      "class": "derivative_database",
+      "license": "ODbL-1.0"
+    }
+  },
+  "layout": {
+    "readme": "README.md",
+    "manifest": "Metadata/manifest.json",
+    "stac_item": "Metadata/stac-item.json",
+    "heightmap": "Elevation/Heightmap.png",
+    "imagery_cog": "Imagery/Imagery.tif"
+  },
+  "cesium_terrain": {
+    "present": true,
+    "tile_count": 1,
+    "layer_json": "Elevation/Terrain/layer.json"
+  },
+  "basemap": {
+    "present": false
+  },
+  "imagery": {
+    "present": true,
+    "cog": "Imagery/Imagery.tif",
+    "provider": "sentinel-2-l2a",
+    "gsd_m": 10,
+    "display_stretch": [
+      0,
+      3000
+    ],
+    "reflectance_scale": 0.0001,
+    "reflectance_offset": -0.1
+  },
+  "pipeline": {
+    "git_sha": "unknown",
+    "worker_image": "unknown",
+    "processed_at": "2026-01-01T00:00:00+00:00"
+  },
+  "packaging": {
+    "delivery_model": "base_on_demand",
+    "selected": [
+      "elevation.heightmap_png"
+    ],
+    "source": "legacy_full_catalog",
+    "default_applied": false
+  },
+  "file_entries": {
+    "Elevation/Heightmap.png": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32613"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "CC0-1.0",
+      "sources": [
+        {
+          "name": "Synthetic elevation",
+          "license": "CC0-1.0"
+        }
+      ],
+      "value_mapping": {
+        "encoding": "png-16bit-grayscale",
+        "min": 2577.826171875,
+        "max": 2962.585693359375,
+        "to_value": "value = min + (u16/65535)*(max - min)",
+        "value_units": "m",
+        "datum": "EGM2008-orthometric",
+        "quantization_step": 0.005871053963292515
+      }
+    },
+    "Imagery/Imagery.tif": {
+      "frame": {
+        "horizontal_crs": {
+          "code": "EPSG:32613"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "unit_to_metres": 1,
+        "axis_order": "east-north",
+        "axis_mapping": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "coordinate_mode": "absolute",
+        "pixel_convention": "pixel-is-area",
+        "row_order": "north-up"
+      },
+      "odbl_role": "none",
+      "license": "LicenseRef-Sentinel-2-Copernicus",
+      "sources": [
+        {
+          "name": "Copernicus Sentinel-2 L2A",
+          "license": "LicenseRef-Sentinel-2-Copernicus"
+        }
+      ]
+    }
+  },
+  "order_id": "ord-imagery-reflectance-1",
+  "unit_system": "metric",
+  "deliverable_class": "produced_work",
+  "updated_at": "2026-01-01T00:00:00+00:00",
+  "hosts": {
+    "unreal": {
+      "engine_min_version": "5.7",
+      "georeference": {
+        "crs_projected": "EPSG:32613",
+        "crs_geographic": "EPSG:4326",
+        "origin": {
+          "lon": -105.64620798739834,
+          "lat": 36.27254939041837,
+          "utm": {
+            "epsg": 32613,
+            "easting_m": 441959.49999999854,
+            "northing_m": 4014372.4999999995
+          },
+          "ground_orthometric_h_m": 2640.955078125
+        },
+        "planet_shape": "Flat",
+        "is_projected": true
+      },
+      "heightmap": {
+        "path": "Elevation/Heightmap.png",
+        "format": "png-16bit-grayscale",
+        "resolution": 1009,
+        "row0_is_north": true,
+        "native_gsd_m": 1,
+        "landscape_post_spacing_m": 1.4136904761904763,
+        "landscape_transform": {
+          "z_scale_percent": 75.14834403991699,
+          "scale_x_percent": 141.36904761904762,
+          "scale_y_percent": 138.98809523809524,
+          "location_z_offset_cm": 277020.59326171875,
+          "section_size_quads": 63,
+          "sections_per_component": 2,
+          "component_count_x": 8,
+          "component_count_y": 8
+        },
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "readiness": {
+        "landscape": {
+          "present": true
+        },
+        "mesh_terrain": {
+          "present": true,
+          "tile_count": 50
+        },
+        "mesh_import": {
+          "present": true
+        }
+      },
+      "file_frame": {
+        "type": "projected",
+        "crs": "EPSG:32613",
+        "horizontal_unit": "m",
+        "vertical_unit": "m"
+      }
+    }
+  }
+}

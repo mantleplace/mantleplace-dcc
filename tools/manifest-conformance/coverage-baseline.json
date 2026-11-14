@@ -12,7 +12,7 @@
   ],
   "platformApi": {
     "version": "1",
-    "sha256": "3af12bb8936dee58b48d653e82d88e125c2d74929dad32754caf6a85bf8ad2cf"
+    "sha256": "21f89376e78ec9c3c494094c9b86ca666aaa50fcce43818a75d26b76aa603de9"
   },
   "cases": {
     "auth.browserPageVectors": [
@@ -208,7 +208,22 @@
     "manifest.heightmapMissingSha": [
       "unreal"
     ],
+    "manifest.heightmapVerticalTierIgnored": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
     "manifest.hostFramesIgnored": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
+    "manifest.imageryReflectanceIgnored": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
+    "manifest.imageryReflectanceNull": [
       "autocad",
       "revit",
       "unreal"
@@ -400,6 +415,9 @@
       "unreal"
     ],
     "manifest.treePointsStatedFrame": [
+      "unreal"
+    ],
+    "manifest.unrealHeightmapVerticalTier": [
       "unreal"
     ],
     "manifest.unrealPublicRecordsFolder": [

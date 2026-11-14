@@ -1176,7 +1176,7 @@
       "get": {
         "operationId": "listVaultBundles",
         "summary": "The curator bundles",
-        "description": "The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import.",
+        "description": "The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import. A 3.0 bundle also carries mpb3: the level recommended for the asking host and site, the size and counts of Max, Med and Min, and its three Extras, each with the download a signed-in plugin sends. The 3.0 form is published ahead of the behaviour and is not served yet; the examples are for a plugin test double and follow the draft tree of the 3.0 spec, which may still rename files.",
         "tags": [
           "Vault"
         ],
@@ -1449,6 +1449,290 @@
                               "orderAdjacent"
                             ],
                             "additionalProperties": false
+                          },
+                          "mpb3": {
+                            "description": "Present only on a 3.0 bundle (not served yet): the recommended level for the asking host and site, the size and counts of each of the three levels, and the Extras. A 2.x bundle has no mpb3 member and every other member is as it was; on a 3.0 bundle, sizeBytes and download.formats describe the Max download.",
+                            "type": "object",
+                            "properties": {
+                              "version": {
+                                "type": "string",
+                                "const": "3.0"
+                              },
+                              "recommendedLevel": {
+                                "type": "string",
+                                "enum": [
+                                  "Max",
+                                  "Med",
+                                  "Min"
+                                ],
+                                "description": "The highest level expected to import in about five minutes on the reference machine, for the host that asked (the Mantle-Place-Client header) and this site. The platform works it out; the figures behind it stay private and can change without rebuilding a bundle."
+                              },
+                              "levels": {
+                                "type": "object",
+                                "properties": {
+                                  "Max": {
+                                    "type": "object",
+                                    "properties": {
+                                      "sizeBytes": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991,
+                                        "description": "The size of the download of this level, every file, as a zip."
+                                      },
+                                      "counts": {
+                                        "type": "object",
+                                        "properties": {
+                                          "rows": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Rows across the level CSV files (Trees.csv, Roads.csv). Med is half of Max, Min a quarter."
+                                          },
+                                          "features": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Features across the GeoPackages. The georeferenced files are byte-identical at every level, so this is the same at all three."
+                                          },
+                                          "triangles": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Triangles across the meshes (Terrain.glb, Buildings.glb, Basemap.usdz, Site.usdz). Med is half of Max, Min a quarter."
+                                          },
+                                          "pixels": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Pixels of Imagery.png. A grid halves and quarters in linear resolution, so Med holds a quarter of the pixels of Max and Min a sixteenth."
+                                          }
+                                        },
+                                        "required": [
+                                          "rows",
+                                          "features",
+                                          "triangles",
+                                          "pixels"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "sizeBytes",
+                                      "counts"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "Med": {
+                                    "type": "object",
+                                    "properties": {
+                                      "sizeBytes": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991,
+                                        "description": "The size of the download of this level, every file, as a zip."
+                                      },
+                                      "counts": {
+                                        "type": "object",
+                                        "properties": {
+                                          "rows": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Rows across the level CSV files (Trees.csv, Roads.csv). Med is half of Max, Min a quarter."
+                                          },
+                                          "features": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Features across the GeoPackages. The georeferenced files are byte-identical at every level, so this is the same at all three."
+                                          },
+                                          "triangles": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Triangles across the meshes (Terrain.glb, Buildings.glb, Basemap.usdz, Site.usdz). Med is half of Max, Min a quarter."
+                                          },
+                                          "pixels": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Pixels of Imagery.png. A grid halves and quarters in linear resolution, so Med holds a quarter of the pixels of Max and Min a sixteenth."
+                                          }
+                                        },
+                                        "required": [
+                                          "rows",
+                                          "features",
+                                          "triangles",
+                                          "pixels"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "sizeBytes",
+                                      "counts"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "Min": {
+                                    "type": "object",
+                                    "properties": {
+                                      "sizeBytes": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991,
+                                        "description": "The size of the download of this level, every file, as a zip."
+                                      },
+                                      "counts": {
+                                        "type": "object",
+                                        "properties": {
+                                          "rows": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Rows across the level CSV files (Trees.csv, Roads.csv). Med is half of Max, Min a quarter."
+                                          },
+                                          "features": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Features across the GeoPackages. The georeferenced files are byte-identical at every level, so this is the same at all three."
+                                          },
+                                          "triangles": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Triangles across the meshes (Terrain.glb, Buildings.glb, Basemap.usdz, Site.usdz). Med is half of Max, Min a quarter."
+                                          },
+                                          "pixels": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991,
+                                            "description": "Pixels of Imagery.png. A grid halves and quarters in linear resolution, so Med holds a quarter of the pixels of Max and Min a sixteenth."
+                                          }
+                                        },
+                                        "required": [
+                                          "rows",
+                                          "features",
+                                          "triangles",
+                                          "pixels"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "sizeBytes",
+                                      "counts"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "Max",
+                                  "Med",
+                                  "Min"
+                                ],
+                                "additionalProperties": false,
+                                "description": "All three levels, always: every order builds Max, Med and Min."
+                              },
+                              "extras": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "enum": [
+                                        "SiteBrief",
+                                        "PlanSheets",
+                                        "TerrainTiles"
+                                      ]
+                                    },
+                                    "name": {
+                                      "type": "string",
+                                      "description": "The name a curator sees: Site Brief, Plan sheets, Terrain tiles."
+                                    },
+                                    "sizeBytes": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "download": {
+                                      "type": "object",
+                                      "properties": {
+                                        "method": {
+                                          "type": "string",
+                                          "const": "POST"
+                                        },
+                                        "path": {
+                                          "type": "string",
+                                          "description": "The download route of the bundle."
+                                        },
+                                        "body": {
+                                          "type": "object",
+                                          "properties": {
+                                            "format": {
+                                              "type": "string",
+                                              "const": "bundle"
+                                            },
+                                            "mpb3": {
+                                              "type": "object",
+                                              "properties": {
+                                                "version": {
+                                                  "type": "string",
+                                                  "const": "3.0"
+                                                },
+                                                "extra": {
+                                                  "type": "string",
+                                                  "enum": [
+                                                    "SiteBrief",
+                                                    "PlanSheets",
+                                                    "TerrainTiles"
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "version",
+                                                "extra"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "required": [
+                                            "format",
+                                            "mpb3"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "The request that mints the link; the answer is the same link answer as for a level. A signed-in plugin sends it with its bearer, as for the bundle."
+                                        }
+                                      },
+                                      "required": [
+                                        "method",
+                                        "path",
+                                        "body"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "How a signed-in plugin downloads this Extra."
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "name",
+                                    "sizeBytes",
+                                    "download"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "description": "The three Extras, each free."
+                              }
+                            },
+                            "required": [
+                              "version",
+                              "recommendedLevel",
+                              "levels",
+                              "extras"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -1474,6 +1758,260 @@
                     "bundles"
                   ],
                   "additionalProperties": false
+                },
+                "examples": {
+                  "mpb3SmallSite": {
+                    "summary": "A small site (0.25 km²): Max is recommended",
+                    "value": {
+                      "bundles": [
+                        {
+                          "id": "6f1c1d0e-3b0a-4d6e-9d57-0a6c2f8e4a11",
+                          "aoiLabel": "Austin, Congress Avenue",
+                          "createdAt": "2026-12-14T16:02:11.000Z",
+                          "areaKm2": 0.25,
+                          "status": "available",
+                          "layers": {
+                            "imagery": true,
+                            "basemap": true,
+                            "elevation": true
+                          },
+                          "manifestVersion": "3.0.0",
+                          "sizeBytes": 40475034,
+                          "sha256": "c3a9d1f0b2e84a7d5c6b19e0f4a83d27b5e1c09a6d4f3e8b7a2c1d0e9f8a7b6c",
+                          "formats": [
+                            "bundle"
+                          ],
+                          "download": {
+                            "method": "POST",
+                            "path": "/api/v1/vault/bundles/6f1c1d0e-3b0a-4d6e-9d57-0a6c2f8e4a11/download",
+                            "formats": [
+                              {
+                                "format": "bundle",
+                                "byteSize": 40475034
+                              }
+                            ]
+                          },
+                          "thumbnail": null,
+                          "deliveryModel": "complete",
+                          "extent": {
+                            "west": -97.74533,
+                            "south": 30.265,
+                            "east": -97.74087,
+                            "north": 30.2695
+                          },
+                          "mpb3": {
+                            "version": "3.0",
+                            "recommendedLevel": "Max",
+                            "levels": {
+                              "Max": {
+                                "sizeBytes": 40475034,
+                                "counts": {
+                                  "rows": 24000,
+                                  "features": 1860,
+                                  "triangles": 2400000,
+                                  "pixels": 16777216
+                                }
+                              },
+                              "Med": {
+                                "sizeBytes": 33449574,
+                                "counts": {
+                                  "rows": 12000,
+                                  "features": 1860,
+                                  "triangles": 1200000,
+                                  "pixels": 4194304
+                                }
+                              },
+                              "Min": {
+                                "sizeBytes": 27262976,
+                                "counts": {
+                                  "rows": 6000,
+                                  "features": 1860,
+                                  "triangles": 600000,
+                                  "pixels": 1048576
+                                }
+                              }
+                            },
+                            "extras": [
+                              {
+                                "id": "SiteBrief",
+                                "name": "Site Brief",
+                                "sizeBytes": 1468006,
+                                "download": {
+                                  "method": "POST",
+                                  "path": "/api/v1/vault/bundles/6f1c1d0e-3b0a-4d6e-9d57-0a6c2f8e4a11/download",
+                                  "body": {
+                                    "format": "bundle",
+                                    "mpb3": {
+                                      "version": "3.0",
+                                      "extra": "SiteBrief"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "PlanSheets",
+                                "name": "Plan sheets",
+                                "sizeBytes": 272630,
+                                "download": {
+                                  "method": "POST",
+                                  "path": "/api/v1/vault/bundles/6f1c1d0e-3b0a-4d6e-9d57-0a6c2f8e4a11/download",
+                                  "body": {
+                                    "format": "bundle",
+                                    "mpb3": {
+                                      "version": "3.0",
+                                      "extra": "PlanSheets"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "TerrainTiles",
+                                "name": "Terrain tiles",
+                                "sizeBytes": 31457,
+                                "download": {
+                                  "method": "POST",
+                                  "path": "/api/v1/vault/bundles/6f1c1d0e-3b0a-4d6e-9d57-0a6c2f8e4a11/download",
+                                  "body": {
+                                    "format": "bundle",
+                                    "mpb3": {
+                                      "version": "3.0",
+                                      "extra": "TerrainTiles"
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "mpb3LargeSite": {
+                    "summary": "A large site (63.93 km²): Med is recommended",
+                    "value": {
+                      "bundles": [
+                        {
+                          "id": "b7a52e49-81c3-4f0d-a2e4-5d1f93c6b7e2",
+                          "aoiLabel": "Austin, north metro",
+                          "createdAt": "2026-12-14T16:40:52.000Z",
+                          "areaKm2": 63.93,
+                          "status": "available",
+                          "layers": {
+                            "imagery": true,
+                            "basemap": true,
+                            "elevation": true
+                          },
+                          "manifestVersion": "3.0.0",
+                          "sizeBytes": 1811415040,
+                          "sha256": "0e5b7a9c2d4f6081a3c5e7092b4d6f81a3c5e7092b4d6f81a3c5e7092b4d6f81",
+                          "formats": [
+                            "bundle"
+                          ],
+                          "download": {
+                            "method": "POST",
+                            "path": "/api/v1/vault/bundles/b7a52e49-81c3-4f0d-a2e4-5d1f93c6b7e2/download",
+                            "formats": [
+                              {
+                                "format": "bundle",
+                                "byteSize": 1811415040
+                              }
+                            ]
+                          },
+                          "thumbnail": null,
+                          "deliveryModel": "complete",
+                          "extent": {
+                            "west": -97.77,
+                            "south": 30.3,
+                            "east": -97.6985,
+                            "north": 30.3575
+                          },
+                          "mpb3": {
+                            "version": "3.0",
+                            "recommendedLevel": "Med",
+                            "levels": {
+                              "Max": {
+                                "sizeBytes": 1811415040,
+                                "counts": {
+                                  "rows": 1400000,
+                                  "features": 212000,
+                                  "triangles": 96000000,
+                                  "pixels": 67108864
+                                }
+                              },
+                              "Med": {
+                                "sizeBytes": 1377724006,
+                                "counts": {
+                                  "rows": 700000,
+                                  "features": 212000,
+                                  "triangles": 48000000,
+                                  "pixels": 16777216
+                                }
+                              },
+                              "Min": {
+                                "sizeBytes": 1227463066,
+                                "counts": {
+                                  "rows": 350000,
+                                  "features": 212000,
+                                  "triangles": 24000000,
+                                  "pixels": 4194304
+                                }
+                              }
+                            },
+                            "extras": [
+                              {
+                                "id": "SiteBrief",
+                                "name": "Site Brief",
+                                "sizeBytes": 13526630,
+                                "download": {
+                                  "method": "POST",
+                                  "path": "/api/v1/vault/bundles/b7a52e49-81c3-4f0d-a2e4-5d1f93c6b7e2/download",
+                                  "body": {
+                                    "format": "bundle",
+                                    "mpb3": {
+                                      "version": "3.0",
+                                      "extra": "SiteBrief"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "PlanSheets",
+                                "name": "Plan sheets",
+                                "sizeBytes": 7654605,
+                                "download": {
+                                  "method": "POST",
+                                  "path": "/api/v1/vault/bundles/b7a52e49-81c3-4f0d-a2e4-5d1f93c6b7e2/download",
+                                  "body": {
+                                    "format": "bundle",
+                                    "mpb3": {
+                                      "version": "3.0",
+                                      "extra": "PlanSheets"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "TerrainTiles",
+                                "name": "Terrain tiles",
+                                "sizeBytes": 692060,
+                                "download": {
+                                  "method": "POST",
+                                  "path": "/api/v1/vault/bundles/b7a52e49-81c3-4f0d-a2e4-5d1f93c6b7e2/download",
+                                  "body": {
+                                    "format": "bundle",
+                                    "mpb3": {
+                                      "version": "3.0",
+                                      "extra": "TerrainTiles"
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -1501,7 +2039,7 @@
       "post": {
         "operationId": "getVaultBundleDownload",
         "summary": "A fresh download link for one format of a bundle",
-        "description": "Mints a presigned URL for one artifact format, or for the whole archive with format bundle. A host that declares view support sends format bundle with a view naming itself, and gets a link to a view holding only the files its host block points at.",
+        "description": "Mints a presigned URL for one artifact format, or for the whole archive with format bundle. A host that declares view support sends format bundle with a view naming itself, and gets a link to a view holding only the files its host block points at.\n\nThe 3.0 form (not yet served): format bundle with mpb3 asks for one level (Max, Med or Min; none means Max) and the promised files wanted, by path from the bundle root, or for one Extra by id. There is no file list per host for 3.0, so mpb3 never comes with view. The answer is the same link answer, with sizeBytes. Until the tickets that serve 3.0 land (web #2623 and #2626), every request in the 3.0 form is refused with HTTP 501 and the code mpb3_not_yet_served; every 2.x request and answer is unchanged. When a plugin too old to read 3.0 asks for a 3.0 bundle, it will receive the update answer (HTTP 426, below).",
         "tags": [
           "Vault"
         ],
@@ -1533,7 +2071,7 @@
                 "properties": {
                   "format": {
                     "type": "string",
-                    "description": "An artifact format, or bundle for the whole archive. glb is the deprecated whole-bundle alias and is still accepted. A view needs bundle."
+                    "description": "An artifact format, or bundle for the whole archive. glb is the deprecated whole-bundle alias and is still accepted. A view needs bundle, and so does mpb3."
                   },
                   "view": {
                     "type": "object",
@@ -1566,6 +2104,128 @@
                       "host"
                     ],
                     "additionalProperties": false
+                  },
+                  "mpb3": {
+                    "description": "The 3.0 form of the request, with format bundle: one level and the promised files wanted, by name, or one Extra. Not served yet: it is refused with HTTP 501 and the code mpb3_not_yet_served. It never comes with view: a 3.0 bundle has no file list per host.",
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "version": {
+                            "type": "string",
+                            "const": "3.0"
+                          },
+                          "level": {
+                            "description": "One level. A request that names none receives Max.",
+                            "type": "string",
+                            "enum": [
+                              "Max",
+                              "Med",
+                              "Min"
+                            ]
+                          },
+                          "files": {
+                            "description": "The promised files wanted, by path from the bundle root, the same at every level. Omitted: every file of the level. There is no file list per host: a plugin names the files it imports, so a new host needs no platform change. Manifest.json always comes with the download, named or not.",
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "Readme.md",
+                                "Manifest.json",
+                                "Elevation/Elevation.tif",
+                                "Elevation/Elevation.png",
+                                "Elevation/Terrain.glb",
+                                "Elevation/Terrain.obj",
+                                "Elevation/Terrain.dxf",
+                                "Elevation/Terrain.landxml",
+                                "Elevation/Slope.tif",
+                                "Elevation/Slope.gpkg",
+                                "Elevation/Aspect.tif",
+                                "Elevation/Hillshade.tif",
+                                "Elevation/Contours.dxf",
+                                "Imagery/Imagery.tif",
+                                "Imagery/Imagery.png",
+                                "Landcover/Landcover.tif",
+                                "Landcover/Landcover.gpkg",
+                                "Landcover/Canopy.tif",
+                                "Landcover/Trees.gpkg",
+                                "Landcover/Trees.csv",
+                                "Materials/Water.png",
+                                "Materials/Grass.png",
+                                "Materials/Forest.png",
+                                "Materials/Dirt.png",
+                                "Materials/Rock.png",
+                                "Materials/Sand.png",
+                                "Materials/Snow.png",
+                                "Materials/Built.png",
+                                "Basemap/Basemap.tif",
+                                "Basemap/Basemap.png",
+                                "Basemap/Basemap.usdz",
+                                "Basemap/Buildings.glb",
+                                "Basemap/Roads.csv",
+                                "Basemap/Buildings.gpkg",
+                                "Basemap/Buildings.dxf",
+                                "Basemap/Roads.gpkg",
+                                "Basemap/Roads.dxf",
+                                "Basemap/Water.gpkg",
+                                "Basemap/Water.dxf",
+                                "Basemap/Landuse.gpkg",
+                                "Basemap/Landuse.dxf",
+                                "Records/Parcels.gpkg",
+                                "Records/Parcels.dxf",
+                                "Records/Zoning.gpkg",
+                                "Records/Zoning.dxf",
+                                "Records/Floodplain.gpkg",
+                                "Records/Floodplain.dxf",
+                                "Records/Wetlands.gpkg",
+                                "Records/Wetlands.dxf",
+                                "Records/Soils.gpkg",
+                                "Records/Soils.dxf",
+                                "Records/Heritage.gpkg",
+                                "Records/Heritage.dxf",
+                                "Records/Conservation.gpkg",
+                                "Records/Conservation.dxf",
+                                "Records/Hydrography.gpkg",
+                                "Records/Hydrography.dxf",
+                                "Records/Contamination.gpkg",
+                                "Records/Contamination.dxf",
+                                "Site/Site.usdz",
+                                "Site/Site.ifc",
+                                "Site/Site.dxf"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "version"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "version": {
+                            "type": "string",
+                            "const": "3.0"
+                          },
+                          "extra": {
+                            "type": "string",
+                            "enum": [
+                              "SiteBrief",
+                              "PlanSheets",
+                              "TerrainTiles"
+                            ],
+                            "description": "One Extra, a free download outside the bundle."
+                          }
+                        },
+                        "required": [
+                          "version",
+                          "extra"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -1630,7 +2290,7 @@
             }
           },
           "400": {
-            "description": "Malformed body or unknown format.",
+            "description": "Malformed body or unknown format. A 3.0 request is malformed when it names two levels, a file the tree does not promise, or an Extra that does not exist; or is sent without format bundle, or with a view. Code: invalid_request for the last two.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1673,10 +2333,74 @@
             }
           },
           "426": {
-            "$ref": "#/components/responses/ClientUpdateRequired"
+            "description": "The calling client is below the minimum version the platform serves for it (code client_update_required, as on every route). For a request in the 3.0 form from a plugin too old to read 3.0 bundles, the answer also carries bundleVersion 3.0 and minimumVersion, the lowest version of that client that reads 3.0. Show an update prompt, not an error. Never cached (Cache-Control: no-store). The bundleVersion answer is not served yet: published ahead of the behaviour.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "const": "client_update_required"
+                    },
+                    "client": {
+                      "type": "string",
+                      "description": "The client name the request sent."
+                    },
+                    "version": {
+                      "type": "string",
+                      "description": "The version the request sent."
+                    },
+                    "minimumVersion": {
+                      "type": "string",
+                      "description": "The lowest version of this client the platform serves. For a 3.0 request, the lowest that reads a 3.0 bundle."
+                    },
+                    "bundleVersion": {
+                      "description": "Present when the request was in the 3.0 form: the bundle version the client cannot read.",
+                      "type": "string",
+                      "const": "3.0"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code",
+                    "client",
+                    "version",
+                    "minimumVersion"
+                  ],
+                  "additionalProperties": false
+                },
+                "examples": {
+                  "mpb3UpdateRequired": {
+                    "summary": "An older Unreal plugin asks for a 3.0 bundle",
+                    "value": {
+                      "error": "This client is out of date. Update it to continue.",
+                      "code": "client_update_required",
+                      "client": "unreal",
+                      "version": "1.4.0",
+                      "minimumVersion": "2.0.0",
+                      "bundleVersion": "3.0"
+                    }
+                  }
+                }
+              }
+            }
           },
           "500": {
             "description": "Transient failure; retry. Code: transient.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "A request in the 3.0 form (mpb3), until the platform serves 3.0. Code: mpb3_not_yet_served. Nothing was minted; use the 2.x form or wait.",
             "content": {
               "application/json": {
                 "schema": {
