@@ -44,16 +44,16 @@ internal static class OrderImporter
 {
     internal static OrderImportResult Import(Document document, string zipPath, PresenceVerdict presence)
     {
-        using LocalBundleArchive archive = LocalBundleArchive.Open(zipPath);
-
-        if (archive.ManifestText is not { } manifestText)
+        // A received export and Import Bundle both open the zip here, so a file that is not a bundle is
+        // refused in one set of words whichever way it came, before the drawing is read.
+        if (!LocalBundleImport.TryOpen(zipPath, out LocalBundleArchive? opened, out string? refusal))
         {
-            AutoCadImportPlan notABundle = new()
-            {
-                Refusal = "This file is not a Mantle Place bundle: it holds no Metadata/manifest.json. Nothing was imported.",
-            };
+            AutoCadImportPlan notABundle = new() { Refusal = refusal };
             return new OrderImportResult(notABundle, notABundle.Summary(), false);
         }
+
+        using LocalBundleArchive archive = opened;
+        string manifestText = archive.ManifestText!;
 
         Database database = document.Database;
         Type? civil3d = Civil3dPartLoader.Load(presence, out _);

@@ -82,6 +82,7 @@ public static class PlugInsPanel
         new("MANTLEPLACESIGNIN", "Sign In", "Sign in to your Mantle Place account in your browser.", "SIGNIN"),
         new("MANTLEPLACESIGNOUT", "Sign Out", "Sign out and clear the session stored on this machine.", "SIGNOUT"),
         new("MANTLEPLACEVAULT", "Vault", "Browse and search the bundles in your Mantle Place vault.", "VAULT"),
+        new("MANTLEPLACEIMPORTBUNDLE", "Import Bundle", "Import a Mantle Place bundle zip from this computer into the active drawing. No account needed.", "IMPORTBUNDLE"),
         new("MANTLEPLACEABOUT", "About", "Show which Mantle Place build is loaded and whether you are signed in.", "ABOUT"),
         new("MANTLEPLACEFEEDBACK", "Send Feedback", "Open the Mantle Place feedback form in your browser.", "FEEDBACK"),
     ];
