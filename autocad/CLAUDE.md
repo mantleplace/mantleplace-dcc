@@ -86,7 +86,8 @@ key this suite must assert, or it fails.
 - **Windows are copied from Revit's, not shared.** The Addin's WPF windows (sign-in, vault browser,
   notice) are built in code and read the monogram from embedded resources (`ResourceImages`), linked
   from Revit's `Resources` so no binary is committed twice. The vault browser has no Prepare, download
-  or import yet: an order comes into a drawing through an export sent from the web vault.
+  or import yet: an order comes into a drawing through an export sent from the web vault, or through
+  Import Bundle (`MANTLEPLACEIMPORTBUNDLE`, `HPS-61`), which takes a zip on disk.
 - **The ribbon panel is built in code, on a `Mantle Place` tab of the plugin's own** (`HPS-57`), as
   Revit's is, in Civil 3D and plain AutoCAD alike. `PlugInsPanel` (Core) lists the commands, in
   `HPS-51`'s order, and decides the tab (`Place`: the plugin's tab, made when the ribbon lacks it);
@@ -101,7 +102,9 @@ key this suite must assert, or it fails.
   the drawing's geographic location refuses the import. The shell (`OrderImporter`) observes the
   location (`DrawingObservations`), verifies every file before drawing anything, and applies the plan
   verbatim. The window an export from the web opens (`AutoCadExportImportHost`) has the Import button;
-  closing it before the press ends the export as cancelled.
+  closing it before the press ends the export as cancelled. Import Bundle hands a zip on disk to the
+  same `OrderImporter.Import`, which opens every bundle through `LocalBundleImport.TryOpen` (Core), so
+  a file that is not a bundle is refused in one set of words either way.
 - **Civil 3D adds the zone check and the surface, through its part alone.** When the presence test
   lets the part load, it reads the drawing's zone code (never sets it), which the shell resolves to an
   EPSG code through AutoCAD's own library for the plan to compare, and it builds the TIN surface from

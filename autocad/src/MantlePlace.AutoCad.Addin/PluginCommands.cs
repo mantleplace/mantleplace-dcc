@@ -1,4 +1,7 @@
+using System.Globalization;
+using System.IO;
 using System.Reflection;
+using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using MantlePlace.AutoCad.Addin;
 using MantlePlace.Revit.Client;
@@ -7,7 +10,7 @@ using MantlePlace.Revit.Core;
 namespace MantlePlace.AutoCad.Addin;
 
 /// <summary>
-/// The shell's commands: the five the Mantle Place tab panel types (<see cref="PlugInsPanel.Commands"/>).
+/// The shell's commands: the six the Mantle Place tab panel types (<see cref="PlugInsPanel.Commands"/>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -78,6 +81,63 @@ public sealed class PluginCommands
     [CommandMethod("MANTLEPLACEVAULT")]
     public void Vault()
         => VaultBrowser.Open(MantlePlaceApplication.MainWindowHandle(), selectOrderId: null);
+
+    /// <summary>
+    /// Import Bundle (HPS-61): a bundle zip on disk, placed in the active drawing by the importer a received
+    /// export's Import button uses, so the same zone check, refusal and surface. No account is needed.
+    /// </summary>
+    /// <remarks>
+    /// The zip comes from AutoCAD's own file prompt: a dialog, or the command line under <c>FILEDIA</c> 0 or
+    /// a script, which is how a script runs it with nobody at the screen. What happened is said on the
+    /// command line and written beside the zip, as the Revit plugin's local import writes its record.
+    /// </remarks>
+    [CommandMethod("MANTLEPLACEIMPORTBUNDLE")]
+    public void ImportBundle()
+    {
+        if (Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.MdiActiveDocument is not { } document)
+        {
+            return;
+        }
+
+        PromptOpenFileOptions options = new("\nMantle Place bundle (.zip) to import: ")
+        {
+            DialogCaption = "Choose a Mantle Place bundle",
+            Filter = "Mantle Place bundle (*.zip)|*.zip",
+            PreferCommandLine = Convert.ToInt32(Autodesk.AutoCAD.ApplicationServices.Core.Application.GetSystemVariable("FILEDIA"), CultureInfo.InvariantCulture) == 0,
+        };
+
+        PromptFileNameResult picked = document.Editor.GetFileNameForOpen(options);
+        if (picked.Status != PromptStatus.OK)
+        {
+            return;
+        }
+
+        string zipPath = LocalBundleImport.Typed(picked.StringResult);
+        string outcome;
+        try
+        {
+            PresenceVerdict presence = Presence.Decide(HostObservations.Observe());
+            outcome = OrderImporter.Import(document, zipPath, presence).Summary;
+            MantlePlaceApplication.Say(outcome);
+        }
+#pragma warning disable CA1031 // An import that throws is reported, never left to take AutoCAD down.
+        catch (System.Exception ex)
+#pragma warning restore CA1031
+        {
+            outcome = $"The import stopped on an error: {ex.Message}. What it placed before the error stays in the drawing.";
+            MantlePlaceApplication.Say(outcome);
+            MantlePlaceApplication.SayFault(ex);
+        }
+
+        try
+        {
+            File.WriteAllText(LocalBundleSource.LogPathFor(zipPath), outcome + Environment.NewLine);
+        }
+        catch (System.Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A folder that cannot be written to keeps no record; the command line has it.
+        }
+    }
 
     /// <summary>The web Feedback form, in the default browser (HPS-56). Works signed in or out.</summary>
     [CommandMethod("MANTLEPLACEFEEDBACK")]

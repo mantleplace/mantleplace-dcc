@@ -29,7 +29,7 @@ internal static class PlugInsPanelTests
 
             run.Equal(
                 string.Join(",", names),
-                "MANTLEPLACESIGNIN,MANTLEPLACESIGNOUT,MANTLEPLACEVAULT,MANTLEPLACEABOUT,MANTLEPLACEFEEDBACK",
+                "MANTLEPLACESIGNIN,MANTLEPLACESIGNOUT,MANTLEPLACEVAULT,MANTLEPLACEIMPORTBUNDLE,MANTLEPLACEABOUT,MANTLEPLACEFEEDBACK",
                 "the commands, in HPS-51's order");
             run.Equal(names.Distinct(StringComparer.Ordinal).Count(), names.Length, "none twice");
         });
