@@ -210,13 +210,38 @@ The calls the import made, each recorded from the drawing read back:
   window's report said so.
 - **Only the plugin's own load prompt** ("Unsigned Executable File", answered Load Once) appeared; no
   other dialog, and Civil 3D never took the foreground.
-- **The local-bundle run was not made.** The plugin has no entry point that imports a bundle already
-  on disk: an order reaches a drawing only as an export sent from the web vault, so every import above
-  came through a send. The entry point, and the local-bundle run it allows, are tracked in [their own issue](https://github.com/mantleplace/mantleplace-dcc/issues/635).
+- **The local-bundle run was not made here.** Every import above came through a send; the plugin had no
+  entry point for a bundle already on disk. Import Bundle is that entry point, and its run is the next
+  section.
+
+## The local-bundle import, live (2026-11-14)
+
+A live Civil 3D 2027 run on the build machine (window, Civil 3D launcher, .NET 10), with the plugin
+1.0.0 built from the Import Bundle branch and installed as its `MantlePlaceAutoCad.bundle`, with nobody
+at the screen and the plugin signed out. The bundle was the zip a received export had left in the
+bundle cache (manifest 2.2.0, a `hosts.autocad` block in a metric UTM frame), copied to a folder of its
+own. `MANTLEPLACEIMPORTBUNDLE` was typed at the command line with `FILEDIA` 0 and the zip's path given
+at its prompt; what each import said was read from the record it wrote beside the zip, and the drawing
+was read back. Each step is **worked**, **did nothing** or **threw**:
+
+| Step | Civil 3D 2027 | What showed it |
+|---|---|---|
+| 1. Vault send | n/a | a local bundle is not sent; the send is the section above |
+| 2. Import of a bundle zip on disk, signed out | worked | aerial, contours, public records, linework and surface placed on `MantlePlace-*` layers, at the order's own coordinates and units; no dialog opened |
+| 3. Zone check | worked | under another system's zone the import refused, named both systems and placed nothing; under the order's own zone it went in; the plugin wrote neither the zone, the units nor the geographic location |
+| 4. Terrain surface | worked | a TIN surface built from the bundle's LandXML, on `MantlePlace-Surface` |
+
+- **A file that is not a bundle is refused.** A text file named `.zip` was refused as not a zip
+  archive, with nothing placed and no dialog, in the same command.
+- **The `Mantle Place` tab, live.** One `Mantle Place` panel, on the plugin's own tab, with its six
+  buttons in order (Sign In, Sign Out, Vault, Import Bundle, About, Send Feedback).
+- **The import ran inside the command, in about twenty seconds,** surface included. Civil 3D's Panorama event
+  window was open afterwards, as a palette: it held nothing up.
+- **Not run here:** the attended path, a dialog under `FILEDIA` 1 that a curator answers.
 
 ## What this does not yet cover
 
-- **A local-bundle import.** The plugin has no entry point for a bundle already on disk (above); [tracked here](https://github.com/mantleplace/mantleplace-dcc/issues/635).
+- **Import Bundle's file dialog**, answered by a person (`FILEDIA` 1); the command-line prompt is above.
 - **A second workspace load of the `Mantle Place` tab**, live. The tab and its buttons were read on a
   running Civil 3D 2027 (above); plain AutoCAD 2027 and a round trip to another workspace were not.
 - **A drawing in feet**, with a foot-based zone and a metric DEM.
