@@ -841,7 +841,8 @@ bundle icon (the monogram) and is not copied into a Revit add-ins folder.
 
 `PackageContents.xml` is built by `AutodeskBundleManifest` in the core, a pure function of the declared
 version and the supported Revit years (2025, 2026 and 2027, each naming the module that year loads,
-which is the one `MantlePlace.addin`), through the one-file
+which is the one `MantlePlace.addin`; each year is its own `Components` group, because Revit reads only the first
+requirement of a group), through the one-file
 [`tools/WriteBundleManifest/`](./tools/WriteBundleManifest/) console project. Headless tests cover it in
 `ci-revit-tests`. The script then compares the version the manifest carries with `<Version>` in
 [`Directory.Build.props`](./Directory.Build.props) and stops on a difference, so a stale build cannot

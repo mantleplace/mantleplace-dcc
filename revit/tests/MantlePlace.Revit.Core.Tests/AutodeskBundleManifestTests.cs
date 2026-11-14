@@ -42,9 +42,9 @@ internal static class AutodeskBundleManifestTests
 
         run.Case("every supported year is declared, each pointing at the module that year loads", () =>
         {
-            XElement components = Parse("1.0.0", [2025, 2026, 2027]).Root!.Element("Components")!;
-            XElement[] requirements = [.. components.Elements("RuntimeRequirements")];
-            XElement[] entries = [.. components.Elements("ComponentEntry")];
+            XElement[] groups = [.. Parse("1.0.0", [2025, 2026, 2027]).Root!.Elements("Components")];
+            XElement[] requirements = [.. groups.Elements("RuntimeRequirements")];
+            XElement[] entries = [.. groups.Elements("ComponentEntry")];
 
             run.Equal(requirements.Length.ToString(), "3", "one runtime requirement per year");
             run.Equal(entries.Length.ToString(), "3", "one component entry per year");
@@ -61,6 +61,33 @@ internal static class AutodeskBundleManifestTests
                     requirements[i].NextNode == entries[i],
                     $"{years[i]}: the entry follows its own requirement, which is how Autodesk pairs them");
             }
+        });
+
+        run.Case("each year is its own Components group, and no two years share one, because Revit reads one requirement per group", () =>
+        {
+            // revit-1.1.0 put all three years in one group, and Revit read only the first
+            // RuntimeRequirements of it: the bundle loaded in 2025 and in neither 2026 nor 2027. Rebuilt
+            // with one group per year it loaded in both (8 of 8 checks on each, on the build machine).
+            int[] years = [2025, 2026, 2027];
+            XElement[] groups = [.. Parse("1.0.0", years).Root!.Elements("Components")];
+
+            run.Equal(groups.Length.ToString(), "3", "one Components group per year");
+            for (int i = 0; i < groups.Length; i++)
+            {
+                XElement[] requirements = [.. groups[i].Elements("RuntimeRequirements")];
+                run.Equal(requirements.Length.ToString(), "1", $"{years[i]}: its group carries exactly one requirement");
+                run.True(groups[i].FirstNode == requirements[0], $"{years[i]}: the requirement opens its group");
+                run.Equal(Attr(requirements[0], "SeriesMin"), $"R{years[i]}", $"{years[i]}: the group is that year's");
+                run.Equal(
+                    string.Join(",", groups[i].Elements("ComponentEntry").Select(e => Attr(e, "ModuleName"))),
+                    AutodeskBundleManifest.ModulePathFor(years[i]),
+                    $"{years[i]}: the group holds that year's one entry, nothing else");
+            }
+
+            run.Equal(
+                groups.SelectMany(g => g.Elements("RuntimeRequirements")).Select(r => Attr(r, "SeriesMin")).Distinct().Count().ToString(),
+                "3",
+                "no two groups declare the same year");
         });
 
         run.Case("one build serves every year: the module is the add-in manifest inside Contents", () =>
