@@ -78,24 +78,24 @@ edited in the same pull request that updates the release.
 
 The standard lists the nine actions every host plugin supports, in order, with their words and their
 rules ([`HPS-58`](host-plugin-standard.md#12-the-common-core-hps-58--hps-63)). This section states, for each host, where it stands
-against that list. A cell is one of three things: **supported**; **planned for the 3.0 reader release**,
+against that list. A cell is one of four things: **supported**; **not shipped**, for a host with no release yet; **planned for the 3.0 reader release**,
 the release in which the host takes up the core's remaining actions; or a **named gap**, said in the
 cell. No cell is blank. A host with no release yet (the `autocad` column, which is also the Civil 3D
-column's plugin) reads `supported` for an action built in its tree and not yet released, as the rows
-below say of it. The rows further down this page hold the per-feature statuses and the releases they
+column's plugin) reads `not shipped` for an action built in its tree and not yet released, as the rows
+below say of it; the first release replaces it with `supported`. The rows further down this page hold the per-feature statuses and the releases they
 come from; this table never restates one.
 
 | Core action | Unreal | Revit | AutoCAD | Civil 3D |
 | --- | --- | --- | --- | --- |
-| 1. Sign in (`HPS-04` … `HPS-13`) | supported | supported | supported | supported |
-| 2. List the vault (`HPS-18`) | supported | supported | supported | supported |
+| 1. Sign in (`HPS-04` … `HPS-13`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
+| 2. List the vault (`HPS-18`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 3. Choose a level (`HPS-59`) | planned for the 3.0 reader release | planned for the 3.0 reader release | planned for the 3.0 reader release | planned for the 3.0 reader release |
 | 4. Download (`HPS-18`, `HPS-26`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
 | 5. Import, through the import window (`HPS-60`) | planned for the 3.0 reader release; **named gap: its import window has no per-layer checklist** | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
 | 6. Import a zip from disk, with no account (`HPS-61`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
-| 7. Refuse a version out of range (`HPS-31`) | supported | supported | supported | supported |
+| 7. Refuse a version out of range (`HPS-31`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 8a. Show credits (`HPS-62`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
-| 8b. Show notices (`HPS-62`) | planned for the 3.0 reader release | supported | supported | supported |
+| 8b. Show notices (`HPS-62`) | planned for the 3.0 reader release | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 9. Import again (`HPS-63`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
 
 Unreal's import window, when it comes, has **no per-layer checklist**: the curator imports what the
