@@ -5,7 +5,7 @@ A Blender plugin that imports a Mantle Place bundle's site in one step: `Site/Co
 publishes. It reads a bundle you already have on disk; it does not sign in or list your vault.
 
 It is the smallest reader of the open bundle format outside the Unreal and Revit plugins, and it is
-written to be read: every rule it applies is cited to [`spec/format.md`](../spec/format.md).
+written to be read: every rule it applies is cited to [`spec/format-2.md`](../spec/format-2.md).
 
 Licensed under [Apache 2.0](../LICENSE).
 

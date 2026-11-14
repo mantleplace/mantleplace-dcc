@@ -11,10 +11,7 @@ This directory is the public specification of that format. It exists so a second
 write a producer or a consumer without reading our plugin code, and check it against the same gates
 our own plugins are held to.
 
-MPB is a **profile**, not an encoding. It invents no way to store data: every file in a bundle is in
-a format somebody else specified, and MPB adds the manifest, the rules for placing each file, and each
-file's licence and sources. The formats a bundle promises are the canonical ones
-([`format.md`](format.md) §9).
+MPB is a **profile**, not an encoding. It invents no way to store data: every file in a bundle is in a format somebody else specified, and MPB adds the tree, the names, the manifest, the rules for placing each file, and each file's licence and sources. In 3.x every file in the tree is promised for the life of the major ([`format.md`](format.md) §3).
 
 ## What decides, and what merely describes
 
@@ -24,6 +21,7 @@ Three artifacts make up an MPB release, and they are not equal in authority.
 | --- | --- | --- |
 | **The schema series** | Published JSON Schema at `https://mantle.place/.well-known/schemas/bundle-manifest/` | **Normative.** The machine contract: every field, type, enum and constraint |
 | **The conformance corpus** | [`tools/manifest-conformance/corpus/`](../tools/manifest-conformance/corpus/) | **Normative.** Language-neutral vectors; a conforming reader passes them |
+| **The 3.x file table** | [`format.md`](format.md) §6 | **Normative** for the tree: every file's name, family, level and precision. The producer's registry is checked against it |
 | **This prose** | `spec/` | **Descriptive.** It explains the doctrine, the shape and the reasons |
 
 **Prose describes; the schema and the gates decide.** Where this directory and the schema appear to
@@ -37,22 +35,12 @@ schema has two contracts and no way to tell which one a producer honoured.
 
 ## Contents
 
-- **[`format.md`](format.md)** — the format itself: what a bundle contains (the zip layout), the
-  pointer doctrine (find every file by a manifest pointer, never by folder name), the manifest's
-  structure and the `hosts.<hostId>` boundary, integrity (sha256 present, absent, or required and
-  missing), how placement values are meant to be consumed (applied verbatim), and how a file states
-  its own frame, the site origin and its licensing in the neutral part of the manifest. For 2.0 it
-  also holds the canonical and courtesy formats and the test a format must pass, the 2.0 layout, the
-  folder allowlist and the six naming rules, how a higher major is refused, and the bundle's media
-  type.
-- **[`compatibility.md`](compatibility.md)** — the versioning and compatibility policy: semver
-  semantics (MAJOR/MINOR/PATCH), freeze-on-publish immutability, what a consumer must do with fields,
-  enum values and versions it does not recognise, a higher major included, and the promise that
-  nothing breaks within 2.x.
-- **[`conformance.md`](conformance.md)** — what "a conforming reader" means, how to prove it, and
-  what claiming a corpus group obliges.
-- **[`changelog.md`](changelog.md)** — the consolidated version history, including the integer
-  pre-history that predates this spec.
+- **[`format.md`](format.md)** — the 3.x format: the tree of seven subject folders, the naming rules, the one promise and the admission rule, the two families of files and their units, the file table with every file's format, level and precision, the three levels, the manifest (one catalog, no per-host block), the zip, what left since 2.x and how to derive it, and where each value a 2.x plugin read from a host block lives now.
+- **[`format-2.md`](format-2.md)** — the 2.x format, superseded and kept for the bundles delivered at 2.x, which are never repackaged: the pointer doctrine, the manifest's three registers and the `hosts.<hostId>` blocks, the canonical and courtesy formats, the 2.0 layout and its naming rules.
+- **[`compatibility.md`](compatibility.md)** — the versioning and compatibility policy: how a reader tells 3.x from 2.x by where the manifest is, semver semantics (MAJOR/MINOR/PATCH), freeze-on-publish immutability, what a consumer must do with fields, values and versions it does not recognise, a higher major included, and the promise that nothing breaks within 3.x.
+- **[`conformance.md`](conformance.md)** — what "a conforming reader" means, how to prove it, what claiming a corpus group obliges, and what a conforming 3.x bundle holds.
+- **[`file-by-host.md`](file-by-host.md)** — the file-by-host table: every file of the 3.x tree opened in eight hosts before the text was frozen.
+- **[`changelog.md`](changelog.md)** — the consolidated version history, including the integer pre-history that predates this spec.
 
 ## Licence
 

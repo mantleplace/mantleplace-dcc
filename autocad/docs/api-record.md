@@ -101,7 +101,7 @@ AutoCAD block for the run; 2025 and 2026 are still unproven.
 | Call | Why the plugin makes it | 2027 |
 |---|---|---|
 | `GeoCoordinateSystem.Create(zoneCode).EPSGcode` | The block states the order's frame as an EPSG code and Civil 3D's zone as its library code, so the zone is compared through AutoCAD's own library and never through a spelling the plugin maps. | worked: `NSRS11.TX-CF` gave 6578 and `TX83-NCF` gave 2276, so the order went in under the first and was refused under the second |
-| `TinSurface.CreateFromLandXML(db, name, path, surfaceName)` | The block's terrain source is LandXML (format.md §6.9), which `AddDEMFile` does not read. The three-parameter overload is obsolete. | worked: 75,302 points, placed as written (US-foot coordinates and heights, the LandXML's own extents), with and without the drawing's zone set |
+| `TinSurface.CreateFromLandXML(db, name, path, surfaceName)` | The block's terrain source is LandXML (format-2.md §6.9), which `AddDEMFile` does not read. The three-parameter overload is obsolete. | worked: 75,302 points, placed as written (US-foot coordinates and heights, the LandXML's own extents), with and without the drawing's zone set |
 | `CivilDocument.GetSurfaceIds()` | The surface's name is unique in the drawing, so a second import of an order gets a numbered name. | worked: the second import into one drawing built `...-2` |
 
 - **Setting the zone sets the geographic location.** In a drawing whose zone the run set, the plan

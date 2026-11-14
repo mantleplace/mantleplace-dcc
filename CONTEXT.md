@@ -179,13 +179,7 @@ sign-in and no server call — it is not a vault operation and must never acquir
 _Avoid_: load, ingest, sync
 
 **Fidelity level**:
-One of the four versions of a deliverable that a bundle carries, from most to least: RAW, MAX, MED
-and MIN. A curator chooses one for each category when downloading or importing, never when ordering.
-MAX is the deliverable in full, within what a host can import. RAW is the source data with nothing
-capped. MED and MIN hold less of it, or hold it coarser, from the same source data: a level may leave
-elements out, or coarsen a surface and state how far it deviates, but it never moves, invents or
-reclassifies anything. "Quality" is avoided because a bundle's quality already means its data, and
-"tier" because a **delivery tier** is something else.
+One of the three versions of a bundle a download can hold, from most to least: Max, Med and Min. Max is the bundle in full; Med has half its resolution or count and Min a quarter, in linear resolution for a grid and in count for a mesh or a set. Every order builds all three, and a curator picks one per download, never when ordering. A level belongs to the download, not to a file name: a file has the same name at every level, only host-ready files differ between levels, and the manifest states the download's level once. A level may leave elements out or coarsen them, but it never moves, invents or reclassifies anything. A 2.x bundle carries up to four, RAW, MAX, MED and MIN, chosen per category and published as suffixed files. "Quality" is avoided because a bundle's quality already means its data, and "tier" because a **delivery tier** is something else.
 _Avoid_: scale, tier, quality, LOD, resolution, detail level
 
 **Download view**:
@@ -318,6 +312,18 @@ _Avoid_: imperial host, unit-aware plugin
 The document inside a bundle that declares what shipped and the pre-derived values a host must apply.
 The published schema, not this repository, is its authority.
 _Avoid_: metadata, index, descriptor
+
+**Georeferenced file**:
+A bundle file whose coordinates are absolute in the order's CRS and units, Imperial or Metric: in MPB 3.x every `tif`, `gpkg`, `dxf`, `landxml` and `ifc`. Its extension says it is one; its bytes are the same in every download of a bundle.
+_Avoid_: canonical file, GIS file, projected file
+
+**Host-ready file**:
+A bundle file in the local site frame, in metres on every order, made for a host that works in a flat local space: in MPB 3.x every `glb`, `usdz`, `obj`, `mtl`, `png` and `csv`. Its extension says it is one, and it is the kind of file a fidelity level coarsens.
+_Avoid_: engine file, courtesy file, engine-frame variant
+
+**Admission rule**:
+The test a file must pass to join the MPB 3.x tree: it is a new subject, or a host-ready copy of an existing subject that some host can neither read nor derive. A file that passes is promised for the life of the major.
+_Avoid_: canonical test, admission test (the 2.x test of a format)
 
 **Landscape layer block**:
 One named division of a bundle's landscape data — the material weights, and the coverage rasters

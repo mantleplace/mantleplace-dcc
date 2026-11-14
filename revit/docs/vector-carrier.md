@@ -9,7 +9,7 @@ Revit-only GeoJSON in `hosts.revit.vectors` can go, and whether Revit places a l
 exactly: each shared vector GeoPackage has a `-Projected` twin, named in `layout.projected_variants`,
 absolute in the order's projected CRS and unit with the same tables and columns. The reader takes a
 twin as it took the carrier, and where the twin's row lists no `tables` it reads the file's one table
-whatever it is named ([`spec/format.md`](../../spec/format.md)); the planner places it the same way
+whatever it is named ([`spec/format-2.md`](../../spec/format-2.md)); the planner places it the same way
 ([`import-inventory.md`](../../docs/import-inventory.md)). On a local ETL bundle of the fixture AOI,
 Revit 2025, 2026 and 2027 placed every vector layer from its twin, with none falling back to the
 GeoJSON ([`tools/timing/`](../tools/timing/README.md#verifying-an-import), `-Verify`).

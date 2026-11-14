@@ -29,7 +29,7 @@ corpus written for MPB 1.14.0, and a `.postN` release changes the package and no
 
 ## What it checks
 
-The format is [`spec/format.md`](https://github.com/mantleplace/mantleplace-dcc/blob/main/spec/format.md); this tool checks a bundle against it and
+The format is [`spec/format-2.md`](https://github.com/mantleplace/mantleplace-dcc/blob/main/spec/format-2.md); this tool checks a bundle against it and
 against the published schema, and restates neither.
 
 - **The archive.** A zip, a folder, or either with the bundle inside one wrapper folder.
@@ -62,7 +62,7 @@ against the published schema, and restates neither.
   `.shp`, `.geojson`, `.dxf`, `.csv` and the like) is never a Produced Work, and a file whose role
   is `none` lists no ODbL source. A missing role reads as `database` and is a warning, as is a
   file with no entry at all.
-- **The 2.0 layout and names** (`format.md` §10.2, §10.3), for a manifest that declares 2.x and
+- **The 2.0 layout and names** (`format-2.md` §10.2, §10.3), for a manifest that declares 2.x and
   only then; a 1.x bundle is held to its own version. These are the `names` check:
 
   | Code | Severity | Rule |
@@ -84,7 +84,7 @@ against the published schema, and restates neither.
   format's own folder, such as a tileset's, keep their own names (rule 4). Rule 2, plural or
   singular, is a matter of meaning that no validator reads.
 
-- **An untabled GeoPackage row** (`format.md` §6.3), for a manifest that declares 2.x. A
+- **An untabled GeoPackage row** (`format-2.md` §6.3), for a manifest that declares 2.x. A
   `vector.layers[].formats[]` row of format `gpkg` that lists no `tables` holds exactly one
   feature table, and a reader reads it whatever the producer named it. A file that holds more than
   one is `gpkg.tables-several` and one that holds none is `gpkg.table-none`, both errors; so is the
