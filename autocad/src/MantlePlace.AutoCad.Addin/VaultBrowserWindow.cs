@@ -71,6 +71,7 @@ internal sealed class VaultBrowserWindow : Window
         _selectOnLoad = selectOrderId;
 
         Title = WindowLabels.VaultWindowTitle;
+        BrandChrome.ShowMarkInTitleBar(this);
         Width = 720;
         Height = 460 + BrandChrome.HeaderHeight + SearchRowHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;

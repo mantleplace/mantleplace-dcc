@@ -78,6 +78,65 @@ internal static class BrandChrome
     }
 
     /// <summary>
+    /// Puts the Mantle Place mark in <paramref name="window"/>'s title bar, in place of the host's logo.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ A WPF window given no icon of its own shows the host process's, so without this every window
+    /// of the plugin carries the host's logo, which is what an app store review refuses. Call it from
+    /// every window that has a title bar; the headless suite reads the shim and fails a window that
+    /// does not (<c>ShimWindowTests</c>).
+    /// </para>
+    /// <para>
+    /// The icon is every render of the mark in one multi-frame image, not one render: Windows wants a
+    /// small icon for the title bar and a large one for the taskbar and Alt+Tab, at whatever the
+    /// display's scale makes those in pixels, and WPF takes the closest frame for each rather than
+    /// scaling one render up or down. Which renders exist is <see cref="MarkRenders"/>'s.
+    /// </para>
+    /// </remarks>
+    internal static void ShowMarkInTitleBar(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        if (TitleBarIcon() is { } icon)
+        {
+            window.Icon = icon;
+        }
+    }
+
+    /// <summary>
+    /// Every render of the mark as the frames of one image, or null when none decodes (a build defect
+    /// the headless suite already fails on).
+    /// </summary>
+    /// <remarks>
+    /// TIFF because it is the one multi-frame format WPF both encodes and decodes with an alpha
+    /// channel. Built per window, on that window's thread: a decoder is bound to the thread that made
+    /// it, and there are two UI threads in the Revit plugin.
+    /// </remarks>
+    private static BitmapFrame? TitleBarIcon()
+    {
+        TiffBitmapEncoder encoder = new();
+        foreach (int size in MarkRenders.Sizes)
+        {
+            if (ResourceImages.Decode(MarkRenders.FileNameOf(size)) is BitmapSource render)
+            {
+                encoder.Frames.Add(BitmapFrame.Create(render));
+            }
+        }
+
+        if (encoder.Frames.Count == 0)
+        {
+            return null;
+        }
+
+        // Not disposed: the decoder caches every frame on load, and the stream is managed memory.
+        System.IO.MemoryStream stream = new();
+        encoder.Save(stream);
+        stream.Position = 0;
+        return new TiffBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
+    }
+
+    /// <summary>
     /// Marks <paramref name="button"/> as the window's one primary action and fills it with the brand
     /// orange.
     /// </summary>
