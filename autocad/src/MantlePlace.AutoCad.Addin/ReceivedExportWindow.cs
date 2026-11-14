@@ -26,6 +26,7 @@ internal sealed class ReceivedExportWindow : Window
         ExportId = export.Id;
 
         Title = ExportReceipt.WindowTitle;
+        BrandChrome.ShowMarkInTitleBar(this);
         Width = 460;
         Height = 230 + BrandChrome.HeaderHeight;
         ResizeMode = ResizeMode.NoResize;

@@ -21,6 +21,7 @@ internal sealed class AboutWindow : Window
     internal AboutWindow(string body, string privacyUrl, IntPtr hostWindow)
     {
         Title = AboutPage.Title;
+        BrandChrome.ShowMarkInTitleBar(this);
         Width = 520;
         Height = 280 + BrandChrome.HeaderHeight;
         ResizeMode = ResizeMode.NoResize;

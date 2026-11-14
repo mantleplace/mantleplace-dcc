@@ -1,6 +1,6 @@
 ---
 name: host-support
-description: The host support matrix — one row per user-facing capability, one column per DCC host, a fixed status in every cell, and a link to the release or ADR that status comes from. The only place a per-host feature status is stated. Read before saying what a host does or does not do, before planning work in one host from another's behaviour, and when a change adds, narrows or drops a feature.
+description: The host support matrix — each host against the common core every plugin supports, then one row per user-facing capability, one column per DCC host, a fixed status in every cell, and a link to the release or ADR that status comes from. The only place a per-host feature status is stated. Read before saying what a host does or does not do, before planning work in one host from another's behaviour, and when a change adds, narrows or drops a feature.
 ---
 
 # Host support matrix
@@ -73,6 +73,48 @@ from, by its tag, or an ADR by a path relative to this file, so the docs-integri
 cell that names no more specific release links the host's latest one, whose *Verification* records
 what was run. No cell describes behaviour. When a host ships a release, the cells it changes are
 edited in the same pull request that updates the release.
+
+## The common core
+
+The standard lists the nine actions every host plugin supports, in order, with their words and their
+rules ([`HPS-58`](host-plugin-standard.md#12-the-common-core-hps-58--hps-63)). This section states, for each host, where it stands
+against that list. A cell is one of four things: **supported**; **not shipped**, for a host with no release yet; **planned for the 3.0 reader release**,
+the release in which the host takes up the core's remaining actions; or a **named gap**, said in the
+cell. No cell is blank. A host with no release yet (the `autocad` column, which is also the Civil 3D
+column's plugin) reads `not shipped` for an action built in its tree and not yet released, as the rows
+below say of it; the first release replaces it with `supported`. The rows further down this page hold the per-feature statuses and the releases they
+come from; this table never restates one.
+
+| Core action | Unreal | Revit | AutoCAD | Civil 3D |
+| --- | --- | --- | --- | --- |
+| 1. Sign in (`HPS-04` … `HPS-13`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
+| 2. List the vault (`HPS-18`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
+| 3. Choose a level (`HPS-59`) | planned for the 3.0 reader release | planned for the 3.0 reader release | planned for the 3.0 reader release | planned for the 3.0 reader release |
+| 4. Download (`HPS-18`, `HPS-26`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
+| 5. Import, through the import window (`HPS-60`) | planned for the 3.0 reader release; **named gap: its import window has no per-layer checklist** | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
+| 6. Import a zip from disk, with no account (`HPS-61`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
+| 7. Refuse a version out of range (`HPS-31`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
+| 8a. Show credits (`HPS-62`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
+| 8b. Show notices (`HPS-62`) | planned for the 3.0 reader release | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
+| 9. Import again (`HPS-63`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
+
+Unreal's import window, when it comes, has **no per-layer checklist**: the curator imports what the
+bundle holds and cannot leave a layer out beforehand. That is the one named gap against the core, and it
+is a gap in the window and not in the core, because a per-layer checklist is host-only (below). The
+two halves of action 8 are separate rows because hosts have them separately. The AutoCAD and Civil 3D columns are one plugin; they differ
+only where Civil 3D adds something (host-only, below).
+
+### What each host does beyond the core
+
+These are **host-only**: no other host has them as `supported` today, and none is a rule in the standard. A feature leaves this
+list for the core by a rule in the standard, when a second host needs it. Each is a row of the tables below, which hold its status.
+
+| Host | Host-only features |
+| --- | --- |
+| Unreal | Terrain as a mesh; coverage rasters as data textures; streaming the bundle through Cesium; an AOI too large for one terrain |
+| Revit | the per-layer checklist, `Include` (choose what an import brings in); a fidelity level for each category; removing a download on request; a notice when a Prepare ends; re-joining a Prepare the host was closed during; site location, sun and time zone; opening the web curator on the project's extent; land cover, land use, water bodies and road surfaces on subdivisions and land plans; ground material names a renderer recognises; flood zones and steep ground on a hazard plan |
+| AutoCAD | public-record layers as polylines on a layer per record; site linework as polylines on a layer per drawing layer |
+| Civil 3D | the coordinate zone check; the terrain as a TIN surface |
 
 ## Account and vault
 

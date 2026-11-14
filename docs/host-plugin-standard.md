@@ -70,6 +70,7 @@ host met the contract for real:
 | **v1.19** | `HPS-56` — every host carries a Send Feedback action from its first release. A curator who hits a problem inside a host had no route to tell Mantle Place from where they were; the web app's Feedback form needs no account and takes an image, but no plugin linked to it and nothing made a new host carry the link |
 | **v1.20** | `HPS-56` gains the `rating` parameter and the post-import prompt, "Did this import come in right?". The moment right after an import is when a curator has an opinion about a bundle, and the only route to say so was the general `Send Feedback` action: a one-tap answer there gets far more replies than a general link, and the rule that a host carries no feedback form of its own stays whole, because the answer is two links to the web form |
 | **v1.21** | `HPS-57` — every host with a ribbon or a top-level menu gives Mantle Place a tab (or top-level menu) of its own, named `Mantle Place`. Revit had a Mantle Place tab and AutoCAD put a panel on the host's Add-ins tab, so a curator moving between hosts looked in two places for the same actions |
+| **v1.22** | `HPS-58` … `HPS-63` — the common core, the nine actions every host plugin supports, in order, each citing the rule that already governs it or stating the one that does not; `HPS-51` gains the words for six of them. Two hosts had grown the same product by different routes: a curator who used both found a level chooser in one and none in the other, an import window with steps in one and a single press in the other, and nothing said which differences were gaps and which were choices, so a third host had no list to build against |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -1035,7 +1036,7 @@ scripts are proven by being run, and the rule by the check script's line at the 
 **`HPS-51` — The shared actions carry the same words in every host; anything naming a host construct
 carries the host's own noun.** A curator who signs in to Revit in the morning and to Unreal in the
 afternoon is doing one thing twice, and the plugin that calls it two things has made them learn it
-twice. Thirteen actions are shared, and each carries one set of words:
+twice. Nineteen actions are shared, and each carries one set of words:
 
 | The action                                                     | The words            | Revit says it on                                                 | Unreal says it on                                    |
 | -------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
@@ -1052,6 +1053,12 @@ twice. Thirteen actions are shared, and each carries one set of words:
 | Choose what a bundle import brings in, before its steps run    | `Include` over the list, `Import` to start; a row that cannot be chosen until another is reads `Needs` and that row's name | the import window, before its steps | nothing yet; these are the words when it grows one |
 | Say what a bundle holds that an import cannot offer, and why, before its steps run | `Unavailable` over the list; each entry is the row's name and one sentence from the table below — never a box | the import window, below its checklist | nothing yet; these are the words when it grows one |
 | Choose each category's fidelity level, before its steps run | `Fidelity Level` over the levels and `Set All To` for every row at once, reading `Mixed` while the rows differ; a level reads its own token — `RAW`, `MAX`, `MED`, `MIN` — then `Same as` and the level it names where the bundle publishes it as another, and `not available in this version of Mantle Place` where the host cannot import it | the import window, beside each checklist row whose category publishes levels | nothing yet; these are the words when it grows one |
+| Download a bundle from the vault | `Download` | takes these words with the 3.0 reader release | takes these words with the 3.0 reader release |
+| Choose the one level a download takes (`HPS-59`) | `Fidelity Level` over the levels, each reading its token (`MAX`, `MED`, `MIN`) and then its size, and `Recommended` beside the one preselected | takes these words with the 3.0 reader release | takes these words with the 3.0 reader release |
+| Say how long a bundle import has run (`HPS-60`) | `Elapsed` and the time | the import window's status line, which carries the time | nothing yet; these are the words when it grows one |
+| Show the credits of what was imported (`HPS-62`) | `Credits` | the drafting view of credits the import writes | the credits the import keeps with its content |
+| Show what the host tells the curator unasked (`HPS-62`) | `Notices` | the host's own surface for them; these are the words | nothing yet; these are the words when it grows one |
+| Import the same order again (`HPS-63`) | `Import Again` | takes these words with the 3.0 reader release | takes these words with the 3.0 reader release |
 
 **A row in that list is named for what it builds, and a step is named the same.** The glossary's
 word where it has one — `Terrain`, `Site Model`, and names built on it, as `Water Subdivisions`
@@ -1361,6 +1368,122 @@ two files and checked by nothing else.
 
 ---
 
+## 12. The common core (`HPS-58` … `HPS-63`)
+
+Every rule above says how a host does one thing correctly. None says **which things every host does**,
+so a curator who uses two hosts could not tell whether a missing action was a gap or a choice, and a
+new host had no list to build against. This section is that list: the **common core**, in the order a
+curator meets it, each action carrying its words (`HPS-51`) and the rule that governs it.
+
+**`HPS-58` — Every host plugin supports the common core, in this order, with the words `HPS-51` fixes.**
+The core is nine actions. Where an earlier rule already governs one, the table cites it and this
+section adds nothing; where none did, a rule below states it.
+
+| # | The action | The rule | The words |
+| - | ---------- | -------- | --------- |
+| 1 | Sign in | `HPS-04` … `HPS-13`, `HPS-57` | `Sign In`, `Sign Out`, `Signing In`, `Signed In` |
+| 2 | List the vault | `HPS-18`, `HPS-20`, `HPS-21`, `HPS-55` | `Vault` |
+| 3 | Choose a level | `HPS-59` | `Fidelity Level`, the level's token, its size, `Recommended` |
+| 4 | Download | `HPS-18`, `HPS-26`, `HPS-27` | `Download` |
+| 5 | Import, through the import window | `HPS-60` | `Bundle Import`, `Cancel`, `Elapsed`, and a step's state words |
+| 6 | Import a zip from disk, with no account | `HPS-61` | `Import Bundle` |
+| 7 | Refuse a manifest version out of range | `HPS-31` | the refusal is prose, and names the version and the range |
+| 8 | Show credits and notices | `HPS-62` | `Credits`, `Notices` |
+| 9 | Import again | `HPS-63` | `Import Again` |
+
+**The core is a floor, not a ceiling.** A host may do more, and what it does beyond the core is
+**host-only**: it is listed for that host, named as host-only, in [`host-support.md`](host-support.md#the-common-core),
+beside the core and not inside it. A host-only feature is never a rule here, and it takes the host's
+own noun (`HPS-51`) where it names a host construct. A feature moves into the core by a rule in this
+section, when a second host needs it.
+
+**What each host does against the core is stated once**, in that same page's matrix, and nowhere else
+(`HPS-58` states what the core is; the matrix states who has it). A cell there is `supported`, `planned for the 3.0 reader release`, or a named gap.
+
+_Enforcer:_ `agent-review`, plus the matrix, which a pull request that adds, narrows or drops a core action in a host edits in the same change.
+
+**`HPS-59` — A host lets the curator choose one level for a download, from the levels the bundle
+publishes, with each level's size shown and the recommended level preselected.** The levels are the
+glossary's *fidelity levels* (`Max`, `Med` and `Min` are the three a curator is offered; `RAW` stays
+the source data and is not part of this choice). Each reads its token, then its size in the host's own
+size format, before the download starts: a curator choosing between a download of a few megabytes and
+one of a few gigabytes is choosing on the size. The level the platform recommends is selected when the
+choice opens, and `Recommended` is said beside it. A curator who does nothing gets the recommendation,
+and a level the bundle does not publish is **not offered**, never shown disabled without a reason
+(`HPS-51`'s `not available in this version of Mantle Place` is that reason, where the host cannot
+import a level the bundle carries).
+
+**The size and the recommendation are the platform's, applied verbatim** (`HPS-33`): a host sums no
+file sizes of its own and works out no recommendation, because a recommendation is a judgement about
+the order and the host, and a fork that computed one would hold a copy of it. A host that is told no
+recommendation preselects none and says nothing is recommended, rather than guessing.
+
+This is the per-download choice. `HPS-51`'s per-category `Fidelity Level` and `Set All To` words stay as they are, for a host whose import window sets a level for each category; one does not replace the other.
+
+_Enforcer:_ `agent-review`, plus a pure-core test of the preselection and of the size words where a host has moved them out of its shim.
+
+**`HPS-60` — The import runs through an import window that lists the steps with their state, shows the
+current step and the elapsed time, and can be cancelled between steps.** A host that runs an import as one
+call on the host's own thread reports "not responding" for minutes with nothing to show and nothing to
+stop (the failure `HPS-51`'s `Bundle Import` row was written from). The window therefore:
+
+- **lists every step before it runs**, one row each, in the order they run, each with its state in
+  `HPS-51`'s words (`Waiting`, `Importing`, `Done`, `Failed`, `Cancelled`, `Not Run`);
+- **shows the current step**, which is the one row reading `Importing`, and moves it as the import moves;
+- **shows the elapsed time**, as `Elapsed` and a clock that runs while the import runs, so a long step is
+  seen to be long and not stuck;
+- **can be cancelled between steps**: `Cancel` is available for the whole import, a press is honoured
+  when the current step ends and never in the middle of one, and the steps it stopped read `Cancelled`
+  and `Not Run` as `HPS-51` says. A step is never abandoned half-written to honour a press;
+- **keeps the host usable between steps**, so the host's own message pump runs and the host does not
+  read as hung.
+
+What the window lists beyond that is the host's own. A **per-layer checklist** (`HPS-51`'s `Include`,
+which lets the curator leave a step out) is **not part of the core**; it is host-only, and the matrix
+names the host whose window has none.
+
+_Enforcer:_ `agent-review`, plus a pure-core test of the step states and the cancel-between-steps decision where a host has moved them out of its shim.
+
+**`HPS-61` — A host imports a bundle zip from the curator's disk with no account.** `Import Bundle`
+(`HPS-51`) works signed out: no sign-in is asked for, no request reaches the platform, and the zip is
+read, checked and placed exactly as a downloaded one is (`HPS-26` … `HPS-35`, the same version refusal
+`HPS-31` and the same digest checks). A bundle a curator received by email or on a drive is a bundle,
+and an import that needs the vault to open it is an import a stranger cannot try. What the host cannot
+do without an account (listing, downloading, the platform's notices) it does not do, and says so
+without prompting.
+
+_Enforcer:_ `agent-review`, plus a pure-core test that the local-import path reaches no client where a host has moved it out of its shim.
+
+**`HPS-62` — A host shows the credits of what it imported and the notices that concern the curator.**
+
+- **Credits** are the bundle's own attribution words, one line per source, verbatim (`HPS-33`), reachable
+  from the host after the import and not only during it, and kept with the imported content where the
+  host has a place to keep them. A host does not write its own credit lines, and does not drop a source
+  to shorten the list.
+- **Notices** are what the host tells a curator unasked, in two kinds: an order that arrives in the
+  vault, and what an import left out and why (`Unavailable`, `HPS-51`). A notice never blocks, is
+  dismissible, and is bounded: a notice about a listing the curator did not ask for obeys `HPS-55`,
+  and a host that cannot list without an account says nothing signed out.
+
+The words are `Credits` and `Notices`, as the names of the surfaces; the text inside them is the
+bundle's, the platform's or the glossary's.
+
+_Enforcer:_ `agent-review`, plus a pure-core test where a host has moved the decision out of its shim.
+
+**`HPS-63` — A host lets the curator import the same order again, and says what the second import
+did.** `Import Again` (`HPS-51`) is the action; what the host *does* with the earlier import's content
+is the host's, and each host's decision is recorded where it was made: Unreal **replaces** the content
+([ADR 0002](adr/0002-import-identity.md)), and Revit's terrain **refuses** a re-import
+([ADR 0004](adr/0004-revit-terrain-identity.md)). Both are conforming. What this rule fixes is that the
+action exists, that it is never silent about which of those happened, and that a step reads `Done`,
+`Cancelled` or `Not Run` truthfully for the one that just ran (`HPS-51`), so a curator can tell which
+steps a further import will pick up. A host never stacks a second copy of the same order on the first
+without saying so.
+
+_Enforcer:_ `agent-review`.
+
+---
+
 ## Reference-implementation deviations
 
 The shipped code is the version-of-record. This standard is a transcription of it, and
@@ -1395,6 +1518,7 @@ records that eviction is deliberately explicit-only.
 | The bounds on a vault listing nobody asked for (`HPS-55`)                                                                                                                                                  | `agent-review`; a pure-core test where a host has one  |
 | Every host carries Send Feedback, its link and the post-import prompt (`HPS-56`) | `agent-review`, plus a pure-core test of the link builder and of the prompt's once-per-bundle rule |
 | A host with a ribbon or a top-level menu gives Mantle Place a tab of its own (`HPS-57`) | `agent-review`; a pure-core test where a host has one |
+| The common core, its level choice, import window, local import, credits and notices, and re-import (`HPS-58` … `HPS-63`) | `agent-review`; a pure-core test where a host has moved the decision out of its shim; the matrix in `host-support.md` is edited in the same change |
 
 Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS-33`) appear in both rows —
 the corpus proves the behaviour, review catches the shape a vector cannot see. `HPS-53` appears twice

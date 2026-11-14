@@ -129,6 +129,7 @@ internal sealed partial class ImportWindow : Window
         _revitWindow = request.RevitWindow;
 
         Title = WindowLabels.ImportWindowTitle;
+        BrandChrome.ShowMarkInTitleBar(this);
         Width = _checklist.OffersLevels ? WidthWithLevels : 520;
 
         // The height it always had, and taller when the unavailable list below the boxes needs it:

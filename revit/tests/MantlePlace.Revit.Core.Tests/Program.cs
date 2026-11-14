@@ -98,6 +98,7 @@ exitCode |= PlatformApiTests.Run();
 exitCode |= PlatformConformanceTests.Run();
 exitCode |= ConnectedHostTests.Run();
 exitCode |= CuratorExtentTests.Run();
+exitCode |= ShimWindowTests.Run("revit/src/MantlePlace.Revit.Addin", "shim windows");
 
 if (exitCode == 0)
 {

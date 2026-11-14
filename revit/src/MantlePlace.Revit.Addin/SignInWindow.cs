@@ -65,6 +65,7 @@ internal sealed class SignInWindow : Window
         _session = session;
 
         Title = WindowLabels.SignInWindowTitle;
+        BrandChrome.ShowMarkInTitleBar(this);
         Width = 420;
 
         // Exactly the header taller than it was. Fixed, because ResizeMode below means nothing but

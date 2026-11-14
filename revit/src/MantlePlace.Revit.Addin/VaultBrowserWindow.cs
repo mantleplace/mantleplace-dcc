@@ -104,6 +104,7 @@ internal sealed class VaultBrowserWindow : Window
         _importHandler = importHandler;
 
         Title = WindowLabels.VaultWindowTitle;
+        BrandChrome.ShowMarkInTitleBar(this);
         Width = 720;
 
         // The header and the search row taller than it was, so the list keeps about the rows it
