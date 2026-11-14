@@ -53,12 +53,37 @@ public readonly record struct CacheEntry(BundleCacheLayout Layout, CacheVerdict 
 public sealed class BundleCache
 {
     private readonly string? _root;
+    private readonly string _host;
 
-    /// <summary>The cache under <c>%LOCALAPPDATA%</c>.</summary>
-    public BundleCache() => _root = null;
+    /// <summary>The cache under <c>%LOCALAPPDATA%</c>, for the plugin that is loading this code.</summary>
+    public BundleCache()
+    {
+        _root = null;
+        _host = HostIdentity.Id;
+    }
 
     /// <summary>As the default constructor, with an explicit root. For tests.</summary>
-    public BundleCache(string root) => _root = root;
+    public BundleCache(string root)
+    {
+        _root = root;
+        _host = HostIdentity.Id;
+    }
+
+    /// <summary>As the explicit-root constructor, as another host. For tests of the slot.</summary>
+    public BundleCache(string root, string host)
+    {
+        _root = root;
+        _host = host;
+    }
+
+    /// <summary>The host this cache reads and writes a slot for.</summary>
+    public string Host => _host;
+
+    /// <summary>
+    /// The level every download is fetched at today: the highest, which holds every level below it.
+    /// The level a download is cached at varies once the manifest's level control does.
+    /// </summary>
+    public const string HighestLevel = HostViews.EveryEntryLevel;
 
     public BundleCacheLayout LayoutFor(string orderId)
         => _root is null ? BundleCacheLayout.ForOrder(orderId) : BundleCacheLayout.ForOrder(orderId, _root);
@@ -82,8 +107,13 @@ public sealed class BundleCache
     /// <see cref="InspectQuick"/>; this one belongs on the pre-import gate.
     /// </para>
     /// </remarks>
-    public CacheEntry Inspect(string orderId, long? expectedSizeBytes, string? expectedSha256, string? manifestVersion)
-        => Inspect(orderId, expectedSizeBytes, expectedSha256, manifestVersion, hashTheFile: true);
+    public CacheEntry Inspect(
+        string orderId,
+        long? expectedSizeBytes,
+        string? expectedSha256,
+        string? manifestVersion,
+        string level = HighestLevel)
+        => Inspect(orderId, expectedSizeBytes, expectedSha256, manifestVersion, level, hashTheFile: true);
 
     /// <summary>
     /// Inspects what is on disk without hashing it — the listing's view.
@@ -102,14 +132,20 @@ public sealed class BundleCache
     /// the list until the import gate catches it. It does catch it, and before anything is built.
     /// </para>
     /// </remarks>
-    public CacheEntry InspectQuick(string orderId, long? expectedSizeBytes, string? expectedSha256, string? manifestVersion)
-        => Inspect(orderId, expectedSizeBytes, expectedSha256, manifestVersion, hashTheFile: false);
+    public CacheEntry InspectQuick(
+        string orderId,
+        long? expectedSizeBytes,
+        string? expectedSha256,
+        string? manifestVersion,
+        string level = HighestLevel)
+        => Inspect(orderId, expectedSizeBytes, expectedSha256, manifestVersion, level, hashTheFile: false);
 
     private CacheEntry Inspect(
         string orderId,
         long? expectedSizeBytes,
         string? expectedSha256,
         string? manifestVersion,
+        string level,
         bool hashTheFile)
     {
         BundleCacheLayout layout = LayoutFor(orderId);
@@ -121,6 +157,18 @@ public sealed class BundleCache
             return new CacheEntry(
                 layout,
                 CacheValidity.Decide(false, 0, string.Empty, expectedSha256, expectedSizeBytes, manifestVersion),
+                sidecar);
+        }
+
+        // One slot per host per order, holding the last download. A zip fetched for another host, at
+        // another level, or before the slot recorded either is a miss for this caller, never a hit:
+        // a host's view holds only that host's files, so serving it across hosts hides the files the
+        // other host reads.
+        if (sidecar is null || !sidecar.IsSlotOf(_host, level))
+        {
+            return new CacheEntry(
+                layout,
+                new CacheVerdict(false, CacheInvalidReason.NotThisSlot, IntegrityChecked: false),
                 sidecar);
         }
 
@@ -163,6 +211,10 @@ public sealed class BundleCache
     /// For a view, the digest the platform stated for its manifest member — the root every per-file
     /// digest is trusted from. Checked before the rename; <c>null</c> when none was stated.
     /// </param>
+    /// <param name="level">
+    /// The level the body was fetched at, recorded with the host so only a caller asking for the same
+    /// host and level reads it; a download at another level replaces this host's slot for the order.
+    /// </param>
     /// <returns><c>null</c> on success; the entry is then valid and the sidecar written.</returns>
     public async Task<string?> PromoteAsync(
         string orderId,
@@ -173,7 +225,8 @@ public sealed class BundleCache
         DateTimeOffset now,
         CancellationToken cancellationToken,
         bool holdsView = false,
-        string? expectedManifestSha256 = null)
+        string? expectedManifestSha256 = null,
+        string level = HighestLevel)
     {
         ArgumentNullException.ThrowIfNull(writeBody);
 
@@ -248,6 +301,8 @@ public sealed class BundleCache
             DownloadedAtUtc = now.UtcDateTime.ToString("O", CultureInfo.InvariantCulture),
             IntegrityChecked = verdict.IntegrityChecked,
             HoldsView = holdsView,
+            Host = _host,
+            Level = level,
         });
 
         return null;

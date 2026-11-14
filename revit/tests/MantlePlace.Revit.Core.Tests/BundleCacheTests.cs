@@ -229,6 +229,80 @@ internal static class BundleCacheTests
             run.Contains(entry.Describe(), "again", "and the curator is told to download it again");
         });
 
+        run.Case("a download cached for one host is never served to another", () =>
+        {
+            // Revit and AutoCAD share one cache folder, and a host's view holds only that host's files.
+            string root = Path.Combine(sandbox, "hosts");
+            BundleCache revit = new(root, "revit");
+            BundleCache autocad = new(root, "autocad");
+            Promote(revit, bytes, bytes.Length, sha).GetAwaiter().GetResult();
+
+            run.Equal(revit.Inspect(OrderId, bytes.Length, sha, "1.0.0").State.ToString(), "CachedValid", "its own host hits");
+
+            CacheEntry other = autocad.Inspect(OrderId, bytes.Length, sha, "1.0.0");
+            run.Equal(other.State.ToString(), "NotCached", "the other host misses");
+            run.Equal(autocad.InspectQuick(OrderId, bytes.Length, sha, "1.0.0").State.ToString(), "NotCached", "in the listing too");
+            run.Equal(other.Describe(), "Not downloaded.", "and is told so, not that the file is damaged");
+        });
+
+        run.Case("a cache entry written before the host was recorded is fetched again", () =>
+        {
+            BundleCache cache = new(Path.Combine(sandbox, "legacy"));
+            Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
+
+            BundleCacheLayout layout = cache.LayoutFor(OrderId);
+            CacheSidecar current = CacheSidecars.TryParse(File.ReadAllText(layout.SidecarPath))!;
+            run.Equal(current.Host, "revit", "the sidecar records the host");
+            run.Equal(current.Level, BundleCache.HighestLevel, "and the level");
+
+            // The sidecar the shipped plugin wrote: no host, no level.
+            File.WriteAllText(
+                layout.SidecarPath,
+                CacheSidecars.Serialize(new CacheSidecar
+                {
+                    OrderId = OrderId,
+                    SizeBytes = bytes.Length,
+                    Sha256 = sha,
+                    ManifestVersion = ManifestVersions.MinSupportedManifestVersion,
+                    IntegrityChecked = true,
+                }));
+            run.False(File.ReadAllText(layout.SidecarPath).Contains("\"host\"", StringComparison.Ordinal), "no host key written");
+            run.Equal(cache.Inspect(OrderId, bytes.Length, sha, "1.0.0").State.ToString(), "NotCached", "a miss");
+
+            File.Delete(layout.SidecarPath);
+            run.Equal(cache.Inspect(OrderId, bytes.Length, sha, "1.0.0").State.ToString(), "NotCached", "no sidecar at all is a miss too");
+        });
+
+        run.Case("the same host and level hits; another level misses and replaces the slot", () =>
+        {
+            BundleCache cache = new(Path.Combine(sandbox, "levels"));
+            Promote(cache, bytes, bytes.Length, sha, "MED").GetAwaiter().GetResult();
+
+            run.Equal(cache.Inspect(OrderId, bytes.Length, sha, "1.0.0", "MED").State.ToString(), "CachedValid", "same level hits");
+            run.Equal(cache.Inspect(OrderId, bytes.Length, sha, "1.0.0", "MAX").State.ToString(), "NotCached", "another level misses");
+
+            byte[] second = Encoding.UTF8.GetBytes("PK the MAX download");
+            Promote(cache, second, second.Length, Sha256Digest.OfUtf8("PK the MAX download"), "MAX").GetAwaiter().GetResult();
+
+            run.Equal(File.ReadAllText(cache.LayoutFor(OrderId).BundleZipPath), "PK the MAX download", "the download replaced the slot");
+            run.Equal(cache.Inspect(OrderId, second.Length, null, "1.0.0", "MAX").State.ToString(), "CachedValid", "the new level hits");
+            run.Equal(cache.Inspect(OrderId, second.Length, null, "1.0.0", "MED").State.ToString(), "NotCached", "the old level no longer does");
+        });
+
+        run.Case("a host's download replaces the other host's in the shared folder", () =>
+        {
+            string root = Path.Combine(sandbox, "shared");
+            BundleCache revit = new(root, "revit");
+            BundleCache autocad = new(root, "autocad");
+            Promote(revit, bytes, bytes.Length, sha).GetAwaiter().GetResult();
+
+            byte[] view = Encoding.UTF8.GetBytes("PK autocad view");
+            Promote(autocad, view, view.Length, null).GetAwaiter().GetResult();
+
+            run.Equal(autocad.Inspect(OrderId, null, null, "1.0.0").State.ToString(), "CachedValid", "AutoCAD hits its own");
+            run.Equal(revit.Inspect(OrderId, bytes.Length, sha, "1.0.0").State.ToString(), "NotCached", "Revit fetches its own again");
+        });
+
         run.Case("eviction is explicit and per-order, and there is no other kind", () =>
         {
             // HPS-44. A host that reclaims disk on the curator's behalf has silently converted an
@@ -275,7 +349,7 @@ internal static class BundleCacheTests
         });
     }
 
-    private static Task<string?> Promote(BundleCache cache, byte[] bytes, long expectedSize, string? expectedSha)
+    private static Task<string?> Promote(BundleCache cache, byte[] bytes, long expectedSize, string? expectedSha, string level = BundleCache.HighestLevel)
         => cache.PromoteAsync(
             OrderId,
             async (destination, token) => await destination.WriteAsync(bytes, token).ConfigureAwait(false),
@@ -283,7 +357,8 @@ internal static class BundleCacheTests
             expectedSha,
             ManifestVersions.MinSupportedManifestVersion,
             DateTimeOffset.UnixEpoch,
-            CancellationToken.None);
+            CancellationToken.None,
+            level: level);
 
     private static void TryDelete(string directory)
     {

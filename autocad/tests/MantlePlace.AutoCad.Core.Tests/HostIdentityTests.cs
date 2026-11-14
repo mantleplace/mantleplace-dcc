@@ -65,6 +65,39 @@ internal static class HostIdentityTests
                 "the view, not the whole bundle, because the tree points are Revit's to read");
         });
 
+        run.Case("the cache holds this plugin's slot: a download Revit cached is a miss here", () =>
+        {
+            string root = Path.Combine(Path.GetTempPath(), "mp-autocad-slot-" + Guid.NewGuid().ToString("N")[..8]);
+            try
+            {
+                byte[] bytes = System.Text.Encoding.UTF8.GetBytes("PK a view");
+                Task<string?> Promote(BundleCache cache) => cache.PromoteAsync(
+                    "order-1",
+                    async (destination, token) => await destination.WriteAsync(bytes, token).ConfigureAwait(false),
+                    bytes.Length,
+                    null,
+                    ManifestVersions.MinSupportedManifestVersion,
+                    DateTimeOffset.UnixEpoch,
+                    CancellationToken.None);
+
+                Promote(new BundleCache(root, "revit")).GetAwaiter().GetResult();
+
+                BundleCache mine = new(root);
+                run.Equal(mine.Host, "autocad", "this plugin's cache reads the autocad slot");
+                run.Equal(mine.Inspect("order-1", null, null, null).State.ToString(), "NotCached", "Revit's view is not served here");
+
+                Promote(mine).GetAwaiter().GetResult();
+                run.Equal(mine.Inspect("order-1", null, null, null).State.ToString(), "CachedValid", "its own download hits");
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        });
+
         return run.Report("Host identity");
     }
 }
