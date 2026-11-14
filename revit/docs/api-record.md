@@ -397,13 +397,26 @@ renderer-neutral.
   bundle was clipped to its crop window. The hand-made half is the manifest's pointer and
   `file_frame`; the contour files are the bundles' own. What is settled headlessly is everything
   else — `PublishedContourReader`, `PublishedContours` and `ContourIdentity`.
-- **Open in Curator's calls are compiled and unexecuted.** `Schema.Lookup` over the provenance schema,
-  `SiteLocation.Latitude`, `Longitude` and `PlaceName` read on the command's thread, and a
-  `TaskDialog` with four command links have not run in a real Revit; nor has the command's bounded
-  wait on the vault listing. What is settled headlessly is everything that decides anything:
-  `CuratorExtents`, `CuratorLink` and the listing's `extent`. A project nobody located may still carry the
-  site location its template ships with, which the plugin cannot tell from a chosen one: the size
-  dialog names it (`PlaceName`) for the curator to see, and only exactly 0, 0 is refused as unlocated.
+- **Open in Curator's calls have left that set, and running them is what found its fault.** On
+  2026-11-13 every ribbon command ran once in Revit 2025, 2026 and 2027, in a harness-launched Revit
+  that loaded a build of the branch and posted each button's own command, in a new project with
+  Revit's default site location and no import. `Schema.Lookup` over the provenance schema (which
+  finds nothing in a project never imported into), `SiteLocation.Latitude`, `Longitude` and
+  `PlaceName` read on the command's thread, and the size `TaskDialog` with four command links all
+  ran: the dialog showed the four sizes, and each one opened the curator in the browser. Before
+  that run the dialog never showed. It named `TaskDialogResult.CommandLink1` as its
+  `DefaultButton` in the object initializer, before any `AddCommandLink`, and Revit checks the
+  default when it is set: the command stopped with "Corresponding button not found. Parameter
+  name: defaultButton", which Revit reports as "could not complete the external command". The
+  default is now set after the links, and `ShimWindowTests` fails a shim file that sets a command
+  link as the default before adding one. The read of the provenance record itself
+  (`ProjectInformation.GetEntity`) ran in the attribution step's harness runs above. What has
+  still not run in a real Revit is the command's other path, the plugin's own bounded wait on the
+  vault listing, which needs a signed-in curator and a project the plugin imported into. What is
+  settled headlessly is everything that decides anything: `CuratorExtents`, `CuratorLink` and the
+  listing's `extent`. A project nobody located may still carry the site location its template
+  ships with, which the plugin cannot tell from a chosen one: the size dialog names it
+  (`PlaceName`) for the curator to see, and only exactly 0, 0 is refused as unlocated.
 - **The plugin is renderer-neutral, and that bites whoever reads Twinmotion or Enscape in an old
   issue and reaches for their storage.** It writes Revit elements sized as published, with names a
   renderer recognises (a water body's and a road surface's layer word, `GroundLayerWords`), and leaves a renderer's own storage to the curator —
