@@ -1,0 +1,20 @@
+# Shared .NET code — build output. The same rules as revit/.gitignore and autocad/.gitignore: the
+# repo-root .gitignore holds only cross-host rules.
+
+bin/
+obj/
+
+# Visual Studio / Rider local state. *.slnx IS tracked (it is the solution of record); the legacy
+# *.sln and the per-user files are not.
+.vs/
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.idea/
+
+# NuGet is not used in this tree (see Directory.Build.props) — if that ever changes, these keep a
+# restore from landing in git.
+packages/
+*.nupkg

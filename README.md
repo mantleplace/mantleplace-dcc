@@ -172,6 +172,8 @@ and imagery beside the imported Landscape.*
 ## Repository layout
 
 The layout, directory by directory, is in [`CLAUDE.md`](CLAUDE.md#layout), which keeps it current.
+The host-neutral .NET code the Revit and AutoCAD plugins both build from is in
+[`shared/`](shared/README.md).
 
 Start with each host's own docs: [`unreal/README.md`](unreal/README.md) for Unreal,
 [`revit/README.md`](revit/README.md) for Revit, [`autocad/README.md`](autocad/README.md) for AutoCAD and Civil 3D, and [`blender/README.md`](blender/README.md) for the
@@ -183,8 +185,8 @@ in [`docs/platform-auth-contract.md`](docs/platform-auth-contract.md).
 **Revit** — no Revit install needed for the tests:
 
 ```bash
-dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -f net8.0
-dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -f net10.0
+dotnet run --project shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -f net8.0
+dotnet run --project shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -f net10.0
 ```
 
 Building the plugin shim itself needs Revit 2025's API present — see

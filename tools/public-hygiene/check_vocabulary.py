@@ -72,7 +72,7 @@ ANY_H2 = re.compile(r"(?m)^##[ \t]+\S")
 RECORD_PREFIXES = ("docs/adr/", "spec/changelog.md")
 
 # Where host strings live. Production code only; the scan skips any path with a test component.
-HOST_ROOTS = ("unreal/", "revit/", "blender/")
+HOST_ROOTS = ("unreal/", "revit/", "blender/", "shared/")
 HOST_SUFFIXES = (".cs", ".cpp", ".h", ".py", ".uplugin")
 TEST_PATH = re.compile(r"(?i)(^|/)[^/]*tests?[^/]*(/|\.[a-z]+$)|(^|/)test_[^/]*$")
 

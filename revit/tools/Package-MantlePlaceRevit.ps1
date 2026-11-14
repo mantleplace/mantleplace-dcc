@@ -10,7 +10,7 @@
     Autodesk storefront and by hand: the copy-first install in README.txt reads Contents exactly as
     before.
 
-    PackageContents.xml is built by a pure function in MantlePlace.Revit.Core
+    PackageContents.xml is built by a pure function in MantlePlace.Core
     (AutodeskBundleManifest), reached through tools/WriteBundleManifest, from the version the build
     was compiled with. This script fails when that version differs from the one
     Directory.Build.props declares, the same stale-build check the shim gets.

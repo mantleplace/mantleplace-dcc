@@ -1,7 +1,7 @@
 using System.Windows;
 using MantlePlace.PlatformApi;
-using MantlePlace.Revit.Client;
-using MantlePlace.Revit.Core;
+using MantlePlace.Client;
+using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 

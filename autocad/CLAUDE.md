@@ -1,6 +1,6 @@
 ---
 name: autocad-host-onboarding
-description: Onboarding for the AutoCAD plugin (plain AutoCAD and Civil 3D, 2025/2026/2027) - the two builds from one source, the Revit sources compiled in by include, the Core / Addin / Civil 3D part split, the frame kind (order-frame, HPS-54), the one version home, and the traps (CI never builds the shell, the Civil 3D part is its own assembly). An index; the detail is in `autocad/README.md` and `autocad/docs/`. Read first for any change under `autocad/`.
+description: Onboarding for the AutoCAD plugin (plain AutoCAD and Civil 3D, 2025/2026/2027) - the two builds from one source, the shared Core, Client and Platform API projects it references, the Core / Addin / Civil 3D part split, the frame kind (order-frame, HPS-54), the one version home, and the traps (CI never builds the shell, the Civil 3D part is its own assembly). An index; the detail is in `autocad/README.md` and `autocad/docs/`. Read first for any change under `autocad/`.
 ---
 
 # Mantle Place for AutoCAD - agent onboarding
@@ -33,18 +33,19 @@ here in a line, and its detail lives in the document it links.
 ## Layout and the split that matters
 
 ```
-src/MantlePlace.AutoCad.Core/     PURE. No AutoCAD API, no NuGet. net8.0 + net10.0. Compiles Revit's Core,
-                                  Client and PlatformApi sources by include, plus its own decisions.
+src/MantlePlace.AutoCad.Core/     PURE. No AutoCAD API, no NuGet. net8.0 + net10.0. Its own decisions; it
+                                  references the shared Core, Client and PlatformApi projects (../shared/).
 src/MantlePlace.AutoCad.Addin/    IMPURE and AutoCAD. The shell: commands, the app entry point. Both -windows TFMs.
 src/MantlePlace.AutoCad.Civil3d/  IMPURE and Civil 3D. The only assembly that references Civil 3D's API.
 tests/MantlePlace.AutoCad.Core.Tests/   Headless, over Core. net8.0 + net10.0.
 tools/                            Packaging, deploy, the manifest writer, the Civil 3D spike.
 ```
 
-- **Shared source, no shared assembly.** The host-free Revit sources (`Core`, `Client`,
-  `PlatformApi`) are compiled into `MantlePlace.AutoCad.Core` by `Compile Include` with a
-  `LinkBase`, so the next .NET host takes shipped code (`HPS-43`) and nothing ships as a dependency
-  of two plugins. Edit them in `revit/`; the AutoCAD build picks the change up. Do not copy them.
+- **Shared projects, each plugin its own copy.** The host-neutral `Core`, `Client` and `PlatformApi`
+  live in [`shared/`](../shared/README.md), and `MantlePlace.AutoCad.Core` references them as
+  projects, so the next .NET host takes shipped code (`HPS-43`). Each plugin ships its own copy of
+  the shared assemblies beside its own; nothing is installed once for two plugins. Edit them in
+  `shared/`; both builds pick the change up. Do not copy them.
 - **Civil 3D is its own assembly, loaded behind a presence test.** Only `MantlePlace.AutoCad.Civil3d`
   references Civil 3D's API, so plain AutoCAD never resolves it. The shell loads it only when
   `Presence.Decide` says Civil 3D is loaded (`AeccLand.dbx` is a module of the process; the evidence
@@ -78,8 +79,9 @@ key this suite must assert, or it fails.
 
 ## Host identity, windows and the ribbon
 
-- **The platform is told `autocad`, from one place.** `HostIdentity.Id` in Revit's `Core` is `revit`
-  there and `autocad` here (`MANTLEPLACE_AUTOCAD`, defined by `MantlePlace.AutoCad.Core.csproj`); the
+- **The platform is told `autocad`, from one place.** `HostIdentity.Id` in the shared `Core` is set
+  at load by each shell: `revit` there and `autocad` here (`HostRegistration.cs`, from
+  `AutoCadBlockReader.HostKey`, with the shell's own version); the
   sign-in route, the `Mantle-Place-Client` header, the connected-host presence and the feedback
   `source` all read it. A shared source that spells `revit` out makes this plugin a second Revit to the
   platform.

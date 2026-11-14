@@ -4,7 +4,7 @@
 using System.Globalization;
 using System.Text;
 using MantlePlace.Revit.CarrierSpike;
-using MantlePlace.Revit.Core;
+using MantlePlace.Core;
 
 // "--compare <extracted bundle> <carrier folder>": the headless comparison table over a real bundle,
 // the same table the in-Revit probe writes (README.md).

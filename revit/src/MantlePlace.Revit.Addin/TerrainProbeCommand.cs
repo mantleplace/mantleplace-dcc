@@ -6,8 +6,8 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Visual;
 using Autodesk.Revit.UI;
-using MantlePlace.Revit.Client;
-using MantlePlace.Revit.Core;
+using MantlePlace.Client;
+using MantlePlace.Core;
 using Microsoft.Win32;
 
 namespace MantlePlace.Revit.Addin;

@@ -3,8 +3,8 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Interop;
 using MantlePlace.AutoCad;
-using MantlePlace.Revit.Client;
-using MantlePlace.Revit.Core;
+using MantlePlace.Client;
+using MantlePlace.Core;
 
 namespace MantlePlace.AutoCad.Addin;
 

@@ -136,7 +136,7 @@ $accentColour = 0xFF7110
 
 # The two slots a Revit ribbon button has: Image at 16 px and LargeImage at 32 px. The mark ships in
 # five sizes because a private renderer can afford to; these ship in the two the ribbon asks for, and
-# MantlePlace.Revit.Core.RibbonGlyphs is what decides which of the two a scaled display is handed.
+# MantlePlace.Core.RibbonGlyphs is what decides which of the two a scaled display is handed.
 $sizes = @(16, 32)
 
 # Tabler draws on a 24 unit grid with a 2 unit stroke, and that ratio is kept rather than rounded to

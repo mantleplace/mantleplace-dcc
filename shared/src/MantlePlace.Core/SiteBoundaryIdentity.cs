@@ -1,0 +1,335 @@
+using System.Globalization;
+
+namespace MantlePlace.Core;
+
+/// <summary>One site-boundary feature the current import still has to create.</summary>
+/// <param name="Ordinal">The feature's ONE-based position in the layer, the same number the stamp carries.</param>
+/// <param name="Stamp">The identity written to the subdivision's Comments parameter.</param>
+public readonly record struct NewSiteBoundary(int Ordinal, string Stamp);
+
+/// <summary>Which published polygon layer a subdivision was cut from.</summary>
+/// <remarks>
+/// <para>
+/// The layer is the stamp's kind, so it is part of the identity: every layer stamps an unnamed
+/// feature by its position, and without the kind land-use feature 1 would read as land-cover
+/// feature 1 already cut. These are four different Overture layers, not four names for one — a
+/// bundle can carry any of them, all of them or none.
+/// </para>
+/// <para>
+/// Only <see cref="Water"/> and <see cref="RoadSurface"/> are cut today
+/// (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>). <see cref="LandUse"/> and
+/// <see cref="LandCover"/> are kept so the subdivisions an earlier build cut from them are still
+/// recognised as this plugin's, and still draped, rather than read as a curator's own.
+/// </para>
+/// </remarks>
+public enum GroundLayer
+{
+    /// <summary>
+    /// <c>vector.layers[name=="land_use"]</c>, as an earlier build cut it. Stamped
+    /// <c>Mantle Place Site Boundary</c>; drawn on a land plan now (<see cref="LandPlan"/>).
+    /// </summary>
+    LandUse,
+
+    /// <summary>
+    /// <c>vector.layers[name=="land_cover"]</c>, as an earlier build cut it. Stamped
+    /// <c>Mantle Place Land Cover</c>; drawn on a land plan now (<see cref="LandPlan"/>).
+    /// </summary>
+    LandCover,
+
+    /// <summary>
+    /// The polygons of <c>vector.layers[name=="water"]</c> — its water bodies, never its stream
+    /// centrelines. Stamped <c>Mantle Place Water</c>.
+    /// </summary>
+    Water,
+
+    /// <summary>
+    /// <c>vector.layers[name=="road_polygons"]</c> — the road surfaces, already widened, merged per
+    /// class and cut so no two overlap. Stamped <c>Mantle Place Road Surface</c>, which no road
+    /// centreline's <c>Mantle Place Road</c> stamp can be mistaken for.
+    /// </summary>
+    RoadSurface,
+}
+
+/// <summary>An owned subdivision stamp, taken apart: which layer, and the per-feature token.</summary>
+public readonly record struct GroundStamp(GroundLayer Layer, string Token);
+
+/// <summary>
+/// Everything that is spelled differently for the two layers, in one place, so a third layer is one
+/// row rather than a hunt for every <c>if</c> on the layer.
+/// </summary>
+/// <param name="StampKind">The stamp's kind: <c>Mantle Place {StampKind} {stem}/{token}</c>.</param>
+/// <param name="MaterialKind">The word a per-subdivision drape material carries before its token.</param>
+/// <param name="Label">The layer in a log sentence, plural: "Skipped the {Label}".</param>
+/// <param name="Noun">The layer as an adjective on "subdivision(s)".</param>
+/// <param name="MaterialWord">
+/// The surface's own name, which a subdivision's drape material carries as its last words, or
+/// <c>null</c> for a layer whose subdivisions name none (<see cref="GroundMaterialNames"/>).
+/// </param>
+/// <remarks>
+/// <para>
+/// ⛔ <b>The material word is a plain name first and a renderer keyword second.</b> Every polygon in
+/// <c>water</c> is water — the subtypes under it (<c>reservoir</c>, <c>pond</c>, <c>human_made</c>
+/// for a swimming pool) are the kind of water body, not a different surface — and every polygon in
+/// <c>road_polygons</c> is a road surface, merged per class before it was published. Enscape's
+/// documentation lists <c>water</c> among the words it reads out of a material name; nothing
+/// documents <c>asphalt</c> to any renderer, and it is here because it is what the surface is
+/// called. No renderer effect is claimed as verified for either — that is a licensed check a human
+/// makes.
+/// </para>
+/// <para>
+/// The two land layers name none. Their per-subtype grass words went with their subdivisions
+/// (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>), so a land subdivision an
+/// earlier build cut is named for its order and token alone when it is draped again.
+/// </para>
+/// </remarks>
+public sealed record GroundLayerWords(string StampKind, string MaterialKind, string Label, string Noun, string? MaterialWord)
+{
+    /// <summary>The words for <paramref name="layer"/>.</summary>
+    /// <remarks>
+    /// Land use keeps the spellings it had before land cover existed — the stamp's kind and the
+    /// material's word are identity, and changing either would have a re-import miss every
+    /// subdivision and material an earlier import made.
+    /// </remarks>
+    /// <remarks>
+    /// ⛔ <b>Every layer is named here, and an unnamed one throws rather than falling through.</b>
+    /// The stamp's kind is the identity, and a default arm would give a layer nobody worded the
+    /// land-use spelling — so <see cref="SiteBoundaryIdentity.Parse"/> would read that layer's
+    /// subdivisions as land use, and a re-import would leave them alone as something else's.
+    /// </remarks>
+    public static GroundLayerWords For(GroundLayer layer) => layer switch
+    {
+        GroundLayer.LandUse => new("Site Boundary", "boundary", SiteVectorLayers.LandUse.Label, "site boundary", MaterialWord: null),
+        GroundLayer.LandCover => new("Land Cover", "land cover", SiteVectorLayers.LandCover.Label, "land cover", MaterialWord: null),
+        GroundLayer.Water => new("Water", "water body", SiteVectorLayers.Water.Label, "water", "water"),
+        GroundLayer.RoadSurface => new("Road Surface", "road surface", SiteVectorLayers.RoadPolygons.Label, "road", "asphalt"),
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(layer),
+            layer,
+            "This layer has no words, so its subdivisions have no identity of their own."),
+    };
+}
+
+/// <summary>
+/// Decides which site-boundary features an import still has to create, and what identity each new
+/// subdivision is stamped with.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A subdivision has no name slot, so the <c>Material</c>/<c>ToposolidType</c> precedent —
+/// name-from-cache-key, reuse when found — lands in its instance Comments parameter instead. The
+/// stamp is <c>Mantle Place Site Boundary {stem}/{feature}</c> for a land-use polygon and
+/// <c>Mantle Place Land Cover {stem}/{feature}</c> for a land-cover one: the stem scopes it to one bundle, so
+/// a boundary from a different order never reads as "already present", and the feature half is the
+/// GeoJSON name where there is one and the one-based position where there is not.
+/// </para>
+/// <para>
+/// Geometric identity — comparing curve loops against what is already on the terrain — was rejected:
+/// a subdivision's profile is projected onto the relief, so the loops Revit hands back are not the
+/// flat z=0 loops this import drew, and comparing them means new API surface plus a tolerance nobody
+/// can defend. A string in a parameter is decidable here, headlessly.
+/// </para>
+/// <para>
+/// This lives in the pure core for the reason <c>ImportStepKinds.LifetimeOf</c> does: the create/skip
+/// decision is policy, and policy in the shim is covered by nothing but review (HPS-02).
+/// </para>
+/// </remarks>
+public static class SiteBoundaryIdentity
+{
+    /// <summary>The stamp for one feature, before any list-level disambiguation.</summary>
+    /// <remarks>
+    /// A null or blank name falls back to the one-based position. Duplicate names are the caller's
+    /// list-level problem and are resolved by <see cref="NewFeatures"/>, which suffixes the position
+    /// — one feature alone cannot know its name is shared.
+    /// </remarks>
+    public static string Stamp(GroundLayer layer, string cacheKeyStem, string? featureName, int oneBasedIndex)
+    {
+        ArgumentNullException.ThrowIfNull(cacheKeyStem);
+        return OwnedPrefix(layer, cacheKeyStem) + TokenOf(featureName, oneBasedIndex);
+    }
+
+    /// <summary>
+    /// Every feature's stamp, in layer order, whether or not its subdivision already exists.
+    /// </summary>
+    /// <remarks>
+    /// What pairs a subdivision on the terrain with the published feature it was cut from, on an
+    /// import that cut it and on one that found it already there alike.
+    /// </remarks>
+    public static IReadOnlyList<string> Stamps(
+        GroundLayer layer,
+        IReadOnlyList<string?> featureNames,
+        string cacheKeyStem)
+    {
+        ArgumentNullException.ThrowIfNull(featureNames);
+        ArgumentNullException.ThrowIfNull(cacheKeyStem);
+
+        string prefix = OwnedPrefix(layer, cacheKeyStem);
+        return [.. DistinctTokens(featureNames).Select(token => prefix + token)];
+    }
+
+    /// <summary>
+    /// The features the current import still has to create: every feature whose stamp is not already
+    /// present, each paired with the stamp its subdivision must carry.
+    /// </summary>
+    /// <remarks>
+    /// Comparison is ordinal over the FULL stamp, so a stamp written by a different bundle's stem can
+    /// never suppress a creation here. An empty <paramref name="existingStamps"/> — the first import —
+    /// returns every feature.
+    /// </remarks>
+    public static IReadOnlyList<NewSiteBoundary> NewFeatures(
+        GroundLayer layer,
+        IReadOnlyCollection<string> existingStamps,
+        IReadOnlyList<string?> featureNames,
+        string cacheKeyStem)
+    {
+        ArgumentNullException.ThrowIfNull(existingStamps);
+
+        HashSet<string> existing = new(existingStamps, StringComparer.Ordinal);
+        IReadOnlyList<string> stamps = Stamps(layer, featureNames, cacheKeyStem);
+
+        List<NewSiteBoundary> created = [];
+        for (int index = 0; index < stamps.Count; index++)
+        {
+            if (!existing.Contains(stamps[index]))
+            {
+                created.Add(new NewSiteBoundary(index + 1, stamps[index]));
+            }
+        }
+
+        return created;
+    }
+
+    /// <summary>
+    /// Whether a subdivision's Comments string is a stamp THIS plugin wrote for THIS bundle, from
+    /// either layer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The drape needs this because the material goes on each subdivision itself — on the instance in
+    /// Revit 2025, where a subdivision is typeless, and through a type of its own in 2026 and 2027,
+    /// where it is typed (<see cref="SubDivisionMaterial"/>) — so the instance has to be found. Finding it by
+    /// stamp rather than by an id remembered from this session is what makes a RE-import able to
+    /// repair un-draped patches — the remembered list is empty whenever the boundaries already exist,
+    /// so a second import used to drape nothing at all while reporting success.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The stem half is what keeps the trespass rule.</b> A curator's own subdivision carries no
+    /// stamp, and another order's carries a different stem, so neither can match. That is the same
+    /// line this plugin draws when it declines to edit the project's own toposolid type: touch what
+    /// this import owns, and nothing else.
+    /// </para>
+    /// </remarks>
+    public static bool IsStampFor(string? comments, string cacheKeyStem) => Parse(comments, cacheKeyStem) is not null;
+
+    /// <summary>
+    /// A stamp this import owns, taken apart into its layer and its per-feature token — the part
+    /// after the stem — or <c>null</c> for any other Comments.
+    /// </summary>
+    /// <remarks>
+    /// The token is what names a subdivision's own drape material, so a re-import finds the material
+    /// it made rather than growing another; the layer keeps the two layers' materials apart.
+    /// </remarks>
+    public static GroundStamp? Parse(string? comments, string cacheKeyStem)
+    {
+        ArgumentNullException.ThrowIfNull(cacheKeyStem);
+
+        if (comments is null)
+        {
+            return null;
+        }
+
+        foreach (GroundLayer layer in Layers)
+        {
+            // Ordinal over the whole prefix INCLUDING the separator. Without the trailing "/", stem
+            // "abc" would claim stem "abcdef"'s subdivisions — and cache-key stems are truncated
+            // hashes, where one being a prefix of another is a collision waiting rather than a
+            // hypothetical.
+            string prefix = OwnedPrefix(layer, cacheKeyStem);
+            if (comments.StartsWith(prefix, StringComparison.Ordinal) && comments.Length > prefix.Length)
+            {
+                return new GroundStamp(layer, comments[prefix.Length..]);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The stamp a subdivision's drape material and type are named by: the one it carries, else the
+    /// one it was cut with, else its element id under the land-use spelling this plugin has always
+    /// used for an unstamped cut.
+    /// </summary>
+    /// <param name="comments">What its Comments parameter holds.</param>
+    /// <param name="stampCutWith">The stamp this import tried to write on it, or <c>null</c> for one this import did not cut.</param>
+    /// <param name="elementId">Revit's <c>ElementId</c> value.</param>
+    /// <param name="cacheKeyStem">The bundle's cache-key stem.</param>
+    /// <remarks>
+    /// A cut whose Comments refused the stamp used to be named by its id alone. The pair made for it
+    /// as it was cut then outlived a refusal at commit under a name no later import computes; named
+    /// by the feature instead, the next import that cuts that feature finds and reuses it.
+    /// </remarks>
+    public static GroundStamp NamingStamp(string? comments, string? stampCutWith, long elementId, string cacheKeyStem)
+        => Parse(comments, cacheKeyStem)
+            ?? Parse(stampCutWith, cacheKeyStem)
+            ?? new GroundStamp(GroundLayer.LandUse, elementId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <summary>Every layer whose stamps this reads, so a new one is recognised the day it is added.</summary>
+    private static readonly GroundLayer[] Layers = Enum.GetValues<GroundLayer>();
+
+    /// <summary>Everything a stamp of this layer and bundle starts with, separator included.</summary>
+    private static string OwnedPrefix(GroundLayer layer, string cacheKeyStem)
+        => "Mantle Place " + GroundLayerWords.For(layer).StampKind + " " + cacheKeyStem + "/";
+
+    /// <summary>
+    /// One token per feature, guaranteed pairwise distinct: two features named "Zone A" must not
+    /// share a stamp, or the second import would recreate whichever one lost the race.
+    /// </summary>
+    /// <remarks>
+    /// The rule: a blank name is its one-based position; a name shared with another feature (or
+    /// colliding with any other token, however it arose — a feature literally named "Zone A 2" next
+    /// to a duplicated "Zone A") gets the position appended. Position-suffixed tokens end in their
+    /// own distinct integer, so they cannot collide with each other, which is what makes the loop
+    /// terminate: every pass converts at least one still-plain token or there is nothing left to
+    /// collide.
+    /// </remarks>
+    private static IReadOnlyList<string> DistinctTokens(IReadOnlyList<string?> featureNames)
+    {
+        string[] tokens = new string[featureNames.Count];
+        bool[] indexed = new bool[featureNames.Count];
+        for (int index = 0; index < featureNames.Count; index++)
+        {
+            tokens[index] = TokenOf(featureNames[index], index + 1);
+            indexed[index] = IsBlank(featureNames[index]);
+        }
+
+        bool collided = true;
+        while (collided)
+        {
+            collided = false;
+            Dictionary<string, int> counts = new(StringComparer.Ordinal);
+            foreach (string token in tokens)
+            {
+                counts[token] = counts.TryGetValue(token, out int count) ? count + 1 : 1;
+            }
+
+            for (int index = 0; index < tokens.Length; index++)
+            {
+                if (!indexed[index] && counts[tokens[index]] > 1)
+                {
+                    tokens[index] = tokens[index] + " " + IndexText(index + 1);
+                    indexed[index] = true;
+                    collided = true;
+                }
+            }
+        }
+
+        return tokens;
+    }
+
+    private static string TokenOf(string? featureName, int oneBasedIndex)
+        => IsBlank(featureName) ? IndexText(oneBasedIndex) : featureName!.Trim();
+
+    private static bool IsBlank(string? featureName) => string.IsNullOrWhiteSpace(featureName);
+
+    private static string IndexText(int oneBasedIndex)
+        => oneBasedIndex.ToString(CultureInfo.InvariantCulture);
+}

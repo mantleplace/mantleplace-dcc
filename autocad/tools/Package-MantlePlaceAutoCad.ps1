@@ -12,7 +12,7 @@
     Contents holds the two builds the plugin ships: net8 (AutoCAD and Civil 3D 2025 and 2026, which run
     .NET 8) and net10 (2027, which runs .NET 10). Each holds the shell, the Civil 3D part and the
     plugin's own core; PackageContents.xml names, for every year, the shell of the build that year
-    loads. No assembly is shared with the Revit plugin: the Revit sources it reuses are compiled into
+    loads. No assembly is installed once for both plugins: the shared projects it reuses (shared/) ship as its own copy, beside
     this plugin's core.
 
     PackageContents.xml is built by the same pure function the Revit package uses

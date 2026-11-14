@@ -1,4 +1,4 @@
-# Exports revit\ of one commit into <work root>\src\<short-sha>\ (with a COMMIT file), for -SourceRoot.
+# Exports revit\ (and shared\, from the commit that moved the Core and Client there) of one commit into <work root>\src\<short-sha>\ (with a COMMIT file), for -SourceRoot.
 # Read-only against the repository: `git archive` never touches a working tree, so a checkout other sessions
 # edit is never used as a source.
 #
@@ -30,7 +30,10 @@ if (Test-Path (Join-Path $dest 'COMMIT')) { Write-Host "$dest already exists"; r
 $tarFile = Join-Path $work "src\$short.tar"
 # git archive -o does not make the folder it writes into, and on a fresh work root src\ does not exist yet.
 New-Item -ItemType Directory -Force (Split-Path -Parent $tarFile) | Out-Null
-& git -C $Repo archive --format=tar -o $tarFile $sha revit
+$paths = @('revit')
+& git -C $Repo cat-file -e "${sha}:shared" 2>$null
+if ($LASTEXITCODE -eq 0) { $paths += 'shared' }
+& git -C $Repo archive --format=tar -o $tarFile $sha @paths
 if ($LASTEXITCODE -ne 0) { Remove-Item -LiteralPath $tarFile -Force -ErrorAction SilentlyContinue; throw "git archive of $sha failed" }
 New-Item -ItemType Directory -Force $dest | Out-Null
 # Windows' own tar: a GNU tar earlier on PATH (Git's usr\bin, when this runs from Git Bash) reads 'D:' in a path as

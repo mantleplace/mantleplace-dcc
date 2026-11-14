@@ -1,0 +1,143 @@
+namespace MantlePlace.Core;
+
+/// <summary>How a Prepare ended.</summary>
+public enum PrepareEnding
+{
+    /// <summary>The bundle is downloaded, verified, and waiting for Import.</summary>
+    Ready,
+
+    /// <summary>The platform refused or failed the build, or the download did not land a valid zip.</summary>
+    Failed,
+
+    /// <summary>
+    /// The poll ran out of budget (<c>HPS-25</c>) with the job still building. The job goes on; only
+    /// the watching stopped, and a Prepare on the same order rejoins it (<c>HPS-24</c>).
+    /// </summary>
+    StillPreparing,
+
+    /// <summary>The curator pressed Cancel.</summary>
+    Cancelled,
+
+    /// <summary>
+    /// Revit stopped watching before the Prepare ended: it is shutting down, or a re-join could not
+    /// reach the platform. The job goes on, and the next start or sign-in re-joins it
+    /// (<see cref="InterruptedPrepares"/>). Never announced.
+    /// </summary>
+    Interrupted,
+}
+
+/// <summary>What the curator is told about one Prepare, and which bundle it opens the vault on.</summary>
+public readonly record struct PrepareNotice(string OrderId, PrepareEnding Ending, string Text);
+
+/// <summary>
+/// Whether a Prepare's ending is worth telling the curator about, and in what words. Pure.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A notice is for a job nobody is watching. <b>While the vault is open there is none</b>: the vault
+/// already shows what happened, and a second saying of it is noise. <b>A cancel is never announced</b>:
+/// the curator pressed it. <b>Nor is an interruption</b>: nothing has ended, and the re-join
+/// announces the real ending when there is one. <b>Signed out, only a download that finished
+/// is</b>: a failure after a sign-out is the sign-out's doing, which the curator chose, and the job
+/// goes on untouched on the platform (<c>HPS-24</c>). A bundle that finished downloading is on disk,
+/// and importing it needs no sign-in at all, so that one is still news.
+/// </para>
+/// <para>
+/// Signed-out is read when the Prepare <em>ends</em>, not from the auth event stream. A token the
+/// other host rotated shows here as a brief sign-out before the retry succeeds; a watch that
+/// reacted to the event would drop itself on that blip, whereas a signed-out poll ends on its own
+/// consecutive-failure cap, a few seconds later, by which time the session has settled.
+/// </para>
+/// </remarks>
+public static class PrepareNotices
+{
+    /// <summary>How long a notice stays up when nobody touches it.</summary>
+    public const double ShowSeconds = 10.0;
+
+    /// <summary>The name a notice gives a bundle: its area's label, or its order when it has none.</summary>
+    public static string LabelOf(string aoiLabel, string orderId)
+        => string.IsNullOrWhiteSpace(aoiLabel) ? orderId : aoiLabel.Trim();
+
+    /// <summary>The notice for one ending, or <c>null</c> when there is nothing to tell.</summary>
+    /// <param name="orderId">The order the notice opens the vault on.</param>
+    /// <param name="label">The bundle's name, from <see cref="LabelOf"/>.</param>
+    /// <param name="ending">How the Prepare ended.</param>
+    /// <param name="detail">The reason, for a failure. Ignored otherwise.</param>
+    /// <param name="vaultOpen">Whether the vault browser is open as the Prepare ends.</param>
+    /// <param name="signedIn">Whether the session is signed in as the Prepare ends.</param>
+    public static PrepareNotice? For(
+        string orderId,
+        string label,
+        PrepareEnding ending,
+        string detail,
+        bool vaultOpen,
+        bool signedIn)
+    {
+        if (vaultOpen || ending is PrepareEnding.Cancelled or PrepareEnding.Interrupted)
+        {
+            return null;
+        }
+
+        if (!signedIn && ending != PrepareEnding.Ready)
+        {
+            return null;
+        }
+
+        string text = ending switch
+        {
+            PrepareEnding.Ready => $"{label} is downloaded and ready to import.",
+            PrepareEnding.StillPreparing =>
+                $"{label} is still being prepared. Open the vault later and press “{WindowLabels.PrepareForRevit}” to pick it up.",
+            _ => string.IsNullOrWhiteSpace(detail)
+                ? $"Couldn't prepare {label}."
+                : $"Couldn't prepare {label}. {detail.Trim()}",
+        };
+
+        return new PrepareNotice(orderId, ending, text);
+    }
+}
+
+/// <summary>One order's news, as the Vault badge counts it.</summary>
+public readonly record struct PendingNotice(string OrderId, string Text);
+
+/// <summary>
+/// The notices the curator has not yet seen in the vault: what the Vault button's badge counts.
+/// </summary>
+/// <remarks>
+/// One per order. A Prepare that ran out of budget and was later rejoined and finished is one
+/// bundle with news, not two, so a later notice for the same order replaces the earlier one. A notice
+/// about several new orders is news of each of them, so it counts once per order.
+/// </remarks>
+public sealed class PendingNotices
+{
+    private readonly List<PendingNotice> _notices = [];
+
+    /// <summary>How many orders have news.</summary>
+    public int Count => _notices.Count;
+
+    /// <summary>The notices, oldest first.</summary>
+    public IReadOnlyList<PendingNotice> All => _notices;
+
+    /// <summary>Adds a Prepare's notice, replacing any earlier one for the same order.</summary>
+    public void Add(PrepareNotice notice) => Add(notice.OrderId, notice.Text);
+
+    /// <summary>Adds a new-order notice, once for each order it announces.</summary>
+    public void Add(NewsNotice notice)
+    {
+        ArgumentNullException.ThrowIfNull(notice);
+
+        foreach (string orderId in notice.OrderIds)
+        {
+            Add(orderId, notice.Text);
+        }
+    }
+
+    private void Add(string orderId, string text)
+    {
+        _notices.RemoveAll(held => string.Equals(held.OrderId, orderId, StringComparison.Ordinal));
+        _notices.Add(new PendingNotice(orderId, text));
+    }
+
+    /// <summary>Forgets every notice. Opening the vault is seeing them.</summary>
+    public void Clear() => _notices.Clear();
+}

@@ -183,7 +183,7 @@ in `Core`, asserted headlessly; the shim only reads the order id and the site lo
   difference of the two published survey points instead, so bundles ordered side by side sit edge to
   edge with no manual move and the first bundle's shared coordinates stay as they were. Heights are
   absolute and are not offset. That is done only for one EPSG code and one angle to true north (zero),
-  and within [`AdjacentBundle.MaxOffsetM`](src/MantlePlace.Revit.Core/AdjacentBundle.cs) of the
+  and within [`AdjacentBundle.MaxOffsetM`](../shared/src/MantlePlace.Core/AdjacentBundle.cs) of the
   anchor; a bundle that is not is refused whole, with one message naming the reason, and the project
   is untouched. The decision is the pure core's; the Revit plugin only applies it, to every layer's
   positions and to the IFC and DXF links;
@@ -657,11 +657,14 @@ an exception in that test. Run the suite on both runtimes ([Build and test](#bui
 ## Layout
 
 ```
-src/MantlePlace.Revit.Core/    pure logic — no Revit API, no I/O, no NuGet; net8.0
-src/MantlePlace.Revit.Client/  I/O that is not Revit — HTTP, cache, zip, secrets; net8.0
-src/MantlePlace.Revit.Addin/   the Revit shim — transactions, ribbon; net8.0-windows
-tests/MantlePlace.Revit.Core.Tests/   headless suite over Core AND Client; net8.0 + net10.0
+../shared/src/MantlePlace.Core/         pure logic — no host API, no I/O, no NuGet; net8.0
+../shared/src/MantlePlace.Client/       I/O that is not a host — HTTP, cache, zip, secrets; net8.0
+src/MantlePlace.Revit.Addin/            the Revit shim — transactions, ribbon; net8.0-windows
+../shared/tests/MantlePlace.Core.Tests/ headless suite over Core AND Client; net8.0 + net10.0
 ```
+
+The core, the client and the suite are host-neutral and shared with the AutoCAD plugin, so they
+live in [`shared/`](../shared/README.md); the shim references them.
 
 Each layer is a **triad** (`HPS-02`): an impure host shim, a pure logic core, and a headless test of
 the core. All protocol behaviour lives in the core, which is constructible and testable with Revit
@@ -672,7 +675,7 @@ not installed. That is what lets the conformance suite run on a hosted runner
 Revit" and "talks to the disk and the network". Only the first needs a licensed install to exercise,
 and CI cannot build the shim at all — so folding the second into it left ⛔`HPS-26` (write to
 `.part`, verify, rename) resting on `agent-review` alone, even though the rule names
-`automation-test` as its second enforcer. Split out, `MantlePlace.Revit.Client` builds and runs on
+`automation-test` as its second enforcer. Split out, `MantlePlace.Client` builds and runs on
 the hosted runner like anything else.
 
 ## Build and test
@@ -700,8 +703,8 @@ NuGet package, and the tree takes no packages.
 
 ```bash
 # The pure core, the client and the conformance suite, on both runtimes. No Revit needed.
-dotnet run --project tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -f net8.0
-dotnet run --project tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -f net10.0
+dotnet run --project ../shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -f net8.0
+dotnet run --project ../shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -f net10.0
 
 # Everything, including the plugin shim. Needs Revit 2025 installed.
 dotnet build MantlePlace.Revit.slnx

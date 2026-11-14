@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/shared/">
+    <Project Path="../shared/src/MantlePlace.Core/MantlePlace.Core.csproj" />
+    <Project Path="../shared/src/MantlePlace.PlatformApi/MantlePlace.PlatformApi.csproj" />
+    <Project Path="../shared/src/MantlePlace.Client/MantlePlace.Client.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/MantlePlace.AutoCad.Core/MantlePlace.AutoCad.Core.csproj" />
     <Project Path="src/MantlePlace.AutoCad.Civil3d/MantlePlace.AutoCad.Civil3d.csproj" />

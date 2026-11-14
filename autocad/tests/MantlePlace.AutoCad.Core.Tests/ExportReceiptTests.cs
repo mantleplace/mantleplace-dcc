@@ -1,5 +1,5 @@
-using MantlePlace.Revit.Core;
-using MantlePlace.Revit.Core.Tests;
+using MantlePlace.Core;
+using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 

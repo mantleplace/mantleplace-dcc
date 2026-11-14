@@ -1,21 +1,25 @@
 # Revit pure-core tests — the headless half of the Revit plugin's triad.
 #
 # HPS-42: conformance tests run headless, with no DCC application required. That is the whole
-# reason the protocol lives in MantlePlace.Revit.Core with the Revit API nowhere near it — a suite
-# that needs a licensed Revit install is a suite that runs when someone remembers.
+# reason the protocol lives in the shared MantlePlace.Core with no host API anywhere near it — a
+# suite that needs a licensed Revit install is a suite that runs when someone remembers.
 #
-# So this job builds and runs the pure core, the client and their conformance suite. The add-in
+# So this job builds and runs the shared pure core, the client and their conformance suite
+# (shared/), the one place CI runs that suite. It runs as the Revit plugin: its cases were written
+# against Revit's block and the add-in's committed files, which is why it is this host's job and
+# keeps the required check names it always had. ci-autocad-tests drives the shared conformance
+# runners again as AutoCAD, which is that host's claim, not a second run of this suite. The add-in
 # shim (MantlePlace.Revit.Addin) references RevitAPI.dll from a local Autodesk install and is
 # deliberately NOT built here: a hosted runner has no Revit, and there is no honest way to fake it.
 # The shim is compiled on a developer machine — `dotnet build revit/MantlePlace.Revit.slnx` — and
 # proven by the tester import gate, not by CI. Skipping it silently would be the failure mode this
 # comment exists to prevent, so: it is skipped, on purpose, and this is where that is written down.
 #
-# MantlePlace.Revit.Client is in scope even though it does real I/O. It references no Revit API, so
+# MantlePlace.Client is in scope even though it does real I/O. It references no host API, so
 # a hosted runner can build and run it — which is what turns ⛔HPS-26's second enforcer
 # (`automation-test`, on the write-to-.part-then-rename path) from a promise into a job.
 #
-# Hosted runner, and no NuGet restore: the tree has zero package references (revit/Directory.Build.props),
+# Hosted runner, and no NuGet restore: the tree has zero package references (shared/Directory.Build.props),
 # so this job cannot be broken by a registry outage or a transitive bump.
 name: ci-revit-tests
 
@@ -30,6 +34,7 @@ on:
     branches: [main]
     paths:
       - "revit/**"
+      - "shared/**"
       - "tools/manifest-conformance/corpus/**"
       # A pin bump can touch nothing but this file, and it is exactly the change whose claim
       # ("the parser was exercised against that shape") this job is the evidence for.
@@ -59,18 +64,18 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          global-json-file: revit/global.json
+          global-json-file: shared/global.json
 
       - name: Build the pure core, the client and their suite
-        run: dotnet build revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -c Release
+        run: dotnet build shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -c Release
 
       # The corpus is checked into this repo, and the reader FAILS rather than skips when it cannot
       # reach it (HPS-40). A green run here therefore means cases actually ran.
       - name: Drive the shared conformance corpus on .NET 8 (Revit 2025, 2026)
-        run: dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -c Release -f net8.0 --no-build
+        run: dotnet run --project shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -c Release -f net8.0 --no-build
 
       - name: Drive the shared conformance corpus on .NET 10 (Revit 2027)
-        run: dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -c Release -f net10.0 --no-build
+        run: dotnet run --project shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -c Release -f net10.0 --no-build
 
   # The same suite on Windows, and NOT a matrix leg of the job above.
   #
@@ -102,13 +107,13 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          global-json-file: revit/global.json
+          global-json-file: shared/global.json
 
       - name: Build the pure core, the client and their suite
-        run: dotnet build revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -c Release
+        run: dotnet build shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -c Release
 
       - name: Drive the shared conformance corpus on .NET 8 (Revit 2025, 2026)
-        run: dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -c Release -f net8.0 --no-build
+        run: dotnet run --project shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -c Release -f net8.0 --no-build
 
       - name: Drive the shared conformance corpus on .NET 10 (Revit 2027)
-        run: dotnet run --project revit/tests/MantlePlace.Revit.Core.Tests/MantlePlace.Revit.Core.Tests.csproj -c Release -f net10.0 --no-build
+        run: dotnet run --project shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -c Release -f net10.0 --no-build

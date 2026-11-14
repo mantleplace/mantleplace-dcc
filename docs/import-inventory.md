@@ -22,7 +22,7 @@ default, what cost and what driver, and nothing about status.
 **One home per figure.**
 
 - **Revit's figures live in code**, in `SlowStepNotice.Measured(ImportStepKind)` in
-  [`SlowStepNotice.cs`](../revit/src/MantlePlace.Revit.Core/SlowStepNotice.cs), because the import
+  [`SlowStepNotice.cs`](../shared/src/MantlePlace.Core/SlowStepNotice.cs), because the import
   window reads them at run time. A Revit row cites its entry by step kind and never restates a
   figure. Where a step kind has no entry, the row says "not measured". A new Revit figure goes into
   `Measured`, not here.
@@ -38,7 +38,7 @@ the schema owns.
 
 One row per row of the import window's checklist, in the order the steps run, and one for the
 terrain's third tier. "When" is the checklist's starting state, `ImportLayers.OnByDefault` in
-[`ImportLayers.cs`](../revit/src/MantlePlace.Revit.Core/ImportLayers.cs), and the level a row opens on
+[`ImportLayers.cs`](../shared/src/MantlePlace.Core/ImportLayers.cs), and the level a row opens on
 where the bundle publishes levels, `ImportLayers.DefaultLevel`. Both are set by measurement: with
 every box ticked at its default level, an import through the window stayed under five minutes in
 Revit 2025, 2026 and 2027 on both reference orders, so every row whose default fits starts ticked
@@ -191,11 +191,11 @@ depends on.
    - Revit: `BundleManifestReader.cs` (`RevitHostBlock(root)`, then `ReadReadiness`, `ReadFileFrame`,
      `ReadGeoreference`, `ReadOwnVectors`, `ReadHazards`, `ReadImagery`, `ReadArtifacts` through
      `BuildArtifact`, `CheckRevitHashes`) and `FidelityLevelsReader.cs`. Re-check with
-     `grep -n "RevitHostBlock\|hostDetail\|revit?\.\|revit\.Object" revit/src/MantlePlace.Revit.Core/BundleManifestReader.cs`
+     `grep -n "RevitHostBlock\|hostDetail\|revit?\.\|revit\.Object" shared/src/MantlePlace.Core/BundleManifestReader.cs`
      and read each function it lands in.
    - AutoCAD: `AutoCadBlockReader.Read` and its helpers in `AutoCadBlock.cs`; what the plan then does
-     with each value is `AutoCadImportPlan.cs`. The Revit `Core` sources compiled into the AutoCAD
-     build are Revit's reads, not a second set.
+     with each value is `AutoCadImportPlan.cs`. The shared `Core` the AutoCAD build references
+     holds Revit's reads, not a second set.
    - Unreal: `ParseFields` of every `MantlePlaceArtifact*.cpp` handler (its block is `In.Unreal`),
      `ParseGeoreference` and `ParseCesium` in `MantlePlaceImportManifest.cpp`, and `_manifest_origin`
      in `mantleplace_cesium_stream.py`. Re-check with

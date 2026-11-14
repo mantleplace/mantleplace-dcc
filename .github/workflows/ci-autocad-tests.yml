@@ -1,9 +1,10 @@
 # AutoCAD pure-core tests: the headless half of the AutoCAD plugin's triad.
 #
-# HPS-42: conformance tests run headless, with no DCC application required. The plugin compiles
-# Revit's host-free Core, Client and PlatformApi sources by include (autocad/CLAUDE.md), so this job
-# builds that compiled-in code and drives the shared conformance corpus over it, plus the plugin's
-# own decisions: the AutoCAD bundle manifest and the Civil 3D presence test.
+# HPS-42: conformance tests run headless, with no DCC application required. The plugin references
+# the shared Core, Client and PlatformApi projects (shared/, autocad/CLAUDE.md), so this job builds
+# them with the plugin's own core and drives the shared conformance corpus over them as AutoCAD,
+# plus the plugin's own decisions: the AutoCAD bundle manifest and the Civil 3D presence test. The
+# shared suite's other cases run once, in ci-revit-tests.
 #
 # The shell (MantlePlace.AutoCad.Addin) and the Civil 3D part (MantlePlace.AutoCad.Civil3d) reference
 # the Autodesk assemblies from a local install and are deliberately NOT built here: a hosted runner
@@ -28,9 +29,9 @@ on:
     branches: [main]
     paths:
       - "autocad/**"
-      # The plugin compiles these sources in, so a change to them changes this tree.
-      - "revit/src/**"
-      - "revit/tests/**"
+      # The plugin references the shared projects and its suite compiles in the shared suite's
+      # runners, so a change to them changes this tree.
+      - "shared/**"
       - "tools/manifest-conformance/corpus/**"
       - "tools/manifest-conformance/verified-against.json"
   workflow_dispatch:
@@ -56,7 +57,7 @@ jobs:
         with:
           global-json-file: autocad/global.json
 
-      - name: Build the compiled-in sources and the suite
+      - name: Build the plugin's core, the shared projects and the suite
         run: dotnet build autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.AutoCad.Core.Tests.csproj -c Release
 
       # The corpus is checked into this repo, and the reader FAILS rather than skips when it cannot

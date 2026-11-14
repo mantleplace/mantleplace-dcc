@@ -2,7 +2,7 @@
 
   <!--
     The REVIT half of the triad (HPS-02): transactions, element creation and Revit API calls, and
-    nothing else. Decisions live in MantlePlace.Revit.Core and I/O lives in MantlePlace.Revit.Client,
+    nothing else. Decisions live in the shared MantlePlace.Core and I/O in the shared MantlePlace.Client,
     which is why almost everything this plugin does can be asserted without a Revit licence (HPS-42).
 
     Compiled against Revit 2025's API — the OLDEST version supported, not the newest installed.
@@ -56,8 +56,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MantlePlace.Revit.Core\MantlePlace.Revit.Core.csproj" />
-    <ProjectReference Include="..\MantlePlace.Revit.Client\MantlePlace.Revit.Client.csproj" />
+    <!-- The host-neutral Core and Client every .NET host plugin builds from (shared/). -->
+    <ProjectReference Include="..\..\..\shared\src\MantlePlace.Core\MantlePlace.Core.csproj" />
+    <ProjectReference Include="..\..\..\shared\src\MantlePlace.Client\MantlePlace.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

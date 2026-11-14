@@ -24,10 +24,10 @@ render looks like rather than the renders themselves
 ([ADR 0009](../adr/0009-host-assets-render-the-monogram.md)).
 
 `ci-platform-api` (`sync-check`) fetches the Platform API spec the platform serves, regenerates the
-Revit plugin's client with the pinned generator, and fails when the vendored copy under
-`revit/src/MantlePlace.PlatformApi/Generated/` would change. It reads a live URL, so it runs on `main`, weekly and on demand, never on a pull request: a
+shared client both .NET plugins ship with the pinned generator, and fails when the vendored copy under
+`shared/src/MantlePlace.PlatformApi/Generated/` would change. It reads a live URL, so it runs on `main`, weekly and on demand, never on a pull request: a
 platform deploy moves the spec without this repo changing. A red run means the sync is due
-(`python revit/tools/platform-api/sync_platform_api.py`, then commit). `manifest-drift.yml` is the
+(`python shared/tools/platform-api/sync_platform_api.py`, then commit). `manifest-drift.yml` is the
 manifest schema's counterpart: weekly, it keeps one tracking issue open while the published schema is
 ahead of `verified-against.json`.
 
@@ -43,7 +43,7 @@ gh api repos/mantleplace/mantleplace-dcc/branches/main/protection
 ```
 
 `generated-names` is the `ci-unreal-naming` job. The other four come from `ci-manifest-conformance`
-(`conformance`), `ci-revit-tests` (`pure-core` and `pure-core-windows`) and `ci-public-hygiene`
+(`conformance`), `ci-revit-tests` (`pure-core` and `pure-core-windows`, the shared .NET suite under `shared/`, run as Revit) and `ci-public-hygiene`
 (`references`). `ci-brand-assets` reports on every pull request but is not required, by construction
 (above). `ci-blender-tests` (`blender-core`, the Blender plugin's pure core) reports on every pull
 request and is not required yet; making it required is a branch-protection change. `ci-autocad-tests`
@@ -84,7 +84,7 @@ pwsh -NoProfile -File tools/public-hygiene/Test-PowerShellParses.ps1
 (cd tools/brand-assets && python -m unittest discover -p "test_*.py")
 python -m unittest discover -s blender/tests -t blender
 dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.AutoCad.Core.Tests.csproj -f net8.0    # and -f net10.0
-python revit/tools/platform-api/sync_platform_api.py --check                    # fetches the served spec; needs the .NET SDK
+python shared/tools/platform-api/sync_platform_api.py --check                    # fetches the served spec; needs the .NET SDK
 python tools/public-hygiene/check_public_references.py --stdin --label "PR body" < pr-body.md
 ```
 

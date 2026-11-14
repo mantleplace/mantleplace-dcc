@@ -2,8 +2,8 @@ using System.IO;
 using Autodesk.Revit.UI;
 
 // Not unused: AccountFace() is an extension method on AuthSession, declared in Client.
-using MantlePlace.Revit.Client;
-using MantlePlace.Revit.Core;
+using MantlePlace.Client;
+using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 

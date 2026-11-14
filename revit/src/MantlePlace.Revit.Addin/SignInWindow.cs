@@ -1,8 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
-using MantlePlace.Revit.Client;
-using MantlePlace.Revit.Core;
+using MantlePlace.Client;
+using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
@@ -25,7 +25,7 @@ namespace MantlePlace.Revit.Addin;
 /// <para>
 /// One window per Revit session, enforced by the command. This is the shim: it starts the flow and
 /// reports what came back, and every decision in between belongs to
-/// <c>MantlePlace.Revit.Client</c> and the pure core beneath it.
+/// <c>MantlePlace.Client</c> and the pure core beneath it.
 /// </para>
 /// </remarks>
 internal sealed class SignInWindow : Window

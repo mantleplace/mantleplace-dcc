@@ -1,0 +1,15 @@
+{
+  "$comment": [
+    "One SDK for the whole tree, the same one the host trees pin (revit/global.json,",
+    "autocad/global.json): the 10.0 SDK builds every target here, net8.0 (the core, the client, the",
+    "generated Platform API client) and the suite's net8.0/net10.0 pair.",
+    "",
+    "rollForward latestFeature keeps this on 10.0.x: a machine with a newer 10.0 patch band builds",
+    "without editing this file, and a machine with only 8/9 fails loudly."
+  ],
+  "sdk": {
+    "version": "10.0.302",
+    "rollForward": "latestFeature",
+    "allowPrerelease": false
+  }
+}

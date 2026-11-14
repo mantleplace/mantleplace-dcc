@@ -76,9 +76,9 @@ is worked out in AutoCAD:
 - **Two builds.** AutoCAD and Civil 3D 2025 and 2026 run .NET 8; 2027 runs .NET 10. The shell is built
   for each runtime against that runtime's AutoCAD API, and the bundle carries both. `PackageContents.xml`
   names the build each year loads, so a curator copies one folder and never chooses.
-- **Shared source, no shared assembly.** Revit's host-free `Core`, `Client` and `PlatformApi`
-  sources are compiled into `MantlePlace.AutoCad.Core` by include. Nothing ships that two plugins
-  depend on.
+- **Shared projects, each plugin its own copy.** The host-neutral `Core`, `Client` and `PlatformApi`
+  projects live in [`shared/`](../shared/README.md); `MantlePlace.AutoCad.Core` references them,
+  and the plugin ships its own copy of their assemblies. Nothing is installed once for two plugins.
 - **Civil 3D is its own assembly.** `MantlePlace.AutoCad.Civil3d` is the only project that references
   Civil 3D's API, and the shell loads it only when `AeccLand.dbx` is a loaded module of the process.
   The record of what ran, per year, is [`docs/api-record.md`](docs/api-record.md).

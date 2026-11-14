@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The I/O half of the triad that is NOT the host (HPS-02). Everything a plugin does to the outside
+    world lives here — HTTP, the loopback listener, the bundle cache, the secret store, the zip —
+    and none of it touches a host API.
+
+    Why a third assembly rather than two. The triad splits pure from impure, and a host shim would
+    otherwise carry both kinds of impure: "talks to the host" and "talks to the disk and the network".
+    Only the first genuinely needs a licensed install to exercise. Split out, ⛔HPS-26's
+    promote-by-rename path (write to .part, verify, rename) is built and tested on a hosted runner
+    like anything else — the rule's second enforcer, `automation-test`, is real.
+
+    net8.0 and not net8.0-windows: nothing here is Windows-only except the DPAPI secret store, which
+    carries [SupportedOSPlatform("windows")] and a null-store fallback (HPS-16) that the suite
+    exercises on the Linux runner. Keeping the TFM portable is what keeps that fallback honest
+    instead of theoretical.
+
+    NO NUGET PACKAGES, same as the rest of the tree (../../Directory.Build.props).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>MantlePlace.Client</RootNamespace>
+    <AssemblyName>MantlePlace.Client</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MantlePlace.Core\MantlePlace.Core.csproj" />
+
+    <!-- The generated Platform API client: host-neutral, no package (MantlePlace.PlatformApi.csproj). -->
+    <ProjectReference Include="..\MantlePlace.PlatformApi\MantlePlace.PlatformApi.csproj" />
+  </ItemGroup>
+
+</Project>

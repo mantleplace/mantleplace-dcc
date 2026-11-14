@@ -131,7 +131,7 @@ if ($SaveCheckpoint) {
 
 # A dirty source tree is not a commit; refuse it unless -AllowDirty says the run is knowingly not one.
 if ($SourceRoot -and (Test-Path -LiteralPath (Join-Path $SourceRoot '.git')) -and -not $AllowDirty) {
-    $dirtyFiles = @(& git -C $SourceRoot status --porcelain --untracked-files=all -- revit 2>$null)
+    $dirtyFiles = @(& git -C $SourceRoot status --porcelain --untracked-files=all -- revit shared 2>$null)
     if ($dirtyFiles.Count -gt 0) { throw "$SourceRoot has uncommitted changes under revit/ ($($dirtyFiles.Count) paths). Commit them and time the commit (-Commit), or pass -AllowDirty to stamp the record as dirty." }
 }
 
@@ -155,7 +155,8 @@ if ((Get-FileHash (Join-Path $outDir $dllName) -Algorithm SHA256).Hash -ne $buil
 
 # layers named on the command line, checked against the enum in the source this tag was built from
 if ($Phase -eq 'layers') {
-    $enumFile = Join-Path $build.sourceRoot 'revit\src\MantlePlace.Revit.Core\ImportLayers.cs'
+    $enumFile = Join-Path $build.sourceRoot 'shared\src\MantlePlace.Core\ImportLayers.cs'
+    if (-not (Test-Path $enumFile)) { $enumFile = Join-Path $build.sourceRoot 'revit\src\MantlePlace.Revit.Core\ImportLayers.cs' }
     if (Test-Path $enumFile) {
         $body = [regex]::Match((Get-Content $enumFile -Raw), 'public enum ImportLayer\s*\{(.*?)\}', 'Singleline').Groups[1].Value
         $valid = [regex]::Matches(($body -replace '///[^\r\n]*', ''), '\b([A-Z][A-Za-z]+)\s*[,\r\n]') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique

@@ -42,15 +42,6 @@
 
   <PropertyGroup>
     <!--
-      Where the Revit plugin's host-free sources live. The Core, the Client and the generated Platform
-      API client compile into MantlePlace.AutoCad.Core by source include, so no assembly is shared
-      between the two plugins (autocad/CLAUDE.md).
-    -->
-    <RevitSourceDir>$(MSBuildThisFileDirectory)..\revit\src\</RevitSourceDir>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <!--
       The two AutoCAD installs the plugin shell compiles against, one per build.
 
       The .NET 8 build serves 2025 and 2026 and compiles against the OLDEST supported API (2025); the
@@ -68,14 +59,15 @@
   <!--
     The dirty marker, as revit/Directory.Build.props explains it: the SDK appends the source commit to
     the informational version, and this appends "-dirty" after the sha when anything under autocad/ is
-    modified, staged or untracked, so two builds naming one commit are not mistaken for the same code.
-    BuildIdentity (compiled in from the Revit Core) is the one reader of this shape.
+    modified, staged or untracked, or under shared/, whose assemblies the plugin ships beside its own,
+    so two builds naming one commit are not mistaken for the same code. BuildIdentity in the shared
+    MantlePlace.Core is the one reader of this shape.
   -->
   <Target Name="MarkDirtySourceRevision"
           AfterTargets="InitializeSourceControlInformation"
           BeforeTargets="GetAssemblyVersion"
           Condition="'$(SourceRevisionId)' != '' and !$(SourceRevisionId.EndsWith('-dirty'))">
-    <Exec Command="git status --porcelain --untracked-files=all -- &quot;$(MSBuildThisFileDirectory).&quot;"
+    <Exec Command="git status --porcelain --untracked-files=all -- &quot;$(MSBuildThisFileDirectory).&quot; &quot;$(MSBuildThisFileDirectory)..\shared&quot;"
           WorkingDirectory="$(MSBuildThisFileDirectory)"
           ConsoleToMSBuild="true"
           IgnoreExitCode="true"

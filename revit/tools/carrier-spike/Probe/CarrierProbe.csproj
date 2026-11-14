@@ -17,7 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\..\src\MantlePlace.Revit.Core\**\*.cs" Exclude="..\..\..\src\**\obj\**;..\..\..\src\**\bin\**" />
+    <Compile Include="..\..\..\..\shared\src\MantlePlace.Core\**\*.cs" Exclude="..\..\..\..\shared\src\**\obj\**;..\..\..\..\shared\src\**\bin\**" />
     <Compile Include="..\Readers\*.cs" />
     <Compile Include="CarrierProbe.cs" />
   </ItemGroup>

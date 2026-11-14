@@ -73,7 +73,7 @@ and `pids\`.
 ### Choosing layers or boxes
 
 - **Layers phase** (`-Phase layers -Layers ...`): the plugin's import with no window. `-Layers` takes the names of
-  `ImportLayer` in `revit/src/MantlePlace.Revit.Core/ImportLayers.cs` of the source being timed (`Terrain`,
+  `ImportLayer` in `shared/src/MantlePlace.Core/ImportLayers.cs` (`revit/src/MantlePlace.Revit.Core/ImportLayers.cs` before the move) of the source being timed (`Terrain`,
   `PublishedContours`, `ContextBuildings`, ...; spaces ignored), `All`, or `Default` (the layers
   `ImportLayers.OnByDefault` ticks, which is what a curator who changes nothing imports). The driver checks
   the names against that enum before launching.
