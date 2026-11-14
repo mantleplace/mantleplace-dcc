@@ -212,11 +212,11 @@ The calls the import made, each recorded from the drawing read back:
   other dialog, and Civil 3D never took the foreground.
 - **The local-bundle run was not made.** The plugin has no entry point that imports a bundle already
   on disk: an order reaches a drawing only as an export sent from the web vault, so every import above
-  came through a send.
+  came through a send. The entry point, and the local-bundle run it allows, are tracked in #635.
 
 ## What this does not yet cover
 
-- **A local-bundle import.** The plugin has no entry point for a bundle already on disk (above).
+- **A local-bundle import.** The plugin has no entry point for a bundle already on disk (above); #635.
 - **A second workspace load of the `Mantle Place` tab**, live. The tab and its buttons were read on a
   running Civil 3D 2027 (above); plain AutoCAD 2027 and a round trip to another workspace were not.
 - **A drawing in feet**, with a foot-based zone and a metric DEM.
