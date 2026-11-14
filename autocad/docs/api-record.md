@@ -138,7 +138,7 @@ launcher) and in plain AutoCAD (the same install's AutoCAD launcher); 2025 and 2
   not prefix it with a menu group (the partial CUIX's tab was read as `MANTLEPLACE.RBN_00012112`).
   A rebuild that keeps the tab and drops the panel puts the panel back, and a second
   `WorkspaceLoaded` adds neither a tab nor a panel. The headless tests pin the decision; the live
-  ribbon is not yet read for the new tab (below).
+  ribbon was read for the new tab in Civil 3D 2027 on 2026-11-14 (below).
 
 ## The extended probe (2026-11-05)
 
@@ -168,11 +168,57 @@ In every year Civil 3D loaded (`Civil3dLoaded`) and the same 22 calls worked:
   the run folder sat on a path with no 8.3 short name and no other Mantle Place bundle was installed;
   which of the two was the cause was not isolated.
 
+## The vault send and import, live (2026-11-14)
+
+A live Civil 3D 2027 run on the build machine (window, Civil 3D launcher, .NET 10), with the plugin
+1.0.0 built from `main` and installed as its `MantlePlaceAutoCad.bundle`, with nobody at the screen.
+The plugin started signed in to a local development platform; three exports of one ready order
+(manifest 2.2.0, a `hosts.autocad` block in a metric UTM frame) were sent from the web vault to the
+drawing's connected host, and Import was pressed in the window each one opened. Each step is
+**worked**, **did nothing** or **threw**:
+
+| Step | Civil 3D 2027 | What showed it |
+|---|---|---|
+| 1. Vault send: the Download step lists the AutoCAD host and a send reaches it | worked | the presence entry named this AutoCAD and its year; each of the three sends opened the plugin's window |
+| 2. One-press import from the received export | worked | the export ended imported on the web, shown as in the drawing; aerial, contours, public records, linework and surface placed on `MantlePlace-*` layers |
+| 3. Zone check | worked | under another system's zone the import refused, named both systems and placed nothing; under the order's own zone it went in; the zone, units and geographic location were never written |
+| 4. Terrain surface | worked | a TIN surface built from the bundle's LandXML, on `MantlePlace-Surface`; a second import of the same order built a numbered surface |
+
+The calls the import made, each recorded from the drawing read back:
+
+| Call | 2027 |
+|---|---|
+| Presence test: `AeccLand.dbx` a loaded module | worked |
+| Civil 3D part loaded by reflection, behind the verdict | worked |
+| `UnitZoneSettings.CoordinateSystemCode`, read | worked |
+| `Database.GeoDataObject`, then `GeoLocationData.CoordinateSystem` | worked |
+| `GeoCoordinateSystem.Create(code).EPSGcode` | worked |
+| `Document.LockDocument()` | worked |
+| `LayerTable.Add` | worked |
+| `RasterImageDef` (image dictionary, `Load()`) | worked |
+| `RasterImage` (`Orientation`, `AssociateRasterDef`) | worked |
+| `RasterImage.TransformBy` (rotation) | n/a: the order's aerial is not rotated |
+| `Polyline.AddVertexAt`, `Elevation`, `AppendEntity`: contours, public records, site linework | worked |
+| `CivilDocument.GetSurfaceIds()` | worked |
+| `TinSurface.CreateFromLandXML(db, name, path, surfaceName)` | worked |
+| `TinSurface.GetGeneralProperties()`, `.Layer` | worked |
+
+- **The `Mantle Place` tab, live.** The same run read the ribbon: one `Mantle Place` tab, the
+  plugin's one panel on it and on no other tab, its five buttons in order (Sign In, Sign Out, Vault,
+  About, Send Feedback), and F1 on each opening the plugin's help page at its topic.
+- **The drawing's unit is not consulted.** The order went in at the units its block states, and the
+  window's report said so.
+- **Only the plugin's own load prompt** ("Unsigned Executable File", answered Load Once) appeared; no
+  other dialog, and Civil 3D never took the foreground.
+- **The local-bundle run was not made.** The plugin has no entry point that imports a bundle already
+  on disk: an order reaches a drawing only as an export sent from the web vault, so every import above
+  came through a send. The entry point, and the local-bundle run it allows, are tracked in [their own issue](https://github.com/mantleplace/mantleplace-dcc/issues/635).
+
 ## What this does not yet cover
 
-- **The `Mantle Place` tab, live.** The decision is pinned headless and the branch builds against
-  2027's API, but the tab, its five buttons and a second workspace load have not yet been read on a
-  running Civil 3D 2027 or AutoCAD 2027. The panel on the host's Add-ins tab (above) is what was read.
+- **A local-bundle import.** The plugin has no entry point for a bundle already on disk (above); [tracked here](https://github.com/mantleplace/mantleplace-dcc/issues/635).
+- **A second workspace load of the `Mantle Place` tab**, live. The tab and its buttons were read on a
+  running Civil 3D 2027 (above); plain AutoCAD 2027 and a round trip to another workspace were not.
 - **A drawing in feet**, with a foot-based zone and a metric DEM.
 - **The plugin's own load path in 2025 and 2026**, and in plain AutoCAD; 2027's is above.
 - **A .NET 8 build.** Every install here, 2025 and 2026 included, runs .NET 10 after its updates, and
