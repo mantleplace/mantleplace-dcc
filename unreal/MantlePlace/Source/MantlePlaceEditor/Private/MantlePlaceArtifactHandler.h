@@ -9,6 +9,7 @@
 
 class AActor;
 class FJsonObject;
+class FMantlePlaceImportSteps;
 class UDataTable;
 class UTexture2D;
 class FZipArchiveReader;
@@ -126,6 +127,16 @@ struct FMantlePlaceImportContext
 	/** False once any requested artifact failed. Optional artifacts never clear it. */
 	bool bAllRequestedSucceeded = true;
 
+	/**
+	 * The import window's steps, one per artifact this import builds, or null when nobody is watching
+	 * (a script, a test). With it, a cancel takes effect between two handlers: the orchestration asks it
+	 * before each one, and a handler it stops is in Cut and runs nothing more.
+	 */
+	FMantlePlaceImportSteps* Steps = nullptr;
+
+	/** The handlers a cancel stopped before their work (or the rest of it) ran. */
+	TSet<FName> Cut;
+
 	/** Read one entry's bytes into memory. False when it is missing (or there is no open bundle). */
 	bool ReadBytes(const FString& InZipPath, TArray<uint8>& OutBytes) const;
 
@@ -227,6 +238,13 @@ public:
 	 * assets only; deletes nothing. Called for included artifacts only.
 	 */
 	virtual void Prepare(FMantlePlaceImportContext& Context) {}
+
+	/**
+	 * True for a handler whose Prepare does work. Its step then reads Importing while its Prepare runs,
+	 * and a cancel between its Prepare and its Import leaves the step Cancelled, not Not Run: part of it
+	 * ran. Every other handler's step starts at its Import.
+	 */
+	virtual bool Prepares() const { return false; }
 
 	/** The import proper, inside the one undo transaction. Called for included artifacts only. */
 	virtual void Import(FMantlePlaceImportContext& Context) = 0;

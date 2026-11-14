@@ -19,6 +19,8 @@ class SEditableTextBox;
 class SButton;
 class SBox;
 class SWidgetSwitcher;
+class FMantlePlaceImportSteps;
+class FMantlePlaceImportWindowHost;
 template <typename ItemType> class SComboBox;
 
 /**
@@ -46,6 +48,10 @@ private:
 	void HandleImportFinished(bool bSuccess, const FMantlePlaceImportResult& Result);
 	void HandleAuthChanged(EMantlePlaceAuthState NewState);
 	void HandleClientUpdateRequired(const FMantlePlaceClientUpdate& Update);
+	/** An import flow started: open the import window on its steps. */
+	void HandleImportSteps(TSharedRef<FMantlePlaceImportSteps> Steps);
+	/** The import window's Cancel. */
+	void HandleImportWindowCancel();
 
 	//~ Construction helpers.
 	TSharedRef<SWidget> BuildHeader();
@@ -101,6 +107,8 @@ private:
 	FString SearchQuery;
 	/** True while a local-zip import is running (routes progress to LocalStatus + disables local Import). */
 	bool bLocalImportInFlight = false;
+	/** The import window of the latest import, open or closed; null under automation, where none opens. */
+	TSharedPtr<FMantlePlaceImportWindowHost> ImportWindow;
 	/** True once the update prompt has been shown: every call the platform refuses says so, the curator is told once. */
 	bool bUpdatePromptShown = false;
 

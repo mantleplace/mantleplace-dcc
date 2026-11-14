@@ -10,6 +10,7 @@
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportProvenance.h"
+#include "MantlePlaceImportStepsLogic.h"
 #include "MantlePlaceImportTiming.h"
 #include "MantlePlaceIntegrityLogic.h"
 #include "MantlePlaceOdblLogic.h"
@@ -25,6 +26,7 @@
 #include "Landscape.h"
 #include "LandscapeInfo.h"
 #include "LandscapeStreamingProxy.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Subsystems/EditorAssetSubsystem.h"
@@ -748,26 +750,74 @@ void BeginHandler(FMantlePlaceImportContext& Context, const IMantlePlaceArtifact
  * everything it would make from. An artifact whose payloads the archive was cut without has nothing
  * to place; it is skipped (and named once, in RunImport), never failed.
  */
+bool LeftOutOfArchive(const FMantlePlaceVaultManifest& Manifest, const IMantlePlaceArtifactHandler& Handler)
+{
+	TArray<FString> Paths;
+	Handler.CollectSourcePaths(Manifest, Paths);
+	return FMantlePlaceIntegrityLogic::LeavesOutAll(Manifest, Paths);
+}
+
 bool Runs(const FMantlePlaceImportContext& Context, const IMantlePlaceArtifactHandler& Handler)
 {
-	if (!Context.Selection.Includes(Handler.Id()))
+	if (!Context.Selection.Includes(Handler.Id()) || Context.Cut.Contains(Handler.Id()))
 	{
 		return false;
 	}
-	TArray<FString> Paths;
-	Handler.CollectSourcePaths(Context.Manifest, Paths);
-	return !FMantlePlaceIntegrityLogic::LeavesOutAll(Context.Manifest, Paths);
+	return !LeftOutOfArchive(Context.Manifest, Handler);
 }
+
+/**
+ * The step boundary before a handler's work: true to run it. False when a cancel is waiting, and the
+ * handler is then cut, so nothing more of it runs. Always true with no steps to ask.
+ */
+bool BeginStep(FMantlePlaceImportContext& Context, const IMantlePlaceArtifactHandler& Handler)
+{
+	if (Context.Steps == nullptr || Context.Steps->Begin(Handler.Id(), FPlatformTime::Seconds()))
+	{
+		return true;
+	}
+	Context.Cut.Add(Handler.Id());
+	return false;
+}
+}
+
+void MantlePlaceImportOrchestration::PlanSteps(
+	const FHandlers& Handlers, const FMantlePlaceVaultManifest& Manifest, const FMantlePlaceImportSelection& Selection,
+	FMantlePlaceImportSteps& Steps)
+{
+	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
+	{
+		if (!Selection.Includes(Handler->Id()) || !Handler->IsPresent(Manifest))
+		{
+			continue;
+		}
+		Steps.Add(Handler->Id(), Handler->DisplayName().ToString());
+		if (LeftOutOfArchive(Manifest, *Handler))
+		{
+			Steps.Skip(Handler->Id(), TEXT("Not in this download: it was left out of the selection."));
+		}
+	}
 }
 
 void MantlePlaceImportOrchestration::RunPrepare(const FHandlers& Handlers, FMantlePlaceImportContext& Context)
 {
 	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
 	{
-		if (Runs(Context, *Handler))
+		if (!Runs(Context, *Handler))
 		{
-			BeginHandler(Context, *Handler);
-			Handler->Prepare(Context);
+			continue;
+		}
+		// Only a handler whose Prepare does work is a step boundary here; the rest start at their Import.
+		const bool bStep = Context.Steps != nullptr && Handler->Prepares();
+		if (bStep && !BeginStep(Context, *Handler))
+		{
+			continue;
+		}
+		BeginHandler(Context, *Handler);
+		Handler->Prepare(Context);
+		if (bStep)
+		{
+			Context.Steps->Pause(Handler->Id(), FPlatformTime::Seconds());
 		}
 	}
 }
@@ -778,10 +828,23 @@ void MantlePlaceImportOrchestration::RunImport(const FHandlers& Handlers, FMantl
 	{
 		if (Runs(Context, *Handler))
 		{
+			if (!BeginStep(Context, *Handler))
+			{
+				continue;
+			}
 			BeginHandler(Context, *Handler);
+			const bool bSucceededBefore = Context.bAllRequestedSucceeded;
 			Handler->Import(Context);
+			if (Context.Steps != nullptr)
+			{
+				// A handler says it failed by clearing the flag; an optional artifact that went wrong
+				// never clears it, and its step reads Done with the log saying what it skipped.
+				Context.Steps->End(Handler->Id(), !(bSucceededBefore && !Context.bAllRequestedSucceeded),
+					FPlatformTime::Seconds());
+			}
 		}
-		else if (Context.Selection.Includes(Handler->Id()) && Handler->IsPresent(Context.Manifest))
+		else if (Context.Selection.Includes(Handler->Id()) && !Context.Cut.Contains(Handler->Id())
+			&& Handler->IsPresent(Context.Manifest))
 		{
 			Context.Log.Add(FString::Printf(
 				TEXT("%s skipped: what it is made from is not in this archive (left out of the selection)."),

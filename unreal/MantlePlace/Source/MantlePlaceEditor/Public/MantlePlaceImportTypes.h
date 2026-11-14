@@ -27,6 +27,13 @@ struct FMantlePlaceImportResult
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
 	bool bSuccess = false;
 
+	/**
+	 * True when a Cancel stopped the import between two steps. bSuccess is then false; what finished
+	 * before it stays in the level, recorded as this order's import, so importing again replaces it.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
+	bool bCancelled = false;
+
 	/** Human-readable, multi-line summary for the vault panel (success details or the failure reason). */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
 	FString Message;

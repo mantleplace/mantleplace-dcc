@@ -9,9 +9,11 @@
 #include "MantlePlaceEditorSettings.h"
 #include "MantlePlaceImporterLibrary.h"
 #include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest (local-zip inspection)
+#include "MantlePlaceImportStepsLogic.h"
 #include "MantlePlaceSha256.h"         // whole-bundle sha256 for the no-orderId local match
 
 #include "HAL/PlatformFileManager.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Guid.h"
 #include "Misc/Paths.h"
@@ -180,12 +182,22 @@ bool UMantlePlaceVaultImportOrchestrator::StartVaultImport(const FMantlePlaceVau
 	MaterializeRepicks = 0;
 	LastOutstanding.Reset();
 
+	BeginSteps();
 	BeginItemImport();
 	return true;
 }
 
 void UMantlePlaceVaultImportOrchestrator::BeginItemImport()
 {
+	// One step for everything before the bundle is on disk: generating Unreal's formats when the order
+	// needs them, then the download. The status line says which, and the step ends when the import
+	// starts; the bundle's own steps are added once it is open.
+	if (Steps.IsValid())
+	{
+		const FName DownloadStep(TEXT("download"));
+		Steps->Add(DownloadStep, TEXT("Download"));
+		Steps->Begin(DownloadStep, FPlatformTime::Seconds());
+	}
 	// Shared tail for both the vault-row path and the resolved local-zip path: an incomplete bundle
 	// (no glb terrain mesh, incl. the empty-formats base_on_demand marker) materializes first; a bundle
 	// that already ships Unreal formats downloads directly.
@@ -219,6 +231,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartVaultImportFirstIncomplete(EMantl
 	ActiveMode = Mode;
 	ActiveScope = Scope.IsEmpty() ? TEXT("unreal") : Scope;
 	Phase = EPhase::AutoPicking;
+	BeginSteps();
 	EmitPhase(TEXT("Listing"), TEXT("Listing your vault to pick a bundle..."), -1.0f);
 	VaultClient->ListVault(); // result -> HandleVaultListedNative (AutoPicking branch)
 	return true;
@@ -261,6 +274,8 @@ bool UMantlePlaceVaultImportOrchestrator::StartLocalImport(const FString& ZipPat
 	MaterializeRepicks = 0;
 	LastOutstanding.Reset();
 
+	BeginSteps();
+
 	// Stage: copy the user's zip into a private dir so their original file is never mutated (mirrors the
 	// vault path, which downloads to the cache rather than importing in place).
 	EmitPhase(TEXT("Staging"), TEXT("Copying the bundle to a staging folder..."), -1.0f);
@@ -286,7 +301,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartLocalImport(const FString& ZipPat
 		// Complete bundle -> import directly from the staged copy (no cloud round-trip).
 		Phase = EPhase::Importing;
 		EmitPhase(TEXT("Importing"), TEXT("Importing into the level..."), -1.0f);
-		const FMantlePlaceImportResult Result = UMantlePlaceImporterLibrary::ImportVaultPackage(LocalStagedPath, ActiveMode);
+		const FMantlePlaceImportResult Result = RunBundleImport(LocalStagedPath);
 		FinishImport(Result.bSuccess, Result);
 		return true;
 	}
@@ -841,7 +856,7 @@ void UMantlePlaceVaultImportOrchestrator::HandleDownloadCompleteNative(bool bSuc
 	// ImportVaultPackage is synchronous and enforces its own fail-closed manifest sha256 checks. The
 	// freshly downloaded, materialized bundle is imported here - for a local import that means the
 	// completed cloud bundle, not the user's incomplete local copy (which is left untouched on disk).
-	FMantlePlaceImportResult Result = UMantlePlaceImporterLibrary::ImportVaultPackage(LocalBundlePath, ActiveMode);
+	FMantlePlaceImportResult Result = RunBundleImport(LocalBundlePath);
 	if (bLocalImport && Result.bSuccess)
 	{
 		Result.Message = FString::Printf(
@@ -856,8 +871,15 @@ void UMantlePlaceVaultImportOrchestrator::FinishImport(bool bSuccess, const FMan
 {
 	UnschedulePoll();
 	Phase = EPhase::Idle;
+	if (Steps.IsValid())
+	{
+		// A step still in flight here is the fetch, ended by a failure or a cancel; the import's own
+		// steps were finished when it returned.
+		Steps->Finish(FPlatformTime::Seconds());
+		Steps.Reset();
+	}
 	UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("Vault import %s: %s"),
-		bSuccess ? TEXT("succeeded") : TEXT("failed"), *Result.Message);
+		bSuccess ? TEXT("succeeded") : (Result.bCancelled ? TEXT("cancelled") : TEXT("failed")), *Result.Message);
 	OnImportFinished.Broadcast(bSuccess, Result);
 	// Drop the local staging copy (no-op for a vault-row import) once the terminal result is out.
 	CleanupLocalStaging();
@@ -888,13 +910,48 @@ void UMantlePlaceVaultImportOrchestrator::EmitPhase(const FString& PhaseLabel, c
 			UE_LOG(LogMantlePlaceVaultImport, Log, TEXT("[%s] %s"), *PhaseLabel, *Message);
 		}
 	}
+	if (Steps.IsValid() && Phase != EPhase::Importing)
+	{
+		// What the fetch is doing, after the Download step's name: the phase's own message, or the
+		// download's percentage on a progress tick, which carries none.
+		Steps->SetActivity(Fraction >= 0.0f && Message.IsEmpty()
+			? FString::Printf(TEXT("%.0f%%"), Fraction * 100.0f)
+			: Message);
+	}
 	OnImportPhase.Broadcast(PhaseLabel, Message, Fraction);
+}
+
+void UMantlePlaceVaultImportOrchestrator::BeginSteps()
+{
+	Steps = MakeShared<FMantlePlaceImportSteps>();
+	OnImportStepsNative.Broadcast(Steps.ToSharedRef());
+}
+
+FMantlePlaceImportResult UMantlePlaceVaultImportOrchestrator::RunBundleImport(const FString& Path)
+{
+	if (Steps.IsValid())
+	{
+		Steps->SetActivity(FString());
+		Steps->End(FName(TEXT("download")), true, FPlatformTime::Seconds());
+	}
+	return UMantlePlaceImporterLibrary::ImportVaultPackageWithSteps(Path, ActiveMode, Steps.Get());
 }
 
 void UMantlePlaceVaultImportOrchestrator::CancelImport()
 {
 	if (Phase == EPhase::Idle)
 	{
+		return;
+	}
+	if (Steps.IsValid())
+	{
+		Steps->RequestCancel();
+	}
+	if (Phase == EPhase::Importing)
+	{
+		// The import is running on this thread, and this was reached between two of its steps (the
+		// import window's Cancel, ticked at a step boundary). It stops at the next one; finishing here
+		// would report a result while it is still running.
 		return;
 	}
 	UnschedulePoll();
@@ -904,7 +961,8 @@ void UMantlePlaceVaultImportOrchestrator::CancelImport()
 	}
 	FMantlePlaceImportResult Result;
 	Result.bSuccess = false;
-	Result.Message = TEXT("Import cancelled.");
+	Result.bCancelled = true;
+	Result.Message = TEXT("Import cancelled before the bundle was imported. Nothing in the level changed.");
 	FinishImport(false, Result);
 }
 

@@ -8,6 +8,7 @@
 #include "MantlePlaceImportTypes.h"  // FMantlePlaceImportResult
 #include "MantlePlaceAuthTypes.h"    // EMantlePlaceAuthState
 #include "MantlePlaceClientLogic.h"  // FMantlePlaceClientUpdate
+#include "MantlePlaceVaultImportOrchestrator.h" // FMantlePlaceOnImportStepsNative
 #include "MantlePlaceVaultPanelController.generated.h"
 
 class UMantlePlaceVaultImportOrchestrator;
@@ -46,6 +47,9 @@ public:
 	/** The platform asked for a newer plugin (HTTP 426 client_update_required); the panel offers the update. */
 	FMantlePlaceOnClientUpdateRequiredNative OnClientUpdateRequired;
 
+	/** An import flow started: the steps the import window shows. */
+	FMantlePlaceOnImportStepsNative OnImportSteps;
+
 	/** Create the orchestrator and bind its dynamic delegates (idempotent). Does not list. */
 	void Initialize();
 
@@ -69,6 +73,9 @@ public:
 	/** Start a local-zip import (stage -> import, or materialize the missing Unreal formats first). */
 	bool StartLocalImport(const FString& ZipPath, EMantlePlaceImportMode Mode);
 
+	/** Stop the import in flight: now while fetching, between steps once importing. The import window's Cancel. */
+	void CancelImport();
+
 	/** True while Item is the bundle currently importing (gates that row's progress line). */
 	bool IsActiveItem(const FMantlePlaceVaultItem& Item) const;
 
@@ -78,6 +85,7 @@ private:
 	UFUNCTION() void HandleImportFinished(bool bSuccess, const FMantlePlaceImportResult& Result);
 	UFUNCTION() void HandleAuthChanged(EMantlePlaceAuthState NewState);
 	void HandleClientUpdateRequired(const FMantlePlaceClientUpdate& Update);
+	void HandleImportSteps(TSharedRef<FMantlePlaceImportSteps> Steps);
 
 	UPROPERTY()
 	TObjectPtr<UMantlePlaceVaultImportOrchestrator> Orchestrator;

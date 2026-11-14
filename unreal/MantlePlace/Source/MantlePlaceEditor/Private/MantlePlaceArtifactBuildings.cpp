@@ -77,6 +77,8 @@ public:
 		}
 	}
 
+	bool Prepares() const override { return true; }
+
 	void Prepare(FMantlePlaceImportContext& Ctx) override
 	{
 		if (!Ctx.Manifest.Buildings.bPresent)
