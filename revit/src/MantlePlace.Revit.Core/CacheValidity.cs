@@ -13,6 +13,12 @@ public enum CacheInvalidReason
     SizeMismatch,
     Sha256Mismatch,
     ManifestTooOld,
+
+    /// <summary>
+    /// The zip on disk was fetched for another host, at another level, or before the slot recorded
+    /// either. For the host asking it is a miss, not damage.
+    /// </summary>
+    NotThisSlot,
 }
 
 /// <summary>What the UI shows for a cache entry.</summary>
@@ -33,7 +39,7 @@ public enum CacheState
 /// </param>
 public readonly record struct CacheVerdict(bool IsValid, CacheInvalidReason Reason, bool IntegrityChecked)
 {
-    public CacheState State(bool fileExists) => !fileExists
+    public CacheState State(bool fileExists) => !fileExists || Reason == CacheInvalidReason.NotThisSlot
         ? CacheState.NotCached
         : IsValid ? CacheState.CachedValid : CacheState.CachedStale;
 }
@@ -145,6 +151,30 @@ public sealed class CacheSidecar
     /// arrived instead, and the files inside it against the manifest's own digests at import.
     /// </remarks>
     public bool HoldsView { get; init; }
+
+    /// <summary>
+    /// The host the download was fetched for (<c>HostIdentity.Id</c>); <c>null</c> in a sidecar written
+    /// before the slot recorded it.
+    /// </summary>
+    /// <remarks>
+    /// The Revit and AutoCAD plugins share one cache folder, and a host's download view holds only that
+    /// host's files, so a zip fetched for one is never a hit for the other.
+    /// </remarks>
+    public string? Host { get; init; }
+
+    /// <summary>
+    /// The level the download was fetched at; <c>null</c> in a sidecar written before the slot recorded it.
+    /// </summary>
+    public string? Level { get; init; }
+
+    /// <summary>
+    /// Whether this download is the slot a <paramref name="host"/> asking at <paramref name="level"/>
+    /// reads: the same host and the same level, both recorded. A sidecar that recorded neither is a miss.
+    /// </summary>
+    public bool IsSlotOf(string host, string level)
+        => Host is not null && Level is not null
+            && string.Equals(Host, host, StringComparison.Ordinal)
+            && string.Equals(Level, level, StringComparison.Ordinal);
 }
 
 /// <summary>The four names a bundle's cache directory holds. Corpus <c>cache.keySanitisation.fileNames</c>.</summary>
@@ -172,6 +202,17 @@ public static class CacheSidecars
             .Append(sidecar.ManifestVersion is null ? "null" : Quote(sidecar.ManifestVersion)).Append(",\n");
         json.Append("  \"downloadedAtUtc\": ").Append(Quote(sidecar.DownloadedAtUtc)).Append(",\n");
         json.Append("  \"integrityChecked\": ").Append(sidecar.IntegrityChecked ? "true" : "false");
+
+        // Written when recorded; an absent key reads back as null, which the slot treats as a miss.
+        if (sidecar.Host is not null)
+        {
+            json.Append(",\n  \"host\": ").Append(Quote(sidecar.Host));
+        }
+
+        if (sidecar.Level is not null)
+        {
+            json.Append(",\n  \"level\": ").Append(Quote(sidecar.Level));
+        }
 
         // Written only for a view, so a whole-archive sidecar reads exactly as it always has.
         if (sidecar.HoldsView)
@@ -228,6 +269,8 @@ public static class CacheSidecars
                 DownloadedAtUtc = root.Str("downloadedAtUtc"),
                 IntegrityChecked = root.Bool("integrityChecked"),
                 HoldsView = root.Bool("view"),
+                Host = root.OptionalStr("host"),
+                Level = root.OptionalStr("level"),
             };
         }
         catch (JsonException)
