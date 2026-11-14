@@ -22,6 +22,43 @@ history, not contract.
 
 ## Semver era
 
+### 2.2.0 — where a heightmap sits on the shared vertical ladder (additive minor; published and frozen)
+
+Two optional members are added to the 16-bit grayscale `value_mapping` of a file entry, a MINOR under
+[compatibility](compatibility.md) §2. Nothing is removed, re-typed or re-meant, and a 2.0 or 2.1 reader
+ignores them as unknown members. [`format.md`](format.md) §6.8 explains them; the schema owns the
+member-level wording, and where it and this entry differ the schema is right.
+
+- **`vertical_tier`**, on a heightmap only: the rung of the shared vertical ladder the PNG is encoded
+  at, which fixes its step (`quantization_step` states that step). Two tiles of one tier share one code
+  lattice, so imported at one Z scale they differ only by a whole number of steps.
+- **`vertical_grid_index`**, with `vertical_tier`: the heightmap's `min` expressed in whole steps, on a
+  grid whose zero is 0 m in the vertical datum. A pixel code stands for one lattice line of that grid,
+  and the same height has the same line in every tile of the tier.
+
+What a reader does differently: a reader that places two heightmaps against one another, a landscape
+tiled over several, reads both members and lines the tiles up by `vertical_grid_index` and not by each
+file's own `min` and `max`. A heightmap built before 2.2.0 carries neither, is stretched over its own
+relief, and a reader decodes it by `min` and `max` as before. A reader that does not tile ignores both.
+
+### 2.1.0 — the reflectance encoding of a Sentinel-2 raster (additive minor; published and frozen)
+
+Two optional members are added to `imagery`, a MINOR under [compatibility](compatibility.md) §2.
+Nothing is removed, re-typed or re-meant, and a 2.0 reader ignores them as unknown members.
+[`format.md`](format.md) §6.4 explains them; the schema owns the member-level wording, and where it
+and this entry differ the schema is right.
+
+- **`imagery.reflectance_scale`** and **`imagery.reflectance_offset`**, which say how the stored
+  values of a Sentinel-2 imagery COG map to reflectance: `reflectance = value * reflectance_scale +
+  reflectance_offset`. Both are numbers, or null when the raster declares no encoding, and a null
+  offset reads as 0. They are absent on NAIP, whose pixels are already display values.
+
+What a reader does differently: a reader that stretches a Sentinel-2 raster by `display_stretch`
+reads the offset first. The stretch is stated in reflectance after the offset comes off, so applying
+it to the stored values and ignoring the offset renders a scene from a later processing baseline
+washed out. A bundle built before 2.1.0 carries neither member, and a reader treats the raster as it
+did before. A reader that does not stretch imagery is unaffected.
+
 ### 2.0.0 — the open site-context standard: a profile over open formats, placed by every file's frame, in one layout (major; published and frozen)
 
 The first major of the semver era, and the first version written for readers outside Mantle Place. It
