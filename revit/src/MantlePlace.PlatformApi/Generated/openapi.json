@@ -475,8 +475,21 @@
                       "maximum": 9007199254740991
                     },
                     "freeSlotOpen": {
-                      "description": "Only with a valid bearer: the account is under the free-bundle cap.",
+                      "description": "Only with a valid bearer: a free build can start now (the account is within its free-build limit).",
                       "type": "boolean"
+                    },
+                    "freeBuildsLeft": {
+                      "description": "Only with a valid bearer: how many free builds the account has left.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "nextFreeBuildAt": {
+                      "description": "Only with a valid bearer: when the next free build opens (an ISO 8601 time), once the account is at its limit in a rolling window; null otherwise.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -786,8 +799,21 @@
                           "maximum": 9007199254740991
                         },
                         "freeSlotOpen": {
-                          "description": "Only with a valid bearer: the account is under the free-bundle cap.",
+                          "description": "Only with a valid bearer: a free build can start now (the account is within its free-build limit).",
                           "type": "boolean"
+                        },
+                        "freeBuildsLeft": {
+                          "description": "Only with a valid bearer: how many free builds the account has left.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "nextFreeBuildAt": {
+                          "description": "Only with a valid bearer: when the next free build opens (an ISO 8601 time), once the account is at its limit in a rolling window; null otherwise.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -813,7 +839,7 @@
             }
           },
           "409": {
-            "description": "Refused. Codes: price_changed (carries the current quote; nothing was charged), free_cap_reached (the account holds the most live free bundles it may), idempotency_key_reused (the key placed an order for a different extent).",
+            "description": "Refused. Codes: price_changed (carries the current quote; nothing was charged), free_cap_reached (the account is at its free-build limit), idempotency_key_reused (the key placed an order for a different extent).",
             "content": {
               "application/json": {
                 "schema": {
@@ -922,8 +948,21 @@
                           "maximum": 9007199254740991
                         },
                         "freeSlotOpen": {
-                          "description": "Only with a valid bearer: the account is under the free-bundle cap.",
+                          "description": "Only with a valid bearer: a free build can start now (the account is within its free-build limit).",
                           "type": "boolean"
+                        },
+                        "freeBuildsLeft": {
+                          "description": "Only with a valid bearer: how many free builds the account has left.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "nextFreeBuildAt": {
+                          "description": "Only with a valid bearer: when the next free build opens (an ISO 8601 time), once the account is at its limit in a rolling window; null otherwise.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -1058,8 +1097,21 @@
                           "maximum": 9007199254740991
                         },
                         "freeSlotOpen": {
-                          "description": "Only with a valid bearer: the account is under the free-bundle cap.",
+                          "description": "Only with a valid bearer: a free build can start now (the account is within its free-build limit).",
                           "type": "boolean"
+                        },
+                        "freeBuildsLeft": {
+                          "description": "Only with a valid bearer: how many free builds the account has left.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "nextFreeBuildAt": {
+                          "description": "Only with a valid bearer: when the next free build opens (an ISO 8601 time), once the account is at its limit in a rolling window; null otherwise.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -2611,7 +2663,8 @@
                             "type": "string",
                             "enum": [
                               "unreal",
-                              "revit"
+                              "revit",
+                              "autocad"
                             ]
                           },
                           "targetConnectionId": {
@@ -2837,7 +2890,8 @@
                       "type": "string",
                       "enum": [
                         "unreal",
-                        "revit"
+                        "revit",
+                        "autocad"
                       ]
                     },
                     "targetConnectionId": {
