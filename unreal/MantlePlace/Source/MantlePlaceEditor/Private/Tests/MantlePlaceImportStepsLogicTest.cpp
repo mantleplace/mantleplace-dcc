@@ -328,6 +328,28 @@ bool FMantlePlaceImportStepsOrchestrationTest::RunTest(const FString& Parameters
 		TestEqual(TEXT("a ran part of itself and is Cancelled; the rest are Not Run"),
 			States(Steps), TEXT("a=Cancelled b=Not Run c=Not Run d=Not Run e=Not Run"));
 	}
+
+	// --- Two failures in one run: each failing step reads Failed, the one between them Done ---------------
+	{
+		TArray<FString> Calls;
+		MantlePlaceArtifacts::FHandlers Handlers;
+		Handlers.Add(MakeUnique<FStepRecordingHandler>(FName(TEXT("p")), Calls, false, true));
+		Handlers.Add(MakeUnique<FStepRecordingHandler>(FName(TEXT("q")), Calls));
+		Handlers.Add(MakeUnique<FStepRecordingHandler>(FName(TEXT("r")), Calls, false, true));
+		FMantlePlaceImportSteps Steps;
+		MantlePlaceImportOrchestration::PlanSteps(Handlers, Manifest, Selection, Steps);
+		MantlePlaceImportTiming::FTimeline Timeline;
+		FMantlePlaceImportResult Result;
+		TArray<FString> Log;
+		FMantlePlaceImportContext Context(nullptr, Manifest, nullptr, Selection, Timeline, Result, Log);
+		Context.Steps = &Steps;
+		MantlePlaceImportOrchestration::RunPrepare(Handlers, Context);
+		MantlePlaceImportOrchestration::RunImport(Handlers, Context);
+		Steps.Finish(0.0);
+		TestEqual(TEXT("a later failure is Failed even after an earlier one; a success between them is Done"),
+			States(Steps), TEXT("p=Failed q=Done r=Failed"));
+		TestFalse(TEXT("and the run as a whole did not succeed"), Context.bAllRequestedSucceeded);
+	}
 	return true;
 }
 

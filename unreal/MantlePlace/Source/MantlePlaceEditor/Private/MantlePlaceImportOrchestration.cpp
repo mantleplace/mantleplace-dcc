@@ -833,14 +833,18 @@ void MantlePlaceImportOrchestration::RunImport(const FHandlers& Handlers, FMantl
 				continue;
 			}
 			BeginHandler(Context, *Handler);
+			// A handler says it failed by clearing the flag; an optional artifact that went wrong never
+			// clears it, and its step reads Done with the log saying what it skipped. The flag is set
+			// afresh for each handler so its step reads that handler's own result, not an earlier
+			// handler's failure, and the run's verdict is the conjunction of them all.
 			const bool bSucceededBefore = Context.bAllRequestedSucceeded;
+			Context.bAllRequestedSucceeded = true;
 			Handler->Import(Context);
+			const bool bHandlerSucceeded = Context.bAllRequestedSucceeded;
+			Context.bAllRequestedSucceeded = bSucceededBefore && bHandlerSucceeded;
 			if (Context.Steps != nullptr)
 			{
-				// A handler says it failed by clearing the flag; an optional artifact that went wrong
-				// never clears it, and its step reads Done with the log saying what it skipped.
-				Context.Steps->End(Handler->Id(), !(bSucceededBefore && !Context.bAllRequestedSucceeded),
-					FPlatformTime::Seconds());
+				Context.Steps->End(Handler->Id(), bHandlerSucceeded, FPlatformTime::Seconds());
 			}
 		}
 		else if (Context.Selection.Includes(Handler->Id()) && !Context.Cut.Contains(Handler->Id())
