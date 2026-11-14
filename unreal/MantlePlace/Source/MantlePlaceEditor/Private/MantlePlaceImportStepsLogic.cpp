@@ -237,7 +237,7 @@ FString FMantlePlaceImportSteps::RunElapsed(double Now) const
 	{
 		return FString();
 	}
-	return Elapsed((bFinished ? RunEnded : Now) - RunStarted);
+	return ElapsedWord() + TEXT(" ") + Elapsed((bFinished ? RunEnded : Now) - RunStarted);
 }
 
 FString FMantlePlaceImportSteps::DescribeCancel() const

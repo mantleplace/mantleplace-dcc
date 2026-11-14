@@ -118,10 +118,14 @@ public:
 	double RunStartedAt() const { return RunStarted; }
 	double RunEndedAt() const { return RunEnded; }
 
-	/** The import window's heading, its title bar and its stop button: HPS-51's words for this window. */
+	/**
+	 * The import window's heading, its title bar, its stop button and the word before the run's clock:
+	 * HPS-51's words for this window (HPS-60).
+	 */
 	static FString Heading() { return TEXT("Bundle Import"); }
 	static FString WindowTitle() { return TEXT("Mantle Place Bundle Import"); }
 	static FString CancelWord() { return TEXT("Cancel"); }
+	static FString ElapsedWord() { return TEXT("Elapsed"); }
 
 	/** A state, as its row says it (HPS-51). */
 	static FString StateWord(EMantlePlaceImportStepState State);
@@ -139,7 +143,10 @@ public:
 	 */
 	FString StatusLine(double Now) const;
 
-	/** How long the whole run has run, or ran: empty before the first step. */
+	/**
+	 * How long the whole run has run, or ran, as HPS-60 shows it: `Elapsed 4 min 10 s`, a clock that runs
+	 * while the import runs and stops when it ends. Empty before the first step.
+	 */
 	FString RunElapsed(double Now) const;
 
 	/** The closing line of a cancelled run: how far it got, and that importing again completes it. */

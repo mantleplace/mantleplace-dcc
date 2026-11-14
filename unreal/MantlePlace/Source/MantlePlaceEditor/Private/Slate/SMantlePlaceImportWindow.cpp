@@ -52,23 +52,12 @@ void SMantlePlaceImportWindow::Construct(const FArguments& InArgs)
 		[
 			SNew(SVerticalBox)
 
-			// The heading the standard fixes for this window, and how long the whole run has taken.
+			// The heading the standard fixes for this window.
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, S::S3)
 			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
-				[
-					SNew(STextBlock)
-					.Font(S::GetFont(EFont::Title))
-					.Text(FText::FromString(FMantlePlaceImportSteps::Heading()))
-				]
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
-				[
-					SNew(STextBlock)
-					.Font(S::GetFont(EFont::Small))
-					.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-					.Text(this, &SMantlePlaceImportWindow::GetRunElapsedText)
-				]
+				SNew(STextBlock)
+				.Font(S::GetFont(EFont::Title))
+				.Text(FText::FromString(FMantlePlaceImportSteps::Heading()))
 			]
 
 			// One row per step, in the order they run.
@@ -77,13 +66,25 @@ void SMantlePlaceImportWindow::Construct(const FArguments& InArgs)
 				SAssignNew(Rows, SVerticalBox)
 			]
 
-			// The step in flight, what it is doing and how long it has run.
+			// The status line: the step in flight, what it is doing and how long it has run, and the run's
+			// own clock after HPS-60's `Elapsed`, which keeps running between steps.
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, S::S3, 0.f, 0.f)
 			[
-				SNew(STextBlock)
-				.Font(S::GetFont(EFont::Small))
-				.AutoWrapText(true)
-				.Text(this, &SMantlePlaceImportWindow::GetStatusText)
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Top)
+				[
+					SNew(STextBlock)
+					.Font(S::GetFont(EFont::Small))
+					.AutoWrapText(true)
+					.Text(this, &SMantlePlaceImportWindow::GetStatusText)
+				]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top).Padding(S::S2, 0.f, 0.f, 0.f)
+				[
+					SNew(STextBlock)
+					.Font(S::GetFont(EFont::Small))
+					.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+					.Text(this, &SMantlePlaceImportWindow::GetRunElapsedText)
+				]
 			]
 
 			// Where the level control goes. Empty on purpose: the control that fills it is its own change,

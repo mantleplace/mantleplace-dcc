@@ -89,6 +89,7 @@ bool FMantlePlaceImportStepsStatesTest::RunTest(const FString& Parameters)
 	// --- The window's words: HPS-51's heading and stop button, and the six a row says ------------------
 	TestEqual(TEXT("the heading"), FMantlePlaceImportSteps::Heading(), FString(TEXT("Bundle Import")));
 	TestEqual(TEXT("the stop button"), FMantlePlaceImportSteps::CancelWord(), FString(TEXT("Cancel")));
+	TestEqual(TEXT("the word before the run's clock"), FMantlePlaceImportSteps::ElapsedWord(), FString(TEXT("Elapsed")));
 	TestTrue(TEXT("the title bar names the window by the heading"), FMantlePlaceImportSteps::WindowTitle().EndsWith(TEXT("Bundle Import")));
 	TestEqual(TEXT("Waiting"), FMantlePlaceImportSteps::StateWord(EState::Waiting), TEXT("Waiting"));
 	TestEqual(TEXT("Importing"), FMantlePlaceImportSteps::StateWord(EState::Importing), TEXT("Importing"));
@@ -149,7 +150,7 @@ bool FMantlePlaceImportStepsStatesTest::RunTest(const FString& Parameters)
 	// --- The run ends without a cancel: a step left Waiting never ran ---------------------------------------
 	Steps.Finish(130.0);
 	TestTrue(TEXT("the run is finished"), Steps.IsFinished());
-	TestEqual(TEXT("the run clock stops at Finish"), Steps.RunElapsed(500.0), FString(TEXT("30 s")));
+	TestEqual(TEXT("the run clock stops at Finish, after HPS-60's word"), Steps.RunElapsed(500.0), FString(TEXT("Elapsed 30 s")));
 	TestEqual(TEXT("with no cancel, a step the run ended before finishing is Not Run: Cancelled is a cancel's word"),
 		Steps.Steps()[2].State, EState::NotRun);
 	TestFalse(TEXT("no cancel was asked for, so the run was not cancelled"), Steps.WasCancelled());
