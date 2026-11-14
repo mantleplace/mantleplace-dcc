@@ -2099,6 +2099,63 @@
       "appliesTo": "unreal"
     },
     {
+      "id": "manifest.imageryReflectanceIgnored",
+      "group": "manifest",
+      "file": "manifest/imagery-reflectance-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 2.1.0 adds two optional members to `imagery`, `reflectance_scale` and `reflectance_offset`, which say how a Sentinel-2 COG's stored values map to reflectance (`reflectance = value * reflectance_scale + reflectance_offset`). The fixture is a 2.1.0 manifest whose imagery entry is a Sentinel-2 raster that states both (0.0001 and -0.1, the offset an L2A scene from processing baseline 04.00 on carries) beside `display_stretch`, and whose `hosts.unreal` block carries a heightmap whose range is stated only in `file_entries` (2.x refuses the host-block `uint16_mapping`). EXPECTED READER OUTCOME: a reader that does not stretch imagery ACCEPTS the manifest and ignores both members, which is every registered host today; a reader that does reads the offset first, because `display_stretch` is stated in reflectance after the offset comes off. The one reader this case catches is one that gates the version on equality with the last minor it saw, or refuses an `imagery` member it does not recognise: either turns an additive minor into a breaking release (compatibility.md). It is also the first manifest-group case at a 2.x version, so it pins that a same-major reader reads a 2.1 manifest. The fixture validates against the published 2.1.0 schema. Host-invariant on purpose: every host reads the job id and the order id around the new members.",
+      "manifestVersion": "2.1.0",
+      "expectations": {
+        "jobId": "imagery-reflectance",
+        "orderId": "ord-imagery-reflectance-1"
+      }
+    },
+    {
+      "id": "manifest.imageryReflectanceNull",
+      "group": "manifest",
+      "file": "manifest/imagery-reflectance-null.json",
+      "expect": "accept",
+      "reason": "The other state of the 2.1.0 members: `reflectance_scale` and `reflectance_offset` are present and NULL, which the schema says a raster that declares no encoding carries, and a null offset reads as 0. The fixture is the imagery-reflectance fixture with both members null. EXPECTED READER OUTCOME: the manifest is ACCEPTED and a null is not read as a number, a refusal or a zero scale: a reader that does not stretch imagery ignores both members, and one that does applies no offset and says the raster declares none rather than dividing by a null scale. Both states are pinned because a typed reader fails on the second where the first passes, a number-typed member that a null throws on. The fixture validates against the published 2.1.0 schema.",
+      "manifestVersion": "2.1.0",
+      "expectations": {
+        "jobId": "imagery-reflectance-null",
+        "orderId": "ord-imagery-reflectance-null-1"
+      }
+    },
+    {
+      "id": "manifest.heightmapVerticalTierIgnored",
+      "group": "manifest",
+      "file": "manifest/heightmap-vertical-tier-ignored.json",
+      "expect": "accept",
+      "reason": "MPB 2.2.0 adds two optional members to the 16-bit grayscale `value_mapping` of a heightmap's `file_entries` entry: `vertical_tier`, the rung of the shared vertical ladder the PNG is encoded at (its step is `2^vertical_tier / 128` metres, which `quantization_step` states), and `vertical_grid_index`, the heightmap's `min` in whole steps on a grid whose zero is 0 m in the vertical datum. The fixture is a 2.2.0 manifest whose heightmap is at tier 1 (step 0.015625 m, index 160000, so `min` is 2500 m), beside the `min`, `max` and `to_value` every 16-bit mapping carries. EXPECTED READER OUTCOME: a reader that does not tile heightmaps ACCEPTS the manifest and ignores both members; a reader that tiles lines two heightmaps up by `vertical_grid_index` and not by each file's own `min` and `max`. A heightmap built before 2.2.0 carries neither member and is read by `min` and `max` as before. The reader this case catches refuses a `value_mapping` member it does not recognise, or a manifest above the last minor it saw. The fixture validates against the published 2.2.0 schema. Host-invariant on purpose: every host reads the job id and the order id around the new members; the Unreal range is asserted by `manifest.unrealHeightmapVerticalTier`.",
+      "manifestVersion": "2.2.0",
+      "expectations": {
+        "jobId": "heightmap-vertical-tier",
+        "orderId": "ord-heightmap-vertical-tier-1"
+      }
+    },
+    {
+      "id": "manifest.unrealHeightmapVerticalTier",
+      "group": "manifest",
+      "file": "manifest/unreal-heightmap-vertical-tier.json",
+      "expect": "accept",
+      "reason": "The Unreal host's reading of the 2.2.0 heightmap mapping. A 2.x bundle states what the 16-bit pixels mean only in `file_entries[<heightmap path>].value_mapping`, so the plugin reads the heightmap's range (`min` and `max`, the heights pixel codes 0 and 65535 stand for) from there when the `unreal` block states none. The mapping here also carries `vertical_tier` and `vertical_grid_index`, which a landscape tiled from several heightmaps lines up by; this host imports one heightmap at the Landscape transform the block states and applies the range verbatim, so the two members change nothing it reads. EXPECTED READER OUTCOME: the manifest is ACCEPTED, the heightmap is present at its path and size, and the range is exactly the mapping's `min` and `max` (2500 and 3523.984375 m), not a range recomputed from the tier or the grid index. The fixture validates against the published 2.2.0 schema.",
+      "manifestVersion": "2.2.0",
+      "appliesTo": "unreal",
+      "expectations": {
+        "jobId": "unreal-heightmap-vertical-tier",
+        "orderId": "ord-unreal-heightmap-vertical-tier-1",
+        "hasHeightmap": true,
+        "heightmapPath": "Elevation/Heightmap.png",
+        "resolution": 1009,
+        "heightmapRangeM": [
+          2500,
+          3523.984375
+        ],
+        "heightmapRangeToleranceM": 1e-06
+      }
+    },
+    {
       "id": "bundle.minimal",
       "group": "bundle",
       "file": "bundle/minimal.json",

@@ -208,7 +208,22 @@
     "manifest.heightmapMissingSha": [
       "unreal"
     ],
+    "manifest.heightmapVerticalTierIgnored": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
     "manifest.hostFramesIgnored": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
+    "manifest.imageryReflectanceIgnored": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
+    "manifest.imageryReflectanceNull": [
       "autocad",
       "revit",
       "unreal"
@@ -400,6 +415,9 @@
       "unreal"
     ],
     "manifest.treePointsStatedFrame": [
+      "unreal"
+    ],
+    "manifest.unrealHeightmapVerticalTier": [
       "unreal"
     ],
     "manifest.unrealPublicRecordsFolder": [
