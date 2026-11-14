@@ -25,6 +25,7 @@ exitCode |= PlugInsPanelTests.Run();
 exitCode |= ExportReceiptTests.Run();
 exitCode |= AboutPageTests.Run();
 exitCode |= HostReleaseYearTests.Run();
+exitCode |= ShimWindowTests.Run("autocad/src/MantlePlace.AutoCad.Addin", "shim windows");
 
 if (exitCode == 0)
 {

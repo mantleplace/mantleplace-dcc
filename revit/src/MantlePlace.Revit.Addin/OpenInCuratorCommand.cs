@@ -166,7 +166,6 @@ public sealed class OpenInCuratorCommand : IExternalCommand
             MainInstruction = "How much around the project's site location?",
             MainContent = content,
             CommonButtons = TaskDialogCommonButtons.Cancel,
-            DefaultButton = TaskDialogResult.CommandLink1,
         };
 
         // A Revit task dialog has four command links, and the core offers no more than that.
@@ -190,6 +189,14 @@ public sealed class OpenInCuratorCommand : IExternalCommand
         for (int i = 0; i < offered; i++)
         {
             dialog.AddCommandLink(links[i], resolution.SizeChoices[i].Label);
+        }
+
+        // ⛔ Only now, never in the initializer: Revit checks DefaultButton against the links already
+        // added and refuses one it cannot find ("Corresponding button not found"), which stopped the
+        // command before the dialog ever showed. With no link to offer, Cancel stays the default.
+        if (offered > 0)
+        {
+            dialog.DefaultButton = results[0];
         }
 
         TaskDialogResult result = dialog.Show();
