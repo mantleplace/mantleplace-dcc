@@ -10,7 +10,7 @@ vault and for Open in Curator's order extent.
 2. Install from the Autodesk storefront, or unzip `MantlePlace-Revit-<version>.zip` and run
    `MantlePlace.bundle\Install.cmd` (the manual copy is in `MantlePlace.bundle\README.txt`). Use one
    way in, not both.
-3. Start Revit 2025, 2026 or 2027 and open or create any project. A **Mantle Place** tab appears on the
+3. Start Revit 2025.5 or later, 2026.5 or later, or 2027 (see [Supported hosts](../README.md)) and open or create any project. A **Mantle Place** tab appears on the
    ribbon.
 
 ## 2. Sign in (optional)
