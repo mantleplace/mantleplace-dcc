@@ -88,6 +88,13 @@ internal static class LocalBundleImportTests
             run.Contains(blank, "Nothing was imported", "a sentence");
         });
 
+        run.Case("a refusal made before any order is read names no blank order", () =>
+        {
+            string summary = new AutoCadImportPlan { Refusal = LocalBundleImport.NotABundle }.Summary();
+
+            run.Equal(summary, "Mantle Place: " + LocalBundleImport.NotABundle, "no 'order :' with nothing between");
+        });
+
         run.Case("a bundle opens with its manifest, under the path typed at the command line, quotes and all", () =>
         {
             string path = Zip(sandbox, "order.zip", ("Order/Metadata/manifest.json", "{\"manifest_version\":\"2.2.0\"}"));

@@ -218,7 +218,8 @@ public sealed class AutoCadImportPlan
     public string Summary(IReadOnlyDictionary<AutoCadPart, string>? outcomes)
     {
         StringBuilder text = new();
-        text.Append(CultureInfo.InvariantCulture, $"Mantle Place order {OrderId}");
+        // A file refused before its manifest was read has no order to name.
+        text.Append(OrderId.Length == 0 ? "Mantle Place" : string.Create(CultureInfo.InvariantCulture, $"Mantle Place order {OrderId}"));
         if (IsRefused)
         {
             text.Append(": ").Append(Refusal);
