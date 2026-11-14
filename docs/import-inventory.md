@@ -1,6 +1,6 @@
 ---
 name: import-inventory
-description: What each host plugin imports from a bundle, per category — the manifest pointer it reads, what it becomes in the host, whether an import brings it in by default, what it was measured to cost and what that cost grows with, and whether a published scale plausibly fits. The home of Unreal's measured import figures; Revit's stay in code and are cited here. Read before proposing a published scale, a new default, or a cost warning for any imported layer.
+description: What each host plugin imports from a bundle, per category — the manifest pointer it reads, what it becomes in the host, whether an import brings it in by default, what it was measured to cost and what that cost grows with, and whether a published scale plausibly fits. The home of Unreal's measured import figures; Revit's stay in code and are cited here. Read before proposing a published scale, a new default, or a cost warning for any imported layer. Also the checklist of every value the Unreal, Revit and AutoCAD plugins read from a per-host manifest block, with the neutral 2.x member that already carries the same fact, for writing the 3.0 format text.
 ---
 
 # Import inventory
@@ -10,6 +10,9 @@ makes, when, at what cost, and what that cost grows with. Revit's fidelity level
 the "Scale axis?" column of the Unreal rows is
 [issue 316](https://github.com/mantleplace/mantleplace-dcc/issues/316)'s to settle, and every entry
 in it is a hypothesis.
+
+The last section lists every value read from a host block instead of every category, and is the
+checklist for the MPB 3.0 format text.
 
 **What lives where.** Whether a host supports a feature at all is the
 [host support matrix](host-support.md)'s, and how a feature behaves is the host's own README
@@ -159,3 +162,190 @@ is inside the `inside transaction` row, so measuring them apart needs the editor
 | `layout.points_csv`, `layout.surface_dxf`, `layout.landxml` | Formats for other tools. The landscape comes from the block's heightmap |
 | `elevation.dem.bounds_target_crs` | Declined ([ADR 0006](adr/0006-unreal-declines-elevation-bounds-target-crs.md)) |
 | `layout.imagery_drape` | The shared drape. This host reads its block's own |
+
+## Every value read from a host block
+
+The checklist the MPB 3.0 format text is written against
+([issue 586](https://github.com/mantleplace/mantleplace-dcc/issues/586)): 3.0 has no `hosts.<host>`
+block, so each row below gets a neutral home there or a line saying it is dropped. One row per value
+a plugin reads out of its own block, for Revit, AutoCAD and Unreal, and the Unreal Cesium stream's
+reads in a section of its own, then the values read from outside a block that a host's download view
+depends on.
+
+**Columns.**
+
+- **Row.** `R` Revit, `A` AutoCAD, `U` Unreal's native import, `T` Unreal's Cesium stream (tiles
+  mode), `O` read outside the block. Cite a row by this id. A member in a row's name is relative to
+  `hosts.<host>` unless it is written with another root.
+- **Read when.** `all` when every manifest the plugin accepts is read this way; `1.x` for a member the
+  2.0 manifest no longer carries, which the plugin still reads for the older bundles it accepts.
+- **Neutral 2.x.** Whether the neutral part of the 2.2 manifest, the members outside `hosts`, already
+  states the same fact. `yes`, then the member; `partly`, then the member and what it lacks; `none`.
+  A bare name such as `frame` is `file_entries[<path>].frame`, the file's own frame statement.
+
+**How the table was produced, and how to check it again.** It was read from the source at
+`ef05172`, not from a bundle, and compared with the published schemas
+(`https://mantle.place/.well-known/schemas/bundle-manifest/`, versions 1.19.0, 2.0.0, 2.1.0 and 2.2.0).
+
+1. *Host-block reads.* Every member a reader takes off the host's block object is a row.
+   - Revit: `BundleManifestReader.cs` (`RevitHostBlock(root)`, then `ReadReadiness`, `ReadFileFrame`,
+     `ReadGeoreference`, `ReadOwnVectors`, `ReadHazards`, `ReadImagery`, `ReadArtifacts` through
+     `BuildArtifact`, `CheckRevitHashes`) and `FidelityLevelsReader.cs`. Re-check with
+     `grep -n "RevitHostBlock\|hostDetail\|revit?\.\|revit\.Object" revit/src/MantlePlace.Revit.Core/BundleManifestReader.cs`
+     and read each function it lands in.
+   - AutoCAD: `AutoCadBlockReader.Read` and its helpers in `AutoCadBlock.cs`; what the plan then does
+     with each value is `AutoCadImportPlan.cs`. The Revit `Core` sources compiled into the AutoCAD
+     build are Revit's reads, not a second set.
+   - Unreal: `ParseFields` of every `MantlePlaceArtifact*.cpp` handler (its block is `In.Unreal`),
+     `ParseGeoreference` and `ParseCesium` in `MantlePlaceImportManifest.cpp`, and `_manifest_origin`
+     in `mantleplace_cesium_stream.py`. Re-check with
+     `grep -rn "In.Unreal" unreal/MantlePlace/Source/MantlePlaceEditor/Private --include=*.cpp`.
+2. *What each plugin does with it* is the reader's own comment and the code that takes the parsed
+   value, named in the Use column in a few words; the host's `CLAUDE.md` and README hold the rest.
+3. *Neutral 2.x.* The members of `hosts.unreal`, `hosts.revit` (and `hosts.autocad`, which only 1.19.0
+   declares) were listed from the published schema and set beside the neutral members that could
+   hold the same fact: the neutral entries, `location.site_origin`, `delivery`, `file_entries`,
+   `layout`, `layout.projected_variants` and the neutral `levels` members. A `yes` means the member
+   states the same fact by its name and description in the schema; it does **not** mean a bundle's
+   neutral file is the file the host block points at, because a host block can name a file in the
+   host's own frame where the neutral pointer names another. A row where that can differ says so.
+4. *Not rows.* Values the plugins read from outside the host blocks (the order identity, `delivery`,
+   `location.time_zone`, `attribution`, `file_entries` licensing, `view`, `files`, the public
+   records' `parcels` and `zoning`) are neutral already. The ones that decide whether a host download
+   view is enough are the `O` rows. A member a schema declares in a block and no reader takes is
+   listed after the tables.
+
+The 2.x schemas declare `hosts.unreal` and `hosts.revit` and let other keys through; only 1.19.0
+declares `hosts.autocad`. The AutoCAD rows are therefore the 1.19.0 members.
+
+### Revit
+
+| Row | Host | Member read | Read when | Use | Neutral 2.x |
+|---|---|---|---|---|---|
+| R01 | Revit | `georeference.origin.lon`, `.lat` | all | The project's site location, applied as stated | yes: `location.site_origin.longitude`, `.latitude` |
+| R02 | Revit | `georeference.origin.projected.epsg`, `.easting`, `.northing`, `.linear_unit` | all | The survey point in the delivery frame; the anchor for shared coordinates and the position every layer is built against; compared with a later bundle's | yes: `location.site_origin.projected.crs`, `.x`, `.y`, `.unit` (the CRS is a reference object there, not an EPSG integer) |
+| R03 | Revit | `georeference.crs_projected` | all | The CRS the survey point is in | yes: `location.site_origin.projected.crs`, and `delivery.horizontal_epsg` |
+| R04 | Revit | `georeference.vertical_datum` | all | The height reference of the survey point's elevation | yes: `location.site_origin.vertical_datum` |
+| R05 | Revit | `georeference.grid_rotation_deg` | all | The grid rotation, applied with the survey point; a later bundle at a different angle is refused whole | none |
+| R06 | Revit | `file_frame.type` | all | Whether the block's files are absolute in a projected CRS or local to an origin; decides if a file can be placed at all | partly: `frame.coordinate_mode` (absolute or offset) in the file's own entry; per file, not per block |
+| R07 | Revit | `file_frame.crs`, `.base_crs` | all | The CRS an absolute frame is in, or the CRS a local frame's origin is stated on | partly: `frame.horizontal_crs`; no member names the CRS a local origin is stated on, other than `location.site_origin.projected.crs` |
+| R08 | Revit | `file_frame.origin.easting`, `.northing`, `.linear_unit` | all | The local frame's origin, in its own unit; an unreadable unit leaves the origin unplaced and the file is refused | partly: `location.site_origin.projected.x`, `.y`, `.unit`, which an offset file is measured from; stated once for the order, not per frame |
+| R09 | Revit | `file_frame.horizontal_unit`, `.vertical_unit` | all | The frame's linear units, compared with every pointer's units; a disagreement is refused, never converted | partly: `frame.unit_to_metres`, `.vertical_unit_to_metres` state a factor where the block states a unit name |
+| R10 | Revit | `readiness.toposurface_points`, `.ifc_site`, `.surface_dxf`, `.vectors`, `.contours`, `.flood_zones`, `.steep_slope`, each `.present` and `.reason` | all | Whether the host's copy of each part was produced, and the stated reason it was not, shown to the user | none: the neutral readiness is the order-level `completeness`, not a per-part verdict |
+| R11 | Revit | `toposurface_points.path`, `surface_dxf.path`, `ifc_site.path` | all | The topography, surface and site-model files, found by pointer, first in the block and then by `layout` | partly: `layout.points_csv`, `layout.surface_dxf`, `layout.buildings_ifc` name a file each, and `frame` states its frame; no neutral member says which of two files is the one in the host's frame, except `layout.projected_variants` for vector layers |
+| R12 | Revit | `toposurface_points.sha256`, `surface_dxf.sha256`, `ifc_site.sha256`, `drape.sha256`, `contours.sha256`, and the same on each vector file | all | Verifies the bytes; a block that names a deliverable without one is refused whole | partly: `files[<path>].sha256` on a bundle stored as parts; `imagery.drape.sha256` for the drape; none on a bundle stored as one archive, which is verified whole |
+| R13 | Revit | `toposurface_points.units`, `surface_dxf.units`, `ifc_site.units`, `drape.units`, `contours.units` | all | The file's linear unit, which must agree with the frame | partly: `frame.unit_to_metres` (a factor, not the name) |
+| R14 | Revit | `toposurface_points.horizontal_frame`, `surface_dxf.horizontal_frame`, `ifc_site.horizontal_frame`, `contours.horizontal_frame` | all | Whether this file is absolute or local, so it is placed against the survey point or the origin | partly: `frame.coordinate_mode` |
+| R15 | Revit | `toposurface_points.vertical_reference`, `contours.vertical_reference` | all | Whether heights are absolute, so they are applied without an offset | partly: `frame.coordinate_mode` is one word for the whole file, so a file with an offset in X and Y and absolute heights has no neutral statement |
+| R16 | Revit | `contours.horizontal_units`, `.vertical_units`, `.vertical_datum` | all | The published contours' two units and datum, each checked against the frame | partly: `elevation.contours.units`, `.vertical_datum`; `frame.unit_to_metres`, `.vertical_unit_to_metres` |
+| R17 | Revit | `drape.path`, `.format`, `.extent`, `.extent_crs` | all | The drape image in the host's frame, and the ground rectangle it covers | partly: `imagery.drape.source`, `.format`, `.extent`, `.extent_crs`, `layout.imagery_drape`; the neutral drape can be the fixed-frame one, which Revit skips by name on an order in another frame |
+| R18 | Revit | `toposurface_points.levels`, `surface_dxf.levels`, `ifc_site.levels`, `drape.levels`, `contours.levels`: for each of RAW, MAX, MED and MIN, `same_as` and `reason`; `cut.rows`; `cut.lowest_level_field`; a pointer level's `path`, `sha256`, `units`, `horizontal_frame`, `extent`, `extent_crs`; `cost_driver.count`, `.unit` | all | The fidelity choices the import window offers and what each costs; a level it cannot read is shown unavailable, never as the whole file | yes: a neutral `levels` member on `elevation.points_csv`, `elevation.surface_dxf`, `buildings.ifc`, `imagery.drape`, `elevation.contours`; the cut and cost shapes are shared definitions |
+| R19 | Revit | `vectors.layers[].name`, `.path`, `.sha256`, `.horizontal_frame`, `.units`, `.vertical_reference`, `.levels` | 1.x | Each vector layer's own file (roads, land use, land cover, water, road surfaces, flood zones, steep ground) in the host's frame | partly: `vector.layers[].name`, `.formats[]`, `.levels` and `layout.projected_variants` (the order-CRS twin of each layer); 2.0 removed this member |
+| R20 | Revit | `vectors.gpkg.path`, `.sha256`, `.tables`, `.levels` | 1.x | The shared GeoPackage carrier of the same layers, one table per layer; its frame is the order's, absolute | partly: `vector.layers[].formats[].path`, `.sha256`, `.tables`, with `layout.projected_variants` for the projected twin |
+
+### AutoCAD
+
+The 2.x schemas do not declare `hosts.autocad`; the plugin reads the block 1.19.0 declares. A bundle
+without the block is refused with a message to prepare the order again.
+
+| Row | Host | Member read | Read when | Use | Neutral 2.x |
+|---|---|---|---|---|---|
+| A01 | AutoCAD | `file_frame.type` | all | Absolute or local frame; decides the drawing-location check and whether a file is placed | partly: `frame.coordinate_mode` per file |
+| A02 | AutoCAD | `file_frame.crs`, `.base_crs` | all | The CRS to compare with the drawing's geographic location and, in Civil 3D, its zone; a value that is not an EPSG code refuses the import | partly: `frame.horizontal_crs`; no member names a local frame's base CRS |
+| A03 | AutoCAD | `file_frame.origin.easting`, `.northing`, `.linear_unit` | all | The local frame's origin, stated back to the user when the drawing has no location | partly: `location.site_origin.projected.x`, `.y`, `.unit` |
+| A04 | AutoCAD | `file_frame.horizontal_unit`, `.vertical_unit` | all | The unit the drawing's contours and surface are stated in, named to the user | partly: `frame.unit_to_metres`, `.vertical_unit_to_metres` |
+| A05 | AutoCAD | `contours.path`, `surface.path`, `aerial.path`, `linework.path`, `records.layers[].path` | all | Each part's file, by pointer only | yes: `layout.contours`, `layout.landxml`, `layout.imagery_drape`, `layout.linework_dxf`, `layout.parcels_gpkg`, `layout.zoning_gpkg`, `layout.hydrography_gpkg` (and the DXF twins) |
+| A06 | AutoCAD | `records.layers[].name` | all | The drawing layer name of each public-record layer | partly: `vector.layers[].name` for vector layers; the record layers are named by their `layout` key |
+| A07 | AutoCAD | `contours.sha256`, `surface.sha256`, `aerial.sha256`, `linework.sha256`, `records.layers[].sha256` | all | Every file is verified before anything is drawn | partly: as R12 |
+| A08 | AutoCAD | `surface.format`, `aerial.format`, and the same on a record or linework pointer | all | LandXML builds a TIN surface and a PNG is the aerial; any other format is skipped by name | partly: the `layout` key and the file's type say it; no `format` member on the neutral pointers |
+| A09 | AutoCAD | `contours.horizontal_frame`, `surface.horizontal_frame`, `aerial.horizontal_frame`, `linework.horizontal_frame`, `records.layers[].horizontal_frame` | all | Absolute or local per file; a file not shown to be in the block's frame is skipped by name | partly: `frame.coordinate_mode` |
+| A10 | AutoCAD | `contours.horizontal_units`, `.vertical_units`, `surface.horizontal_units`, `.vertical_units`, and the same on every pointer | all | The units each file's coordinates and heights are in | partly: `frame.unit_to_metres`, `.vertical_unit_to_metres` |
+| A11 | AutoCAD | `contours.vertical_reference`, `surface.vertical_reference` | all | Heights placed as absolute only when stated absolute; otherwise the part is skipped by name | partly: as R15 |
+| A12 | AutoCAD | `contours.vertical_datum`, `surface.vertical_datum` | all | Read with the pointer; no decision uses it today | yes: `elevation.contours.vertical_datum`, `elevation.landxml.vertical_datum`, `frame.vertical_crs` |
+| A13 | AutoCAD | `aerial.width`, `.height` | all | The image's pixel size, read with the pointer; no decision uses it today | none on the drape: `imagery.drape` has no pixel size; `landcover.*` rasters do |
+| A14 | AutoCAD | `aerial.insertion.x`, `.y`, `.width`, `.height`, `.rotation_deg` | all | Where the aerial is inserted in the drawing, its size in the frame's unit and its rotation; applied as stated | none: `imagery.drape.extent` is a rectangle in `extent_crs`, with no rotation and not in the file frame's unit |
+| A15 | AutoCAD | `readiness.contours`, `.surface`, `.aerial`, `.records`, `.linework`, each `.present` and `.reason`; `readiness.surface.requires` | all | Whether a part was produced; the reason is shown, and `requires` names the Civil 3D part a surface needs | none, as R10 |
+
+### Unreal, the native import
+
+| Row | Host | Member read | Read when | Use | Neutral 2.x |
+|---|---|---|---|---|---|
+| U01 | Unreal | `heightmap.path`, `.sha256` | all | The landscape's heightmap, found by pointer and verified | partly: `layout.heightmap`; `files[<path>].sha256` on a bundle stored as parts |
+| U02 | Unreal | `heightmap.resolution` | all | The heightmap's side in pixels; the landscape is refused when it disagrees with the component count and the quads per component | none |
+| U03 | Unreal | `heightmap.row0_is_north` | all | Which edge row 0 is, so the heightmap is not flipped | yes: `frame.row_order` |
+| U04 | Unreal | `heightmap.uint16_mapping.z_min_m`, `.z_max_m` | 1.x | What the 16-bit pixels mean in metres; the 2.0 reader falls back to the file's own mapping | yes: `value_mapping.min`, `.max` on the heightmap's `file_entries` entry |
+| U05 | Unreal | `heightmap.landscape_transform.scale_x_percent`, `.scale_y_percent`, `.z_scale_percent`, `.location_z_offset_cm`, `.section_size_quads`, `.sections_per_component`, `.component_count_x`, `.component_count_y` | all | The landscape's scale, vertical offset and component layout, applied as stated (the engine's own units) | none |
+| U06 | Unreal | `imagery_drape.source`, `.sha256` | all | The drape's image, in the fixed metric frame, found by pointer and verified | partly: `imagery.drape.source`, `.sha256`; the neutral drape can be in another frame on an order that is not in the fixed one |
+| U07 | Unreal | `imagery_drape.extent` (left, bottom, right, top) | all | The ground rectangle the drape covers | yes: `imagery.drape.extent`, with `extent_crs` |
+| U08 | Unreal | `imagery_drape.alignment` | all | The bundle's claim that the drape and the heightmap's rectangle match; a claim the two rectangles refute is refused | none |
+| U09 | Unreal | `mesh_alternative.path`, `.up_axis`, `.sha256` | all | The terrain mesh, its vertical axis (any other than the one understood is refused) and its digest | partly: `layout.mesh_formats` names the files; `frame.axis_mapping` states the axes; `files[<path>].sha256` |
+| U10 | Unreal | `mesh_alternative.nanite_recommended` | all | Whether the terrain mesh is built with Nanite | none |
+| U11 | Unreal | `readiness.mesh_import.reason` | all | The stated reason the mesh was not produced, shown when there is nothing to import | none, as R10 |
+| U12 | Unreal | `buildings_mesh.path`, `.up_axis` | all | The buildings' mesh and its vertical axis | partly: `layout.buildings` (and `buildings.formats[]`); `frame.axis_mapping` |
+| U13 | Unreal | `landscape_layers.<layer>.path`, `.sha256`, `.materials`, for each of `material_weights`, `water_mask`, `ndvi`, `slope`, `aspect`, `worldcover`, `canopy_height`, `hillshade` | all | The coverage rasters that become paint layers; the material names are applied verbatim, a paint layer's name included | partly: `layout.<layer>` for the files; `value_mapping.bands`, `.classes` state what the pixels mean, and whether they carry the same material names is not checked here |
+| U14 | Unreal | `landscape_layers.<layer>.ue_ready[].path`, `.sha256`, `.encoding`, `.width`, `.height`, `.size_bytes` | all | The engine-ready rasters (one per plane), read as stated | partly: `value_mapping.encoding`; `landcover.<layer>.width`, `.height`; `files[<path>].size_bytes` |
+| U15 | Unreal | `landscape_layers.<layer>.ue_ready[].value_mapping.min`, `.max`, `.to_value`, `.units`, `.value_units`, `.nodata_value`, `.true_value`, `.false_value`, `.identity`, `.bands`, `.classes` | 1.x | What a pixel means; where the block states none the reader takes the file's own | yes: `value_mapping` on the file's `file_entries` entry (`min`, `max`, `to_value`, `value_units`, `nodata_value`, `true_value`, `false_value`, `identity`, `bands`, `classes`, `encoding`) |
+| U16 | Unreal | `foliage_points.path`, `.sha256`, `.point_count` | all | The tree points, verified, with the row count checked when stated | partly: `layout.tree_points`, `landcover.tree_points.point_count`; the neutral file is in the delivery frame, the block's in the fixed one |
+| U17 | Unreal | `foliage_points.crs`, `.units`, `.horizontal_units` | all | The file's frame, judged by the logic unit, which refuses the layer by name when it is not the host's | yes: `landcover.tree_points.crs`, `.units`, `.horizontal_units`, and `frame` |
+| U18 | Unreal | `foliage_points.levels`: for MAX, MED and MIN, `same_as`; `cut.rows`; a pointer level's `path`, `sha256`, `point_count`, `crs`, `units`, `horizontal_units` | all | Which tree level the project asks for and what the file at that level is | yes: `landcover.tree_points.levels` |
+| U19 | Unreal | `road_splines.path`, `.sha256`, `.vertical_datum`, `.tables` | all | The host's own GeoPackage of road centrelines, preferred over the shared layer; one table per layer | partly: `vector.layers[name=road_splines].formats[].path`, `.sha256`, `.tables`, `.vertical_datum`; no neutral member names a copy in a frame other than the order's `-Projected` twin |
+| U20 | Unreal | `georeference.crs_projected` | all | The CRS of the fixed metric frame, compared with a file's stated CRS before the file is placed; its EPSG code goes to the road reader | partly: `delivery.local_origin.utm_epsg`; `location.site_origin.projected.crs` |
+| U21 | Unreal | `georeference.origin.utm.easting_m`, `.northing_m`, `.epsg` | all | The AOI origin every placed point is subtracted from; a bundle that states none places nothing by it | partly: `delivery.local_origin.easting_m`, `.northing_m`, `.utm_epsg`; `location.site_origin.projected.x`, `.y` is the same point in the delivery CRS, not necessarily the UTM one |
+| U22 | Unreal | `georeference.origin.ground_orthometric_h_m` | all | Read into the manifest facts; no decision uses it today | yes: `location.site_origin.datum_height_m` |
+| U23 | Unreal | `georeference.planet_shape` | all | Fail-closed: anything but the flat shape is refused | none |
+
+### Unreal, the Cesium stream (tiles mode)
+
+"Stream into Cesium" reads the manifest through the same parse as the native import and then adds
+these. It places no landscape and imports no asset.
+
+| Row | Host | Member read | Read when | Use | Neutral 2.x |
+|---|---|---|---|---|---|
+| T01 | Unreal | `layout.cesium_terrain` (outside the block) | all | The tileset's directory in the archive, the only entries extracted for the stream | yes: `layout.cesium_terrain`, `cesium_terrain.layer_json` |
+| T02 | Unreal | `cesium_terrain.tile_count` (outside the block) | all | The tile count shown with the stream | yes: `cesium_terrain.tile_count` |
+| T03 | Unreal | `bbox.west`, `.south`, `.east`, `.north` (outside the block) | all | The AOI rectangle in degrees, read into the stream's report | yes: `bbox` |
+| T04 | Unreal | `imagery_drape.source`, `.sha256`, `.extent` | all | The one drape the stream serves, extracted when present and valid | partly: as U06 and U07 |
+| T05 | Unreal | `georeference.origin.lon`, `.lat`, `.ground_orthometric_h_m` | all | The Cesium georeference's origin longitude and latitude, set from the bundle at each stream; a manifest the helper cannot read leaves the level's origin untouched. The height is returned and not used | yes: `location.site_origin.longitude`, `.latitude`, `.datum_height_m` |
+
+### Read outside the host block, because a download view depends on it
+
+A host download view holds only the files in that host's block. When the order delivered a file the
+plugin reads that the view lacks, the plugin fetches the whole bundle instead of importing from a
+view that would leave the layer out silently. The view request names the host and asks every entry at
+its most complete level. These tokens are the files that
+check is made on; each is a file a host reads that no host block points at.
+
+| Row | Host | Token (file read outside the block) | Use | Neutral 2.x |
+|---|---|---|---|---|
+| O01 | Revit | `landcover.tree_points_csv`, through `layout.tree_points` and `landcover.tree_points` (the frame, units, count and levels are neutral reads) | The tree points, placed as families; without them the import would run with the trees missing | yes: `layout.tree_points`, `landcover.tree_points` |
+| O02 | AutoCAD | none | Its import reads the block's pointers and nothing else, so a view is always enough | not applicable |
+| O03 | Unreal | `flood.nfhl`, through `layout.flood_zones` | The flood records' GeoPackage, verified and credited with the public records | yes: `layout.flood_zones`, `flood.nfhl` |
+| O04 | Unreal | `cesium.terrain`, through `layout.cesium_terrain` | The quantized-mesh tileset the stream serves (T01) | yes: `layout.cesium_terrain` |
+
+In every `O` row the neutral member already exists. What 3.0 has to settle is how a host's view is
+cut when no block lists the files that host reads.
+
+### Declared in a block and read by no plugin
+
+Listed so that a row is not assumed missing. Each is a candidate to drop in 3.0, which is the format
+text's decision.
+
+- `hosts.unreal`: `engine_min_version`, `units_note`, `readiness.landscape`, `readiness.mesh_terrain`,
+  `file_frame`, `heightmap.format`, `.native_gsd_m`, `.landscape_post_spacing_m`, `.levels`,
+  `georeference.crs_geographic`, `.is_projected`, `.origin.lon` and `.lat` for the native import,
+  `imagery_drape.format`, `.derive_in_plugin`, `.effective_gsd_m`, `.extent_crs`, `.levels`,
+  `mesh_alternative.note`, `.levels`, `buildings_mesh.note`, `.levels`, `foliage_points.columns`,
+  `.uncapped_point_count`, `.point_cap`, `.rank`, and on `road_splines` `.format`, `.crs`, `.z_unit`,
+  `.feature_count`, `.size_bytes`.
+- `hosts.revit`: `host_min_version`, `units_note`, `georeference.crs_geographic`, `.is_projected`,
+  `toposurface_points.format`, `.point_count`, `surface_dxf.surf_type`, `.triangle_count`,
+  `.decimated_from_triangle_count`, `ifc_site.schema`, `.map_conversion_scale`,
+  `.terrain_is_context_geometry`, `.footprint_count`, `drape.width`, `.height`, `.effective_gsd_m`.
+  Revit does read `surf_type`, `schema`, `triangle_count`, `footprint_count` and `point_count`, but
+  from the neutral entries (`elevation.*`, `buildings.ifc`, `landcover.tree_points`), never from its
+  block.
+- `hosts.autocad`: `host_min_version`.
+
+### Not covered
+
+The Blender plugin is not in this table: the ticket names the Unreal, Revit and AutoCAD plugins.
