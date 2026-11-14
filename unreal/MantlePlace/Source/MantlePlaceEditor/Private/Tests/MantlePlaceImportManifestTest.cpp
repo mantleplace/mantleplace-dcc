@@ -50,6 +50,8 @@ const TCHAR* const ConsumedExpectationKeys[] = {
 	TEXT("componentCountX"),
 	TEXT("componentCountY"),
 	TEXT("row0IsNorth"),
+	TEXT("heightmapRangeM"),
+	TEXT("heightmapRangeToleranceM"),
 	TEXT("drapePath"),
 	TEXT("drapeSha256"),
 	TEXT("meshPath"),
@@ -470,6 +472,12 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 	AssertIntExpectation(T, Case, TEXT("sectionsPerComponent"), M.Heightmap.SectionsPerComponent);
 	AssertIntExpectation(T, Case, TEXT("componentCountX"), M.Heightmap.ComponentCountX);
 	AssertIntExpectation(T, Case, TEXT("componentCountY"), M.Heightmap.ComponentCountY);
+
+	// The heightmap's range as the importer holds it: the `min` and `max` the 16-bit codes 0 and 65535
+	// stand for, read from the unreal block or, on a 2.x bundle, from `file_entries[path].value_mapping`.
+	// 2.2.0's `vertical_tier` and `vertical_grid_index` sit beside them and change neither.
+	AssertTupleExpectation(T, Case, TEXT("heightmapRangeM"), TEXT("heightmapRangeToleranceM"),
+		{ M.Heightmap.ZMinM, M.Heightmap.ZMaxM });
 
 	const FVector Scale = M.GetLandscapeScale();
 	AssertTupleExpectation(T, Case, TEXT("landscapeScale"), TEXT("landscapeScaleTolerance"),
