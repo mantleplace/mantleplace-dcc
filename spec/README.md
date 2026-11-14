@@ -39,7 +39,7 @@ schema has two contracts and no way to tell which one a producer honoured.
 - **[`format-2.md`](format-2.md)** — the 2.x format, superseded and kept for the bundles delivered at 2.x, which are never repackaged: the pointer doctrine, the manifest's three registers and the `hosts.<hostId>` blocks, the canonical and courtesy formats, the 2.0 layout and its naming rules.
 - **[`compatibility.md`](compatibility.md)** — the versioning and compatibility policy: how a reader tells 3.x from 2.x by where the manifest is, semver semantics (MAJOR/MINOR/PATCH), freeze-on-publish immutability, what a consumer must do with fields, values and versions it does not recognise, a higher major included, and the promise that nothing breaks within 3.x.
 - **[`conformance.md`](conformance.md)** — what "a conforming reader" means, how to prove it, what claiming a corpus group obliges, and what a conforming 3.x bundle holds.
-- **[`file-by-host.md`](file-by-host.md)** — the file-by-host table: every file of the 3.x tree opened in eight hosts before the text was frozen.
+- **[`file-by-host.md`](file-by-host.md)** — the file-by-host table: sixty files of the 3.x tree opened in eight hosts before the text was frozen (the two real-time hosts only on the host-ready files; nine files of the tree were not opened by any host).
 - **[`changelog.md`](changelog.md)** — the consolidated version history, including the integer pre-history that predates this spec.
 
 ## Licence

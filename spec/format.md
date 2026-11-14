@@ -62,9 +62,9 @@ Every data file belongs to one of two families, and its extension says which.
 | Family | Extensions | Coordinates | Unit |
 | --- | --- | --- | --- |
 | **Georeferenced** | `tif`, `gpkg`, `dxf`, `landxml`, `ifc` | Absolute, in the order's CRS; heights in the order's vertical datum | The order's: Imperial or Metric, as the order resolved it |
-| **Host-ready** | `glb`, `usdz`, `obj`, `mtl`, `png`, `csv` | Offsets in the local site frame (below) | Metres, on every order |
+| **Host-ready** | `glb`, `usdz`, `obj`, `png`, `csv` | Offsets in the local site frame (below) | Metres, on every order |
 
-The manifest states both frames once (§9.4). No file name carries a unit, and no file carries a second frame.
+`Terrain.mtl` is the companion of `Terrain.obj`: text with no coordinates, in neither family, and it carries no level, so it is the same at every level. The manifest states both frames once (§9.4). No file name carries a unit, and no file carries a second frame.
 
 **The georeferenced frame** is the order's delivery: its projected CRS, its vertical datum and geoid, and its horizontal and vertical linear units. Every georeferenced file is in it, and every DXF among them as well: a DXF in longitude and latitude, or with no unit, does not conform.
 
@@ -89,7 +89,7 @@ Each host-ready format holds that frame in its own convention, which is fixed he
 
 ## 5. Formats
 
-- **Vector layers ship as pairs.** Every vector layer is a `.gpkg` and a `.dxf` holding the same features and the same attributes, in 3D where the data has heights (the roads, draped on the ground) and in 2D where it has none. The one exception is the tree points: `Trees` ships as a `.gpkg` and a `.csv`, with no `.dxf`.
+- **Vector layers ship as pairs.** Every vector layer is a `.gpkg` and a `.dxf` holding the same features and the same attributes, in 3D where the data has heights (the roads, draped on the ground) and in 2D where it has none. There are two exceptions: the tree points, where `Trees` ships as a `.gpkg` and a `.csv`, with no `.dxf`; and the contours, where `Contours` ships as a `.dxf` alone, with no `.gpkg`.
 - **Every DXF carries its attributes**, stored as extended data on each entity, as the producer's writer stores them. A DXF with geometry and no attributes does not conform.
 - **Georeferenced rasters are tiled GeoTIFFs (COG)**, compressed losslessly, with a predictor where it helps.
 - **Every host-ready raster is a PNG.**
@@ -100,7 +100,7 @@ Each host-ready format holds that frame in its own convention, which is fixed he
 
 ## 6. The file table
 
-One row per file of the tree, sixty-nine in all. **Family** is §4's. **Level** says whether the file is built at each level (§8): `yes` means the Med and Min downloads hold a coarser file under the same name; `no` means the three downloads hold the same bytes. **Precision** is the data type, the scale (what one stored unit means) and the no-data value; no reader depends on a scale tag inside the file, because this column and the catalog state it (§7). **Count** is what the catalog counts for that file (§9.5).
+One row per file of the tree, sixty-nine in all. **Family** is §4's. **Level** says whether the file is built at each level (§8): `yes` means the Med and Min downloads hold a coarser file under the same name; `no` means the three downloads hold the same bytes. **Precision** is the data type, the scale (what one stored unit means) and the no-data value; no reader depends on a scale tag inside the file, because this column and the catalog state it (§7). **Count** is what the catalog counts for that file (§9.5); `None` means the file has nothing to count, and its catalog entry states no count. Every file's entry states its size and its sha256, except that of `Manifest.json`, which cannot carry its own hash.
 
 | File | Subject | Format | Family | Level | Precision | Count |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -110,7 +110,7 @@ One row per file of the tree, sixty-nine in all. **Family** is §4's. **Level** 
 | `Elevation/Elevation.png` | Ground elevation, for a heightmap import | PNG, 16-bit grayscale | Host-ready | yes | UInt16; height in the local site frame, in metres, = offset + code × step, both stated in its catalog entry; no no-data code: every pixel holds a height | Pixels |
 | `Elevation/Terrain.glb` | The terrain mesh | glTF 2.0 binary | Host-ready | yes | Float32 vertices, metres; Y-up | Triangles |
 | `Elevation/Terrain.obj` | The terrain mesh | OBJ | Host-ready | yes | Decimal text, metres; Y-up; texture coordinates on every vertex | Triangles |
-| `Elevation/Terrain.mtl` | The terrain mesh's material | OBJ material library | Host-ready | no | Text: one material whose diffuse map is `../Imagery/Imagery.png` | None |
+| `Elevation/Terrain.mtl` | The terrain mesh's material | OBJ material library | Companion of `Terrain.obj` | no | Text: one material whose diffuse map is `../Imagery/Imagery.png` | None |
 | `Elevation/Terrain.dxf` | The terrain surface | DXF, 3D faces | Georeferenced | no | Double coordinates in the order's unit | Triangles |
 | `Elevation/Terrain.landxml` | The terrain surface | LandXML TIN | Georeferenced | no | Decimal text in the order's unit | Triangles |
 | `Elevation/Slope.tif` | Slope of the ground | GeoTIFF | Georeferenced | no | UInt16; one unit is a tenth of a degree; no-data 65535 | Pixels |
@@ -269,7 +269,7 @@ Each entry states its **ODbL role** (an ODbL database, a Produced Work, or no OD
 
 ## 11. Reading a bundle, start to finish
 
-1. **Find the manifest.** `Manifest.json` at the root is a 3.x bundle. `Metadata/manifest.json` is a 2.x or 1.x bundle, read by [`format-2.md`](format-2.md). Neither is not a bundle.
+1. **Find the manifest.** `Manifest.json` at the root is a 3.x bundle. `Metadata/manifest.json` is a 2.x or 1.x bundle, read by [`format-2.md`](format-2.md). A zip with neither is not a bundle.
 2. **Check the version.** Parse the major; refuse a higher major gracefully, before extracting anything ([`compatibility.md`](compatibility.md) §3).
 3. **Read the bundle statement and the two frames** (§9.3, §9.4), including the level.
 4. **Find each file by its name in the catalog**, resolved inside the extraction root (§10). A name the catalog lacks is not held; the manifest says why (§9.6).
@@ -418,4 +418,4 @@ The inventory in [`docs/import-inventory.md`](../docs/import-inventory.md#every-
 
 ## 15. The file-by-host table
 
-Before this text was frozen, three bundles were repacked into this tree and every file was opened in eight hosts with their own importers. The result, a row per file and a column per host, is [`file-by-host.md`](file-by-host.md). It is evidence for the tree, not part of the contract: a host's importer can change, and the promise in §3 does not.
+Before this text was frozen, three bundles were repacked into this tree and sixty files of the tree were opened in eight hosts with their own importers: QGIS, Blender, 3ds Max, AutoCAD, Civil 3D, Revit, Unreal Engine and Twinmotion. Unreal Engine and Twinmotion were given only the host-ready files. Of the sixty, fifty-eight opened in at least one host; `Readme.md` and `Manifest.json` (text) opened in none, since no host has an importer for them. The other nine files of the tree were not opened by any host: they joined the tree on the run's findings or had no source in the three bundles. The result, a row per file and a column per host, is [`file-by-host.md`](file-by-host.md). It is evidence for the tree, not part of the contract: a host's importer can change, and the promise in §3 does not.

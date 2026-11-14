@@ -91,7 +91,7 @@ A producer's 3.x bundle conforms when the bundle check finds every requirement b
 - `Terrain.obj` is written Y-up, in metres, with texture coordinates, and names `Terrain.mtl`; the Readme states its unit.
 - `Terrain.mtl` names `../Imagery/Imagery.png` as its diffuse map, the texture coordinates of `Terrain.obj` address the pixels of that file at the same level, and no other texture ships.
 - `Imagery.tif`'s fourth band is written as near-infrared, never declared alpha.
-- Every vector layer except the tree points is a `.gpkg` and a `.dxf` holding the same features and attributes, in 3D where the data has heights. Every DXF carries its attributes, written by the producer's writer.
+- Every vector layer except the tree points and the contours is a `.gpkg` and a `.dxf` holding the same features and attributes, in 3D where the data has heights; the tree points are a `.gpkg` and a `.csv`, and the contours are a `.dxf` alone. Every DXF carries its attributes, written by the producer's writer.
 - Each raster's data type, scale and no-data value are the ones the file table states. Slope, aspect and canopy height are each within half a stored unit of the source; elevation and imagery are equal to the source pixel for pixel.
 - `Roads.csv` and `Trees.csv` carry the columns [`format.md`](format.md) §6 names.
 
@@ -103,7 +103,7 @@ A producer's 3.x bundle conforms when the bundle check finds every requirement b
 
 **The manifest and the zip.**
 
-- `Manifest.json` is at the root, validates against the 3.x schema, has one catalog with a count and a sha256 for every file held, and carries no per-host block, no commit, image path, budget, threshold or build parameter, and no Extra.
+- `Manifest.json` is at the root, validates against the 3.x schema, has one catalog with an entry for every file held, stating a count for every file whose row in the file table gives one (§6 of [`format.md`](format.md); a row that says `None` has no count) and a sha256 for every file except `Manifest.json` itself, which cannot carry its own hash, and carries no per-host block, no commit, image path, budget, threshold or build parameter, and no Extra.
 - Every member is DEFLATE-compressed, or stored where compression does not shrink it; the zip opens in the standard zip readers and every member verifies against its catalog digest.
 
 **A parcels fixture.** The `Parcels` pair is checked on a fixture that has one, since many orders have no parcel source.

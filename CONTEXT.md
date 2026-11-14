@@ -318,7 +318,7 @@ A bundle file whose coordinates are absolute in the order's CRS and units, Imper
 _Avoid_: canonical file, GIS file, projected file
 
 **Host-ready file**:
-A bundle file in the local site frame, in metres on every order, made for a host that works in a flat local space: in MPB 3.x every `glb`, `usdz`, `obj`, `mtl`, `png` and `csv`. Its extension says it is one, and it is the kind of file a fidelity level coarsens.
+A bundle file in the local site frame, in metres on every order, made for a host that works in a flat local space: in MPB 3.x every `glb`, `usdz`, `obj`, `png` and `csv`. Its extension says it is one, and it is the kind of file a fidelity level coarsens.
 _Avoid_: engine file, courtesy file, engine-frame variant
 
 **Admission rule**:
