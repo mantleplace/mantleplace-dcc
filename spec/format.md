@@ -380,6 +380,16 @@ The bundle therefore carries the drape once per frame a host needs, never once f
 What a host does with a drape it cannot show to be in its frame — refuse it, name why, and never
 reproject it — is the host standard's (`HPS-52`, `HPS-53`), not this document's.
 
+**What the stored values of a Sentinel-2 raster mean (from 2.1.0).** The imagery entry of a
+Sentinel-2 order may carry `reflectance_scale` and `reflectance_offset`, which say how the COG's
+stored values map to reflectance: the value times the scale, plus the offset. They restate the band
+scale and offset the COG itself declares, so a reader that opens the COG with a raster library gets
+the same two numbers. They matter wherever `display_stretch` is applied, because the stretch is stated
+in reflectance after the offset has come off, and a reader that ignores the offset renders a scene
+from a later processing baseline washed out. Both members are absent on NAIP, whose pixels are
+already display values, and a null offset reads as 0. A reader that cannot honour them shows the
+imagery as it did before 2.1.0 and says so, rather than guessing at a stretch.
+
 ### 6.5 A host's own copy of the vector layers
 
 The shared vector set is geographic, which suits a GIS reader and no one else. §6 lets a consumer
@@ -536,6 +546,12 @@ and UE-ready raster mappings state, for any reader, and those copies stay throug
 - a 16-bit grayscale needs `min` (the value pixel code 0 stands for), `max` (the value 65535 stands
   for) and `to_value`, the decoding formula in words, and may add `value_units`, `datum`,
   `nodata_value` and `quantization_step`;
+- a 16-bit grayscale **heightmap** may add, from 2.2.0, `vertical_tier` and `vertical_grid_index`,
+  which place it on the vertical ladder every Mantle Place heightmap shares: the tier fixes the step
+  (`quantization_step` states it), and the grid index is `min` in whole steps on a grid whose zero is
+  0 m in the vertical datum. Two tiles of one tier therefore share one code lattice, and a reader that
+  tiles a landscape from several lines them up by the grid index and not by each file's own `min` and
+  `max`. A heightmap without them is stretched over its own relief and is read by `min` and `max`;
 - a mask needs `true_value` and `false_value`, the two pixel codes;
 - an indexed layer needs `classes`, either the list of pixel codes in use or an object from code to
   class name, and a reader accepts both. The class codes are the legend and are never rescaled;

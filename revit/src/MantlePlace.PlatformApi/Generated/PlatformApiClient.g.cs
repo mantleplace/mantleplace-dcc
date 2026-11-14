@@ -815,7 +815,7 @@ namespace MantlePlace.PlatformApi
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
-                            throw new ApiException<Response8>("Refused. Codes: price_changed (carries the current quote; nothing was charged), free_cap_reached (the account holds the most live free bundles it may), idempotency_key_reused (the key placed an order for a different extent).", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                            throw new ApiException<Response8>("Refused. Codes: price_changed (carries the current quote; nothing was charged), free_cap_reached (the account is at its free-build limit), idempotency_key_reused (the key placed an order for a different extent).", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 422)
@@ -2387,10 +2387,23 @@ namespace MantlePlace.PlatformApi
         public long? CreditBalanceCents { get; set; } = default!;
 
         /// <summary>
-        /// Only with a valid bearer: the account is under the free-bundle cap.
+        /// Only with a valid bearer: a free build can start now (the account is within its free-build limit).
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeSlotOpen")]
         public bool? FreeSlotOpen { get; set; } = default!;
+
+        /// <summary>
+        /// Only with a valid bearer: how many free builds the account has left.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("freeBuildsLeft")]
+        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
+        public long? FreeBuildsLeft { get; set; } = default!;
+
+        /// <summary>
+        /// Only with a valid bearer: when the next free build opens (an ISO 8601 time), once the account is at its limit in a rolling window; null otherwise.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("nextFreeBuildAt")]
+        public string? NextFreeBuildAt { get; set; } = default!;
 
     }
 
@@ -3004,10 +3017,23 @@ namespace MantlePlace.PlatformApi
         public long? CreditBalanceCents { get; set; } = default!;
 
         /// <summary>
-        /// Only with a valid bearer: the account is under the free-bundle cap.
+        /// Only with a valid bearer: a free build can start now (the account is within its free-build limit).
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeSlotOpen")]
         public bool? FreeSlotOpen { get; set; } = default!;
+
+        /// <summary>
+        /// Only with a valid bearer: how many free builds the account has left.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("freeBuildsLeft")]
+        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
+        public long? FreeBuildsLeft { get; set; } = default!;
+
+        /// <summary>
+        /// Only with a valid bearer: when the next free build opens (an ISO 8601 time), once the account is at its limit in a rolling window; null otherwise.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("nextFreeBuildAt")]
+        public string? NextFreeBuildAt { get; set; } = default!;
 
     }
 
@@ -3075,10 +3101,23 @@ namespace MantlePlace.PlatformApi
         public long? CreditBalanceCents { get; set; } = default!;
 
         /// <summary>
-        /// Only with a valid bearer: the account is under the free-bundle cap.
+        /// Only with a valid bearer: a free build can start now (the account is within its free-build limit).
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeSlotOpen")]
         public bool? FreeSlotOpen { get; set; } = default!;
+
+        /// <summary>
+        /// Only with a valid bearer: how many free builds the account has left.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("freeBuildsLeft")]
+        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
+        public long? FreeBuildsLeft { get; set; } = default!;
+
+        /// <summary>
+        /// Only with a valid bearer: when the next free build opens (an ISO 8601 time), once the account is at its limit in a rolling window; null otherwise.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("nextFreeBuildAt")]
+        public string? NextFreeBuildAt { get; set; } = default!;
 
     }
 
@@ -3146,10 +3185,23 @@ namespace MantlePlace.PlatformApi
         public long? CreditBalanceCents { get; set; } = default!;
 
         /// <summary>
-        /// Only with a valid bearer: the account is under the free-bundle cap.
+        /// Only with a valid bearer: a free build can start now (the account is within its free-build limit).
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeSlotOpen")]
         public bool? FreeSlotOpen { get; set; } = default!;
+
+        /// <summary>
+        /// Only with a valid bearer: how many free builds the account has left.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("freeBuildsLeft")]
+        [System.ComponentModel.DataAnnotations.Range(0L, 9007199254740991L)]
+        public long? FreeBuildsLeft { get; set; } = default!;
+
+        /// <summary>
+        /// Only with a valid bearer: when the next free build opens (an ISO 8601 time), once the account is at its limit in a rolling window; null otherwise.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("nextFreeBuildAt")]
+        public string? NextFreeBuildAt { get; set; } = default!;
 
     }
 
@@ -3887,6 +3939,9 @@ namespace MantlePlace.PlatformApi
         [System.Runtime.Serialization.EnumMember(Value = @"revit")]
         Revit = 1,
 
+        [System.Runtime.Serialization.EnumMember(Value = @"autocad")]
+        Autocad = 2,
+
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -4238,6 +4293,9 @@ namespace MantlePlace.PlatformApi
 
         [System.Runtime.Serialization.EnumMember(Value = @"revit")]
         Revit = 1,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"autocad")]
+        Autocad = 2,
 
     }
 
