@@ -187,3 +187,13 @@ and flags each open issue that does not conform: no type, not exactly one state,
 
 A repo documents its local labels in its own label page,
 which holds only a pointer here and those labels. Nothing in a repo's local labels may be a state.
+
+### `release-train`
+
+`release-train` marks an issue that is part of the next coordinated release across the Mantle Place
+plugins and the platform. It is not a state and not a kind; the one state label stays beside it.
+
+- An issue created as part of that release takes `--label release-train` at `issue create`.
+- A maintainer adds it to an existing bug or upkeep issue the release needs, never to a new feature
+  the release does not already include.
+- It comes off an open issue that is cut from the release. A closed issue keeps it.
