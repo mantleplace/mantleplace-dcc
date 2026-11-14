@@ -122,14 +122,14 @@ list for the core by a rule in the standard, when a second host needs it. Each i
 | --- | --- | --- | --- |
 | Sign in and out in the system browser | supported — [unreal-0.8.0] | supported — [revit-0.1.0] | not shipped — no `autocad` release yet |
 | List, prepare and download your orders | supported — [unreal-0.8.0] | supported — [revit-0.1.0] | not shipped — no `autocad` release yet |
-| Import a complete order in one press, downloading only the host's files | supported — [unreal-0.8.1] | not shipped — [revit-1.1.0] | not shipped — no `autocad` release yet |
+| Import a complete order in one press, downloading only the host's files | supported — [unreal-0.8.1] | not shipped — [revit-1.1.1] | not shipped — no `autocad` release yet |
 | Search the vault | supported — [unreal-0.8.0] | supported — [revit-0.2.0] | not shipped — no `autocad` release yet |
 | Remove a download on request | not shipped — [unreal-0.8.1] | supported — [revit-0.2.0] | not shipped — no `autocad` release yet |
 | A notice when a Prepare ends | not shipped — [unreal-0.8.1] | supported — [revit-0.2.0] | not shipped — no `autocad` release yet |
 | A notice when an order arrives in the vault | not shipped — [unreal-0.8.1] | supported — [revit-0.2.0] | not shipped — no `autocad` release yet |
 | Re-join a Prepare the host was closed during | not shipped — [unreal-0.8.1] | supported — [revit-0.2.0] | not shipped — no `autocad` release yet |
 | Receive a bundle sent from the web vault, and report its import back | not shipped — [unreal-0.8.1] | supported — [revit-1.1.0] | not shipped — no `autocad` release yet |
-| Each bundle's thumbnail in the vault | not shipped — [unreal-0.8.1] | not shipped — [revit-1.1.0] | not shipped — no `autocad` release yet |
+| Each bundle's thumbnail in the vault | not shipped — [unreal-0.8.1] | not shipped — [revit-1.1.1] | not shipped — no `autocad` release yet |
 | Open the web curator on the extent the project already knows | not shipped — [unreal-0.8.1] | supported — [revit-1.1.0] | not shipped — no `autocad` release yet |
 | A `Mantle Place` tab of its own on the host's ribbon or menu bar (`HPS-57`) | not shipped — [unreal-0.8.1] | supported — [revit-0.1.0] | not shipped — no `autocad` release yet |
 
@@ -165,7 +165,7 @@ list for the core by a rule in the standard, when a second host needs it. Each i
 | Terrain | supported — [ADR 0006](adr/0006-unreal-declines-elevation-bounds-target-crs.md), [unreal-0.8.0] | supported — [revit-0.2.0] | not shipped — no `autocad` release yet |
 | Terrain as a mesh | supported — [unreal-0.8.0], [ADR 0016](adr/0016-unreal-mesh-terrain-is-parked-until-5-9.md) | declined — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) | not shipped — no `autocad` release yet |
 | Imagery drape | supported — [unreal-0.8.0] | supported — [ADR 0008](adr/0008-revit-drape-is-anchored-to-the-smooth-shading-origin.md) | not shipped — no `autocad` release yet |
-| Stylized map drape | not shipped — [unreal-0.8.1] | not shipped — [revit-1.1.0] | not shipped — no `autocad` release yet |
+| Stylized map drape | not shipped — [unreal-0.8.1] | not shipped — [revit-1.1.1] | not shipped — no `autocad` release yet |
 | Land cover | not shipped — [unreal-0.8.1] | supported, on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) | not shipped — no `autocad` release yet |
 | Land use, water bodies and road surfaces | not shipped — [unreal-0.8.1] | supported; land use on a land plan — [ADR 0015](adr/0015-revit-subdivisions-are-for-built-surfaces.md) | not shipped — no `autocad` release yet |
 | Coverage rasters as data textures | supported — [unreal-0.8.0] | not applicable | not applicable |
@@ -180,8 +180,8 @@ list for the core by a rule in the standard, when a second host needs it. Each i
 | Context buildings | supported — [unreal-0.7.0] | supported — [ADR 0012](adr/0012-context-buildings-come-from-the-site-model.md) | not shipped — no `autocad` release yet |
 | Road centrelines | supported — [unreal-0.8.1] | supported — [revit-0.1.0] | not shipped — no `autocad` release yet |
 | Tree points | supported — [unreal-0.7.0], [unreal-0.8.0] | supported — [revit-0.1.0] | not shipped — no `autocad` release yet |
-| Parcels and zoning | partial — [unreal-0.8.1] | not shipped — [revit-1.1.0] | not shipped — no `autocad` release yet |
-| Site linework | not shipped — [unreal-0.8.1] | not shipped — [revit-1.1.0] | not shipped — no `autocad` release yet |
+| Parcels and zoning | partial — [unreal-0.8.1] | not shipped — [revit-1.1.1] | not shipped — no `autocad` release yet |
+| Site linework | not shipped — [unreal-0.8.1] | not shipped — [revit-1.1.1] | not shipped — no `autocad` release yet |
 | The bundle's attribution, written into the project | supported — [unreal-0.8.0] | supported — [ADR 0011](adr/0011-revit-provenance-record-and-attribution-note-identity.md) | not shipped — no `autocad` release yet |
 | ODbL content kept apart, and a Prepare for handover command | supported — [unreal-0.8.0] | supported — [revit-0.2.0] | not shipped — no `autocad` release yet |
 
@@ -189,7 +189,7 @@ list for the core by a rule in the standard, when a second host needs it. Each i
 
 | Capability | Unreal | Revit | AutoCAD |
 | --- | --- | --- | --- |
-| An AOI too large for one terrain | supported — [unreal-0.7.0] | not shipped — [revit-1.1.0] | not shipped — no `autocad` release yet |
+| An AOI too large for one terrain | supported — [unreal-0.7.0] | not shipped — [revit-1.1.1] | not shipped — no `autocad` release yet |
 | Stream the bundle beside the import, through Cesium | supported — [unreal-0.6.0] | not applicable | not applicable |
 
 [unreal-0.8.1]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.8.1
@@ -197,5 +197,6 @@ list for the core by a rule in the standard, when a second host needs it. Each i
 [unreal-0.7.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.7.0
 [unreal-0.6.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.6.0
 [revit-1.1.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-1.1.0
+[revit-1.1.1]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-1.1.1
 [revit-0.2.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-0.2.0
 [revit-0.1.0]: https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-0.1.0
