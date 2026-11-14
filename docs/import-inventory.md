@@ -348,4 +348,4 @@ text's decision.
 
 ### Not covered
 
-The Blender add-on is not in this table: the ticket names the Unreal, Revit and AutoCAD plugins.
+The Blender plugin is not in this table: the ticket names the Unreal, Revit and AutoCAD plugins.
