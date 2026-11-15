@@ -447,6 +447,9 @@
     "manifest.unrealPublicRecordsLegacyLayout": [
       "unreal"
     ],
+    "manifest.unrealPublicRecordsPublishedFrame": [
+      "unreal"
+    ],
     "manifest.unrealRoadSplinesPointer": [
       "unreal"
     ],

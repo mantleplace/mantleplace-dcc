@@ -12,6 +12,7 @@
 #include "MantlePlaceIntegrityLogic.h"
 #include "MantlePlaceLandscapeWeightsLogic.h"
 #include "MantlePlaceManifestThreeLogic.h"
+#include "MantlePlacePublicRecordsLogic.h"
 #include "MantlePlaceRoadSplinesLogic.h"
 #include "MantlePlaceTreePointsLogic.h"
 
@@ -57,12 +58,16 @@ FString Manifest(const FString& LocalUnit = TEXT("{\"name\": \"metre\", \"to_met
 }
 
 /** The read of a bundle that holds every catalog file, with `Text` as its Manifest.json. */
-FMantlePlaceBundleRead ReadOf(const FString& Text, const FString& Root = FString())
+FMantlePlaceBundleRead ReadOf(const FString& Text, const FString& Root = FString(), const TArray<FString>& Extra = TArray<FString>())
 {
 	TArray<FString> Names = { Root + TEXT("Manifest.json"), Root + TEXT("Elevation/Elevation.png"),
 		Root + TEXT("Imagery/Imagery.png"), Root + TEXT("Elevation/Terrain.glb"), Root + TEXT("Basemap/Buildings.glb"),
 		Root + TEXT("Basemap/Roads.csv"), Root + TEXT("Materials/Water.png"), Root + TEXT("Materials/Grass.png"),
 		Root + TEXT("Elevation/Slope.tif") };
+	for (const FString& Name : Extra)
+	{
+		Names.Add(Root + Name);
+	}
 	return FMantlePlaceBundleReaderLogic::Read(Names, [&Text](const FString& Name, FString& OutText)
 	{
 		OutText = Text;
@@ -236,6 +241,97 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 			const TArray<FString> Lines = MantlePlaceImportOrchestration::DescribeFormatSkips(Handlers, M, Selection);
 			TestTrue(Label + TEXT("the log names the skipped trees"), Lines.ContainsByPredicate(
 				[](const FString& Line) { return Line.StartsWith(TEXT("Skipped")) && Line.Contains(TEXT("tree cover")); }));
+		}
+	}
+
+	// --- Public-record layers: drawn where the order's frame is this host's, each with its credit --------
+	{
+		const FString RecordEntries = TEXT(R"JSON(
+    "Records/Parcels.dxf": {"family": "georeferenced", "sha256": "p1", "count": {"kind": "features", "value": 12}, "license": "CC0-1.0",
+        "sources": [{"name": "County GIS", "license": "CC0-1.0", "link": "https://example.test/parcels"}]},
+    "Records/Parcels.gpkg": {"family": "georeferenced", "sha256": "p2", "license": "CC0-1.0",
+        "sources": [{"name": "County GIS", "license": "CC0-1.0", "link": "https://example.test/parcels"}]},
+    "Records/Floodplain.gpkg": {"family": "georeferenced", "sha256": "f1", "license": "CC0-1.0"},
+    "Records/Newfamily.dxf": {"family": "georeferenced", "sha256": "n1"},
+    "Elevation/Slope.tif")JSON");
+		const FString NotHeld = TEXT(R"JSON([{"path": "Records/Zoning.dxf", "reason": "The AOI has no zoning record."},
+ {"path": "Records/Zoning.gpkg", "reason": "The AOI has no zoning record."},
+ {"path": "Records/Habitat.gpkg", "reason": "Pending: the source did not answer in time."}])JSON");
+		const FString Metric = TEXT(R"JSON("horizontal_crs": {"code": "EPSG:32614"}, "horizontal_unit": {"name": "metre", "to_metres": 1})JSON");
+		const TArray<FString> Held = { TEXT("Records/Parcels.dxf"), TEXT("Records/Parcels.gpkg"), TEXT("Records/Floodplain.gpkg"),
+			TEXT("Records/Newfamily.dxf") };
+		const FString Imperial = Manifest(TEXT("{\"name\": \"metre\", \"to_metres\": 1}"),
+			TEXT("\"width\": 1009, \"height\": 505, \"bands\": [\"height\"], \"data_type\": \"UInt16\", \"scale\": 0.01, \"offset\": 0,"
+				" \"frame\": \"local\", \"rectangle\": [-1008, -500, 1008, 516], \"cell_size\": [2, 2]"),
+			NotHeld).Replace(TEXT("\"Elevation/Slope.tif\""), *RecordEntries);
+		const FString MetricText = Imperial.Replace(
+			TEXT(R"JSON("horizontal_crs": {"code": "EPSG:2277"}, "horizontal_unit": {"name": "US survey foot", "to_metres": 0.3048006096})JSON"),
+			*Metric);
+		TestNotEqual(TEXT("the metric variant differs"), MetricText, Imperial);
+
+		const FMantlePlaceBundleRead Read = ReadOf(MetricText, TEXT("Bundle/"), Held);
+		FMantlePlaceVaultManifest M;
+		FString Error;
+		TestTrue(TEXT("a manifest with records converts"), FMantlePlaceManifestThreeLogic::ToVaultManifest(Read, MetricText, M, Error));
+		const FMantlePlacePublicRecordsBlock& Records = M.PublicRecords;
+		TestTrue(TEXT("the records are fed"), Records.bPresent);
+		TestFalse(TEXT("public records are not skipped"), M.FormatSkips.Contains(TEXT("public_records")));
+		TArray<FString> Families;
+		for (const FMantlePlaceRecordLayer& Layer : Records.Layers)
+		{
+			Families.Add(Layer.Family);
+		}
+		TestTrue(TEXT("a family per file name, the known ones in the published order, a new one after"),
+			Families == TArray<FString>{ TEXT("parcels"), TEXT("floodplain"), TEXT("newfamily") });
+		TestEqual(TEXT("a 3.x file name reads as the family it stands for"),
+			FMantlePlacePublicRecordsLogic::DisplayName(TEXT("floodplain")), FString(TEXT("Flood zones")));
+
+		if (TestTrue(TEXT("parcels is the first layer"), Records.Layers.Num() > 0 && Records.Layers[0].Family == TEXT("parcels")))
+		{
+			const FMantlePlaceRecordLayer& Parcels = Records.Layers[0];
+			if (TestEqual(TEXT("parcels: the GeoPackage and the linework"), Parcels.Files.Num(), 2))
+			{
+				TestEqual(TEXT("the GeoPackage first, at its archive entry"), Parcels.Files[0].Path, FString(TEXT("Bundle/Records/Parcels.gpkg")));
+				TestEqual(TEXT("then the linework"), Parcels.Files[1].Path, FString(TEXT("Bundle/Records/Parcels.dxf")));
+				TestEqual(TEXT("its digest, for the integrity chain"), Parcels.Files[1].Sha256, FString(TEXT("p1")));
+				FString Refusal;
+				TestTrue(TEXT("a file in the local frame's own grid, in metres, is placed: ") + Refusal,
+					FMantlePlacePublicRecordsLogic::CanPlaceFrame(Parcels.Files[1].Frame, M.Georef.CrsProjected, Refusal));
+				const TArray<FString> Said = FMantlePlacePublicRecordsLogic::DescribeLayer(Parcels);
+				TestTrue(TEXT("the credit is the entry's source, its link and its licence"), Said.Num() > 0
+					&& Said[0].Contains(TEXT("County GIS")) && Said[0].Contains(TEXT("https://example.test/parcels"))
+					&& Said[0].Contains(TEXT("CC0-1.0")));
+			}
+		}
+		TestTrue(TEXT("the records are declared for the integrity check"),
+			FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(M).ContainsByPredicate(
+				[](const FMantlePlaceDeclaredArtifact& A) { return A.Path == TEXT("Bundle/Records/Parcels.dxf") && A.Sha256 == TEXT("p1"); }));
+		const TArray<FString> NotDelivered = FMantlePlacePublicRecordsLogic::DescribeNotDelivered(Records);
+		TestTrue(TEXT("a file not held shows the stated reason, once for the two zoning files"), NotDelivered.Contains(
+			TEXT("Zoning not in this download (Records/Zoning.dxf, Records/Zoning.gpkg): The AOI has no zoning record.")));
+		TestTrue(TEXT("a pending layer shows its reason verbatim"), NotDelivered.Contains(
+			TEXT("Habitat not in this download (Records/Habitat.gpkg): Pending: the source did not answer in time.")));
+
+		const MantlePlaceArtifacts::FHandlers Handlers = MantlePlaceArtifacts::MakeAll();
+		FMantlePlaceImportSteps Steps;
+		MantlePlaceImportOrchestration::PlanSteps(
+			Handlers, M, FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode::Both, false), Steps);
+		const int32 RecordsRow = Steps.Find(TEXT("public_records"));
+		TestTrue(TEXT("public records are planned"), RecordsRow != INDEX_NONE
+			&& Steps.Steps()[RecordsRow].State == EMantlePlaceImportStepState::Waiting);
+
+		// The same files in a foot grid: the frame is stated verbatim and refused by name, never converted (HPS-53).
+		const FMantlePlaceBundleRead FeetRead = ReadOf(Imperial, FString(), Held);
+		FMantlePlaceVaultManifest Feet;
+		TestTrue(TEXT("a foot-grid manifest converts"), FMantlePlaceManifestThreeLogic::ToVaultManifest(FeetRead, Imperial, Feet, Error));
+		if (TestTrue(TEXT("its linework is listed"), Feet.PublicRecords.Layers.Num() > 0 && Feet.PublicRecords.Layers[0].Files.Num() == 2))
+		{
+			FString Refusal;
+			const FMantlePlaceRecordFile& Linework = Feet.PublicRecords.Layers[0].Files[1];
+			TestEqual(TEXT("its CRS is stated verbatim"), Linework.Frame.Crs, FString(TEXT("EPSG:2277")));
+			TestFalse(TEXT("a foot grid is not this host's frame"),
+				FMantlePlacePublicRecordsLogic::CanPlaceFrame(Linework.Frame, Feet.Georef.CrsProjected, Refusal));
+			TestTrue(TEXT("and the refusal names the frame: ") + Refusal, Refusal.Contains(TEXT("EPSG:2277")));
 		}
 	}
 

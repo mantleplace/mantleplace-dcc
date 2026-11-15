@@ -18,9 +18,28 @@ const TCHAR* const KnownDisplayNames[] = {
 
 static_assert(UE_ARRAY_COUNT(KnownFamilies) == UE_ARRAY_COUNT(KnownDisplayNames), "one display name per known family");
 
+/** The names an MPB 3.x file table gives a family a 2.x manifest keyed otherwise (format.md section 12), and the key each stands for. */
+struct FFamilyAlias
+{
+	const TCHAR* Name;
+	const TCHAR* Family;
+};
+const FFamilyAlias FamilyAliases[] = {
+	{ TEXT("floodplain"), TEXT("flood") },
+	{ TEXT("conservation"), TEXT("protected") },
+	{ TEXT("heritage"), TEXT("historic") },
+};
+
 /** The position in the published order, or INDEX_NONE for a family this reader has not met. */
 int32 KnownIndex(const FString& Family)
 {
+	for (const FFamilyAlias& Alias : FamilyAliases)
+	{
+		if (Family.Equals(Alias.Name, ESearchCase::CaseSensitive))
+		{
+			return KnownIndex(FString(Alias.Family));
+		}
+	}
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(KnownFamilies); ++Index)
 	{
 		if (Family.Equals(KnownFamilies[Index], ESearchCase::CaseSensitive))
@@ -105,6 +124,37 @@ void FMantlePlacePublicRecordsLogic::OrderLayers(TArray<FMantlePlaceRecordLayer>
 		}
 		return A.Family < B.Family;
 	});
+}
+
+FString FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(const FString& CoordinateMode)
+{
+	if (CoordinateMode == TEXT("absolute"))
+	{
+		return TEXT("projected");
+	}
+	if (CoordinateMode == TEXT("offset"))
+	{
+		return TEXT("local");
+	}
+	return CoordinateMode;
+}
+
+FMantlePlaceRecordFrame FMantlePlacePublicRecordsLogic::StatedFrame(
+    const FString& Type, const FString& Crs, bool bHasUnitFactor, double UnitToMetres, const FString& UnitName)
+{
+	FMantlePlaceRecordFrame Frame;
+	Frame.bStated = true;
+	Frame.Type = Type;
+	Frame.Crs = Crs;
+	if (bHasUnitFactor)
+	{
+		// A factor of exactly 1 is the metre. Any other is stated as it is and refused by CanPlaceFrame.
+		Frame.HorizontalUnit = UnitToMetres == 1.0
+		                           ? FString(TEXT("m"))
+		                           : (UnitName.IsEmpty() ? FString::Printf(TEXT("%g m per unit"), UnitToMetres)
+		                                                 : FString::Printf(TEXT("%s (%g m)"), *UnitName, UnitToMetres));
+	}
+	return Frame;
 }
 
 bool FMantlePlacePublicRecordsLogic::CanPlaceFrame(
@@ -463,6 +513,30 @@ TArray<FString> FMantlePlacePublicRecordsLogic::DescribeNotDelivered(const FMant
 	for (const FMantlePlaceSkippedSource& Source : Block.SkippedSources)
 	{
 		Out.Add(DescribeSkippedSource(Source));
+	}
+	// A 3.x download's promised files it does not hold: one line per family and stated reason, the
+	// reason shown as the manifest wrote it and never matched on (it can grow).
+	TArray<FString> Seen;
+	for (const FMantlePlaceRecordNotHeld& First : Block.NotHeld)
+	{
+		const FString Key = First.Family + TEXT("
+") + First.Reason;
+		if (Seen.Contains(Key))
+		{
+			continue;
+		}
+		Seen.Add(Key);
+		TArray<FString> Paths;
+		for (const FMantlePlaceRecordNotHeld& Other : Block.NotHeld)
+		{
+			if (Other.Family == First.Family && Other.Reason == First.Reason)
+			{
+				Paths.Add(Other.Path);
+			}
+		}
+		Out.Add(FString::Printf(
+		    TEXT("%s not in this download (%s)%s"), *DisplayName(First.Family), *FString::Join(Paths, TEXT(", ")),
+		    First.Reason.IsEmpty() ? TEXT(".") : *FString::Printf(TEXT(": %s"), *First.Reason)));
 	}
 	return Out;
 }

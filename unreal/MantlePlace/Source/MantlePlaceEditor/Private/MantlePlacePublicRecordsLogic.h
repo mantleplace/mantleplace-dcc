@@ -36,11 +36,25 @@ struct FMantlePlacePublicRecordsLogic
 	static FString DisplayName(const FString& Family);
 
 	/**
+	 * (An MPB 3.x file name states `floodplain`, `conservation` and `heritage` for `flood`, `protected` and
+	 * `historic`; each reads as the family it stands for, here and in DisplayName.)
 	 * The known families in the published order (parcels, zoning, flood, wetlands, soils, protected,
 	 * hydrography, habitat, contamination, historic), then any other family by key. A stable order that
 	 * does not depend on the order the manifest's members happened to be read in.
 	 */
 	static void OrderLayers(TArray<FMantlePlaceRecordLayer>& Layers);
+
+	/**
+	 * The frame a published manifest states for a record file, written into the reader's own shape and
+	 * judged nowhere here. `Type` is `projected` or `local`; a unit factor of exactly 1 reads as the
+	 * metre (`m`) and any other factor is stated as it is, for CanPlaceFrame to refuse. No factor
+	 * (a geographic CRS states none) leaves the unit empty. Nothing is converted.
+	 */
+	static FMantlePlaceRecordFrame StatedFrame(
+	    const FString& Type, const FString& Crs, bool bHasUnitFactor, double UnitToMetres, const FString& UnitName = FString());
+
+	/** `coordinate_mode` of a 2.x `file_entries[<path>].frame` as a frame type: `absolute` is `projected`, `offset` is `local`; anything else verbatim. */
+	static FString FrameTypeOfCoordinateMode(const FString& CoordinateMode);
 
 	/**
 	 * Whether the file's stated frame is this host's (HPS-53). A file is shown only where the format
@@ -97,6 +111,6 @@ struct FMantlePlacePublicRecordsLogic
 	/** A source that covers the extent and delivered nothing, as a sentence. */
 	static FString DescribeSkippedSource(const FMantlePlaceSkippedSource& Source);
 
-	/** Every record the bundle does not deliver: each pointer, then each skipped source. Empty when none. */
+	/** Every record the bundle does not deliver: each pointer, each skipped source, then each file a 3.x download does not hold. Empty when none. */
 	static TArray<FString> DescribeNotDelivered(const FMantlePlacePublicRecordsBlock& Block);
 };

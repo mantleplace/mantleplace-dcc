@@ -43,6 +43,17 @@ bool FMantlePlacePublicRecordsFamiliesTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(FString::Printf(TEXT("%s is a known family"), Known), FMantlePlacePublicRecordsLogic::IsKnownFamily(Known));
 	}
+	// The names an MPB 3.x file table gives three of them read as the family they stand for.
+	for (const TCHAR* Alias : { TEXT("floodplain"), TEXT("conservation"), TEXT("heritage") })
+	{
+		TestTrue(FString::Printf(TEXT("%s is a known family"), Alias), FMantlePlacePublicRecordsLogic::IsKnownFamily(Alias));
+	}
+	TestEqual(TEXT("floodplain reads as flood zones"),
+		FMantlePlacePublicRecordsLogic::DisplayName(TEXT("floodplain")), FString(TEXT("Flood zones")));
+	TestEqual(TEXT("conservation reads as protected areas"),
+		FMantlePlacePublicRecordsLogic::DisplayName(TEXT("conservation")), FString(TEXT("Protected areas")));
+	TestEqual(TEXT("heritage reads as historic"),
+		FMantlePlacePublicRecordsLogic::DisplayName(TEXT("heritage")), FString(TEXT("Historic")));
 	TestFalse(TEXT("an unseen family is not known"), FMantlePlacePublicRecordsLogic::IsKnownFamily(TEXT("easements")));
 	TestFalse(TEXT("a known family is matched exactly"), FMantlePlacePublicRecordsLogic::IsKnownFamily(TEXT("Parcels")));
 
@@ -381,6 +392,69 @@ bool FMantlePlacePublicRecordsWordsTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("one pointer, one source"), Lines.Num(), 2);
 		TestTrue(TEXT("the pointer first"), Lines.Num() > 0 && Lines[0].StartsWith(TEXT("Parcels")));
 		TestTrue(TEXT("the source after"), Lines.Num() > 1 && Lines[1].StartsWith(TEXT("Zoning")));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMantlePlacePublicRecordsPublishedFrameTest,
+    "MantlePlace.Import.PublicRecordsLogic.PublishedFrame",
+    EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlacePublicRecordsPublishedFrameTest::RunTest(const FString& Parameters)
+{
+	// A frame the published manifest states is written into the reader's shape verbatim; CanPlaceFrame judges it.
+	TestEqual(TEXT("an absolute file is a projected one"),
+		FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(TEXT("absolute")), FString(TEXT("projected")));
+	TestEqual(TEXT("an offset file is a local one"),
+		FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(TEXT("offset")), FString(TEXT("local")));
+	TestEqual(TEXT("a mode nobody has met is shown as stated"),
+		FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(TEXT("tiled")), FString(TEXT("tiled")));
+
+	FString Refusal;
+	{
+		const FMantlePlaceRecordFrame Frame = FMantlePlacePublicRecordsLogic::StatedFrame(TEXT("projected"), TEXT("EPSG:32613"), true, 1.0);
+		TestTrue(TEXT("a factor of exactly 1 is the metre"), Frame.bStated && Frame.HorizontalUnit == TEXT("m"));
+		TestTrue(TEXT("a metric file in the host's grid is placed: ") + Refusal,
+			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:32613"), Refusal));
+		TestFalse(TEXT("the same file is not placed in another grid"),
+			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:32614"), Refusal));
+	}
+	{
+		const FMantlePlaceRecordFrame Frame = FMantlePlacePublicRecordsLogic::StatedFrame(
+			TEXT("projected"), TEXT("EPSG:2277"), true, 0.3048006096, TEXT("US survey foot"));
+		TestEqual(TEXT("a foot is stated as it is, factor and name"), Frame.HorizontalUnit, FString(TEXT("US survey foot (0.3048 m)")));
+		TestFalse(TEXT("a foot grid is refused, never scaled"),
+			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:2277"), Refusal));
+		TestTrue(TEXT("and the refusal names the unit: ") + Refusal, Refusal.Contains(TEXT("US survey foot")));
+	}
+	{
+		const FMantlePlaceRecordFrame Frame = FMantlePlacePublicRecordsLogic::StatedFrame(TEXT("projected"), TEXT("EPSG:4326"), false, 0.0);
+		TestTrue(TEXT("a geographic CRS states no unit factor, so no unit"), Frame.bStated && Frame.HorizontalUnit.IsEmpty());
+		TestFalse(TEXT("and is refused as stated only in part"),
+			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:4326"), Refusal));
+	}
+	{
+		const FMantlePlaceRecordFrame Frame = FMantlePlacePublicRecordsLogic::StatedFrame(
+			FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(TEXT("offset")), TEXT("EPSG:32613"), true, 1.0);
+		TestFalse(TEXT("an offset file is not in the host's absolute grid"),
+			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:32613"), Refusal));
+	}
+
+	// What a 3.x download does not hold: one line per layer and stated reason, the reason verbatim.
+	{
+		FMantlePlacePublicRecordsBlock Block;
+		Block.NotHeld.Add({ TEXT("zoning"), TEXT("Records/Zoning.dxf"), TEXT("The AOI has no zoning record.") });
+		Block.NotHeld.Add({ TEXT("zoning"), TEXT("Records/Zoning.gpkg"), TEXT("The AOI has no zoning record.") });
+		Block.NotHeld.Add({ TEXT("floodplain"), TEXT("Records/Floodplain.gpkg"), FString() });
+		const TArray<FString> Lines = FMantlePlacePublicRecordsLogic::DescribeNotDelivered(Block);
+		if (TestEqual(TEXT("two layers, two lines"), Lines.Num(), 2))
+		{
+			TestEqual(TEXT("the two files share a line and the reason"), Lines[0],
+				FString(TEXT("Zoning not in this download (Records/Zoning.dxf, Records/Zoning.gpkg): The AOI has no zoning record.")));
+			TestEqual(TEXT("no stated reason is not invented"), Lines[1],
+				FString(TEXT("Flood zones not in this download (Records/Floodplain.gpkg).")));
+		}
 	}
 	return true;
 }

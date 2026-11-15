@@ -28,6 +28,11 @@ struct FMantlePlaceLandscapeLayout
  *    stated in the projected CRS whose grid the frame's axes follow) becomes this host's georeference
  *    origin. A heightmap's height is `height of the site origin + offset + code × scale`; every stated
  *    number is multiplied into centimetres and nothing else (HPS-33).
+ *  - **The public-record layers are the one georeferenced thing this host places** (`Records/*.dxf`, drawn
+ *    as linework): each is in the order's frame, which the manifest states once, and is placed only
+ *    where that frame is this host's (HPS-53); the GeoPackages stay in the bundle, verified. Each layer
+ *    is named by its file and read through the catalog, its credit the sources its entries state, and
+ *    each promised record file the download does not hold is shown with its stated reason.
  *  - **The engine layout is the engine's.** 3.0 drops the section size and component counts: the
  *    producer writes `Elevation.png` at a size the layout accepts, and ChooseLandscapeLayout picks the
  *    layout a New Landscape of that size takes.
@@ -48,6 +53,8 @@ struct FMantlePlaceManifestThreeLogic
 	static const TCHAR* RoadsPath() { return TEXT("Basemap/Roads.csv"); }
 	/** The folder of the weight maps: every PNG in it is one paint layer, named by its file (format.md §6). */
 	static const TCHAR* MaterialsFolder() { return TEXT("Materials/"); }
+	/** The folder of the public-record layers: each `.gpkg` and `.dxf` in it is one family's file, the family named by its file (format.md §6). */
+	static const TCHAR* RecordsFolder() { return TEXT("Records/"); }
 
 	/**
 	 * Fill `OutManifest` from a 3.x read and its manifest text. False, with OutError naming the value,
