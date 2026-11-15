@@ -99,6 +99,14 @@ PNG's pixel meaning is stated: a 1.x host block carries `uint16_mapping` and `ue
 a 2.0 bundle states it only in `file_entries[<path>].value_mapping`. A host-block statement is applied
 verbatim and wins, and a block without one reads the file's own entry.
 
+**An MPB 3.x manifest has a second reading path,** `FMantlePlaceBundleReaderLogic` (opened on a folder or
+a zip by `MantlePlaceBundleArchive`): `Manifest.json` at the bundle's root is 3.x, `Metadata/manifest.json`
+is 2.x, either inside one wrapper folder. A major above `NewestMajor` (3) is refused with the update
+message the 2.x parse uses, before any catalog is read. Every 3.x file is found by its name in the one
+catalog, never through a per-host block; family, frame and unit follow the extension, and the level and
+each count are what the manifest states. `MantlePlace.Import.ReaderCorpus` runs every corpus `reader`
+case against it. The 2.x parse above is frozen as it ships; importing a 3.x bundle is not wired yet.
+
 A manifest path matches an archive entry **regardless of case** (format-2.md 10.3 rule 6). **The engine's
 zip reader already does:** `FZipArchiveReader` keeps its entries in a `TMap<FString, ...>` whose hash and
 key comparison ignore case, so `metadata/MANIFEST.json` finds `Metadata/manifest.json`; checked against

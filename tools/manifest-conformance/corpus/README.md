@@ -149,9 +149,10 @@ unpublished schema at info (`schema.pending`).
 
 The `reader` group is the answer sheet for a **reader of either major**: for one synthetic bundle, what
 a correct reader finds in it. It is data, so a reader in any language runs the same cases and reaches
-the same result, and no two readers read 3.0 a little differently. A host claims it when its reader
-runs every case (`HPS-41`): Revit and AutoCAD claim it through the shared .NET reader
-(`ReaderConformanceTests.cs`), and `mpb` reads 2.x only.
+the same result, and no two readers read 3.0 a little differently. A host claims it, in its `groups` in
+[`verified-against.json`](../verified-against.json), when its reader runs every case (`HPS-41`): Revit and
+AutoCAD claim it through the shared .NET reader (`ReaderConformanceTests.cs`), Unreal through its own
+reader, and `mpb` reads 2.x only.
 
 A `reader` case is a pair. The case file names a bundle and holds the result:
 
