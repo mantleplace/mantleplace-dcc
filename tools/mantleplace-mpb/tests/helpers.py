@@ -33,6 +33,19 @@ SYNTHETIC_SCHEMA = {
 SYNTHETIC_SCHEMA_2 = {**SYNTHETIC_SCHEMA, "properties": {**SYNTHETIC_SCHEMA["properties"],
                                                         "version": {"const": "2.0.0"}}}
 
+#: Stands in for the 3.0 schema: the members a 3.x manifest is read by, and no `layout`.
+SYNTHETIC_SCHEMA_3 = {
+    "$schema": SCHEMA_2020_12,
+    "type": "object",
+    "required": ["version", "level", "catalog", "not_held"],
+    "properties": {
+        "version": {"const": "3.0.0"},
+        "level": {"enum": ["Max", "Med", "Min"]},
+        "catalog": {"type": "object"},
+        "not_held": {"type": "array"},
+    },
+}
+
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()

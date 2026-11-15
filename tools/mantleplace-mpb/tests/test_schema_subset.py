@@ -41,6 +41,19 @@ class Applicators(unittest.TestCase):
         self.assertFalse(ok(schema, {"a": "x"}))
         self.assertFalse(ok(schema, {"a": 1}))
 
+    def test_a_ref_reaches_a_schema_grouped_under_a_def(self) -> None:
+        """The 3.0 schema keeps its file table as `$defs.files.<path>`: a group of schemas, not a
+        schema, reached by pointer. The group's keys are paths, never keywords."""
+        schema = {"$defs": {"files": {"Readme.md": {"required": ["sha256"]},
+                                      "Elevation/Terrain.glb": {"required": ["count"]}}},
+                  "properties": {"catalog": {"properties": {
+                      "Readme.md": {"$ref": "#/$defs/files/Readme.md"},
+                      "Elevation/Terrain.glb": {"$ref": "#/$defs/files/Elevation~1Terrain.glb"}}}}}
+        self.assertTrue(ok(schema, {"catalog": {"Readme.md": {"sha256": "x"},
+                                                "Elevation/Terrain.glb": {"count": 1}}}))
+        self.assertFalse(ok(schema, {"catalog": {"Readme.md": {}}}))
+        self.assertFalse(ok(schema, {"catalog": {"Elevation/Terrain.glb": {}}}))
+
     def test_one_of_means_exactly_one(self) -> None:
         schema = {"oneOf": [{"required": ["a"]}, {"required": ["b"]}]}
         self.assertTrue(ok(schema, {"a": 1}))
@@ -103,6 +116,19 @@ class FailingClosed(unittest.TestCase):
             with self.subTest(keyword=keyword):
                 with self.assertRaises(UnsupportedSchema):
                     errors({"$schema": S, keyword: False}, {})
+
+    def test_a_keyword_it_does_not_evaluate_is_refused_behind_a_ref(self) -> None:
+        """A schema reached only through `$ref` is audited like any other before anything runs."""
+        for target in ({"x-unknown": 1}, {"properties": {"a": {"unevaluatedProperties": False}}}):
+            with self.subTest(target=target):
+                with self.assertRaises(UnsupportedSchema):
+                    errors({"$schema": S, "$defs": {"files": {"A.md": target}},
+                            "properties": {"a": {"$ref": "#/$defs/files/A.md"}}}, {})
+
+    def test_a_ref_into_a_def_that_is_not_a_schema_is_refused(self) -> None:
+        with self.assertRaises(UnsupportedSchema):
+            errors({"$schema": S, "$defs": {"files": {"A.md": 3}},
+                    "properties": {"a": {"$ref": "#/$defs/files/A.md"}}}, {})
 
     def test_a_remote_ref_is_refused(self) -> None:
         with self.assertRaises(UnsupportedSchema):

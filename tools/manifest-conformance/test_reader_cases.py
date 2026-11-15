@@ -94,7 +94,7 @@ class ShippedCasesTest(unittest.TestCase):
     def test_a_not_held_reason_is_kept_as_written(self) -> None:
         _, body, _ = _case("reader.v3RecordsNotHeld")
         reasons = {row["reason"] for row in body["result"]["skipped"]}
-        self.assertEqual(reasons, {"no-data", "pending", "withheld"})
+        self.assertEqual(reasons, {"no_data", "pending", "withheld"})
 
     def test_a_count_is_the_one_the_catalog_states_at_each_level(self) -> None:
         def counts(case_id: str) -> dict[str, int | None]:
@@ -202,7 +202,7 @@ class AnswerTest(unittest.TestCase):
     def test_a_count_the_catalog_does_not_state_is_refused(self) -> None:
         """A reader reports what the catalog states and never counts a file for itself."""
         def invent(_e, r):
-            r["files"][0]["count"] = 3
+            next(row for row in r["files"] if row["count"] is None)["count"] = 3
         self.assertFails(_problems("reader.v3MedWithoutRecords", invent), "count")
 
     def test_a_family_the_extension_does_not_state_is_refused(self) -> None:
@@ -224,12 +224,13 @@ class AnswerTest(unittest.TestCase):
 
     def test_a_file_the_catalog_lacks_cannot_be_found(self) -> None:
         def drop(files):
-            del files["Manifest.json"]["file_entries"]["Elevation/Terrain.glb"]
+            del files["Manifest.json"]["catalog"]["Elevation/Terrain.glb"]
         self.assertFails(_problems("reader.v3FullMax", mutate_bundle=drop), "Terrain.glb")
 
     def test_a_not_held_file_the_manifest_does_not_list_is_refused(self) -> None:
         def forget(files):
-            del files["Manifest.json"]["not_held"]["Records/Parcels.gpkg"]
+            held_back = files["Manifest.json"]["not_held"]
+            held_back[:] = [row for row in held_back if row["path"] != "Records/Parcels.gpkg"]
         self.assertFails(_problems("reader.v3RecordsNotHeld", mutate_bundle=forget), "skipped")
 
     def test_a_reason_other_than_the_manifests_is_refused(self) -> None:

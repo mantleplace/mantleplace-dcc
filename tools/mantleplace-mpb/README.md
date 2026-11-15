@@ -110,10 +110,11 @@ is `Metadata/manifest.json` as 2.x or 1.x (`format.md` §11). A manifest in the 
 major does not use is `manifest.place`. A manifest that declares 3.x is held to these checks, and
 not to the 2.x pointer, frame and layout checks above:
 
-- **The schema, once it is published.** The 3.x schema is not served yet. Until it is, a manifest
-  that declares a 3.x version for which no schema is served is held to the rules below alone, and
-  the report says so (`schema.pending`, at info). Once the schema is served, the manifest is held
-  to it like any other, and `--staged` works as above.
+- **The schema.** A manifest that declares a 3.x version is held to that version's schema like any
+  other, and `--staged` works as above: the 3.0.0 schema is served as a staged release, so
+  `mpb validate --staged` holds a 3.0.0 manifest to it. A manifest that declares a 3.x version for
+  which no schema is served at all is held to the rules below alone, and the report says so
+  (`schema.pending`, at info).
 - **The tree and its names** (`format.md` §1, §2, §6, §12), the `names` check:
 
   | Code | Severity | Rule |
@@ -147,10 +148,10 @@ not to the 2.x pointer, frame and layout checks above:
 - **ODbL roles**, as for 2.x: a vector or tabular data file is never a Produced Work, and a file
   whose role is `none` lists no ODbL source.
 
-The 3.x schema names the manifest's members. Until it is published, the check reads the catalog
-from `file_entries`, the member the 2.x catalog already has, and the level from `level`; the
-schema's names replace these two in `layout3.py` and nowhere else. A manifest that declares a later
-major is read for its version and nothing else.
+The 3.x schema names the manifest's members: the check reads the catalog from `catalog` and the
+level from `level`, in `layout3.py` and nowhere else. A 3.x manifest that states only the 2.x
+member `file_entries` has no catalog. A manifest that declares a later major is read for its version
+and nothing else.
 
 ## The report
 

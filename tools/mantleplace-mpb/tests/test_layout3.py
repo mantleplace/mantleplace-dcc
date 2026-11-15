@@ -2,8 +2,9 @@
 # SPDX-FileCopyrightText: Mantle Place LLC
 """A 3.x bundle (`spec/format.md`): the tree, the names, one level and the catalog.
 
-The 3.x schema is not published yet, so these runs read a schema directory that holds none for
-3.0.0; the manifest is then held to the format text's rules alone (`schema.pending`, at info).
+Most runs read a schema directory that holds none for 3.0.0, so the manifest is held to the format
+text's rules alone (`schema.pending`, at info) and each rule is seen on its own. The members are the
+served 3.0.0 schema's: the catalog in `catalog`, the level in `level`.
 """
 
 from __future__ import annotations
@@ -13,8 +14,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from helpers import (SYNTHETIC_SCHEMA_2, bundle_files, make_folder, make_zip, manifest, sha256,
-                     write_schema_dir)
+from helpers import (SYNTHETIC_SCHEMA_2, SYNTHETIC_SCHEMA_3, bundle_files, make_folder, make_zip,
+                     manifest, sha256, write_schema_dir)
 from mantleplace_mpb import SchemaSource, validate
 
 TERMS = {"odbl_role": "none", "license": "LicenseRef-MantlePlace-Terms", "sources": []}
@@ -41,7 +42,7 @@ def bundle3(extra: dict[str, bytes] | None = None, *, level: object = "Max",
         entries[path] = {**TERMS, "sha256": "0" * 64}
     for path in drop_entries:
         entries.pop(path, None)
-    document: dict = {"version": "3.0.0", "file_entries": entries}
+    document: dict = {"version": "3.0.0", "catalog": entries, "not_held": []}
     if level is not None:
         document["level"] = level
     document.update(manifest_extra)
@@ -102,6 +103,16 @@ class AValidBundle(Case):
         schemas = SchemaSource(schema_dir=write_schema_dir(
             self.tmp / "s3s", {"2.0.0": SYNTHETIC_SCHEMA_2, "3.0.0": schema}, staged=("3.0.0",)))
         self.assertIn("schema.version-unpublished", self.codes(self.run_folder(bundle3(), schemas)))
+
+    def test_a_staged_3x_schema_is_held_to_with_staged(self) -> None:
+        schemas = SchemaSource(schema_dir=write_schema_dir(
+            self.tmp / "s3t", {"2.0.0": SYNTHETIC_SCHEMA_2, "3.0.0": SYNTHETIC_SCHEMA_3},
+            staged=("3.0.0",)), staged=True)
+        report = self.run_folder(bundle3(), schemas)
+        self.assertEqual("pass", report.verdict, [f.to_dict() for f in report.findings])
+        self.assertIn("schema.staged", self.codes(report, "info"))
+        self.assertNotIn("schema.pending", self.codes(report, "info"))
+        self.assertIn("schema.invalid", self.codes(self.run_folder(bundle3(level=None), schemas)))
 
     def test_a_later_major_with_no_schema_is_unpublished(self) -> None:
         files = bundle3()
@@ -219,15 +230,23 @@ class TheCatalog(Case):
     def test_no_catalog(self) -> None:
         files = bundle3()
         document = json.loads(files["Manifest.json"])
-        del document["file_entries"]
+        del document["catalog"]
+        files["Manifest.json"] = json.dumps(document).encode("utf-8")
+        self.assertRejects(self.run_folder(files), "catalog.absent")
+
+    def test_the_2x_member_name_is_not_a_3x_catalog(self) -> None:
+        """The catalog is the schema's `catalog`; a 3.x manifest that states `file_entries` has none."""
+        files = bundle3()
+        document = json.loads(files["Manifest.json"])
+        document["file_entries"] = document.pop("catalog")
         files["Manifest.json"] = json.dumps(document).encode("utf-8")
         self.assertRejects(self.run_folder(files), "catalog.absent")
 
     def test_an_entry_matched_only_regardless_of_case(self) -> None:
         files = bundle3()
         document = json.loads(files["Manifest.json"])
-        document["file_entries"]["Elevation/terrain.glb"] = \
-            document["file_entries"].pop("Elevation/Terrain.glb")
+        document["catalog"]["Elevation/terrain.glb"] = \
+            document["catalog"].pop("Elevation/Terrain.glb")
         files["Manifest.json"] = json.dumps(document).encode("utf-8")
         self.assertRejects(self.run_folder(files), "name.case-mismatch")
 
@@ -239,7 +258,7 @@ class TheCatalog(Case):
     def test_an_entry_with_no_hash(self) -> None:
         files = bundle3()
         document = json.loads(files["Manifest.json"])
-        del document["file_entries"]["Elevation/Terrain.glb"]["sha256"]
+        del document["catalog"]["Elevation/Terrain.glb"]["sha256"]
         files["Manifest.json"] = json.dumps(document).encode("utf-8")
         self.assertRejects(self.run_folder(files), "catalog.sha256-missing")
 
@@ -250,9 +269,12 @@ class TheCatalog(Case):
     def test_a_vector_layer_is_never_a_produced_work(self) -> None:
         files = bundle3()
         document = json.loads(files["Manifest.json"])
-        document["file_entries"]["Basemap/Roads.gpkg"]["odbl_role"] = "produced-work"
+        document["catalog"]["Basemap/Roads.gpkg"]["odbl_role"] = "produced-work"
         files["Manifest.json"] = json.dumps(document).encode("utf-8")
-        self.assertRejects(self.run_folder(files), "role.extension-mismatch")
+        report = self.run_folder(files)
+        self.assertRejects(report, "role.extension-mismatch")
+        self.assertEqual(["/catalog/Basemap~1Roads.gpkg/odbl_role"],
+                         [f.pointer for f in report.findings if f.code == "role.extension-mismatch"])
 
 
 class TheManifestsPlace(Case):

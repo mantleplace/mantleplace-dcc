@@ -10,7 +10,7 @@ from pathlib import Path
 from .archive import MANIFEST_PATH, MANIFEST_PATH_3, open_bundle
 from .checks import check_frames, check_hashes, check_pointers, check_roles
 from .geopackage import check_geopackage
-from .layout3 import check_catalog, check_level, check_tree, major
+from .layout3 import CATALOG, check_catalog, check_level, check_tree, major
 from .names import check_names, is_layout_2
 from .report import Report
 from .schema_subset import UnsupportedSchema, errors
@@ -56,7 +56,7 @@ def validate(path: str | Path, *, schemas: SchemaSource | None = None,
             check_tree(bundle, report, manifest.get("version"))
             check_level(manifest, report)
             check_catalog(manifest, bundle, report)
-            check_roles(manifest, bundle, report, unstated=False)
+            check_roles(manifest, bundle, report, unstated=False, member=CATALOG)
             return report
         if (declared or 0) > 3:
             return report  # A later major: its version is all this validator reads (§14).
