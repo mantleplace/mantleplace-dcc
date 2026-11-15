@@ -33,6 +33,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceSha256Test::RunTest(const FString& Parameters)
 {
+	if (MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
+	{
+		return true;
+	}
+
 	TArray<FCase> Cases;
 	FString LoadError;
 	if (!LoadGroup(TEXT("digest"), Cases, LoadError))

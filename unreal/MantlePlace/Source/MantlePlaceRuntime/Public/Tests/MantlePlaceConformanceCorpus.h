@@ -28,9 +28,12 @@
  *
  * Two deliberate design choices:
  *
- *  - **A missing corpus is a FAILURE, never a skip.** A reader that quietly finds nothing turns
+ *  - **In CI a missing corpus is a FAILURE, never a skip.** A reader that quietly finds nothing turns
  *    HPS-40 into a no-op that reports green — the exact failure the rule exists to prevent. The
  *    corpus is checked into this repo, so "not found" means the layout moved and the suite must say so.
+ *    The one run with no corpus by design is a packaged release's, which does not ship it: there, and
+ *    only where `CI` is unset, each corpus test skips with a warning that names the corpus
+ *    (SkipWithoutCorpus). A run carrying that warning has not proven conformance.
  *  - **A declared-but-unread expectation key is a FAILURE** (HPS-46, see UnassertedExpectations).
  *    Consumption is proven by what was actually ASSERTED: the Wants* accessors record each key
  *    they read on a successful typed read, and a key the case declares that was never recorded —
@@ -464,6 +467,41 @@ inline bool LoadGroup(const TCHAR* Group, TArray<FCase>& OutCases, FString& OutE
 inline FString FindCorpusRoot()
 {
 	return Detail::FindCorpusDir();
+}
+
+/**
+ * Whether a run that finds no corpus skips its corpus tests (true) or fails them (false), given
+ * the value of the `CI` environment variable. It skips only where `CI` is unset: a packaged
+ * release does not ship the corpus, so its suite has nothing to read, while CI always runs from
+ * the repository, where a corpus that cannot be found means the layout moved. Pure, so the
+ * reader self-test asserts it.
+ */
+inline bool MissingCorpusSkips(const FString& CiVariable)
+{
+	return CiVariable.IsEmpty();
+}
+
+/**
+ * The first line of every test that reads the corpus: `if (SkipWithoutCorpus(*this)) return true;`.
+ * True when the corpus is absent and this run may go without it (MissingCorpusSkips); the test
+ * then carries one warning naming the missing corpus and asserts nothing. False everywhere else,
+ * so with the corpus present the test runs, and in CI a missing corpus reaches the test's own
+ * failure.
+ */
+inline bool SkipWithoutCorpus(FAutomationTestBase& Test)
+{
+	if (!Detail::FindCorpusDir().IsEmpty()
+		|| !MissingCorpusSkips(FPlatformMisc::GetEnvironmentVariable(TEXT("CI"))))
+	{
+		return false;
+	}
+
+	Test.AddWarning(FString::Printf(
+		TEXT("Conformance corpus not present (tools/manifest-conformance/corpus/index.json, looked for ")
+		TEXT("above '%s'); skipped. A release zip does not ship the corpus; from the repository this ")
+		TEXT("test runs."),
+		*Detail::CorpusSearchAnchor()));
+	return true;
 }
 
 /**

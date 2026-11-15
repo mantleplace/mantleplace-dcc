@@ -59,6 +59,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 {
+	if (MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
+	{
+		return true;
+	}
+
 	using FLogic = FMantlePlaceBundleCacheLogic;
 	const FString Root = TEXT("C:/Cache");
 
