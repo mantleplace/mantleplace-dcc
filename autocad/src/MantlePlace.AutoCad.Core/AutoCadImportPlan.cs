@@ -173,6 +173,34 @@ public sealed class AutoCadImportPlan
 {
     private static readonly AutoCadPart[] Order = [AutoCadPart.Contours, AutoCadPart.Surface, AutoCadPart.Aerial, AutoCadPart.Records, AutoCadPart.Linework];
 
+    /// <summary>
+    /// The promised files of a 3.0 bundle that this plugin's parts read, by path from the bundle root:
+    /// what a 3.0 download asks for (<see cref="DownloadLevels.BuildRequestBody"/>). Declared once,
+    /// here, beside the parts.
+    /// </summary>
+    /// <remarks>
+    /// Each <see cref="AutoCadPart"/>'s source in the order's frame, the georeferenced family: the
+    /// contours, the terrain's LandXML for the Civil 3D surface, the aerial image, every public-record
+    /// layer as linework, and the site linework. <c>Manifest.json</c> comes with every download, named
+    /// or not.
+    /// </remarks>
+    public static IReadOnlyList<string> ThreeFiles { get; } =
+    [
+        "Elevation/Contours.dxf",
+        "Elevation/Terrain.landxml",
+        "Imagery/Imagery.tif",
+        "Records/Parcels.dxf",
+        "Records/Zoning.dxf",
+        "Records/Floodplain.dxf",
+        "Records/Wetlands.dxf",
+        "Records/Soils.dxf",
+        "Records/Heritage.dxf",
+        "Records/Conservation.dxf",
+        "Records/Hydrography.dxf",
+        "Records/Contamination.dxf",
+        "Site/Site.dxf",
+    ];
+
     /// <summary>The order this bundle is, still named on a refusal (HPS-37).</summary>
     public string OrderId { get; init; } = string.Empty;
 

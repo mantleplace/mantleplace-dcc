@@ -26,6 +26,7 @@ exitCode |= PlatformConformanceTests.Run();
 exitCode |= ReaderConformanceTests.Run();
 exitCode |= AutoCadManifestConformanceTests.Run();
 exitCode |= AutoCadImportPlanTests.Run();
+exitCode |= DownloadLevelTests.Run();
 exitCode |= AutoCadRecordSetTests.Run();
 exitCode |= LandXmlSurfaceTests.Run();
 exitCode |= AutoCadBundleManifestTests.Run();
