@@ -1,0 +1,284 @@
+// Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
+
+#include "Misc/AutomationTest.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+#include "MantlePlaceBundleCache.h"
+#include "MantlePlaceImportNaming.h"
+#include "MantlePlaceImportManifest.h"
+#include "MantlePlaceImporterLibrary.h"
+#include "MantlePlaceStreamStaging.h"
+#include "MantlePlaceTerrainTilesLogic.h"
+#include "MantlePlaceVaultTypes.h"
+#include "Tests/MantlePlaceConformanceCorpus.h"
+
+#include "FileUtilities/ZipArchiveWriter.h"
+#include "HAL/FileManager.h"
+#include "HAL/PlatformFileManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Guid.h"
+#include "Misc/Paths.h"
+#include "Misc/ScopeExit.h"
+#include "Serialization/JsonWriter.h"
+
+// Streaming an MPB 3.0 order into Cesium. A 3.x bundle holds no terrain tiles: they are an Extra the platform
+// lists and a signed-in plugin downloads, kept beside the bundle's zip. `MantlePlace.Import.TerrainTiles` holds
+// the decisions (where the tiles live, which tileset a zip holds, what a fetch comes to);
+// `MantlePlace.Import.StreamTerrainTiles` runs the stream itself on a real 3.x zip with the Extra beside it,
+// asks twice, and checks the second ask reuses what the first laid out. The network leg (list, mint, download)
+// is the vault client's and the fetcher's shell around these decisions; it needs a signed-in session, which a
+// headless suite does not have, so its pure part is what is asserted here and its live run is the PR's.
+
+namespace
+{
+	/** A zip at Path holding the given entries, each with the text beside it. */
+	bool WriteZip(const FString& Path, const TArray<TPair<FString, FString>>& Entries)
+	{
+		IPlatformFile& Platform = FPlatformFileManager::Get().GetPlatformFile();
+		Platform.CreateDirectoryTree(*FPaths::GetPath(Path));
+		IFileHandle* Out = Platform.OpenWrite(*Path);
+		if (Out == nullptr)
+		{
+			return false;
+		}
+		FZipArchiveWriter Writer(Out); // takes ownership of the handle; the destructor writes the directory
+		const FDateTime Now = FDateTime::UtcNow();
+		for (const TPair<FString, FString>& Entry : Entries)
+		{
+			const FTCHARToUTF8 Utf8(*Entry.Value);
+			Writer.AddFile(Entry.Key, TArray<uint8>(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length()), Now);
+		}
+		return true;
+	}
+
+	/** The corpus's own 3.x Manifest.json, as text. */
+	bool CorpusManifestText(FString& OutText)
+	{
+		TSharedPtr<FJsonObject> Fixture;
+		FString Unused;
+		const TSharedPtr<FJsonObject>* Files = nullptr;
+		const TSharedPtr<FJsonObject>* Manifest = nullptr;
+		if (!MantlePlaceConformanceCorpus::Detail::LoadJsonObject(
+				FPaths::Combine(MantlePlaceConformanceCorpus::FindCorpusRoot(), TEXT("bundle/v3-catalog-file-missing.json")), Fixture, Unused)
+			|| !Fixture->TryGetObjectField(TEXT("files"), Files) || !(*Files)->TryGetObjectField(TEXT("Manifest.json"), Manifest))
+		{
+			return false;
+		}
+		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutText);
+		return FJsonSerializer::Serialize(Manifest->ToSharedRef(), Writer);
+	}
+
+	TArray<TPair<FString, FString>> TilesEntries(const FString& Folder)
+	{
+		return {
+			{ Folder + TEXT("layer.json"), TEXT("{\"tilejson\":\"2.1.0\",\"format\":\"quantized-mesh-1.0\",\"available\":[[{\"startX\":0,\"startY\":0,\"endX\":0,\"endY\":0}]]}") },
+			{ Folder + TEXT("0/0/0.terrain"), TEXT("tile") },
+			{ Folder + TEXT("1/0/0.terrain"), TEXT("tile") },
+		};
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceTerrainTilesLogicTest,
+	"MantlePlace.Import.TerrainTiles",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceTerrainTilesLogicTest::RunTest(const FString& Parameters)
+{
+	using L = FMantlePlaceTerrainTilesLogic;
+
+	// Where the Extra lives: the bundle's own folder, whatever the zip is called.
+	TestEqual(TEXT("beside the bundle"), L::TilesZipBeside(TEXT("D:/p/Saved/MantlePlace/VaultCache/order-1/bundle.zip")),
+		FString(TEXT("D:/p/Saved/MantlePlace/VaultCache/order-1/TerrainTiles.zip")));
+	TestEqual(TEXT("beside a zip of another name"), L::TilesZipBeside(TEXT("D:/Downloads/site.zip")),
+		FString(TEXT("D:/Downloads/TerrainTiles.zip")));
+
+	// Only a bundle the plugin downloaded has a folder of its own to keep the Extra in.
+	const FString Cache = TEXT("D:/p/Saved/MantlePlace/VaultCache");
+	TestTrue(TEXT("a vault-cache bundle"), L::IsInVaultCache(TEXT("D:/p/Saved/MantlePlace/VaultCache/order-1/bundle.zip"), Cache));
+	TestFalse(TEXT("a zip on disk"), L::IsInVaultCache(TEXT("D:/Downloads/site.zip"), Cache));
+	TestFalse(TEXT("a sibling folder that shares the cache's name as a prefix"),
+		L::IsInVaultCache(TEXT("D:/p/Saved/MantlePlace/VaultCacheOld/order-1/bundle.zip"), Cache));
+	TestFalse(TEXT("a path that climbs out of the cache"),
+		L::IsInVaultCache(TEXT("D:/p/Saved/MantlePlace/VaultCache/../Elsewhere/bundle.zip"), Cache));
+
+	// The tileset is found by its layer.json, inside a folder, the shallowest one.
+	{
+		const L::FTileset Found = L::FindTileset({ TEXT("Elevation/Terrain/layer.json"), TEXT("Elevation/Terrain/0/0/0.terrain"),
+			TEXT("Elevation/Terrain/1/0/0.terrain"), TEXT("Readme.md") });
+		TestTrue(TEXT("a tileset"), Found.bFound);
+		TestEqual(TEXT("its layer.json"), Found.LayerJsonPath, FString(TEXT("Elevation/Terrain/layer.json")));
+		TestEqual(TEXT("its folder"), Found.Prefix, FString(TEXT("Elevation/Terrain/")));
+		TestEqual(TEXT("its tiles"), Found.TileCount, 2);
+	}
+	{
+		const L::FTileset Found = L::FindTileset({ TEXT("A/B/C/layer.json"), TEXT("A/layer.json"), TEXT("A/1/0/0.terrain") });
+		TestEqual(TEXT("the shallowest layer.json wins"), Found.Prefix, FString(TEXT("A/")));
+	}
+	{
+		const L::FTileset Found = L::FindTileset({ TEXT("Terrain/LAYER.JSON"), TEXT("Terrain/0/0/0.TERRAIN") });
+		TestTrue(TEXT("names match regardless of case"), Found.bFound && Found.TileCount == 1);
+	}
+	TestFalse(TEXT("a layer.json at the root would select every entry: not a tileset"),
+		L::FindTileset({ TEXT("layer.json"), TEXT("0/0/0.terrain") }).bFound);
+	TestFalse(TEXT("no layer.json: no tileset"), L::FindTileset({ TEXT("Terrain/0/0/0.terrain") }).bFound);
+	TestFalse(TEXT("a folder entry is not a layer.json"), L::FindTileset({ TEXT("Terrain/layer.json/") }).bFound);
+
+	// Where the terrain comes from.
+	TestTrue(TEXT("a 2.x bundle serves its own tiles, as before"),
+		L::DecideSource(false, false) == L::ESource::Bundled && L::DecideSource(false, true) == L::ESource::Bundled);
+	TestTrue(TEXT("a 3.x bundle with tiles beside it serves those"), L::DecideSource(true, true) == L::ESource::ExtraBeside);
+	TestTrue(TEXT("a 3.x bundle with none beside it has none"), L::DecideSource(true, false) == L::ESource::ExtraMissing);
+
+	// What a fetch comes to: tiles beside it are reused; a listed Extra is fetched; none listed is a refusal.
+	{
+		FMantlePlaceVaultItem Listed;
+		FMantlePlaceVaultExtra Tiles;
+		Tiles.Id = MantlePlaceTerrainTilesExtraId();
+		Listed.Extras.Add(Tiles);
+		FMantlePlaceVaultItem Unlisted;
+		FMantlePlaceVaultExtra Brief;
+		Brief.Id = TEXT("SiteBrief");
+		Unlisted.Extras.Add(Brief);
+
+		TestTrue(TEXT("tiles on disk: a second ask fetches nothing, whatever the listing says"),
+			L::PlanFetch(true, &Listed) == L::EFetchPlan::Reuse && L::PlanFetch(true, nullptr) == L::EFetchPlan::Reuse);
+		TestTrue(TEXT("listed and not on disk: fetch"), L::PlanFetch(false, &Listed) == L::EFetchPlan::Fetch);
+		TestTrue(TEXT("the platform lists other Extras but no terrain tiles: disabled"),
+			L::PlanFetch(false, &Unlisted) == L::EFetchPlan::NoTilesListed);
+		TestTrue(TEXT("the listing holds no such order: disabled"), L::PlanFetch(false, nullptr) == L::EFetchPlan::NoTilesListed);
+	}
+
+	// A download is the file the platform listed, or it is not kept.
+	TestTrue(TEXT("a stated length is held to"), L::SizeMatches(31457, 31457) && !L::SizeMatches(31457, 31456));
+	TestTrue(TEXT("a length the row did not state is not a mismatch"), L::SizeMatches(0, 99));
+
+	// The reasons say what is wrong and how to go on.
+	TestTrue(TEXT("none listed names the cause"), L::NoTilesListedReason().Contains(TEXT("lists no terrain tiles")));
+	TestTrue(TEXT("none beside names the file and the way on"),
+		L::NoTilesBesideReason().Contains(L::TilesFileName()) && L::NoTilesBesideReason().Contains(TEXT("vault")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceStreamTerrainTilesTest,
+	"MantlePlace.Import.StreamTerrainTiles",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceStreamTerrainTilesTest::RunTest(const FString& Parameters)
+{
+	if (MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
+	{
+		return true;
+	}
+	FString ManifestText;
+	if (!TestTrue(TEXT("the corpus holds a 3.x manifest"), CorpusManifestText(ManifestText)))
+	{
+		return false;
+	}
+
+	IFileManager& Files = IFileManager::Get();
+	const FString CacheRoot = FPaths::Combine(FPaths::ProjectSavedDir(), GetDefault<UMantlePlaceBundleCache>()->CacheSubDir);
+	const FString Scratch = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("MantlePlace"), TEXT("Tests"), TEXT("StreamTerrainTiles-") + FGuid::NewGuid().ToString());
+	const FString InCache = FPaths::Combine(CacheRoot, TEXT("test-") + FGuid::NewGuid().ToString());
+	FString Identity;
+	ON_SCOPE_EXIT
+	{
+		Files.DeleteDirectory(*Scratch, false, true);
+		Files.DeleteDirectory(*InCache, false, true);
+		if (!Identity.IsEmpty())
+		{
+			Files.DeleteDirectory(*MantlePlaceStreamStaging::StagingDir(Identity), false, true);
+			Files.Delete(*MantlePlaceStreamStaging::RecordPath(Identity));
+		}
+	};
+
+	const TArray<TPair<FString, FString>> Bundle = { { TEXT("Manifest.json"), ManifestText } };
+
+	// 1. A zip on disk with no tiles beside it: the action is disabled, with the reason, and nothing is fetchable.
+	{
+		const FString Zip = FPaths::Combine(Scratch, TEXT("site.zip"));
+		if (!TestTrue(TEXT("the bundle zip is written"), WriteZip(Zip, Bundle)))
+		{
+			return false;
+		}
+		const FMantlePlaceStreamInfo Info = UMantlePlaceImporterLibrary::StreamBundleIntoCesium(Zip);
+		TestFalse(TEXT("a 3.x zip on disk with no tiles beside it does not stream"), Info.bSuccess);
+		TestFalse(TEXT("and there is nothing to fetch for it"), Info.bTerrainTilesFetchable);
+		TestEqual(TEXT("and says why"), Info.Message, FMantlePlaceTerrainTilesLogic::NoTilesBesideReason());
+	}
+
+	// 2. A bundle the plugin downloaded, tiles not fetched yet: not streamed, and the caller is told to fetch.
+	const FString CachedZip = FPaths::Combine(InCache, TEXT("bundle.zip"));
+	{
+		if (!TestTrue(TEXT("the cached bundle zip is written"), WriteZip(CachedZip, Bundle)))
+		{
+			return false;
+		}
+		const FMantlePlaceStreamInfo Info = UMantlePlaceImporterLibrary::StreamBundleIntoCesium(CachedZip);
+		TestFalse(TEXT("tiles not fetched: no stream"), Info.bSuccess);
+		TestTrue(TEXT("a cached bundle's tiles can be fetched"), Info.bTerrainTilesFetchable);
+		TestEqual(TEXT("and the message says to"), Info.Message, FMantlePlaceTerrainTilesLogic::NotFetchedYetMessage());
+	}
+
+	// 3. The Extra arrives beside the bundle: it streams, from the tileset the Extra holds.
+	if (!TestTrue(TEXT("the tiles are written beside the bundle"),
+			WriteZip(FMantlePlaceTerrainTilesLogic::TilesZipBeside(CachedZip), TilesEntries(TEXT("Elevation/Terrain/")))))
+	{
+		return false;
+	}
+	FMantlePlaceVaultManifest Read;
+	FString ReadError;
+	if (!TestTrue(TEXT("the 3.x bundle reads"), UMantlePlaceImporterLibrary::ReadVaultManifest(CachedZip, Read, ReadError)))
+	{
+		AddError(ReadError);
+		return false;
+	}
+	Identity = MantlePlaceImportNaming::ResolveIdentity(Read.OrderId, FString());
+	const FString StageDir = MantlePlaceStreamStaging::StagingDir(Identity);
+
+	const FMantlePlaceStreamInfo First = UMantlePlaceImporterLibrary::StreamBundleIntoCesium(CachedZip);
+	ON_SCOPE_EXIT { UMantlePlaceImporterLibrary::StopBundleStream(); };
+	if (!TestTrue(TEXT("with the tiles beside it a 3.x bundle streams"), First.bSuccess))
+	{
+		AddError(First.Message);
+		return false;
+	}
+	TestTrue(TEXT("the terrain URL is the Extra's layer.json"), First.CesiumTerrainUrl.EndsWith(TEXT("Elevation/Terrain/layer.json")));
+	TestTrue(TEXT("the tiles were staged"), Files.FileExists(*FPaths::Combine(StageDir, TEXT("Elevation/Terrain/1/0/0.terrain"))));
+	TestTrue(TEXT("the site origin comes from the manifest, in degrees, verbatim"),
+		First.bHasOrigin && FMath::IsNearlyEqual(First.OriginLongitudeDeg, -73.975) && FMath::IsNearlyEqual(First.OriginLatitudeDeg, 40.755));
+	TestTrue(TEXT("the AOI rectangle comes from the manifest"), First.bHasBbox && FMath::IsNearlyEqual(First.BboxWestDeg, -74.02));
+	TestTrue(TEXT("no imagery is served: the Extra holds none"), First.ImageryUrl.IsEmpty());
+
+	// 4. A second ask reuses what the first laid out: a marker the first stream left survives, where a re-stage
+	//    clears the directory.
+	const FString Marker = FPaths::Combine(StageDir, TEXT("reuse-marker.txt"));
+	FFileHelper::SaveStringToFile(TEXT("kept"), *Marker);
+	const FMantlePlaceStreamInfo Second = UMantlePlaceImporterLibrary::StreamBundleIntoCesium(CachedZip);
+	TestTrue(TEXT("a second ask streams"), Second.bSuccess);
+	TestTrue(TEXT("and reused the staged tiles"), Files.FileExists(*Marker));
+
+	// 5. Tiles that differ are not served as the old ones: the same order re-stages.
+	if (WriteZip(FMantlePlaceTerrainTilesLogic::TilesZipBeside(CachedZip), TilesEntries(TEXT("Tiles/"))))
+	{
+		const FMantlePlaceStreamInfo Third = UMantlePlaceImporterLibrary::StreamBundleIntoCesium(CachedZip);
+		TestTrue(TEXT("changed tiles stream"), Third.bSuccess && Third.CesiumTerrainUrl.EndsWith(TEXT("Tiles/layer.json")));
+		TestFalse(TEXT("and re-stage the directory"), Files.FileExists(*Marker));
+	}
+
+	// 6. An entry that climbs out of the staging directory is skipped, never written.
+	{
+		TArray<TPair<FString, FString>> Hostile = TilesEntries(TEXT("Elevation/Terrain/"));
+		Hostile.Add({ TEXT("Elevation/Terrain/../../../escaped.txt"), TEXT("no") });
+		WriteZip(FMantlePlaceTerrainTilesLogic::TilesZipBeside(CachedZip), Hostile);
+		const FMantlePlaceStreamInfo Fourth = UMantlePlaceImporterLibrary::StreamBundleIntoCesium(CachedZip);
+		TestTrue(TEXT("a hostile Extra still streams its tiles"), Fourth.bSuccess);
+		TestFalse(TEXT("but nothing is written outside the staging directory"),
+			Files.FileExists(*FPaths::Combine(FPaths::GetPath(StageDir), TEXT("escaped.txt"))));
+	}
+	return true;
+}
+
+#endif // WITH_DEV_AUTOMATION_TESTS

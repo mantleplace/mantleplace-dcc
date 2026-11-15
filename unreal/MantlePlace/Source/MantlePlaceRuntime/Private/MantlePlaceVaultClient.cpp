@@ -215,13 +215,23 @@ void UMantlePlaceVaultClient::GetPresignedLevelUrl(const FString& OrderId, const
 	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ false, Level, Files);
 }
 
-void UMantlePlaceVaultClient::MintDownload(
-	const FString& OrderId, const FString& Format, bool bView, const FString& Level, const TArray<FString>& Files)
+void UMantlePlaceVaultClient::GetPresignedExtraUrl(const FString& OrderId, const FString& ExtraId)
+{
+	if (ExtraId.IsEmpty())
+	{
+		NotifyPresigned(false, FMantlePlacePresignedDownload(), TEXT("An Extra's id is required."));
+		return;
+	}
+	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ false, FString(), TArray<FString>(), ExtraId);
+}
+
+void UMantlePlaceVaultClient::MintDownload(const FString& OrderId, const FString& Format, bool bView,
+	const FString& Level, const TArray<FString>& Files, const FString& ExtraId)
 {
 	TWeakObjectPtr<UMantlePlaceVaultClient> WeakSelf(this);
-	TFunction<void()> Replay = [WeakSelf, OrderId, Format, bView, Level, Files]()
+	TFunction<void()> Replay = [WeakSelf, OrderId, Format, bView, Level, Files, ExtraId]()
 	{
-		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->MintDownload(OrderId, Format, bView, Level, Files); }
+		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->MintDownload(OrderId, Format, bView, Level, Files, ExtraId); }
 	};
 
 	const FMantlePlacePresignedDownload Empty;
@@ -263,7 +273,11 @@ void UMantlePlaceVaultClient::MintDownload(
 	// A 3.0 request names one level and the files this host reads. A 2.x view request names the host and
 	// asks the platform to cut the zip; the host never assembles one.
 	FString Body;
-	if (!Level.IsEmpty())
+	if (!ExtraId.IsEmpty())
+	{
+		Body = FMantlePlaceVaultLogic::BuildExtraDownloadBody(ExtraId);
+	}
+	else if (!Level.IsEmpty())
 	{
 		Body = FMantlePlaceVaultLogic::BuildLevelDownloadBody(Level, Files);
 	}

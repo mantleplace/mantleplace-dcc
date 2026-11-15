@@ -37,6 +37,7 @@ public class MantlePlaceEditor : ModuleRules
 				"ImageWrapper",  // 16-bit grayscale PNG decode
 				"Json",          // Metadata/manifest.json parse
 				"SQLiteCore",    // FSQLiteDatabase: the road-splines GeoPackage (engine plugin SQLiteCore, enabled in the .uplugin)
+				"HTTP",          // FHttpModule: the terrain tiles Extra is downloaded from its minted link
 				"HTTPServer",    // FMantlePlaceLocalTileServer: stream the bundle to Cesium for Unreal
 				"DesktopPlatform", // IDesktopPlatform::OpenFileDialog (Browse button)
 				"Slate",         // SMantlePlaceVaultPanel/Row: the native vault tooling UI

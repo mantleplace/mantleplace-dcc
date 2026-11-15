@@ -75,6 +75,11 @@ struct FMantlePlaceGeoreferenceBlock
 	double OriginEastingM = 0.0;
 	double OriginNorthingM = 0.0;
 	double GroundOrthometricHM = 0.0; // elevation at the centroid (= mesh ground z=0 reference)
+	bool bHasGeographicOrigin = false; // an MPB 3.x site origin stated in longitude and latitude (frames.local.origin);
+	                                   // read for ONE purpose: a Cesium georeference is set in degrees. Never
+	                                   // derived from the projected origin above, and never read from a 2.x bundle.
+	double OriginLongitudeDeg = 0.0;
+	double OriginLatitudeDeg = 0.0;
 	FString PlanetShape;              // contract: "Flat" only; Parse rejects any other value
 };
 

@@ -148,6 +148,12 @@ import mantleplace_cesium_stream as mp
 mp.stream_into_cesium()                             # newest cached vault bundle (the one just imported)
 ```
 
+An MPB 3.0 bundle holds no terrain tiles: the platform lists them as an Extra beside the bundle. The
+first stream of a downloaded 3.0 bundle fetches them (it needs a signed-in session), keeps them next to
+the bundle's zip and streams when they arrive; a second stream reuses them. An order the platform lists
+no terrain tiles for, or a zip from anywhere but the vault cache with none beside it, is refused with the
+reason in the log. A 2.x bundle streams its own tiles, as before.
+
 ## Packaging a release
 
 Packaging needs a licensed Unreal Engine 5.8 install, so it runs privately and never in public CI

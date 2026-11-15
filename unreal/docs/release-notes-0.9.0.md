@@ -40,4 +40,11 @@ Each is shown as skipped, with its reason, in the import window and the import l
 | --- | --- |
 | Coverage rasters (slope, aspect, hillshade, land cover, canopy height, NDVI) | MPB 3.0 ships them only as georeferenced GeoTIFFs, and the plugin never converts a georeferenced file. |
 | Water mask | MPB 3.0 ships no separate mask: the water coverage is `Materials/Water.png`, painted as the `Water` layer. |
-| Streaming into Cesium | The terrain tiles are an Extra beside an MPB 3.0 bundle, not part of it; not offered in this release. |
+
+## Streaming into Cesium
+
+An MPB 3.0 bundle holds no terrain tiles: the platform lists them as an Extra beside the bundle. The first
+stream of a downloaded 3.0 order fetches them (a signed-in session is needed), keeps them beside the bundle's
+zip and streams when they arrive; a second stream reuses them. An order the platform lists no terrain tiles
+for, or a zip from outside the plugin's download folder with none beside it, is refused with the reason. A 2.x
+bundle streams its own tiles, as in 0.8.

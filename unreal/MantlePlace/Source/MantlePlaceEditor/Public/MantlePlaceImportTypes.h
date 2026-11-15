@@ -106,4 +106,25 @@ struct FMantlePlaceStreamInfo
 
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
 	double BboxNorthDeg = 0.0;
+
+	/**
+	 * The site origin in WGS84 degrees, as the manifest states it, for the Cesium georeference. True only for an
+	 * MPB 3.x bundle: a 2.x bundle's origin is read from its own manifest by the helper, as it always was.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
+	bool bHasOrigin = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
+	double OriginLongitudeDeg = 0.0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
+	double OriginLatitudeDeg = 0.0;
+
+	/**
+	 * An MPB 3.x bundle whose terrain tiles are not on disk yet, and which the plugin can fetch: it is in the vault
+	 * cache. The caller fetches them (UMantlePlaceTerrainTilesFetcher) and streams again; Message says so.
+	 * False with bSuccess false is a refusal that fetching would not change, and Message says why.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
+	bool bTerrainTilesFetchable = false;
 };
