@@ -43,6 +43,12 @@ FString UnitWords(const TSharedPtr<FJsonObject>* Unit)
 	return FString::Printf(TEXT("%s (%g m)"), *GetString(*Unit, TEXT("name")), GetNumber(*Unit, TEXT("to_metres")));
 }
 
+/** A raster's `unit` is a free string; the elevation file is metres on every order (format.md section 6), so "m" and "metre" are that unit. Anything else fails closed. */
+bool IsMetreRasterUnit(const FString& Unit)
+{
+	return Unit.IsEmpty() || Unit == TEXT("m") || Unit == TEXT("metre");
+}
+
 bool ReadNumbers(const TSharedPtr<FJsonObject>& Obj, const TCHAR* Field, int32 Expected, TArray<double>& Out)
 {
 	Out.Reset();
@@ -165,10 +171,10 @@ void ReadHeightmap(const FThreeContext& C, double SiteHeightM)
 	const int32 Height = GetInt(Raster, TEXT("height"));
 	const FString Unit = GetString(Raster, TEXT("unit"));
 	if (GetString(Raster, TEXT("data_type")) != TEXT("UInt16") || !Raster->HasTypedField<EJson::Number>(TEXT("scale"))
-		|| !Raster->HasTypedField<EJson::Number>(TEXT("offset")) || (!Unit.IsEmpty() && Unit != TEXT("metre")))
+		|| !Raster->HasTypedField<EJson::Number>(TEXT("offset")) || !IsMetreRasterUnit(Unit))
 	{
-		C.Skip(Step, FString::Printf(TEXT("%s does not state a UInt16 height in metres as offset + code x scale, "
-			"so its pixels cannot be read as heights (format.md section 7)."), *Path));
+		C.Skip(Step, FString::Printf(TEXT("%s does not state a UInt16 height in metres as offset + code x scale (unit: %s), "
+			"so its pixels cannot be read as heights (format.md section 7)."), *Path, Unit.IsEmpty() ? TEXT("none") : *Unit));
 		return;
 	}
 	if (!ReadNumbers(Raster, TEXT("rectangle"), 4, Rect) || !ReadNumbers(Raster, TEXT("cell_size"), 2, Cell)

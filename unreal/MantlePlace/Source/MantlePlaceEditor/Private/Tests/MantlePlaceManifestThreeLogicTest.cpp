@@ -429,6 +429,30 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("and is not valid"), M.bValid);
 	}
 
+	// --- A raster unit stated as "m" is the metre; an unknown unit is a named skip -----------------
+	for (const TCHAR* UnitText : { TEXT("m"), TEXT("foot") })
+	{
+		const bool bMetre = FCString::Strcmp(UnitText, TEXT("m")) == 0;
+		const FString Text = Manifest(TEXT("{\"name\": \"metre\", \"to_metres\": 1}"),
+			FString::Printf(TEXT("\"width\": 1009, \"height\": 1009, \"data_type\": \"UInt16\", \"scale\": 0.0078125, \"offset\": -12.01,"
+				" \"unit\": \"%s\", \"bands\": [\"height\"], \"frame\": \"local\", \"rectangle\": [-1008, -1008, 1008, 1008],"
+				" \"cell_size\": [2, 2]"), UnitText));
+		FMantlePlaceVaultManifest M;
+		FString Error;
+		TestTrue(TEXT("a stated raster unit still converts"), FMantlePlaceManifestThreeLogic::ToVaultManifest(ReadOf(Text), Text, M, Error));
+		const FString* Reason = M.FormatSkips.Find(MantlePlaceArtifactId::Landscape());
+		if (bMetre)
+		{
+			TestTrue(TEXT("unit m is read as metres: the Landscape is fed"), M.Heightmap.bPresent);
+			TestTrue(TEXT("and not skipped"), Reason == nullptr);
+		}
+		else
+		{
+			TestFalse(TEXT("an unknown unit is not read"), M.Heightmap.bPresent);
+			TestTrue(TEXT("and the skip names the unit"), Reason != nullptr && Reason->Contains(TEXT("foot")));
+		}
+	}
+
 	// --- A raster that states no rectangle is a named skip, never a guess -------------------------
 	{
 		const FString Text = Manifest(TEXT("{\"name\": \"metre\", \"to_metres\": 1}"),
