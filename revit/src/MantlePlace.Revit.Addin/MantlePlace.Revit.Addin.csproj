@@ -59,6 +59,8 @@
     <!-- The host-neutral Core and Client every .NET host plugin builds from (shared/). -->
     <ProjectReference Include="..\..\..\shared\src\MantlePlace.Core\MantlePlace.Core.csproj" />
     <ProjectReference Include="..\..\..\shared\src\MantlePlace.Client\MantlePlace.Client.csproj" />
+    <!-- The windows every .NET host opens, from one source: sign-in, vault, About, the notices. -->
+    <ProjectReference Include="..\..\..\shared\src\MantlePlace.Wpf\MantlePlace.Wpf.csproj" />
   </ItemGroup>
 
   <ItemGroup>

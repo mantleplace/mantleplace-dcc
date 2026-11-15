@@ -11,6 +11,8 @@
          CoreDir, ClientDir     the Core and Client sources: <SourceRoot>\shared\src\MantlePlace.{Core,Client} from the
                                 move to shared/ on, <SourceRoot>\revit\src\MantlePlace.Revit.{Core,Client} before it
          PlatformApiDir         the generated Platform API client's sources, when the source has one; empty otherwise
+         WpfDir                 the shared windows' sources (<SourceRoot>\shared\src\MantlePlace.Wpf), when the source has them;
+                                empty for a source from before the windows moved there
          RevitApiDir            Revit 2025, the compile target the real add-in uses
          HarnessVerify          true when the source has PrepareForHandover.cs: compiles Verify.cs (-Verify)
        The plugin's Core, Client and Addin sources compile into this ONE assembly. -->
@@ -39,6 +41,7 @@
     <Compile Include="$(CoreDir)\**\*.cs" Exclude="$(CoreDir)\obj\**;$(CoreDir)\bin\**" />
     <Compile Include="$(ClientDir)\**\*.cs" Exclude="$(ClientDir)\obj\**;$(ClientDir)\bin\**" />
     <Compile Include="$(PlatformApiDir)\**\*.cs" Exclude="$(PlatformApiDir)\obj\**;$(PlatformApiDir)\bin\**" Condition="'$(PlatformApiDir)' != ''" />
+    <Compile Include="$(WpfDir)\**\*.cs" Exclude="$(WpfDir)\obj\**;$(WpfDir)\bin\**" Condition="'$(WpfDir)' != ''" />
     <Compile Include="$(Tree)\MantlePlace.Revit.Addin\**\*.cs" Exclude="$(Tree)\**\obj\**;$(Tree)\**\bin\**" />
     <Compile Include="TimingHarness.cs" />
     <Compile Include="Verify.cs" Condition="'$(HarnessVerify)' == 'true'" />   <!-- the -Verify measurements; only from a source that has PrepareForHandover -->
@@ -46,6 +49,8 @@
     <Using Include="System.IO" />
     <Using Include="System.Net.Http" />
     <EmbeddedResource Include="$(Tree)\MantlePlace.Revit.Addin\Families\*.rfa" LogicalName="MantlePlace.Revit.Addin.Families.%(Filename)%(Extension)" />
+    <!-- The mark the shared windows draw (MarkImages), under the name the shared project gives it. -->
+    <EmbeddedResource Include="$(Tree)\MantlePlace.Revit.Addin\Resources\MantlePlaceMark_*.png" LogicalName="MantlePlace.Wpf.Resources.%(Filename)%(Extension)" Condition="'$(WpfDir)' != ''" />
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>HarnessTag</_Parameter1>
       <_Parameter2>$(HarnessTag)</_Parameter2>

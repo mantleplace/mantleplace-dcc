@@ -1,42 +1,85 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
-using Autodesk.Revit.UI;
 using MantlePlace.Client;
 using MantlePlace.Core;
 
-namespace MantlePlace.Revit.Addin;
+namespace MantlePlace.Wpf;
 
 /// <summary>
-/// The modeless vault browser: list, materialize, download, import.
+/// Opens the web Feedback form scoped to one bundle (<c>HPS-56</c>), through the host's own launcher,
+/// which knows the host's version.
+/// </summary>
+/// <param name="orderId">The bundle's order id.</param>
+/// <param name="refused">The address, when the browser would not open it.</param>
+/// <returns>Whether the browser opened.</returns>
+public delegate bool FeedbackOpener(string? orderId, out string refused);
+
+/// <summary>
+/// A host's import from the vault window: its hook into the open document, which only the host has.
+/// </summary>
+public interface IVaultImport
+{
+    /// <summary>
+    /// Raised with the import's closing report. Any thread: the window hops to its own.
+    /// </summary>
+    event EventHandler<string>? Completed;
+
+    /// <summary>
+    /// Hands a bundle zip the cache has verified to the host's import. Called on the window's thread;
+    /// the host queues it onto its own and returns.
+    /// </summary>
+    /// <param name="bundleZipPath">The verified bundle zip.</param>
+    void Open(string bundleZipPath);
+}
+
+/// <summary>
+/// What a host that imports from the vault window hands it: the session's Prepare watcher and its own
+/// import. A host with neither shows no Prepare and no Import (<see cref="WindowLabels.VaultButtons"/>).
+/// </summary>
+/// <param name="Watcher">The session's Prepare watcher, which a Prepare outlives the window in.</param>
+/// <param name="Import">The host's import.</param>
+public sealed record VaultImporting(PrepareWatcher Watcher, IVaultImport Import);
+
+/// <summary>
+/// The modeless vault browser: list, search, Prepare, download, import, remove a local copy, and
+/// report a problem with one bundle.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Modeless on purpose. A materialize can take ten minutes, and a modal dialog would hold Revit's
+/// One source for every .NET host. What a host hands it is its own: the owner window, its import from
+/// the vault (<see cref="VaultImporting"/>; Revit has one, AutoCAD does not yet, and its orders arrive
+/// as an export from the web vault or through Import Bundle), and its feedback launcher. Its name
+/// comes from <see cref="HostIdentity"/>. Which buttons show, in which order, and where a signed-out
+/// curator is sent are the pure core's (<see cref="WindowLabels.VaultButtons"/>,
+/// <see cref="WindowLabels.SignInFirst"/>), where the headless suite holds them for both hosts.
+/// </para>
+/// <para>
+/// Modeless on purpose. A materialize can take ten minutes, and a modal dialog would hold the host's
 /// message loop for all of it. The curator keeps working; the window updates when the job does.
 /// </para>
 /// <para>
 /// <b>Closing this window is not cancelling.</b> Only the Cancel button cancels. A Prepare belongs to
 /// the session's <see cref="PrepareWatcher"/>, not to this window: closed, the Prepare runs on and the
-/// curator is told when it ends (<see cref="PrepareNotifier"/>); reopened, the window shows it still
-/// running, and pressing Prepare again follows it rather than polling the order twice. A window's
-/// close box is "I am done looking", not "throw away the thing I paid for".
+/// curator is told when it ends; reopened, the window shows it still running, and pressing Prepare
+/// again follows it rather than polling the order twice. A window's close box is "I am done looking",
+/// not "throw away the thing I paid for".
 /// </para>
 /// <para>
-/// Built in code rather than XAML: it is a header, a search field, one list and five buttons, and a
-/// code-only window has no build-action, resource-lookup or designer surface to go wrong inside a
-/// Revit add-in.
+/// Built in code rather than XAML: it is a header, a search field, one list and a row of buttons, and
+/// a code-only window has no build-action, resource-lookup or designer surface to go wrong inside a
+/// host.
 /// </para>
 /// </remarks>
-internal sealed class VaultBrowserWindow : Window
+public sealed class VaultBrowserWindow : Window
 {
     private readonly AuthSession _session;
     private readonly VaultClient _vault;
     private readonly BundleCache _cache;
-    private readonly PrepareWatcher _watcher;
-    private readonly ExternalEvent _importEvent;
-    private readonly BundleImportEventHandler _importHandler;
+    private readonly AnnouncedOrderStore _announced;
+    private readonly FeedbackOpener _reportProblem;
+    private readonly PrepareWatcher? _watcher;
+    private readonly IVaultImport? _import;
 
     /// <summary>
     /// Roughly what the search row takes: a one-line text box and the 8 px margin under it. The
@@ -45,16 +88,12 @@ internal sealed class VaultBrowserWindow : Window
     private const double SearchRowHeight = 32;
 
     private readonly ListBox _list = new() { Margin = new Thickness(0, 0, 0, 8), MinHeight = 220 };
-
-    // Qualified because Autodesk.Revit.UI has a TextBox of its own, a ribbon control: CS0104 otherwise.
-    private readonly System.Windows.Controls.TextBox _search = new() { ToolTip = WindowLabels.SearchToolTip, VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly TextBox _search = new() { ToolTip = WindowLabels.SearchToolTip, VerticalContentAlignment = VerticalAlignment.Center };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, MinHeight = 40 };
-    private readonly Button _refresh = new() { Content = WindowLabels.Refresh, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
-    private readonly Button _prepare = new() { Content = WindowLabels.PrepareForRevit, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
-    private readonly Button _import = new() { Content = WindowLabels.Import, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
-    private readonly Button _remove = new() { Content = WindowLabels.RemoveDownload, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
-    private readonly Button _report = new() { Content = WindowLabels.ReportProblem, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(12, 4, 12, 4) };
-    private readonly Button _cancel = new() { Content = WindowLabels.Cancel, Padding = new Thickness(12, 4, 12, 4), IsEnabled = false };
+
+    /// <summary>The row of buttons, in the core's order. Cancel is kept to enable and disable.</summary>
+    private readonly StackPanel _buttons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+    private Button? _cancel;
 
     /// <summary>
     /// A row for every bundle the listing gave, whether the filter shows it or not. The list holds
@@ -85,23 +124,32 @@ internal sealed class VaultBrowserWindow : Window
         public override string ToString() => Text;
     }
 
-    internal VaultBrowserWindow(
+    /// <param name="session">The plugin's session.</param>
+    /// <param name="vault">The vault client.</param>
+    /// <param name="cache">The bundle cache.</param>
+    /// <param name="announced">The record of orders already announced, which a listing marks as seen (<c>HPS-55</c>).</param>
+    /// <param name="reportProblem">The host's feedback launcher, for Report a Problem.</param>
+    /// <param name="importing">The host's Prepare and import, or null for a host with no import from the vault.</param>
+    /// <param name="hostWindow">The host's main window, which owns this one.</param>
+    /// <param name="selectOrderId">A bundle to select once the list loads: the one a notice was clicked for.</param>
+    public VaultBrowserWindow(
         AuthSession session,
         VaultClient vault,
         BundleCache cache,
-        PrepareWatcher watcher,
-        ExternalEvent importEvent,
-        BundleImportEventHandler importHandler,
-        IntPtr revitWindow,
+        AnnouncedOrderStore announced,
+        FeedbackOpener reportProblem,
+        VaultImporting? importing,
+        IntPtr hostWindow,
         string? selectOrderId)
     {
         _session = session;
         _vault = vault;
         _cache = cache;
-        _watcher = watcher;
+        _announced = announced;
+        _reportProblem = reportProblem;
+        _watcher = importing?.Watcher;
+        _import = importing?.Import;
         _selectOnLoad = selectOrderId;
-        _importEvent = importEvent;
-        _importHandler = importHandler;
 
         Title = WindowLabels.VaultWindowTitle;
         BrandChrome.ShowMarkInTitleBar(this);
@@ -112,31 +160,38 @@ internal sealed class VaultBrowserWindow : Window
         Height = 460 + BrandChrome.HeaderHeight + SearchRowHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        // Owned by Revit's main window so it stays in front of it and minimises with it, rather
+        // Owned by the host's main window so it stays in front of it and minimises with it, rather
         // than becoming a stray top-level window the curator loses behind the model.
-        new WindowInteropHelper(this) { Owner = revitWindow };
+        new WindowInteropHelper(this) { Owner = hostWindow };
 
-        Content = BuildLayout();
+        Content = BuildLayout(WindowLabels.VaultButtons(importing is not null, WindowLabels.HostName(HostIdentity.Id)));
 
-        _refresh.Click += (_, _) => _ = RefreshAsync();
-        _prepare.Click += (_, _) => Prepare();
-        _import.Click += (_, _) => _ = ImportAsync();
-        _remove.Click += (_, _) => RemoveSelected();
-        _report.Click += (_, _) => ReportProblemWithSelected();
-        _cancel.Click += (_, _) => CancelWork();
         _search.TextChanged += (_, _) => OnSearchChanged();
 
-        _importHandler.Completed += OnImportCompleted;
+        if (_import is not null)
+        {
+            _import.Completed += OnImportCompleted;
+        }
 
-        // ⛔ Both raised on a thread-pool thread (PrepareWatcher's remarks). Every handler hops.
-        _watcher.Said += OnPrepareSaid;
-        _watcher.Ended += OnPrepareEnded;
+        if (_watcher is not null)
+        {
+            // ⛔ Both raised on a thread-pool thread (PrepareWatcher's remarks). Every handler hops.
+            _watcher.Said += OnPrepareSaid;
+            _watcher.Ended += OnPrepareEnded;
+        }
 
         Closed += (_, _) =>
         {
-            _importHandler.Completed -= OnImportCompleted;
-            _watcher.Said -= OnPrepareSaid;
-            _watcher.Ended -= OnPrepareEnded;
+            if (_import is not null)
+            {
+                _import.Completed -= OnImportCompleted;
+            }
+
+            if (_watcher is not null)
+            {
+                _watcher.Said -= OnPrepareSaid;
+                _watcher.Ended -= OnPrepareEnded;
+            }
         };
 
         Loaded += (_, _) => _ = LoadAsync();
@@ -147,7 +202,8 @@ internal sealed class VaultBrowserWindow : Window
     /// A row the search is hiding is let back in by clearing the search: the curator clicked a notice
     /// for that bundle, and selecting a row they cannot see would be selecting nothing.
     /// </remarks>
-    internal void Select(string orderId)
+    /// <param name="orderId">The bundle's order id.</param>
+    public void Select(string orderId)
     {
         VaultRow? row = _rows.Find(held => string.Equals(held.Bundle.OrderId, orderId, StringComparison.Ordinal));
         if (row is null)
@@ -179,7 +235,7 @@ internal sealed class VaultBrowserWindow : Window
             Select(orderId);
         }
 
-        if (_watcher.Runs is { Count: > 0 } running)
+        if (_watcher?.Runs is { Count: > 0 } running)
         {
             Report(running[^1].LastMessage);
         }
@@ -187,19 +243,33 @@ internal sealed class VaultBrowserWindow : Window
         UpdateCancel();
     }
 
-    private UIElement BuildLayout()
+    private UIElement BuildLayout(IReadOnlyList<VaultButton> faces)
     {
-        // The one primary action in the plugin. Prepare is the step before it and Remove undoes it;
-        // neither is what the curator came here to do.
-        BrandChrome.MakePrimary(_import);
+        foreach (VaultButton face in faces)
+        {
+            Button button = new() { Content = face.Face, Padding = new Thickness(12, 4, 12, 4) };
+            if (face.Action != VaultAction.Cancel)
+            {
+                button.Margin = new Thickness(0, 0, 8, 0);
+            }
 
-        StackPanel buttons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        buttons.Children.Add(_refresh);
-        buttons.Children.Add(_prepare);
-        buttons.Children.Add(_import);
-        buttons.Children.Add(_remove);
-        buttons.Children.Add(_report);
-        buttons.Children.Add(_cancel);
+            // The one primary action in the plugin, Import where the host has it. Prepare is the step
+            // before it and Remove undoes it; neither is what the curator came here to do.
+            if (face.Primary)
+            {
+                BrandChrome.MakePrimary(button);
+            }
+
+            VaultAction action = face.Action;
+            button.Click += (_, _) => Press(action);
+            if (action == VaultAction.Cancel)
+            {
+                button.IsEnabled = false;
+                _cancel = button;
+            }
+
+            _buttons.Children.Add(button);
+        }
 
         // Below the buttons, above the list it narrows.
         DockPanel search = new() { Margin = new Thickness(0, 0, 0, 8) };
@@ -215,14 +285,39 @@ internal sealed class VaultBrowserWindow : Window
 
         DockPanel root = new() { Margin = new Thickness(12) };
         BrandChrome.AddHeader(root, WindowLabels.VaultHeading);
-        DockPanel.SetDock(buttons, Dock.Top);
+        DockPanel.SetDock(_buttons, Dock.Top);
         DockPanel.SetDock(search, Dock.Top);
         DockPanel.SetDock(_status, Dock.Bottom);
-        root.Children.Add(buttons);
+        root.Children.Add(_buttons);
         root.Children.Add(search);
         root.Children.Add(_status);
         root.Children.Add(_list);
         return root;
+    }
+
+    private void Press(VaultAction action)
+    {
+        switch (action)
+        {
+            case VaultAction.Refresh:
+                _ = RefreshAsync();
+                break;
+            case VaultAction.Prepare:
+                Prepare();
+                break;
+            case VaultAction.Import:
+                _ = ImportAsync();
+                break;
+            case VaultAction.RemoveDownload:
+                RemoveSelected();
+                break;
+            case VaultAction.ReportProblem:
+                ReportProblemWithSelected();
+                break;
+            case VaultAction.Cancel:
+                CancelWork();
+                break;
+        }
     }
 
     /// <summary>
@@ -253,9 +348,8 @@ internal sealed class VaultBrowserWindow : Window
 
             // The curator is looking at every order this listing holds, so none of them is news to
             // the background listing any more (HPS-55). Off this thread: the record waits on a lock
-            // another Revit may hold, and a window that stutters for it would be the wrong trade.
-            // The store is read here, on this thread, while the add-in is certainly running.
-            AnnouncedOrderStore announced = MantlePlaceApplication.Announced;
+            // another host process may hold, and a window that stutters for it would be the wrong trade.
+            AnnouncedOrderStore announced = _announced;
             string email = _session.UserEmail;
             _ = Task.Run(() => announced.Seen(listing, email));
 
@@ -267,6 +361,10 @@ internal sealed class VaultBrowserWindow : Window
             // ⛔HPS-21: rows that were skipped are SAID, not swallowed. A silent skip hides platform
             // corruption for as long as it lasts, and a filter does not hide it either.
             ReportCount();
+        }
+        catch (OperationCanceledException)
+        {
+            Report("Cancelled.");
         }
         finally
         {
@@ -297,7 +395,7 @@ internal sealed class VaultBrowserWindow : Window
     /// <summary>As <see cref="Prepare()"/>, for a bundle already chosen — the Import press that found an on-demand order.</summary>
     private void Prepare(VaultBundle bundle)
     {
-        if (!SignedIn())
+        if (_watcher is null || !SignedIn())
         {
             return;
         }
@@ -323,6 +421,11 @@ internal sealed class VaultBrowserWindow : Window
     private void CancelWork()
     {
         _work?.Cancel();
+
+        if (_watcher is null)
+        {
+            return;
+        }
 
         PrepareRun? run = Selected is { } bundle
             ? _watcher.Watching(bundle.OrderId)
@@ -392,7 +495,7 @@ internal sealed class VaultBrowserWindow : Window
     }
 
     /// <summary>
-    /// One materialize start, then Revit's download view for a complete order — or the existing
+    /// One materialize start, then the host's download view for a complete order — or the existing
     /// Prepare for an on-demand one (<see cref="CompleteOrders"/>).
     /// </summary>
     /// <remarks>
@@ -463,13 +566,17 @@ internal sealed class VaultBrowserWindow : Window
 
     private void OpenImport(CacheEntry entry)
     {
+        if (_import is null)
+        {
+            return;
+        }
+
         // Not "Importing…": the import window opens on its checklist, and nothing is imported until
         // the curator presses Import there.
         Report($"Opening the {WindowLabels.ImportHeading} window — choose what to include, then press {WindowLabels.Import}.");
 
-        // Hands off to Revit's thread. The window stays responsive and hears back through Completed.
-        _importHandler.QueueImport(entry.Layout.BundleZipPath);
-        _importEvent.Raise();
+        // Hands off to the host's thread. The window stays responsive and hears back through Completed.
+        _import.Open(entry.Layout.BundleZipPath);
     }
 
     private void RemoveSelected()
@@ -500,12 +607,12 @@ internal sealed class VaultBrowserWindow : Window
             return;
         }
 
-        Report(FeedbackLauncher.TryOpen(bundle.OrderId, out string refused)
+        Report(_reportProblem(bundle.OrderId, out string refused)
             ? $"Opened the feedback form for {bundle.AoiLabel} in your browser."
             : $"Could not open your browser. Open this address manually: {refused}");
     }
 
-    private void OnImportCompleted(object? sender, string report) => Report(report);
+    private void OnImportCompleted(object? sender, string report) => OnUiThread(() => Report(report));
 
     /// <summary>
     /// Re-filters as the curator types. Local to the window: nothing is sent to the platform.
@@ -516,7 +623,7 @@ internal sealed class VaultBrowserWindow : Window
 
         // The count only while nothing is in flight: a download's progress is the line the curator
         // is waiting on, and typing must not overwrite it.
-        if (_work is null && _watcher.Runs.Count == 0)
+        if (_work is null && (_watcher is null || _watcher.Runs.Count == 0))
         {
             ReportCount();
         }
@@ -577,10 +684,10 @@ internal sealed class VaultBrowserWindow : Window
             return true;
         }
 
-        // The path is the ribbon's own words. It was "Account ▸ Sign in" against a button that no
-        // longer exists under that name, and a status line that names a control the curator cannot
-        // find is worse than one that says nothing.
-        Report($"Sign in first: Mantle Place ▸ Account ▸ {AccountRibbon.SignInFace}.");
+        // The path is the host's ribbon's own words (WindowLabels.SignInFirst). A status line that
+        // names a control the curator cannot find, as AutoCAD's copy of this window once named the
+        // Add-ins tab, is worse than one that says nothing.
+        Report(WindowLabels.SignInFirst(HostIdentity.Id));
         return false;
     }
 
@@ -592,7 +699,13 @@ internal sealed class VaultBrowserWindow : Window
     }
 
     /// <summary>Cancel is live while there is anything to cancel: a refresh, or any Prepare.</summary>
-    private void UpdateCancel() => _cancel.IsEnabled = _work is not null || _watcher.Runs.Count > 0;
+    private void UpdateCancel()
+    {
+        if (_cancel is not null)
+        {
+            _cancel.IsEnabled = _work is not null || _watcher?.Runs.Count > 0;
+        }
+    }
 
     private void Report(string message) => _status.Text = message;
 
@@ -648,6 +761,6 @@ internal sealed class VaultBrowserWindow : Window
         string row = VaultRows.Describe(bundle, entry.Describe());
 
         // A row being prepared says so, so a window reopened onto a Prepare shows which one.
-        return _watcher.Watching(bundle.OrderId) is null ? row : $"{row} — {PrepareMessages.RowPreparing}";
+        return _watcher?.Watching(bundle.OrderId) is null ? row : $"{row} — {PrepareMessages.RowPreparing}";
     }
 }

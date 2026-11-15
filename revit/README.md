@@ -29,8 +29,8 @@ writing the token somewhere less safe (`HPS-16`).
 `Sign In` when you are signed out, `Signing In…` — disabled — while a browser round-trip or a stored
 grant is being renewed, and `Signed In` once you are, with your address on the tooltip. Signed in,
 clicking the face opens About Mantle Place; the dropdown carries your address, `Sign Out`,
-`Open mantle.place`, `Send Feedback`, and that About dialog, which names the build you are running, the Revit it is
-running in, and where each import wrote its log. `Sign Out` is offered only when there is a session
+`Open mantle.place`, `Send Feedback`, and that About window, which names the build you are running, the Revit it is
+running in, and where each import wrote its log, and links the privacy page. `Sign Out` is offered only when there is a session
 to drop — including a stored one you are not currently signed in to, because both hosts share one
 credential per Windows user. F1 over any button on the tab opens this README on GitHub
 (`HelpLinks.RibbonHelpUrl`, set on every button, the split button's rows included).
@@ -371,8 +371,8 @@ retroactively; import the bundle again into a fresh project to get them filed.
 their file beside the zip they were handed, so a bundle downloaded from your vault logs inside its
 own order folder under `%LOCALAPPDATA%\MantlePlace\bundles\`, and a zip you opened from somewhere
 else logs beside that zip. `Logs` selects the newest log under the cache, and where there is
-none it opens the cache and says that a zip from elsewhere logged elsewhere. The About dialog on the
-Account button reaches the same place through the same function, so the two can never disagree.
+none it opens the cache and says that a zip from elsewhere logged elsewhere. The About window's `Logs`
+button reaches the same place through the same function, so the two can never disagree.
 
 **An import brings in what you tick.** Both ways in — `Import Bundle` and the vault window's
 `Import` — open the modeless `Bundle Import` window on a checklist headed `Include`. Above it, under
@@ -659,12 +659,15 @@ an exception in that test. Run the suite on both runtimes ([Build and test](#bui
 ```
 ../shared/src/MantlePlace.Core/         pure logic — no host API, no I/O, no NuGet; net8.0
 ../shared/src/MantlePlace.Client/       I/O that is not a host — HTTP, cache, zip, secrets; net8.0
+../shared/src/MantlePlace.Wpf/          the windows both hosts open — sign-in, vault, About, notices; net8.0-windows
 src/MantlePlace.Revit.Addin/            the Revit shim — transactions, ribbon; net8.0-windows
 ../shared/tests/MantlePlace.Core.Tests/ headless suite over Core AND Client; net8.0 + net10.0
 ```
 
-The core, the client and the suite are host-neutral and shared with the AutoCAD plugin, so they
-live in [`shared/`](../shared/README.md); the shim references them.
+The core, the client, the windows and the suite are host-neutral and shared with the AutoCAD plugin,
+so they live in [`shared/`](../shared/README.md); the shim references them. What the shim adds to a
+shared window is Revit's own: the owner window, the vault's import through an external event
+(`RevitVaultImport`), and About's Revit sentences and its Logs button.
 
 Each layer is a **triad** (`HPS-02`): an impure host shim, a pure logic core, and a headless test of
 the core. All protocol behaviour lives in the core, which is constructible and testable with Revit

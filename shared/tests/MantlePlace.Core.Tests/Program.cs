@@ -108,6 +108,9 @@ exitCode |= PlatformConformanceTests.Run();
 exitCode |= ConnectedHostTests.Run();
 exitCode |= CuratorExtentTests.Run();
 exitCode |= ShimWindowTests.Run("revit/src/MantlePlace.Revit.Addin", "shim windows");
+exitCode |= AboutPageTests.Run();
+exitCode |= SharedWindowsTests.Run();
+exitCode |= ShimWindowTests.Run(SharedWindowsTests.SharedWindowsFolder, "shared windows' chrome");
 
 if (exitCode == 0)
 {
