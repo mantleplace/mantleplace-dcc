@@ -62,7 +62,8 @@ MPB is a **specified format**, and a release of it is three artifacts published 
 
 That means a second implementer is possible, and welcome. If you write a third-party consumer,
 [`spec/`](spec/) is the document and the corpus is the test you can run against it — neither
-requires reading a line of our plugin code.
+requires reading a line of our plugin code. To build a plugin or a reader for a new host, start from
+[Building a reader for MPB 3.0](docs/building-a-reader-for-mpb-3.md).
 
 ## Install a built plugin
 
