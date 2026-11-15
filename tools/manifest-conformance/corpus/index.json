@@ -13,7 +13,7 @@
     "Case fields:",
     "  id              stable, dotted, never renumbered — host suites name it in failures.",
     "  group           manifest | vault | auth | cache | digest | projection | bundle |",
-    "                  platform | client.",
+    "                  reader | platform | client.",
     "  file            path relative to corpus/.",
     "  expect          accept  — the parser MUST accept and produce `expectations`.",
     "                  reject  — the parser MUST refuse; `errorContains` if the message matters.",
@@ -2676,6 +2676,112 @@
           "catalog.entry-missing"
         ]
       }
+    },
+    {
+      "id": "bundle.v3FullMed",
+      "group": "bundle",
+      "file": "bundle/v3-full-med.json",
+      "expect": "accept",
+      "reason": "The Med download of the same 3.0 bundle (format.md §8): the same sixty-nine names and paths, the level stated once as Med, every host-ready file built coarser and every georeferenced file the Max bytes. A level is never in a name, so nothing but the manifest's one statement tells a validator which download it holds.",
+      "expectations": {
+        "hashesVerified": 68
+      }
+    },
+    {
+      "id": "bundle.v3FullMin",
+      "group": "bundle",
+      "file": "bundle/v3-full-min.json",
+      "expect": "accept",
+      "reason": "The Min download of the same 3.0 bundle (format.md §8): the Max names at the third level, stated once as Min.",
+      "expectations": {
+        "hashesVerified": 68
+      }
+    },
+    {
+      "id": "bundle.v3RecordsNotHeld",
+      "group": "bundle",
+      "file": "bundle/v3-records-not-held.json",
+      "expect": "accept",
+      "reason": "A Max download of an AOI with no records that lists the twenty `Records` files it does not hold, each with its reason (format.md §9.6). A file the download does not hold is listed as not held, so its absence is no refusal.",
+      "expectations": {
+        "hashesVerified": 48
+      }
+    },
+    {
+      "id": "bundle.majorAhead",
+      "group": "bundle",
+      "file": "bundle/major-ahead.json",
+      "expect": "reject",
+      "reason": "A manifest at the root that declares a major no schema is published for. The validator reads the version and nothing else of it (format.md §14), and nothing could vouch for the manifest.",
+      "expectations": {
+        "errors": [
+          "schema.version-unpublished"
+        ]
+      }
+    },
+    {
+      "id": "reader.v3FullMax",
+      "group": "reader",
+      "file": "reader/v3-full-max.json",
+      "expect": "accept",
+      "reason": "What a reader finds in the Max download of a 3.0 bundle: every file of the file table, found by its catalog name, with its family, its frame and the count the catalog states. The answer every reader of 3.x gives, in one language-neutral place, so three readers do not each read 3.0 a little differently."
+    },
+    {
+      "id": "reader.v3FullMed",
+      "group": "reader",
+      "file": "reader/v3-full-med.json",
+      "expect": "accept",
+      "reason": "The same files at Med: the level is the manifest's one statement, and a host-ready file's stated count is the Med one while a georeferenced file's is the Max one. A reader that derived a count, or took the level from a name, gets this wrong."
+    },
+    {
+      "id": "reader.v3FullMin",
+      "group": "reader",
+      "file": "reader/v3-full-min.json",
+      "expect": "accept",
+      "reason": "The same files at Min: the third level, and the counts the Min files state."
+    },
+    {
+      "id": "reader.v3RecordsNotHeld",
+      "group": "reader",
+      "file": "reader/v3-records-not-held.json",
+      "expect": "accept",
+      "reason": "A bundle missing a whole optional subject. The reader finds what is held, reports each file the manifest lists as not held with the stated reason as written, and does not fail on an absent file (format.md §9.6)."
+    },
+    {
+      "id": "reader.v3MedWithoutRecords",
+      "group": "reader",
+      "file": "reader/v3-med-without-records.json",
+      "expect": "accept",
+      "reason": "A small Med bundle whose manifest states no counts and lists no file as not held: a reader reports only what the manifest states, so every count is null and nothing is skipped."
+    },
+    {
+      "id": "reader.v3MinorFileUnknown",
+      "group": "reader",
+      "file": "reader/v3-minor-file-unknown.json",
+      "expect": "accept",
+      "reason": "A 3.x minor may add a file, and a reader of 3.0 finds it by its catalog name instead of refusing the bundle for it (compatibility.md §3)."
+    },
+    {
+      "id": "reader.v3CatalogFileMissing",
+      "group": "reader",
+      "file": "reader/v3-catalog-file-missing.json",
+      "expect": "accept",
+      "reason": "A catalog name with no file in the download is reported as skipped and is never fatal: the bundle a validator refuses is a bundle a reader still reads, finding every file that is there."
+    },
+    {
+      "id": "reader.v2Full",
+      "group": "reader",
+      "file": "reader/v2-full.json",
+      "expect": "accept",
+      "reason": "A manifest at the 2.x location. The same runner reads a 2.x bundle: the manifest is found where the bundle's major keeps it (compatibility.md §1), a file's family and frame come from its own frame statement, and a 2.x manifest states no level and no count."
+    },
+    {
+      "id": "reader.majorAhead",
+      "group": "reader",
+      "file": "reader/major-ahead.json",
+      "expect": "reject",
+      "reason": "A major above any the reader supports is refused gracefully, before a file is extracted (format.md §14, compatibility.md §3). The version the reader read from `Manifest.json` is the one value it must have read before it refused (HPS-37), and the message names it.",
+      "errorContains": "99.0.0"
     },
     {
       "id": "platform.quote.public",

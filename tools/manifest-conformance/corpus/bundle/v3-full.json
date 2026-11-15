@@ -14,7 +14,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "7b42ac5bf115dd755887b6b0437eef3638e826524679b25e8a6a7a9cc7be4227"
+          "sha256": "7b42ac5bf115dd755887b6b0437eef3638e826524679b25e8a6a7a9cc7be4227",
+          "count": 1048576
         },
         "Basemap/Basemap.tif": {
           "odbl_role": "produced-work",
@@ -25,7 +26,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "7b58054efa758cda4199f7e56266d845c069e4982530eddc9be2bc3e90ec8aa5"
+          "sha256": "7b58054efa758cda4199f7e56266d845c069e4982530eddc9be2bc3e90ec8aa5",
+          "count": 1048576
         },
         "Basemap/Basemap.usdz": {
           "odbl_role": "database",
@@ -36,7 +38,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "a4d3d43e641f6d4554f9a478a72b8add37c33e3ab9631ae4080d0da030a0dddf"
+          "sha256": "a4d3d43e641f6d4554f9a478a72b8add37c33e3ab9631ae4080d0da030a0dddf",
+          "count": 4000
         },
         "Basemap/Buildings.dxf": {
           "odbl_role": "database",
@@ -47,7 +50,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "effafad84f0fcb6c25f23229780181e2a758464e500ac61aa4d6c504512b2eea"
+          "sha256": "effafad84f0fcb6c25f23229780181e2a758464e500ac61aa4d6c504512b2eea",
+          "count": 120
         },
         "Basemap/Buildings.glb": {
           "odbl_role": "produced-work",
@@ -58,7 +62,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "ca817f43df0ff5ce0a31a0689cdc5d10e8f134032dff6703daa723ffdf03b2cd"
+          "sha256": "ca817f43df0ff5ce0a31a0689cdc5d10e8f134032dff6703daa723ffdf03b2cd",
+          "count": 90000
         },
         "Basemap/Buildings.gpkg": {
           "odbl_role": "database",
@@ -69,7 +74,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "f29b2a4a2d0635e2d8d401bb114f07b7766516c4a84b67cdc04b996544329567"
+          "sha256": "f29b2a4a2d0635e2d8d401bb114f07b7766516c4a84b67cdc04b996544329567",
+          "count": 120
         },
         "Basemap/Landuse.dxf": {
           "odbl_role": "database",
@@ -80,7 +86,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "0e0c1418605f83df5d1cefed2ba7ab23dda79b9b15dbd8c5a73725ad43f22869"
+          "sha256": "0e0c1418605f83df5d1cefed2ba7ab23dda79b9b15dbd8c5a73725ad43f22869",
+          "count": 120
         },
         "Basemap/Landuse.gpkg": {
           "odbl_role": "database",
@@ -91,7 +98,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "7c3ff790f1f6a01f65d4efcd7f2be0fdce4f3a04e7427b2add190c30e6cff84c"
+          "sha256": "7c3ff790f1f6a01f65d4efcd7f2be0fdce4f3a04e7427b2add190c30e6cff84c",
+          "count": 120
         },
         "Basemap/Pavement.dxf": {
           "odbl_role": "database",
@@ -102,7 +110,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "97a08cd2289e03f9bcd61474403fae31c8791a5933574e5d066437ecd758f9f8"
+          "sha256": "97a08cd2289e03f9bcd61474403fae31c8791a5933574e5d066437ecd758f9f8",
+          "count": 120
         },
         "Basemap/Pavement.gpkg": {
           "odbl_role": "database",
@@ -113,7 +122,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "cdc2a40829ab0a52b2750301c4b591b1291cc88c81dc7414b25b7ad0cdfd1efa"
+          "sha256": "cdc2a40829ab0a52b2750301c4b591b1291cc88c81dc7414b25b7ad0cdfd1efa",
+          "count": 120
         },
         "Basemap/Roads.csv": {
           "odbl_role": "database",
@@ -124,7 +134,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "72a91680a519703e833a21790e2c23ffbd3ac529197bef1a245000ba70243fb9"
+          "sha256": "72a91680a519703e833a21790e2c23ffbd3ac529197bef1a245000ba70243fb9",
+          "count": 1600
         },
         "Basemap/Roads.dxf": {
           "odbl_role": "database",
@@ -135,7 +146,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "e197d457e5288f7d13f6f531cee38fe0074ca860776f485125df74538f8fe889"
+          "sha256": "e197d457e5288f7d13f6f531cee38fe0074ca860776f485125df74538f8fe889",
+          "count": 120
         },
         "Basemap/Roads.gpkg": {
           "odbl_role": "database",
@@ -146,7 +158,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "2171729bd7b03bbd1b911c70d3f8f914516e9957ba654fc50c5f79239cfb369b"
+          "sha256": "2171729bd7b03bbd1b911c70d3f8f914516e9957ba654fc50c5f79239cfb369b",
+          "count": 120
         },
         "Basemap/Water.dxf": {
           "odbl_role": "database",
@@ -157,7 +170,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "a09640c43f06219a8159cfdd3681b04af2c704535572ecec87f0f39bbeced5da"
+          "sha256": "a09640c43f06219a8159cfdd3681b04af2c704535572ecec87f0f39bbeced5da",
+          "count": 120
         },
         "Basemap/Water.gpkg": {
           "odbl_role": "database",
@@ -168,73 +182,85 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "9dc66238508d491728d763ea39163c21f820b163bd22cab35affc427291f241e"
+          "sha256": "9dc66238508d491728d763ea39163c21f820b163bd22cab35affc427291f241e",
+          "count": 120
         },
         "Elevation/Aspect.tif": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "349368920042259724f269bb8d256c4e368bf4111c4329354f712d11cbfcef0c"
+          "sha256": "349368920042259724f269bb8d256c4e368bf4111c4329354f712d11cbfcef0c",
+          "count": 1048576
         },
         "Elevation/Contours.dxf": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "b50ac3d501313963cdeb12c46d53e8d540f23af901f93cf6131724a0c93679f2"
+          "sha256": "b50ac3d501313963cdeb12c46d53e8d540f23af901f93cf6131724a0c93679f2",
+          "count": 340
         },
         "Elevation/Elevation.png": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "c7c846f083cb9193546622f1604c59bbdc2bdb9f52560b9e2333656a3571c82e"
+          "sha256": "c7c846f083cb9193546622f1604c59bbdc2bdb9f52560b9e2333656a3571c82e",
+          "count": 1018081
         },
         "Elevation/Elevation.tif": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "a41a33831d5d6f62628da2c49589d4eda038e1966392b836d6a872bf586f73a9"
+          "sha256": "a41a33831d5d6f62628da2c49589d4eda038e1966392b836d6a872bf586f73a9",
+          "count": 1048576
         },
         "Elevation/Hillshade.tif": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "e4e181248807d5751c4d644a00d0905fbbf3ffc44d41eacfbbd41d7c0e0ae471"
+          "sha256": "e4e181248807d5751c4d644a00d0905fbbf3ffc44d41eacfbbd41d7c0e0ae471",
+          "count": 1048576
         },
         "Elevation/Slope.dxf": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "84cbe495ec37644b8ed215a902cbe07d6d584407e8e9b56038e46fab12b919e1"
+          "sha256": "84cbe495ec37644b8ed215a902cbe07d6d584407e8e9b56038e46fab12b919e1",
+          "count": 120
         },
         "Elevation/Slope.gpkg": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "37a8d0623a8f38bfb447bb42c9f694fb7ecce07d42bb2f5780fc4701654f7ff0"
+          "sha256": "37a8d0623a8f38bfb447bb42c9f694fb7ecce07d42bb2f5780fc4701654f7ff0",
+          "count": 120
         },
         "Elevation/Slope.tif": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "6e48ba326e4c1ab8daf20390bce8c19174aa1aff202770b9c7654135fa2fa01b"
+          "sha256": "6e48ba326e4c1ab8daf20390bce8c19174aa1aff202770b9c7654135fa2fa01b",
+          "count": 1048576
         },
         "Elevation/Terrain.dxf": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "2ae9ac3df295da9cfe416839392f8c6d3f243049102e35614d084c2f1bec33b1"
+          "sha256": "2ae9ac3df295da9cfe416839392f8c6d3f243049102e35614d084c2f1bec33b1",
+          "count": 200000
         },
         "Elevation/Terrain.glb": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "6baa2abd3b49926b9cdad8f74f3cfa699d2ca9e0e50876c6182dd7db0947d37e"
+          "sha256": "6baa2abd3b49926b9cdad8f74f3cfa699d2ca9e0e50876c6182dd7db0947d37e",
+          "count": 200000
         },
         "Elevation/Terrain.landxml": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "f5088beee417439ad755c508b36ca730fa8f68308454d68e5e5b1c8a104125ff"
+          "sha256": "f5088beee417439ad755c508b36ca730fa8f68308454d68e5e5b1c8a104125ff",
+          "count": 200000
         },
         "Elevation/Terrain.mtl": {
           "odbl_role": "none",
@@ -246,55 +272,64 @@
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "2d79bc4fbdf34ddf8f02adaa02022c6646ad335e4a5139840d73e8374ba8f6d3"
+          "sha256": "2d79bc4fbdf34ddf8f02adaa02022c6646ad335e4a5139840d73e8374ba8f6d3",
+          "count": 200000
         },
         "Imagery/Imagery.png": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "fed42011b553e882dd6fed0618b5c2804152ec0cdedde51fab6a20dd79d0d90f"
+          "sha256": "fed42011b553e882dd6fed0618b5c2804152ec0cdedde51fab6a20dd79d0d90f",
+          "count": 1048576
         },
         "Imagery/Imagery.tif": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "c6c1427e00117c772bc9eec1e919eb7407f941d796bfca2592e99e3b34f21c2f"
+          "sha256": "c6c1427e00117c772bc9eec1e919eb7407f941d796bfca2592e99e3b34f21c2f",
+          "count": 1048576
         },
         "Landcover/Canopy.tif": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "444cd8316e164737619f6e99927ecca1fb063c42e7fbac41ec442995346d5ed3"
+          "sha256": "444cd8316e164737619f6e99927ecca1fb063c42e7fbac41ec442995346d5ed3",
+          "count": 1048576
         },
         "Landcover/Landcover.dxf": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "7f1b4bdd5bc13eed9bda28001a7f31f26bc0c0352b795054fabcf8e5a400000d"
+          "sha256": "7f1b4bdd5bc13eed9bda28001a7f31f26bc0c0352b795054fabcf8e5a400000d",
+          "count": 120
         },
         "Landcover/Landcover.gpkg": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "d4fa16fd189735d9c858912081631b0891d7e190fb968d3b923234be37861e34"
+          "sha256": "d4fa16fd189735d9c858912081631b0891d7e190fb968d3b923234be37861e34",
+          "count": 120
         },
         "Landcover/Landcover.tif": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "23c2ceedcb89fae0b2b1304d2407378bba6ff83ede704e93fe3eda4059ef607e"
+          "sha256": "23c2ceedcb89fae0b2b1304d2407378bba6ff83ede704e93fe3eda4059ef607e",
+          "count": 1048576
         },
         "Landcover/Trees.csv": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "2ad84e2b17222d5a6a8b2b1d168eeaac1c1faf7fa2f8ae43d971796db133c87b"
+          "sha256": "2ad84e2b17222d5a6a8b2b1d168eeaac1c1faf7fa2f8ae43d971796db133c87b",
+          "count": 5000
         },
         "Landcover/Trees.gpkg": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "5784d46a1dc940b58bcf1eb11ead526cb77b2eef896951bcf1d7a61b018f8793"
+          "sha256": "5784d46a1dc940b58bcf1eb11ead526cb77b2eef896951bcf1d7a61b018f8793",
+          "count": 5000
         },
         "Manifest.json": {
           "odbl_role": "none",
@@ -305,49 +340,57 @@
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "c4da1bb9758a4847ee9fea3393c8632e12bfb7f5d6928d15977694aa45dcf8da"
+          "sha256": "c4da1bb9758a4847ee9fea3393c8632e12bfb7f5d6928d15977694aa45dcf8da",
+          "count": 1048576
         },
         "Materials/Dirt.png": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "94fe87b7f32f608fe137f251bd7e6e3417bc4742513d95f7dbbe6431e3a0d3ed"
+          "sha256": "94fe87b7f32f608fe137f251bd7e6e3417bc4742513d95f7dbbe6431e3a0d3ed",
+          "count": 1048576
         },
         "Materials/Forest.png": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "fcf134581e2e18b792d39a050d087180bacf766a04ff8ea2f07d16767c058b63"
+          "sha256": "fcf134581e2e18b792d39a050d087180bacf766a04ff8ea2f07d16767c058b63",
+          "count": 1048576
         },
         "Materials/Grass.png": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "cb6ae5da425df447474b91997622d0d36d31c63c6313d69ecf8b06d55cd62773"
+          "sha256": "cb6ae5da425df447474b91997622d0d36d31c63c6313d69ecf8b06d55cd62773",
+          "count": 1048576
         },
         "Materials/Rock.png": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "041f4da631337b16185fd2d850b8b6fba950685f3818a523f13ce9a8786aebba"
+          "sha256": "041f4da631337b16185fd2d850b8b6fba950685f3818a523f13ce9a8786aebba",
+          "count": 1048576
         },
         "Materials/Sand.png": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "15ad10e1e86649cb18213eab41d55df8a2c88e285593dd6178420eda13194b8f"
+          "sha256": "15ad10e1e86649cb18213eab41d55df8a2c88e285593dd6178420eda13194b8f",
+          "count": 1048576
         },
         "Materials/Snow.png": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "7dc21be66375fc87c9782ce8b91edfa319bfe1bd802b6bc7cc9fc1377dd404ea"
+          "sha256": "7dc21be66375fc87c9782ce8b91edfa319bfe1bd802b6bc7cc9fc1377dd404ea",
+          "count": 1048576
         },
         "Materials/Water.png": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "9764ef811073bf507e8c3037211cd9c08da76e947b01206bf67407c6516d12b9"
+          "sha256": "9764ef811073bf507e8c3037211cd9c08da76e947b01206bf67407c6516d12b9",
+          "count": 1048576
         },
         "Readme.md": {
           "odbl_role": "none",
@@ -364,7 +407,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "c793d05ed7f54f58003c15ef6ef45c024636d27a5c229dc905916f10c94a9779"
+          "sha256": "c793d05ed7f54f58003c15ef6ef45c024636d27a5c229dc905916f10c94a9779",
+          "count": 120
         },
         "Records/Conservation.gpkg": {
           "odbl_role": "none",
@@ -375,7 +419,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "c036d0e2a397edbb955e0130357e8973cc3d4ad1cdf33a226922eac9bc0425f3"
+          "sha256": "c036d0e2a397edbb955e0130357e8973cc3d4ad1cdf33a226922eac9bc0425f3",
+          "count": 120
         },
         "Records/Contamination.dxf": {
           "odbl_role": "none",
@@ -386,7 +431,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "eca04a1f7ad982304e1d105a5fdce22cf4c226d13292656b331c39b363b2db9e"
+          "sha256": "eca04a1f7ad982304e1d105a5fdce22cf4c226d13292656b331c39b363b2db9e",
+          "count": 120
         },
         "Records/Contamination.gpkg": {
           "odbl_role": "none",
@@ -397,7 +443,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "7513fae680bb33f54455ec7266926d2d3b05d7db38444b18a070074eb9c1ff34"
+          "sha256": "7513fae680bb33f54455ec7266926d2d3b05d7db38444b18a070074eb9c1ff34",
+          "count": 120
         },
         "Records/Floodplain.dxf": {
           "odbl_role": "none",
@@ -408,7 +455,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "5ccc68db20c98d5a22c8ac8c6f593fb41d67495cfd03052117f266a86160be6b"
+          "sha256": "5ccc68db20c98d5a22c8ac8c6f593fb41d67495cfd03052117f266a86160be6b",
+          "count": 120
         },
         "Records/Floodplain.gpkg": {
           "odbl_role": "none",
@@ -419,7 +467,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "a6ec1e01a80f629eb0040f05a9ec28c321d3e08a67bcb7f25527652bc46c153c"
+          "sha256": "a6ec1e01a80f629eb0040f05a9ec28c321d3e08a67bcb7f25527652bc46c153c",
+          "count": 120
         },
         "Records/Habitat.dxf": {
           "odbl_role": "none",
@@ -430,7 +479,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "4dc9b6d56cb60977a56b84928fcb2358b098dc9cc02516316272b607de461b4b"
+          "sha256": "4dc9b6d56cb60977a56b84928fcb2358b098dc9cc02516316272b607de461b4b",
+          "count": 120
         },
         "Records/Habitat.gpkg": {
           "odbl_role": "none",
@@ -441,7 +491,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "3e6762afb20e618060e66ca06ff2606516d24dfb6ec26cd3dbd38e6e6a20e877"
+          "sha256": "3e6762afb20e618060e66ca06ff2606516d24dfb6ec26cd3dbd38e6e6a20e877",
+          "count": 120
         },
         "Records/Heritage.dxf": {
           "odbl_role": "none",
@@ -452,7 +503,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "1a9473805ab78c4df281cefec6e226688448b08bea8a6af839e9dc6544d81e27"
+          "sha256": "1a9473805ab78c4df281cefec6e226688448b08bea8a6af839e9dc6544d81e27",
+          "count": 120
         },
         "Records/Heritage.gpkg": {
           "odbl_role": "none",
@@ -463,7 +515,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "77949ae5cb8999824679d45b4431ee33a64e2292582b0f3145553954d69956a1"
+          "sha256": "77949ae5cb8999824679d45b4431ee33a64e2292582b0f3145553954d69956a1",
+          "count": 120
         },
         "Records/Hydrography.dxf": {
           "odbl_role": "none",
@@ -474,7 +527,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "ad13879464ebe11233055bd096e224b5723d5762b11d2f1752f0307bbb751feb"
+          "sha256": "ad13879464ebe11233055bd096e224b5723d5762b11d2f1752f0307bbb751feb",
+          "count": 120
         },
         "Records/Hydrography.gpkg": {
           "odbl_role": "none",
@@ -485,7 +539,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "b4c108fa5fc9246c6b36fd3dbb2167346d3e278b9be5689e1b471289d9b34a6c"
+          "sha256": "b4c108fa5fc9246c6b36fd3dbb2167346d3e278b9be5689e1b471289d9b34a6c",
+          "count": 120
         },
         "Records/Parcels.dxf": {
           "odbl_role": "none",
@@ -496,7 +551,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "671fe398d04a41a956b4da447e4db18c2583197c74b9f2cff6063faca21e4c3e"
+          "sha256": "671fe398d04a41a956b4da447e4db18c2583197c74b9f2cff6063faca21e4c3e",
+          "count": 120
         },
         "Records/Parcels.gpkg": {
           "odbl_role": "none",
@@ -507,7 +563,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "e42f6fd20c170b64e7059efee9b933416b8555da69c6aade3c91ab34d6eef863"
+          "sha256": "e42f6fd20c170b64e7059efee9b933416b8555da69c6aade3c91ab34d6eef863",
+          "count": 120
         },
         "Records/Soils.dxf": {
           "odbl_role": "none",
@@ -518,7 +575,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "9c505cfd00bc41e2c2c4211bb2fcc3ffda9eeb84cacbc1ae09442dda45f688b0"
+          "sha256": "9c505cfd00bc41e2c2c4211bb2fcc3ffda9eeb84cacbc1ae09442dda45f688b0",
+          "count": 120
         },
         "Records/Soils.gpkg": {
           "odbl_role": "none",
@@ -529,7 +587,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "4e933bfa3d55fbbf3122fe4cd1f6da9764e1d47522d658204c863ebb83686cac"
+          "sha256": "4e933bfa3d55fbbf3122fe4cd1f6da9764e1d47522d658204c863ebb83686cac",
+          "count": 120
         },
         "Records/Wetlands.dxf": {
           "odbl_role": "none",
@@ -540,7 +599,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "769a8c25cff419623680cb5bda2059dc689fa14dd4f3a0cd665ec0158835c3ae"
+          "sha256": "769a8c25cff419623680cb5bda2059dc689fa14dd4f3a0cd665ec0158835c3ae",
+          "count": 120
         },
         "Records/Wetlands.gpkg": {
           "odbl_role": "none",
@@ -551,7 +611,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "47c524314e7ee03cbda74495267e7149868d10ca98877f2f062117c0d7999a0c"
+          "sha256": "47c524314e7ee03cbda74495267e7149868d10ca98877f2f062117c0d7999a0c",
+          "count": 120
         },
         "Records/Zoning.dxf": {
           "odbl_role": "none",
@@ -562,7 +623,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "327c25a66bd710a990d0dfee9389e137bcc9afb9227509b8b1c1d147b8f9897a"
+          "sha256": "327c25a66bd710a990d0dfee9389e137bcc9afb9227509b8b1c1d147b8f9897a",
+          "count": 120
         },
         "Records/Zoning.gpkg": {
           "odbl_role": "none",
@@ -573,7 +635,8 @@
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
           ],
-          "sha256": "fc0575a5aaebd3376c3650d1d5b35e5bff7a41abae67ff685ac42a0a2248e07b"
+          "sha256": "fc0575a5aaebd3376c3650d1d5b35e5bff7a41abae67ff685ac42a0a2248e07b",
+          "count": 120
         },
         "Site/Site.dxf": {
           "odbl_role": "database",
@@ -584,13 +647,15 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "e236e4aa8b0e7cc2c641456cffe6b4e0ac3b20621f6c67fb7d926f880075343e"
+          "sha256": "e236e4aa8b0e7cc2c641456cffe6b4e0ac3b20621f6c67fb7d926f880075343e",
+          "count": 4000
         },
         "Site/Site.ifc": {
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [],
-          "sha256": "5bdad9ecfc6e29bee34ace4569c9f0f537d9e32f475ef7184568e5e5a76c721a"
+          "sha256": "5bdad9ecfc6e29bee34ace4569c9f0f537d9e32f475ef7184568e5e5a76c721a",
+          "count": 4000
         },
         "Site/Site.usdz": {
           "odbl_role": "produced-work",
@@ -601,7 +666,8 @@
               "license": "ODbL-1.0"
             }
           ],
-          "sha256": "895bec4605940ecf12ca42aa4c017200e49680df88596340a27c783cd460d47d"
+          "sha256": "895bec4605940ecf12ca42aa4c017200e49680df88596340a27c783cd460d47d",
+          "count": 320000
         }
       }
     },

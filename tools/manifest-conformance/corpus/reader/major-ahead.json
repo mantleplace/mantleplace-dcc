@@ -1,0 +1,14 @@
+{
+  "$comment": "A manifest of a major above any this reader supports. The reader reads `Manifest.json` at the root, parses the version and nothing else, and refuses before it extracts a file (format.md §14): the version it read is the one thing it reports, and it finds and skips no file.",
+  "bundle": "bundle/major-ahead.json",
+  "result": {
+    "outcome": "refused",
+    "major": 99,
+    "version": "99.0.0",
+    "manifestPath": "Manifest.json",
+    "level": null,
+    "refusal": "major-ahead",
+    "files": [],
+    "skipped": []
+  }
+}

@@ -72,6 +72,7 @@ import urllib.request
 from pathlib import Path
 
 import platform_cases
+import reader_cases
 
 SCHEMA_BASE_URL = "https://mantle.place/.well-known/schemas/bundle-manifest"
 SCHEMA_URL = SCHEMA_BASE_URL + "/{version}.json"
@@ -118,7 +119,7 @@ _PLANNED_HOSTS: frozenset[str] = frozenset()
 #: The documented corpus groups. A typo'd group silently excludes a case from every host suite
 #: that dispatches on it, so it is checked rather than trusted.
 _CORPUS_GROUPS = frozenset({"manifest", "vault", "auth", "cache", "digest", "projection", "bundle",
-                            *platform_cases.PLATFORM_GROUPS})
+                            reader_cases.READER_GROUP, *platform_cases.PLATFORM_GROUPS})
 
 #: Every host entry must carry these. A host that omits one is a silent hole in the gate, so this
 #: is checked before anything is fetched.
@@ -460,6 +461,9 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
                 "`python shared/tools/platform-api/sync_platform_api.py`, re-check the platform and "
                 "client cases against it, and raise the records."
             )
+
+    # The reader cases are held to their shape and to the bundle each one is the answer for.
+    failures.extend(reader_cases.check_reader_cases(raw_cases, _CORPUS))
 
     if entries is not None:
         # Never record a baseline from a corpus that does not pass its own integrity checks: a
