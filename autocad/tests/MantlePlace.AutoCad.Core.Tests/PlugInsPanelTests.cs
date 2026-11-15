@@ -34,6 +34,12 @@ internal static class PlugInsPanelTests
             run.Equal(names.Distinct(StringComparer.Ordinal).Count(), names.Length, "none twice");
         });
 
+        run.Case("the buttons read HPS-51's words, in the order HPS-57 lists them", () =>
+            run.Equal(
+                string.Join(",", PlugInsPanel.Commands.Select(command => command.Label)),
+                "Sign In,Sign Out,Vault,Import Bundle,About Mantle Place,Send Feedback",
+                "Import Bundle after Vault and before About Mantle Place"));
+
         run.Case("each command has a label, a tooltip and a help topic of its own", () =>
         {
             foreach (PanelCommand command in PlugInsPanel.Commands)

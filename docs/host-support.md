@@ -91,14 +91,14 @@ come from; this table never restates one.
 | 2. List the vault (`HPS-18`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 3. Choose a level (`HPS-59`) | planned for the 3.0 reader release | planned for the 3.0 reader release | planned for the 3.0 reader release | planned for the 3.0 reader release |
 | 4. Download (`HPS-18`, `HPS-26`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
-| 5. Import, through the import window (`HPS-60`) | planned for the 3.0 reader release; **named gap: its import window has no per-layer checklist** | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
+| 5. Import, through the import window (`HPS-60`) | planned for the 3.0 reader release; **named gap: its import window has no per-layer checklist** | supported | not shipped — no `autocad` release yet; **named gap: its import window has no per-layer checklist** | not shipped — no `autocad` release yet; **named gap: its import window has no per-layer checklist** |
 | 6. Import a zip from disk, with no account (`HPS-61`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 7. Refuse a version out of range (`HPS-31`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 8a. Show credits (`HPS-62`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
 | 8b. Show notices (`HPS-62`) | planned for the 3.0 reader release | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 9. Import again (`HPS-63`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
 
-Unreal's import window, when it comes, has **no per-layer checklist**: the curator imports what the
+Unreal's import window, when it comes, and AutoCAD's have **no per-layer checklist**: the curator imports what the
 bundle holds and cannot leave a layer out beforehand. That is the one named gap against the core, and it
 is a gap in the window and not in the core, because a per-layer checklist is host-only (below). The
 two halves of action 8 are separate rows because hosts have them separately. The AutoCAD and Civil 3D columns are one plugin; they differ

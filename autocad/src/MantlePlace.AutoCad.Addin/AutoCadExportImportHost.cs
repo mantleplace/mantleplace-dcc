@@ -11,29 +11,27 @@ namespace MantlePlace.AutoCad.Addin;
 /// <remarks>
 /// <para>
 /// ⛔ <b>Both calls arrive off AutoCAD's thread</b>, from the connected host's lock, and neither waits
-/// on AutoCAD: the one slot is a field set under a lock, and the window is posted to the UI thread
-/// (<see cref="MantlePlaceApplication.OnUiThread"/>). What happens to the window comes back through
+/// on AutoCAD: the one slot is a field set under a lock, and the import is posted to the UI thread
+/// (<see cref="MantlePlaceApplication.OnUiThread"/>). What happens to it comes back through
 /// <see cref="MantlePlaceApplication.Connected"/>.
 /// </para>
 /// <para>
-/// Revit opens an import window here. This opens <see cref="ReceivedExportWindow"/>, which says the
-/// bundle arrived and was checked; its Import button places the order in the active drawing
-/// (<see cref="OrderImporter"/>), and the web hears the import begin and end. Closing the window before
-/// the press ends the export as the web's <c>cancelled</c>, the same ending as a Revit user closing the
-/// import window before pressing Import.
+/// A send opens the shared import window, as it does in Revit (<see cref="WindowedImport"/>, <c>HPS-60</c>).
+/// AutoCAD offers no per-layer choice, so there is no checklist to wait on: the import begins as the window
+/// opens, the web hears it open and begin, and Cancel stops it between steps, which the web hears as
+/// cancelled. While another import runs, from disk or from an earlier send, the export waits its turn.
 /// </para>
 /// </remarks>
 internal sealed class AutoCadExportImportHost : IExportImportHost
 {
     private readonly object _gate = new();
     private string? _holding;
-    private ReceivedExportWindow? _window;
 
     public bool RequestOpen(HostExport export, string zipPath)
     {
         lock (_gate)
         {
-            if (_holding is not null)
+            if (_holding is not null || WindowedImport.IsRunning)
             {
                 return false;
             }
@@ -45,100 +43,67 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
         return true;
     }
 
-    public void Close(string exportId) => MantlePlaceApplication.OnUiThread(() =>
+    /// <summary>
+    /// The web asked for this export's window to close. There is no checklist to close it from: the import
+    /// began as the window opened, and a running import is left alone, as Revit leaves one.
+    /// </summary>
+    public void Close(string exportId)
     {
-        if (_window is { } window && string.Equals(window.ExportId, exportId, StringComparison.Ordinal))
-        {
-            // The web cancelled it: the window goes, and what the closing reports is a no-op to the
-            // desk, which has already moved the export on.
-            window.Close();
-        }
-    });
+    }
 
     /// <summary>On AutoCAD's UI thread.</summary>
     private void Open(HostExport export, string zipPath)
     {
         ConnectedHostService? connected = MantlePlaceApplication.Connected;
+
+        if (Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.MdiActiveDocument is not { } document)
+        {
+            Release();
+            connected?.ImportRefused(export.Id, ExportReasons.WindowFailed, "AutoCAD has no drawing open to import into. Nothing was imported.");
+            connected?.TurnFree();
+            return;
+        }
+
+        string? refusal;
+        bool started;
         try
         {
-            ReceivedExportWindow window = new(export, zipPath, MantlePlaceApplication.MainWindowHandle());
-            bool began = false;
-            window.ImportRequested += (_, _) =>
-            {
-                began = true;
-                RunImport(export, zipPath, window, connected);
-            };
-            window.Closed += (_, _) =>
-            {
-                _window = null;
-                lock (_gate)
+            started = WindowedImport.Start(
+                document,
+                zipPath,
+                end =>
                 {
-                    _holding = null;
-                }
-
-                // After an import the web has heard how it ended; before one, this is the window going
-                // before an import started.
-                if (!began)
-                {
-                    connected?.ImportEnded(export.Id, ImportEnding.DismissedBeforeStart, string.Empty);
-                }
-
-                connected?.TurnFree();
-            };
-
-            _window = window;
-            window.Show();
-            MantlePlaceApplication.Say(ExportReceipt.Describe(export, zipPath));
-            connected?.ImportOpened(export.Id);
+                    Release();
+                    connected?.ImportEnded(export.Id, end.Ending, end.Ending == ImportEnding.Imported ? string.Empty : end.Summary);
+                },
+                out refusal);
         }
 #pragma warning disable CA1031 // A window that will not open must be reported to the web, not left to hang the export.
         catch (Exception ex)
 #pragma warning restore CA1031
         {
-            _window = null;
-            lock (_gate)
-            {
-                _holding = null;
-            }
-
-            connected?.ImportRefused(export.Id, ExportReasons.WindowFailed, $"AutoCAD could not open the window for this export ({ex.Message}).");
-            connected?.TurnFree();
+            started = false;
+            refusal = $"AutoCAD could not open the window for this export ({ex.Message}).";
         }
-    }
 
-    /// <summary>On AutoCAD's UI thread: the one press. The window shows what happened, and so does the web.</summary>
-    private static void RunImport(HostExport export, string zipPath, ReceivedExportWindow window, ConnectedHostService? connected)
-    {
-        connected?.ImportBegan(export.Id);
-
-        if (Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.MdiActiveDocument is not { } document)
+        if (!started)
         {
-            const string NoDrawing = "AutoCAD has no drawing open to import into. Nothing was imported.";
-            window.ShowOutcome(NoDrawing);
-            connected?.ImportEnded(export.Id, ImportEnding.Failed, NoDrawing);
+            Release();
+            connected?.ImportRefused(export.Id, ExportReasons.WindowFailed, refusal ?? "AutoCAD could not open the window for this export.");
+            connected?.TurnFree();
             return;
         }
 
-        try
-        {
-            PresenceVerdict presence = Presence.Decide(HostObservations.Observe());
-            OrderImportResult result = OrderImporter.Import(document, zipPath, presence);
+        MantlePlaceApplication.Say(ExportReceipt.Describe(export, zipPath));
+        connected?.ImportOpened(export.Id);
+        connected?.ImportBegan(export.Id);
+    }
 
-            window.ShowOutcome(result.Summary);
-            MantlePlaceApplication.Say(result.Summary);
-            connected?.ImportEnded(
-                export.Id,
-                result.PlacedAnything ? ImportEnding.Imported : ImportEnding.Failed,
-                result.PlacedAnything ? string.Empty : result.Summary);
-        }
-#pragma warning disable CA1031 // An import that throws is reported to the user and the web, never left to take AutoCAD down.
-        catch (Exception ex)
-#pragma warning restore CA1031
+    private void Release()
+    {
+        lock (_gate)
         {
-            string failed = $"The import stopped on an error: {ex.Message}. What it placed before the error stays in the drawing.";
-            window.ShowOutcome(failed);
-            connected?.ImportEnded(export.Id, ImportEnding.Failed, failed);
-            MantlePlaceApplication.SayFault(ex);
+            _holding = null;
         }
     }
 }

@@ -8,11 +8,11 @@ using MantlePlace.Core;
 
 namespace MantlePlace.AutoCad.Addin;
 
-/// <summary>What one press did: the plan, the text that says what happened, and whether anything went in.</summary>
+/// <summary>What an import did: the plan, the text that says what happened, and whether anything went in.</summary>
 internal sealed record OrderImportResult(AutoCadImportPlan Plan, string Summary, bool PlacedAnything);
 
 /// <summary>
-/// Places a planned order in a drawing: the shell half of <see cref="AutoCadImportPlanner"/>.
+/// Places a planned order in a drawing, one step at a time: the shell half of <see cref="AutoCadImportPlanner"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -22,10 +22,13 @@ internal sealed record OrderImportResult(AutoCadImportPlan Plan, string Summary,
 /// this client thin). The degrees-to-radians step is AutoCAD's API taking an angle, not a placement value.
 /// </para>
 /// <para>
-/// <b>Everything is checked before anything is drawn</b> (HPS-26): each placed part's file is found and
-/// its bytes matched to its published digest first, and a mismatch refuses the whole import with nothing
-/// in the drawing. The aerial goes in before the contours so the linework draws over the image, and the
-/// public-record layers and the site linework go in last, over both.
+/// <b>Everything is checked before anything is drawn</b> (HPS-26): <see cref="Verify"/>, the run's first
+/// step, finds each placed part's file and matches its bytes to its published digest, and a mismatch
+/// refuses the whole import with nothing in the drawing. Each part is then one step
+/// (<see cref="Place"/>), one transaction, which is what lets the import window's Cancel stop the run
+/// between parts and never inside one (<see cref="AutoCadImportRun"/>, <c>HPS-60</c>). The aerial goes in
+/// before the contours so the linework draws over the image, and the public-record layers and the site
+/// linework go in last, over both.
 /// </para>
 /// <para>
 /// The aerial is an external reference, as every AutoCAD raster image is, so its file is extracted to the
@@ -40,57 +43,102 @@ internal sealed record OrderImportResult(AutoCadImportPlan Plan, string Summary,
 /// Civil 3D. A part that fails to load is the second case, not a crash.
 /// </para>
 /// </remarks>
-internal static class OrderImporter
+internal sealed class OrderImporter : IDisposable
 {
-    internal static OrderImportResult Import(Document document, string zipPath, PresenceVerdict presence)
+    private readonly Document _document;
+    private readonly LocalBundleArchive _archive;
+    private readonly Type? _civil3d;
+    private readonly Dictionary<AutoCadPart, string> _files = [];
+    private readonly List<(PlannedFile File, string Path)> _recordFiles = [];
+    private readonly Dictionary<AutoCadPart, string> _outcomes = [];
+    private string? _integrityRefusal;
+    private bool _placedAnything;
+
+    private OrderImporter(Document document, LocalBundleArchive archive, Type? civil3d, AutoCadImportPlan plan, string? deliveryLine)
+    {
+        _document = document;
+        _archive = archive;
+        _civil3d = civil3d;
+        Plan = plan;
+        DeliveryLine = deliveryLine;
+    }
+
+    /// <summary>The plan, not refused.</summary>
+    internal AutoCadImportPlan Plan { get; }
+
+    /// <summary>Whether the Civil 3D part is on, which is what builds the surface.</summary>
+    internal bool Civil3d => _civil3d is not null;
+
+    /// <summary>The order's unit system, linear unit and delivery CRS, for the import window's second line.</summary>
+    internal string? DeliveryLine { get; }
+
+    /// <summary>
+    /// Opens the zip, observes the drawing and plans the order, drawing nothing; or says why nothing will be
+    /// imported (<paramref name="refused"/>, and <c>null</c> returned).
+    /// </summary>
+    internal static OrderImporter? Prepare(Document document, string zipPath, PresenceVerdict presence, out OrderImportResult? refused)
     {
         // A received export and Import Bundle both open the zip here, so a file that is not a bundle is
         // refused in one set of words whichever way it came, before the drawing is read.
         if (!LocalBundleImport.TryOpen(zipPath, out LocalBundleArchive? opened, out string? refusal))
         {
-            AutoCadImportPlan notABundle = new() { Refusal = refusal };
-            return new OrderImportResult(notABundle, notABundle.Summary(), false);
+            refused = Refused(new AutoCadImportPlan { Refusal = refusal });
+            return null;
         }
 
-        using LocalBundleArchive archive = opened;
-        string manifestText = archive.ManifestText!;
-
-        Database database = document.Database;
-        Type? civil3d = Civil3dPartLoader.Load(presence, out _);
-        DrawingZone? zone = null;
-        if (civil3d is not null)
+        bool handedOver = false;
+        try
         {
-            try
+            Database database = document.Database;
+            Type? civil3d = Civil3dPartLoader.Load(presence, out _);
+            DrawingZone? zone = null;
+            if (civil3d is not null)
             {
-                zone = DrawingObservations.Zone(Civil3dPartLoader.ReadZoneCode(civil3d, database));
-            }
-#pragma warning disable CA1031 // A zone that cannot be read refuses the import; it never takes AutoCAD down.
-            catch (Exception ex)
-#pragma warning restore CA1031
-            {
-                AutoCadImportPlan unread = new()
+                try
                 {
-                    Refusal = $"Civil 3D could not say this drawing's coordinate zone ({ex.Message}), so it cannot be shown to be the order's. Nothing was imported.",
-                };
-                return new OrderImportResult(unread, unread.Summary(), false);
+                    zone = DrawingObservations.Zone(Civil3dPartLoader.ReadZoneCode(civil3d, database));
+                }
+#pragma warning disable CA1031 // A zone that cannot be read refuses the import; it never takes AutoCAD down.
+                catch (Exception ex)
+#pragma warning restore CA1031
+                {
+                    refused = Refused(new AutoCadImportPlan
+                    {
+                        Refusal = $"Civil 3D could not say this drawing's coordinate zone ({ex.Message}), so it cannot be shown to be the order's. Nothing was imported.",
+                    });
+                    return null;
+                }
+            }
+
+            AutoCadBlockRead read = AutoCadBlockReader.Read(opened.ManifestText!);
+            AutoCadImportPlan plan = AutoCadImportPlanner.Plan(read, DrawingObservations.Geolocation(database), zone);
+            if (plan.IsRefused)
+            {
+                refused = Refused(plan);
+                return null;
+            }
+
+            refused = null;
+            handedOver = true;
+            return new OrderImporter(document, opened, civil3d, plan, DeliveryHeader.Describe(read.Manifest.Delivery));
+        }
+        finally
+        {
+            if (!handedOver)
+            {
+                opened.Dispose();
             }
         }
+    }
 
-        AutoCadImportPlan plan = AutoCadImportPlanner.Plan(
-            manifestText,
-            DrawingObservations.Geolocation(database),
-            zone);
-
-        if (plan.IsRefused)
-        {
-            return new OrderImportResult(plan, plan.Summary(), false);
-        }
-
-        // Found and verified, all of them, before the drawing is touched.
-        Dictionary<AutoCadPart, string> files = [];
-        List<(PlannedFile File, string Path)> recordFiles = [];
-        Dictionary<AutoCadPart, string> outcomes = [];
-        foreach (PlannedPart part in plan.Parts.Where(p => p.Place))
+    /// <summary>
+    /// The first step: finds every placed part's file and checks it against its published digest, drawing
+    /// nothing. <c>false</c> when a file fails its check, which refuses the whole import; a file the bundle
+    /// does not hold fails only its own part.
+    /// </summary>
+    internal bool Verify()
+    {
+        foreach (PlannedPart part in Plan.Parts.Where(p => p.Place && (p.Kind != AutoCadPart.Surface || Civil3d)))
         {
             // The records are several files, one per layer; every other part is one.
             IEnumerable<(string Path, string Sha256, PlannedFile? File)> wanted = part.Kind == AutoCadPart.Records
@@ -100,9 +148,9 @@ internal static class OrderImporter
             List<(PlannedFile File, string Path)> extracted = [];
             foreach ((string path, string sha256, PlannedFile? file) in wanted)
             {
-                if (AutoCadBundleEntries.Resolve(archive.EntryNames, path) is not { } entry)
+                if (AutoCadBundleEntries.Resolve(_archive.EntryNames, path) is not { } entry)
                 {
-                    outcomes[part.Kind] = AutoCadImportPlanner.FailedSentence(part.Kind, $"the bundle does not hold {path}.");
+                    _outcomes[part.Kind] = AutoCadImportPlanner.FailedSentence(part.Kind, $"the bundle does not hold {path}.");
                     extracted.Clear();
                     break;
                 }
@@ -111,23 +159,17 @@ internal static class OrderImporter
                 string local;
                 try
                 {
-                    local = archive.Extract(entry, lifetime, sha256);
+                    local = _archive.Extract(entry, lifetime, sha256);
                 }
                 catch (InvalidOperationException integrity)
                 {
-                    AutoCadImportPlan refused = new()
-                    {
-                        OrderId = plan.OrderId,
-                        JobId = plan.JobId,
-                        Frame = plan.Frame,
-                        Refusal = integrity.Message,
-                    };
-                    return new OrderImportResult(refused, refused.Summary(), false);
+                    _integrityRefusal = integrity.Message;
+                    return false;
                 }
 
                 if (file is null)
                 {
-                    files[part.Kind] = local;
+                    _files[part.Kind] = local;
                 }
                 else
                 {
@@ -135,45 +177,71 @@ internal static class OrderImporter
                 }
             }
 
-            recordFiles.AddRange(extracted);
+            _recordFiles.AddRange(extracted);
         }
 
-        bool placedAnything = false;
-        using (document.LockDocument())
-        {
-            if (files.TryGetValue(AutoCadPart.Aerial, out string? image))
-            {
-                PlannedPart aerial = plan.Part(AutoCadPart.Aerial);
-                outcomes[AutoCadPart.Aerial] = Run(AutoCadPart.Aerial, () => PlaceAerial(database, image, aerial, plan.OrderId), aerial.Sentence, ref placedAnything);
-            }
-
-            if (civil3d is not null && files.TryGetValue(AutoCadPart.Surface, out string? landXml))
-            {
-                PlannedPart surface = plan.Part(AutoCadPart.Surface);
-                outcomes[AutoCadPart.Surface] = Run(AutoCadPart.Surface, () => BuildSurface(database, civil3d, landXml, surface, plan.OrderId), null, ref placedAnything);
-            }
-
-            if (files.TryGetValue(AutoCadPart.Contours, out string? dxf))
-            {
-                PlannedPart contours = plan.Part(AutoCadPart.Contours);
-                outcomes[AutoCadPart.Contours] = Run(AutoCadPart.Contours, () => PlaceContours(database, dxf, contours), null, ref placedAnything);
-            }
-
-            if (recordFiles.Count > 0)
-            {
-                PlannedPart records = plan.Part(AutoCadPart.Records);
-                outcomes[AutoCadPart.Records] = Run(AutoCadPart.Records, () => PlaceRecords(database, recordFiles, records), null, ref placedAnything);
-            }
-
-            if (files.TryGetValue(AutoCadPart.Linework, out string? linework))
-            {
-                PlannedPart lines = plan.Part(AutoCadPart.Linework);
-                outcomes[AutoCadPart.Linework] = Run(AutoCadPart.Linework, () => PlaceLinework(database, linework, lines), null, ref placedAnything);
-            }
-        }
-
-        return new OrderImportResult(plan, plan.Summary(outcomes), placedAnything);
+        return true;
     }
+
+    /// <summary>
+    /// One step: places <paramref name="kind"/> in its own transaction, under the drawing's lock. <c>false</c>
+    /// when it did not go in; what it said, placed or not, is in the closing report.
+    /// </summary>
+    internal bool Place(AutoCadPart kind)
+    {
+        if (_outcomes.ContainsKey(kind))
+        {
+            // Its file was not in the bundle: the verification already said so.
+            return false;
+        }
+
+        Database database = _document.Database;
+        PlannedPart part = Plan.Part(kind);
+        Func<string?>? place = kind switch
+        {
+            AutoCadPart.Aerial when _files.TryGetValue(kind, out string? image) => () => PlaceAerial(database, image, part, Plan.OrderId),
+            AutoCadPart.Surface when _civil3d is not null && _files.TryGetValue(kind, out string? landXml) => () => BuildSurface(database, _civil3d!, landXml, part, Plan.OrderId),
+            AutoCadPart.Contours when _files.TryGetValue(kind, out string? dxf) => () => PlaceContours(database, dxf, part),
+            AutoCadPart.Records when _recordFiles.Count > 0 => () => PlaceRecords(database, _recordFiles, part),
+            AutoCadPart.Linework when _files.TryGetValue(kind, out string? linework) => () => PlaceLinework(database, linework, part),
+            _ => null,
+        };
+
+        if (place is null)
+        {
+            return false;
+        }
+
+        using (_document.LockDocument())
+        {
+            bool placed = false;
+            _outcomes[kind] = Run(kind, place, kind == AutoCadPart.Aerial ? part.Sentence : null, ref placed);
+            _placedAnything |= placed;
+            return placed;
+        }
+    }
+
+    /// <summary>What the import did, for the window's report, the command line and the web.</summary>
+    /// <param name="notReached">What each part the run never reached says, in place of the plan's sentence.</param>
+    internal OrderImportResult Result(IReadOnlyDictionary<AutoCadPart, string>? notReached)
+    {
+        if (_integrityRefusal is not null)
+        {
+            return Refused(new AutoCadImportPlan { OrderId = Plan.OrderId, JobId = Plan.JobId, Frame = Plan.Frame, Refusal = _integrityRefusal });
+        }
+
+        Dictionary<AutoCadPart, string> said = new(_outcomes);
+        foreach ((AutoCadPart kind, string sentence) in notReached ?? new Dictionary<AutoCadPart, string>())
+        {
+            _ = said.TryAdd(kind, sentence);
+        }
+
+        return new OrderImportResult(Plan, Plan.Summary(said), _placedAnything);
+    }
+
+    public void Dispose() => _archive.Dispose();
+
+    private static OrderImportResult Refused(AutoCadImportPlan plan) => new(plan, plan.Summary(), false);
 
     /// <summary>Runs one part; a part AutoCAD refuses is reported and the others still go in.</summary>
     private static string Run(AutoCadPart kind, Func<string?> place, string? placedSentence, ref bool placedAnything)
