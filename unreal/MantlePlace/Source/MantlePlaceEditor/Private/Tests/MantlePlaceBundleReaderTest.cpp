@@ -234,6 +234,22 @@ void CompareResult(FAutomationTestBase& T, const FString& Label, const TSharedPt
 		T.TestTrue(Label + TEXT("a refusal carries a message"), !Read.Error.IsEmpty());
 	}
 
+	// `frames`: stated for a 3.x read and only then, equal to what the reader put on the read, every
+	// member exactly (a geoid the manifest names none for is `null`).
+	const TSharedPtr<FJsonObject>* ExpectedFrames = nullptr;
+	if (Result->TryGetObjectField(TEXT("frames"), ExpectedFrames) && ExpectedFrames != nullptr)
+	{
+		if (T.TestTrue(Label + TEXT("the reader read the frames"), Read.Frames.IsValid()))
+		{
+			T.TestTrue(Label + TEXT("the frames are the case's"),
+				FJsonValue::CompareEqual(FJsonValueObject(*ExpectedFrames), FJsonValueObject(Read.Frames)));
+		}
+	}
+	else
+	{
+		T.TestFalse(Label + TEXT("the reader read frames the case does not state"), Read.Frames.IsValid());
+	}
+
 	// `files`, as a set keyed by path, every member exactly.
 	TMap<FString, FString> ExpectedFiles;
 	const TArray<TSharedPtr<FJsonValue>>* Files = nullptr;

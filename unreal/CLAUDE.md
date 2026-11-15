@@ -104,7 +104,9 @@ a zip by `MantlePlaceBundleArchive`): `Manifest.json` at the bundle's root is 3.
 is 2.x, either inside one wrapper folder. A major above `NewestMajor` (3) is refused with the update
 message the 2.x parse uses, before any catalog is read. Every 3.x file is found by its name in the one
 catalog, never through a per-host block; family, frame and unit follow the extension, and the level and
-each count are what the manifest states. `MantlePlace.Import.ReaderCorpus` runs every corpus `reader`
+each count are what the manifest states. The manifest's `frames` are read as the shared reader reads them: the metre, the
+international foot and the US survey foot, a local frame in metres and east, north, up; any other value is
+refused as `unreadable`, naming it, and nothing is converted. `MantlePlace.Import.ReaderCorpus` runs every corpus `reader`
 case against it. The 2.x parse above is frozen as it ships; importing a 3.x bundle is not wired yet.
 
 A manifest path matches an archive entry **regardless of case** (format-2.md 10.3 rule 6). **The engine's
