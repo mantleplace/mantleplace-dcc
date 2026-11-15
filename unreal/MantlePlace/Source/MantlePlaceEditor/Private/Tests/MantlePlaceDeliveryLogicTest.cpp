@@ -169,6 +169,9 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 	}
 
 	// --- The reader carries the block verbatim, and a null CRS is no CRS ---
+	// The reference manifest is the corpus's, which a release zip does not ship: there the lines
+	// above have run and this block is skipped, with a warning naming the corpus.
+	if (!MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
 	{
 		const FMantlePlaceVaultManifest Imperial = ParseReferenceWith(*this,
 		    TEXT("{\"unit_system\":\"imperial\",\"tier\":\"sp_ftus\",\"linear_unit\":\"ftUS\",\"horizontal_epsg\":6543}"));

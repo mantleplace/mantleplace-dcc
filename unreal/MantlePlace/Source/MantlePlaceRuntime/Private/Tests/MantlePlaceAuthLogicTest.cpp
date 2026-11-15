@@ -102,6 +102,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 {
+	if (MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
+	{
+		return true;
+	}
+
 	using FLogic = FMantlePlaceAuthLogic;
 
 	TArray<FCase> Cases;

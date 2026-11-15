@@ -137,6 +137,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceClientConformanceTest::RunTest(const FString& Parameters)
 {
+	if (MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
+	{
+		return true;
+	}
+
 	using namespace MantlePlaceConformanceCorpus;
 	using FLogic = FMantlePlaceClientLogic;
 

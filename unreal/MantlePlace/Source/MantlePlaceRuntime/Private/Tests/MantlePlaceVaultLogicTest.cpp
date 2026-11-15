@@ -135,6 +135,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 {
+	if (MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
+	{
+		return true;
+	}
+
 	using FLogic = FMantlePlaceVaultLogic;
 	using EStatus = EMantlePlaceVaultBundleStatus;
 	using EState = EMantlePlaceMaterializeState;

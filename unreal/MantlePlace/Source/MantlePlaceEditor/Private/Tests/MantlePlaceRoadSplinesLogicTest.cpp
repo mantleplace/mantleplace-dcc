@@ -28,6 +28,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceRoadSplinesLogicTest::RunTest(const FString& Parameters)
 {
+	if (MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
+	{
+		return true;
+	}
+
 	using FLogic = FMantlePlaceRoadSplinesLogic;
 
 	TArray<FCase> Cases;
