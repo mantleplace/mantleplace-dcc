@@ -124,9 +124,10 @@ run reporting any `No editor` skip is not green.**
 
 - **Corpus.** The conformance tests walk up (at most eight levels) from the plugin directory looking
   for `tools/manifest-conformance/corpus/index.json`
-  (`FindCorpusDir` in `MantlePlaceConformanceCorpus.h`). When they do not find it they fail where
-  `CI` is set, and elsewhere warn `Conformance corpus not present` and pass (`SkipWithoutCorpus`):
-  a release zip does not ship the corpus, so its suite skips them. **A run carrying that warning has
+  (`FindCorpusDir` in `MantlePlaceConformanceCorpus.h`). When they do not find it, a source tree
+  fails where `CI` is set; a packaged plugin (its descriptor says `Installed`) and a source tree with
+  `CI` unset warn `Conformance corpus not present` and pass (`SkipWithoutCorpus`): a release zip
+  does not ship the corpus, so its suite skips them, in a strict run too. **A run carrying that warning has
   not proven conformance and is not green for a change**, whatever the count says. A scratch
   project holding only `MantlePlace/` under `Plugins/` cannot reach the corpus: place the scratch project (or
   a copy of the plugin) beneath a directory that has `tools/manifest-conformance/corpus/`, or copy

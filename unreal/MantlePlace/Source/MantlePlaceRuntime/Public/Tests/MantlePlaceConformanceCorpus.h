@@ -470,28 +470,39 @@ inline FString FindCorpusRoot()
 }
 
 /**
- * Whether a run that finds no corpus skips its corpus tests (true) or fails them (false), given
- * the value of the `CI` environment variable. It skips only where `CI` is unset: a packaged
- * release does not ship the corpus, so its suite has nothing to read, while CI always runs from
- * the repository, where a corpus that cannot be found means the layout moved. Pure, so the
- * reader self-test asserts it.
+ * Whether a run that finds no corpus skips its corpus tests (true) or fails them (false). It skips
+ * in a packaged plugin, whatever `CI` says: a release does not ship the corpus, so its suite has
+ * nothing to read, and a strict run of a release zip sets `CI` like any other strict run. In a
+ * source tree it skips only where `CI` is unset: CI runs from the repository, where a corpus that
+ * cannot be found means the layout moved. Pure, so the reader self-test asserts it.
  */
-inline bool MissingCorpusSkips(const FString& CiVariable)
+inline bool MissingCorpusSkips(const FString& CiVariable, bool bPackagedPlugin)
 {
-	return CiVariable.IsEmpty();
+	return bPackagedPlugin || CiVariable.IsEmpty();
 }
+
+namespace Detail
+{
+	/** Whether this plugin is a packaged build: its descriptor says `Installed`, which packaging
+	 *  writes and the repository's own descriptor never carries. */
+	inline bool IsPackagedPlugin()
+	{
+		const TSharedPtr<IPlugin> ThisPlugin = IPluginManager::Get().FindPlugin(TEXT("MantlePlace"));
+		return ThisPlugin.IsValid() && ThisPlugin->GetDescriptor().bInstalled;
+	}
+} // namespace Detail
 
 /**
  * The first line of every test that reads the corpus: `if (SkipWithoutCorpus(*this)) return true;`.
  * True when the corpus is absent and this run may go without it (MissingCorpusSkips); the test
  * then carries one warning naming the missing corpus and asserts nothing. False everywhere else,
- * so with the corpus present the test runs, and in CI a missing corpus reaches the test's own
- * failure.
+ * so with the corpus present the test runs, and in CI from a source tree a missing corpus reaches
+ * the test's own failure.
  */
 inline bool SkipWithoutCorpus(FAutomationTestBase& Test)
 {
 	if (!Detail::FindCorpusDir().IsEmpty()
-		|| !MissingCorpusSkips(FPlatformMisc::GetEnvironmentVariable(TEXT("CI"))))
+		|| !MissingCorpusSkips(FPlatformMisc::GetEnvironmentVariable(TEXT("CI")), Detail::IsPackagedPlugin()))
 	{
 		return false;
 	}

@@ -1328,11 +1328,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 {
-	// --- When a missing corpus skips: only where CI is unset. Asserted before the skip itself, so
-	// it holds in a release zip's run too, where nothing below can run. ---
-	TestTrue(TEXT("no corpus, CI unset: the corpus tests skip"), MissingCorpusSkips(FString()));
-	TestFalse(TEXT("no corpus, CI=true: the corpus tests fail"), MissingCorpusSkips(TEXT("true")));
-	TestFalse(TEXT("no corpus, CI=1: the corpus tests fail"), MissingCorpusSkips(TEXT("1")));
+	// --- When a missing corpus skips: in a packaged plugin always, in a source tree only where CI
+	// is unset. Asserted before the skip itself, so it holds in a release zip's run too, where
+	// nothing below can run. ---
+	TestTrue(TEXT("no corpus, source tree, CI unset: the corpus tests skip"), MissingCorpusSkips(FString(), false));
+	TestFalse(TEXT("no corpus, source tree, CI=true: the corpus tests fail"), MissingCorpusSkips(TEXT("true"), false));
+	TestFalse(TEXT("no corpus, source tree, CI=1: the corpus tests fail"), MissingCorpusSkips(TEXT("1"), false));
+	TestTrue(TEXT("no corpus, packaged, CI=true: the corpus tests skip"), MissingCorpusSkips(TEXT("true"), true));
+	TestTrue(TEXT("no corpus, packaged, CI unset: the corpus tests skip"), MissingCorpusSkips(FString(), true));
 
 	if (SkipWithoutCorpus(*this))
 	{
