@@ -120,6 +120,14 @@ struct FMantlePlaceCachedBundle
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	FString ListingSha256;
 
+	/**
+	 * The one level an MPB 3.0 download in the slot holds (`Max`, `Med` or `Min`); empty for a 2.x download
+	 * and in a sidecar written before 3.0. The slot serves only the level it records
+	 * (FMantlePlaceBundleCacheLogic::StateAtLevel): another level is a fresh download that replaces it.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString Level;
+
 	/** Cloud-vs-cached state for the list row. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	EMantlePlaceCacheState State = EMantlePlaceCacheState::NotCached;

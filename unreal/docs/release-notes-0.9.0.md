@@ -19,6 +19,16 @@ and again on a re-import.
 | Tree points | `Landcover/Trees.csv` |
 | Road splines | `Basemap/Roads.csv` |
 
+## Choosing a level before the download
+
+An MPB 3.0 order from the vault is downloaded at one level. The import window shows `Fidelity Level`
+with Max, Med and Min, each with its download size and the platform's recommendation preselected and
+marked `Recommended`, and `Download` fetches the chosen level. The download holds only the files listed
+above, at that level, with the manifest. The plugin keeps one download per order: importing the same
+level again reuses it with no download, and choosing another level downloads that level and replaces
+it. An import with no window to choose in (a script) takes the recommendation. A 2.x order downloads as
+in 0.8, with no level to choose.
+
 ## Layers left out of an MPB 3.0 import
 
 Each is shown as skipped, with its reason, in the import window and the import log.

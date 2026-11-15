@@ -7,12 +7,15 @@
 #include "HAL/PlatformTime.h"
 #include "MantlePlaceEditorStyle.h"
 #include "MantlePlaceImportStepsLogic.h"
+#include "MantlePlaceLevelChoiceLogic.h"
 #include "Misc/App.h"
 #include "Misc/AutomationTest.h"
 #include "RenderingThread.h"
 #include "RHICommandList.h"
 #include "Rendering/SlateRenderer.h"
+#include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SSeparator.h"
@@ -87,11 +90,10 @@ void SMantlePlaceImportWindow::Construct(const FArguments& InArgs)
 				]
 			]
 
-			// Where the level control goes. Empty on purpose: the control that fills it is its own change,
-			// and the window keeps its place so that change adds a widget and moves nothing.
+			// A 3.0 order's level control (SetLevelChoice); empty for any other run.
 			+ SVerticalBox::Slot().AutoHeight()
 			[
-				SNew(SBox)
+				SAssignNew(LevelSlot, SBox)
 			]
 
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, S::S3, 0.f, 0.f)
@@ -192,6 +194,95 @@ void SMantlePlaceImportWindow::SetResult(const FString& Message)
 	}
 }
 
+void SMantlePlaceImportWindow::SetLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice)
+{
+	if (!LevelSlot.IsValid())
+	{
+		return;
+	}
+	LevelChoice = Choice;
+	using S = FMantlePlaceEditorStyle;
+	const TWeakPtr<FMantlePlaceLevelChoice> Weak = Choice;
+
+	TSharedRef<SVerticalBox> Levels = SNew(SVerticalBox);
+	for (const FMantlePlaceLevelOption& Option : Choice->Options())
+	{
+		const FString Level = Option.Level;
+		Levels->AddSlot().AutoHeight().Padding(0.f, S::S6 / 2.f)
+		[
+			SNew(SCheckBox)
+			.Style(FAppStyle::Get(), "RadioButton")
+			.ToolTipText(FText::FromString(Option.ToolTip))
+			.IsChecked_Lambda([Weak, Level]()
+			{
+				const TSharedPtr<FMantlePlaceLevelChoice> Pinned = Weak.Pin();
+				return Pinned.IsValid() && Pinned->Selected() == Level ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+			})
+			.IsEnabled_Lambda([Weak]()
+			{
+				const TSharedPtr<FMantlePlaceLevelChoice> Pinned = Weak.Pin();
+				return Pinned.IsValid() && !Pinned->IsConfirmed();
+			})
+			.OnCheckStateChanged_Lambda([Weak, Level](ECheckBoxState NewState)
+			{
+				const TSharedPtr<FMantlePlaceLevelChoice> Pinned = Weak.Pin();
+				if (Pinned.IsValid() && NewState == ECheckBoxState::Checked)
+				{
+					Pinned->Choose(Level);
+				}
+			})
+			[
+				SNew(STextBlock)
+				.Font(S::GetFont(Option.bRecommended ? EFont::Title : EFont::Body))
+				.Text(FText::FromString(Option.Label))
+			]
+		];
+	}
+
+	LevelSlot->SetPadding(FMargin(0.f, S::S3, 0.f, 0.f));
+	LevelSlot->SetContent(
+		SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, S::S6 / 2.f)
+		[
+			SNew(STextBlock)
+			.Font(S::GetFont(EFont::Body))
+			.Text(FText::FromString(FMantlePlaceLevelChoice::Heading()))
+		]
+		+ SVerticalBox::Slot().AutoHeight()
+		[
+			Levels
+		]
+		+ SVerticalBox::Slot().AutoHeight().Padding(0.f, S::S6 / 2.f, 0.f, 0.f)
+		[
+			SNew(STextBlock)
+			.Font(S::GetFont(EFont::Small))
+			.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+			.AutoWrapText(true)
+			.Visibility(Choice->Note().IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible)
+			.Text(FText::FromString(Choice->Note()))
+		]
+		+ SVerticalBox::Slot().AutoHeight().Padding(0.f, S::S2, 0.f, 0.f).HAlign(HAlign_Left)
+		[
+			SNew(SButton)
+			.ContentPadding(S::ButtonPaddingMd)
+			.Text(FText::FromString(FMantlePlaceLevelChoice::DownloadWord()))
+			.ToolTipText(LOCTEXT("LevelDownloadTip", "Downloads the order at the chosen level, then imports it. A level already downloaded for this order is imported again with no download."))
+			.IsEnabled_Lambda([Weak]()
+			{
+				const TSharedPtr<FMantlePlaceLevelChoice> Pinned = Weak.Pin();
+				return Pinned.IsValid() && Pinned->HasSelection() && !Pinned->IsConfirmed();
+			})
+			.OnClicked_Lambda([Weak]()
+			{
+				if (const TSharedPtr<FMantlePlaceLevelChoice> Pinned = Weak.Pin())
+				{
+					Pinned->Confirm();
+				}
+				return FReply::Handled();
+			})
+		]);
+}
+
 FText SMantlePlaceImportWindow::GetStatusText() const
 {
 	return Steps.IsValid() ? FText::FromString(Steps->StatusLine(FPlatformTime::Seconds())) : FText::GetEmpty();
@@ -264,6 +355,16 @@ void FMantlePlaceImportWindowHost::SetResult(const FString& Message)
 	{
 		Content->SetResult(Message);
 	}
+}
+
+bool FMantlePlaceImportWindowHost::ShowLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice)
+{
+	if (bClosed || !Content.IsValid() || !Window.IsValid())
+	{
+		return false;
+	}
+	Content->SetLevelChoice(Choice);
+	return true;
 }
 
 void FMantlePlaceImportWindowHost::Close()

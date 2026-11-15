@@ -10,6 +10,7 @@
 #include "MantlePlaceEditorStyle.h"
 #include "MantlePlaceExtentBox.h"
 #include "MantlePlaceFeedbackLogic.h"
+#include "MantlePlaceLevelChoiceLogic.h"
 #include "MantlePlaceLevelExtent.h"
 #include "MantlePlacePalette.h"
 #include "MantlePlaceImporterLibrary.h"
@@ -216,6 +217,7 @@ void SMantlePlaceVaultPanel::Construct(const FArguments& InArgs)
 	Controller->OnAuthChanged.AddSP(this, &SMantlePlaceVaultPanel::HandleAuthChanged);
 	Controller->OnClientUpdateRequired.AddSP(this, &SMantlePlaceVaultPanel::HandleClientUpdateRequired);
 	Controller->OnImportSteps.AddSP(this, &SMantlePlaceVaultPanel::HandleImportSteps);
+	Controller->OnOfferLevelChoice.BindSP(this, &SMantlePlaceVaultPanel::HandleOfferLevelChoice);
 
 	ModeOptions.Add(MakeShared<FString>(TEXT("Landscape")));
 	ModeOptions.Add(MakeShared<FString>(TEXT("Mesh")));
@@ -825,6 +827,13 @@ void SMantlePlaceVaultPanel::HandleImportSteps(TSharedRef<FMantlePlaceImportStep
 	}
 	ImportWindow = FMantlePlaceImportWindowHost::Open(
 		Steps, FSimpleDelegate::CreateSP(this, &SMantlePlaceVaultPanel::HandleImportWindowCancel));
+}
+
+bool SMantlePlaceVaultPanel::HandleOfferLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice)
+{
+	// The window opened on this run's steps shows the control; with no window (it could not open), the
+	// orchestrator takes the recommendation.
+	return ImportWindow.IsValid() && ImportWindow->ShowLevelChoice(Choice);
 }
 
 void SMantlePlaceVaultPanel::HandleImportWindowCancel()

@@ -21,6 +21,7 @@ class SBox;
 class SWidgetSwitcher;
 class FMantlePlaceImportSteps;
 class FMantlePlaceImportWindowHost;
+class FMantlePlaceLevelChoice;
 template <typename ItemType> class SComboBox;
 
 /**
@@ -50,6 +51,8 @@ private:
 	void HandleClientUpdateRequired(const FMantlePlaceClientUpdate& Update);
 	/** An import flow started: open the import window on its steps. */
 	void HandleImportSteps(TSharedRef<FMantlePlaceImportSteps> Steps);
+	/** A 3.0 order's level control: shown in the import window, true when it is. */
+	bool HandleOfferLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice);
 	/** The import window's Cancel. */
 	void HandleImportWindowCancel();
 

@@ -50,6 +50,9 @@ public:
 	/** An import flow started: the steps the import window shows. */
 	FMantlePlaceOnImportStepsNative OnImportSteps;
 
+	/** A 3.0 order's level control, for the import window; true when the window shows it (single-cast, relayed). */
+	FMantlePlaceOnOfferLevelChoiceNative OnOfferLevelChoice;
+
 	/** Create the orchestrator and bind its dynamic delegates (idempotent). Does not list. */
 	void Initialize();
 
@@ -86,6 +89,7 @@ private:
 	UFUNCTION() void HandleAuthChanged(EMantlePlaceAuthState NewState);
 	void HandleClientUpdateRequired(const FMantlePlaceClientUpdate& Update);
 	void HandleImportSteps(TSharedRef<FMantlePlaceImportSteps> Steps);
+	bool HandleOfferLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice);
 
 	UPROPERTY()
 	TObjectPtr<UMantlePlaceVaultImportOrchestrator> Orchestrator;
