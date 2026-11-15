@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using MantlePlace.Core;
+using MantlePlace.Wpf;
 
 namespace MantlePlace.Revit.Addin;
 
@@ -19,7 +20,7 @@ namespace MantlePlace.Revit.Addin;
 /// Revit repaints and processes input between the two.
 /// </para>
 /// <para>
-/// The window is on a thread of its own (<see cref="ImportWindowHost"/>), so it does not wait for a
+/// The window is on a thread of its own (<see cref="ImportWindowThread"/>), so it does not wait for a
 /// slice to end to be told anything: it is posted a view of the run after every slice, and from
 /// inside one whenever a commit starts or ends or a step says what its wait has measured at
 /// (<see cref="ActiveImport.Changed"/>). That is what keeps it naming the step Revit is committing.
@@ -51,13 +52,13 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     private ActiveImport? _import;
 
     /// <summary>The open import's window. Cleared when the import ends; its host stays in <see cref="_hosts"/>.</summary>
-    private ImportWindowHost? _window;
+    private ImportWindowThread? _window;
 
     /// <summary>
     /// Every import window still on screen, the finished ones showing their report included, until its
     /// thread ends — so a fault dialog can lower them all and shutdown can close them all.
     /// </summary>
-    private readonly List<ImportWindowHost> _hosts = [];
+    private readonly List<ImportWindowThread> _hosts = [];
 
     /// <summary>Whether a slice is running, inside which a window's callback must not.</summary>
     private bool _inSlice;
@@ -174,7 +175,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// <summary>Lowers every import window before Revit shows a dialog, so the dialog does not open under one.</summary>
     internal void LowerWindow()
     {
-        foreach (ImportWindowHost host in _hosts)
+        foreach (ImportWindowThread host in _hosts)
         {
             host.Lower();
         }
@@ -326,23 +327,21 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// <returns>Whether the window opened, and the import is this handler's.</returns>
     private bool Show(ActiveImport import, IntPtr revitWindow, bool fromVault)
     {
+        // No measured costs: Revit's are said by the step itself, beside its clock (SlowStepNotice),
+        // as they always were.
         ImportWindowRequest request = new(
             Path.GetFileName(import.ZipPath),
             import.DeliveryLine,
             import.UnitsDisagreement,
             import.Checklist,
             revitWindow,
-            choice => OutsideSlice(() => BeginChosen(import, choice)),
-            () => OutsideSlice(() => CancelRun(import)),
-            () => OutsideSlice(() => DismissBeforeStart(import)),
-            line => OutsideSlice(() => import.Note(line)),
-            fault => OutsideSlice(() => MantlePlaceApplication.SayFault(fault)));
+            new WindowCalls(this, import));
 
-        ImportWindowHost? host;
+        ImportWindowThread? host;
         Exception? failure;
         try
         {
-            host = ImportWindowHost.Open(request, out failure);
+            host = ImportWindowThread.Open(request, out failure);
         }
         catch (Exception ex) when (ex is InvalidOperationException or OutOfMemoryException)
         {
@@ -472,7 +471,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// </remarks>
     internal void Shutdown()
     {
-        foreach (ImportWindowHost host in _hosts)
+        foreach (ImportWindowThread host in _hosts)
         {
             host.CloseNow();
         }
@@ -660,5 +659,22 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             import.Staged is null && !import.Failed
                 ? import.Heading
                 : $"{import.Heading} The report is in the {WindowLabels.ImportHeading} window, and in the log beside the bundle.");
+    }
+
+    /// <summary>
+    /// The import window's calls for one import, each run outside a slice. Bound to its import, so a
+    /// call arriving late from an earlier import's window acts on nothing it does not own.
+    /// </summary>
+    private sealed class WindowCalls(BundleImportEventHandler handler, ActiveImport import) : IImportWindowHost
+    {
+        public void Begin(ImportLayerChoice choice) => handler.OutsideSlice(() => handler.BeginChosen(import, choice));
+
+        public void CancelRun() => handler.OutsideSlice(() => handler.CancelRun(import));
+
+        public void Dismiss() => handler.OutsideSlice(() => handler.DismissBeforeStart(import));
+
+        public void Note(string line) => handler.OutsideSlice(() => import.Note(line));
+
+        public void Fault(Exception fault) => handler.OutsideSlice(() => MantlePlaceApplication.SayFault(fault));
     }
 }

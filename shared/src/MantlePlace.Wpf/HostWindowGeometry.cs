@@ -1,41 +1,41 @@
 using System.Runtime.InteropServices;
 using MantlePlace.Core;
 
-namespace MantlePlace.Revit.Addin;
+namespace MantlePlace.Wpf;
 
 /// <summary>
-/// Where Revit's main window is, in the device-independent pixels WPF places windows in. The one home
-/// of that conversion, for the Prepare notices and the import window alike.
+/// Where the host's main window is, in the device-independent pixels WPF places windows in. The one
+/// home of that conversion, for the Prepare notices and the import window alike.
 /// </summary>
 /// <remarks>
 /// Every call here is one Windows answers from its own records, without sending the window a message,
-/// so it is safe from a thread that must never wait on Revit's — the import window's — and it answers
-/// while Revit's thread is stuck in a commit. Where a window goes inside that rectangle is the pure
+/// so it is safe from a thread that must never wait on the host's — the import window's — and it
+/// answers while the host's thread is stuck in a commit. Where a window goes inside that rectangle is the pure
 /// core's (<see cref="NoticeStack"/>, <see cref="ImportWindowPlacement"/>).
 /// </remarks>
-internal static class RevitWindowGeometry
+public static class HostWindowGeometry
 {
     private const double BaselineDpi = 96.0;
     private const int RestoreToMaximized = 0x0002;
     private const uint MonitorDefaultToNearest = 0x00000002;
 
     /// <summary>Whether <paramref name="window"/> is minimised.</summary>
-    internal static bool IsMinimised(IntPtr window) => window != IntPtr.Zero && IsIconic(window);
+    public static bool IsMinimised(IntPtr window) => window != IntPtr.Zero && IsIconic(window);
 
     /// <summary>
     /// The window's rectangle in device-independent pixels, or <c>null</c> when there is none to read.
     /// </summary>
-    /// <param name="window">Revit's main window.</param>
+    /// <param name="window">The host's main window.</param>
     /// <param name="whereRestored">
     /// For a minimised window, where it would be restored to rather than the parking place Windows
     /// moves it to: its restored rectangle, kept by Windows less its monitor's work-area inset, or that
     /// work area when it restores maximised (<see cref="ImportWindowPlacement.Restored"/>).
     /// </param>
     /// <remarks>
-    /// GetWindowRect answers in device pixels and WPF places in device-independent ones, so Revit's
+    /// GetWindowRect answers in device pixels and WPF places in device-independent ones, so the host
     /// window's own DPI is the divisor: what is placed against it lands on the monitor it is on.
     /// </remarks>
-    internal static ScreenRect? Bounds(IntPtr window, bool whereRestored = false)
+    public static ScreenRect? Bounds(IntPtr window, bool whereRestored = false)
     {
         if (window == IntPtr.Zero)
         {
@@ -103,8 +103,8 @@ internal static class RevitWindowGeometry
         public NativeRect NormalPosition;
     }
 
-    // DllImport rather than LibraryImport, for RibbonImagery's reason: the generator needs
-    // AllowUnsafeBlocks, which this project does not set.
+    // DllImport rather than LibraryImport: the generator needs AllowUnsafeBlocks, which this project
+    // does not set.
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);

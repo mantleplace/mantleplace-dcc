@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using MantlePlace.Core;
 
-namespace MantlePlace.Revit.Addin;
+namespace MantlePlace.Wpf;
 
 /// <summary>
 /// The level column: a plain dropdown on each row whose category publishes levels, and one set-all
@@ -24,21 +24,21 @@ internal sealed partial class ImportWindow
     private const double WidthWithLevels = 760;
 
     /// <summary>The third column: a level dropdown on each row that offers levels.</summary>
-    private void AddLevelColumn(Grid rows)
+    private void AddLevelColumn(ImportChecklist checklist, Grid rows)
     {
         rows.ColumnDefinitions.Insert(1, new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         rows.ColumnDefinitions[0].Width = GridLength.Auto;
 
-        for (int index = 0; index < _checklist.Layers.Count; index++)
+        for (int index = 0; index < checklist.Layers.Count; index++)
         {
-            ImportLayer layer = _checklist.Layers[index];
-            if (!_checklist.HasLevels(layer))
+            ImportLayer layer = checklist.Layers[index];
+            if (!checklist.HasLevels(layer))
             {
                 continue;
             }
 
             ComboBox levels = new() { Margin = new Thickness(0, 2, 12, 2), HorizontalAlignment = HorizontalAlignment.Stretch };
-            foreach (LevelOption option in _checklist.LevelOptions(layer))
+            foreach (LevelOption option in checklist.LevelOptions(layer))
             {
                 levels.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Level, IsEnabled = option.IsAvailable });
             }
@@ -94,7 +94,7 @@ internal sealed partial class ImportWindow
 
     private void OnLevelChanged(ImportLayer layer, ComboBox levels)
     {
-        if (_refreshing || levels.SelectedItem is not ComboBoxItem { Tag: FidelityLevel level })
+        if (_refreshing || _checklist is null || levels.SelectedItem is not ComboBoxItem { Tag: FidelityLevel level })
         {
             return;
         }
@@ -105,7 +105,7 @@ internal sealed partial class ImportWindow
 
     private void OnSetAllLevels()
     {
-        if (_refreshing || _setAllLevels.SelectedItem is not ComboBoxItem { Tag: FidelityLevel level })
+        if (_refreshing || _checklist is null || _setAllLevels.SelectedItem is not ComboBoxItem { Tag: FidelityLevel level })
         {
             return;
         }
@@ -115,21 +115,21 @@ internal sealed partial class ImportWindow
     }
 
     /// <summary>Paints each dropdown from the checklist, and the set-all control from what the rows share.</summary>
-    private void RefreshLevels()
+    private void RefreshLevels(ImportChecklist checklist)
     {
         foreach ((ImportLayer layer, ComboBox levels) in _levelBoxes)
         {
-            FidelityLevel chosen = _checklist.ChosenLevel(layer);
+            FidelityLevel chosen = checklist.ChosenLevel(layer);
             levels.SelectedItem = levels.Items.OfType<ComboBoxItem>().FirstOrDefault(item => item.Tag is FidelityLevel level && level == chosen);
-            levels.IsEnabled = !_begun && _checklist.IsChecked(layer);
+            levels.IsEnabled = _state.ChecklistEditable && checklist.IsChecked(layer);
         }
 
-        if (_checklist.OffersLevels)
+        if (checklist.OffersLevels)
         {
-            FidelityLevel? all = _checklist.AllLevels;
+            FidelityLevel? all = checklist.AllLevels;
             _setAllLevels.SelectedItem = _setAllLevels.Items.OfType<ComboBoxItem>()
                 .FirstOrDefault(item => all is { } shared ? item.Tag is FidelityLevel level && level == shared : item.Tag is null);
-            _setAllLevels.IsEnabled = !_begun;
+            _setAllLevels.IsEnabled = _state.ChecklistEditable;
         }
     }
 }

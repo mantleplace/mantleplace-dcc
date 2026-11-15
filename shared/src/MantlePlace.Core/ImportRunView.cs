@@ -108,6 +108,34 @@ public sealed class ImportRunView
     }
 
     /// <summary>
+    /// A view of a run a host keeps without a <see cref="StagedImport"/>: its steps in plan order, the
+    /// one in flight, and whether the host is committing it.
+    /// </summary>
+    /// <param name="rows">Every step, in plan order.</param>
+    /// <param name="currentIndex">The row in flight, or -1 for none.</param>
+    /// <param name="committing">Whether the host is inside the step's commit.</param>
+    /// <param name="progress">How far the step in flight has got, or <c>null</c>.</param>
+    public static ImportRunView From(
+        IReadOnlyList<ImportRunRow> rows,
+        int currentIndex,
+        bool committing = false,
+        StepProgress? progress = null)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentOutOfRangeException.ThrowIfLessThan(currentIndex, -1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(currentIndex, rows.Count);
+
+        return new ImportRunView(
+            [.. rows],
+            currentIndex,
+            currentIndex >= 0 ? progress : null,
+            currentIndex >= 0 && committing,
+            [],
+            cancelRequested: false,
+            finishing: false);
+    }
+
+    /// <summary>
     /// Whether the window's clock starts again when <paramref name="arriving"/> replaces the view it
     /// shows: when it names a different wait — the next step, the work after the last, or none.
     /// </summary>

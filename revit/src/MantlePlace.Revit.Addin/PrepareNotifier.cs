@@ -112,7 +112,7 @@ internal static class PrepareNotifier
 
         // Minimised, or not up yet: nowhere to put a notice that belongs to Revit's window. The
         // badge is still there when the curator comes back, which is what it is for.
-        if (revitWindow == IntPtr.Zero || RevitWindowGeometry.IsMinimised(revitWindow))
+        if (revitWindow == IntPtr.Zero || HostWindowGeometry.IsMinimised(revitWindow))
         {
             return;
         }
@@ -146,8 +146,8 @@ internal static class PrepareNotifier
 
     private static void Restack()
     {
-        // In Revit's window, on the monitor it is on (RevitWindowGeometry).
-        if (RevitWindowGeometry.Bounds(_revitWindow?.Invoke() ?? IntPtr.Zero) is not { } owner)
+        // In Revit's window, on the monitor it is on (HostWindowGeometry).
+        if (HostWindowGeometry.Bounds(_revitWindow?.Invoke() ?? IntPtr.Zero) is not { } owner)
         {
             return;
         }

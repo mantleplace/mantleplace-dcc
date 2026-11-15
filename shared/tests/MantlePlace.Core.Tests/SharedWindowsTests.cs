@@ -27,7 +27,11 @@ internal static class SharedWindowsTests
     /// <summary>The host trees, which must hold no copy.</summary>
     private static readonly string[] HostTrees = ["revit/src", "autocad/src"];
 
-    /// <summary>The shared set: the four windows, the notice, and the chrome and styles they share.</summary>
+    /// <summary>
+    /// The shared set: the four windows, the notice, the chrome and styles they share, and the import
+    /// window's thread, its host's side, and the two Windows readers it stacks and places itself by.
+    /// The import window itself is a partial class, so it is held by its own case.
+    /// </summary>
     private static readonly string[] SharedTypes =
     [
         "SignInWindow",
@@ -36,7 +40,15 @@ internal static class SharedWindowsTests
         "NoticePopup",
         "BrandChrome",
         "WindowStyles",
+        "ImportWindowThread",
+        "ImportWindowRequest",
+        "IImportWindowHost",
+        "ForegroundWatch",
+        "HostWindowGeometry",
     ];
+
+    /// <summary>Names the import window's code had in the Revit shim, which no host tree may declare again.</summary>
+    private static readonly string[] RetiredHostTypes = ["ImportWindowHost", "RevitWindowGeometry"];
 
     /// <summary>The two .NET hosts, by the id each shell hands <see cref="HostIdentity"/>.</summary>
     private static readonly string[] HostIds = ["revit", "autocad"];
@@ -163,7 +175,7 @@ internal static class SharedWindowsTests
 
             foreach (string type in SharedTypes)
             {
-                Regex declared = new($@"\b(class|record|struct)\s+{type}\b", RegexOptions.CultureInvariant);
+                Regex declared = Declaration(type);
 
                 int inShared = Directory.GetFiles(shared, "*.cs", SearchOption.AllDirectories)
                     .Where(file => !IsBuildOutput(file))
@@ -187,8 +199,48 @@ internal static class SharedWindowsTests
             }
         });
 
+        run.Case("the import window is declared in the shared home only, and no host keeps its old names", () =>
+        {
+            string? shared = RepoTree.Find(SharedWindowsFolder);
+            run.True(shared is not null, SharedWindowsFolder);
+            if (shared is null)
+            {
+                return;
+            }
+
+            Regex window = Declaration("ImportWindow");
+            run.True(
+                Directory.GetFiles(shared, "*.cs", SearchOption.AllDirectories)
+                    .Where(file => !IsBuildOutput(file))
+                    .Any(file => window.IsMatch(File.ReadAllText(file))),
+                $"ImportWindow is declared in {SharedWindowsFolder}");
+
+            foreach (string tree in HostTrees)
+            {
+                string? folder = RepoTree.Find(tree);
+                if (folder is null)
+                {
+                    run.Fail(tree);
+                    continue;
+                }
+
+                foreach (string file in Directory.GetFiles(folder, "*.cs", SearchOption.AllDirectories).Where(file => !IsBuildOutput(file)))
+                {
+                    string text = File.ReadAllText(file);
+                    foreach (string type in RetiredHostTypes.Append("ImportWindow"))
+                    {
+                        run.False(Declaration(type).IsMatch(text), $"{tree} declares no {type} ({Path.GetFileName(file)})");
+                    }
+                }
+            }
+        });
+
         return run.Report("shared windows");
     }
+
+    /// <summary>A declaration of <paramref name="type"/>, whatever its kind.</summary>
+    private static Regex Declaration(string type)
+        => new($@"\b(class|record|struct|interface)\s+{type}\b", RegexOptions.CultureInvariant);
 
     private static bool IsBuildOutput(string file)
     {
