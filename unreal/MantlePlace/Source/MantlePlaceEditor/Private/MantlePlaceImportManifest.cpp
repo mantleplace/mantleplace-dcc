@@ -80,8 +80,11 @@ FVector FMantlePlaceVaultManifest::GetLandscapeSpawnLocation() const
 	// by half the (scaled) quad span so the AOI centre lands on world (0,0). Identity rotation,
 	// so TransformVector(scale) is a component-wise multiply. In a level that already holds another
 	// import the AOI centre lands on that import's offset instead (ToLevelFrame).
+	// A 3.x heightmap states the rectangle it covers, whose centre need not be the origin; a 2.x grid is
+	// centred on it, and its centre is zero.
 	const FVector2D AoiSize = GetAoiSizeUeCm();
-	return ToLevelFrame(FVector(-AoiSize.X / 2.0, -AoiSize.Y / 2.0, Heightmap.LocationZOffsetCm));
+	const FVector Centre = ProjectedToUeCm(Heightmap.GridCentreEastM, Heightmap.GridCentreNorthM, 0.0);
+	return ToLevelFrame(FVector(Centre.X - AoiSize.X / 2.0, Centre.Y - AoiSize.Y / 2.0, Heightmap.LocationZOffsetCm));
 }
 
 FVector FMantlePlaceVaultManifest::GetMeshLocation() const
@@ -130,7 +133,9 @@ void FMantlePlaceVaultManifest::GetDrapeUvTransform(FVector2D& OutScale, FVector
 	}
 
 	const FVector2D AoiSize = GetAoiSizeUeCm();
-	const FVector2D AoiMin(-AoiSize.X / 2.0, -AoiSize.Y / 2.0); // AOI centred on world (0,0)
+	// The grid centred on world (0,0) for 2.x, on its stated centre for 3.x (GetLandscapeSpawnLocation).
+	const FVector Centre = ProjectedToUeCm(Heightmap.GridCentreEastM, Heightmap.GridCentreNorthM, 0.0);
+	const FVector2D AoiMin(Centre.X - AoiSize.X / 2.0, Centre.Y - AoiSize.Y / 2.0);
 
 	OutScale = FVector2D(AoiSize.X / DrapeSize.X, AoiSize.Y / DrapeSize.Y);
 	OutOffset = FVector2D(

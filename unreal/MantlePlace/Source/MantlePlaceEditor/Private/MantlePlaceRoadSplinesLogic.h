@@ -179,4 +179,24 @@ struct FMantlePlaceRoadSplinesLogic
 	 * two cannot be mistaken for each other.
 	 */
 	static FString DescribeOutcome(int32 LinesSeen, int32 SplinesCreated);
+
+	/**
+	 * Read an MPB 3.x `Basemap/Roads.csv` into Local-Projected-Frame splines. The table is host-ready:
+	 * one row per vertex, columns `road`, `vertex`, `x`, `y`, `z`, `class`, `width_m` and `name` found by
+	 * name in the header, x and y metres east and north of the site origin and z metres above its
+	 * height (format.md sections 4 and 6). So nothing is projected: `SiteHeightM`, the origin's stated
+	 * height, is added to z as the tree table's ground_z is, and the rest is the stated offsets.
+	 *
+	 * The rows of one road share its `road` number and are in vertex order; a road ends where the
+	 * number changes. A road counts in `OutLinesSeen` whether or not it has the two points a spline
+	 * needs. A row whose x, y or z is not a number is counted in `OutRowsUnreadable` and passed over.
+	 * Fails closed (false + OutError) on a table with no header or a header missing a named column.
+	 */
+	static bool ParseSiteCsv(
+	    const FString& CsvText,
+	    double SiteHeightM,
+	    TArray<FMantlePlaceRoadSpline>& OutSplines,
+	    int32& OutLinesSeen,
+	    int32& OutRowsUnreadable,
+	    FString& OutError);
 };

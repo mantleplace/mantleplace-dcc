@@ -184,8 +184,10 @@ public:
 			Frame.HorizontalUnits = Level.HorizontalUnits;
 		}
 		TArray<FMantlePlaceTreePointRow> Rows;
+		// A 3.x Trees.csv is already offsets from the origin (FMantlePlaceFoliagePointsBlock::bSiteFrame).
+		const bool bSiteFrame = Manifest.Foliage.bSiteFrame;
 		const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
-			CsvText, Manifest.Georef.OriginEastingM, Manifest.Georef.OriginNorthingM, Frame,
+			CsvText, bSiteFrame ? 0.0 : Manifest.Georef.OriginEastingM, bSiteFrame ? 0.0 : Manifest.Georef.OriginNorthingM, Frame,
 			Manifest.GetAoiSizeUeCm(), // zero when the block publishes no landscape transform
 			Level.DeclaredCount, Rows, TreesError, Manifest.Foliage.FoliageTypeVocabulary);
 		if (Outcome == EMantlePlaceTreePointsOutcome::CountMismatch)
@@ -204,6 +206,13 @@ public:
 			// against this block's landscape about its origin); only now do they move to the level's.
 			for (FMantlePlaceTreePointRow& Row : Rows)
 			{
+				// A 3.x ground height is metres above the site origin's: the stated height is added, so
+				// the table holds the same absolute heights a 2.x one does.
+				if (bSiteFrame && Row.bGroundKnown)
+				{
+					Row.GroundZM += static_cast<float>(Manifest.Foliage.SiteHeightM);
+					Row.Position.Z += Manifest.Foliage.SiteHeightM * 100.0;
+				}
 				Row.Position = Manifest.ToLevelFrame(Row.Position);
 			}
 		}

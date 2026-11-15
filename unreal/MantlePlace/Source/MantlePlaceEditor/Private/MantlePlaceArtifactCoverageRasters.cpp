@@ -154,7 +154,12 @@ public:
 		return true;
 	}
 
-	bool IsPresent(const FMantlePlaceVaultManifest& M) const override { return M.LandscapeLayers.bPresent; }
+	// An MPB 3.x bundle's layers are its paint layers alone, which the Landscape applies; this step is
+	// then a named skip (FMantlePlaceVaultManifest::FormatSkips), never an empty run. 2.x sets no skip.
+	bool IsPresent(const FMantlePlaceVaultManifest& M) const override
+	{
+		return M.LandscapeLayers.bPresent && !M.FormatSkips.Contains(Id());
+	}
 
 	// Every landscape layer and every UE-ready companion, including the layers this importer parses
 	// but does not yet apply: the check is on the bundle's bytes, not on what today's importer

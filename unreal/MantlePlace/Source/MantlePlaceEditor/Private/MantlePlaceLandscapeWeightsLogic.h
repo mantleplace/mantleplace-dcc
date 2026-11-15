@@ -82,6 +82,13 @@ struct FMantlePlaceWeightPlane
 struct FMantlePlaceLandscapeWeightsLogic
 {
 	/**
+	 * The encoding an MPB 3.x weight map is given (FMantlePlaceManifestThreeLogic): one 8-bit grayscale
+	 * PNG per material, whose single band is named in `ValueMapping.Bands`. The importer decodes every
+	 * companion to RGBA, which carries a grayscale band in channel 0.
+	 */
+	static const TCHAR* const GrayscaleEncoding;
+
+	/**
 	 * Resolve `materials[]` to (image, channel) pairs via each `ue_ready[].value_mapping.bands`,
 	 * in the legend's own band order. Fails closed (false + OutError) when the layer carries no
 	 * legend, no RGBA companions, or a material no companion names — a half-resolved legend would
