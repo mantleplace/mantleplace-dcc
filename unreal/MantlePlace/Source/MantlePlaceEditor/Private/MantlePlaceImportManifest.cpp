@@ -3,6 +3,7 @@
 #include "MantlePlaceImportManifest.h"
 
 #include "MantlePlaceArtifactHandler.h"
+#include "MantlePlaceBundleReaderLogic.h" // the version messages, one text for both readers
 #include "MantlePlaceManifestJson.h"
 #include "MantlePlaceRoadSplinesLogic.h"    // FMantlePlaceRoadSplinesDatum
 #include "MantlePlaceTreePointsLogic.h"     // FMantlePlaceTreePointsFrame
@@ -467,11 +468,8 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	    FMantlePlaceManifestVersion::Parse(MantlePlaceMinSupportedManifestVersion);
 	if (!Parsed.bValid || Parsed < Floor)
 	{
-		OutError = FString::Printf(
-		    TEXT("Bundle manifest version %s is no longer supported (minimum %s). Re-download this "
-		         "AOI from your vault at mantle.place/vault — rebuilding it there re-cuts the bundle "
-		         "on the current pipeline."),
-		    M.Version.IsEmpty() ? TEXT("(absent)") : *M.Version, *MantlePlaceMinSupportedManifestVersion);
+		// One text for both readers (FMantlePlaceBundleReaderLogic): the words are as they shipped.
+		OutError = FMantlePlaceBundleReaderLogic::BelowFloorMessage(M.Version, MantlePlaceMinSupportedManifestVersion);
 		return M;
 	}
 
@@ -485,13 +483,12 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	// This reader speaks 1.x and 2.x (MantlePlaceMaxSupportedManifestMajor): a 2.0 bundle changed the
 	// folders and the names, and every file here is found through a pointer value, so the same
 	// parse reads both. What a 2.0 bundle moved is read where it moved to (the heightmap's and the
-	// UE-ready rasters' value mappings, in `file_entries`), never by branching on the version.
+	// UE-ready rasters' value mappings, in `file_entries`), never by branching on the version. A 3.x
+	// manifest is at the bundle's root, not here, and FMantlePlaceBundleReaderLogic reads it; this path
+	// is the 2.x one, frozen as it ships.
 	if (Parsed.Major > MantlePlaceMaxSupportedManifestMajor)
 	{
-		OutError = FString::Printf(
-		    TEXT("Bundle manifest version %s is newer than this plugin understands (it reads up to %d.x). "
-		         "Update the Mantle Place plugin to import this bundle."),
-		    *M.Version, MantlePlaceMaxSupportedManifestMajor);
+		OutError = FMantlePlaceBundleReaderLogic::NewerMajorMessage(M.Version, MantlePlaceMaxSupportedManifestMajor);
 		return M;
 	}
 
