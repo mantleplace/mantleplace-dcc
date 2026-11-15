@@ -151,8 +151,8 @@ FMantlePlaceRecordFrame FMantlePlacePublicRecordsLogic::StatedFrame(
 		// A factor of exactly 1 is the metre. Any other is stated as it is and refused by CanPlaceFrame.
 		Frame.HorizontalUnit = UnitToMetres == 1.0
 		                           ? FString(TEXT("m"))
-		                           : (UnitName.IsEmpty() ? FString::Printf(TEXT("%g m per unit"), UnitToMetres)
-		                                                 : FString::Printf(TEXT("%s (%g m)"), *UnitName, UnitToMetres));
+		                           : (UnitName.IsEmpty() ? FString::Printf(TEXT("%.10g m per unit"), UnitToMetres)
+		                                                 : FString::Printf(TEXT("%s (%.10g m)"), *UnitName, UnitToMetres));
 	}
 	return Frame;
 }

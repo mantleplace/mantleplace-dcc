@@ -423,7 +423,7 @@ bool FMantlePlacePublicRecordsPublishedFrameTest::RunTest(const FString& Paramet
 	{
 		const FMantlePlaceRecordFrame Frame = FMantlePlacePublicRecordsLogic::StatedFrame(
 			TEXT("projected"), TEXT("EPSG:2277"), true, 0.3048006096, TEXT("US survey foot"));
-		TestEqual(TEXT("a foot is stated as it is, factor and name"), Frame.HorizontalUnit, FString(TEXT("US survey foot (0.3048 m)")));
+		TestEqual(TEXT("a foot is stated as it is, factor and name"), Frame.HorizontalUnit, FString(TEXT("US survey foot (0.3048006096 m)")));
 		TestFalse(TEXT("a foot grid is refused, never scaled"),
 			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:2277"), Refusal));
 		TestTrue(TEXT("and the refusal names the unit: ") + Refusal, Refusal.Contains(TEXT("US survey foot")));
