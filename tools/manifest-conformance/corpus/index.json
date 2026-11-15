@@ -1219,8 +1219,9 @@
           "zoning:Example City:source_down"
         ],
         "publicRecordFrames": [
+          "parcels.gpkg=EPSG:32613 m",
           "parcels.dxf=EPSG:32613 m",
-          "zoning.dxf=EPSG:2258 0.304801 m per unit"
+          "zoning.dxf=EPSG:2258 0.3048006096 m per unit"
         ]
       }
     },
