@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Autodesk.Revit.UI;
 using MantlePlace.Core;
+using MantlePlace.Wpf;
 
 namespace MantlePlace.Revit.Addin;
 

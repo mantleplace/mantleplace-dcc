@@ -6,23 +6,24 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using MantlePlace.Core;
 
-namespace MantlePlace.Revit.Addin;
+namespace MantlePlace.Wpf;
 
 /// <summary>
-/// One notice — a Prepare that ended, or an order new in the vault: a small window in the corner of
-/// Revit's that never takes focus.
+/// One notice (<c>HPS-62</c>): a Prepare that ended, or an order new in the vault. A small window in
+/// the corner of the host's that never takes focus, the same in every host that shows one.
 /// </summary>
 /// <remarks>
 /// <para>
 /// ⛔ <b>It must never take focus.</b> A curator modelling when a bundle finishes is typing into a
-/// view, and a notice that grabs the keyboard eats their next keystroke. Revit has no notification
+/// view, and a notice that grabs the keyboard eats their next keystroke. Neither host has a notification
 /// API of its own, so this is a WPF window made unable to activate twice over: <c>ShowActivated</c>
 /// keeps showing it from activating, and <c>WS_EX_NOACTIVATE</c> keeps a click on it from doing so.
 /// A click still reaches it; only activation is refused.
 /// </para>
 /// <para>
-/// Owned by Revit's main window, so it stays with Revit — in front of it, minimised with it — and is
-/// never a stray top-level window. Not topmost: another application in front of Revit stays in front.
+/// Owned by the host's main window, so it stays with the host — in front of it, minimised with it — and
+/// is never a stray top-level window. Not topmost: another application in front of the host stays in
+/// front.
 /// </para>
 /// <para>
 /// A click anywhere but the close box opens the vault on the bundle; that is the only thing it leads
@@ -30,14 +31,14 @@ namespace MantlePlace.Revit.Addin;
 /// is on it — a curator reading it is not a curator who missed it.
 /// </para>
 /// </remarks>
-internal sealed class NoticePopup : Window
+public sealed class NoticePopup : Window
 {
     private readonly DispatcherTimer _timer;
 
     /// <param name="selectOrderId">The order a click selects in the vault; <c>null</c> for none in particular.</param>
     /// <param name="text">What the notice says.</param>
-    /// <param name="revitWindow">The window the notice belongs to.</param>
-    internal NoticePopup(string? selectOrderId, string text, IntPtr revitWindow)
+    /// <param name="hostWindow">The host's main window, which the notice belongs to.</param>
+    public NoticePopup(string? selectOrderId, string text, IntPtr hostWindow)
     {
         SelectOrderId = selectOrderId;
 
@@ -55,7 +56,7 @@ internal sealed class NoticePopup : Window
         Cursor = Cursors.Hand;
         ToolTip = text;
 
-        new WindowInteropHelper(this) { Owner = revitWindow };
+        new WindowInteropHelper(this) { Owner = hostWindow };
 
         Content = BuildLayout(text);
 
@@ -75,13 +76,13 @@ internal sealed class NoticePopup : Window
     }
 
     /// <summary>The curator clicked the notice: open the vault on its bundle.</summary>
-    internal event EventHandler? Chosen;
+    public event EventHandler? Chosen;
 
     /// <summary>The order a click selects in the vault, when the notice is about one.</summary>
-    internal string? SelectOrderId { get; }
+    public string? SelectOrderId { get; }
 
     /// <summary>Moves the notice to <paramref name="place"/>, in device-independent pixels.</summary>
-    internal void PlaceAt(ScreenRect place)
+    public void PlaceAt(ScreenRect place)
     {
         Left = place.Left;
         Top = place.Top;
@@ -110,7 +111,7 @@ internal sealed class NoticePopup : Window
 
         TextBlock heading = new()
         {
-            Text = WindowLabels.VaultWindowTitle,
+            Text = WindowLabels.NoticeTitle,
             FontWeight = FontWeights.SemiBold,
             Foreground = SystemColors.GrayTextBrush,
             Margin = new Thickness(0, 0, 0, 4),

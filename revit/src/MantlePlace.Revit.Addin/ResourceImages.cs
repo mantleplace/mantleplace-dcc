@@ -15,12 +15,11 @@ namespace MantlePlace.Revit.Addin;
 /// what stops a release whose ribbon is blank because one folder did not get zipped.
 /// </para>
 /// <para>
-/// Its own type, apart from <see cref="RibbonImagery"/>, for two reasons. Both the ribbon and the
-/// windows' <see cref="BrandChrome"/> decode from this table, and a second copy of the method below
-/// would be a second place to forget the <c>ResourceAssembly</c> touch. And <b>nothing here
-/// references the Revit API</b>, which is what lets the windows be built and rendered offscreen from
-/// the compiled assembly on a machine with no Revit running — the only check this shim's WPF gets,
-/// since CI never builds it (<c>HPS-42</c>).
+/// Its own type, apart from <see cref="RibbonImagery"/>, so the method below has one home and one
+/// place to remember the <c>ResourceAssembly</c> touch, and so <b>nothing here references the Revit
+/// API</b>. The ribbon is its only reader: the windows are the shared set
+/// (<c>shared/src/MantlePlace.Wpf</c>), which decode the mark from their own assembly's resources
+/// (<c>MarkImages</c>).
 /// </para>
 /// <para>
 /// Which file name to ask for is never decided here: that is <c>MarkRenders</c> and

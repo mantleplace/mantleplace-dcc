@@ -5,30 +5,30 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using MantlePlace.Core;
 
-namespace MantlePlace.Revit.Addin;
+namespace MantlePlace.Wpf;
 
 /// <summary>
-/// The two brand touches the plugin's windows share: the header row, and the fill on the one primary
-/// action.
+/// The two brand touches the plugin's windows share, in every host that opens them: the header row,
+/// and the fill on the one primary action.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Both windows had nothing but a title bar saying who they belonged to. This puts the mark and the
 /// window's purpose above the content, and the brand orange on exactly one button in the whole
-/// plugin. <b>Everything else keeps Revit's own chrome</b> — no restyled list rows, no custom fonts,
+/// plugin. <b>Everything else keeps the host's own chrome</b> — no restyled list rows, no custom fonts,
 /// no brand background. An add-in that paints its own windows stops looking like part of the host,
 /// which is the failure the ribbon pass exists to fix, not one to introduce here.
 /// </para>
 /// <para>
-/// Shared rather than copied into each window because there are two of them and the second copy is
-/// the one that drifts. What is decided here is WPF assembly and nothing else: the words are
+/// One source for both .NET hosts rather than a copy in each, because the second copy is the one that
+/// drifts. What is decided here is WPF assembly and nothing else: the words are
 /// <see cref="WindowLabels"/>, the colour is <see cref="BrandPalette"/>, and which render of the mark
 /// goes in the <see cref="MarkRenders.HeaderSlotPixels"/> slot is <see cref="MarkRenders"/> — all
 /// three in the pure core, where CI can see them (<c>HPS-02</c>, <c>HPS-42</c>). The decode itself is
-/// <see cref="ResourceImages.Decode"/>, shared with the ribbon so the pack URI has one home.
+/// <see cref="MarkImages.Decode"/>, which a host's ribbon may use for the same renders.
 /// </para>
 /// </remarks>
-internal static class BrandChrome
+public static class BrandChrome
 {
     /// <summary>Names the one element in the primary button's template that the triggers repaint.</summary>
     private const string FillName = "MantlePlaceFill";
@@ -37,10 +37,10 @@ internal static class BrandChrome
     /// The primary action's look, built once per thread and shared by that thread's windows.
     /// </summary>
     /// <remarks>
-    /// ⛔ Per thread, because a <see cref="Style"/> has thread affinity until it is sealed, and there
-    /// are two UI threads now: Revit's, for the vault and sign-in windows, and the import window's own
-    /// (<see cref="ImportWindowHost"/>). One shared instance was built by whichever thread reached it
-    /// first and would have been refused by the other.
+    /// ⛔ Per thread, because a <see cref="Style"/> has thread affinity until it is sealed, and a host
+    /// may run more than one UI thread: Revit runs its own, for the vault and sign-in windows, and the
+    /// import window's own. One shared instance was built by whichever thread reached it first and
+    /// would have been refused by the other.
     /// </remarks>
     [ThreadStatic]
     private static Style? _primaryStyle;
@@ -56,7 +56,7 @@ internal static class BrandChrome
     /// height is the mark's slot plus the gap, and a window that grows by exactly this keeps the
     /// content it showed before.
     /// </remarks>
-    internal const double HeaderHeight = MarkRenders.HeaderSlotPixels + HeaderGap;
+    public const double HeaderHeight = MarkRenders.HeaderSlotPixels + HeaderGap;
 
     /// <summary>
     /// Puts the mark and the window's purpose above everything else in <paramref name="root"/>.
@@ -68,7 +68,7 @@ internal static class BrandChrome
     /// </remarks>
     /// <param name="root">The window's root panel, still empty.</param>
     /// <param name="heading">The window's purpose — one of <see cref="WindowLabels"/>'s headings.</param>
-    internal static void AddHeader(DockPanel root, string heading)
+    public static void AddHeader(DockPanel root, string heading)
     {
         ArgumentNullException.ThrowIfNull(root);
 
@@ -94,7 +94,7 @@ internal static class BrandChrome
     /// scaling one render up or down. Which renders exist is <see cref="MarkRenders"/>'s.
     /// </para>
     /// </remarks>
-    internal static void ShowMarkInTitleBar(Window window)
+    public static void ShowMarkInTitleBar(Window window)
     {
         ArgumentNullException.ThrowIfNull(window);
 
@@ -111,14 +111,14 @@ internal static class BrandChrome
     /// <remarks>
     /// TIFF because it is the one multi-frame format WPF both encodes and decodes with an alpha
     /// channel. Built per window, on that window's thread: a decoder is bound to the thread that made
-    /// it, and there are two UI threads in the Revit plugin.
+    /// it, and a host may run more than one UI thread (Revit does).
     /// </remarks>
     private static BitmapFrame? TitleBarIcon()
     {
         TiffBitmapEncoder encoder = new();
         foreach (int size in MarkRenders.Sizes)
         {
-            if (ResourceImages.Decode(MarkRenders.FileNameOf(size)) is BitmapSource render)
+            if (MarkImages.Decode(MarkRenders.FileNameOf(size)) is BitmapSource render)
             {
                 encoder.Frames.Add(BitmapFrame.Create(render));
             }
@@ -141,13 +141,13 @@ internal static class BrandChrome
     /// orange.
     /// </summary>
     /// <remarks>
-    /// ⛔ Setting <c>Background</c> alone does not hold. Revit 2025's WPF ships the Aero2 theme, whose
+    /// ⛔ Setting <c>Background</c> alone does not hold. The hosts' WPF ships the Aero2 theme, whose
     /// default <c>Button</c> template replaces the background with a theme brush on hover and on
     /// press — so a button painted that way is orange until the cursor touches it and blue-grey
     /// after. Replacing the template is the only way the colour survives an interaction, and it is
     /// still one button in one window rather than a restyle.
     /// </remarks>
-    internal static void MakePrimary(Button button)
+    public static void MakePrimary(Button button)
     {
         ArgumentNullException.ThrowIfNull(button);
         button.Style = _primaryStyle ??= BuildPrimaryStyle();
@@ -202,7 +202,7 @@ internal static class BrandChrome
         return trigger;
     }
 
-    internal static SolidColorBrush Frozen(BrandColour colour)
+    public static SolidColorBrush Frozen(BrandColour colour)
     {
         SolidColorBrush brush = new(Color.FromRgb(colour.R, colour.G, colour.B));
         brush.Freeze();
@@ -268,7 +268,7 @@ internal static class BrandChrome
                 return;
             }
 
-            if (ResourceImages.Decode(fileName) is not { } source)
+            if (MarkImages.Decode(fileName) is not { } source)
             {
                 return;
             }

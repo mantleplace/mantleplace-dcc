@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.Runtime;
 using MantlePlace.AutoCad.Addin;
 using MantlePlace.Client;
 using MantlePlace.Core;
+using MantlePlace.Wpf;
 
 namespace MantlePlace.AutoCad.Addin;
 

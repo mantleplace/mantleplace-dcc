@@ -59,6 +59,7 @@ and datum refusals.
 ../shared/src/MantlePlace.Core/         PURE. No host API, no I/O, no NuGet. net8.0. Shared with AutoCAD.
 ../shared/src/MantlePlace.PlatformApi/  HOST-NEUTRAL. The generated Platform API client and its transport. net8.0.
 ../shared/src/MantlePlace.Client/       IMPURE, but not a host. HTTP, cache, zip, secrets. net8.0.
+../shared/src/MantlePlace.Wpf/          IMPURE (WPF), but not a host. Sign-in, vault, About, notices. net8.0-windows.
 src/MantlePlace.Revit.Addin/            IMPURE and Revit. Ribbon, transactions. The .NET of the API it compiles against.
 ../shared/tests/MantlePlace.Core.Tests/ Headless, over Core AND Client, as the Revit plugin. net8.0 + net10.0.
 ```

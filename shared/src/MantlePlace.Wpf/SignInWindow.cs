@@ -4,17 +4,17 @@ using System.Windows.Interop;
 using MantlePlace.Client;
 using MantlePlace.Core;
 
-namespace MantlePlace.AutoCad.Addin;
+namespace MantlePlace.Wpf;
 
 /// <summary>
 /// The modeless surface a browser sign-in runs behind: what is happening, and a way to stop it.
 /// </summary>
 /// <remarks>
 /// <para>
-/// It exists because <c>IExternalCommand.Execute</c> is synchronous and the sign-in is not. Waiting
+/// It exists because a host's command is synchronous and the sign-in is not. Waiting
 /// for the browser round-trip on the calling thread froze the whole application for up to the
 /// five-minute timeout, with nothing on screen and no way out. The command now starts the flow,
-/// shows this, and returns; AutoCAD stays usable while the curator is in their browser.
+/// shows this, and returns; the host stays usable while the curator is in their browser.
 /// </para>
 /// <para>
 /// The Cancel button is the point, not decoration. <see cref="AuthSession.CancelSignIn"/> and the
@@ -23,28 +23,28 @@ namespace MantlePlace.AutoCad.Addin;
 /// underneath, but a backstop is not a substitute for a button.
 /// </para>
 /// <para>
-/// One window per AutoCAD session, enforced by the command. This is the shim: it starts the flow and
+/// One window per host session, enforced by the host's command, and one source for every host that
+/// opens it: the host hands it the session and its main window, and its name is read from
+/// <see cref="HostIdentity"/>. This is the shim: it starts the flow and
 /// reports what came back, and every decision in between belongs to
 /// <c>MantlePlace.Client</c> and the pure core beneath it.
 /// </para>
 /// </remarks>
-internal sealed class SignInWindow : Window
+public sealed class SignInWindow : Window
 {
     private readonly AuthSession _session;
 
     /// <summary>
     /// True while the browser round-trip is in flight — which is the only time closing this window
     /// means "stop". After it clears there is nothing to cancel, and asking for one anyway is what
-    /// used to take AutoCAD down.
+    /// used to take the host down.
     /// </summary>
     private bool _running;
 
-    private readonly TextBlock _status = new()
-    {
-        TextWrapping = TextWrapping.Wrap,
-        Text = "Opening your browser. Finish signing in there, then come back — "
-            + "AutoCAD stays usable while you do.",
-    };
+    /// <summary>The host's product name, for the two sentences that name it.</summary>
+    private readonly string _hostName = WindowLabels.HostName(HostIdentity.Id);
+
+    private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap };
 
     private readonly Button _cancel = new()
     {
@@ -60,9 +60,13 @@ internal sealed class SignInWindow : Window
         Visibility = Visibility.Collapsed,
     };
 
-    internal SignInWindow(AuthSession session, IntPtr hostWindow)
+    /// <param name="session">The plugin's session, which runs the flow.</param>
+    /// <param name="hostWindow">The host's main window, which owns this one.</param>
+    public SignInWindow(AuthSession session, IntPtr hostWindow)
     {
         _session = session;
+        _status.Text = "Opening your browser. Finish signing in there, then come back — "
+            + $"{_hostName} stays usable while you do.";
 
         Title = WindowLabels.SignInWindowTitle;
         BrandChrome.ShowMarkInTitleBar(this);
@@ -74,7 +78,7 @@ internal sealed class SignInWindow : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        // Owned by AutoCAD's main window, so it stays in front of it and minimises with it rather
+        // Owned by the host's main window, so it stays in front of it and minimises with it rather
         // than becoming a stray top-level window the curator loses behind the model.
         new WindowInteropHelper(this) { Owner = hostWindow };
 
@@ -90,7 +94,7 @@ internal sealed class SignInWindow : Window
         // The _running test is the other half of that sentence, and it used to be missing: once the
         // sign-in has finished there is nothing to cancel, and cancelling anyway reached into a
         // CancellationTokenSource that SignInAsync had already disposed. Pressing Close on a
-        // SUCCESSFUL sign-in therefore threw out of this handler and terminated AutoCAD.
+        // SUCCESSFUL sign-in therefore threw out of this handler and terminated the host.
         Closed += (_, _) => Guarded(() =>
         {
             if (_running)
@@ -106,7 +110,7 @@ internal sealed class SignInWindow : Window
     /// <remarks>
     /// These three handlers are the only entry points into this window that <see cref="RunAsync"/>'s
     /// own catch does not cover — it protects the task, and the task is over by the time the curator
-    /// reaches for a button. A throw from here lands on AutoCAD's message pump, which has no filter a
+    /// reaches for a button. A throw from here lands on the host's message pump, which has no filter a
     /// third-party add-in participates in, so the whole application goes down over a sign-in dialog.
     /// </remarks>
     private void Guarded(Action body)
@@ -153,7 +157,7 @@ internal sealed class SignInWindow : Window
     /// unobserved fault on a fire-and-forget task surfaces later, somewhere unrelated, as a crash
     /// with no connection to the button that caused it.
     /// </remarks>
-    internal async Task RunAsync()
+    public async Task RunAsync()
     {
         _running = true;
         try
@@ -183,7 +187,7 @@ internal sealed class SignInWindow : Window
                 return;
             }
 
-            Settle(Describe(_session));
+            Settle(Describe(_session, _hostName));
         }
         catch (Exception ex)
         {
@@ -206,7 +210,7 @@ internal sealed class SignInWindow : Window
     }
 
     /// <summary>Says plainly whether the session survives a restart (<c>HPS-16</c>).</summary>
-    private static string Describe(AuthSession session)
+    private static string Describe(AuthSession session, string hostName)
     {
         string who = session.UserEmail.Length > 0
             ? $"Signed in as {session.UserEmail}."
@@ -215,6 +219,6 @@ internal sealed class SignInWindow : Window
         return session.IsPersistent
             ? who
             : who + " This machine has no secure credential store, so you will need to sign in again "
-                + "next time AutoCAD starts.";
+                + $"next time {hostName} starts.";
     }
 }

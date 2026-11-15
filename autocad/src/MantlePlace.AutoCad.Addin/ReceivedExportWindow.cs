@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using MantlePlace.AutoCad;
 using MantlePlace.Core;
+using MantlePlace.Wpf;
 
 namespace MantlePlace.AutoCad.Addin;
 

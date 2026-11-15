@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Interop;
 using MantlePlace.Core;
+using MantlePlace.Wpf;
 
 namespace MantlePlace.Revit.Addin;
 

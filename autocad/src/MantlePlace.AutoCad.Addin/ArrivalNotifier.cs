@@ -1,5 +1,6 @@
 using MantlePlace.Client;
 using MantlePlace.Core;
+using MantlePlace.Wpf;
 
 namespace MantlePlace.AutoCad.Addin;
 
@@ -133,6 +134,12 @@ internal static class VaultBrowser
             MantlePlaceApplication.Session,
             MantlePlaceApplication.Vault,
             MantlePlaceApplication.Cache,
+            MantlePlaceApplication.Announced,
+            FeedbackLauncher.TryOpen,
+
+            // No Prepare and no Import yet: an order reaches a drawing through an export sent from
+            // the web vault, or through Import Bundle.
+            importing: null,
             hostWindow,
             selectOrderId);
 

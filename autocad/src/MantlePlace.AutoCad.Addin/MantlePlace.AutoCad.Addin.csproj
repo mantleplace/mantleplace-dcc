@@ -29,14 +29,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MantlePlace.AutoCad.Core\MantlePlace.AutoCad.Core.csproj" />
-  </ItemGroup>
-
-  <!-- The monogram renders the windows draw: the Revit plugin's files, linked rather than copied so no
-       second binary is committed. They are embedded and read as streams (ResourceImages), because a
-       pack URI does not find an assembly AutoCAD loaded into a load context of its own. -->
-  <ItemGroup>
-    <EmbeddedResource Include="..\..\..\revit\src\MantlePlace.Revit.Addin\Resources\MantlePlaceMark_*.png"
-                      LogicalName="MantlePlace.AutoCad.Addin.Resources.%(Filename)%(Extension)" />
+    <!-- The windows every .NET host opens, from one source: sign-in, vault, About, the notices, and the
+         monogram renders they and this ribbon draw (MarkImages). -->
+    <ProjectReference Include="..\..\..\shared\src\MantlePlace.Wpf\MantlePlace.Wpf.csproj" />
   </ItemGroup>
 
   <!-- The Civil 3D part is built beside the shell and shipped in the same folder, but never referenced:

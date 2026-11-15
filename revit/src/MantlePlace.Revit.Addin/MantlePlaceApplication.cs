@@ -158,7 +158,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
     /// </para>
     /// <para>
     /// This is a net under a mistake. The contract is still that a handler does not throw; see
-    /// <c>SignInWindow.Guarded</c>, which is where the fault is supposed to be caught.
+    /// <c>SignInWindow.Guarded</c> (the shared windows, <c>shared/src/MantlePlace.Wpf</c>), which is where the fault is supposed to be caught.
     /// </para>
     /// </remarks>
     private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

@@ -1,8 +1,9 @@
 <Project>
 
   <!--
-    Shared MSBuild properties for the host-neutral .NET code: the pure core, the client and the
-    generated Platform API client every .NET host plugin builds from, and their headless suite.
+    Shared MSBuild properties for the host-neutral .NET code: the pure core, the client, the
+    generated Platform API client and the windows every .NET host plugin builds from, and their
+    headless suite.
 
     Three rules worth knowing before adding a project here:
 

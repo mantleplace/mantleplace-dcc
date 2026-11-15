@@ -3,6 +3,7 @@ using System.Windows.Input;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Ribbon;
 using Autodesk.Windows;
+using MantlePlace.Wpf;
 using AcApplication = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MantlePlace.AutoCad.Addin;
@@ -135,8 +136,8 @@ internal static class PluginRibbon
                 ShowImage = true,
                 Size = RibbonItemSize.Large,
                 Orientation = Orientation.Vertical,
-                Image = ResourceImages.Decode(PlugInsPanel.ImageSources[0]),
-                LargeImage = ResourceImages.Decode(PlugInsPanel.ImageSources[1]),
+                Image = MarkImages.Decode(PlugInsPanel.ImageSources[0]),
+                LargeImage = MarkImages.Decode(PlugInsPanel.ImageSources[1]),
                 CommandParameter = command.Command,
                 CommandHandler = RunCommand.Instance,
 

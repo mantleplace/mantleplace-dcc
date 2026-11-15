@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using MantlePlace.Client;
 using MantlePlace.Core;
+using MantlePlace.Wpf;
 
 namespace MantlePlace.Revit.Addin;
 

@@ -1,6 +1,7 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using MantlePlace.Wpf;
 
 namespace MantlePlace.Revit.Addin;
 
@@ -58,9 +59,11 @@ public sealed class VaultBrowserCommand : IExternalCommand
             MantlePlaceApplication.Session,
             MantlePlaceApplication.Vault,
             MantlePlaceApplication.Cache,
-            MantlePlaceApplication.Watcher,
-            MantlePlaceApplication.ImportEvent,
-            MantlePlaceApplication.ImportHandler,
+            MantlePlaceApplication.Announced,
+            FeedbackLauncher.TryOpen,
+            new VaultImporting(
+                MantlePlaceApplication.Watcher,
+                new RevitVaultImport(MantlePlaceApplication.ImportEvent, MantlePlaceApplication.ImportHandler)),
             revitWindow,
             selectOrderId);
 

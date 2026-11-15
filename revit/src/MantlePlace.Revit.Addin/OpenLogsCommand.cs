@@ -41,22 +41,26 @@ public sealed class OpenLogsCommand : IExternalCommand
     /// Shows the newest log, or says why there is none.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Shared with the About dialog's "Open the import logs" link on purpose.</b> Two commands
-    /// that both claim to open the logs and open different folders is a support call that starts
-    /// with the curator and the maintainer looking at different directories. One function, one
-    /// answer — see <see cref="AboutMantlePlace"/>.
+    /// <para>
+    /// ⛔ <b>Shared with the About window's Logs button on purpose.</b> Two commands that both claim
+    /// to open the logs and open different folders is a support call that starts with the curator
+    /// and the maintainer looking at different directories. One function, one answer — see
+    /// <see cref="AboutMantlePlace"/>.
+    /// </para>
+    /// <para>
+    /// The About window is the shared WPF one, and its button runs on Revit's thread but outside a
+    /// Revit API context, where a <c>TaskDialog</c> is not allowed; from there the two sentences
+    /// below are a WPF message box, as <see cref="ClientUpdateDialog"/>'s are.
+    /// </para>
     /// </remarks>
-    internal static void Show()
+    /// <param name="fromWindow">True when called from a window's button rather than a ribbon command.</param>
+    internal static void Show(bool fromWindow = false)
     {
         OpenLogsTarget target = BundleLogSearch.ResolveTarget();
 
         if (target.Notice is { } notice)
         {
-            new TaskDialog("Mantle Place")
-            {
-                MainInstruction = "No log has been written yet.",
-                MainContent = notice,
-            }.Show();
+            Say("No log has been written yet.", notice, fromWindow);
         }
 
         bool opened = target.RevealFilePath is { } log
@@ -67,11 +71,23 @@ public sealed class OpenLogsCommand : IExternalCommand
         {
             // Not worth failing the command over — the path is the answer, and a curator can paste
             // it somewhere themselves.
-            new TaskDialog("Mantle Place")
-            {
-                MainInstruction = "Could not open File Explorer.",
-                MainContent = $"Open it yourself: {refused}",
-            }.Show();
+            Say("Could not open File Explorer.", $"Open it yourself: {refused}", fromWindow);
         }
+    }
+
+    private static void Say(string instruction, string content, bool fromWindow)
+    {
+        if (fromWindow)
+        {
+            _ = System.Windows.MessageBox.Show(
+                $"{instruction}\n\n{content}", "Mantle Place", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        new TaskDialog("Mantle Place")
+        {
+            MainInstruction = instruction,
+            MainContent = content,
+        }.Show();
     }
 }

@@ -1,8 +1,6 @@
-using MantlePlace.Core.Tests;
+namespace MantlePlace.Core.Tests;
 
-namespace MantlePlace.AutoCad.Tests;
-
-/// <summary>The About command's text and its privacy link.</summary>
+/// <summary>The About window's text and its privacy link, for every host that opens it.</summary>
 internal static class AboutPageTests
 {
     internal static int Run()
@@ -21,6 +19,13 @@ internal static class AboutPageTests
             string body = AboutPage.Body("build line", "civil line", "session line");
 
             run.Equal("build line\n\ncivil line\n\nsession line", body, "three paragraphs");
+        });
+
+        run.Case("the body keeps as many paragraphs as a host gives, in its order", () =>
+        {
+            string body = AboutPage.Body("build line", "running line", "supports line", "session line");
+
+            run.Equal("build line\n\nrunning line\n\nsupports line\n\nsession line", body, "four paragraphs");
         });
 
         return run.Report("About page");
