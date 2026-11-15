@@ -143,13 +143,23 @@ not to the 2.x pointer, frame and layout checks above:
   holds, `Readme.md` and `Manifest.json` included: an entry with no file is
   `catalog.file-missing`, a file with no entry `catalog.entry-missing`, no catalog at all
   `catalog.absent`. Every entry but the manifest's states a sha256 (`catalog.sha256-missing`), and
-  each is verified (`sha256.mismatch`). An entry that is not a plain relative path is
-  `pointer.unsafe`.
+  each is verified (`sha256.mismatch`). An entry of a file whose row in the file table gives a count
+  states one (`catalog.count-missing`); only `Readme.md`, `Manifest.json` and `Terrain.mtl` say
+  `None`, and a file the 3.0 table does not list needs none. An entry that is not a plain relative
+  path is `pointer.unsafe`.
+- **No per-host block** (§9.7), in the `manifest` check. A `hosts` member, or a member named for a
+  host (`unreal`, `revit`, `autocad`, `blender`), is `manifest.host-block`.
+- **The zip's compression** (`conformance.md` §7), the `zip` check, for a zip and skipped for a
+  folder: each member is DEFLATE-compressed, or stored where DEFLATE does not shrink it. A member in
+  any other method (BZIP2, LZMA), or stored when DEFLATE, at its default level, would make it
+  smaller, is `zip.compression`. It reads the archive's own member records, so it needs the zip and
+  not an extracted tree.
 - **ODbL roles**, as for 2.x: a vector or tabular data file is never a Produced Work, and a file
   whose role is `none` lists no ODbL source.
 
-The 3.x schema names the manifest's members: the check reads the catalog from `catalog` and the
-level from `level`, in `layout3.py` and nowhere else. A 3.x manifest that states only the 2.x
+The 3.x schema names the manifest's members: the checks read the catalog from `catalog`, the
+level from `level`, an entry's count from `count` and the per-host block from `hosts`, in
+`layout3.py` and nowhere else. A 3.x manifest that states only the 2.x
 member `file_entries` has no catalog. A manifest that declares a later major is read for its version
 and nothing else.
 

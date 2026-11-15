@@ -25,6 +25,11 @@ Two case fields change how a case is run, not what it must report:
 - A case whose paths differ only by case is built as the two zips and never as a folder: no
   folder can hold it on a case-insensitive file system, which is why the rule exists.
 
+A case body may also carry `zipMethods`, an object from an archive path to the zip method that
+member is written with (`stored`, `deflate`, `bzip2` or `lzma`; the rest are DEFLATE). A folder has
+no zip method, so a case that sets one is built as the two zips only, as a case whose paths differ
+only by case is.
+
 An expectation key the runner does not know fails the case: a runner that reads past an
 assertion it does not understand would pass a corpus full of assertions it never made.
 """
@@ -46,6 +51,8 @@ GROUP = "bundle"
 FORMS = ("folder", "zip", "wrapped")
 _EXPECTATION_KEYS = frozenset({"errors", "warnings", "hashesVerified"})
 _WRAPPER = "Bundle/"
+_METHODS = {"stored": zipfile.ZIP_STORED, "deflate": zipfile.ZIP_DEFLATED,
+            "bzip2": zipfile.ZIP_BZIP2, "lzma": zipfile.ZIP_LZMA}
 
 
 class CorpusError(Exception):
@@ -111,7 +118,20 @@ def _materialise(files: object) -> dict[str, bytes]:
     return out
 
 
-def _build(form: str, files: dict[str, bytes], where: Path) -> Path:
+def _methods(body: object, files: dict[str, bytes]) -> dict[str, int]:
+    """The zip method of each member a case body names in `zipMethods`."""
+    named = body.get("zipMethods") if isinstance(body, dict) else None
+    if named is None:
+        return {}
+    if not isinstance(named, dict) or any(
+            name not in files or method not in _METHODS for name, method in named.items()):
+        raise ValueError("`zipMethods` maps a path of `files` to one of "
+                         + ", ".join(_METHODS))
+    return {name: _METHODS[method] for name, method in named.items()}
+
+
+def _build(form: str, files: dict[str, bytes], where: Path,
+           methods: dict[str, int] | None = None) -> Path:
     if form == "folder":
         for name, data in files.items():
             target = where / "bundle" / name
@@ -122,11 +142,14 @@ def _build(form: str, files: dict[str, bytes], where: Path) -> Path:
     path = where / f"{form}.zip"
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, data in files.items():
-            archive.writestr(prefix + name, data)
+            archive.writestr(prefix + name, data, compress_type=(methods or {}).get(
+                name, zipfile.ZIP_DEFLATED))
     return path
 
 
-def _forms(files: dict[str, bytes]) -> tuple[str, ...]:
+def _forms(files: dict[str, bytes], methods: dict[str, int] | None = None) -> tuple[str, ...]:
+    if methods:
+        return tuple(form for form in FORMS if form != "folder")
     entries = {"/".join(name.split("/")[:i]) for name in files for i in range(1, name.count("/") + 2)}
     if len({entry.casefold() for entry in entries}) < len(entries):
         return tuple(form for form in FORMS if form != "folder")
@@ -172,13 +195,14 @@ def run_corpus(corpus: Path, schemas: SchemaSource) -> tuple[int, list[str]]:
         try:
             body = json.loads((corpus / case["file"]).read_text(encoding="utf-8"))
             files = _materialise(body.get("files") if isinstance(body, dict) else None)
+            methods = _methods(body, files)
         except (OSError, ValueError, KeyError, TypeError) as exc:
             failures.append(f"{case_id}: the case cannot be read: {exc}")
             continue
         source = staged if case.get("stagedSchema") is True else schemas
-        for form in _forms(files):
+        for form in _forms(files, methods):
             with tempfile.TemporaryDirectory(prefix="mpb-corpus-") as tmp:
-                report = validate(_build(form, files, Path(tmp)), schemas=source)
+                report = validate(_build(form, files, Path(tmp), methods), schemas=source)
                 if report.incomplete:
                     raise CorpusError(f"{case_id} ({form}) could not be checked: "
                                       + "; ".join(f.message for f in report.findings

@@ -38,8 +38,10 @@ def bundle3(extra: dict[str, bytes] | None = None, *, level: object = "Max",
     for path, data in files.items():
         terms = ODBL if path.endswith(".gpkg") else TERMS
         entries[path] = {**terms, "sha256": sha256(data)}
+        if path != "Readme.md":
+            entries[path]["count"] = {"kind": "pixels", "value": 1}
     for path in add_entries:
-        entries[path] = {**TERMS, "sha256": "0" * 64}
+        entries[path] = {**TERMS, "sha256": "0" * 64, "count": {"kind": "pixels", "value": 1}}
     for path in drop_entries:
         entries.pop(path, None)
     document: dict = {"version": "3.0.0", "catalog": entries, "not_held": []}
@@ -250,6 +252,38 @@ class TheCatalog(Case):
         files["Manifest.json"] = json.dumps(document).encode("utf-8")
         self.assertRejects(self.run_folder(files), "name.case-mismatch")
 
+    def test_an_entry_with_no_count(self) -> None:
+        files = bundle3()
+        document = json.loads(files["Manifest.json"])
+        del document["catalog"]["Elevation/Terrain.glb"]["count"]
+        files["Manifest.json"] = json.dumps(document).encode("utf-8")
+        report = self.run_folder(files)
+        self.assertRejects(report, "catalog.count-missing")
+        self.assertEqual(["/catalog/Elevation~1Terrain.glb/count"],
+                         [f.pointer for f in report.findings if f.code == "catalog.count-missing"])
+
+    def test_a_count_that_is_not_an_object_is_no_count(self) -> None:
+        files = bundle3()
+        document = json.loads(files["Manifest.json"])
+        document["catalog"]["Elevation/Terrain.glb"]["count"] = 3
+        files["Manifest.json"] = json.dumps(document).encode("utf-8")
+        self.assertRejects(self.run_folder(files), "catalog.count-missing")
+
+    def test_a_row_that_gives_no_count_needs_none(self) -> None:
+        """`Readme.md`, `Manifest.json` and `Terrain.mtl` say `None` in the file table."""
+        files = bundle3({"Elevation/Terrain.mtl": b"material"})
+        document = json.loads(files["Manifest.json"])
+        document["catalog"]["Elevation/Terrain.mtl"] = {**TERMS, "sha256": sha256(b"material")}
+        files["Manifest.json"] = json.dumps(document).encode("utf-8")
+        self.assertEqual("pass", self.run_folder(files).verdict)
+
+    def test_a_file_the_table_does_not_list_needs_no_count(self) -> None:
+        files = bundle3({"Basemap/Zones.gpkg": b"zones"}, **{})
+        document = json.loads(files["Manifest.json"])
+        del document["catalog"]["Basemap/Zones.gpkg"]["count"]
+        files["Manifest.json"] = json.dumps(document).encode("utf-8")
+        self.assertNotIn("catalog.count-missing", self.codes(self.run_folder(files)))
+
     def test_a_hash_mismatch(self) -> None:
         files = bundle3()
         files["Elevation/Terrain.glb"] = b"changed"
@@ -275,6 +309,23 @@ class TheCatalog(Case):
         self.assertRejects(report, "role.extension-mismatch")
         self.assertEqual(["/catalog/Basemap~1Roads.gpkg/odbl_role"],
                          [f.pointer for f in report.findings if f.code == "role.extension-mismatch"])
+
+
+class NoPerHostBlock(Case):
+    def test_a_hosts_member(self) -> None:
+        report = self.run_folder(bundle3(hosts={"unreal": {"file_frame": {}}}))
+        self.assertRejects(report, "manifest.host-block")
+        self.assertEqual(["/hosts"], [f.pointer for f in report.findings
+                                      if f.code == "manifest.host-block"])
+
+    def test_a_member_named_for_a_host(self) -> None:
+        for host in ("unreal", "revit", "autocad", "blender"):
+            with self.subTest(host=host):
+                self.assertRejects(self.run_folder(bundle3(**{host: {"origin": {}}})),
+                                   "manifest.host-block")
+
+    def test_a_credits_member_is_no_host_block(self) -> None:
+        self.assertEqual("pass", self.run_folder(bundle3(credits=[])).verdict)
 
 
 class TheManifestsPlace(Case):

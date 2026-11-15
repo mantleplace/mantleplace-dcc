@@ -59,6 +59,12 @@ class Bundle:
     def files(self) -> list[str]:
         return sorted(self._files)
 
+    def members(self) -> list[tuple[str, zipfile.ZipInfo]]:
+        """`(path, zip entry)` for each file of a zip, sorted by path; none for a folder."""
+        if self._archive is None:
+            return []
+        return [(path, self._files[path]) for path in self.files]  # type: ignore[misc]
+
     def has_file(self, path: str) -> bool:
         return path in self._files
 
