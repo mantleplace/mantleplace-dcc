@@ -771,6 +771,15 @@ public sealed class ImportStep
     /// </summary>
     public FidelityLevels? Levels { get; init; }
 
+    /// <summary>
+    /// What the file this step reads holds, as an MPB 3.0 catalog counts it, in the unit this step's
+    /// measured cost is per (<see cref="SlowStepNotice.CostOfCatalogCount"/>); <c>null</c> for a 2.x
+    /// plan, whose levels state their own cost, for a file whose catalog entry states no count, and for
+    /// a step with no measured cost per unit. The import window's estimate and its budget read it
+    /// (<see cref="ImportChecklist.EstimateNote"/>); the step still reads the whole file.
+    /// </summary>
+    public CostDriver? Cost { get; internal set; }
+
     /// <summary>The level this step imports, as applied; <c>null</c> for an entry with no levels.</summary>
     public AppliedLevel? Level { get; init; }
 

@@ -442,7 +442,7 @@ internal sealed partial class ImportWindow : Window
             rows.Children.Add(box);
             _boxes[layer] = box;
 
-            TextBlock note = new() { Margin = new Thickness(0, 2, 0, 2), Opacity = 0.7 };
+            TextBlock note = new() { Margin = new Thickness(0, 2, 0, 2), Opacity = 0.7, TextWrapping = TextWrapping.Wrap, MaxWidth = 340 };
             Grid.SetRow(note, index);
             Grid.SetColumn(note, 1);
             rows.Children.Add(note);
@@ -515,7 +515,7 @@ internal sealed partial class ImportWindow : Window
                 _boxes[layer].IsEnabled = _checklist.IsEnabled(layer);
                 _notes[layer].Text = _checklist.MissingPrerequisite(layer) is { } missing
                     ? WindowLabels.Needs(missing)
-                    : string.Empty;
+                    : _checklist.EstimateNote(layer) ?? string.Empty;
             }
 
             RefreshLevels(_checklist);

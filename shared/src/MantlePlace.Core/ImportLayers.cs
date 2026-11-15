@@ -236,7 +236,9 @@ public sealed partial class ImportChecklist
             plan.Skipped,
             revitVersionNumber);
         checklist.OfferLevels(plan.Steps);
+        checklist.OfferEstimates(plan.Steps);
         checklist.Restore(remembered);
+        checklist.UntickOverBudget();
         return checklist;
     }
 
