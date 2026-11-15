@@ -26,6 +26,21 @@ internal static class ManifestThreeReader
     /// <summary>The download's one level (<c>spec/format.md</c> §9.3).</summary>
     private const string LevelMember = "level";
 
+    /// <summary>The bundle statement's order (§9.3), and its identity: the one id that joins a bundle to its vault entry.</summary>
+    private const string OrderMember = "order";
+
+    private const string OrderIdMember = "id";
+
+    /// <summary>A GeoPackage entry's table names (§13, R20).</summary>
+    private const string TablesMember = "tables";
+
+    /// <summary>The bundle's credits, each a line of text and a link (§9.8), and the two members of one.</summary>
+    private const string CreditsMember = "credits";
+
+    private const string CreditTextMember = "text";
+
+    private const string CreditLinkMember = "link";
+
     /// <summary>The one file catalog, keyed by each file's path in the zip (§9.5).</summary>
     private const string CatalogMember = "catalog";
 
@@ -206,6 +221,7 @@ internal static class ManifestThreeReader
                     _ => LinearUnit.Unspecified,
                 },
                 Raster = entry.Value.ValueKind == JsonValueKind.Object ? Raster(entry.Value) : null,
+                Tables = entry.Value.ValueKind == JsonValueKind.Object ? entry.Value.StringArray(TablesMember) : [],
             });
         }
 
@@ -227,6 +243,16 @@ internal static class ManifestThreeReader
         // The terms of each file, read as a 2.x catalog's are: the members did not change (§9.8).
         BundleManifestReader.ReadFileEntries(manifest, root, CatalogMember);
 
+        // The order's identity, verbatim (§9.3): what the bundle is filed under and what every element a
+        // host places is stamped with, as a 2.x order_id is. So the same order is one cache entry and one
+        // set of stamps from the vault or from a zip of any name, and a re-import finds what it placed.
+        manifest.OrderId = root.Object(OrderMember)?.OptionalStr(OrderIdMember) ?? string.Empty;
+        manifest.FilingKey = manifest.OrderId;
+
+        // The credits are the attribution a 2.x manifest's attribution.sources carried: each line verbatim,
+        // with its link. Never a refusal, as there: a malformed line costs that line alone.
+        manifest.AttributionSources = Credits(root);
+
         manifest.Contents = new BundleContents
         {
             Major = version.Major,
@@ -238,6 +264,33 @@ internal static class ManifestThreeReader
         };
         manifest.IsValid = true;
         return manifest;
+    }
+
+    /// <summary>The <c>credits</c> lines as attribution, each verbatim; a line with neither text nor link is left out.</summary>
+    private static List<AttributionSource> Credits(JsonElement root)
+    {
+        List<AttributionSource> read = [];
+        if (!root.TryGetProperty(CreditsMember, out JsonElement credits) || credits.ValueKind != JsonValueKind.Array)
+        {
+            return read;
+        }
+
+        foreach (JsonElement credit in credits.EnumerateArray())
+        {
+            if (credit.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            string? text = credit.OptionalStr(CreditTextMember);
+            string? link = credit.OptionalStr(CreditLinkMember);
+            if (text is not null || link is not null)
+            {
+                read.Add(new AttributionSource(string.Empty, text, null, link));
+            }
+        }
+
+        return read;
     }
 
     /// <summary>The family a file's extension states (§4), matched regardless of case.</summary>
