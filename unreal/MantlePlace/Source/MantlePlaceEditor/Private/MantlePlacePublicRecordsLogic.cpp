@@ -519,8 +519,7 @@ TArray<FString> FMantlePlacePublicRecordsLogic::DescribeNotDelivered(const FMant
 	TArray<FString> Seen;
 	for (const FMantlePlaceRecordNotHeld& First : Block.NotHeld)
 	{
-		const FString Key = First.Family + TEXT("
-") + First.Reason;
+		const FString Key = First.Family + TEXT("|") + First.Reason;
 		if (Seen.Contains(Key))
 		{
 			continue;
