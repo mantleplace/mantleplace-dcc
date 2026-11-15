@@ -68,16 +68,29 @@ struct FMantlePlacePublicRecordsLogic
 
 	/**
 	 * Read ASCII DXF linework. LWPOLYLINE, POLYLINE (with its VERTEX records, until SEQEND; a polyface
-	 * or 3D mesh is skipped) and LINE become polylines; every other entity is counted in
-	 * OutEntitiesSkipped and left out. Fails closed (false + OutError) on a binary DXF, on text that
-	 * is not group-code/value pairs, and on a drawing with no ENTITIES section; a drawing whose
-	 * ENTITIES hold none of the three kinds is a success with no lines, which the caller reports.
+	 * or 3D mesh is skipped) and LINE become polylines; a HATCH becomes one closed outline per boundary
+	 * loop (polyline paths, and edge paths made only of straight edges; the fill is not read); a POINT
+	 * becomes an entry in OutPoints. Every coordinate is the file's own. Every other entity, and a HATCH
+	 * with an arc, ellipse or spline edge, is counted in OutEntitiesSkipped and left out. Fails closed
+	 * (false + OutError) on a binary DXF, on text that is not group-code/value pairs, and on a drawing
+	 * with no ENTITIES section; a drawing whose ENTITIES hold none of those kinds is a success with
+	 * nothing, which the caller reports.
 	 */
 	static bool ParseDxf(
 	    const FString& Text,
 	    TArray<FMantlePlaceRecordPolyline>& OutLines,
+	    TArray<FVector2D>& OutPoints,
 	    int32& OutEntitiesSkipped,
 	    FString& OutError);
+
+	/** Half the width, in metres, of the marker drawn for a record point. */
+	static constexpr double MarkerRadiusM = 4.0;
+
+	/**
+	 * The marker a record point is drawn as: a closed diamond centred on the point, `MarkerRadiusM` to each
+	 * vertex, in the file's own frame. The point itself is unmoved; only the marker has a size.
+	 */
+	static FMantlePlaceRecordPolyline MarkerOutline(const FVector2D& Point);
 
 	/**
 	 * The backstop HPS-53 keeps behind a stated frame: a producer can state a frame wrongly, so a file
