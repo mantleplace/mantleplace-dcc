@@ -1,11 +1,102 @@
 {
-  "$comment": "The Min download of the same 3.0 bundle as `bundle/v3-full.json`: the same sixty-nine names and paths (format.md §8: a level belongs to the download, never to the file name), the level stated once, every host-ready file built coarser (here a different placeholder, so its sha256 differs) and its count quartered, every georeferenced file byte-identical to the Max file. The 3.x schema is not published yet, so the manifest is held to the format text's rules alone, which the validator reports at info (`schema.pending`).",
+  "$comment": "The Min download of the same 3.0 bundle as `bundle/v3-full.json`: the same sixty-nine names and paths (format.md §8: a level belongs to the download, never to the file name), the level stated once, every host-ready file built coarser (here a different placeholder, so its sha256 differs) and its count quartered, every georeferenced file byte-identical to the Max file. The manifest is held to the served 3.0.0 schema, a staged release, which the validator reports at info (`schema.staged`).",
   "files": {
     "Manifest.json": {
       "version": "3.0.0",
+      "order": {
+        "id": "corpus-bundle",
+        "aoi": {
+          "west": -74.02,
+          "south": 40.7,
+          "east": -73.93,
+          "north": 40.81,
+          "area_km2": 92.6
+        },
+        "unit_system": "metric",
+        "time_zone": "America/New_York",
+        "built_on": "2026-01-01"
+      },
       "level": "Min",
-      "file_entries": {
+      "frames": {
+        "georeferenced": {
+          "horizontal_crs": {
+            "code": "EPSG:32618"
+          },
+          "vertical_crs": {
+            "code": "EPSG:3855"
+          },
+          "geoid_model": "EGM2008",
+          "horizontal_unit": {
+            "name": "metre",
+            "to_metres": 1
+          },
+          "vertical_unit": {
+            "name": "metre",
+            "to_metres": 1
+          },
+          "axis_order": "east-north",
+          "grid_rotation_deg": 0.67
+        },
+        "local": {
+          "origin": {
+            "longitude": -73.975,
+            "latitude": 40.755,
+            "ellipsoidal_height_m": -12.5,
+            "height_m": 20.0,
+            "projected": {
+              "crs": {
+                "code": "EPSG:32618"
+              },
+              "x": 586500.0,
+              "y": 4512000.0,
+              "unit": {
+                "name": "metre",
+                "to_metres": 1
+              }
+            }
+          },
+          "vertical_crs": {
+            "code": "EPSG:3855"
+          },
+          "geoid_model": "EGM2008",
+          "unit": {
+            "name": "metre",
+            "to_metres": 1
+          },
+          "axes": {
+            "x": "east",
+            "y": "north",
+            "z": "up"
+          },
+          "grid_rotation_deg": 0.67
+        }
+      },
+      "catalog": {
         "Basemap/Basemap.png": {
+          "subject": "The rendered map, for a drape",
+          "format": "PNG, RGB",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 43,
+          "sha256": "58007b1ed249ad73bde6a04887bab714c7ecc9c3c69a1662b90a6ce230012f5c",
+          "count": {
+            "kind": "pixels",
+            "value": 65536
+          },
+          "raster": {
+            "width": 256,
+            "height": 256,
+            "bands": [
+              "red",
+              "green",
+              "blue"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "local"
+          },
           "odbl_role": "produced-work",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [
@@ -13,11 +104,33 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "58007b1ed249ad73bde6a04887bab714c7ecc9c3c69a1662b90a6ce230012f5c",
-          "count": 65536
+          ]
         },
         "Basemap/Basemap.tif": {
+          "subject": "The rendered map",
+          "format": "GeoTIFF, RGB",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 36,
+          "sha256": "7b58054efa758cda4199f7e56266d845c069e4982530eddc9be2bc3e90ec8aa5",
+          "count": {
+            "kind": "pixels",
+            "value": 1048576
+          },
+          "raster": {
+            "width": 1024,
+            "height": 1024,
+            "bands": [
+              "red",
+              "green",
+              "blue"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "georeferenced"
+          },
           "odbl_role": "produced-work",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [
@@ -25,11 +138,22 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "7b58054efa758cda4199f7e56266d845c069e4982530eddc9be2bc3e90ec8aa5",
-          "count": 1048576
+          ]
         },
         "Basemap/Basemap.usdz": {
+          "subject": "The map's features as curves, points and polygons",
+          "format": "OpenUSD package",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 44,
+          "sha256": "fe9df3fa486217acdea2b9aeaa8d003b3de05843b6f01ee62975cef8cff478ed",
+          "count": {
+            "kind": "features",
+            "value": 1000
+          },
+          "mesh": {
+            "up_axis": "z"
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -37,11 +161,19 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "fe9df3fa486217acdea2b9aeaa8d003b3de05843b6f01ee62975cef8cff478ed",
-          "count": 1000
+          ]
         },
         "Basemap/Buildings.dxf": {
+          "subject": "Building footprints",
+          "format": "DXF, 2D polygons",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 38,
+          "sha256": "effafad84f0fcb6c25f23229780181e2a758464e500ac61aa4d6c504512b2eea",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -49,11 +181,22 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "effafad84f0fcb6c25f23229780181e2a758464e500ac61aa4d6c504512b2eea",
-          "count": 120
+          ]
         },
         "Basemap/Buildings.glb": {
+          "subject": "Extruded buildings",
+          "format": "glTF 2.0 binary",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 45,
+          "sha256": "6718ee00c7182a76cc4bfe519686f47f7cfb802b13230856d16f73acba9ede19",
+          "count": {
+            "kind": "triangles",
+            "value": 22500
+          },
+          "mesh": {
+            "up_axis": "y"
+          },
           "odbl_role": "produced-work",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [
@@ -61,11 +204,19 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "6718ee00c7182a76cc4bfe519686f47f7cfb802b13230856d16f73acba9ede19",
-          "count": 22500
+          ]
         },
         "Basemap/Buildings.gpkg": {
+          "subject": "Building footprints",
+          "format": "GeoPackage, 2D polygons",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 39,
+          "sha256": "f29b2a4a2d0635e2d8d401bb114f07b7766516c4a84b67cdc04b996544329567",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -73,11 +224,19 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "f29b2a4a2d0635e2d8d401bb114f07b7766516c4a84b67cdc04b996544329567",
-          "count": 120
+          ]
         },
         "Basemap/Landuse.dxf": {
+          "subject": "Land use, as areas",
+          "format": "DXF, 2D polygons",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 36,
+          "sha256": "0e0c1418605f83df5d1cefed2ba7ab23dda79b9b15dbd8c5a73725ad43f22869",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -85,11 +244,19 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "0e0c1418605f83df5d1cefed2ba7ab23dda79b9b15dbd8c5a73725ad43f22869",
-          "count": 120
+          ]
         },
         "Basemap/Landuse.gpkg": {
+          "subject": "Land use, as areas",
+          "format": "GeoPackage, 2D polygons",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "7c3ff790f1f6a01f65d4efcd7f2be0fdce4f3a04e7427b2add190c30e6cff84c",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -97,11 +264,19 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "7c3ff790f1f6a01f65d4efcd7f2be0fdce4f3a04e7427b2add190c30e6cff84c",
-          "count": 120
+          ]
         },
         "Basemap/Pavement.dxf": {
+          "subject": "Road surfaces, as areas",
+          "format": "DXF, 2D polygons",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "97a08cd2289e03f9bcd61474403fae31c8791a5933574e5d066437ecd758f9f8",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -109,11 +284,19 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "97a08cd2289e03f9bcd61474403fae31c8791a5933574e5d066437ecd758f9f8",
-          "count": 120
+          ]
         },
         "Basemap/Pavement.gpkg": {
+          "subject": "Road surfaces, as areas",
+          "format": "GeoPackage, 2D polygons",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 38,
+          "sha256": "cdc2a40829ab0a52b2750301c4b591b1291cc88c81dc7414b25b7ad0cdfd1efa",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -121,11 +304,31 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "cdc2a40829ab0a52b2750301c4b591b1291cc88c81dc7414b25b7ad0cdfd1efa",
-          "count": 120
+          ]
         },
         "Basemap/Roads.csv": {
+          "subject": "Road centrelines, one row per vertex",
+          "format": "CSV",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 41,
+          "sha256": "04198439817f3aeb8d1af5b1e55b58fc4929bae8fb6861a184cc19c5aea058dd",
+          "count": {
+            "kind": "rows",
+            "value": 400
+          },
+          "table": {
+            "columns": [
+              "road",
+              "vertex",
+              "x",
+              "y",
+              "z",
+              "class",
+              "width_m",
+              "name"
+            ]
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -133,11 +336,19 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "04198439817f3aeb8d1af5b1e55b58fc4929bae8fb6861a184cc19c5aea058dd",
-          "count": 400
+          ]
         },
         "Basemap/Roads.dxf": {
+          "subject": "Road centrelines, draped",
+          "format": "DXF, 3D polylines",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 34,
+          "sha256": "e197d457e5288f7d13f6f531cee38fe0074ca860776f485125df74538f8fe889",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -145,11 +356,19 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "e197d457e5288f7d13f6f531cee38fe0074ca860776f485125df74538f8fe889",
-          "count": 120
+          ]
         },
         "Basemap/Roads.gpkg": {
+          "subject": "Road centrelines, draped",
+          "format": "GeoPackage, 3D lines",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 35,
+          "sha256": "2171729bd7b03bbd1b911c70d3f8f914516e9957ba654fc50c5f79239cfb369b",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -157,11 +376,19 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "2171729bd7b03bbd1b911c70d3f8f914516e9957ba654fc50c5f79239cfb369b",
-          "count": 120
+          ]
         },
         "Basemap/Water.dxf": {
+          "subject": "Water bodies and waterways",
+          "format": "DXF, 2D",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 34,
+          "sha256": "a09640c43f06219a8159cfdd3681b04af2c704535572ecec87f0f39bbeced5da",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -169,11 +396,19 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "a09640c43f06219a8159cfdd3681b04af2c704535572ecec87f0f39bbeced5da",
-          "count": 120
+          ]
         },
         "Basemap/Water.gpkg": {
+          "subject": "Water bodies and waterways",
+          "format": "GeoPackage, 2D",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 35,
+          "sha256": "9dc66238508d491728d763ea39163c21f820b163bd22cab35affc427291f241e",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -181,224 +416,722 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "9dc66238508d491728d763ea39163c21f820b163bd22cab35affc427291f241e",
-          "count": 120
+          ]
         },
         "Elevation/Aspect.tif": {
+          "subject": "Aspect of the ground",
+          "format": "GeoTIFF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "349368920042259724f269bb8d256c4e368bf4111c4329354f712d11cbfcef0c",
+          "count": {
+            "kind": "pixels",
+            "value": 1048576
+          },
+          "raster": {
+            "width": 1024,
+            "height": 1024,
+            "bands": [
+              "aspect"
+            ],
+            "data_type": "UInt16",
+            "scale": 1,
+            "offset": 0,
+            "unit": "degree",
+            "nodata": 65535,
+            "frame": "georeferenced"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "349368920042259724f269bb8d256c4e368bf4111c4329354f712d11cbfcef0c",
-          "count": 1048576
+          "sources": []
         },
         "Elevation/Contours.dxf": {
+          "subject": "Contour lines",
+          "format": "DXF, 3D polylines",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 39,
+          "sha256": "b50ac3d501313963cdeb12c46d53e8d540f23af901f93cf6131724a0c93679f2",
+          "count": {
+            "kind": "features",
+            "value": 340
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "b50ac3d501313963cdeb12c46d53e8d540f23af901f93cf6131724a0c93679f2",
-          "count": 340
+          "sources": []
         },
         "Elevation/Elevation.png": {
+          "subject": "Ground elevation, for a heightmap import",
+          "format": "PNG, 16-bit grayscale",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 47,
+          "sha256": "2b9580388615d1b748ddcbb479a300fdcd4728797d952102c391428ad716eba1",
+          "count": {
+            "kind": "pixels",
+            "value": 64009
+          },
+          "raster": {
+            "width": 253,
+            "height": 253,
+            "bands": [
+              "height"
+            ],
+            "data_type": "UInt16",
+            "scale": 0.01,
+            "offset": -12.5,
+            "unit": "metre",
+            "nodata": null,
+            "frame": "local",
+            "ladder": {
+              "tier": 3,
+              "index": 0
+            }
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "2b9580388615d1b748ddcbb479a300fdcd4728797d952102c391428ad716eba1",
-          "count": 64009
+          "sources": []
         },
         "Elevation/Elevation.tif": {
+          "subject": "Ground elevation",
+          "format": "GeoTIFF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 40,
+          "sha256": "a41a33831d5d6f62628da2c49589d4eda038e1966392b836d6a872bf586f73a9",
+          "count": {
+            "kind": "pixels",
+            "value": 1048576
+          },
+          "raster": {
+            "width": 1024,
+            "height": 1024,
+            "bands": [
+              "elevation"
+            ],
+            "data_type": "Float32",
+            "scale": 1,
+            "offset": 0,
+            "unit": "metre",
+            "nodata": -32768,
+            "frame": "georeferenced"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "a41a33831d5d6f62628da2c49589d4eda038e1966392b836d6a872bf586f73a9",
-          "count": 1048576
+          "sources": []
         },
         "Elevation/Hillshade.tif": {
+          "subject": "Shaded relief",
+          "format": "GeoTIFF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 40,
+          "sha256": "e4e181248807d5751c4d644a00d0905fbbf3ffc44d41eacfbbd41d7c0e0ae471",
+          "count": {
+            "kind": "pixels",
+            "value": 1048576
+          },
+          "raster": {
+            "width": 1024,
+            "height": 1024,
+            "bands": [
+              "brightness"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": 0,
+            "frame": "georeferenced"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "e4e181248807d5751c4d644a00d0905fbbf3ffc44d41eacfbbd41d7c0e0ae471",
-          "count": 1048576
+          "sources": []
         },
         "Elevation/Slope.dxf": {
+          "subject": "Steep ground, as areas",
+          "format": "DXF, 2D polygons",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 36,
+          "sha256": "84cbe495ec37644b8ed215a902cbe07d6d584407e8e9b56038e46fab12b919e1",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "84cbe495ec37644b8ed215a902cbe07d6d584407e8e9b56038e46fab12b919e1",
-          "count": 120
+          "sources": []
         },
         "Elevation/Slope.gpkg": {
+          "subject": "Steep ground, as areas",
+          "format": "GeoPackage, 2D polygons",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "37a8d0623a8f38bfb447bb42c9f694fb7ecce07d42bb2f5780fc4701654f7ff0",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "37a8d0623a8f38bfb447bb42c9f694fb7ecce07d42bb2f5780fc4701654f7ff0",
-          "count": 120
+          "sources": []
         },
         "Elevation/Slope.tif": {
+          "subject": "Slope of the ground",
+          "format": "GeoTIFF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 36,
+          "sha256": "6e48ba326e4c1ab8daf20390bce8c19174aa1aff202770b9c7654135fa2fa01b",
+          "count": {
+            "kind": "pixels",
+            "value": 1048576
+          },
+          "raster": {
+            "width": 1024,
+            "height": 1024,
+            "bands": [
+              "slope"
+            ],
+            "data_type": "UInt16",
+            "scale": 0.1,
+            "offset": 0,
+            "unit": "degree",
+            "nodata": 65535,
+            "frame": "georeferenced"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "6e48ba326e4c1ab8daf20390bce8c19174aa1aff202770b9c7654135fa2fa01b",
-          "count": 1048576
+          "sources": []
         },
         "Elevation/Terrain.dxf": {
+          "subject": "The terrain surface",
+          "format": "DXF, 3D faces",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 38,
+          "sha256": "2ae9ac3df295da9cfe416839392f8c6d3f243049102e35614d084c2f1bec33b1",
+          "count": {
+            "kind": "triangles",
+            "value": 200000
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "2ae9ac3df295da9cfe416839392f8c6d3f243049102e35614d084c2f1bec33b1",
-          "count": 200000
+          "sources": []
         },
         "Elevation/Terrain.glb": {
+          "subject": "The terrain mesh",
+          "format": "glTF 2.0 binary",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 45,
+          "sha256": "91b35b5a3dbf7cc87fa9ccb73d02adc649cf0ca70b47133ca24c0ed39d41ce88",
+          "count": {
+            "kind": "triangles",
+            "value": 50000
+          },
+          "mesh": {
+            "up_axis": "y"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "91b35b5a3dbf7cc87fa9ccb73d02adc649cf0ca70b47133ca24c0ed39d41ce88",
-          "count": 50000
+          "sources": []
         },
         "Elevation/Terrain.landxml": {
+          "subject": "The terrain surface",
+          "format": "LandXML TIN",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 42,
+          "sha256": "f5088beee417439ad755c508b36ca730fa8f68308454d68e5e5b1c8a104125ff",
+          "count": {
+            "kind": "triangles",
+            "value": 200000
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "f5088beee417439ad755c508b36ca730fa8f68308454d68e5e5b1c8a104125ff",
-          "count": 200000
+          "sources": []
         },
         "Elevation/Terrain.mtl": {
+          "subject": "The terrain mesh's material",
+          "format": "OBJ material library",
+          "family": "companion",
+          "levelled": false,
+          "size_bytes": 38,
+          "sha256": "8f5126eddf0471ba0cf8d95a62268a70689a85f37f2aa2171a18a290cf97df25",
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "8f5126eddf0471ba0cf8d95a62268a70689a85f37f2aa2171a18a290cf97df25"
+          "sources": []
         },
         "Elevation/Terrain.obj": {
+          "subject": "The terrain mesh",
+          "format": "OBJ",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 45,
+          "sha256": "c5fc7ba11b3715446843198c1947f1c74de06b700d92706e628441a0b66631b3",
+          "count": {
+            "kind": "triangles",
+            "value": 50000
+          },
+          "mesh": {
+            "up_axis": "y"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "c5fc7ba11b3715446843198c1947f1c74de06b700d92706e628441a0b66631b3",
-          "count": 50000
+          "sources": []
         },
         "Imagery/Imagery.png": {
+          "subject": "Aerial imagery, for a drape",
+          "format": "PNG, RGB",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 43,
+          "sha256": "04a2ab71192b21b6e535b3b29b803fb2f159e28f8bf8513d556a640d193fa824",
+          "count": {
+            "kind": "pixels",
+            "value": 65536
+          },
+          "raster": {
+            "width": 256,
+            "height": 256,
+            "bands": [
+              "red",
+              "green",
+              "blue"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "local"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "04a2ab71192b21b6e535b3b29b803fb2f159e28f8bf8513d556a640d193fa824",
-          "count": 65536
+          "sources": []
         },
         "Imagery/Imagery.tif": {
+          "subject": "Aerial imagery",
+          "format": "GeoTIFF, four bands",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 36,
+          "sha256": "c6c1427e00117c772bc9eec1e919eb7407f941d796bfca2592e99e3b34f21c2f",
+          "count": {
+            "kind": "pixels",
+            "value": 1048576
+          },
+          "raster": {
+            "width": 1024,
+            "height": 1024,
+            "bands": [
+              "red",
+              "green",
+              "blue",
+              "near-infrared"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "georeferenced"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "c6c1427e00117c772bc9eec1e919eb7407f941d796bfca2592e99e3b34f21c2f",
-          "count": 1048576
+          "sources": []
         },
         "Landcover/Canopy.tif": {
+          "subject": "Canopy height",
+          "format": "GeoTIFF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "444cd8316e164737619f6e99927ecca1fb063c42e7fbac41ec442995346d5ed3",
+          "count": {
+            "kind": "pixels",
+            "value": 1048576
+          },
+          "raster": {
+            "width": 1024,
+            "height": 1024,
+            "bands": [
+              "canopy_height"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "unit": "metre",
+            "nodata": 255,
+            "frame": "georeferenced"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "444cd8316e164737619f6e99927ecca1fb063c42e7fbac41ec442995346d5ed3",
-          "count": 1048576
+          "sources": []
         },
         "Landcover/Landcover.dxf": {
+          "subject": "Land cover, as areas",
+          "format": "DXF, 2D polygons",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 40,
+          "sha256": "7f1b4bdd5bc13eed9bda28001a7f31f26bc0c0352b795054fabcf8e5a400000d",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "7f1b4bdd5bc13eed9bda28001a7f31f26bc0c0352b795054fabcf8e5a400000d",
-          "count": 120
+          "sources": []
         },
         "Landcover/Landcover.gpkg": {
+          "subject": "Land cover, as areas",
+          "format": "GeoPackage, 2D polygons",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 41,
+          "sha256": "d4fa16fd189735d9c858912081631b0891d7e190fb968d3b923234be37861e34",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "d4fa16fd189735d9c858912081631b0891d7e190fb968d3b923234be37861e34",
-          "count": 120
+          "sources": []
         },
         "Landcover/Landcover.tif": {
+          "subject": "Land cover classes",
+          "format": "GeoTIFF, paletted",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 40,
+          "sha256": "23c2ceedcb89fae0b2b1304d2407378bba6ff83ede704e93fe3eda4059ef607e",
+          "count": {
+            "kind": "pixels",
+            "value": 1048576
+          },
+          "raster": {
+            "width": 1024,
+            "height": 1024,
+            "bands": [
+              "class"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": 0,
+            "frame": "georeferenced",
+            "legend": [
+              {
+                "code": 1,
+                "class": "water"
+              },
+              {
+                "code": 2,
+                "class": "trees"
+              },
+              {
+                "code": 3,
+                "class": "grass"
+              },
+              {
+                "code": 4,
+                "class": "built"
+              }
+            ]
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "23c2ceedcb89fae0b2b1304d2407378bba6ff83ede704e93fe3eda4059ef607e",
-          "count": 1048576
+          "sources": []
         },
         "Landcover/Trees.csv": {
+          "subject": "Tree points",
+          "format": "CSV",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 43,
+          "sha256": "ac180824a234d7621e82204d33b5ca6fe0a6e7adc11d845621f2455e313cafb4",
+          "count": {
+            "kind": "rows",
+            "value": 1250
+          },
+          "table": {
+            "columns": [
+              "x",
+              "y",
+              "ground_z",
+              "height_m",
+              "crown_radius_m",
+              "foliage_type"
+            ]
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "ac180824a234d7621e82204d33b5ca6fe0a6e7adc11d845621f2455e313cafb4",
-          "count": 1250
+          "sources": []
         },
         "Landcover/Trees.gpkg": {
+          "subject": "Tree points",
+          "format": "GeoPackage, 3D points",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "5784d46a1dc940b58bcf1eb11ead526cb77b2eef896951bcf1d7a61b018f8793",
+          "count": {
+            "kind": "features",
+            "value": 5000
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "5784d46a1dc940b58bcf1eb11ead526cb77b2eef896951bcf1d7a61b018f8793",
-          "count": 5000
+          "sources": []
         },
         "Manifest.json": {
+          "subject": "The bundle, for a machine",
+          "format": "JSON",
+          "family": "bundle",
+          "levelled": true,
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": []
         },
         "Materials/Built.png": {
+          "subject": "Built-surface weight",
+          "format": "PNG, 8-bit grayscale",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 43,
+          "sha256": "e93d7743c9d2f272ecb844192889c6e88875a58e3f2818c8989ceef07d0503ec",
+          "count": {
+            "kind": "pixels",
+            "value": 65536
+          },
+          "raster": {
+            "width": 256,
+            "height": 256,
+            "bands": [
+              "weight"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "local"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "e93d7743c9d2f272ecb844192889c6e88875a58e3f2818c8989ceef07d0503ec",
-          "count": 65536
+          "sources": []
         },
         "Materials/Dirt.png": {
+          "subject": "Dirt weight",
+          "format": "PNG, 8-bit grayscale",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 42,
+          "sha256": "ac1c7ecdcebbf1183970d42379a1a98dfce5a0ad575b1f21d585a9d28b0be95e",
+          "count": {
+            "kind": "pixels",
+            "value": 65536
+          },
+          "raster": {
+            "width": 256,
+            "height": 256,
+            "bands": [
+              "weight"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "local"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "ac1c7ecdcebbf1183970d42379a1a98dfce5a0ad575b1f21d585a9d28b0be95e",
-          "count": 65536
+          "sources": []
         },
         "Materials/Forest.png": {
+          "subject": "Forest weight",
+          "format": "PNG, 8-bit grayscale",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 44,
+          "sha256": "9cd0c42f3c4c4768bde6807a8b7b0d3e1948ea6f32ad1b996e09a45e5d21ddc5",
+          "count": {
+            "kind": "pixels",
+            "value": 65536
+          },
+          "raster": {
+            "width": 256,
+            "height": 256,
+            "bands": [
+              "weight"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "local"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "9cd0c42f3c4c4768bde6807a8b7b0d3e1948ea6f32ad1b996e09a45e5d21ddc5",
-          "count": 65536
+          "sources": []
         },
         "Materials/Grass.png": {
+          "subject": "Grass weight",
+          "format": "PNG, 8-bit grayscale",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 43,
+          "sha256": "db1313d9e7f33b5773a4caa575657992206c90afe7e7fbf16a303a3346f8f5fa",
+          "count": {
+            "kind": "pixels",
+            "value": 65536
+          },
+          "raster": {
+            "width": 256,
+            "height": 256,
+            "bands": [
+              "weight"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "local"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "db1313d9e7f33b5773a4caa575657992206c90afe7e7fbf16a303a3346f8f5fa",
-          "count": 65536
+          "sources": []
         },
         "Materials/Rock.png": {
+          "subject": "Rock weight",
+          "format": "PNG, 8-bit grayscale",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 42,
+          "sha256": "b73872315f7129ec4c3348de58f14ac30ec7d2a6131f64ef516c9c413f224b85",
+          "count": {
+            "kind": "pixels",
+            "value": 65536
+          },
+          "raster": {
+            "width": 256,
+            "height": 256,
+            "bands": [
+              "weight"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "local"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "b73872315f7129ec4c3348de58f14ac30ec7d2a6131f64ef516c9c413f224b85",
-          "count": 65536
+          "sources": []
         },
         "Materials/Sand.png": {
+          "subject": "Sand weight",
+          "format": "PNG, 8-bit grayscale",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 42,
+          "sha256": "5d59e55c3ab5a390d51d77323381886e47f8824c996dd01a06640a9654129e5d",
+          "count": {
+            "kind": "pixels",
+            "value": 65536
+          },
+          "raster": {
+            "width": 256,
+            "height": 256,
+            "bands": [
+              "weight"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "local"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "5d59e55c3ab5a390d51d77323381886e47f8824c996dd01a06640a9654129e5d",
-          "count": 65536
+          "sources": []
         },
         "Materials/Snow.png": {
+          "subject": "Snow weight",
+          "format": "PNG, 8-bit grayscale",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 42,
+          "sha256": "69fec24ab264971fbdc0a87bf82aa8fc127328ec17063bd9c55fc01312a743dc",
+          "count": {
+            "kind": "pixels",
+            "value": 65536
+          },
+          "raster": {
+            "width": 256,
+            "height": 256,
+            "bands": [
+              "weight"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "local"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "69fec24ab264971fbdc0a87bf82aa8fc127328ec17063bd9c55fc01312a743dc",
-          "count": 65536
+          "sources": []
         },
         "Materials/Water.png": {
+          "subject": "Water weight; the water coverage",
+          "format": "PNG, 8-bit grayscale",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 43,
+          "sha256": "5899d9cbd02c79411a8460b47075611b301fa796b47c32144fb30d6afa256486",
+          "count": {
+            "kind": "pixels",
+            "value": 65536
+          },
+          "raster": {
+            "width": 256,
+            "height": 256,
+            "bands": [
+              "weight"
+            ],
+            "data_type": "Byte",
+            "scale": 1,
+            "offset": 0,
+            "nodata": null,
+            "frame": "local"
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "5899d9cbd02c79411a8460b47075611b301fa796b47c32144fb30d6afa256486",
-          "count": 65536
+          "sources": []
         },
         "Readme.md": {
+          "subject": "The bundle, for a person",
+          "format": "Markdown",
+          "family": "bundle",
+          "levelled": true,
+          "size_bytes": 70,
+          "sha256": "fa2fa0739228c6d4b64976a8a9acbc48f36fb82fb0956493489e7632e63a3078",
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "fa2fa0739228c6d4b64976a8a9acbc48f36fb82fb0956493489e7632e63a3078"
+          "sources": []
         },
         "Records/Conservation.dxf": {
+          "subject": "Protected areas",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 41,
+          "sha256": "c793d05ed7f54f58003c15ef6ef45c024636d27a5c229dc905916f10c94a9779",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -406,11 +1139,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "c793d05ed7f54f58003c15ef6ef45c024636d27a5c229dc905916f10c94a9779",
-          "count": 120
+          ]
         },
         "Records/Conservation.gpkg": {
+          "subject": "Protected areas",
+          "format": "GeoPackage",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 42,
+          "sha256": "c036d0e2a397edbb955e0130357e8973cc3d4ad1cdf33a226922eac9bc0425f3",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -418,11 +1159,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "c036d0e2a397edbb955e0130357e8973cc3d4ad1cdf33a226922eac9bc0425f3",
-          "count": 120
+          ]
         },
         "Records/Contamination.dxf": {
+          "subject": "Contaminated sites",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 42,
+          "sha256": "eca04a1f7ad982304e1d105a5fdce22cf4c226d13292656b331c39b363b2db9e",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -430,11 +1179,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "eca04a1f7ad982304e1d105a5fdce22cf4c226d13292656b331c39b363b2db9e",
-          "count": 120
+          ]
         },
         "Records/Contamination.gpkg": {
+          "subject": "Contaminated sites",
+          "format": "GeoPackage",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 43,
+          "sha256": "7513fae680bb33f54455ec7266926d2d3b05d7db38444b18a070074eb9c1ff34",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -442,11 +1199,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "7513fae680bb33f54455ec7266926d2d3b05d7db38444b18a070074eb9c1ff34",
-          "count": 120
+          ]
         },
         "Records/Floodplain.dxf": {
+          "subject": "Flood hazard zones",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 39,
+          "sha256": "5ccc68db20c98d5a22c8ac8c6f593fb41d67495cfd03052117f266a86160be6b",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -454,11 +1219,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "5ccc68db20c98d5a22c8ac8c6f593fb41d67495cfd03052117f266a86160be6b",
-          "count": 120
+          ]
         },
         "Records/Floodplain.gpkg": {
+          "subject": "Flood hazard zones",
+          "format": "GeoPackage",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 40,
+          "sha256": "a6ec1e01a80f629eb0040f05a9ec28c321d3e08a67bcb7f25527652bc46c153c",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -466,11 +1239,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "a6ec1e01a80f629eb0040f05a9ec28c321d3e08a67bcb7f25527652bc46c153c",
-          "count": 120
+          ]
         },
         "Records/Habitat.dxf": {
+          "subject": "Critical habitat",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 36,
+          "sha256": "4dc9b6d56cb60977a56b84928fcb2358b098dc9cc02516316272b607de461b4b",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -478,11 +1259,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "4dc9b6d56cb60977a56b84928fcb2358b098dc9cc02516316272b607de461b4b",
-          "count": 120
+          ]
         },
         "Records/Habitat.gpkg": {
+          "subject": "Critical habitat",
+          "format": "GeoPackage",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "3e6762afb20e618060e66ca06ff2606516d24dfb6ec26cd3dbd38e6e6a20e877",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -490,11 +1279,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "3e6762afb20e618060e66ca06ff2606516d24dfb6ec26cd3dbd38e6e6a20e877",
-          "count": 120
+          ]
         },
         "Records/Heritage.dxf": {
+          "subject": "Historic places",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "1a9473805ab78c4df281cefec6e226688448b08bea8a6af839e9dc6544d81e27",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -502,11 +1299,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "1a9473805ab78c4df281cefec6e226688448b08bea8a6af839e9dc6544d81e27",
-          "count": 120
+          ]
         },
         "Records/Heritage.gpkg": {
+          "subject": "Historic places",
+          "format": "GeoPackage",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 38,
+          "sha256": "77949ae5cb8999824679d45b4431ee33a64e2292582b0f3145553954d69956a1",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -514,11 +1319,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "77949ae5cb8999824679d45b4431ee33a64e2292582b0f3145553954d69956a1",
-          "count": 120
+          ]
         },
         "Records/Hydrography.dxf": {
+          "subject": "Streams and water features",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 40,
+          "sha256": "ad13879464ebe11233055bd096e224b5723d5762b11d2f1752f0307bbb751feb",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -526,11 +1339,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "ad13879464ebe11233055bd096e224b5723d5762b11d2f1752f0307bbb751feb",
-          "count": 120
+          ]
         },
         "Records/Hydrography.gpkg": {
+          "subject": "Streams and water features",
+          "format": "GeoPackage",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 41,
+          "sha256": "b4c108fa5fc9246c6b36fd3dbb2167346d3e278b9be5689e1b471289d9b34a6c",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -538,11 +1359,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "b4c108fa5fc9246c6b36fd3dbb2167346d3e278b9be5689e1b471289d9b34a6c",
-          "count": 120
+          ]
         },
         "Records/Parcels.dxf": {
+          "subject": "Parcel boundaries",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 36,
+          "sha256": "671fe398d04a41a956b4da447e4db18c2583197c74b9f2cff6063faca21e4c3e",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -550,11 +1379,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "671fe398d04a41a956b4da447e4db18c2583197c74b9f2cff6063faca21e4c3e",
-          "count": 120
+          ]
         },
         "Records/Parcels.gpkg": {
+          "subject": "Parcel boundaries",
+          "format": "GeoPackage",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "e42f6fd20c170b64e7059efee9b933416b8555da69c6aade3c91ab34d6eef863",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -562,11 +1399,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "e42f6fd20c170b64e7059efee9b933416b8555da69c6aade3c91ab34d6eef863",
-          "count": 120
+          ]
         },
         "Records/Soils.dxf": {
+          "subject": "Soil map units",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 34,
+          "sha256": "9c505cfd00bc41e2c2c4211bb2fcc3ffda9eeb84cacbc1ae09442dda45f688b0",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -574,11 +1419,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "9c505cfd00bc41e2c2c4211bb2fcc3ffda9eeb84cacbc1ae09442dda45f688b0",
-          "count": 120
+          ]
         },
         "Records/Soils.gpkg": {
+          "subject": "Soil map units",
+          "format": "GeoPackage",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 35,
+          "sha256": "4e933bfa3d55fbbf3122fe4cd1f6da9764e1d47522d658204c863ebb83686cac",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -586,11 +1439,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "4e933bfa3d55fbbf3122fe4cd1f6da9764e1d47522d658204c863ebb83686cac",
-          "count": 120
+          ]
         },
         "Records/Wetlands.dxf": {
+          "subject": "Wetlands",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "769a8c25cff419623680cb5bda2059dc689fa14dd4f3a0cd665ec0158835c3ae",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -598,11 +1459,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "769a8c25cff419623680cb5bda2059dc689fa14dd4f3a0cd665ec0158835c3ae",
-          "count": 120
+          ]
         },
         "Records/Wetlands.gpkg": {
+          "subject": "Wetlands",
+          "format": "GeoPackage",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 38,
+          "sha256": "47c524314e7ee03cbda74495267e7149868d10ca98877f2f062117c0d7999a0c",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -610,11 +1479,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "47c524314e7ee03cbda74495267e7149868d10ca98877f2f062117c0d7999a0c",
-          "count": 120
+          ]
         },
         "Records/Zoning.dxf": {
+          "subject": "Zoning districts",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 35,
+          "sha256": "327c25a66bd710a990d0dfee9389e137bcc9afb9227509b8b1c1d147b8f9897a",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -622,11 +1499,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "327c25a66bd710a990d0dfee9389e137bcc9afb9227509b8b1c1d147b8f9897a",
-          "count": 120
+          ]
         },
         "Records/Zoning.gpkg": {
+          "subject": "Zoning districts",
+          "format": "GeoPackage",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 36,
+          "sha256": "fc0575a5aaebd3376c3650d1d5b35e5bff7a41abae67ff685ac42a0a2248e07b",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
           "odbl_role": "none",
           "license": "LicenseRef-Synthetic-PublicDomain",
           "sources": [
@@ -634,11 +1519,19 @@
               "name": "Synthetic public record",
               "license": "LicenseRef-Synthetic-PublicDomain"
             }
-          ],
-          "sha256": "fc0575a5aaebd3376c3650d1d5b35e5bff7a41abae67ff685ac42a0a2248e07b",
-          "count": 120
+          ]
         },
         "Site/Site.dxf": {
+          "subject": "The flat plan drawing, with its paper-space layouts",
+          "format": "DXF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 30,
+          "sha256": "e236e4aa8b0e7cc2c641456cffe6b4e0ac3b20621f6c67fb7d926f880075343e",
+          "count": {
+            "kind": "features",
+            "value": 4000
+          },
           "odbl_role": "database",
           "license": "ODbL-1.0",
           "sources": [
@@ -646,18 +1539,37 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "e236e4aa8b0e7cc2c641456cffe6b4e0ac3b20621f6c67fb7d926f880075343e",
-          "count": 4000
+          ]
         },
         "Site/Site.ifc": {
+          "subject": "The site model",
+          "format": "IFC 4.0.2.1",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 30,
+          "sha256": "5bdad9ecfc6e29bee34ace4569c9f0f537d9e32f475ef7184568e5e5a76c721a",
+          "count": {
+            "kind": "features",
+            "value": 4000
+          },
           "odbl_role": "none",
           "license": "LicenseRef-MantlePlace-Terms",
-          "sources": [],
-          "sha256": "5bdad9ecfc6e29bee34ace4569c9f0f537d9e32f475ef7184568e5e5a76c721a",
-          "count": 4000
+          "sources": []
         },
         "Site/Site.usdz": {
+          "subject": "The site as one model: terrain, buildings, roads, water, land use and trees, textured",
+          "format": "OpenUSD package",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 38,
+          "sha256": "1db42222a69e0082be60985c2d2d46d684c45287e13f72d21fabd70218dd29c1",
+          "count": {
+            "kind": "triangles",
+            "value": 80000
+          },
+          "mesh": {
+            "up_axis": "z"
+          },
           "odbl_role": "produced-work",
           "license": "LicenseRef-MantlePlace-Terms",
           "sources": [
@@ -665,11 +1577,10 @@
               "name": "OpenStreetMap",
               "license": "ODbL-1.0"
             }
-          ],
-          "sha256": "1db42222a69e0082be60985c2d2d46d684c45287e13f72d21fabd70218dd29c1",
-          "count": 80000
+          ]
         }
-      }
+      },
+      "not_held": []
     },
     "Basemap/Basemap.png": "placeholder for Basemap/Basemap.png at Min\n",
     "Basemap/Basemap.tif": "placeholder for Basemap/Basemap.tif\n",

@@ -24,9 +24,9 @@ These hold a manifest that declares 3.x, and only one. What each rule checks:
   `catalog.absent`. Every entry but the manifest's carries a sha256 (`catalog.sha256-missing`),
   which is verified (`sha256.mismatch`).
 
-The 3.x schema owns the manifest's members, and it is not published yet. Until it is, the catalog
-is read from `file_entries`, the member the 2.x catalog already has, and the level from `level`;
-the schema's names replace these two here and nowhere else.
+The 3.x schema owns the manifest's members: the catalog is `catalog` and the level `level`, as the
+served 3.0.0 schema names them. A 3.x manifest that states only the 2.x member `file_entries` has no
+catalog. These two names are read here and nowhere else.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ from .report import Report
 from .schema_subset import escape
 
 #: The manifest members these checks read (see the module docstring).
-CATALOG = "file_entries"
+CATALOG = "catalog"
 LEVEL = "level"
 #: The levels, coarsest last (§8).
 LEVELS = ("Max", "Med", "Min")
