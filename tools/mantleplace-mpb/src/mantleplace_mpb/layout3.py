@@ -22,11 +22,16 @@ These hold a manifest that declares 3.x, and only one. What each rule checks:
 - **The catalog.** One entry per file the download holds, keyed by its path: an entry with no file
   is `catalog.file-missing`, a file with no entry `catalog.entry-missing`, and no catalog at all
   `catalog.absent`. Every entry but the manifest's carries a sha256 (`catalog.sha256-missing`),
-  which is verified (`sha256.mismatch`).
+  which is verified (`sha256.mismatch`). Every entry of a file whose row in the file table gives a
+  count states one (`catalog.count-missing`); the rows that say `None` are `Readme.md`,
+  `Manifest.json` and `Terrain.mtl`.
+- **No per-host block.** The manifest holds no `hosts` member and no member named for a host
+  (`manifest.host-block`).
 
-The 3.x schema owns the manifest's members: the catalog is `catalog` and the level `level`, as the
-served 3.0.0 schema names them. A 3.x manifest that states only the 2.x member `file_entries` has no
-catalog. These two names are read here and nowhere else.
+The 3.x schema owns the manifest's members: the catalog is `catalog`, the level `level`, an entry's
+count `count` and the per-host block `hosts`, as the served 3.0.0 schema names them. A 3.x manifest
+that states only the 2.x member `file_entries` has no catalog. These names are read here and
+nowhere else. The zip's compression is read in `zipmethods.py`.
 """
 
 from __future__ import annotations
@@ -41,6 +46,9 @@ from .schema_subset import escape
 #: The manifest members these checks read (see the module docstring).
 CATALOG = "catalog"
 LEVEL = "level"
+COUNT = "count"
+#: A per-host block (§9.7): the 2.x `hosts` member, and a member named for one host.
+HOST_BLOCKS = ("hosts", "unreal", "revit", "autocad", "blender")
 #: The levels, coarsest last (§8).
 LEVELS = ("Max", "Med", "Min")
 
@@ -69,6 +77,9 @@ TREE = frozenset(
        for e in ("gpkg", "dxf")]
     + [f"Records/{n}.{e}" for n in _RECORDS for e in ("gpkg", "dxf")]
     + ["Site/Site.usdz", "Site/Site.ifc", "Site/Site.dxf"])
+
+#: The files whose row in the file table gives no count (§6): `None`.
+NO_COUNT = frozenset({"Readme.md", MANIFEST_PATH_3, "Elevation/Terrain.mtl"})
 
 #: The 2.x files 3.0 removed or renamed (§12), by their 2.x path. Matched regardless of case, so
 #: `LandCover/WaterMask.tif` is caught under the 3.x folder `Landcover/` too.
@@ -248,6 +259,16 @@ def check_level(manifest: dict, report: Report) -> None:
                    f"the level {level!r} is not one of {', '.join(LEVELS)}", pointer=where)
 
 
+def check_host_block(manifest: dict, report: Report) -> None:
+    """The manifest holds no per-host block (`manifest.host-block`, §9.7)."""
+    for name in HOST_BLOCKS:
+        if name in manifest:
+            report.add("manifest", "manifest.host-block", "error",
+                       f"the manifest holds a `{name}` member, a per-host block; a 3.x manifest has "
+                       "none, and a reader finds each file it wants by its name in the catalog",
+                       pointer=f"/{name}")
+
+
 def check_catalog(manifest: dict, bundle: Bundle, report: Report) -> None:
     """One catalog entry per file, each with a sha256 that matches (`catalog.*`, `sha256.*`)."""
     report.ran.append("catalog")
@@ -283,6 +304,12 @@ def check_catalog(manifest: dict, bundle: Bundle, report: Report) -> None:
                        pointer=where, file=actual)
         if actual == bundle.manifest_path:
             continue  # The manifest cannot carry its own hash (§6).
+        if path in TREE and path not in NO_COUNT and not (
+                isinstance(entry, dict) and isinstance(entry.get(COUNT), dict)):
+            report.add("catalog", "catalog.count-missing", "error",
+                       f"the entry for {path} states no count; a file whose row in the file table "
+                       "gives one has it, so a reader can estimate an import before starting it",
+                       pointer=f"{where}/{COUNT}", file=path)
         stated = entry.get("sha256") if isinstance(entry, dict) else None
         if not isinstance(stated, str):
             report.hashes["unknown"] += 1

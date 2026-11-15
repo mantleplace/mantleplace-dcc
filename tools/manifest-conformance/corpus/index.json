@@ -2685,6 +2685,60 @@
       }
     },
     {
+      "id": "bundle.v3CatalogCountMissing",
+      "group": "bundle",
+      "file": "bundle/v3-count-missing.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "A catalog entry states a count for a file whose row in the file table gives one (format.md §9.5, conformance.md §7): `Elevation/Terrain.glb` is a mesh and states no triangles. The served 3.0.0 schema states the same rule, so its refusal (`schema.invalid`) stands beside the count rule's. 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "catalog.count-missing",
+          "schema.invalid"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3HostBlock",
+      "group": "bundle",
+      "file": "bundle/v3-host-block.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "The manifest holds no per-host block (format.md §9.7, conformance.md §7): a reader finds each file by its name in the catalog. This manifest carries a 2.x `hosts` member. The served 3.0.0 schema states the same rule, so its refusal (`schema.invalid`) stands beside the host-block rule's. 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "manifest.host-block",
+          "schema.invalid"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3ZipMethod",
+      "group": "bundle",
+      "file": "bundle/v3-zip-method.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "Every member of the zip is DEFLATE-compressed, or stored where compression does not shrink it (conformance.md §7). `Elevation/Terrain.glb` is written with BZIP2. A folder has no zip method, so the case is built as the zip and the wrapped zip only (`zipMethods`, in the case body). 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "zip.compression"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3ZipStoredShrinks",
+      "group": "bundle",
+      "file": "bundle/v3-zip-stored-shrinks.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "A member is stored only where compression does not shrink it (conformance.md §7). `Elevation/Elevation.tif` is stored although DEFLATE makes it smaller. The case is built as the zip and the wrapped zip only (`zipMethods`, in the case body). 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "zip.compression"
+        ]
+      }
+    },
+    {
       "id": "bundle.v3FullMed",
       "group": "bundle",
       "file": "bundle/v3-full-med.json",

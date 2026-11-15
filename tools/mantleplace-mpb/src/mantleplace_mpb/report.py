@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 
 #: The checks, in the order a run makes them and a report lists them.
 CHECKS = ("archive", "manifest", "schema", "pointers", "sha256", "frames", "roles", "geopackage", "names",
-          "level", "catalog")
+          "level", "catalog", "zip")
 
 SEVERITIES = ("error", "warning", "info")
 

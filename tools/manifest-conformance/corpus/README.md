@@ -114,7 +114,7 @@ The codes are those [`mantleplace-mpb`](../../mantleplace-mpb/README.md) reports
 `mpb corpus` is the runner. A manifest in a case declares its own version and is held to that
 published schema, so a case is fetched against the network the way the contract gate is.
 
-Two case fields say how a case is built and fetched, not what it must report:
+Three case fields say how a case is built and fetched, not what it must report:
 
 - `stagedSchema: true` marks a case whose manifest declares a **staged** version: served for
   readers, not yet in the freeze ledger. The runner holds it to the served schema, as
@@ -124,6 +124,10 @@ Two case fields say how a case is built and fetched, not what it must report:
 - A case whose paths differ only by case (`bundle.v2NameCaseCollision`) is built as the zip and
   the wrapped zip only. No folder on a case-insensitive file system can hold it, which is the
   reason for the rule it tests.
+- `zipMethods`, an object in the case body beside `files`, maps an archive path to the zip method
+  that member is written with (`stored`, `deflate`, `bzip2` or `lzma`; every other member is
+  DEFLATE). A folder has no zip method, so such a case is built as the zip and the wrapped zip
+  only, like a case whose paths differ only by case.
 
 The 2.0 cases hold every 2.0 bundle to the folder allowlist and the naming rules
 ([`format.md`](../../../spec/format.md) §10.2, §10.3): `bundle.v2Full` is the default download
@@ -140,8 +144,11 @@ manifest of a major no schema is published for, and each rejection has a case th
 so a file the 3.0 table lacks is a warning there and an error in `bundle.v3FileUnknown`. Every case
 that declares 3.0.0 is held to the served 3.0.0 schema (`stagedSchema`), and is valid against it
 except where the rule it breaks is one the schema states too: a catalog key outside the 3.0 file
-table, or a level stated twice or not at all. Those cases expect the schema's refusal
-(`schema.invalid`) beside their own code. No schema is served for 3.1.0, so
+table, a level stated twice or not at all, an entry with no count, or a per-host block. Those
+cases expect the schema's refusal (`schema.invalid`) beside their own code. The zip's compression
+is no schema rule: `bundle.v3ZipMethod` writes one member with BZIP2 and `bundle.v3ZipStoredShrinks`
+stores one that DEFLATE would shrink, each a reject, and `bundle.v3ZipStoredSmall` stores a member
+DEFLATE would not shrink and is an accept. No schema is served for 3.1.0, so
 `bundle.v3MinorFileUnknown` is held to the format text's rules, and the runner reports the
 unpublished schema at info (`schema.pending`).
 

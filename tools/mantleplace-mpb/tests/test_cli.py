@@ -201,6 +201,25 @@ class TheCorpusCommand(unittest.TestCase):
         self.assertEqual(0, code, out)
         self.assertNotIn("(folder)", out)
 
+    def test_a_case_with_a_zip_method_is_built_only_as_zips_and_holds_it(self) -> None:
+        """A folder has no zip method; the case's `zipMethods` is written into the zips."""
+        body = self.body(manifest(version="2.0.0"))
+        body["zipMethods"] = {"README.md": "stored"}
+        case = {"id": "bundle.stored", "group": "bundle", "file": "bundle/stored.json",
+                "expect": "accept", "reason": "r"}
+        self.write([case], {"bundle/stored.json": body})
+        schemas = str(write_schema_dir(self.tmp / "v2", {"2.0.0": SYNTHETIC_SCHEMA_2}))
+        code, out = run("corpus", str(self.corpus), "--schema-dir", schemas)
+        self.assertEqual(0, code, out)
+        from mantleplace_mpb.corpus import _forms
+
+        self.assertEqual(("zip", "wrapped"), _forms({"README.md": b"x"}, {"README.md": 0}))
+        body["zipMethods"] = {"README.md": "zstd"}
+        self.write([case], {"bundle/stored.json": body})
+        code, out = run("corpus", str(self.corpus), "--schema-dir", schemas)
+        self.assertEqual(1, code, out)
+        self.assertIn("zipMethods", out)
+
     def test_an_empty_bundle_group_fails(self) -> None:
         self.write([], {})
         code, _ = run("corpus", str(self.corpus), "--schema-dir", self.schemas)
