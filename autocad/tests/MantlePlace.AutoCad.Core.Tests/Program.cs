@@ -23,6 +23,7 @@ exitCode |= AuthConformanceTests.Run();
 exitCode |= CacheConformanceTests.Run();
 exitCode |= ProjectionConformanceTests.Run();
 exitCode |= PlatformConformanceTests.Run();
+exitCode |= ReaderConformanceTests.Run();
 exitCode |= AutoCadManifestConformanceTests.Run();
 exitCode |= AutoCadImportPlanTests.Run();
 exitCode |= AutoCadRecordSetTests.Run();

@@ -41,6 +41,28 @@ security report, not a pull request — see [`SECURITY.md`](../SECURITY.md). A f
 the disclosure, and it lands before anyone can ship the mitigation. Publishing the rules does not
 open that door; it exists so a reader can check the claims a README makes about them.
 
+## Which rules bind which major
+
+MPB 3.0 has **no per-host block and no pointer.** A reader finds each file by its promised name in the
+manifest's one catalog ([`format.md`](../spec/format.md) §9.7), so every rule below that sends a reader
+to a pointer or to its own host block is a **2.x matter**. Each is marked **2.x only** where it stands,
+with what a 3.0 reader does instead. A rule not marked binds a reader of either major.
+[`building-a-reader-for-mpb-3.md`](building-a-reader-for-mpb-3.md) is the page that walks a new host
+through the 3.0 reader.
+
+| Rule | Binds | What a 3.0 reader does instead |
+| --- | --- | --- |
+| `HPS-32` | both, in two forms | A file is found by its promised name in the catalog |
+| `HPS-34` | 2.x for its per-host hash table | Every catalog entry carries a sha256, and a mismatch fails closed |
+| `HPS-36` | 2.x only | Shows the reason the manifest states for each promised file the bundle does not hold |
+| `HPS-37` | 2.x only | The bundle statement states the order's identity |
+| `HPS-41` | both; its `appliesTo` scope is 2.x | A 3.x case binds every reader |
+| `HPS-45` | 2.x only | No reader projects |
+| `HPS-47` | 2.x only | The catalog and the not-held list say what the download holds |
+| `HPS-52` | 2.x only | Finds each file by name and takes the family it can place |
+| `HPS-53` | both; the frame beside a pointer, the version and unit stand-ins and the extent backstop are 2.x | A file's family states its frame |
+| `HPS-54` | 2.x only | A file's family settles its frame |
+
 ## Version history
 
 Rule ids are append-only, so a rule's number never means two things. The suite has grown as each
@@ -71,6 +93,7 @@ host met the contract for real:
 | **v1.20** | `HPS-56` gains the `rating` parameter and the post-import prompt, "Did this import come in right?". The moment right after an import is when a curator has an opinion about a bundle, and the only route to say so was the general `Send Feedback` action: a one-tap answer there gets far more replies than a general link, and the rule that a host carries no feedback form of its own stays whole, because the answer is two links to the web form |
 | **v1.21** | `HPS-57` — every host with a ribbon or a top-level menu gives Mantle Place a tab (or top-level menu) of its own, named `Mantle Place`. Revit had a Mantle Place tab and AutoCAD put a panel on the host's Add-ins tab, so a curator moving between hosts looked in two places for the same actions |
 | **v1.22** | `HPS-58` … `HPS-63` — the common core, the nine actions every host plugin supports, in order, each citing the rule that already governs it or stating the one that does not; `HPS-51` gains the words for six of them. Two hosts had grown the same product by different routes: a curator who used both found a level chooser in one and none in the other, an import window with steps in one and a single press in the other, and nothing said which differences were gaps and which were choices, so a third host had no list to build against |
+| **v1.23** | The standard brought up to MPB 3.0. `HPS-32` becomes "found by its promised name in the catalog", and the rules that send a reader to a pointer or a host block (`HPS-34`'s per-host table, `HPS-36`, `HPS-37`, `HPS-45`, `HPS-47`, `HPS-52`, the pointer half of `HPS-53`, `HPS-54`) are marked 2.x only, each with what a 3.0 reader does. 3.0 has no per-host block, so a rule that told a reader to follow a per-host pointer had nothing to apply to, and a new host reading it would have looked for a block the manifest no longer carries |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -637,12 +660,24 @@ that has not yet taken the break.
 
 _Enforcer:_ `ci-manifest-conformance` + `automation-test` (corpus `manifest.reject.*`).
 
-⛔ **`HPS-32` — Every artifact path comes from a manifest pointer, never from folder convention.**
-The host reads the path out of the manifest and extracts that exact entry. Hardcoding a well-known
-relative path works until the ETL renames a folder, and then it fails on a customer's bundle rather
-than in CI.
+⛔ **`HPS-32` — Every file is found through the manifest, never by a folder convention the host
+guessed: in a 3.x bundle by its promised name in the catalog, in a 2.x bundle through the manifest's
+pointer.**
 
-_Enforcer:_ `agent-review`.
+**3.x.** The catalog is the manifest's one list of the files the download holds, keyed by path in the zip
+([`format.md`](../spec/format.md) §9.5). The host asks it for the name it wants, resolves the entry inside
+its extraction root, and extracts that exact entry. A name the catalog lacks is a file this download does
+not hold, which the manifest says with a reason (`format.md` §9.6), and not an error. There is no per-host
+pointer to follow and none to look for: a 3.x manifest has no host block (`format.md` §9.7). The names are
+promised for the life of 3.x (`format.md` §3), so a host that asks the catalog for `Elevation/Elevation.png`
+is reading a contract and not guessing a convention.
+
+**2.x only.** The host reads the path out of the manifest's pointer and extracts that exact entry.
+Hardcoding a well-known relative path works until the ETL renames a folder, and then it fails on a
+customer's bundle rather than in CI.
+
+_Enforcer:_ `agent-review`, and for 3.x the corpus `reader` group (`reader.v3FullMax`,
+`reader.v3CatalogFileMissing` and the rest), which a host claims by running every case (`HPS-41`).
 
 ⛔ **`HPS-33` — Manifest values are applied verbatim and never re-derived.** Scales, offsets,
 origins, extents and the placement math are computed by the ETL; the host multiplies them into its
@@ -655,14 +690,18 @@ against those, not against exact floats.
 _Enforcer:_ `automation-test` (corpus `manifest.full`) + `agent-review`.
 
 **`HPS-34` — Integrity fields fail closed where the contract requires them and skip where it does
-not.** Required hashes are **required** — a missing one is a refusal, because importing unverifiable
+not.** **2.x only, in this paragraph and the table below.** Required hashes are **required** — a missing one is a refusal, because importing unverifiable
 bytes is worse than not importing. Optional hashes (mesh, buildings, the shared `vector` layers) absent mean the
 check is skipped and the artifact is still valid — the same _unknown ≠ absent_ rule as `HPS-27`.
 Where an artifact carries no hash of its own, the host resolves it by matching the path against the
 manifest's format table rather than assuming.
 
-WHICH hashes are required is **per host**, because each host's deliverables are published by a
-different part of the contract and arrived at different versions:
+**3.x.** There is no per-host table and no optional hash: **every catalog entry carries a sha256**
+except `Manifest.json`, which cannot carry its own, and a host verifies each file it reads and fails
+closed on a mismatch, naming the file ([`format.md`](../spec/format.md) §9.8).
+
+WHICH hashes are required in 2.x is **per host**, because each host's
+deliverables are published by a different part of the contract and arrived at different versions:
 
 | Host     | Required-hash artifacts                                           | From  | Required                          |
 | -------- | ----------------------------------------------------------------- | ----- | --------------------------------- |
@@ -689,11 +728,19 @@ verifies the identity and refuses on mismatch rather than picking one. An enum v
 not support (the reference: any `planet_shape` other than `Flat`) is a refusal naming the offending
 value, never a silent fallback to the default.
 
+**3.x.** The reference's two examples are 2.x manifests of the reference host. A 3.x reader's
+fail-closed duty is [`format.md`](../spec/format.md) §4: a unit, a datum or an axis it does not
+understand is refused, naming the value, and [`compatibility.md`](../spec/compatibility.md) §3 says
+which enums fail closed and which are echoed.
+
 _Enforcer:_ `automation-test` (corpus `manifest.resolutionMismatch`,
 `manifest.planetShapeSphere`).
 
 **`HPS-36` — A host reads its own `hosts.<hostId>.readiness` block and surfaces the stated
-reason.** When an expected artifact is absent, the manifest says why; the plugin shows that reason
+reason.** **2.x only.** In 3.x the manifest has no host block, and the same duty is met by the list of
+promised files the bundle does not hold: a host shows each one's stated reason as the manifest states it
+and never branches on it, and an absent file is not an error
+([`format.md`](../spec/format.md) §9.6). When an expected artifact is absent, the manifest says why; the plugin shows that reason
 instead of dead-ending on an empty import. A host reads only its own subtree.
 
 Readiness lives inside the host's own block, which is the manifest's shape: a sibling host's
@@ -705,7 +752,9 @@ _Enforcer:_ `automation-test` (corpus `manifest.dccReadinessReason`,
 `manifest.dccReadinessIgnoresRetiredFlatKey`).
 
 **`HPS-37` — A bundle with no host block is not a parse failure, and the job id is not the order
-id.** A base, not-yet-materialized bundle carries no host block; the host MUST still parse the
+id.** **2.x only.** A 3.x manifest has no host block and no base bundle to tell from a materialized
+one; its bundle statement states the order's identity, the one identifier that joins a bundle to its
+vault entry ([`format.md`](../spec/format.md) §9.3). A base, not-yet-materialized bundle carries no host block; the host MUST still parse the
 top-level facts — bounding box, layout pointers, packaging, **order id** — before returning "not
 importable", so streaming and the vault join key survive. The per-rebuild ETL `jobId` and the vault
 `orderId` are **not interchangeable**; only the order id joins to the vault.
@@ -717,7 +766,10 @@ host does project it matches the corpus known answers.** `HPS-33` is the default
 default: placement values come pre-computed and are applied verbatim, and `HPS-52` decides which
 pointer a host reaches for first. But a host importing geometry whose own coordinates are geographic
 — the reference case is a `vector` GeoJSON layer in lon/lat that must land in a UTM-origin frame —
-has to project, because the manifest describes the layer rather than every vertex in it. That narrow
+has to project, because the manifest describes the layer rather than every vertex in it. **This is
+2.x only: a 3.x reader never projects**, since every georeferenced file is already in the order's CRS
+and every host-ready file in the local site frame ([`format.md`](../spec/format.md) §4), and a host
+claims no `projection` group for 3.x. That narrow
 case is permitted, and it is the _only_ projection a host may perform: `HPS-03`'s ban on a
 geoprocessing stack is unchanged.
 
@@ -747,7 +799,9 @@ it lands that half is `agent-review`, and the per-host test where a host has one
 `SiteFrame.CanPlaceGeographic` is the only one today.
 
 **`HPS-47` — A host decides "is this bundle materialized" from the manifest's neutral signals,
-never from its own content alone.** The signals, either of which means materialized: a non-empty
+never from its own content alone.** **2.x only.** A 3.x manifest has no per-host block, so there is no
+materialization state to decide: the catalog says which files the download holds, and the not-held list
+says which it does not and why ([`format.md`](../spec/format.md) §9.5, §9.6). The signals, either of which means materialized: a non-empty
 `hosts` object, or a non-empty `vector.layers` array. A host asks whether `hosts` has any key, never
 which keys it has, so a bundle materialized for a host this plugin has never heard of reads as
 materialized, and there is no roster of host ids to go stale. A `hosts` entry whose readiness paths
@@ -822,7 +876,8 @@ ignore a case added later. So a host tracks which ids it drove and fails on any 
 reference calls that `UndrivenCases`. Reviewers cannot see a missing `if` in a 400-line test.
 
 **A case carrying `appliesTo` is scoped to that one host's manifest block and is skipped by every
-other host.** Placement math, block-specific required hashes and block-specific enum values are
+other host.** The scope exists for the 2.x host blocks: a 3.x manifest has none, so a 3.x case carries no
+`appliesTo` and binds every reader ([`conformance.md`](../spec/conformance.md) §3). Placement math, block-specific required hashes and block-specific enum values are
 per-host by construction — every host gets its own top-level block — and holding a Revit
 plugin to Unreal's `component_count_x` identity would invert that. Cases with no `appliesTo`
 are host-invariant and bind everyone — the version gate, the base-bundle partial parse, and the
@@ -1247,7 +1302,10 @@ a host may subtract its own origin from whatever a file happens to hold and call
 position. Section 6 says what a host does with a *value*; this says which *file* a host is entitled
 to place at all.
 
-⛔ **`HPS-52` — A host places from its own host block first.** Where the host block points at content
+⛔ **`HPS-52` — A host places from its own host block first.** **2.x only.** A 3.x manifest has no host
+block, so there is no pointer to prefer: a host finds each file by its promised name in the catalog
+(`HPS-32`) and places the family it can place, a georeferenced file by the order's CRS and a host-ready
+file by the local site frame ([`format.md`](../spec/format.md) §4). Where the host block points at content
 already in the host frame, **that pointer is the placement path on every delivery tier** — not a
 metric path and an imperial one, and not a path chosen after the fact by what the tier turned out to
 be. A host-neutral pointer, and the `HPS-45` projection behind it, are the **fallback**: they are
@@ -1285,7 +1343,19 @@ and the copy's datum is asked and never assumed from the pointer. It carries `ap
 too; a case for that host's other pointers is that host's to add.
 
 ⛔ **`HPS-53` — A host places a file only where it can show the file's frame is its host frame, and
-otherwise refuses that file by name.** Read the frame from the thing you are placing — never from the
+otherwise refuses that file by name.**
+
+**3.x.** The refusal stands, and the frame is read from the file's family: a georeferenced file is
+absolute in the order's CRS, in the order's unit and vertical datum, and a host-ready file is offsets
+in the local site frame, in metres, and the manifest states both frames once
+([`format.md`](../spec/format.md) §4, §9.4). A host places a file only where it understands the unit,
+the datum and the axes it is stated in, and refuses by name a file it does not, and a height whose datum is
+not the one the host's ground is in is still unplaceable, whichever major it came from. Four parts of the
+rule below are **2.x only**, because each finds a frame a 2.x file did not state, and a 3.x file always
+states it: the frame read beside a pointer, the format version that stands in for an unstated datum, the
+delivered unit that stands in for an unstated unit, and the extent backstop. The rest binds both.
+
+Read the frame from the thing you are placing — never from the
 bundle, never from the delivery tier, and never from the last file that worked. A host about to place
 projected coordinates reads the frame the format states for them, the CRS and the linear unit, and
 where it cannot read both, or reads a CRS that is not its own, the file is **unplaceable**. An
@@ -1297,13 +1367,13 @@ an elevation and is wrong by however far apart the two datums are at that site. 
 place a height reads the datum the format states for it and places it only where that datum is the
 one its ground is in — a fixed-frame host's own datum, an order-frame host's ground as it was built.
 A height in another datum is **unplaceable**, and so is one in a datum the host does not know, named,
-even against the same string. Where the format version predates the datum being stated, the version
+even against the same string. Where the format version predates the datum being stated (a 2.x matter), the version
 stands in: every bundle before MPB 1.8.0 was EGM2008, so content from before it stating none reads as
 EGM2008, and so does a ground that records none. A stated datum always outranks the version, and a
 height that states none in a version that owes a statement is never assumed to match. Datums are
 compared verbatim.
 
-**One statement stands in for an unstated unit, and only where the format makes it.** Where the format
+**One statement stands in for an unstated unit, and only where the format makes it (2.x only).** Where the format
 says a file's values follow the delivered linear unit — the terrain points, and the tree points'
 `ground_z` column before MPB 1.3.0 stated its unit beside the pointer — a host reads
 `delivery.linear_unit` as that file's unit, and a bundle stating neither is metric, as every bundle
@@ -1321,7 +1391,7 @@ The failure being guarded is arithmetic that succeeds — foot coordinates minus
 number that looks exactly like a position, and every test that does not check where content landed
 stays green.
 
-**Where the format states no frame beside a pointer, one substitute is permitted, and it is a
+**Where the format states no frame beside a pointer (2.x only), one substitute is permitted, and it is a
 comparison of published values:** content whose coordinates fall outside the extent the host's own
 block publishes is not in this frame, and is refused on that evidence alone. **The comparison runs
 one way.** Falling inside the extent is not proof of the frame — only the absence of proof against
@@ -1353,7 +1423,9 @@ the parser and the planner, compared with what the ground records, unstated agai
 stated datum outranking the version.
 
 **`HPS-54` — A host is a fixed-frame host or an order-frame host, and says which in its own
-`CLAUDE.md`.** Both kinds are the glossary's, and so is which of the hosts is which (Unreal is a fixed-frame host; Revit and `autocad` are order-frame hosts); what this
+`CLAUDE.md`.** **2.x only.** In 3.x a file's family settles its frame, so no declaration is needed to
+read one ([`format.md`](../spec/format.md) §4); a host that still reads 2.x bundles keeps its
+declaration. Both kinds are the glossary's, and so is which of the hosts is which (Unreal is a fixed-frame host; Revit and `autocad` are order-frame hosts); what this
 rule adds is that a host **says it itself**, in its own onboarding document, where anyone working in
 that tree reads it before touching placement rather than one document further out.
 
@@ -1506,7 +1578,7 @@ records that eviction is deliberately explicit-only.
 | Version floor, host registration, floor declaration (`HPS-31`, `HPS-38`, `HPS-39`)                                                                                                                                        | `ci-manifest-conformance`                              |
 | Headless conformance of the pure cores (`HPS-42`)                                                                                                                                                                         | `ci-revit-tests` (Revit), the Unreal host's private gate |
 | Protocol behaviour with corpus vectors (`HPS-04`, `HPS-07`, `HPS-10` … `HPS-12`, `HPS-19` … `HPS-25`, `HPS-25a`, `HPS-27`, `HPS-28`, `HPS-30`, `HPS-33` … `HPS-35`, `HPS-37`, `HPS-40`, `HPS-45` … `HPS-49`, `HPS-53`)               | `automation-test`, per host, against the shared corpus |
-| Secrets, browser flow, cache promotion, pointer-driven paths, dumb-consumer doctrine (`HPS-03` … `HPS-06`, `HPS-06a`, `HPS-08`, `HPS-09`, `HPS-13` … `HPS-18`, `HPS-23`, `HPS-26`, `HPS-29`, `HPS-32`, `HPS-33`, `HPS-36`, `HPS-44`) | `agent-review`                                         |
+| Secrets, browser flow, cache promotion, catalog- and pointer-driven paths, dumb-consumer doctrine (`HPS-03` … `HPS-06`, `HPS-06a`, `HPS-08`, `HPS-09`, `HPS-13` … `HPS-18`, `HPS-23`, `HPS-26`, `HPS-29`, `HPS-32`, `HPS-33`, `HPS-36`, `HPS-44`) | `agent-review`                                         |
 | The triad — pure cores testable without the DCC (`HPS-02`)                                                                                                                                                                | `automation-test` + `agent-review`                     |
 | Four-layer completeness, corpus coverage (`HPS-01`, `HPS-41`)                                                                                                                                                             | `pr-review`                                            |
 | Corpus-reader coverage — asserted keys, vector leaves, nested leaves (`HPS-46`, `HPS-46a`, `HPS-46b`)                                                                                                                   | `automation-test` per host + `corpus/self-test/`       |

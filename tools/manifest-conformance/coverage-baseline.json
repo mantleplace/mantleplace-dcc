@@ -503,30 +503,48 @@
       "unreal"
     ],
     "reader.majorAhead": [
+      "autocad",
+      "revit",
       "unreal"
     ],
     "reader.v2Full": [
+      "autocad",
+      "revit",
       "unreal"
     ],
     "reader.v3CatalogFileMissing": [
+      "autocad",
+      "revit",
       "unreal"
     ],
     "reader.v3FullMax": [
+      "autocad",
+      "revit",
       "unreal"
     ],
     "reader.v3FullMed": [
+      "autocad",
+      "revit",
       "unreal"
     ],
     "reader.v3FullMin": [
+      "autocad",
+      "revit",
       "unreal"
     ],
     "reader.v3MedWithoutRecords": [
+      "autocad",
+      "revit",
       "unreal"
     ],
     "reader.v3MinorFileUnknown": [
+      "autocad",
+      "revit",
       "unreal"
     ],
     "reader.v3RecordsNotHeld": [
+      "autocad",
+      "revit",
       "unreal"
     ],
     "vault.download.missingUrl": [

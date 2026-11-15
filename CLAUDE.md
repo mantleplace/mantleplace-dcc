@@ -212,6 +212,10 @@ Most facts already have exactly one home. Find it before writing a fact down any
   [`changelog.md`](spec/changelog.md) is the one place versions appear. The conformance corpus is
   maintainer-owned: a case is proposed by pull request, never forked
   ([`corpus/README.md`](tools/manifest-conformance/corpus/README.md)).
+- **Building the reader for a new host** → [`docs/building-a-reader-for-mpb-3.md`](docs/building-a-reader-for-mpb-3.md):
+  how to tell 2.x from 3.0, the catalog, the two families, the level, what to request, the common core,
+  running the corpus reader cases and the checklist before a first release. It links the rules and
+  restates none.
 - **Cross-host normative rules** → [`docs/host-plugin-standard.md`](docs/host-plugin-standard.md),
   cited by `HPS-NN` id. A public file may cite only a rule whose text is published there
   ([ADR 0007](docs/adr/0007-publicly-cited-standard-rules-are-published-here.md)), and
