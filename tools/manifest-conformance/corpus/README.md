@@ -145,8 +145,9 @@ the same cases are held to it, and a case it refuses is corrected rather than ma
 
 The `reader` group is the answer sheet for a **reader of either major**: for one synthetic bundle, what
 a correct reader finds in it. It is data, so a reader in any language runs the same cases and reaches
-the same result, and no two readers read 3.0 a little differently. No host claims it yet; a host
-claims it when its reader runs every case (`HPS-41`), and `mpb` reads 2.x only.
+the same result, and no two readers read 3.0 a little differently. A host claims it when its reader
+runs every case (`HPS-41`): Revit and AutoCAD claim it through the shared .NET reader
+(`ReaderConformanceTests.cs`), and `mpb` reads 2.x only.
 
 A `reader` case is a pair. The case file names a bundle and holds the result:
 

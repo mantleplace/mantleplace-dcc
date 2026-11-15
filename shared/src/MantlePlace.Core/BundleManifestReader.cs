@@ -175,13 +175,7 @@ public static class BundleManifestReader
         {
             return Refuse(
                 manifest,
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Bundle manifest version {0} is newer than this plugin understands (it reads {1}.x to {2}.x). "
-                    + "Update the Mantle Place plugin to import this bundle.",
-                    manifest.Version,
-                    floor.Major,
-                    ManifestVersions.NewestSupportedMajor));
+                ManifestVersions.NewerMajorMessage(manifest.Version, ManifestVersions.NewestSupportedMajor));
         }
 
         // 2.0 removed `hosts.revit.vectors` and names each vector layer's projected twin in
@@ -329,7 +323,7 @@ public static class BundleManifestReader
     /// <see cref="OdblRole.Database"/> (<c>spec/format.md</c> §6.8). Dropping such an entry would read
     /// the same, but keeping it lets a later reader tell a file the manifest listed from one it did not.
     /// </remarks>
-    private static void ReadFileEntries(BundleManifest manifest, JsonElement root)
+    internal static void ReadFileEntries(BundleManifest manifest, JsonElement root)
     {
         if (root.Object("file_entries") is not { } entries)
         {

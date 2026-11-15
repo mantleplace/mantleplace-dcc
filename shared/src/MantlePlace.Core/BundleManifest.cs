@@ -793,6 +793,14 @@ public sealed class BundleManifest
     public bool HasPreDerivedSurveyPoint => SurveyPoint is { IsUsable: true };
 
     /// <summary>
+    /// What <see cref="BundleReader"/> found in the bundle, for either major: where the manifest was,
+    /// the download's level, each file found by its catalog name with its family, frame and count, and
+    /// each file named and not read. <c>null</c> on a manifest parsed alone, with no bundle around it
+    /// (<see cref="BundleManifestReader.Parse"/>).
+    /// </summary>
+    public BundleContents? Contents { get; internal set; }
+
+    /// <summary>
     /// Directory prefix of a Cesium terrain pointer: <c>"Elevation/Terrain/layer.json"</c> yields
     /// <c>"Elevation/Terrain/"</c>, and a bare <c>"layer.json"</c> yields <c>""</c> — not <c>"/"</c>.
     /// </summary>

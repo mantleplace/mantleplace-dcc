@@ -372,6 +372,27 @@ public sealed class LocalBundleArchive : IDisposable
         }
     }
 
+    /// <summary>
+    /// Reads this zip as a bundle of either major (<see cref="BundleReader"/>): a <c>Manifest.json</c>
+    /// at its root as 3.x, a <c>Metadata/manifest.json</c> as 2.x. <c>null</c> when it holds neither.
+    /// </summary>
+    /// <remarks>
+    /// Beside <see cref="Manifest"/>, not instead of it: a host's import still reads that one until its
+    /// plan is built from this reading.
+    /// </remarks>
+    public BundleManifest? ReadBundle() => BundleReader.Read(EntryNames, ReadEntryText);
+
+    private string? ReadEntryText(string entryName)
+    {
+        if (_archive.GetEntry(entryName) is not { } entry)
+        {
+            return null;
+        }
+
+        using StreamReader reader = new(entry.Open());
+        return reader.ReadToEnd();
+    }
+
     private static ZipArchiveEntry? FindManifest(ZipArchive archive)
         => archive.Entries.FirstOrDefault(candidate =>
             candidate.FullName.Replace('\\', '/').EndsWith(ManifestEntrySuffix, StringComparison.OrdinalIgnoreCase));

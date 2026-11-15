@@ -55,6 +55,30 @@ public static class ManifestVersions
     /// </para>
     /// </remarks>
     public const int NewestSupportedMajor = 2;
+
+    /// <summary>
+    /// The newest MAJOR <see cref="BundleReader"/> reads: a <c>Manifest.json</c> at a bundle's root of
+    /// a higher major is refused with the update remedy (<c>spec/format.md</c> §14).
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="NewestSupportedMajor"/>, which is what this plugin imports and tells the platform
+    /// it imports: a 3.x bundle is read here before a host plans an import from it, and a host
+    /// announces 3.x only once it does.
+    /// </remarks>
+    public const int NewestReadMajor = 3;
+
+    /// <summary>
+    /// The refusal of a manifest of a major above <paramref name="newestMajor"/>: the bundle's version,
+    /// the majors read, and the remedy, which is to update the plugin.
+    /// </summary>
+    internal static string NewerMajorMessage(string? version, int newestMajor) =>
+        string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "Bundle manifest version {0} is newer than this plugin understands (it reads {1}.x to {2}.x). "
+            + "Update the Mantle Place plugin to import this bundle.",
+            version,
+            ManifestVersion.Parse(MinSupportedManifestVersion).Major,
+            newestMajor);
 }
 
 /// <summary>
