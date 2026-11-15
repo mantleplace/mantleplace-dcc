@@ -46,6 +46,17 @@ internal static class ManifestThreeReader
     /// <summary>A not-held entry's path.</summary>
     private const string PathMember = "path";
 
+    /// <summary>A raster entry's facts (§9.5), and the four members of it this reader reads.</summary>
+    private const string RasterMember = "raster";
+
+    private const string WidthMember = "width";
+
+    private const string HeightMember = "height";
+
+    private const string RasterFrameMember = "frame";
+
+    private const string RectangleMember = "rectangle";
+
     /// <summary>The extensions of the georeferenced family (§4).</summary>
     private static readonly HashSet<string> Georeferenced =
         new(["tif", "gpkg", "dxf", "landxml", "ifc"], StringComparer.OrdinalIgnoreCase);
@@ -194,6 +205,7 @@ internal static class ManifestThreeReader
                     FileFamily.Georeferenced => frames.Georeferenced.HorizontalUnit.Unit,
                     _ => LinearUnit.Unspecified,
                 },
+                Raster = entry.Value.ValueKind == JsonValueKind.Object ? Raster(entry.Value) : null,
             });
         }
 
@@ -263,6 +275,43 @@ internal static class ManifestThreeReader
         && value >= 0
             ? value
             : null;
+
+    /// <summary>
+    /// What an entry's <c>raster</c> member states (§9.5): its width and height, the frame its
+    /// rectangle is in and the rectangle as four numbers, west, south, east and north. <c>null</c> when
+    /// the entry is not a raster; a value it does not state is left unstated, never filled in.
+    /// </summary>
+    private static RasterGrid? Raster(JsonElement entry)
+    {
+        if (entry.Object(RasterMember) is not { } raster)
+        {
+            return null;
+        }
+
+        RasterRectangle? rectangle = null;
+        if (raster.TryGetProperty(RectangleMember, out JsonElement edges)
+            && edges.ValueKind == JsonValueKind.Array
+            && edges.GetArrayLength() == 4
+            && edges.EnumerateArray().All(edge => edge.ValueKind == JsonValueKind.Number))
+        {
+            double[] values = [.. edges.EnumerateArray().Select(edge => edge.GetDouble())];
+            rectangle = new RasterRectangle(values[0], values[1], values[2], values[3]);
+        }
+
+        return new RasterGrid(
+            PositiveInt(raster, WidthMember),
+            PositiveInt(raster, HeightMember),
+            raster.OptionalStr(RasterFrameMember),
+            rectangle);
+    }
+
+    private static int PositiveInt(JsonElement element, string member) =>
+        element.TryGetProperty(member, out JsonElement value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out int number)
+        && number > 0
+            ? number
+            : 0;
 
     /// <summary>
     /// A relative path that stays inside the bundle: no leading slash, no drive, no back-slash and no

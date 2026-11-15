@@ -258,7 +258,16 @@ public static partial class WindowLabels
                 or SkipReasonCode.NoGeographicOrigin
                 or SkipReasonCode.GeographicOriginOutOfRange
                 or SkipReasonCode.LeftOutByChoice
-                or SkipReasonCode.LevelUnavailable => null,
+                or SkipReasonCode.LevelUnavailable
+
+                // No vault holds a file the format does not have; the release notes say which.
+                or SkipReasonCode.NotInFormat => null,
+
+            // The bundle says it does not hold the file, and why; the reason is the bundle's, shown
+            // as stated in the log, since the reasons grow and a sentence chosen by reason would
+            // show nothing for a new one.
+            SkipReasonCode.NotHeld =>
+                $"This bundle does not hold {these}. The import log gives the bundle's reason.",
 
             // A code added to the planner and never decided here shows nothing rather than a guess;
             // the test that walks the enum is what makes it get a decision.

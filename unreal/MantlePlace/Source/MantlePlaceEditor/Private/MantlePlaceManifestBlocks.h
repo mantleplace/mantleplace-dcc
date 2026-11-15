@@ -270,10 +270,12 @@ struct FMantlePlaceRoadSplinesBlock
  */
 
 /**
- * The frame a record file states for itself: the same object as `hosts.unreal.file_frame`. Read when
- * a file's entry carries one; no published manifest version declares it for these files yet, so
- * today it is usually absent, and a file that states none cannot be shown to be in this host's frame
- * (HPS-53). FMantlePlacePublicRecordsLogic::CanPlaceFrame decides what a stated one means.
+ * The frame a record file states for itself, verbatim. A 2.x manifest states it as the neutral
+ * `file_entries[<path>].frame` (MPB 1.14.0, `fileEntryFrame`); the provisional `file_frame` a family
+ * block's own entry could carry is read first when it is there. A 3.x manifest states one frame for
+ * every georeferenced file (`frames.georeferenced`), which each record file of that family is in. A
+ * file that states none cannot be shown to be in this host's frame (HPS-53).
+ * FMantlePlacePublicRecordsLogic::CanPlaceFrame decides what a stated one means.
  */
 struct FMantlePlaceRecordFrame
 {
@@ -318,8 +320,10 @@ struct FMantlePlaceRecordLayer
 	TArray<FMantlePlaceRecordFile> Files;
 	TArray<FMantlePlaceRecordPointer> Pointers;
 	// The text the manifest carries for the layer, verbatim and shown as published. Empty = absent.
-	// No published schema version declares these keys yet; they are read by these provisional names
-	// and the standing notice (FMantlePlacePublicRecordsLogic::StandingNotice) is shown regardless.
+	// `Credit` falls back to the sources each file entry states (name, link, licence). No published
+	// schema version declares a per-layer disclaimer or notice (an open data-contract request tracks it), so those two are read by their
+	// provisional names and are usually empty; the standing notice
+	// (FMantlePlacePublicRecordsLogic::StandingNotice) is shown regardless.
 	FString Credit;
 	FString Disclaimer;
 	FString Notice;
@@ -334,9 +338,19 @@ struct FMantlePlaceSkippedSource
 	FString Reason;                 // verbatim: source_down | source_failed | source_timeout
 };
 
+/** A record file the manifest promises and this download does not hold, with the reason it states (MPB 3.x `not_held`). */
+struct FMantlePlaceRecordNotHeld
+{
+	FString Family;                 // the layer the file belongs to, as FMantlePlaceRecordLayer::Family
+	FString Path;                   // the promised file's catalog path
+	FString Reason;                 // the manifest's stated reason, verbatim; never matched on
+};
+
 struct FMantlePlacePublicRecordsBlock
 {
 	bool bPresent = false;          // at least one layer, or at least one source that delivered nothing
+	FString BundleNotice;           // the bundle's own `attribution.notice` (2.x), shown once beside the standing notice
+	TArray<FMantlePlaceRecordNotHeld> NotHeld; // a 3.x download's promised record files that are not in it
 	TArray<FMantlePlaceRecordLayer> Layers; // in the order FMantlePlacePublicRecordsLogic::OrderLayers gives
 	TArray<FMantlePlaceSkippedSource> SkippedSources;
 };

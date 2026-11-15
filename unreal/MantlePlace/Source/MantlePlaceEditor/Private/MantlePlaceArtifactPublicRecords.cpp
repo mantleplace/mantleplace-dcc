@@ -71,6 +71,65 @@ FMantlePlaceRecordFile ReadFile(
 	return File;
 }
 
+/**
+ * What the published manifest states for a record file in the neutral `file_entries[<path>]`
+ * (MPB 1.14.0 on): its full frame (`fileEntryFrame`), its licence and the sources it was made from.
+ * Each is taken only where the file's own block entry did not already state it, verbatim and judged
+ * nowhere here: a frame is CanPlaceFrame's call, a credit is shown as published.
+ */
+void ApplyPublishedEntry(FMantlePlaceRecordFile& File, const TSharedPtr<FJsonObject>& Root)
+{
+	const TSharedPtr<FJsonObject> Entry = FindFileEntry(Root, File.Path);
+	if (!Entry.IsValid())
+	{
+		return;
+	}
+	if (!File.Frame.bStated)
+	{
+		const TSharedPtr<FJsonObject>* Frame = GetObject(Entry, TEXT("frame"));
+		bool bPlaced = true;
+		if (Frame != nullptr)
+		{
+			(*Frame)->TryGetBoolField(TEXT("placed"), bPlaced); // `{ "placed": false }` states no spatial frame
+		}
+		if (Frame != nullptr && bPlaced)
+		{
+			FString Crs;
+			if (const TSharedPtr<FJsonObject>* Horizontal = GetObject(*Frame, TEXT("horizontal_crs")))
+			{
+				Crs = GetString(*Horizontal, TEXT("code")); // a PROJJSON or WKT2 form states no code: left empty, a named refusal
+			}
+			const bool bHasFactor = (*Frame)->HasTypedField<EJson::Number>(TEXT("unit_to_metres"));
+			File.Frame = FMantlePlacePublicRecordsLogic::StatedFrame(
+				FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(GetString(*Frame, TEXT("coordinate_mode"))), Crs,
+				bHasFactor, bHasFactor ? (*Frame)->GetNumberField(TEXT("unit_to_metres")) : 0.0);
+		}
+	}
+	if (File.License.IsEmpty())
+	{
+		File.License = GetString(Entry, TEXT("license"));
+	}
+	if (File.Source.IsEmpty())
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Sources = nullptr;
+		TArray<FString> Named;
+		if (Entry->TryGetArrayField(TEXT("sources"), Sources) && Sources != nullptr)
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Sources)
+			{
+				const TSharedPtr<FJsonObject> Source = Value.IsValid() ? Value->AsObject() : TSharedPtr<FJsonObject>();
+				const FString Name = Source.IsValid() ? GetString(Source, TEXT("name")) : FString();
+				if (!Name.IsEmpty())
+				{
+					const FString Link = GetString(Source, TEXT("link"));
+					Named.Add(Link.IsEmpty() ? Name : FString::Printf(TEXT("%s (%s)"), *Name, *Link));
+				}
+			}
+		}
+		File.Source = FString::Join(Named, TEXT("; "));
+	}
+}
+
 FMantlePlaceRecordPointer ReadPointer(const TSharedPtr<FJsonObject>& Row)
 {
 	FMantlePlaceRecordPointer Pointer;
@@ -105,7 +164,7 @@ void AddPointer(FMantlePlaceRecordLayer& Layer, const FMantlePlaceRecordPointer&
 /** Whether a top-level member is a public-record family block, and if so its layer (otherwise Layer stays empty). */
 bool ReadLayer(
 	const FString& Key, const TSharedPtr<FJsonObject>& Block, const TSharedPtr<FJsonObject>& Layout,
-	const TSharedPtr<FJsonObject>& Files, FMantlePlaceRecordLayer& Layer)
+	const TSharedPtr<FJsonObject>& Files, const TSharedPtr<FJsonObject>& Root, FMantlePlaceRecordLayer& Layer)
 {
 	const bool bKnown = FMantlePlacePublicRecordsLogic::IsKnownFamily(Key);
 
@@ -160,6 +219,7 @@ bool ReadLayer(
 			continue;
 		}
 		FMantlePlaceRecordFile File = ReadFile(EntryKey, *Entry, Files);
+		ApplyPublishedEntry(File, Root);
 		if (Layer.Credit.IsEmpty())
 		{
 			Layer.Credit = GetString(*Entry, TEXT("credit"));
@@ -198,6 +258,7 @@ bool ReadLayer(
 		{
 			File.Sha256 = GetString(*Listed, TEXT("sha256"));
 		}
+		ApplyPublishedEntry(File, Root);
 		Layer.Files.Add(MoveTemp(File));
 	};
 	AddFromLayout(Key + TEXT("_gpkg"), TEXT("gpkg"));
@@ -252,10 +313,15 @@ public:
 				continue;
 			}
 			FMantlePlaceRecordLayer Layer;
-			if (ReadLayer(Member.Key, *MemberObject, Layout, Files, Layer))
+			if (ReadLayer(Member.Key, *MemberObject, Layout, Files, In.Root, Layer))
 			{
 				Block.Layers.Add(MoveTemp(Layer));
 			}
+		}
+
+		if (const TSharedPtr<FJsonObject>* AttributionPtr = GetObject(In.Root, TEXT("attribution")))
+		{
+			Block.BundleNotice = GetString(*AttributionPtr, TEXT("notice")); // the bundle's own, shown once
 		}
 
 		if (const TSharedPtr<FJsonObject>* CompletenessPtr = GetObject(In.Root, TEXT("completeness")))
@@ -308,7 +374,7 @@ public:
 		// A layer with an empty family key could only come from a pointer row naming no layer: it is
 		// kept (the holder is worth showing) and reads as "Record" in the sentence.
 		FMantlePlacePublicRecordsLogic::OrderLayers(Block.Layers);
-		Block.bPresent = Block.Layers.Num() > 0 || Block.SkippedSources.Num() > 0;
+		Block.bPresent = Block.Layers.Num() > 0 || Block.SkippedSources.Num() > 0 || Block.NotHeld.Num() > 0;
 		return true;
 	}
 
@@ -341,6 +407,10 @@ public:
 		// The notice comes first and whatever else follows: it is the one thing every public-record
 		// import says, whether or not the manifest carries a notice of its own for a layer.
 		Ctx.Log.Add(FMantlePlacePublicRecordsLogic::StandingNotice());
+		if (!Block.BundleNotice.IsEmpty())
+		{
+			Ctx.Log.Add(FString::Printf(TEXT("The bundle's notice: %s"), *Block.BundleNotice));
+		}
 		for (const FMantlePlaceRecordLayer& Layer : Block.Layers)
 		{
 			if (Layer.Files.Num() == 0)
