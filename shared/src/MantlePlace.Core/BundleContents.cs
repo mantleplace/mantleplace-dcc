@@ -86,6 +86,12 @@ public sealed record BundleFile(string Path, FileFamily Family, long? Count, str
     /// 2.x file.
     /// </summary>
     public RasterGrid? Raster { get; init; }
+
+    /// <summary>
+    /// The tables a 3.x catalog entry names for a GeoPackage (<c>spec/format.md</c> §13, R20), in the
+    /// catalog's order; empty when it names none, and for a 2.x file.
+    /// </summary>
+    public IReadOnlyList<string> Tables { get; init; } = [];
 }
 
 /// <summary>

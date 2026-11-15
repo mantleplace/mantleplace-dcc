@@ -117,7 +117,7 @@ internal static class ThreePlanTests
             run.Within(origin?.Northing ?? 0, 214000.25, 1e-9, "and its y, verbatim");
             run.Equal(origin?.LinearUnit ?? LinearUnit.Unspecified, LinearUnit.UsSurveyFoot, "in the unit the origin states");
             run.Equal(origin?.Epsg ?? 0, 2263, "on the georeferenced frame's CRS");
-            run.Within(point?.SurveyPoint?.AngleRadians ?? 0, -1.2 * Math.PI / 180.0, 1e-12, "turned by the stated grid rotation");
+            run.Within(point?.SurveyPoint?.AngleRadians ?? double.NaN, 0.0, 0.0, "not turned by the stated grid rotation: every file is on the grid already, as a 2.x import's");
 
             ImportStep? location = Step(plan, ImportStepKind.SetSiteLocation);
             run.Within(location?.SiteLocation?.LatitudeDeg ?? 0, 40.755, 1e-12, "the site location's latitude is the origin's");
@@ -168,6 +168,97 @@ internal static class ThreePlanTests
 
             SkippedImport? points = plan.Skipped.FirstOrDefault(skip => skip.Kind == ImportStepKind.ToposurfaceFromPointsFile);
             run.Equal(points?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.NotInFormat, "the points file is skipped: 3.0 has none");
+        });
+
+        run.Case("a 3.0 bundle imported over its order's 2.x import is the same anchor, not a refused rotation", () =>
+        {
+            // A 2.x import set the project's angle to the 2.x block's grid rotation, zero by construction:
+            // its files were cut on the order's grid. The 3.0 files are on that grid too, and the frames'
+            // grid rotation is the convergence at the site origin, so turning the project by it would
+            // put every placed file off the survey grid, and refuse the order's own re-import.
+            BundleImportPlan plan = Plan(Read(Load(FullBundle)));
+            SurveyPointPlacement placement = Step(plan, ImportStepKind.SetSharedCoordinates)!.SurveyPoint!;
+            ProjectAnchor fromTwo = new(placement.Origin.Epsg, placement.Origin.Easting!.Value, placement.Origin.Northing!.Value, 0.0);
+
+            AnchorDecision decision = AdjacentBundle.Decide(fromTwo, placement);
+
+            run.False(decision.IsRefusal, $"not refused: {decision.Message}");
+            run.True(Manifest(Load(FullBundle))["frames"]!["local"]!["grid_rotation_deg"]!.GetValue<double>() != 0.0, "the corpus bundle states a grid rotation that is not zero");
+        });
+
+        run.Case("the terrain's uncropped notice reads as one sentence", () =>
+        {
+            ImportStep? terrain = Step(Plan(Read(Load(FullBundle))), ImportStepKind.ToposurfaceFromSurfaceTin);
+            string notice = SurfaceCrop.NoWindowNotice(terrain?.CropUnavailable, "every vertex in the surface");
+
+            run.False(notice.Contains("..", StringComparison.Ordinal), $"no doubled full stop: {notice}");
+        });
+
+        run.Case("a layer file whose catalog entry names its tables is read at the table of the step's geometry", () =>
+        {
+            // The corpus entries name no tables; a platform export names them (R20), and its water file
+            // holds the waterways and the water bodies as two tables.
+            BundleImportPlan plan = Plan(Read(Load(FullBundle, manifest =>
+            {
+                manifest["catalog"]!["Basemap/Water.gpkg"]!["tables"] = new JsonArray("Water_line", "Water_polygon");
+                manifest["catalog"]!["Basemap/Roads.gpkg"]!["tables"] = new JsonArray("RoadSplines");
+            })));
+
+            ImportStep? water = Step(plan, ImportStepKind.Water);
+            run.Equal(water?.Table, "Water_polygon", "the water bodies are the polygon table");
+            run.False(water?.SoleTable ?? true, "read by that name, not as the file's one table");
+
+            ImportStep? roads = Step(plan, ImportStepKind.RoadCentrelines);
+            run.Equal(roads?.Table, "RoadSplines", "a file that names one table is read at it, whatever the file is called");
+            run.False(roads?.SoleTable ?? true, "by name");
+        });
+
+        run.Case("a 3.0 vertical CRS is stated in the datum words a 2.x import of the order recorded", () =>
+        {
+            BundleImportPlan egm = Plan(Read(Load(FullBundle)));
+            run.Equal(
+                Step(egm, ImportStepKind.ToposurfaceFromSurfaceTin)?.HeightDatum?.Stated,
+                HeightDatums.Egm2008,
+                "EPSG:3855 on EGM2008 is the EGM2008 height a 2.x manifest named");
+
+            BundleImportPlan navd = Plan(Read(Load(FullBundle, manifest =>
+            {
+                foreach (string frame in new[] { "georeferenced", "local" })
+                {
+                    manifest["frames"]![frame]!["vertical_crs"] = new JsonObject { ["code"] = "EPSG:5703" };
+                    manifest["frames"]![frame]!["geoid_model"] = "GEOID18";
+                }
+            })));
+            run.Equal(
+                Step(navd, ImportStepKind.ToposurfaceFromSurfaceTin)?.HeightDatum?.Stated,
+                HeightDatums.Navd88Geoid18,
+                "EPSG:5703 on GEOID18 is the NAVD88 (GEOID18) height a 2.x manifest named");
+            run.True(navd.Steps.Any(step => step.Kind == ImportStepKind.ContextBuildings), "and the site model's buildings are planned on it");
+
+            BundleImportPlan otherGeoid = Plan(Read(Load(FullBundle, manifest =>
+            {
+                manifest["frames"]!["georeferenced"]!["vertical_crs"] = new JsonObject { ["code"] = "EPSG:5703" };
+                manifest["frames"]!["georeferenced"]!["geoid_model"] = "GEOID12B";
+            })));
+            run.Equal(
+                Step(otherGeoid, ImportStepKind.ToposurfaceFromSurfaceTin)?.HeightDatum?.Stated,
+                "EPSG:5703",
+                "NAVD88 on another geoid is not the pair a 2.x manifest named, so it stays the code and fails closed");
+        });
+
+        run.Case("a 3.0 bundle's credits are its attribution", () =>
+        {
+            BundleManifest manifest = Read(Load(FullBundle, root =>
+            {
+                root["credits"] = new JsonArray(
+                    new JsonObject { ["text"] = "Elevation: a survey", ["link"] = "https://example.org/survey" },
+                    new JsonObject { ["text"] = "Imagery: an agency" });
+            }));
+
+            run.Equal(manifest.AttributionSources.Count, 2, "one source per credit");
+            run.Equal(manifest.AttributionSources[0].AttributionText, "Elevation: a survey", "its text, verbatim");
+            run.Equal(manifest.AttributionSources[0].LicenseUrl, "https://example.org/survey", "and its link");
+            run.Equal(manifest.AttributionSources[1].AttributionText, "Imagery: an agency", "a credit with no link still credits");
         });
 
         run.Case("a 3.0 plan carries no per-category levels, whatever the choice names", () =>

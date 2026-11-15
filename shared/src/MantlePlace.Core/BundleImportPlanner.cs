@@ -1833,7 +1833,8 @@ public static class BundleImportPlanner
             && (kind is ImportStepKind.ToposurfaceFromPointsFile
                 or ImportStepKind.ToposurfaceFromSurfaceTin
                 or ImportStepKind.PublishedContours)
-            ? RevitThreeView.IsThree(manifest) ? ThreeNoCrop : SurfaceCrop.Unavailable(manifest, SiteFrame.For(manifest))
+            // A clause, not a sentence: the notice that reports it ends it (SurfaceCrop.NoWindowNotice).
+            ? RevitThreeView.IsThree(manifest) ? ThreeNoCrop.TrimEnd('.') : SurfaceCrop.Unavailable(manifest, SiteFrame.For(manifest))
             : null;
 
     /// <summary>

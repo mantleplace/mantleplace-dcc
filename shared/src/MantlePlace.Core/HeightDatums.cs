@@ -250,6 +250,53 @@ public static class HeightDatums
         _ => kind.ToString(),
     };
 
+    /// <summary>
+    /// A 3.x frame's vertical CRS and geoid as this plugin's datum statement: the 2.x name of a pair it
+    /// knows, else the CRS as the manifest gave it, which this plugin then does not know and refuses.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A naming, never a conversion: <c>EPSG:5703</c> on <c>GEOID18</c> is the NAVD88 height a 2.x
+    /// manifest called <see cref="Navd88Geoid18"/>, and <c>EPSG:3855</c> is the EGM2008 height it called
+    /// <see cref="Egm2008"/>. Read in the 2.x words, the ground a 3.0 import builds records the datum a
+    /// 2.x import of the same order records, so a re-import across the two majors compares as one datum
+    /// rather than refusing every height (<see cref="Refusal"/>).
+    /// </para>
+    /// <para>
+    /// NAVD88 on any other geoid, or with none named, is not the pair a 2.x manifest named, so it stays
+    /// the code and fails closed. So does a CRS stated only as WKT2 or PROJJSON: nothing takes one apart.
+    /// </para>
+    /// </remarks>
+    public static string? FromFrame(FrameCrs crs, string? geoidModel)
+    {
+        ArgumentNullException.ThrowIfNull(crs);
+
+        string? code = crs.Code?.Trim();
+        if (string.Equals(code, Navd88HeightCode, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(geoidModel?.Trim(), Geoid18, StringComparison.OrdinalIgnoreCase))
+        {
+            return Navd88Geoid18;
+        }
+
+        if (string.Equals(code, Egm2008HeightCode, StringComparison.OrdinalIgnoreCase)
+            && (string.IsNullOrWhiteSpace(geoidModel) || string.Equals(geoidModel.Trim(), Egm2008Geoid, StringComparison.OrdinalIgnoreCase)))
+        {
+            return Egm2008;
+        }
+
+        return crs.Code ?? crs.Wkt2 ?? crs.ProjJson;
+    }
+
+    /// <summary>The EPSG code of NAVD88 height, and the geoid a 2.x manifest's NAVD88 statement names.</summary>
+    private const string Navd88HeightCode = "EPSG:5703";
+
+    private const string Geoid18 = "GEOID18";
+
+    /// <summary>The EPSG code of EGM2008 height, and the geoid it is on.</summary>
+    private const string Egm2008HeightCode = "EPSG:3855";
+
+    private const string Egm2008Geoid = "EGM2008";
+
     /// <summary>Whether this plugin knows <paramref name="datum"/>, compared verbatim.</summary>
     public static bool IsKnown(string datum)
         => string.Equals(datum, Egm2008, StringComparison.Ordinal)

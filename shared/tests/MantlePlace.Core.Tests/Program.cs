@@ -21,6 +21,7 @@ exitCode |= BundleReaderTests.Run();
 exitCode |= HostBlockPrecedenceTests.Run();
 exitCode |= ImportPlannerTests.Run();
 exitCode |= ThreePlanTests.Run();
+exitCode |= ThreeArchiveTests.Run();
 exitCode |= ImportLayerTests.Run();
 exitCode |= ImportLayerLinksTests.Run();
 exitCode |= RememberedChoiceTests.Run();

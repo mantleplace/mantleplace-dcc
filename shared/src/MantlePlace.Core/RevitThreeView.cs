@@ -120,8 +120,10 @@ internal static class RevitThreeView
             LinearUnit = projected.Unit.Unit,
         };
 
-        string? groundDatum = Statement(georeferenced.VerticalCrs);
-        string? localDatum = Statement(local.VerticalCrs);
+        // A height datum in the words a 2.x manifest used for the same pair, so a 3.0 ground states
+        // the datum a 2.x import of the order recorded (HeightDatums.FromFrame says why it is a naming).
+        string? groundDatum = HeightDatums.FromFrame(georeferenced.VerticalCrs, georeferenced.GeoidModel);
+        string? localDatum = HeightDatums.FromFrame(local.VerticalCrs, local.GeoidModel);
         string horizontal = LinearUnits.ToManifestToken(georeferenced.HorizontalUnit.Unit);
         string vertical = LinearUnits.ToManifestToken(georeferenced.VerticalUnit.Unit);
 
@@ -139,9 +141,10 @@ internal static class RevitThreeView
                 }
                 : null;
 
-        // One GeoPackage per layer (R20): the file holds the layer alone, so its one table is read
-        // whatever the file names it, the file's stem tried first.
-        BundleArtifact? Layer(string path) =>
+        // One GeoPackage per layer (R20). A catalog entry that names its tables says which one holds
+        // the geometry the step draws from (Water.gpkg holds Water_line and Water_polygon); one that
+        // names none holds the layer alone, so its one table is read whatever the file names it.
+        BundleArtifact? Layer(string path, SiteVectorLayer layer) =>
             Named(contents, path) is { } file
                 ? new BundleArtifact
                 {
@@ -150,8 +153,8 @@ internal static class RevitThreeView
                     Units = horizontal,
                     VerticalDatum = groundDatum,
                     Family = FileFamily.Georeferenced,
-                    Table = Stem(path),
-                    SoleTable = true,
+                    Table = TableOf(file, path, layer),
+                    SoleTable = file.Tables.Count == 0,
                 }
                 : null;
 
@@ -184,20 +187,25 @@ internal static class RevitThreeView
             {
                 CrsProjected = georeferenced.HorizontalCrs.Code ?? string.Empty,
                 VerticalDatum = groundDatum ?? string.Empty,
-                GridRotationDeg = local.GridRotationDegrees,
+                // Zero, not the stated convergence: every georeferenced file is on the grid already and
+                // is placed by subtracting the survey point, never turned, which is why a 2.x manifest
+                // stated zero by construction. Turning the shared coordinates by the convergence
+                // would put the model's north off the grid the files are drawn on, and would make a
+                // 3.0 import of an order a different anchor from its 2.x import (AdjacentBundle).
+                GridRotationDeg = 0.0,
                 Origin = origin,
                 Declared = true,
             },
             SurfaceDxf = Georeferenced(TerrainPath, BundleManifestReader.ProjectedFrame, vertical),
             RevitContours = Georeferenced(ContoursPath, verticalUnits: vertical),
             SiteIfc = Georeferenced(SiteModelPath),
-            RoadSplines = Layer(RoadsPath),
-            RoadPolygons = Layer(PavementPath),
-            Water = Layer(WaterPath),
-            LandUse = Layer(LandUsePath),
-            LandCover = Layer(LandCoverPath),
-            FloodZones = Layer(FloodZonesPath),
-            SteepGround = Layer(SteepGroundPath),
+            RoadSplines = Layer(RoadsPath, SiteVectorLayers.RoadSplines),
+            RoadPolygons = Layer(PavementPath, SiteVectorLayers.RoadPolygons),
+            Water = Layer(WaterPath, SiteVectorLayers.Water),
+            LandUse = Layer(LandUsePath, SiteVectorLayers.LandUse),
+            LandCover = Layer(LandCoverPath, SiteVectorLayers.LandCover),
+            FloodZones = Layer(FloodZonesPath, SiteVectorLayers.FloodZones),
+            SteepGround = Layer(SteepGroundPath, SiteVectorLayers.SteepGround),
             TreePoints = HostReady(TreesPath),
             ImageryDrape = HostReady(DrapePath),
         };
@@ -226,8 +234,28 @@ internal static class RevitThreeView
             : null;
     }
 
-    /// <summary>A CRS as one statement, the form the manifest gave first: its code, else its WKT2, else its PROJJSON.</summary>
-    private static string? Statement(FrameCrs crs) => crs.Code ?? crs.Wkt2 ?? crs.ProjJson;
+    /// <summary>
+    /// The table of <paramref name="layer"/> in <paramref name="file"/>: where the catalog names none,
+    /// the file's stem (the file holds the layer alone and its one table is read whatever its name);
+    /// else the listed table of the file's stem, else the only one listed, else the one of the
+    /// geometry family the step draws from (<c>_line</c> or <c>_polygon</c>), else the stem, which the
+    /// importer then reports missing.
+    /// </summary>
+    internal static string TableOf(BundleFile file, string path, SiteVectorLayer layer)
+    {
+        string stem = Stem(path);
+        IReadOnlyList<string> tables = file.Tables;
+        if (tables.Count == 0)
+        {
+            return stem;
+        }
+
+        string family = layer.DrawnFrom == SiteGeometryKinds.Lines ? "_line" : "_polygon";
+        return tables.FirstOrDefault(name => string.Equals(name, stem, StringComparison.OrdinalIgnoreCase))
+            ?? (tables.Count == 1 ? tables[0] : null)
+            ?? tables.FirstOrDefault(name => name.EndsWith(family, StringComparison.OrdinalIgnoreCase))
+            ?? stem;
+    }
 
     private static string Stem(string path)
     {
