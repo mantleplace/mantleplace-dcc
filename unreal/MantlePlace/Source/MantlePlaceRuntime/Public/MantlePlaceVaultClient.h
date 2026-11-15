@@ -103,6 +103,13 @@ public:
 	void GetPresignedLevelUrl(const FString& OrderId, const FString& Level, const TArray<FString>& Files);
 
 	/**
+	 * Begin minting a presigned URL for one Extra of an MPB 3.0 order (`TerrainTiles`, say): a free download
+	 * beside the bundle, asked for by the id the vault listing gave it. The answer is the plain link answer,
+	 * marked with no level and no view. Result via OnPresignedUrlReady.
+	 */
+	void GetPresignedExtraUrl(const FString& OrderId, const FString& ExtraId);
+
+	/**
 	 * Probe a minted URL with a 1-byte ranged GET (no auth header) to confirm it resolves
 	 * without downloading the bundle. Result via OnPresignedUrlProbed.
 	 */
@@ -277,10 +284,12 @@ private:
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	/**
 	 * The download-mint POST every download entry point shares; they differ only in the body they build.
-	 * A non-empty Level is a 3.0 request for that level and Files; it is never a view.
+	 * A non-empty Level is a 3.0 request for that level and Files; a non-empty ExtraId is one for that Extra;
+	 * neither is ever a view.
 	 */
 	void MintDownload(const FString& OrderId, const FString& Format, bool bView,
-		const FString& Level = FString(), const TArray<FString>& Files = TArray<FString>());
+		const FString& Level = FString(), const TArray<FString>& Files = TArray<FString>(),
+		const FString& ExtraId = FString());
 
 	/** The 3.0 level the in-flight download mint asked for; empty for a 2.x request. Read by its answer. */
 	FString PendingDownloadLevel;

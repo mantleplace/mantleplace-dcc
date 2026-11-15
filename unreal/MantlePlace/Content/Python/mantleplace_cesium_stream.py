@@ -83,7 +83,7 @@ def _find_georeference():
     return None
 
 
-def _ensure_georeference(zip_path, geoid_separation_m=0.0):
+def _ensure_georeference(zip_path, geoid_separation_m=0.0, origin=None):
     """Find or spawn the level's CesiumGeoreference and set its origin from the bundle manifest.
 
     The +90 yaw in _orient_into_world_frame pivots on the tileset actor's origin at UE (0,0,0),
@@ -92,6 +92,10 @@ def _ensure_georeference(zip_path, geoid_separation_m=0.0):
     patch away from (0,0,0), and the yaw then swings it around the globe instead of spinning it in
     place -- the streamed patch renders sideways at globe scale. So this module owns the origin --
     applied from the manifest, never trusted from the level.
+
+    `origin` is the (lon, lat) the C++ stream reports for an MPB 3.x bundle, whose manifest states the
+    site origin elsewhere than a 2.x one does; it is applied as given. Without it the origin is read from
+    the 2.x manifest, as it always was.
 
     If the manifest origin cannot be read, the existing georeference is left untouched -- correct
     only if it was already set to the bundle origin by hand.
@@ -102,7 +106,10 @@ def _ensure_georeference(zip_path, geoid_separation_m=0.0):
         georef = unreal.EditorActorSubsystem().spawn_actor_from_class(
             unreal.CesiumGeoreference, unreal.Vector(0, 0, 0))
 
-    origin = _manifest_origin(zip_path) if zip_path else None
+    if origin is not None:
+        origin = (origin[0], origin[1], 0.0)
+    else:
+        origin = _manifest_origin(zip_path) if zip_path else None
     if origin is not None:
         lon, lat, _ground_h = origin
         # Height: the ELLIPSOID (0), not the ground. The level's frame carries true orthometric Z
@@ -332,8 +339,47 @@ def _newest_vault_cache_bundle():
     return max(candidates, key=os.path.getmtime)
 
 
+#: The fetcher a 3.x stream is waiting on. Held here so it is not collected while the download runs.
+_pending_fetch = None
+
+
+def _info_origin(info):
+    """(lon, lat) the stream reported for a 3.x bundle, or None (a 2.x bundle reports none)."""
+    return (info.origin_longitude_deg, info.origin_latitude_deg) if info.has_origin else None
+
+
+def _fetch_terrain_tiles_then_stream(zip_path, geoid_separation_m):
+    """Fetch an MPB 3.0 order's terrain tiles (the platform lists them as an Extra beside the bundle), then
+    stream again. The fetch is asynchronous: this returns at once, and the stream follows when the tiles
+    arrive. A refusal -- no tiles listed, not signed in, a failed download -- is logged with its reason."""
+    global _pending_fetch
+    fetcher = unreal.MantlePlaceTerrainTilesFetcher()
+
+    def _fetched(success, tiles_path, message):
+        global _pending_fetch
+        _pending_fetch = None
+        if not success:
+            unreal.log_error("[MantlePlace] stream failed: {}".format(message))
+            return
+        unreal.log("[MantlePlace] {}".format(message))
+        stream_into_cesium(zip_path, geoid_separation_m)
+
+    fetcher.on_fetched.add_callable(_fetched)
+    _pending_fetch = fetcher
+    unreal.log("[MantlePlace] fetching the terrain tiles for this order...")
+    if not fetcher.fetch(zip_path):
+        _pending_fetch = None
+        unreal.log_error("[MantlePlace] stream failed: a terrain tiles fetch is already running.")
+
+
 def stream_into_cesium(zip_path=None, geoid_separation_m=0.0):
     """Start the local server (C++) and wire up the Cesium tileset + imagery overlay. Returns the tileset.
+
+    A 2.x bundle streams its own terrain tiles. An MPB 3.0 bundle holds none: they are an Extra the
+    platform lists, fetched here the first time you ask and kept beside the bundle, so a second ask
+    reuses them. That first ask returns None and streams when the download completes (the log says so);
+    it needs a signed-in session, and an order the platform lists no terrain tiles for, or a zip on disk
+    with none beside it, is refused with the reason.
 
     With no `zip_path`, streams the newest bundle in the importer's vault cache
     — the file the last vault import read — so the console form is simply
@@ -354,12 +400,15 @@ def stream_into_cesium(zip_path=None, geoid_separation_m=0.0):
             return None
         unreal.log("[MantlePlace] streaming the newest cached bundle: {}".format(zip_path))
     info = unreal.MantlePlaceImporterLibrary.stream_bundle_into_cesium(zip_path)
+    if not info.success and info.terrain_tiles_fetchable:
+        _fetch_terrain_tiles_then_stream(zip_path, geoid_separation_m)
+        return None
     if not info.success:
         unreal.log_error("[MantlePlace] stream failed: {}".format(info.message))
         return None
     unreal.log("[MantlePlace] {}".format(info.message))
 
-    georef = _ensure_georeference(zip_path, geoid_separation_m)
+    georef = _ensure_georeference(zip_path, geoid_separation_m, _info_origin(info))
 
     # Spawn (replace) the bundle's terrain tileset, pointed at the local server's layer.json.
     _remove_existing(_TILESET_LABEL)

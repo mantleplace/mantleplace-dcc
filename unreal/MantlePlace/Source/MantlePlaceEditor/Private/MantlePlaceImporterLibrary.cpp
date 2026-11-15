@@ -21,6 +21,8 @@
 #include "MantlePlaceLocalTileServer.h"
 #include "MantlePlaceScopedRestore.h"
 #include "MantlePlaceStreamStaging.h"
+#include "MantlePlaceTerrainTilesLogic.h"
+#include "MantlePlaceBundleCache.h"
 #include "MantlePlaceSha256.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -82,6 +84,25 @@ namespace
 				continue;
 			}
 			const FString OutPath = FPaths::Combine(TempDir, Name);
+			// An archive path is untrusted input (format.md 10): one that resolves outside the staging
+			// directory is skipped, never written. The 3.x terrain tiles are a download of their own, so
+			// this is the first place their entry names are read as paths.
+			FString Resolved = OutPath;
+			FString Root = TempDir;
+			FPaths::NormalizeFilename(Resolved);
+			FPaths::NormalizeFilename(Root);
+			FPaths::CollapseRelativeDirectories(Resolved);
+			FPaths::CollapseRelativeDirectories(Root);
+			if (!Root.EndsWith(TEXT("/")))
+			{
+				Root += TEXT("/");
+			}
+			if (!Resolved.StartsWith(Root, ESearchCase::IgnoreCase))
+			{
+				UE_LOG(LogMantlePlaceImport, Warning,
+					TEXT("Skipped the archive entry %s: it resolves outside the staging directory."), *Name);
+				continue;
+			}
 			PlatformFile.CreateDirectoryTree(*FPaths::GetPath(OutPath));
 			if (FFileHelper::SaveArrayToFile(Bytes, *OutPath))
 			{
@@ -870,46 +891,111 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 		return Info;
 	}
 
+	// Where the terrain comes from. A 2.x bundle holds its own quantized-mesh tiles. A 3.x bundle holds none:
+	// they are the terrain tiles Extra, kept beside the bundle's zip once fetched (spec/format.md 9.9, 12), and
+	// served from there as the bundled tiles are served. Nothing else about the stream differs.
 	TArray<uint8> ManifestBytes;
+	FMantlePlaceVaultManifest Manifest;
+	const FZipArchiveReader* TerrainSource = &Reader;
+	TUniquePtr<FZipArchiveReader> TilesReader;
+	FString TerrainPrefix;
+	FString TerrainPath;
+	FString SourceDigest;
+	int32 TerrainTileCount = 0;
+	bool bFormatThree = false;
+
 	if (MantlePlaceFormatThree::IsFormatThree(Reader))
 	{
-		// A 3.x bundle holds no terrain tiles: they are an Extra beside it (spec/format.md §12).
-		Info.Message = TEXT("Streaming into Cesium is not offered for an MPB 3.0 bundle in this release: its "
-			"terrain tiles are an Extra beside the bundle.");
-		return Info;
-	}
-	if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
-	{
-		Info.Message = TEXT("Bundle has no Metadata/manifest.json.");
-		return Info;
-	}
-	FString ManifestText;
-	FFileHelper::BufferToString(ManifestText, ManifestBytes.GetData(), ManifestBytes.Num());
-	FString ParseError;
-	const FMantlePlaceVaultManifest Manifest = MantlePlaceImportManifest::Parse(ManifestText, ParseError);
-	Info.JobId = Manifest.JobId;
+		bFormatThree = true;
+		FString ReadError;
+		if (!MantlePlaceFormatThree::Read(Reader, ManifestBytes, Manifest, ReadError))
+		{
+			Info.Message = ReadError;
+			return Info;
+		}
+		Info.JobId = Manifest.JobId;
 
-	if (!Manifest.Cesium.bHasTerrain)
-	{
-		Info.Message = TEXT("This bundle ships no Cesium quantized-mesh terrain (layout.cesiumTerrain is "
-			"absent). Re-export from a v8+ pipeline that produces Cesium terrain tiles.");
-		return Info;
-	}
+		const FString TilesPath = FMantlePlaceTerrainTilesLogic::TilesZipBeside(ZipPath);
+		FMantlePlaceTerrainTilesLogic::FTileset Tileset;
+		if (PlatformFile.FileExists(*TilesPath))
+		{
+			if (IFileHandle* TilesHandle = PlatformFile.OpenRead(*TilesPath))
+			{
+				TilesReader = MakeUnique<FZipArchiveReader>(TilesHandle);
+				if (TilesReader->IsValid())
+				{
+					Tileset = FMantlePlaceTerrainTilesLogic::FindTileset(TilesReader->GetFileNames());
+				}
+			}
+		}
+		if (FMantlePlaceTerrainTilesLogic::DecideSource(/*bFormatThree*/ true, Tileset.bFound)
+			== FMantlePlaceTerrainTilesLogic::ESource::ExtraMissing)
+		{
+			const FString CacheRoot = FPaths::Combine(FPaths::ProjectSavedDir(), GetDefault<UMantlePlaceBundleCache>()->CacheSubDir);
+			Info.bTerrainTilesFetchable = FMantlePlaceTerrainTilesLogic::IsInVaultCache(ZipPath, CacheRoot);
+			Info.Message = Info.bTerrainTilesFetchable ? FMantlePlaceTerrainTilesLogic::NotFetchedYetMessage()
+				: FMantlePlaceTerrainTilesLogic::NoTilesBesideReason();
+			return Info;
+		}
 
-	// Zip-entry prefix derived from the manifest so this keeps working as the bundle layout renames
-	// the terrain folder across versions (v13+: CesiumTerrain/; legacy: Terrain/).
-	const FString TerrainPrefix = MantlePlaceImportManifest::DeriveCesiumTerrainPrefix(Manifest.Cesium.TerrainPath);
-	if (TerrainPrefix.IsEmpty())
+		TArray<uint8> TilesBytes;
+		if (!FFileHelper::LoadFileToArray(TilesBytes, *TilesPath))
+		{
+			Info.Message = FString::Printf(TEXT("Could not read the terrain tiles beside the bundle: %s"), *TilesPath);
+			return Info;
+		}
+		TerrainSource = TilesReader.Get();
+		TerrainPrefix = Tileset.Prefix;
+		TerrainPath = Tileset.LayerJsonPath;
+		TerrainTileCount = Tileset.TileCount;
+		// What distinguishes one build of the Extra from another: the Extra carries no version promise, so its
+		// own bytes say "the same tiles", where the order id says "the same order".
+		SourceDigest = MantlePlaceSha256::HexDigest(TilesBytes);
+		if (Manifest.Georef.bHasGeographicOrigin)
+		{
+			Info.bHasOrigin = true;
+			Info.OriginLongitudeDeg = Manifest.Georef.OriginLongitudeDeg;
+			Info.OriginLatitudeDeg = Manifest.Georef.OriginLatitudeDeg;
+		}
+	}
+	else
 	{
-		Info.Message = TEXT("Bundle's layout.cesiumTerrain has no directory component; refusing to "
-			"extract (would match every zip entry).");
-		return Info;
+		if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
+		{
+			Info.Message = TEXT("Bundle has no Metadata/manifest.json.");
+			return Info;
+		}
+		FString ManifestText;
+		FFileHelper::BufferToString(ManifestText, ManifestBytes.GetData(), ManifestBytes.Num());
+		FString ParseError;
+		Manifest = MantlePlaceImportManifest::Parse(ManifestText, ParseError);
+		Info.JobId = Manifest.JobId;
+
+		if (!Manifest.Cesium.bHasTerrain)
+		{
+			Info.Message = TEXT("This bundle ships no Cesium quantized-mesh terrain (layout.cesiumTerrain is "
+				"absent). Re-export from a v8+ pipeline that produces Cesium terrain tiles.");
+			return Info;
+		}
+
+		// Zip-entry prefix derived from the manifest so this keeps working as the bundle layout renames
+		// the terrain folder across versions (v13+: CesiumTerrain/; legacy: Terrain/).
+		TerrainPrefix = MantlePlaceImportManifest::DeriveCesiumTerrainPrefix(Manifest.Cesium.TerrainPath);
+		if (TerrainPrefix.IsEmpty())
+		{
+			Info.Message = TEXT("Bundle's layout.cesiumTerrain has no directory component; refusing to "
+				"extract (would match every zip entry).");
+			return Info;
+		}
+		TerrainPath = Manifest.Cesium.TerrainPath;
+		TerrainTileCount = Manifest.Cesium.TerrainTileCount;
+		SourceDigest = MantlePlaceSha256::HexDigest(ManifestBytes);
 	}
 
 	// Keyed on the identity, not the raw job id: a directory name out of unvalidated bundle JSON.
-	// Refused when neither the order nor the manifest digest yields a usable one, for the same reason
+	// Refused when neither the order nor the digest yields a usable one, for the same reason
 	// the native import refuses it — this path creates and clears a directory named by it.
-	const FString ManifestSha256 = MantlePlaceSha256::HexDigest(ManifestBytes);
+	const FString ManifestSha256 = SourceDigest;
 	const FString Identity =
 		MantlePlaceImportNaming::ResolveIdentity(Manifest.OrderId, ManifestSha256);
 	if (!MantlePlaceImportNaming::IsUsableIdentity(Identity))
@@ -926,17 +1012,18 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 	// that does not match exactly re-stages, because this directory is scratch and rebuilding it
 	// costs an extraction while serving a stale one serves the wrong terrain.
 	const FString StageDir = MantlePlaceStreamStaging::StagingDir(Identity);
-	const FString TerrainRootOnDisk = FPaths::Combine(StageDir, Manifest.Cesium.TerrainPath);
+	const FString TerrainRootOnDisk = FPaths::Combine(StageDir, TerrainPath);
 
 	MantlePlaceStreamStaging::FRecord Incoming;
 	Incoming.Identity = Identity;
 	Incoming.ManifestSha256 = ManifestSha256;
 	Incoming.TerrainPrefix = TerrainPrefix;
-	Incoming.CesiumTerrainPath = Manifest.Cesium.TerrainPath;
+	Incoming.CesiumTerrainPath = TerrainPath;
 	// The one imagery file this stream serves, by the same pointer and the same condition that build
 	// Info.ImageryUrl below — the only imagery the Python helper reads. Empty when the stream serves
 	// none, and then none is extracted.
-	Incoming.DrapePath = (Manifest.Drape.bPresent && !Manifest.Drape.Path.IsEmpty()) ? Manifest.Drape.Path : FString();
+	// A 3.x stream serves none: the tiles Extra holds no imagery.
+	Incoming.DrapePath = (!bFormatThree && Manifest.Drape.bPresent && !Manifest.Drape.Path.IsEmpty()) ? Manifest.Drape.Path : FString();
 	Incoming.SchemeVersion = MantlePlaceStreamStaging::CurrentSchemeVersion;
 
 	MantlePlaceStreamStaging::FRecord Staged;
@@ -955,7 +1042,7 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 		// Every extracted entry is named by a manifest pointer: the terrain subtree under
 		// layout.cesium_terrain's directory, and the drape the stream serves (HPS-32).
 		int64 StagedBytes = 0;
-		Incoming.EntryCount = ExtractSelectedEntries(Reader, Incoming, StageDir, StagedBytes);
+		Incoming.EntryCount = ExtractSelectedEntries(*TerrainSource, Incoming, StageDir, StagedBytes);
 		if (Incoming.EntryCount == 0)
 		{
 			Info.Message = FString::Printf(TEXT("Bundle declares Cesium terrain but no %s entries were extracted."), *TerrainPrefix);
@@ -1031,7 +1118,7 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 
 	Info.bSuccess = true;
 	Info.BaseUrl = BaseUrl;
-	Info.CesiumTerrainUrl = BaseUrl / Manifest.Cesium.TerrainPath;
+	Info.CesiumTerrainUrl = BaseUrl / TerrainPath;
 	if (!Incoming.DrapePath.IsEmpty())
 	{
 		Info.ImageryUrl = BaseUrl / Incoming.DrapePath;
@@ -1043,7 +1130,7 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 	Info.BboxNorthDeg = Manifest.Cesium.BboxNorthDeg;
 	Info.Message = FString::Printf(
 		TEXT("Streaming bundle %s on %s (%d Cesium terrain tiles). Cesium3DTileset Url -> %s"),
-		*MantlePlaceImportNaming::ShortIdentity(Manifest.JobId), *BaseUrl, Manifest.Cesium.TerrainTileCount, *Info.CesiumTerrainUrl);
+		*MantlePlaceImportNaming::ShortIdentity(Manifest.JobId), *BaseUrl, TerrainTileCount, *Info.CesiumTerrainUrl);
 	return Info;
 }
 

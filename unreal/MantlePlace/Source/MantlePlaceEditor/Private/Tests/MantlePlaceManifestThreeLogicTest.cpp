@@ -112,6 +112,10 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the origin's easting"), M.Georef.OriginEastingM, 500000.0);
 		TestEqual(TEXT("the origin's height is the mesh ground"), M.Georef.GroundOrthometricHM, 100.0);
 		TestEqual(TEXT("the site datum, verbatim"), M.SiteVerticalDatum, FString(TEXT("EPSG:3855")));
+		// The streamed terrain's georeference is set from the manifest's own longitude and latitude, verbatim.
+		TestTrue(TEXT("the origin's geographic position is read"), M.Georef.bHasGeographicOrigin);
+		TestEqual(TEXT("the origin's longitude, verbatim"), M.Georef.OriginLongitudeDeg, -97.7);
+		TestEqual(TEXT("the origin's latitude, verbatim"), M.Georef.OriginLatitudeDeg, 30.3);
 
 		// The heightmap: stated numbers in centimetres, nothing else.
 		const FMantlePlaceHeightmapBlock& H = M.Heightmap;
