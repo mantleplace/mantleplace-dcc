@@ -424,10 +424,9 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		FString Error;
 		TestTrue(TEXT("a table with no name column parses: ") + Error,
 			FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
-				TEXT("road,vertex,x,y,z,class,width_m
-1,0,10,20,1,primary,7
-1,1,30,40,2,primary,7
-"),
+				TEXT("road,vertex,x,y,z,class,width_m\n"
+					"1,0,10,20,1,primary,7\n"
+					"1,1,30,40,2,primary,7\n"),
 				0.0, Splines, Seen, Unreadable, Error));
 		TestEqual(TEXT("one spline"), Splines.Num(), 1);
 		if (Splines.Num() == 1)
@@ -435,8 +434,7 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 			TestTrue(TEXT("left unnamed"), Splines[0].Name.IsEmpty());
 		}
 		TestFalse(TEXT("a missing coordinate is still refused"),
-			FMantlePlaceRoadSplinesLogic::ParseSiteCsv(TEXT("road,vertex,x,z,class,width_m
-"), 0.0, Splines, Seen, Unreadable, Error));
+			FMantlePlaceRoadSplinesLogic::ParseSiteCsv(TEXT("road,vertex,x,z,class,width_m\n"), 0.0, Splines, Seen, Unreadable, Error));
 		TestTrue(TEXT("naming it: ") + Error, Error.Contains(TEXT("`y`")));
 	}
 
