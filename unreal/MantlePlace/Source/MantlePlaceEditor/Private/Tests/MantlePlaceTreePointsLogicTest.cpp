@@ -193,6 +193,99 @@ bool FMantlePlaceTreePointsLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("and it says that is why"), Error.Contains(TEXT("no landscape extent")));
 	}
 
+	// --- The extent's edge is inside it, and a small share just outside is left out, named ---
+	// The reference landscape's half-spans are 712.5 m east and 700.5 m north of the origin. A live
+	// 3.0 bundle had 20 of 3,551 points on or just over the edge, and the whole layer was refused.
+	{
+		const FString Header = TEXT("x,y,ground_z,height_m,crown_radius_m\n");
+		// A row `EastingM` metres east of the origin's easting and `NorthingM` north of its northing.
+		auto Row = [&](double EastingM, double NorthingM)
+		{
+			return FString::Printf(TEXT("%.2f,%.2f,2640.96,12.40,4.34\n"), OriginEastingM + EastingM,
+			    OriginNorthingM + NorthingM);
+		};
+		TArray<FMantlePlaceTreePointRow> Rows;
+		FString Error, Note;
+
+		// On the edge, on every side, is inside.
+		const FString OnEdge = Header + Row(712.5, 0.0) + Row(-712.5, 0.0) + Row(0.0, 700.5) + Row(0.0, -700.5);
+		TestTrue(TEXT("points exactly on the extent's edge are Parsed"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(OnEdge, OriginEastingM, OriginNorthingM, Unstated,
+		        LandscapeSpanUeCm, /*DeclaredPointCount*/ 4, Rows, Error, FString(), &Note)
+		        == EMantlePlaceTreePointsOutcome::Parsed);
+		TestEqual(TEXT("and all four are kept"), Rows.Num(), 4);
+		TestTrue(TEXT("with nothing left out to name"), Note.IsEmpty());
+
+		// 1 cm past the edge is rounding, not evidence, and is inside the tolerance.
+		TestTrue(TEXT("a point 1 cm past the edge is Parsed"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(Header + Row(712.51, 0.0) + Row(-712.51, 0.0),
+		        OriginEastingM, OriginNorthingM, Unstated, LandscapeSpanUeCm, 2, Rows, Error)
+		        == EMantlePlaceTreePointsOutcome::Parsed);
+		TestEqual(TEXT("and both are kept"), Rows.Num(), 2);
+
+		// 1 of 20 is 5%: placed, the odd one out left out and named.
+		FString Twenty = Header + Row(713.0, 0.0);
+		for (int32 Index = 0; Index < 19; ++Index)
+		{
+			Twenty += Row(Index, -Index);
+		}
+		TestTrue(TEXT("one point just outside 19 inside is Parsed"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(Twenty, OriginEastingM, OriginNorthingM, Unstated,
+		        LandscapeSpanUeCm, /*DeclaredPointCount*/ 20, Rows, Error, FString(), &Note)
+		        == EMantlePlaceTreePointsOutcome::Parsed);
+		TestEqual(TEXT("and places the 19 inside"), Rows.Num(), 19);
+		TestTrue(TEXT("and names the count left out"), Note.Contains(TEXT("1 of 20")));
+		TestTrue(TEXT("and the first one"), Note.Contains(FString::Printf(TEXT("x=%.2f"), OriginEastingM + 713.0)));
+		TestTrue(TEXT("and how many were placed"), Note.Contains(TEXT("The other 19")));
+		TestEqual(TEXT("with no error"), Error, FString());
+
+		// The count check is against the points read, the ones left out included.
+		TestTrue(TEXT("a declared count that disagrees with the points read is still CountMismatch"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(Twenty, OriginEastingM, OriginNorthingM, Unstated,
+		        LandscapeSpanUeCm, /*DeclaredPointCount*/ 19, Rows, Error, FString(), &Note)
+		        == EMantlePlaceTreePointsOutcome::CountMismatch);
+		TestTrue(TEXT("and leaves no note"), Note.IsEmpty());
+
+		// 1 of 19 is over 5%: the file is refused, as before.
+		FString Nineteen = Header + Row(713.0, 0.0);
+		for (int32 Index = 0; Index < 18; ++Index)
+		{
+			Nineteen += Row(Index, -Index);
+		}
+		TestTrue(TEXT("one point outside 18 inside is over the share and Unplaceable"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(Nineteen, OriginEastingM, OriginNorthingM, Unstated,
+		        LandscapeSpanUeCm, 0, Rows, Error, FString(), &Note)
+		        == EMantlePlaceTreePointsOutcome::Unplaceable);
+		TestEqual(TEXT("and keeps no rows"), Rows.Num(), 0);
+		TestTrue(TEXT("and it says 1 of 19"), Error.Contains(TEXT("1 of 19")));
+		TestTrue(TEXT("and leaves no note"), Note.IsEmpty());
+
+		// The live case's shape: 20 of 3,551 on or over the edge, the rest inside.
+		FString Live = Header;
+		for (int32 Index = 0; Index < 3531; ++Index)
+		{
+			Live += Row((Index % 700) - 350, (Index % 600) - 300);
+		}
+		for (int32 Index = 0; Index < 20; ++Index)
+		{
+			Live += Row(-712.5 - (Index % 2) * 0.5, Index);
+		}
+		TestTrue(TEXT("20 of 3551 on or just over the edge is Parsed"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(Live, OriginEastingM, OriginNorthingM, Unstated,
+		        LandscapeSpanUeCm, /*DeclaredPointCount*/ 3551, Rows, Error, FString(), &Note)
+		        == EMantlePlaceTreePointsOutcome::Parsed);
+		TestEqual(TEXT("with the edge points kept and the ones over it left out"), Rows.Num(), 3531 + 10);
+		TestTrue(TEXT("naming 10 of 3551"), Note.Contains(TEXT("10 of 3551")));
+
+		// A file on another grid has every point off the landscape: refused however it is cut.
+		const FString FootFrame =
+		    Header + TEXT("1817612.40,1919384.75,8664.57,40.68,14.24\n1817940.49,1919056.66,,26.25,9.19\n");
+		TestTrue(TEXT("a foot-frame file is still Unplaceable"),
+		    FMantlePlaceTreePointsLogic::ParseCsv(FootFrame, OriginEastingM, OriginNorthingM, Unstated,
+		        LandscapeSpanUeCm, 2, Rows, Error, FString(), &Note)
+		        == EMantlePlaceTreePointsOutcome::Unplaceable);
+	}
+
 	// --- A stated frame is read, and the extent stays as the backstop (HPS-53, MPB 1.3.0) ---
 	// The wrong-CRS, wrong-unit and half-stated refusals are shared vectors (corpus case
 	// manifest.treePointsStatedFrame), driven through the parser. What stays here is what a

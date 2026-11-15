@@ -138,9 +138,13 @@ struct FMantlePlaceTreePointsLogic
 	 * `LandscapeSpanUeCm` is `FMantlePlaceVaultManifest::GetAoiSizeUeCm()`: the landscape's
 	 * published span in UE axis order (X = North, Y = East), centred on the origin; zero when the
 	 * block publishes no heightmap. It is a comparison of published values, never a derivation,
-	 * and **it runs one way.** Any row outside the span makes the FILE Unplaceable — the frame
-	 * belongs to the file, not to the point, so rows that happen to land inside are not kept.
-	 * Rows inside the span prove nothing about the frame; they are only the absence of evidence
+	 * and **it runs one way.** A point is outside only past the span's edge by more than
+	 * `EdgeToleranceCmValue` (a point on the edge is inside), and more than
+	 * `MaxOutsideSharePercentValue` percent of the rows outside makes the FILE Unplaceable: the
+	 * frame belongs to the file, not to the point, so rows that happen to land inside are not kept.
+	 * At or under that share the file is Parsed without the outside rows, and `OutNote` (when given)
+	 * names how many were left out and the first; a file on another grid or in another unit has
+	 * every point off the landscape and is nowhere near the share. Rows inside the span prove nothing about the frame; they are only the absence of evidence
 	 * against it. A span of zero is therefore no evidence either way: behind a stated frame that
 	 * matched, the file is placed (a mesh-only bundle brings its trees), and behind an unstated
 	 * one it is refused, because an unstated frame is never assumed to match. The check runs
@@ -165,7 +169,14 @@ struct FMantlePlaceTreePointsLogic
 	    int32 DeclaredPointCount,
 	    TArray<FMantlePlaceTreePointRow>& OutRows,
 	    FString& OutError,
-	    const FString& FoliageTypeVocabulary = FString());
+	    const FString& FoliageTypeVocabulary = FString(),
+	    FString* OutNote = nullptr);
+
+	/** How far past the extent's edge, in cm, a point may sit and still be on it (rounding, not evidence). */
+	static constexpr double EdgeToleranceCmValue = 10.0;
+
+	/** The most points, as a percentage of the file, that may sit outside the extent for the rest to be placed. */
+	static constexpr int32 MaxOutsideSharePercentValue = 5;
 
 	/**
 	 * One `foliage_type` cell -> the type it names. Values are matched EXACTLY (`Shrub` and
