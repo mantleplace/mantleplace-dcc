@@ -1,0 +1,21 @@
+{
+  "$comment": "A Med bundle of six files whose manifest states no count and lists nothing as not held: a reader reports only what the manifest states, so every count is null and nothing is skipped. It never counts a file's contents to fill a count in.",
+  "bundle": "bundle/v3-med-without-records.json",
+  "result": {
+    "outcome": "read",
+    "major": 3,
+    "version": "3.0.0",
+    "manifestPath": "Manifest.json",
+    "level": "Med",
+    "refusal": null,
+    "files": [
+      {"path": "Basemap/Roads.dxf", "family": "georeferenced", "frame": "order", "count": null},
+      {"path": "Basemap/Roads.gpkg", "family": "georeferenced", "frame": "order", "count": null},
+      {"path": "Elevation/Elevation.tif", "family": "georeferenced", "frame": "order", "count": null},
+      {"path": "Elevation/Terrain.glb", "family": "host-ready", "frame": "site", "count": null},
+      {"path": "Manifest.json", "family": null, "frame": null, "count": null},
+      {"path": "Readme.md", "family": null, "frame": null, "count": null}
+    ],
+    "skipped": []
+  }
+}

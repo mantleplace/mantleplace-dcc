@@ -1,0 +1,545 @@
+{
+  "$comment": "A Max download of an AOI with no records, listing what it does not hold (format.md §9.6): each promised `Records` file is named with the reason the manifest states for it. Most are `no-data`, one is `pending` (a public-record source did not answer in time) and one is `withheld`, a reason no reader's table lists: a reader shows the stated reason and never matches on it. The 3.x schema is not published yet, so the manifest is held to the format text's rules alone, which the validator reports at info (`schema.pending`).",
+  "files": {
+    "Manifest.json": {
+      "version": "3.0.0",
+      "level": "Max",
+      "file_entries": {
+        "Basemap/Basemap.png": {
+          "odbl_role": "produced-work",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "7b42ac5bf115dd755887b6b0437eef3638e826524679b25e8a6a7a9cc7be4227",
+          "count": 1048576
+        },
+        "Basemap/Basemap.tif": {
+          "odbl_role": "produced-work",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "7b58054efa758cda4199f7e56266d845c069e4982530eddc9be2bc3e90ec8aa5",
+          "count": 1048576
+        },
+        "Basemap/Basemap.usdz": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "a4d3d43e641f6d4554f9a478a72b8add37c33e3ab9631ae4080d0da030a0dddf",
+          "count": 4000
+        },
+        "Basemap/Buildings.dxf": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "effafad84f0fcb6c25f23229780181e2a758464e500ac61aa4d6c504512b2eea",
+          "count": 120
+        },
+        "Basemap/Buildings.glb": {
+          "odbl_role": "produced-work",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "ca817f43df0ff5ce0a31a0689cdc5d10e8f134032dff6703daa723ffdf03b2cd",
+          "count": 90000
+        },
+        "Basemap/Buildings.gpkg": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "f29b2a4a2d0635e2d8d401bb114f07b7766516c4a84b67cdc04b996544329567",
+          "count": 120
+        },
+        "Basemap/Landuse.dxf": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "0e0c1418605f83df5d1cefed2ba7ab23dda79b9b15dbd8c5a73725ad43f22869",
+          "count": 120
+        },
+        "Basemap/Landuse.gpkg": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "7c3ff790f1f6a01f65d4efcd7f2be0fdce4f3a04e7427b2add190c30e6cff84c",
+          "count": 120
+        },
+        "Basemap/Pavement.dxf": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "97a08cd2289e03f9bcd61474403fae31c8791a5933574e5d066437ecd758f9f8",
+          "count": 120
+        },
+        "Basemap/Pavement.gpkg": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "cdc2a40829ab0a52b2750301c4b591b1291cc88c81dc7414b25b7ad0cdfd1efa",
+          "count": 120
+        },
+        "Basemap/Roads.csv": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "72a91680a519703e833a21790e2c23ffbd3ac529197bef1a245000ba70243fb9",
+          "count": 1600
+        },
+        "Basemap/Roads.dxf": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "e197d457e5288f7d13f6f531cee38fe0074ca860776f485125df74538f8fe889",
+          "count": 120
+        },
+        "Basemap/Roads.gpkg": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "2171729bd7b03bbd1b911c70d3f8f914516e9957ba654fc50c5f79239cfb369b",
+          "count": 120
+        },
+        "Basemap/Water.dxf": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "a09640c43f06219a8159cfdd3681b04af2c704535572ecec87f0f39bbeced5da",
+          "count": 120
+        },
+        "Basemap/Water.gpkg": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "9dc66238508d491728d763ea39163c21f820b163bd22cab35affc427291f241e",
+          "count": 120
+        },
+        "Elevation/Aspect.tif": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "349368920042259724f269bb8d256c4e368bf4111c4329354f712d11cbfcef0c",
+          "count": 1048576
+        },
+        "Elevation/Contours.dxf": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "b50ac3d501313963cdeb12c46d53e8d540f23af901f93cf6131724a0c93679f2",
+          "count": 340
+        },
+        "Elevation/Elevation.png": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "c7c846f083cb9193546622f1604c59bbdc2bdb9f52560b9e2333656a3571c82e",
+          "count": 1018081
+        },
+        "Elevation/Elevation.tif": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "a41a33831d5d6f62628da2c49589d4eda038e1966392b836d6a872bf586f73a9",
+          "count": 1048576
+        },
+        "Elevation/Hillshade.tif": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "e4e181248807d5751c4d644a00d0905fbbf3ffc44d41eacfbbd41d7c0e0ae471",
+          "count": 1048576
+        },
+        "Elevation/Slope.dxf": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "84cbe495ec37644b8ed215a902cbe07d6d584407e8e9b56038e46fab12b919e1",
+          "count": 120
+        },
+        "Elevation/Slope.gpkg": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "37a8d0623a8f38bfb447bb42c9f694fb7ecce07d42bb2f5780fc4701654f7ff0",
+          "count": 120
+        },
+        "Elevation/Slope.tif": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "6e48ba326e4c1ab8daf20390bce8c19174aa1aff202770b9c7654135fa2fa01b",
+          "count": 1048576
+        },
+        "Elevation/Terrain.dxf": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "2ae9ac3df295da9cfe416839392f8c6d3f243049102e35614d084c2f1bec33b1",
+          "count": 200000
+        },
+        "Elevation/Terrain.glb": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "6baa2abd3b49926b9cdad8f74f3cfa699d2ca9e0e50876c6182dd7db0947d37e",
+          "count": 200000
+        },
+        "Elevation/Terrain.landxml": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "f5088beee417439ad755c508b36ca730fa8f68308454d68e5e5b1c8a104125ff",
+          "count": 200000
+        },
+        "Elevation/Terrain.mtl": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "8f5126eddf0471ba0cf8d95a62268a70689a85f37f2aa2171a18a290cf97df25"
+        },
+        "Elevation/Terrain.obj": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "2d79bc4fbdf34ddf8f02adaa02022c6646ad335e4a5139840d73e8374ba8f6d3",
+          "count": 200000
+        },
+        "Imagery/Imagery.png": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "fed42011b553e882dd6fed0618b5c2804152ec0cdedde51fab6a20dd79d0d90f",
+          "count": 1048576
+        },
+        "Imagery/Imagery.tif": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "c6c1427e00117c772bc9eec1e919eb7407f941d796bfca2592e99e3b34f21c2f",
+          "count": 1048576
+        },
+        "Landcover/Canopy.tif": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "444cd8316e164737619f6e99927ecca1fb063c42e7fbac41ec442995346d5ed3",
+          "count": 1048576
+        },
+        "Landcover/Landcover.dxf": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "7f1b4bdd5bc13eed9bda28001a7f31f26bc0c0352b795054fabcf8e5a400000d",
+          "count": 120
+        },
+        "Landcover/Landcover.gpkg": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "d4fa16fd189735d9c858912081631b0891d7e190fb968d3b923234be37861e34",
+          "count": 120
+        },
+        "Landcover/Landcover.tif": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "23c2ceedcb89fae0b2b1304d2407378bba6ff83ede704e93fe3eda4059ef607e",
+          "count": 1048576
+        },
+        "Landcover/Trees.csv": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "2ad84e2b17222d5a6a8b2b1d168eeaac1c1faf7fa2f8ae43d971796db133c87b",
+          "count": 5000
+        },
+        "Landcover/Trees.gpkg": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "5784d46a1dc940b58bcf1eb11ead526cb77b2eef896951bcf1d7a61b018f8793",
+          "count": 5000
+        },
+        "Manifest.json": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": []
+        },
+        "Materials/Built.png": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "c4da1bb9758a4847ee9fea3393c8632e12bfb7f5d6928d15977694aa45dcf8da",
+          "count": 1048576
+        },
+        "Materials/Dirt.png": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "94fe87b7f32f608fe137f251bd7e6e3417bc4742513d95f7dbbe6431e3a0d3ed",
+          "count": 1048576
+        },
+        "Materials/Forest.png": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "fcf134581e2e18b792d39a050d087180bacf766a04ff8ea2f07d16767c058b63",
+          "count": 1048576
+        },
+        "Materials/Grass.png": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "cb6ae5da425df447474b91997622d0d36d31c63c6313d69ecf8b06d55cd62773",
+          "count": 1048576
+        },
+        "Materials/Rock.png": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "041f4da631337b16185fd2d850b8b6fba950685f3818a523f13ce9a8786aebba",
+          "count": 1048576
+        },
+        "Materials/Sand.png": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "15ad10e1e86649cb18213eab41d55df8a2c88e285593dd6178420eda13194b8f",
+          "count": 1048576
+        },
+        "Materials/Snow.png": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "7dc21be66375fc87c9782ce8b91edfa319bfe1bd802b6bc7cc9fc1377dd404ea",
+          "count": 1048576
+        },
+        "Materials/Water.png": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "9764ef811073bf507e8c3037211cd9c08da76e947b01206bf67407c6516d12b9",
+          "count": 1048576
+        },
+        "Readme.md": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "fa2fa0739228c6d4b64976a8a9acbc48f36fb82fb0956493489e7632e63a3078"
+        },
+        "Site/Site.dxf": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "e236e4aa8b0e7cc2c641456cffe6b4e0ac3b20621f6c67fb7d926f880075343e",
+          "count": 4000
+        },
+        "Site/Site.ifc": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "5bdad9ecfc6e29bee34ace4569c9f0f537d9e32f475ef7184568e5e5a76c721a",
+          "count": 4000
+        },
+        "Site/Site.usdz": {
+          "odbl_role": "produced-work",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "895bec4605940ecf12ca42aa4c017200e49680df88596340a27c783cd460d47d",
+          "count": 320000
+        }
+      },
+      "not_held": {
+        "Records/Conservation.dxf": {
+          "reason": "no-data"
+        },
+        "Records/Conservation.gpkg": {
+          "reason": "no-data"
+        },
+        "Records/Contamination.dxf": {
+          "reason": "withheld"
+        },
+        "Records/Contamination.gpkg": {
+          "reason": "withheld"
+        },
+        "Records/Floodplain.dxf": {
+          "reason": "no-data"
+        },
+        "Records/Floodplain.gpkg": {
+          "reason": "no-data"
+        },
+        "Records/Habitat.dxf": {
+          "reason": "no-data"
+        },
+        "Records/Habitat.gpkg": {
+          "reason": "no-data"
+        },
+        "Records/Heritage.dxf": {
+          "reason": "pending"
+        },
+        "Records/Heritage.gpkg": {
+          "reason": "pending"
+        },
+        "Records/Hydrography.dxf": {
+          "reason": "no-data"
+        },
+        "Records/Hydrography.gpkg": {
+          "reason": "no-data"
+        },
+        "Records/Parcels.dxf": {
+          "reason": "no-data"
+        },
+        "Records/Parcels.gpkg": {
+          "reason": "no-data"
+        },
+        "Records/Soils.dxf": {
+          "reason": "no-data"
+        },
+        "Records/Soils.gpkg": {
+          "reason": "no-data"
+        },
+        "Records/Wetlands.dxf": {
+          "reason": "no-data"
+        },
+        "Records/Wetlands.gpkg": {
+          "reason": "no-data"
+        },
+        "Records/Zoning.dxf": {
+          "reason": "no-data"
+        },
+        "Records/Zoning.gpkg": {
+          "reason": "no-data"
+        }
+      }
+    },
+    "Basemap/Basemap.png": "placeholder for Basemap/Basemap.png\n",
+    "Basemap/Basemap.tif": "placeholder for Basemap/Basemap.tif\n",
+    "Basemap/Basemap.usdz": "placeholder for Basemap/Basemap.usdz\n",
+    "Basemap/Buildings.dxf": "placeholder for Basemap/Buildings.dxf\n",
+    "Basemap/Buildings.glb": "placeholder for Basemap/Buildings.glb\n",
+    "Basemap/Buildings.gpkg": "placeholder for Basemap/Buildings.gpkg\n",
+    "Basemap/Landuse.dxf": "placeholder for Basemap/Landuse.dxf\n",
+    "Basemap/Landuse.gpkg": "placeholder for Basemap/Landuse.gpkg\n",
+    "Basemap/Pavement.dxf": "placeholder for Basemap/Pavement.dxf\n",
+    "Basemap/Pavement.gpkg": "placeholder for Basemap/Pavement.gpkg\n",
+    "Basemap/Roads.csv": "placeholder for Basemap/Roads.csv\n",
+    "Basemap/Roads.dxf": "placeholder for Basemap/Roads.dxf\n",
+    "Basemap/Roads.gpkg": "placeholder for Basemap/Roads.gpkg\n",
+    "Basemap/Water.dxf": "placeholder for Basemap/Water.dxf\n",
+    "Basemap/Water.gpkg": "placeholder for Basemap/Water.gpkg\n",
+    "Elevation/Aspect.tif": "placeholder for Elevation/Aspect.tif\n",
+    "Elevation/Contours.dxf": "placeholder for Elevation/Contours.dxf\n",
+    "Elevation/Elevation.png": "placeholder for Elevation/Elevation.png\n",
+    "Elevation/Elevation.tif": "placeholder for Elevation/Elevation.tif\n",
+    "Elevation/Hillshade.tif": "placeholder for Elevation/Hillshade.tif\n",
+    "Elevation/Slope.dxf": "placeholder for Elevation/Slope.dxf\n",
+    "Elevation/Slope.gpkg": "placeholder for Elevation/Slope.gpkg\n",
+    "Elevation/Slope.tif": "placeholder for Elevation/Slope.tif\n",
+    "Elevation/Terrain.dxf": "placeholder for Elevation/Terrain.dxf\n",
+    "Elevation/Terrain.glb": "placeholder for Elevation/Terrain.glb\n",
+    "Elevation/Terrain.landxml": "placeholder for Elevation/Terrain.landxml\n",
+    "Elevation/Terrain.mtl": "placeholder for Elevation/Terrain.mtl\n",
+    "Elevation/Terrain.obj": "placeholder for Elevation/Terrain.obj\n",
+    "Imagery/Imagery.png": "placeholder for Imagery/Imagery.png\n",
+    "Imagery/Imagery.tif": "placeholder for Imagery/Imagery.tif\n",
+    "Landcover/Canopy.tif": "placeholder for Landcover/Canopy.tif\n",
+    "Landcover/Landcover.dxf": "placeholder for Landcover/Landcover.dxf\n",
+    "Landcover/Landcover.gpkg": "placeholder for Landcover/Landcover.gpkg\n",
+    "Landcover/Landcover.tif": "placeholder for Landcover/Landcover.tif\n",
+    "Landcover/Trees.csv": "placeholder for Landcover/Trees.csv\n",
+    "Landcover/Trees.gpkg": "placeholder for Landcover/Trees.gpkg\n",
+    "Materials/Built.png": "placeholder for Materials/Built.png\n",
+    "Materials/Dirt.png": "placeholder for Materials/Dirt.png\n",
+    "Materials/Forest.png": "placeholder for Materials/Forest.png\n",
+    "Materials/Grass.png": "placeholder for Materials/Grass.png\n",
+    "Materials/Rock.png": "placeholder for Materials/Rock.png\n",
+    "Materials/Sand.png": "placeholder for Materials/Sand.png\n",
+    "Materials/Snow.png": "placeholder for Materials/Snow.png\n",
+    "Materials/Water.png": "placeholder for Materials/Water.png\n",
+    "Readme.md": "A synthetic bundle for the conformance corpus. It holds no real data.\n",
+    "Site/Site.dxf": "placeholder for Site/Site.dxf\n",
+    "Site/Site.ifc": "placeholder for Site/Site.ifc\n",
+    "Site/Site.usdz": "placeholder for Site/Site.usdz\n"
+  }
+}

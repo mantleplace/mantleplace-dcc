@@ -47,6 +47,8 @@ The second major of the semver era. It removes, moves and renames files and mani
 
 **The bundle check.** The corpus's `bundle` group gains the 3.0 cases (`bundle.v3*`), and `mpb validate` holds a bundle whose manifest is `Manifest.json` at the root to its tree, its names, its one level and its catalog ([`conformance.md`](conformance.md) §7), and to the 3.0.0 schema once that is served.
 
+**The reader cases.** The corpus's `reader` group says, for each 3.0 bundle of the `bundle` group and for a 2.x bundle and a refused major, exactly what a correct reader finds: which files, each file's family, frame and stated count, the download's level, and what it skips and why ([`conformance.md`](conformance.md) §4).
+
 **Settled by the dry run before the freeze** ([file-by-host table](file-by-host.md)): `Basemap/Pavement`, `Records/Habitat`, `Landcover/Landcover.dxf` and `Elevation/Slope.dxf` joined the tree; `Trees` stays a GeoPackage and a CSV; `Roads.csv` carries each road's name; `Terrain.obj` stays, written Y-up with its unit in the Readme, beside a `Terrain.mtl` that points at the bundle's imagery; `Materials/Water.png` is the water coverage; and the Basemap DXFs in the order's CRS and units, `Imagery.tif`'s fourth band as near-infrared and every DXF with its attributes are conformance requirements ([`conformance.md`](conformance.md) §7).
 
 ### 2.2.0 — where a heightmap sits on the shared vertical ladder (additive minor; published and frozen)

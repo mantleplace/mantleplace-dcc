@@ -132,12 +132,84 @@ warnings, an unlisted folder and a stray root file, are accept cases.
 The 3.0 cases (`bundle.v3*`) hold a 3.x bundle to its tree, its names, its one level and its
 catalog ([`format.md`](../../../spec/format.md) §1, §2, §8, §9.5; the requirements are
 [`conformance.md`](../../../spec/conformance.md) §7): `bundle.v3Full` is a Max download whole,
-`bundle.v3MedWithoutRecords` a Med download of an AOI with no records, and each rejection has a
-case that breaks one rule. `bundle.v3MinorFileUnknown` declares 3.1.0, a minor that may add a file,
+`bundle.v3FullMed` and `bundle.v3FullMin` the same bundle at the other two levels,
+`bundle.v3MedWithoutRecords` a Med download of an AOI with no records, `bundle.v3RecordsNotHeld` a Max
+download that lists the twenty Records files it does not hold with each reason, `bundle.majorAhead` a
+manifest of a major no schema is published for, and each rejection has a case that breaks one rule. `bundle.v3MinorFileUnknown` declares 3.1.0, a minor that may add a file,
 so a file the 3.0 table lacks is a warning there and an error in `bundle.v3FileUnknown`. The 3.x
 schema is not published yet, so these cases carry no `stagedSchema`: the runner holds each manifest
 to the format text's rules and reports the unpublished schema at info. Once the schema is served,
 the same cases are held to it, and a case it refuses is corrected rather than marked.
+
+## The reader group (`reader/`)
+
+The `reader` group is the answer sheet for a **reader of either major**: for one synthetic bundle, what
+a correct reader finds in it. It is data, so a reader in any language runs the same cases and reaches
+the same result, and no two readers read 3.0 a little differently. No host claims it yet; a host
+claims it when its reader runs every case (`HPS-41`), and `mpb` reads 2.x only.
+
+A `reader` case is a pair. The case file names a bundle and holds the result:
+
+| Member | What it holds |
+| --- | --- |
+| `bundle` | the path, under the corpus, of the `bundle` case file that describes the bundle (`bundle/v3-full.json`). The bundle is built from its `files` as the `bundle` group says: a folder, a zip and a zip in one wrapper folder, with the same result from all three. A bundle a validator refuses may be read by a reader (`reader.v3CatalogFileMissing`) |
+| `result` | exactly the members below, in this order |
+
+| `result` member | What the reader must report |
+| --- | --- |
+| `outcome` | `read`, or `refused` when it stops at the manifest's version. The case's `expect` is `accept` for `read` and `reject` for `refused` |
+| `major`, `version` | the major and the semver string it read from the manifest |
+| `manifestPath` | where it found the manifest: `Manifest.json` for a 3.x or later bundle, `Metadata/manifest.json` before ([`compatibility.md`](../../../spec/compatibility.md) §1) |
+| `level` | the download's level, `Max`, `Med` or `Min`, as the manifest states it once; `null` where a bundle states none (every 2.x bundle) or the reader refused |
+| `refusal` | `null` for a read; `major-ahead` for a major above 3, refused before any file is extracted ([`format.md`](../../../spec/format.md) §14). The case's `errorContains` is the version, which the message names |
+| `files` | the files it finds, one object each, sorted by `path`: a catalog name that the bundle holds |
+| `skipped` | the files it names and does not read, one object each, sorted by `path` |
+
+A **found file** is `{"path", "family", "frame", "count"}`. `path` is the catalog's key. `family` is
+`georeferenced` or `host-ready`, or `null` for a file in neither (`Readme.md`, `Manifest.json`, `Terrain.mtl`);
+in 3.x it is the extension's ([`format.md`](../../../spec/format.md) §4), in 2.x the file's own frame
+statement (`absolute` is georeferenced, `offset` host-ready, none is `null`). `frame` is the frame its
+coordinates are in and always pairs with the family: `order` (absolute, in the order's CRS) for
+`georeferenced`, `site` (offsets from the site origin) for `host-ready`, `null` for `null`. `count` is
+the count the catalog **states** for the file, rows, features, triangles or pixels, and `null` when it
+states none: a reader reports what the manifest says and never counts a file for itself.
+
+A **skipped file** is `{"path", "why", "reason"}`, with `why` one of two:
+
+- `file-missing`: the catalog names it and the download holds no such file. It is reported and never
+  fatal; `reason` is `null`. The reader still reads every file it does find.
+- `not-held`: the manifest lists it among the promised files the download does not hold
+  ([`format.md`](../../../spec/format.md) §9.6). `reason` is the reason the manifest states, **verbatim**.
+  A reader shows it and never branches on it: the reasons grow, and a case holds one no reader's
+  table lists (`withheld`).
+
+A file in the bundle that the catalog does not name is not found and is not skipped. A path the
+catalog names is matched as written; matching regardless of case is the reader's own rule and no case
+depends on it.
+
+**Running the cases.** For each case of group `reader` in `index.json`: read the case file, build the
+bundle it names, run the reader on it, and compare. `files` and `skipped` are compared as sets keyed by
+`path` (the order is for the human who reads them), every member of an entry exactly, and a count
+as an integer. A `reject` case asserts that the reader refuses, that the message contains
+`errorContains`, and that the members it must have read first (`version`, `major`, `manifestPath`) are
+the result's. A reader claims the group by running every case and failing on one it did not run
+([`conformance.md`](../../../spec/conformance.md) §3).
+
+`check_manifest_conformance.py` holds every case file to this shape, and to its bundle
+(`reader_cases.py`): the members, their types and the closed vocabularies; the lists sorted, with each
+path once; a `reject` case for a refusal and an `accept` case for a read; and the whole result
+**re-derived from the bundle's manifest**, so the answer cannot drift from the fixture it answers for.
+The bundle's manifest states the level in `level`, the catalog in `file_entries`, a count in `count`
+and the files it does not hold in `not_held`, an object from a path to `{"reason"}`; those are the
+names the fixtures use until the 3.x schema is served, and the schema's names replace them here and
+nowhere else.
+
+The cases: `reader.v3FullMax`, `reader.v3FullMed` and `reader.v3FullMin` are the whole 3.0 file table
+at each level; `reader.v3RecordsNotHeld` and `reader.v3MedWithoutRecords` are a bundle missing optional
+subjects, with and without a not-held list; `reader.v3MinorFileUnknown` is a 3.x minor's added file,
+found by its catalog name; `reader.v3CatalogFileMissing` is a catalog name with no file;
+`reader.v2Full` is a manifest at the 2.x location, read by the same runner; `reader.majorAhead` is a
+major above 3, refused. Every `bundle` case that conforms and declares 3.x has a case.
 
 ## The Platform API groups (`platform/`, `client/`)
 
@@ -185,6 +257,7 @@ host may ever consume.
 | `digest`     | `MantlePlaceSha256Test.cpp` + the cache suite (NIST FIPS 180-4 known answers)                                     |
 | `projection` | `MantlePlaceRoadSplinesLogicTest.cpp` (`mesh.origin` of the reference fixture)                                    |
 | `bundle`     | written for the bundle validator; the manifests start from the platform's minimal readiness-only manifest          |
+| `reader` | written for the readers of both majors; the bundles are the `bundle` group's, the results are derived from their manifests |
 | `platform`, `client` | written against the served Platform API spec; synthetic values throughout                          |
 
 "Lifted from" means the _assertions_ came from those files, not that every fixture is byte-identical

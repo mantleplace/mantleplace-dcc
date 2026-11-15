@@ -1,0 +1,23 @@
+{
+  "$comment": "The catalog names `Imagery/Imagery.png`, and the download holds no such file. A validator refuses this bundle; a reader does not: it reports the name as skipped, `file-missing`, and reads every file it does find. A name with no file is reported, never fatal.",
+  "bundle": "bundle/v3-catalog-file-missing.json",
+  "result": {
+    "outcome": "read",
+    "major": 3,
+    "version": "3.0.0",
+    "manifestPath": "Manifest.json",
+    "level": "Max",
+    "refusal": null,
+    "files": [
+      {"path": "Basemap/Roads.dxf", "family": "georeferenced", "frame": "order", "count": null},
+      {"path": "Basemap/Roads.gpkg", "family": "georeferenced", "frame": "order", "count": null},
+      {"path": "Elevation/Elevation.tif", "family": "georeferenced", "frame": "order", "count": null},
+      {"path": "Elevation/Terrain.glb", "family": "host-ready", "frame": "site", "count": null},
+      {"path": "Manifest.json", "family": null, "frame": null, "count": null},
+      {"path": "Readme.md", "family": null, "frame": null, "count": null}
+    ],
+    "skipped": [
+      {"path": "Imagery/Imagery.png", "why": "file-missing", "reason": null}
+    ]
+  }
+}

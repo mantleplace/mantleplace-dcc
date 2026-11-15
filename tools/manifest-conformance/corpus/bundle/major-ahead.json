@@ -1,0 +1,15 @@
+{
+  "$comment": "A bundle from a major no reader of this corpus knows: `Manifest.json` is at the root, as it is in every later major (format.md §2), and declares 99.0.0. A reader reads that version and nothing else, and refuses before it extracts a file (format.md §14); it must not read the catalog this manifest may or may not have.",
+  "files": {
+    "Manifest.json": {
+      "version": "99.0.0",
+      "inventory": {
+        "Elevation/Elevation.tif": {
+          "digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      }
+    },
+    "Elevation/Elevation.tif": "placeholder for Elevation/Elevation.tif\n",
+    "Readme.md": "A synthetic bundle for the conformance corpus. It holds no real data.\n"
+  }
+}
