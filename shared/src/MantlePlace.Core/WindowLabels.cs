@@ -271,15 +271,16 @@ public static partial class WindowLabels
         => string.Format(CultureInfo.InvariantCulture, "{0:N0} of {1:N0}", progress.Done, progress.Total);
 
     /// <summary>
-    /// What the status line says while Revit is inside a commit.
+    /// What the status line says while the host is inside a commit: <c>Revit is committing</c>.
     /// </summary>
+    /// <param name="hostName">The host's product name (<see cref="HostName"/>).</param>
     /// <remarks>
     /// Prose, not one of <c>HPS-51</c>'s labels: a status line is bound by the glossary. It names
-    /// Revit as the one working, because that is the truth of it — the plugin has handed Revit the
-    /// transaction and is waiting like the curator is — and it is the same fact the log's notice
-    /// explains at length before the step (<see cref="SlowStepNotice"/>).
+    /// the host as the one working, because that is the truth of it — the plugin has handed the host
+    /// the transaction and is waiting like the curator is — and in Revit it is the same fact the log's
+    /// notice explains at length before the step (<see cref="SlowStepNotice"/>).
     /// </remarks>
-    public const string RevitIsCommitting = "Revit is committing";
+    public static string IsCommitting(string hostName) => $"{hostName} is committing";
 
     /// <summary>
     /// What the status line calls the work after the last step, which belongs to no row: smooth
@@ -305,19 +306,32 @@ public static partial class WindowLabels
     }
 
     /// <summary>
-    /// The import window's status line: the step in flight, how far it has got, whether Revit is
-    /// committing it, how long it has run, and a cancel that is waiting for its boundary; or the work
-    /// after the last step. Empty between steps.
+    /// The import window's status line for the host this plugin is (<see cref="HostIdentity"/>), with
+    /// no estimate: see <see cref="StatusLine(ImportRunView, TimeSpan, string, TimeSpan?)"/>.
     /// </summary>
-    /// <param name="view">The run, as Revit's thread last posted it.</param>
+    public static string StatusLine(ImportRunView view, TimeSpan elapsed)
+        => StatusLine(view, elapsed, HostName(HostIdentity.Id), estimate: null);
+
+    /// <summary>
+    /// The import window's status line: the step in flight, how far it has got, whether the host is
+    /// committing it, how long it has run against what it was measured at, and a cancel that is
+    /// waiting for its boundary; or the work after the last step. Empty between steps.
+    /// </summary>
+    /// <param name="view">The run, as the host's thread last posted it.</param>
     /// <param name="elapsed">How long the step in flight has run, by the window's own clock.</param>
+    /// <param name="hostName">The host's product name, which says who is committing.</param>
+    /// <param name="estimate">
+    /// What the host measured the step in flight at, said beside the clock (<c>40 s of about 2 min 30 s</c>);
+    /// <c>null</c> for a step, or a host, with no measured cost.
+    /// </param>
     /// <remarks>
     /// A step that is one commit has no count to show, because there is no part of a commit to count;
     /// its clock is what says it is still going. <see cref="SlowStepNotice"/> is where the log says so.
     /// </remarks>
-    public static string StatusLine(ImportRunView view, TimeSpan elapsed)
+    public static string StatusLine(ImportRunView view, TimeSpan elapsed, string hostName, TimeSpan? estimate)
     {
         ArgumentNullException.ThrowIfNull(view);
+        ArgumentException.ThrowIfNullOrEmpty(hostName);
 
         string name;
         if (view.Current is { } kind)
@@ -341,10 +355,13 @@ public static partial class WindowLabels
 
         if (view.Committing)
         {
-            parts.Add(RevitIsCommitting);
+            parts.Add(IsCommitting(hostName));
         }
 
-        parts.Add(Elapsed(elapsed));
+        // The estimate is a step's: the work after the last step belongs to no step to measure.
+        parts.Add(estimate is { } measured && view.Current is not null
+            ? $"{Elapsed(elapsed)} of about {Elapsed(measured)}"
+            : Elapsed(elapsed));
         string line = $"{name}: {string.Join(", ", parts)}";
 
         // Only over a step: once the steps are over the cancel has landed, and the finishing work is

@@ -35,7 +35,7 @@ internal static class ResourceImages
 
     /// <summary>
     /// Guards <see cref="Decoded"/>: the ribbon decodes on Revit's thread and the import window's
-    /// header on its own (<see cref="ImportWindowHost"/>). What it hands out is frozen, so the images
+    /// header on its own (<see cref="MantlePlace.Wpf.ImportWindowThread"/>). What it hands out is frozen, so the images
     /// themselves cross threads freely; only the table needs the lock.
     /// </summary>
     private static readonly object DecodedLock = new();

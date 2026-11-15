@@ -9,7 +9,8 @@ src/MantlePlace.Core/          PURE. Protocol behaviour: parsing, validity decis
 src/MantlePlace.Client/        IMPURE, but not a host. HTTP, the loopback listener, the bundle cache, secrets, zip. net8.0.
 src/MantlePlace.PlatformApi/   The generated Platform API client and its transport. net8.0.
 src/MantlePlace.Wpf/           IMPURE (WPF), but not a host. The windows every host opens: sign-in, the vault
-                               browser, About, the notices, their brand chrome and window styles. net8.0-windows.
+                               browser, About, the notices, the import window, their brand chrome and window
+                               styles. net8.0-windows.
 tests/MantlePlace.Core.Tests/  The headless suite over Core AND Client. net8.0 + net10.0.
 tools/platform-api/            The script that re-vendors the Platform API spec and client.
 ```
@@ -27,6 +28,12 @@ tools/platform-api/            The script that re-vendors the Platform API spec 
   their order are decided in `MantlePlace.Core` (`WindowLabels`, `AboutPage`), where
   `SharedWindowsTests` holds them for both hosts and checks neither host tree holds a copy. No window
   shows a host's logo: each sets the Mantle Place mark in its title bar.
+- **One import window.** `ImportWindowThread` opens it on a thread of its own, unowned, over the
+  host's main window. The host runs its own steps and posts `ImportRunView`s; it implements
+  `IImportWindowHost` to hear Import, Cancel, a dismissal, a log line and a fault, each posted back to
+  its own thread. A host with no per-layer choice passes no checklist, and the window shows the steps
+  only. What every press, close and view does, and the status line with its clock and the host's
+  measured cost where it gives one, is `ImportWindowState` in the core, held by `ImportWindowStateTests`.
 - **No version of its own.** A plugin's version has one home per host; what the platform is told is
   the version the host hands `HostIdentity`.
 

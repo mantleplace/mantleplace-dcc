@@ -87,7 +87,8 @@ renderer-neutral.
     changed, Revit was hung in 61 to 74% of 5-second samples, the window never once showed road
     surfaces, water or the drape as the step in flight, and in 2027 no UI Automation read of it
     completed for the drape's 2,759 s.
-  - **How.** `ImportWindowHost` runs it on an STA thread with its own `Dispatcher`, unowned, and
+  - **How.** `ImportWindowThread` (in [`shared/src/MantlePlace.Wpf`](../../shared/README.md), the one
+    import window every .NET host opens) runs it on an STA thread with its own `Dispatcher`, unowned, and
     only posts cross: views of the run (`ImportRunView`) one way; Import, Cancel, a dismissal, a log
     line and a fault the other, onto Revit's dispatcher, where they run as the click handlers they
     used to be. Every `Transaction` commit goes through `CommitAndReport`, which says on both sides
@@ -103,7 +104,8 @@ renderer-neutral.
     their one slice, but Cancel still lands only between slices: a slice never yields inside an open
     transaction, and slicing them means splitting the transaction, which would change what a
     rollback undoes.
-  - **What is headless.** What the window says (`WindowLabels`, `ImportRunView`), when it floats,
+  - **What is headless.** What the window says and does with each press, close and view
+    (`WindowLabels`, `ImportRunView`, `ImportWindowState`), when it floats,
     takes the focus or comes forward, where it opens (`ImportWindowStacking`,
     `ImportWindowPlacement`), and what each notice says (`SlowStepNotice`). It never floats over a
     Revit modal. `ForegroundWatch` carries the stacking out without ever sending Revit's thread a

@@ -38,7 +38,12 @@ internal static class ShimWindowTests
 
     /// <param name="shimRelativePath">The shim's source folder, from the repository root.</param>
     /// <param name="label">The suite's name for it in the report.</param>
-    internal static int Run(string shimRelativePath, string label)
+    /// <param name="declaresWindows">
+    /// Whether the folder declares windows of its own, so finding none means the scan is broken. The
+    /// Revit shim declares none since its import window moved to the shared home: it opens only the
+    /// shared windows, which are scanned in their own folder.
+    /// </param>
+    internal static int Run(string shimRelativePath, string label, bool declaresWindows = true)
     {
         TestRun run = new();
 
@@ -72,7 +77,10 @@ internal static class ShimWindowTests
                     $"{Path.GetFileName(file)} builds no bare Window, which would carry the host's logo");
             }
 
-            run.True(windows > 0, "the shim's windows were found at all");
+            if (declaresWindows)
+            {
+                run.True(windows > 0, "the shim's windows were found at all");
+            }
         });
 
         run.Case("a task dialog names a command link its default only once the link is added", () =>

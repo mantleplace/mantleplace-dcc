@@ -2,9 +2,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Interop;
 using MantlePlace.Core;
-using MantlePlace.Wpf;
 
-namespace MantlePlace.Revit.Addin;
+namespace MantlePlace.Wpf;
 
 /// <summary>The window in front at one moment, and what the core reads off it.</summary>
 internal readonly record struct ForegroundReading(IntPtr Window, ForegroundFacts Facts);
@@ -16,14 +15,14 @@ internal readonly record struct ForegroundReading(IntPtr Window, ForegroundFacts
 /// </summary>
 /// <remarks>
 /// <para>
-/// It decides nothing: every rule — float over Revit, never over a Revit modal, go behind another
+/// It decides nothing: every rule — float over the host, never over a host modal, go behind another
 /// application, leave the desktop alone — is the pure core's, with its tests. This reads the facts and
 /// makes the one Windows call the decision names.
 /// </para>
 /// <para>
-/// ⛔ <b>It never asks Revit's thread anything.</b> Every call here is answered by Windows from its own
-/// records — the foreground window, a window's process, class, styles and enabled state, a ghost's
-/// hung window — and the only window it moves is the import window. <c>GetWindowText</c> on a Revit
+/// ⛔ <b>It never asks the host's thread anything.</b> Every call here is answered by Windows from its
+/// own records — the foreground window, a window's process, class, styles and enabled state, a ghost's
+/// hung window — and the only window it moves is the import window. <c>GetWindowText</c> on a host
 /// window would send that window a message within one process, and is not used.
 /// </para>
 /// <para>
@@ -49,7 +48,7 @@ internal sealed class ForegroundWatch : IDisposable
     private static readonly IntPtr HwndNoTopmost = new(-2);
 
     private readonly IntPtr _window;
-    private readonly IntPtr _revitWindow;
+    private readonly IntPtr _hostWindow;
     private readonly Action<Exception> _fault;
 
     /// <summary>Held for the hook's lifetime: Windows calls through it, and a collected delegate is a crash.</summary>
@@ -63,17 +62,17 @@ internal sealed class ForegroundWatch : IDisposable
 
     /// <summary>Stacks the window for what was in front as it opened — before it is shown — and watches from then on.</summary>
     /// <param name="window">The import window's handle. Its thread must pump messages: the hook is delivered there.</param>
-    /// <param name="revitWindow">Revit's main window.</param>
+    /// <param name="hostWindow">The host's main window.</param>
     /// <param name="opening">
     /// The reading the window decided its focus from (<see cref="ImportWindowStacking.ShowsActivated"/>):
     /// the same one decides where it goes, so the two cannot disagree over a foreground that changed
     /// between two reads.
     /// </param>
     /// <param name="fault">Told of an exception the hook caught, so it can be logged; the watch carries on.</param>
-    internal ForegroundWatch(IntPtr window, IntPtr revitWindow, ForegroundReading opening, Action<Exception> fault)
+    internal ForegroundWatch(IntPtr window, IntPtr hostWindow, ForegroundReading opening, Action<Exception> fault)
     {
         _window = window;
-        _revitWindow = revitWindow;
+        _hostWindow = hostWindow;
         _fault = fault;
         _callback = OnForegroundChanged;
 
@@ -97,14 +96,14 @@ internal sealed class ForegroundWatch : IDisposable
     }
 
     /// <summary>The window in front now, and what the core reads off it — usable before the import window exists.</summary>
-    internal static ForegroundReading Read(IntPtr importWindow, IntPtr revitWindow)
+    internal static ForegroundReading Read(IntPtr importWindow, IntPtr hostWindow)
     {
         IntPtr foreground = GetForegroundWindow();
-        return new ForegroundReading(foreground, FactsOf(foreground, importWindow, revitWindow));
+        return new ForegroundReading(foreground, FactsOf(foreground, importWindow, hostWindow));
     }
 
     /// <summary>
-    /// Stops floating now, whatever is in front: Revit is about to show a dialog, which must not open
+    /// Stops floating now, whatever is in front: the host is about to show a dialog, which must not open
     /// under this window. The next change of foreground decides again.
     /// </summary>
     internal void Lower()
@@ -123,10 +122,14 @@ internal sealed class ForegroundWatch : IDisposable
         }
     }
 
-    private static ForegroundFacts FactsOf(IntPtr foreground, IntPtr importWindow, IntPtr revitWindow)
+    /// <remarks>
+    /// The core's facts name Revit, the host they were written against; they are the host's main
+    /// window and the host's process for every host.
+    /// </remarks>
+    private static ForegroundFacts FactsOf(IntPtr foreground, IntPtr importWindow, IntPtr hostWindow)
     {
         // Read, not judged: what a disabled main window means is the core's.
-        bool mainEnabled = revitWindow == IntPtr.Zero || IsWindowEnabled(revitWindow);
+        bool mainEnabled = hostWindow == IntPtr.Zero || IsWindowEnabled(hostWindow);
         if (foreground == IntPtr.Zero)
         {
             return new ForegroundFacts(false, false, false, false, mainEnabled, false, string.Empty, false);
@@ -142,7 +145,7 @@ internal sealed class ForegroundWatch : IDisposable
             Exists: true,
             IsImportWindow: foreground == importWindow,
             InThisProcess: inThisProcess,
-            IsRevitMainWindow: foreground == revitWindow,
+            IsRevitMainWindow: foreground == hostWindow,
             RevitMainWindowEnabled: mainEnabled,
             ForegroundFloats: WindowStyles.Has(foreground, WindowStyles.Topmost),
             ClassName: className.ToString(),
@@ -205,7 +208,7 @@ internal sealed class ForegroundWatch : IDisposable
     {
         try
         {
-            Stacking next = ImportWindowStacking.Next(FactsOf(window, _window, _revitWindow), _floating);
+            Stacking next = ImportWindowStacking.Next(FactsOf(window, _window, _hostWindow), _floating);
             _floating = next.Floating;
             Move(next.Move, window);
         }
@@ -249,8 +252,8 @@ internal sealed class ForegroundWatch : IDisposable
 
     private delegate void WinEventProc(IntPtr hook, uint eventType, IntPtr window, int objectId, int childId, uint thread, uint time);
 
-    // DllImport rather than LibraryImport, for RibbonImagery's reason: the generator needs
-    // AllowUnsafeBlocks, which this project does not set.
+    // DllImport rather than LibraryImport: the generator needs AllowUnsafeBlocks, which this project
+    // does not set.
     [DllImport("user32.dll")]
     private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr module, WinEventProc callback, uint processId, uint threadId, uint flags);
 

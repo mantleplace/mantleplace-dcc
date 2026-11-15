@@ -85,11 +85,13 @@ key this suite must assert, or it fails.
   sign-in route, the `Mantle-Place-Client` header, the connected-host presence and the feedback
   `source` all read it. A shared source that spells `revit` out makes this plugin a second Revit to the
   platform.
-- **Windows are shared with Revit, not copied.** Sign-in, the vault browser, About and the notices,
-  with their brand chrome and window styles, are the one set in
+- **Windows are shared with Revit, not copied.** Sign-in, the vault browser, About, the notices and
+  the import window, with their brand chrome and window styles, are the one set in
   [`shared/src/MantlePlace.Wpf`](../shared/README.md); the shell opens them and hands them its main
   window, its feedback launcher and its About sentences, and its ribbon reads the monogram from the
-  same assembly (`MarkImages`). Only the received-export window is this host's own. The vault browser
+  same assembly (`MarkImages`). Only the received-export window is this host's own. The import window
+  (`ImportWindowThread`) opens with no checklist for a host with no per-layer choice, and shows the steps
+  the host posts; the host implements `IImportWindowHost` to hear Cancel. This plugin does not open it yet. The vault browser
   has no Prepare, download or import yet: an order comes into a drawing through an export sent from the web vault, or through
   Import Bundle (`MANTLEPLACEIMPORTBUNDLE`, `HPS-61`), which takes a zip on disk.
 - **The ribbon panel is built in code, on a `Mantle Place` tab of the plugin's own** (`HPS-57`), as
