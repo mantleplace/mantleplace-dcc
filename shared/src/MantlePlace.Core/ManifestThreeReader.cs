@@ -17,8 +17,8 @@ namespace MantlePlace.Core;
 /// <para>
 /// The members read are the served 3.0.0 schema's: the level, the <c>catalog</c>, each entry's
 /// <c>count.value</c> and digest, and the <c>not_held</c> list of <c>{path, reason}</c>. The two
-/// frames (§9.4) are not read yet: the local frame's metre is assumed, and no CRS or unit is taken
-/// from the manifest.
+/// frames (§9.4) are read once, by <see cref="ManifestFramesReader"/>, and each file's unit follows
+/// the frame its family is in; no unit stands in for one the manifest states.
 /// </para>
 /// </remarks>
 internal static class ManifestThreeReader
@@ -140,6 +140,13 @@ internal static class ManifestThreeReader
                     levelText ?? "(absent)"));
         }
 
+        // The two frames, stated once for every file of their family (§9.4). A unit, datum or axis
+        // order this reader does not understand refuses the manifest, naming the value (§4).
+        if (ManifestFramesReader.Read(root, out string? framesError) is not { } frames)
+        {
+            return Refuse(manifest, version.Major, BundleRefusal.Unreadable, framesError ?? "Manifest.json states no frames.");
+        }
+
         if (root.Object(CatalogMember) is not { } catalog)
         {
             return Refuse(
@@ -180,10 +187,13 @@ internal static class ManifestThreeReader
                 entry.Value.ValueKind == JsonValueKind.Object ? Count(entry.Value) : null,
                 entry.Value.ValueKind == JsonValueKind.Object ? entry.Value.OptionalStr(DigestMember) : null)
             {
-                // The local site frame is in metres on every order (spec/format.md §4, §9.4); the
-                // order's units are the georeferenced frame's, stated once for the family. Neither is
-                // read from the frames yet: see the remarks above.
-                Unit = family == FileFamily.HostReady ? LinearUnit.Metre : LinearUnit.Unspecified,
+                // A file is in the unit of the frame its family is in, as that frame states it (§4, §9.4).
+                Unit = family switch
+                {
+                    FileFamily.HostReady => frames.Local.Unit.Unit,
+                    FileFamily.Georeferenced => frames.Georeferenced.HorizontalUnit.Unit,
+                    _ => LinearUnit.Unspecified,
+                },
             });
         }
 
@@ -210,6 +220,7 @@ internal static class ManifestThreeReader
             Major = version.Major,
             ManifestPath = BundleReader.ManifestPath,
             Level = level,
+            Frames = frames,
             Files = [.. found.OrderBy(file => file.Path, StringComparer.Ordinal)],
             Skipped = [.. skipped.OrderBy(file => file.Path, StringComparer.Ordinal)],
         };

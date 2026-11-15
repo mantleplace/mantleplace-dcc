@@ -62,7 +62,10 @@ class ShippedCasesTest(unittest.TestCase):
                        "reader.v3RecordsNotHeld", "reader.v3MedWithoutRecords",  # optional subjects
                        "reader.v2Full",  # the manifest at the 2.x location
                        "reader.majorAhead",  # a major above 3, refused
-                       "reader.v3CatalogFileMissing"):  # a catalog name with no file
+                       "reader.v3CatalogFileMissing",  # a catalog name with no file
+                       "reader.v3FramesFeet",  # frames in feet, north-east, a CRS in each form
+                       "reader.v3FramesUnitUnknown", "reader.v3FramesAxisOrderUnknown",  # refused, named
+                       "reader.v3FramesLocalUnitNotMetre", "reader.v3FramesVerticalDatumUnreadable"):
             self.assertIn(wanted, ids)
 
     def test_the_three_levels_are_each_stated_by_a_full_bundle(self) -> None:
@@ -105,6 +108,92 @@ class ShippedCasesTest(unittest.TestCase):
         self.assertEqual(high["Elevation/Terrain.dxf"], low["Elevation/Terrain.dxf"])  # georeferenced
         self.assertIsNone(high["Elevation/Terrain.mtl"])
         self.assertIsNone(high["Readme.md"])
+
+
+class FramesTest(unittest.TestCase):
+    """The two frames a 3.x manifest states once (format.md section 9.4) are on the result."""
+
+    def assertFails(self, problems: list[str], text: str) -> None:
+        self.assertTrue(any(text in p for p in problems), f"no failure mentions {text!r}: {problems}")
+
+    def test_every_3_x_read_states_the_frames_its_manifest_states(self) -> None:
+        for entry in (c for c in _index() if c["group"] == "reader"):
+            result = _load(entry["file"])["result"]
+            self.assertEqual("frames" in result, result["outcome"] == "read" and result["major"] >= 3,
+                             entry["id"])
+
+    def test_the_frames_are_the_manifests_with_the_geoid_always_stated(self) -> None:
+        _, body, fixture = _case("reader.v3FullMax")
+        stated = fixture["files"]["Manifest.json"]["frames"]
+        frames = body["result"]["frames"]
+        self.assertEqual(frames["georeferenced"]["horizontal_unit"], stated["georeferenced"]["horizontal_unit"])
+        self.assertEqual(frames["local"]["origin"], stated["local"]["origin"])
+        self.assertIn("geoid_model", frames["local"])
+
+    def test_a_manifest_that_names_no_geoid_is_answered_with_null(self) -> None:
+        _, body, _ = _case("reader.v3FramesFeet")
+        self.assertIsNone(body["result"]["frames"]["georeferenced"]["geoid_model"])
+
+    def test_frames_that_are_not_the_manifests_are_refused(self) -> None:
+        def change(_e, r):
+            r["frames"]["georeferenced"]["horizontal_unit"]["to_metres"] = 0.3048
+        self.assertFails(_problems("reader.v3FullMax", change), "frames")
+
+    def test_a_read_without_frames_is_refused(self) -> None:
+        self.assertFails(_problems("reader.v3FullMax", lambda e, r: r.pop("frames")), "frames")
+
+    def test_frames_on_a_2_x_bundle_are_refused(self) -> None:
+        entry, body, fixture = _case("reader.v2Full")
+        result = body["result"]
+        body["result"] = {**{k: result[k] for k in ("outcome", "major", "version", "manifestPath", "level", "refusal")},
+                          "frames": {"georeferenced": {}, "local": {}},
+                          "files": result["files"], "skipped": result["skipped"]}
+        self.assertFails(reader.check_case(entry, body, fixture), "frames")
+
+    def test_a_read_of_a_manifest_whose_frames_cannot_be_read_is_refused(self) -> None:
+        def spoil(files):
+            files["Manifest.json"]["frames"]["georeferenced"]["axis_order"] = "south-west"
+        entry, body, fixture = _case("reader.v3FullMax")
+        spoil(fixture["files"])
+        body["result"]["frames"]["georeferenced"]["axis_order"] = "south-west"
+        self.assertFails(reader.check_case(entry, body, fixture), "south-west")
+
+    def test_a_frames_refusal_names_a_value_the_manifest_states(self) -> None:
+        entry, _, _ = _case("reader.v3FramesUnitUnknown")
+        _, body, fixture = _case("reader.v3FramesUnitUnknown")
+        self.assertEqual(body["result"]["refusal"], "unreadable")
+        self.assertEqual(body["result"]["outcome"], "refused")
+        self.assertEqual(entry["expect"], "reject")
+        self.assertIn(entry["errorContains"], json.dumps(fixture["files"]["Manifest.json"]["frames"]))
+
+    def test_a_frames_refusal_of_frames_that_can_be_read_is_refused(self) -> None:
+        def mend(files):
+            files["Manifest.json"]["frames"]["georeferenced"]["horizontal_unit"] = {"name": "metre", "to_metres": 1}
+        self.assertFails(_problems("reader.v3FramesUnitUnknown", mutate_bundle=mend), "frames")
+
+    def test_a_frames_refusal_that_names_nothing_the_manifest_states_is_refused(self) -> None:
+        self.assertFails(_problems("reader.v3FramesUnitUnknown", lambda e, r: e.update(errorContains="parsec")),
+                         "errorContains")
+
+    def test_each_refusal_unit_and_datum_the_reader_does_not_understand_is_one(self) -> None:
+        for unit in ({"name": "metre"}, {"name": "x", "to_metres": 0}, {"name": "cm", "to_metres": 0.01},
+                     {"name": "", "to_metres": 1}, {"name": "m", "to_metres": "1"}):
+            frames = copy.deepcopy(_load("bundle/v3-med-without-records.json")["files"]["Manifest.json"]["frames"])
+            frames["georeferenced"]["vertical_unit"] = unit
+            self.assertIsNotNone(reader.frames_refusal(frames), unit)
+        for crs in ({}, {"code": "no"}, {"projjson": "x"}, {"wkt2": ""}):
+            frames = copy.deepcopy(_load("bundle/v3-med-without-records.json")["files"]["Manifest.json"]["frames"])
+            frames["local"]["vertical_crs"] = crs
+            self.assertIsNotNone(reader.frames_refusal(frames), crs)
+
+    def test_the_corpus_frames_are_readable_except_in_the_refusal_cases(self) -> None:
+        refused = {"reader.v3FramesUnitUnknown", "reader.v3FramesAxisOrderUnknown",
+                   "reader.v3FramesLocalUnitNotMetre", "reader.v3FramesVerticalDatumUnreadable"}
+        for entry in (c for c in _index() if c["group"] == "reader"):
+            manifest = _case(entry["id"])[2]["files"].get("Manifest.json")
+            if isinstance(manifest, dict) and "frames" in manifest:
+                self.assertEqual(reader.frames_refusal(manifest["frames"]) is not None,
+                                 entry["id"] in refused, entry["id"])
 
 
 class ShapeTest(unittest.TestCase):

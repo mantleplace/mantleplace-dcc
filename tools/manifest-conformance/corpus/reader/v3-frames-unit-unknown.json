@@ -1,0 +1,14 @@
+{
+  "$comment": "A unit the reader does not understand is refused, naming it (format.md §4, §9.4): a factor that is neither the metre, the international foot nor the US survey foot is a unit no host can apply verbatim, and guessing one places every georeferenced file at the wrong scale.",
+  "bundle": "bundle/v3-frames-unit-unknown.json",
+  "result": {
+    "outcome": "refused",
+    "major": 3,
+    "version": "3.0.0",
+    "manifestPath": "Manifest.json",
+    "level": null,
+    "refusal": "unreadable",
+    "files": [],
+    "skipped": []
+  }
+}

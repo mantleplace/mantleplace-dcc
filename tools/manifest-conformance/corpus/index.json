@@ -2730,6 +2730,67 @@
       }
     },
     {
+      "id": "bundle.v3FramesFeet",
+      "group": "bundle",
+      "file": "bundle/v3-frames-feet.json",
+      "expect": "accept",
+      "stagedSchema": true,
+      "reason": "A Med download of an order in feet: the horizontal unit is the US survey foot and the vertical the international foot, each by the factor the manifest states, the horizontal axes run north then east, the grid rotation is negative, and the CRS are named in each of the three forms (a code, a WKT2 string, a PROJJSON object). The local frame states its own geoid and the georeferenced frame names none. A reader that assumed the metre, or read a unit by its name, or took a CRS apart, is wrong here. 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "hashesVerified": 5
+      }
+    },
+    {
+      "id": "bundle.v3FramesUnitUnknown",
+      "group": "bundle",
+      "file": "bundle/v3-frames-unit-unknown.json",
+      "expect": "accept",
+      "stagedSchema": true,
+      "reason": "A Med download whose horizontal unit is the centimetre, a unit the served schema allows (any positive factor to metres) and no reader of 3.0 understands. The bundle conforms; a reader refuses it. 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "hashesVerified": 5
+      }
+    },
+    {
+      "id": "bundle.v3FramesAxisOrderUnknown",
+      "group": "bundle",
+      "file": "bundle/v3-frames-axis-order-unknown.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "A Med download whose horizontal axis order is neither east-north nor north-east. The served 3.0.0 schema names the two and refuses the case (`schema.invalid`). 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "schema.invalid"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3FramesLocalUnitNotMetre",
+      "group": "bundle",
+      "file": "bundle/v3-frames-local-unit-not-metre.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "A Med download whose local site frame states its unit as the foot. The local frame is in metres on every order (format.md §9.4) and the served 3.0.0 schema fixes the factor at 1, so the schema refuses the case (`schema.invalid`). 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "schema.invalid"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3FramesVerticalDatumUnreadable",
+      "group": "bundle",
+      "file": "bundle/v3-frames-vertical-datum-unreadable.json",
+      "expect": "reject",
+      "stagedSchema": true,
+      "reason": "A Med download whose local vertical CRS is named by a code that is no authority code. The served 3.0.0 schema words a code as an authority and an identifier and refuses the case (`schema.invalid`). 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "expectations": {
+        "errors": [
+          "schema.invalid"
+        ]
+      }
+    },
+    {
       "id": "reader.v3FullMax",
       "group": "reader",
       "file": "reader/v3-full-max.json",
@@ -2777,6 +2838,45 @@
       "file": "reader/v3-catalog-file-missing.json",
       "expect": "accept",
       "reason": "A catalog name with no file in the download is reported as skipped and is never fatal: the bundle a validator refuses is a bundle a reader still reads, finding every file that is there."
+    },
+    {
+      "id": "reader.v3FramesFeet",
+      "group": "reader",
+      "file": "reader/v3-frames-feet.json",
+      "expect": "accept",
+      "reason": "A bundle in feet: a reader reads each frame's unit by its factor to metres, the axis order, the grid rotation and each CRS as the manifest states them, takes the local unit from the manifest and not from the metre it is on every order, and reports a geoid the manifest names none for as null (format.md §9.4)."
+    },
+    {
+      "id": "reader.v3FramesUnitUnknown",
+      "group": "reader",
+      "file": "reader/v3-frames-unit-unknown.json",
+      "expect": "reject",
+      "reason": "A unit the reader does not understand is refused, naming it (format.md §4, §9.4): a factor that is neither the metre, the international foot nor the US survey foot is a unit no host can apply verbatim, and guessing one places every georeferenced file at the wrong scale.",
+      "errorContains": "centimetre"
+    },
+    {
+      "id": "reader.v3FramesAxisOrderUnknown",
+      "group": "reader",
+      "file": "reader/v3-frames-axis-order-unknown.json",
+      "expect": "reject",
+      "reason": "An axis order the reader does not know is refused, naming it (format.md §4, §9.4): reading the coordinates of every georeferenced file as the other order swaps easting and northing.",
+      "errorContains": "south-west"
+    },
+    {
+      "id": "reader.v3FramesLocalUnitNotMetre",
+      "group": "reader",
+      "file": "reader/v3-frames-local-unit-not-metre.json",
+      "expect": "reject",
+      "reason": "The local frame's unit is read and not assumed: a unit that is not the metre is refused, naming it, rather than converted (format.md §4, §9.4), since no host re-derives a placement.",
+      "errorContains": "foot"
+    },
+    {
+      "id": "reader.v3FramesVerticalDatumUnreadable",
+      "group": "reader",
+      "file": "reader/v3-frames-vertical-datum-unreadable.json",
+      "expect": "reject",
+      "reason": "A vertical datum the reader cannot name is refused, naming what the manifest states (format.md §4, §9.4): heights in a datum no host can name are heights in an unknown datum.",
+      "errorContains": "not a code"
     },
     {
       "id": "reader.v2Full",

@@ -82,7 +82,7 @@ internal static class ReaderConformanceTests
         if (corpusCase.IsReject)
         {
             run.False(manifest.IsValid, "refused");
-            run.Contains(manifest.Error, corpusCase.ErrorContains, "the refusal names the version");
+            run.Contains(manifest.Error, corpusCase.ErrorContains, "the refusal names the value the case names");
         }
         else if (corpusCase.IsAccept)
         {
@@ -100,6 +100,8 @@ internal static class ReaderConformanceTests
         run.Equal(contents.ManifestPath, expected.GetProperty("manifestPath").GetString(), "manifestPath");
         run.Equal(LevelToken(contents.Level), NullableString(expected.GetProperty("level")), "level");
         run.Equal(RefusalToken(contents.Refusal), NullableString(expected.GetProperty("refusal")), "refusal");
+
+        CompareFrames(run, contents.Frames, expected);
 
         CompareRows(
             run,
@@ -199,6 +201,62 @@ internal static class ReaderConformanceTests
         return bytes;
     }
 
+    /// <summary>
+    /// The frames the case states, against the frames the reader put on the result: both present and
+    /// the same, or neither. The case states them as the manifest does, with <c>geoid_model</c> always
+    /// there and <c>null</c> where the manifest names none.
+    /// </summary>
+    private static void CompareFrames(TestRun run, BundleFrames? actual, JsonElement expected)
+    {
+        bool stated = expected.TryGetProperty("frames", out JsonElement frames);
+        if (!stated || actual is null)
+        {
+            run.True(!stated && actual is null, stated ? "the case states frames and the reader read none" : "the reader read frames the case does not state");
+            return;
+        }
+
+        JsonElement found = JsonSerializer.SerializeToElement(FrameJson.Of(actual));
+        List<string> differences = [];
+        Differences(found, frames, "frames", differences);
+        foreach (string difference in differences)
+        {
+            run.Fail(difference);
+        }
+    }
+
+    private static void Differences(JsonElement actual, JsonElement expected, string where, List<string> found)
+    {
+        if (actual.ValueKind == JsonValueKind.Object && expected.ValueKind == JsonValueKind.Object)
+        {
+            foreach (JsonProperty member in expected.EnumerateObject())
+            {
+                if (actual.TryGetProperty(member.Name, out JsonElement have))
+                {
+                    Differences(have, member.Value, $"{where}.{member.Name}", found);
+                }
+                else
+                {
+                    found.Add($"{where}.{member.Name} is missing");
+                }
+            }
+
+            foreach (JsonProperty member in actual.EnumerateObject().Where(m => !expected.TryGetProperty(m.Name, out _)))
+            {
+                found.Add($"{where}.{member.Name} is reported and the case does not state it");
+            }
+
+            return;
+        }
+
+        bool same = actual.ValueKind == JsonValueKind.Number && expected.ValueKind == JsonValueKind.Number
+            ? actual.GetDouble() == expected.GetDouble()
+            : actual.ValueKind == expected.ValueKind && actual.ToString() == expected.ToString();
+        if (!same)
+        {
+            found.Add($"{where} is {actual.GetRawText()}; expected {expected.GetRawText()}");
+        }
+    }
+
     private static void CompareRows(
         TestRun run, string label, Dictionary<string, string> actual, Dictionary<string, string> expected)
     {
@@ -252,6 +310,7 @@ internal static class ReaderConformanceTests
     {
         BundleRefusal.None => null,
         BundleRefusal.MajorAhead => "major-ahead",
+        BundleRefusal.Unreadable => "unreadable",
         _ => refusal.ToString(),
     };
 

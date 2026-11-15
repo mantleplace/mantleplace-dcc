@@ -4,8 +4,9 @@ A `reader` case says what a correct reader finds in one synthetic bundle, as lan
 (`corpus/README.md`, "The reader group"). The case file names the bundle by the `bundle` group's case
 file that describes it, and holds the `result` a reader must reach on it: the version it read, where
 it found the manifest, the download's level, each file it found with its family, its frame and the
-count the catalog states, and each file it skipped and why. A reader in any language builds the
-bundle, reads it, and compares.
+count the catalog states, each file it skipped and why, and for a 3.x bundle the two frames its manifest
+states once (format.md section 9.4). A reader in any language builds the bundle, reads it, and
+compares.
 
 This module holds every case file to that shape, and to its bundle. Two checks, both offline:
 
@@ -44,7 +45,9 @@ CATALOG_2 = "file_entries"
 
 LEVELS = ("Max", "Med", "Min")
 WHY = ("not-held", "file-missing")
-REFUSALS = ("major-ahead",)
+#: `major-ahead`: a major above the newest. `unreadable`: a major the reader reads, whose manifest
+#: states a unit, a datum, an axis order or a frame it does not understand (format.md section 4).
+REFUSALS = ("major-ahead", "unreadable")
 #: A family and the one frame its coordinates are in (format.md section 4).
 FRAME_OF = {"georeferenced": "order", "host-ready": "site"}
 _GEOREFERENCED = frozenset({"tif", "gpkg", "dxf", "landxml", "ifc"})
@@ -53,6 +56,17 @@ _HOST_READY = frozenset({"glb", "usdz", "obj", "png", "csv"})
 _FAMILY_OF_MODE = {"absolute": "georeferenced", "offset": "host-ready"}
 
 _RESULT_KEYS = ("outcome", "major", "version", "manifestPath", "level", "refusal", "files", "skipped")
+#: A 3.x read also states the frames, between the level's group and the refusal's: right after `level`.
+_RESULT_KEYS_WITH_FRAMES = _RESULT_KEYS[:5] + ("frames",) + _RESULT_KEYS[5:]
+FRAMES = "frames"
+_FRAME_KEYS = ("georeferenced", "local")
+#: The axis orders and the one local axes statement the served 3.0.0 schema names.
+_AXIS_ORDERS = ("east-north", "north-east")
+_LOCAL_AXES = {"x": "east", "y": "north", "z": "up"}
+#: The factors to metres a reader understands: the metre, the international foot, the US survey foot.
+_KNOWN_FACTORS = (1.0, 0.3048, 1200 / 3937)
+_FACTOR_TOLERANCE = 1e-9
+_CRS_CODE = re.compile(r"^[A-Z]+:[0-9A-Za-z.]+$")
 _FILE_KEYS = ("path", "family", "frame", "count")
 _SKIPPED_KEYS = ("path", "why", "reason")
 _SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
@@ -100,9 +114,10 @@ def check_result_shape(result: object) -> list[str]:
     """The problems with `result` as a shape, one line each; empty when it is the documented one."""
     if not isinstance(result, dict):
         return ["`result` is not an object"]
-    if tuple(result) != _RESULT_KEYS:
+    keys = _RESULT_KEYS_WITH_FRAMES if FRAMES in result else _RESULT_KEYS
+    if tuple(result) != keys:
         return [f"`result` has the members {', '.join(result) or 'none'}, expected exactly "
-                f"{', '.join(_RESULT_KEYS)}, in that order"]
+                f"{', '.join(_RESULT_KEYS)}, in that order, with `frames` after `level` for a 3.x read"]
     problems: list[str] = []
     outcome, major, version = result["outcome"], result["major"], result["version"]
     if outcome not in ("read", "refused"):
@@ -121,8 +136,15 @@ def check_result_shape(result: object) -> list[str]:
         problems.append("`result.refusal` is set when, and only when, the outcome is `refused`")
     elif result["refusal"] is not None and result["refusal"] not in REFUSALS:
         problems.append(f"`result.refusal` is not one of {', '.join(REFUSALS)}")
-    if outcome == "refused" and _is_int(major) and major <= NEWEST_MAJOR:
+    if result["refusal"] == "major-ahead" and _is_int(major) and major <= NEWEST_MAJOR:
         problems.append(f"a refusal is of a major above {NEWEST_MAJOR}, not {major}")
+    if result["refusal"] == "unreadable" and major != NEWEST_MAJOR:
+        problems.append(f"an `unreadable` refusal is of a bundle of major {NEWEST_MAJOR}, not {major}")
+    stated = FRAMES in result
+    if stated != (outcome == "read" and _is_int(major) and major >= 3):
+        problems.append("`result.frames` is stated when, and only when, a 3.x bundle is read")
+    elif stated and not (isinstance(result[FRAMES], dict) and tuple(result[FRAMES]) == _FRAME_KEYS):
+        problems.append(f"`result.frames` is not an object with exactly the members {', '.join(_FRAME_KEYS)}")
     if outcome == "read" and _is_int(major) and major > NEWEST_MAJOR:
         problems.append(f"a bundle of major {major}, above {NEWEST_MAJOR}, is refused and never read")
 
@@ -155,6 +177,98 @@ def check_result_shape(result: object) -> list[str]:
     return problems
 
 
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _unit_problem(unit: object, where: str) -> str | None:
+    """Why a linear unit is not one a reader understands, or None: a name, and a known factor."""
+    if not isinstance(unit, dict) or not isinstance(unit.get("name"), str) or not unit["name"]:
+        return f"{where} states no unit name"
+    factor = unit.get("to_metres")
+    if not _is_number(factor) or factor <= 0:
+        return f"{where} states no positive to_metres factor"
+    if not any(abs(factor - known) <= known * _FACTOR_TOLERANCE for known in _KNOWN_FACTORS):
+        return f"{where} states the unit {unit['name']} ({factor} metres), which is not understood"
+    return None
+
+
+def _crs_problem(crs: object, where: str) -> str | None:
+    """Why a CRS names nothing a reader can apply, or None: a code, PROJJSON or WKT2, each well formed."""
+    if not isinstance(crs, dict):
+        return f"{where} is not an object"
+    if "code" in crs and not (isinstance(crs["code"], str) and _CRS_CODE.match(crs["code"])):
+        return f"{where} names the code {crs['code']!r}, which is not an authority code"
+    if "projjson" in crs and not isinstance(crs["projjson"], dict):
+        return f"{where}.projjson is not an object"
+    if "wkt2" in crs and not (isinstance(crs["wkt2"], str) and crs["wkt2"]):
+        return f"{where}.wkt2 is not a string"
+    if not any(form in crs for form in ("code", "projjson", "wkt2")):
+        return f"{where} names no code, PROJJSON object or WKT2 string"
+    return None
+
+
+def _number_problem(frame: object, name: str, where: str) -> str | None:
+    value = frame.get(name) if isinstance(frame, dict) else None
+    return None if _is_number(value) else f"{where}.{name} is not a number"
+
+
+def frames_refusal(frames: object) -> str | None:
+    """Why a reader of the served 3.0.0 frames (format.md section 9.4) refuses them, or None.
+
+    A unit it does not understand, an axis order it does not know, a datum that names nothing, and a
+    local unit that is not the metre are refused; so is a member the frames need and lack.
+    """
+    if not isinstance(frames, dict):
+        return "the manifest states no frames"
+    order, local = frames.get("georeferenced"), frames.get("local")
+    if not isinstance(order, dict) or not isinstance(local, dict):
+        return "the manifest states no frames.georeferenced or frames.local"
+    origin = local.get("origin")
+    projected = origin.get("projected") if isinstance(origin, dict) else None
+    if not isinstance(origin, dict) or not isinstance(projected, dict):
+        return "frames.local.origin states no projected origin"
+    checks = [
+        _crs_problem(order.get("horizontal_crs"), "frames.georeferenced.horizontal_crs"),
+        _crs_problem(order.get("vertical_crs"), "frames.georeferenced.vertical_crs"),
+        _unit_problem(order.get("horizontal_unit"), "frames.georeferenced.horizontal_unit"),
+        _unit_problem(order.get("vertical_unit"), "frames.georeferenced.vertical_unit"),
+        None if order.get("axis_order") in _AXIS_ORDERS
+        else f"frames.georeferenced.axis_order states {order.get('axis_order')!r}, not an axis order",
+        _number_problem(order, "grid_rotation_deg", "frames.georeferenced"),
+        _crs_problem(local.get("vertical_crs"), "frames.local.vertical_crs"),
+        _crs_problem(projected.get("crs"), "frames.local.origin.projected.crs"),
+        _unit_problem(projected.get("unit"), "frames.local.origin.projected.unit"),
+        _unit_problem(local.get("unit"), "frames.local.unit"),
+        None if local.get("axes") == _LOCAL_AXES else "frames.local.axes is not x east, y north, z up",
+        _number_problem(local, "grid_rotation_deg", "frames.local"),
+    ]
+    checks += [_number_problem(origin, name, "frames.local.origin")
+               for name in ("longitude", "latitude", "ellipsoidal_height_m", "height_m")]
+    checks += [_number_problem(projected, name, "frames.local.origin.projected") for name in ("x", "y")]
+    for frame, where in ((order, "frames.georeferenced"), (local, "frames.local")):
+        geoid = frame.get("geoid_model")
+        if geoid is not None and not isinstance(geoid, str):
+            checks.append(f"{where}.geoid_model is not a name or null")
+    local_unit = local.get("unit")
+    if isinstance(local_unit, dict) and _is_number(local_unit.get("to_metres")) and local_unit["to_metres"] != 1:
+        checks.append(f"frames.local.unit states {local_unit.get('name')} ({local_unit['to_metres']} metres), "
+                      "but the local frame is in metres on every order")
+    return next((problem for problem in checks if problem), None)
+
+
+def expected_frames(frames: dict) -> dict:
+    """The answer for a readable `frames`: the manifest's own words, with each `geoid_model` stated.
+
+    Nothing is derived or renamed; a geoid the manifest names none for is `null`, so a reader that
+    leaves it out and one that reports `null` give the answer sheet one shape.
+    """
+    answer = json.loads(json.dumps(frames))
+    for member in _FRAME_KEYS:
+        answer[member].setdefault("geoid_model", None)
+    return answer
+
+
 def _expected_file(path: str, entry: object, major: int) -> dict:
     if major >= 3:
         family = family_of_3(path)
@@ -180,9 +294,17 @@ def check_result_against_bundle(result: dict, fixture: object) -> list[str]:
         return [f"`result.version` is {result['version']!r}, but the bundle's manifest declares "
                 f"{manifest.get('version')!r}"]
     if result["outcome"] == "refused":
+        if result["refusal"] == "unreadable" and frames_refusal(manifest.get(FRAMES)) is None:
+            return ["`result` refuses the bundle as unreadable, but a reader reads its manifest's frames"]
         return []
     major = result["major"]
     problems: list[str] = []
+    if major >= 3:
+        refusal = frames_refusal(manifest.get(FRAMES))
+        if refusal is not None:
+            return [f"`result` reads the bundle, but a reader refuses its manifest's frames: {refusal}"]
+        if result[FRAMES] != expected_frames(manifest[FRAMES]):
+            problems.append("`result.frames` is not the frames the manifest states, with each geoid_model stated")
     if result["level"] != (manifest.get(LEVEL) if major >= 3 else None):
         problems.append(f"`result.level` is {result['level']!r}, but the manifest states "
                         f"{manifest.get(LEVEL) if major >= 3 else None!r}")
@@ -242,6 +364,13 @@ def check_case(entry: dict, body: object, fixture: object) -> list[str]:
     if "errorContains" in entry and (entry["expect"] != "reject"
                                      or not isinstance(entry["errorContains"], str)):
         problems.append("`errorContains` is a string on a `reject` case only")
+    elif isinstance(result, dict) and result.get("refusal") == "unreadable":
+        files = fixture.get("files") if isinstance(fixture, dict) else None
+        manifest = files.get(result.get("manifestPath")) if isinstance(files, dict) else None
+        stated = json.dumps(manifest.get(FRAMES)) if isinstance(manifest, dict) else ""
+        if not isinstance(entry.get("errorContains"), str) or entry["errorContains"] not in stated:
+            problems.append("`errorContains` names a value the manifest's frames state, the value the "
+                            "reader refused")
     return [f"FAIL: reader case '{case_id}' ({entry['file']}): {problem}." for problem in problems]
 
 
