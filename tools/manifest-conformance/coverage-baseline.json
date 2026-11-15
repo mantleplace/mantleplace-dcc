@@ -524,23 +524,28 @@
     ],
     "reader.v3FramesAxisOrderUnknown": [
       "autocad",
-      "revit"
+      "revit",
+      "unreal"
     ],
     "reader.v3FramesFeet": [
       "autocad",
-      "revit"
+      "revit",
+      "unreal"
     ],
     "reader.v3FramesLocalUnitNotMetre": [
       "autocad",
-      "revit"
+      "revit",
+      "unreal"
     ],
     "reader.v3FramesUnitUnknown": [
       "autocad",
-      "revit"
+      "revit",
+      "unreal"
     ],
     "reader.v3FramesVerticalDatumUnreadable": [
       "autocad",
-      "revit"
+      "revit",
+      "unreal"
     ],
     "reader.v3FullMax": [
       "autocad",
