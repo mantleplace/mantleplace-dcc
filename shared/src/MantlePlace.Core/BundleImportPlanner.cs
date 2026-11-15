@@ -35,6 +35,44 @@ public static class BundleImportPlanner
     ];
 
     /// <summary>
+    /// What a plan of an MPB 3.0 bundle leaves out that a plan of a 2.x bundle of the same site
+    /// carries, each with its reason: the release notes for <c>revit-1.2.0</c> name every one
+    /// (<c>revit/docs/release-notes-1.2.0.md</c>), and a test holds the two together.
+    /// </summary>
+    /// <remarks>
+    /// An item with a <see cref="ThreeLeftOutItem.Kind"/> is a step whose 2.x input has no 3.0 file,
+    /// skipped as <see cref="SkipReasonCode.NotInFormat"/> with the item's reason. The rest are facts a
+    /// planned step goes without. Each is left out because Revit never converts a georeferenced file
+    /// and never works out a value the manifest does not state (<c>HPS-33</c>).
+    /// </remarks>
+    public static IReadOnlyList<ThreeLeftOutItem> ThreeLeftOut { get; } =
+    [
+        new(
+            ImportStepKind.ToposurfaceFromPointsFile,
+            "The toposurface points file",
+            "MPB 3.0 ships no points file, and the plugin never converts a georeferenced file; the terrain is built from Elevation/Terrain.dxf."),
+        new(
+            null,
+            "Cropping the terrain and contours to the area of interest",
+            "MPB 3.0 states the area of interest only in longitude and latitude, and no reader projects; the terrain is built from the whole surface."),
+        new(
+            null,
+            "The project's time zone",
+            "MPB 3.0 names the time zone without the UTC offset Revit needs, and the plugin does not work one out; the site location is still set."),
+        new(
+            null,
+            "The flood map's zones, panels and effective dates on the hazard plan's key",
+            "MPB 3.0 states none of them; the flood zones are still drawn from Records/Floodplain.gpkg."),
+        new(
+            null,
+            "The steep-ground threshold on the hazard plan's key",
+            "MPB 3.0 publishes no build threshold; the steep ground is still drawn from Elevation/Slope.gpkg."),
+    ];
+
+    /// <summary>The reason a 3.0 plan's terrain and contours have no crop window: the left-out item's.</summary>
+    private static string ThreeNoCrop => ThreeLeftOut[1].Why;
+
+    /// <summary>
     /// How far a corroborated extent may disagree with the image's own grid, in pixels per axis.
     /// </summary>
     /// <remarks>
@@ -82,6 +120,15 @@ public static class BundleImportPlanner
         if (!manifest.IsValid)
         {
             return new BundleImportPlan { CanImport = false, BlockedReason = manifest.Error };
+        }
+
+        // A 3.x reading is planned by the same code as a 2.x manifest, from the view that fills each
+        // step's pointer from the catalog and the frames; a 2.x manifest is planned as it always was.
+        BundleManifest? three = null;
+        if (RevitThreeView.IsThree(manifest))
+        {
+            three = manifest;
+            manifest = RevitThreeView.From(manifest);
         }
 
         BundleEntryIndex entries = new(entryNames);
@@ -154,6 +201,11 @@ public static class BundleImportPlanner
         steps.AddRange(drapeSteps);
         skipped.AddRange(drapeSkipped);
 
+        if (three is not null)
+        {
+            ExplainThreeAbsences(three, steps, skipped);
+        }
+
         LeaveOut(choice, steps, skipped);
         NoteAvailableButNotImported(manifest, entries, notImported);
 
@@ -168,6 +220,17 @@ public static class BundleImportPlanner
         if (!canImport)
         {
             steps.RemoveAll(step => step.Kind == ImportStepKind.SiteContextView);
+
+            // A 3.0 plan names every step it leaves out (ExplainThreeAbsences).
+            if (three is not null)
+            {
+                skipped.Add(new SkippedImport
+                {
+                    Kind = ImportStepKind.SiteContextView,
+                    ReasonCode = SkipReasonCode.DeclaredAbsent,
+                    Reason = "No site context view: nothing in this import would be shown in it.",
+                });
+            }
         }
 
         // Last, once the checklist has taken out what the curator left out: the role of what each
@@ -190,6 +253,70 @@ public static class BundleImportPlanner
                     : "This bundle carries nothing this plugin can import into Revit. "
                       + DescribeAbsence(manifest),
         };
+    }
+
+    /// <summary>
+    /// Puts an MPB 3.x plan's absences in the bundle's terms: the step 3.0 has no file for says so, and
+    /// a step whose file the bundle lacks names the file, with the manifest's reason, verbatim, where it
+    /// lists the file as not held (<c>spec/format.md</c> §11).
+    /// </summary>
+    /// <remarks>
+    /// Run on the whole plan, before the checklist takes anything out, so the curator's choice still
+    /// wins over an absence the way it does for a 2.x plan. Each step that reads a file ends up planned
+    /// or skipped, the site model's link included, which a 2.x plan folds into the copy's one skip: a
+    /// 3.0 plan names every step it leaves out (the release notes for <c>revit-1.2.0</c>).
+    /// </remarks>
+    private static void ExplainThreeAbsences(BundleManifest three, List<ImportStep> steps, List<SkippedImport> skipped)
+    {
+        foreach (ThreeLeftOutItem item in ThreeLeftOut)
+        {
+            if (item.Kind is not { } notInFormat)
+            {
+                continue;
+            }
+
+            SkippedImport replacement = new() { Kind = notInFormat, ReasonCode = SkipReasonCode.NotInFormat, Reason = item.Why };
+            int at = skipped.FindIndex(skip => skip.Kind == notInFormat);
+            skipped.RemoveAll(skip => skip.Kind == notInFormat);
+            skipped.Insert(at < 0 ? skipped.Count : at, replacement);
+        }
+
+        foreach ((ImportStepKind kind, string path) in RevitThreeView.FileOf)
+        {
+            SkippedImport absent = Absent(kind, path);
+            int at = skipped.FindIndex(skip => skip.Kind == kind);
+            if (at >= 0)
+            {
+                if (skipped[at].ReasonCode is SkipReasonCode.ArtifactNotInManifest or SkipReasonCode.DeclaredAbsent)
+                {
+                    skipped[at] = absent;
+                }
+
+                continue;
+            }
+
+            // The terrain's DXF linked as CAD is a fallback, listed only when the TIN fails.
+            if (kind != ImportStepKind.ToposurfaceFromSurfaceDxf && !steps.Exists(step => step.Kind == kind))
+            {
+                skipped.Add(absent);
+            }
+        }
+
+        SkippedImport Absent(ImportStepKind kind, string path) =>
+            RevitThreeView.NotHeld(three, path) is { } notHeld
+                ? new SkippedImport
+                {
+                    Kind = kind,
+                    ReasonCode = SkipReasonCode.NotHeld,
+                    Reason = $"This bundle does not hold {path}: {notHeld.Reason}",
+                }
+                : new SkippedImport
+                {
+                    Kind = kind,
+                    ReasonCode = SkipReasonCode.ArtifactNotInManifest,
+                    Reason = $"This bundle's catalog names no {path}, and lists no reason it does not hold one. "
+                        + "Re-download it from your vault at mantle.place/vault.",
+                };
     }
 
     /// <summary>
@@ -396,6 +523,13 @@ public static class BundleImportPlanner
             return false;
         }
 
+        // An MPB 3.x bundle has no points file to fall back on (ThreeLeftOut), so its terrain DXF is
+        // linked for the curator instead.
+        bool three = manifest.SurfaceDxf?.Family is not null;
+        string instead = three
+            ? "so the terrain's DXF was linked instead."
+            : "so the terrain was built from the points file instead.";
+
         if (frame is null)
         {
             skipped = new SkippedImport
@@ -403,8 +537,20 @@ public static class BundleImportPlanner
                 Kind = kind,
                 ReasonCode = SkipReasonCode.NoSiteFrame,
                 Reason = "The surface TIN is measured in real-world coordinates and this bundle "
-                    + "publishes no origin to place it against, so the terrain was built from the "
-                    + "points file instead.",
+                    + "publishes no origin to place it against, " + instead,
+            };
+            return false;
+        }
+
+        if (three && !frame.IsInOriginUnit(candidate!.Units))
+        {
+            skipped = new SkippedImport
+            {
+                Kind = kind,
+                ReasonCode = SkipReasonCode.CoordinateSystemNotSupported,
+                Reason = $"The surface TIN is in \"{manifest.SurfaceDxf!.Units}\", but this bundle states its site "
+                    + $"origin in \"{LinearUnits.ToManifestToken(frame.Origin.LinearUnit)}\", and this plugin "
+                    + "converts neither, " + instead,
             };
             return false;
         }
@@ -951,7 +1097,25 @@ public static class BundleImportPlanner
         (SkipReasonCode Code, string Reason)? refusal;
 
         ImportStep? geoJsonFallback = null;
-        if (artifact.IsGeoPackage)
+        if (artifact.Family is { } family)
+        {
+            // An MPB 3.x file is in the frame its family settles (spec/format.md §4), so there is no
+            // fallback to read and nothing to resolve: a host-ready file is offsets from the site origin
+            // in metres, and a georeferenced one is absolute in the order's CRS and units, which the
+            // origin is stated in too. A georeferenced file is placed against the origin only when the
+            // two units agree; this host converts neither.
+            refusal = family == FileFamily.HostReady ? null : ThreeUnitRefusal(artifact, frame, label, out units);
+            if (family == FileFamily.HostReady)
+            {
+                units = LinearUnit.Metre;
+                layer = new LayerFrame(LayerCoordinates.LocalOffsets, LinearUnit.Metre);
+            }
+            else
+            {
+                layer = new LayerFrame(LayerCoordinates.AbsoluteProjected, units);
+            }
+        }
+        else if (artifact.IsGeoPackage)
         {
             // The carrier is absolute in the origin's own unit, so an origin that states none leaves
             // nothing to subtract in: this host does not derive a unit (CLAUDE.md, no placement values
@@ -1036,6 +1200,7 @@ public static class BundleImportPlanner
             Hazard = hazard,
             LandPlan = landPlan,
             HeightDatum = HeightDatums.For(kind, artifact, manifest),
+            HeightBaseM = artifact.HeightBaseM,
             Levels = published,
             Level = leveled.Applied,
             LevelFiles = levelFiles,
@@ -1121,6 +1286,12 @@ public static class BundleImportPlanner
             ReasonCode = code,
             Reason = reason,
         });
+
+        if (manifest.ImageryDrape?.Family is not null)
+        {
+            PlanThreeDrape(manifest, manifest.ImageryDrape, entries, steps, Skip, probeImageSize);
+            return;
+        }
 
         // The producer's own "there is no imagery" beats anything this host could infer from a
         // missing pointer, and it is the one absence a re-download cannot fix.
@@ -1261,6 +1432,91 @@ public static class BundleImportPlanner
             },
             Levels = entryDrape.Levels,
             Level = leveled.Applied,
+        });
+    }
+
+    /// <summary>
+    /// The drape of an MPB 3.x bundle: <c>Imagery/Imagery.png</c>, laid over the rectangle its catalog
+    /// entry states in the local site frame, in metres from the site origin (<c>spec/format.md</c> §9.5).
+    /// </summary>
+    /// <remarks>
+    /// The rectangle is a contract and is placed verbatim (<c>HPS-33</c>); what is checked is that it
+    /// belongs to this image, by the catalog's pixel width and height against the file's own. A raster
+    /// whose catalog states no local rectangle has no ground this host may read for it, and is skipped
+    /// rather than placed from anything worked out. There are no levels: a 3.0 download holds one.
+    /// </remarks>
+    private static void PlanThreeDrape(
+        BundleManifest manifest,
+        BundleArtifact drape,
+        BundleEntryIndex entries,
+        List<ImportStep> steps,
+        Action<SkipReasonCode, string> skip,
+        Func<string, ImageSize?> probeImageSize)
+    {
+        if (entries.Resolve(drape.Path) is not { } entry)
+        {
+            skip(
+                SkipReasonCode.EntryNotInArchive,
+                $"The catalog names the satellite imagery \"{drape.Path}\", but no such entry is in this bundle. "
+                + "Re-download it from your vault at mantle.place/vault.");
+            return;
+        }
+
+        if (SiteFrame.For(manifest) is not { } frame)
+        {
+            skip(
+                SkipReasonCode.NoSiteFrame,
+                "This bundle states its site origin in a coordinate system this plugin cannot place, so the "
+                + "terrain was left untextured rather than draped against a guess.");
+            return;
+        }
+
+        if (drape.Raster is not { Rectangle: { } rectangle } raster
+            || !string.Equals(raster.Frame, RevitThreeView.LocalRasterFrame, StringComparison.Ordinal)
+            || !(rectangle.Right > rectangle.Left) || !(rectangle.Top > rectangle.Bottom))
+        {
+            skip(
+                SkipReasonCode.ExtentNotCorroborated,
+                $"This bundle's catalog states no rectangle in the local site frame for \"{drape.Path}\", so "
+                + "there is no way to know which ground the image covers and the terrain was left untextured.");
+            return;
+        }
+
+        if (probeImageSize(entry) is not { IsUsable: true } pixels)
+        {
+            skip(
+                SkipReasonCode.ExtentNotCorroborated,
+                $"The satellite imagery at \"{drape.Path}\" is not a readable PNG, so neither Revit could "
+                + "texture with it nor this plugin could check which ground it covers. Re-download the "
+                + "bundle from your vault at mantle.place/vault.");
+            return;
+        }
+
+        if (pixels.Width != raster.Width || pixels.Height != raster.Height)
+        {
+            skip(
+                SkipReasonCode.ExtentNotCorroborated,
+                $"This bundle's catalog states \"{drape.Path}\" is {raster.Width} × {raster.Height} pixels, but "
+                + $"the image is {pixels}, so its rectangle cannot be shown to be this image's. Draping it "
+                + "could stretch the image over the wrong ground, so the terrain was left untextured.");
+            return;
+        }
+
+        steps.Add(new ImportStep
+        {
+            Kind = ImportStepKind.ImageryDrape,
+            EntryName = entry,
+            ExpectedSha256 = drape.Sha256,
+            Frame = frame,
+            Drape = new DrapePlacement
+            {
+                LeftM = rectangle.Left,
+                BottomM = rectangle.Bottom,
+                RightM = rectangle.Right,
+                TopM = rectangle.Top,
+                PixelSize = pixels,
+                ExtentFromDrapeBlock = true,
+            },
         });
     }
 
@@ -1554,6 +1810,13 @@ public static class BundleImportPlanner
             Frame = frame,
             ToposolidType = toposolidType,
             HeightDatum = HeightDatums.For(kind, artifact, manifest),
+
+            // An MPB 3.x file's heights are in the georeferenced frame's vertical unit, stated apart
+            // from its X/Y (spec/format.md §4); a 2.x pointer here states none.
+            VerticalUnits = artifact.Family is not null
+                && TryReadUnitToken(artifact.VerticalUnits ?? string.Empty, out LinearUnit vertical)
+                    ? vertical
+                    : LinearUnit.Unspecified,
             Levels = artifact.Levels,
             Level = leveled.Applied,
             SavesLinkCompanion = savesLinkCompanion,
@@ -1570,8 +1833,34 @@ public static class BundleImportPlanner
             && (kind is ImportStepKind.ToposurfaceFromPointsFile
                 or ImportStepKind.ToposurfaceFromSurfaceTin
                 or ImportStepKind.PublishedContours)
-            ? SurfaceCrop.Unavailable(manifest, SiteFrame.For(manifest))
+            ? RevitThreeView.IsThree(manifest) ? ThreeNoCrop : SurfaceCrop.Unavailable(manifest, SiteFrame.For(manifest))
             : null;
+
+    /// <summary>
+    /// Why an MPB 3.x georeferenced file cannot be placed against the site origin, or <c>null</c> with
+    /// its <paramref name="units"/>: its coordinates are subtracted from the origin, so the two have to
+    /// be in one unit, and this host converts neither (<c>HPS-35</c>, <c>HPS-53</c>).
+    /// </summary>
+    private static (SkipReasonCode Code, string Reason)? ThreeUnitRefusal(
+        BundleArtifact artifact,
+        SiteFrame frame,
+        string label,
+        out LinearUnit units)
+    {
+        if (!TryReadUnitToken(artifact.Units ?? string.Empty, out units))
+        {
+            return (SkipReasonCode.UnitNotUnderstood,
+                $"The {label} are in \"{artifact.Units}\", which this plugin does not understand. Importing them "
+                + "could place them at the wrong scale, so they were left out.");
+        }
+
+        return frame.IsInOriginUnit(units)
+            ? null
+            : (SkipReasonCode.CoordinateSystemNotSupported,
+                $"The {label} are absolute coordinates in \"{artifact.Units}\", but this bundle states its site "
+                + $"origin in \"{LinearUnits.ToManifestToken(frame.Origin.LinearUnit)}\". Importing them anyway "
+                + "would put them in the wrong place, and this plugin converts neither, so they were left out.");
+    }
 
     private static (SkipReasonCode Code, string Reason) CrsRefusal(BundleArtifact artifact, SiteFrame frame, string label)
         => (SkipReasonCode.CoordinateSystemNotSupported,
@@ -1804,6 +2093,11 @@ public static class BundleImportPlanner
 
     private static string DescribeAbsence(BundleManifest manifest)
     {
+        if (RevitThreeView.IsThree(manifest))
+        {
+            return "The skipped items name each file it does not hold, and why.";
+        }
+
         if (manifest.Readiness.Declared)
         {
             return "The manifest's Revit readiness block explains why — see the skipped items.";
