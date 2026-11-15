@@ -417,6 +417,29 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("naming the column: ") + Error, Error.Contains(TEXT("class")));
 	}
 
+	// A 3.0 table has no `name` column: it imports, the road unnamed.
+	{
+		TArray<FMantlePlaceRoadSpline> Splines;
+		int32 Seen = 0, Unreadable = 0;
+		FString Error;
+		TestTrue(TEXT("a table with no name column parses: ") + Error,
+			FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
+				TEXT("road,vertex,x,y,z,class,width_m
+1,0,10,20,1,primary,7
+1,1,30,40,2,primary,7
+"),
+				0.0, Splines, Seen, Unreadable, Error));
+		TestEqual(TEXT("one spline"), Splines.Num(), 1);
+		if (Splines.Num() == 1)
+		{
+			TestTrue(TEXT("left unnamed"), Splines[0].Name.IsEmpty());
+		}
+		TestFalse(TEXT("a missing coordinate is still refused"),
+			FMantlePlaceRoadSplinesLogic::ParseSiteCsv(TEXT("road,vertex,x,z,class,width_m
+"), 0.0, Splines, Seen, Unreadable, Error));
+		TestTrue(TEXT("naming it: ") + Error, Error.Contains(TEXT("`y`")));
+	}
+
 	// --- Fail closed on a unit it does not place --------------------------------------------------
 	{
 		const FString Text = Manifest(TEXT("{\"name\": \"US survey foot\", \"to_metres\": 0.3048006096}"));
