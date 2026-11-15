@@ -6,6 +6,8 @@
 #include "Widgets/SCompoundWidget.h"
 
 class FMantlePlaceImportSteps;
+class FMantlePlaceLevelChoice;
+class SBox;
 class STextBlock;
 class SVerticalBox;
 class SWindow;
@@ -13,9 +15,10 @@ class SWindow;
 /**
  * The import window's content: the `Bundle Import` heading and the run's elapsed time, one row per
  * step with its state word (HPS-51) and, for a step that did not run, why; the status line naming the
- * step in flight and how long it has run; an empty slot where the level control goes; `Cancel` and
- * `Close`. Every word it shows is decided by FMantlePlaceImportSteps, which a headless test reads: this
- * only lays them out.
+ * step in flight and how long it has run; a 3.0 order's level control (`Fidelity Level`, the levels with
+ * their sizes, `Download`), shown only while it is offered; `Cancel` and `Close`. Every word it shows is
+ * decided by FMantlePlaceImportSteps and FMantlePlaceLevelChoice, which headless tests read: this only
+ * lays them out.
  */
 class SMantlePlaceImportWindow : public SCompoundWidget
 {
@@ -34,6 +37,9 @@ public:
 	/** The import's closing message, shown under the steps once the run is over. */
 	void SetResult(const FString& Message);
 
+	/** Show a 3.0 order's level control under the status line; Download confirms it. */
+	void SetLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice);
+
 private:
 	FText GetStatusText() const;
 	FText GetRunElapsedText() const;
@@ -45,6 +51,8 @@ private:
 	FSimpleDelegate OnClose;
 	TSharedPtr<SVerticalBox> Rows;
 	TSharedPtr<STextBlock> ResultText;
+	TSharedPtr<SBox> LevelSlot;
+	TSharedPtr<FMantlePlaceLevelChoice> LevelChoice;
 };
 
 /**
@@ -76,6 +84,9 @@ public:
 
 	/** The import's closing message. */
 	void SetResult(const FString& Message);
+
+	/** Show a 3.0 order's level control in the window. False when the window is gone, so nobody can choose. */
+	bool ShowLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice);
 
 	/** Close the window, whatever the run is doing (the vault panel is going away). */
 	void Close();

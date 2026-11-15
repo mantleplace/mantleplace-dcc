@@ -94,6 +94,15 @@ public:
 	void GetPresignedViewUrl(const FString& OrderId);
 
 	/**
+	 * Begin minting a presigned URL for an MPB 3.0 order's download at one level (`Max`, `Med` or `Min`):
+	 * the promised files this host's import reads, named by path from the bundle root (the editor declares
+	 * them beside its import steps), and Manifest.json, which comes with every download. The answer is
+	 * marked with the level (FMantlePlacePresignedDownload::Level) and held against its own stated length
+	 * and manifest digest. Result via OnPresignedUrlReady. A 2.x order keeps GetPresignedViewUrl.
+	 */
+	void GetPresignedLevelUrl(const FString& OrderId, const FString& Level, const TArray<FString>& Files);
+
+	/**
 	 * Probe a minted URL with a 1-byte ranged GET (no auth header) to confirm it resolves
 	 * without downloading the bundle. Result via OnPresignedUrlProbed.
 	 */
@@ -266,8 +275,15 @@ private:
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	void HandleProbeResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
-	/** The POST both materialize entry points share; they differ only in the body they build. */
-	void MintDownload(const FString& OrderId, const FString& Format, bool bView);
+	/**
+	 * The download-mint POST every download entry point shares; they differ only in the body they build.
+	 * A non-empty Level is a 3.0 request for that level and Files; it is never a view.
+	 */
+	void MintDownload(const FString& OrderId, const FString& Format, bool bView,
+		const FString& Level = FString(), const TArray<FString>& Files = TArray<FString>());
+
+	/** The 3.0 level the in-flight download mint asked for; empty for a 2.x request. Read by its answer. */
+	FString PendingDownloadLevel;
 	void SendMaterializeRequest(const FString& OrderId, const FString& Body, const FString& Jwt);
 
 	void HandleMaterializeStartResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,

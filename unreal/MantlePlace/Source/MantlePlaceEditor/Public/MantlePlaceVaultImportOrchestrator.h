@@ -16,9 +16,13 @@ class UMantlePlaceAuthSystemBase;
 class UMantlePlaceVaultClient;
 class UMantlePlaceBundleCache;
 class FMantlePlaceImportSteps; // MantlePlaceImportStepsLogic.h (editor-internal)
+class FMantlePlaceLevelChoice; // MantlePlaceLevelChoiceLogic.h (editor-internal)
 
 /** An import flow has started: its steps, which the import window shows (native: the steps are a plain class). */
 DECLARE_MULTICAST_DELEGATE_OneParam(FMantlePlaceOnImportStepsNative, TSharedRef<FMantlePlaceImportSteps>);
+
+/** A 3.0 order's level control is ready to show. True when a window shows it and will confirm it; false when nobody can. */
+DECLARE_DELEGATE_RetVal_OneParam(bool, FMantlePlaceOnOfferLevelChoiceNative, TSharedRef<FMantlePlaceLevelChoice>);
 
 /** Blueprint-assignable events for the EUW surface (a WidgetBlueprint binds these in its graph). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnVaultListedBP, bool, bSuccess, const TArray<FMantlePlaceVaultItem>&, Bundles, const FString&, Message);
@@ -103,6 +107,15 @@ public:
 	 * inside StartLocalImport itself, and a window opened after it returned would open on a finished run.
 	 */
 	FMantlePlaceOnImportStepsNative OnImportStepsNative;
+
+	/**
+	 * A 3.0 order's import waits here for its level (HPS-59): the control is offered once the steps are
+	 * announced, and the download starts when the curator presses Download. Bound by the panel controller,
+	 * which answers true only when the import window shows the control. Unbound, or answered false (an
+	 * unattended run, a script, a window that could not open), the import takes the platform's
+	 * recommended level, and fails with the reason when the order states none.
+	 */
+	FMantlePlaceOnOfferLevelChoiceNative OnOfferLevelChoiceNative;
 
 	/**
 	 * Wire an explicit signed-in auth source (for a headless caller or a test that has no editor
@@ -212,6 +225,7 @@ private:
 		AutoPicking,    // ListVault in flight for StartVaultImportFirstIncomplete
 		ResolvingLocal, // ListVault in flight to sha256-match a local zip with no manifest orderId
 		Materializing,  // RequestMaterialize in flight
+		ChoosingLevel,  // a 3.0 order's level control is shown; waiting for Download
 		Polling,        // GetMaterializeStatus loop
 		Relisting,      // re-list to obtain the fresh (post-materialize) item
 		Presigning,     // GetPresignedUrl in flight
@@ -236,6 +250,12 @@ private:
 
 	/** Mint a presigned "glb" URL for ActiveItem, then download it. */
 	void BeginPresign();
+
+	/** A 3.0 order: offer its level control, and download what it confirms (or the recommendation, unattended). */
+	void BeginLevelChoice();
+
+	/** Download ActiveItem at Level: the kept slot when it holds that level, else a fresh 3.0 download of Unreal's files. */
+	void DownloadLevel(const FString& Level);
 
 	/** Arm a one-shot status-poll timer (respecting MaterializeMaxPolls). */
 	void SchedulePoll();
@@ -358,6 +378,9 @@ private:
 
 	/** The manifest digest the platform stated for the view being downloaded; empty when it stated none. */
 	FString ViewManifestSha256;
+
+	/** A 3.0 order's level control while it is offered; null otherwise. */
+	TSharedPtr<FMantlePlaceLevelChoice> LevelChoice;
 
 	//~ Local-zip import bookkeeping (all empty/false for a vault-row import).
 	bool bLocalImport = false;    // this flow originated from a local .zip
