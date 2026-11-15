@@ -80,6 +80,30 @@ public static partial class WindowLabels
         return text;
     }
 
+    /// <summary>
+    /// What a row of a 3.0 bundle says beside its box: what its file holds, what importing it is
+    /// estimated to take in this Revit, and where that breaks the budget, the one plain line that says
+    /// why the box starts unticked and that ticking it imports all of it.
+    /// </summary>
+    /// <param name="cost">The file's catalog count.</param>
+    /// <param name="estimate">That count times this Revit's measured cost per unit.</param>
+    /// <param name="overBudget">Whether the estimate breaks the budget (<see cref="SlowStepNotice.BreaksBudget"/>).</param>
+    public static string EstimateNote(CostDriver cost, SlowStepNotice.LevelEstimate estimate, bool overBudget)
+    {
+        ArgumentNullException.ThrowIfNull(cost);
+        ArgumentNullException.ThrowIfNull(estimate);
+
+        string text = CostText(cost) + ", about " + Duration(estimate.Seconds);
+        if (!estimate.Timed)
+        {
+            text += string.Format(CultureInfo.InvariantCulture, " (as timed in Revit {0})", estimate.Version);
+        }
+
+        return overBudget
+            ? text + ". That is over five minutes, so it starts unticked. Tick it to import all of it."
+            : text;
+    }
+
     /// <summary>A <c>same_as</c> reason in the curator's words.</summary>
     public static string SameAsReasonPhrase(SameAsReason reason) => reason switch
     {

@@ -238,6 +238,14 @@ public static class BundleImportPlanner
         foreach (ImportStep step in steps)
         {
             step.Odbl = OdblContent.RoleOf(manifest.FileEntries, step);
+
+            // An MPB 3.0 step carries its file's catalog count, which the checklist turns into an
+            // estimate. The count is the download's own, at the level chosen before it: nothing here
+            // thins a file to fit a budget.
+            if (three is not null && step.EntryName.Length > 0)
+            {
+                step.Cost = SlowStepNotice.CostOfCatalogCount(step.Kind, three.Contents?.Find(step.EntryName)?.Count);
+            }
         }
 
         return new BundleImportPlan
