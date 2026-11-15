@@ -30,9 +30,8 @@ A step whose file the bundle does not hold is shown as skipped, naming the file,
 reason where it gives one.
 
 A 3.0 bundle imports from the vault, from a zip on disk, and again over an earlier import, by the same rules
-as a 2.x bundle; a 3.0 import over a 2.x import of the same order is the same site, not a new one. The
-project's shared coordinates are not turned by the grid rotation the manifest states: every file is drawn
-on the order's grid already, as a 2.x bundle's was. A layer file whose catalog entry names its tables is read
+as a 2.x bundle. The project's shared coordinates are turned by the grid rotation the manifest's local frame
+states, verbatim. A layer file whose catalog entry names its tables is read
 at the table of the step's geometry (the water bodies from `Water_polygon`), and the manifest's credits are
 the import's attribution.
 

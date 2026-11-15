@@ -187,12 +187,9 @@ internal static class RevitThreeView
             {
                 CrsProjected = georeferenced.HorizontalCrs.Code ?? string.Empty,
                 VerticalDatum = groundDatum ?? string.Empty,
-                // Zero, not the stated convergence: every georeferenced file is on the grid already and
-                // is placed by subtracting the survey point, never turned, which is why a 2.x manifest
-                // stated zero by construction. Turning the shared coordinates by the convergence
-                // would put the model's north off the grid the files are drawn on, and would make a
-                // 3.0 import of an order a different anchor from its 2.x import (AdjacentBundle).
-                GridRotationDeg = 0.0,
+                // The local frame's stated grid rotation, applied verbatim: the plugin never chooses a
+                // placement value. spec/format.md §13 R05 maps the 2.x angle to this field.
+                GridRotationDeg = local.GridRotationDegrees,
                 Origin = origin,
                 Declared = true,
             },

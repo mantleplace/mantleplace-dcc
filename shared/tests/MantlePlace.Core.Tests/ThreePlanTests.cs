@@ -117,7 +117,7 @@ internal static class ThreePlanTests
             run.Within(origin?.Northing ?? 0, 214000.25, 1e-9, "and its y, verbatim");
             run.Equal(origin?.LinearUnit ?? LinearUnit.Unspecified, LinearUnit.UsSurveyFoot, "in the unit the origin states");
             run.Equal(origin?.Epsg ?? 0, 2263, "on the georeferenced frame's CRS");
-            run.Within(point?.SurveyPoint?.AngleRadians ?? double.NaN, 0.0, 0.0, "not turned by the stated grid rotation: every file is on the grid already, as a 2.x import's");
+            run.Within(point?.SurveyPoint?.AngleRadians ?? 0, -1.2 * Math.PI / 180.0, 1e-12, "turned by the stated grid rotation");
 
             ImportStep? location = Step(plan, ImportStepKind.SetSiteLocation);
             run.Within(location?.SiteLocation?.LatitudeDeg ?? 0, 40.755, 1e-12, "the site location's latitude is the origin's");
@@ -170,20 +170,25 @@ internal static class ThreePlanTests
             run.Equal(points?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.NotInFormat, "the points file is skipped: 3.0 has none");
         });
 
-        run.Case("a 3.0 bundle imported over its order's 2.x import is the same anchor, not a refused rotation", () =>
+        run.Case("a 3.0 bundle imported again over its own earlier import follows the re-import rule", () =>
         {
-            // A 2.x import set the project's angle to the 2.x block's grid rotation, zero by construction:
-            // its files were cut on the order's grid. The 3.0 files are on that grid too, and the frames'
-            // grid rotation is the convergence at the site origin, so turning the project by it would
-            // put every placed file off the survey grid, and refuse the order's own re-import.
-            BundleImportPlan plan = Plan(Read(Load(FullBundle)));
-            SurveyPointPlacement placement = Step(plan, ImportStepKind.SetSharedCoordinates)!.SurveyPoint!;
-            ProjectAnchor fromTwo = new(placement.Origin.Epsg, placement.Origin.Easting!.Value, placement.Origin.Northing!.Value, 0.0);
+            // The project's anchor is what the first import of the same 3.0 order wrote: its survey
+            // point and its stated angle. A second import of that bundle meets the rule any re-import
+            // meets: one point and one angle, which is the same anchor when the angle is zero.
+            static ProjectAnchor AnchorOf(SurveyPointPlacement placement) =>
+                new(placement.Origin.Epsg, placement.Origin.Easting!.Value, placement.Origin.Northing!.Value, placement.AngleRadians);
 
-            AnchorDecision decision = AdjacentBundle.Decide(fromTwo, placement);
+            SurveyPointPlacement level = Step(
+                Plan(Read(Load(FullBundle, manifest => manifest["frames"]!["local"]!["grid_rotation_deg"] = 0.0))),
+                ImportStepKind.SetSharedCoordinates)!.SurveyPoint!;
+            AnchorDecision again = AdjacentBundle.Decide(AnchorOf(level), level);
+            run.False(again.IsRefusal, $"a level grid re-imports at the same anchor: {again.Message}");
+            run.Equal(again.Kind, AnchorDecisionKind.Offset, "placed against the anchor it set");
+            run.False(again.MovesGeometry, "at no offset");
 
-            run.False(decision.IsRefusal, $"not refused: {decision.Message}");
-            run.True(Manifest(Load(FullBundle))["frames"]!["local"]!["grid_rotation_deg"]!.GetValue<double>() != 0.0, "the corpus bundle states a grid rotation that is not zero");
+            SurveyPointPlacement turned = Step(Plan(Read(Load(FullBundle))), ImportStepKind.SetSharedCoordinates)!.SurveyPoint!;
+            AnchorDecision turnedAgain = AdjacentBundle.Decide(AnchorOf(turned), turned);
+            run.Equal(turnedAgain.Refusal, AnchorRefusal.RotatedGrid, "a stated non-zero rotation is refused on re-import, as a 2.x one is");
         });
 
         run.Case("the terrain's uncropped notice reads as one sentence", () =>
