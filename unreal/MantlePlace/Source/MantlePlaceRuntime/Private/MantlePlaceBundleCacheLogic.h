@@ -129,6 +129,14 @@ struct FMantlePlaceBundleCacheLogic
 	/** Map (file present?, validity) to the list-row state. */
 	static EMantlePlaceCacheState DeriveCacheState(bool bFileExists, const FMantlePlaceCacheValidity& Validity);
 
+	/**
+	 * The slot's state for a download of WantedLevel. The per-order slot holds one download: an MPB 3.0
+	 * order's at the level its sidecar records, a 2.x order's at none. A valid slot holding another level
+	 * (or a level, for a 2.x download, and the reverse) is stale for this one, so the download is fetched
+	 * afresh and replaces it; the same level is served as it is. Exact spelling, as the request spells it.
+	 */
+	static EMantlePlaceCacheState StateAtLevel(EMantlePlaceCacheState State, const FString& RecordedLevel, const FString& WantedLevel);
+
 	// ── Presigned-URL expiry (ISO-8601) - mirrors the auth IsExpired shape ──
 
 	/** Parse an ISO-8601 timestamp (e.g. "2026-06-20T00:00:00.000Z") to a UTC FDateTime. */

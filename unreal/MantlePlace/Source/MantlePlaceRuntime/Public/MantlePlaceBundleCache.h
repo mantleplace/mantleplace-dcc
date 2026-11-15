@@ -58,7 +58,8 @@ public:
 	 * Download an owned bundle's presigned URL into the local cache (streamed, async, fail-closed).
 	 * Result via OnDownloadComplete; progress via OnDownloadProgress. The bundle is verified against
 	 * the item's advertised size/sha256 before it is promoted; a failed/torn download never presents
-	 * as a valid cache entry.
+	 * as a valid cache entry. An MPB 3.0 download (Presigned.Level set) is served from the slot only when
+	 * the slot holds that level, and otherwise replaces it; the URL may then be empty for a cache hit.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	void DownloadBundle(const FMantlePlaceVaultItem& Item, const FMantlePlacePresignedDownload& Presigned);
@@ -82,6 +83,12 @@ public:
 	/** True iff a valid cached bundle exists for this item (the offline re-import gate). */
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
 	bool IsCachedAndValid(const FMantlePlaceVaultItem& Item) const;
+
+	/**
+	 * True iff the slot holds a valid download of Item at Level: an MPB 3.0 order's chosen level, or empty
+	 * for a 2.x download. A slot holding another level is not this one (FMantlePlaceBundleCacheLogic::StateAtLevel).
+	 */
+	bool IsCachedAndValidAtLevel(const FMantlePlaceVaultItem& Item, const FString& Level) const;
 
 	/**
 	 * True iff this item's cached zip is the host's download VIEW rather than the whole archive (its
@@ -137,8 +144,12 @@ private:
 	/** sha256 of a file, or empty when missing/over the size cap (size-only path). */
 	FString ComputeFileSha256(const FString& Path, int64& OutSizeBytes) const;
 
-	/** Resolve cache state for an item (stat + sidecar, no event). Shared by Inspect/IsValid/Download. */
-	FMantlePlaceCachedBundle ResolveCached(const FMantlePlaceVaultItem& Item) const;
+	/**
+	 * Resolve cache state for an item (stat + sidecar, no event). Shared by Inspect/IsValid/Download. With
+	 * WantedLevel, the slot is valid only when it holds that level (empty: a 2.x download); without it,
+	 * whatever level the slot holds (the list row's badge).
+	 */
+	FMantlePlaceCachedBundle ResolveCached(const FMantlePlaceVaultItem& Item, const FString* WantedLevel = nullptr) const;
 
 	/** The in-flight request (single at a time; the HTTP module also retains it). */
 	TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> ActiveRequest;
@@ -154,4 +165,6 @@ private:
 	/** The active download is the host's view, and its length as the platform stated it (0 = unstated). */
 	bool bActiveIsView = false;
 	int64 ActiveViewSizeBytes = 0;
+	/** The 3.0 level the active download holds, recorded in the sidecar; empty for a 2.x download. */
+	FString ActiveLevel;
 };

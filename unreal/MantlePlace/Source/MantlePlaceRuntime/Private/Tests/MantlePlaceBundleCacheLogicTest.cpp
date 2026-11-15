@@ -473,4 +473,55 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceBundleCacheLevelTest,
+	"MantlePlace.BundleCache.Level",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceBundleCacheLevelTest::RunTest(const FString& Parameters)
+{
+	using FLogic = FMantlePlaceBundleCacheLogic;
+	using E = EMantlePlaceCacheState;
+
+	// The same level reuses the slot; a different one is a fresh download that replaces it.
+	TestEqual(TEXT("The same level reuses the cached download"),
+		CacheStateName(FLogic::StateAtLevel(E::CachedValid, TEXT("Med"), TEXT("Med"))), FString(TEXT("CachedValid")));
+	TestEqual(TEXT("A different level is downloaded afresh"),
+		CacheStateName(FLogic::StateAtLevel(E::CachedValid, TEXT("Med"), TEXT("Max"))), FString(TEXT("CachedStale")));
+	TestEqual(TEXT("A level is spelled exactly"),
+		CacheStateName(FLogic::StateAtLevel(E::CachedValid, TEXT("MED"), TEXT("Med"))), FString(TEXT("CachedStale")));
+
+	// A 2.x download records no level and wants none: as it was.
+	TestEqual(TEXT("A 2.x slot serves a 2.x download"),
+		CacheStateName(FLogic::StateAtLevel(E::CachedValid, FString(), FString())), FString(TEXT("CachedValid")));
+	TestEqual(TEXT("A 2.x slot does not serve a 3.0 level"),
+		CacheStateName(FLogic::StateAtLevel(E::CachedValid, FString(), TEXT("Max"))), FString(TEXT("CachedStale")));
+	TestEqual(TEXT("A 3.0 slot does not serve a 2.x download"),
+		CacheStateName(FLogic::StateAtLevel(E::CachedValid, TEXT("Min"), FString())), FString(TEXT("CachedStale")));
+
+	// The level never rescues a slot that is not valid, nor invents one.
+	TestEqual(TEXT("Nothing cached stays nothing cached"),
+		CacheStateName(FLogic::StateAtLevel(E::NotCached, FString(), TEXT("Med"))), FString(TEXT("NotCached")));
+	TestEqual(TEXT("A stale slot stays stale at its own level"),
+		CacheStateName(FLogic::StateAtLevel(E::CachedStale, TEXT("Med"), TEXT("Med"))), FString(TEXT("CachedStale")));
+
+	// The sidecar records the level; a 2.x sidecar is unchanged and reads as no level.
+	FMantlePlaceCachedBundle Meta;
+	Meta.OrderId = TEXT("order-3");
+	Meta.bHoldsView = true;
+	Meta.Level = TEXT("Med");
+	FMantlePlaceCachedBundle Back;
+	FString Error;
+	TestTrue(TEXT("A 3.0 sidecar round-trips"), FLogic::ParseMeta(FLogic::SerializeMeta(Meta), Back, Error));
+	TestEqual(TEXT("The sidecar keeps the level"), Back.Level, FString(TEXT("Med")));
+
+	FMantlePlaceCachedBundle TwoX;
+	TwoX.OrderId = TEXT("order-2");
+	TestFalse(TEXT("A 2.x sidecar writes no level"), FLogic::SerializeMeta(TwoX).Contains(TEXT("\"level\"")));
+	FMantlePlaceCachedBundle OldBack;
+	TestTrue(TEXT("A sidecar from before 3.0 parses"), FLogic::ParseMeta(TEXT("{\"orderId\":\"order-2\",\"sha256\":\"ab\"}"), OldBack, Error));
+	TestTrue(TEXT("And holds no level"), OldBack.Level.IsEmpty());
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -204,12 +204,24 @@ void UMantlePlaceVaultClient::GetPresignedViewUrl(const FString& OrderId)
 	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ true);
 }
 
-void UMantlePlaceVaultClient::MintDownload(const FString& OrderId, const FString& Format, bool bView)
+void UMantlePlaceVaultClient::GetPresignedLevelUrl(const FString& OrderId, const FString& Level, const TArray<FString>& Files)
+{
+	if (!FMantlePlaceVaultLogic::IsOfferedLevel(Level))
+	{
+		NotifyPresigned(false, FMantlePlacePresignedDownload(),
+			FString::Printf(TEXT("'%s' is not a level a download offers. Expected Max, Med or Min."), *Level));
+		return;
+	}
+	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ false, Level, Files);
+}
+
+void UMantlePlaceVaultClient::MintDownload(
+	const FString& OrderId, const FString& Format, bool bView, const FString& Level, const TArray<FString>& Files)
 {
 	TWeakObjectPtr<UMantlePlaceVaultClient> WeakSelf(this);
-	TFunction<void()> Replay = [WeakSelf, OrderId, Format, bView]()
+	TFunction<void()> Replay = [WeakSelf, OrderId, Format, bView, Level, Files]()
 	{
-		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->MintDownload(OrderId, Format, bView); }
+		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->MintDownload(OrderId, Format, bView, Level, Files); }
 	};
 
 	const FMantlePlacePresignedDownload Empty;
@@ -248,10 +260,18 @@ void UMantlePlaceVaultClient::MintDownload(const FString& OrderId, const FString
 	CancelActiveRequest();
 
 	const FString Url = FMantlePlaceVaultLogic::BuildDownloadUrl(VaultApiBaseUrl, OrderId);
-	// A view request names the host and asks the platform to cut the zip; the host never assembles one.
-	const FString Body = bView
-		? FMantlePlaceVaultLogic::BuildViewDownloadBody()
-		: FMantlePlaceVaultLogic::BuildDownloadBody(Format);
+	// A 3.0 request names one level and the files this host reads. A 2.x view request names the host and
+	// asks the platform to cut the zip; the host never assembles one.
+	FString Body;
+	if (!Level.IsEmpty())
+	{
+		Body = FMantlePlaceVaultLogic::BuildLevelDownloadBody(Level, Files);
+	}
+	else
+	{
+		Body = bView ? FMantlePlaceVaultLogic::BuildViewDownloadBody() : FMantlePlaceVaultLogic::BuildDownloadBody(Format);
+	}
+	PendingDownloadLevel = Level;
 
 	ActiveRequest = FMantlePlaceClientHttp::CreateRequest(TEXT("POST"), Url);
 	ActiveRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
@@ -434,7 +454,10 @@ void UMantlePlaceVaultClient::HandleDownloadResponse(
 
 	FMantlePlacePresignedDownload Download;
 	FString ParseError;
-	if (!FMantlePlaceVaultLogic::ParseDownloadResponse(Content, Download, ParseError))
+	const bool bParsed = PendingDownloadLevel.IsEmpty()
+		? FMantlePlaceVaultLogic::ParseDownloadResponse(Content, Download, ParseError)
+		: FMantlePlaceVaultLogic::ParseLevelDownloadResponse(Content, PendingDownloadLevel, Download, ParseError);
+	if (!bParsed)
 	{
 		NotifyPresigned(false, Empty, ParseError);
 		return;

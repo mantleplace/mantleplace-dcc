@@ -179,6 +179,16 @@ EMantlePlaceCacheState FMantlePlaceBundleCacheLogic::DeriveCacheState(
 	return Validity.bValid ? EMantlePlaceCacheState::CachedValid : EMantlePlaceCacheState::CachedStale;
 }
 
+EMantlePlaceCacheState FMantlePlaceBundleCacheLogic::StateAtLevel(
+	EMantlePlaceCacheState State, const FString& RecordedLevel, const FString& WantedLevel)
+{
+	if (State == EMantlePlaceCacheState::CachedValid && !RecordedLevel.Equals(WantedLevel, ESearchCase::CaseSensitive))
+	{
+		return EMantlePlaceCacheState::CachedStale;
+	}
+	return State;
+}
+
 bool FMantlePlaceBundleCacheLogic::ParseExpiry(const FString& Iso8601, FDateTime& OutUtc)
 {
 	if (Iso8601.IsEmpty())
@@ -394,6 +404,11 @@ FString FMantlePlaceBundleCacheLogic::SerializeMeta(const FMantlePlaceCachedBund
 	Root->SetStringField(TEXT("format"), Meta.Format);
 	Root->SetBoolField(TEXT("holdsView"), Meta.bHoldsView);
 	Root->SetStringField(TEXT("listingSha256"), Meta.ListingSha256);
+	if (!Meta.Level.IsEmpty())
+	{
+		// Written only for a 3.0 download, so a 2.x sidecar is byte for byte what it was.
+		Root->SetStringField(TEXT("level"), Meta.Level);
+	}
 	return BundleCacheSerializeCondensed(Root);
 }
 
@@ -442,6 +457,7 @@ bool FMantlePlaceBundleCacheLogic::ParseMeta(const FString& Json, FMantlePlaceCa
 	Root->TryGetStringField(TEXT("format"), Parsed.Format);
 	Root->TryGetBoolField(TEXT("holdsView"), Parsed.bHoldsView); // absent in a sidecar older than views: false
 	Root->TryGetStringField(TEXT("listingSha256"), Parsed.ListingSha256);
+	Root->TryGetStringField(TEXT("level"), Parsed.Level); // absent for a 2.x download and before 3.0: none
 
 	Out = MoveTemp(Parsed);
 	return true;

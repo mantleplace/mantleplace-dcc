@@ -10,6 +10,8 @@
 #include "MantlePlaceImporterLibrary.h"
 #include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest (local-zip inspection)
 #include "MantlePlaceImportStepsLogic.h"
+#include "MantlePlaceLevelChoiceLogic.h"
+#include "MantlePlaceManifestThreeLogic.h" // the files a 3.0 download names
 #include "MantlePlaceSha256.h"         // whole-bundle sha256 for the no-orderId local match
 
 #include "HAL/PlatformFileManager.h"
@@ -178,6 +180,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartVaultImport(const FMantlePlaceVau
 	bViewDeliveryKnown = false;
 	ViewDelivered.Reset();
 	ViewManifestSha256.Reset();
+	LevelChoice.Reset();
 	bMaterializeRunObserved = false;
 	MaterializeRepicks = 0;
 	LastOutstanding.Reset();
@@ -197,6 +200,13 @@ void UMantlePlaceVaultImportOrchestrator::BeginItemImport()
 		const FName DownloadStep(TEXT("download"));
 		Steps->Add(DownloadStep, TEXT("Download"));
 		Steps->Begin(DownloadStep, FPlatformTime::Seconds());
+	}
+	// A 3.0 order is downloaded at the one level the curator chooses, as it was published: there is no
+	// Unreal format to generate and no view to ask for. A 2.x order takes the path below, unchanged.
+	if (!bLocalImport && ActiveItem.bHasLevels)
+	{
+		BeginLevelChoice();
+		return;
 	}
 	// Shared tail for both the vault-row path and the resolved local-zip path: an incomplete bundle
 	// (no glb terrain mesh, incl. the empty-formats base_on_demand marker) materializes first; a bundle
@@ -397,6 +407,70 @@ void UMantlePlaceVaultImportOrchestrator::BeginPresign()
 	// falls through to download.zip when it does not -- so this was correct by luck of the data.
 	// The cache verifies against the listing's sha256, which is the archive's digest.
 	VaultClient->GetPresignedBundleUrl(ActiveItem.OrderId); // -> HandlePresignedNative
+}
+
+void UMantlePlaceVaultImportOrchestrator::BeginLevelChoice()
+{
+	Phase = EPhase::ChoosingLevel;
+	// Nothing to generate and nothing to recover: a 3.0 download is the order as published.
+	bAttemptedMaterializeRecovery = true;
+	LevelChoice = FMantlePlaceLevelChoice::For(ActiveItem);
+	if (!LevelChoice.IsValid())
+	{
+		FailImport(TEXT("This order's levels could not be read, so no level can be downloaded."));
+		return;
+	}
+	const TSharedRef<FMantlePlaceLevelChoice> Choice = LevelChoice.ToSharedRef();
+	TWeakObjectPtr<UMantlePlaceVaultImportOrchestrator> WeakThis(this);
+	Choice->OnConfirmed = [WeakThis, WeakChoice = TWeakPtr<FMantlePlaceLevelChoice>(Choice)](const FString& Level)
+	{
+		// On the next tick, not inside the Download click: a kept level imports at once, and the import
+		// moves the window that holds the button into its modal host.
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis, WeakChoice, Level](float)
+		{
+			UMantlePlaceVaultImportOrchestrator* Self = WeakThis.Get();
+			// A Download pressed on a control this run no longer waits on (cancelled, finished) does nothing.
+			if (Self != nullptr && Self->Phase == EPhase::ChoosingLevel && Self->LevelChoice.IsValid()
+				&& Self->LevelChoice == WeakChoice.Pin())
+			{
+				Self->DownloadLevel(Level);
+			}
+			return false; // once
+		}));
+	};
+
+	EmitPhase(TEXT("Choosing"), FString::Printf(TEXT("Choose a %s, then %s."),
+		*FMantlePlaceLevelChoice::Heading().ToLower(), *FMantlePlaceLevelChoice::DownloadWord()), -1.0f);
+	if (OnOfferLevelChoiceNative.IsBound() && OnOfferLevelChoiceNative.Execute(Choice))
+	{
+		return; // the window confirms it
+	}
+
+	// Nobody to choose (an unattended run, a script, a window that could not open): the recommendation.
+	if (!Choice->Confirm())
+	{
+		FailImport(TEXT("This order states no recommended level, and there is no window to choose one in. "
+			"Import it from the Mantle Place panel and choose a level."));
+	}
+}
+
+void UMantlePlaceVaultImportOrchestrator::DownloadLevel(const FString& Level)
+{
+	if (BundleCache->IsCachedAndValidAtLevel(ActiveItem, Level))
+	{
+		// The slot already holds this level: it is imported again with no download (the cache serves it).
+		FMantlePlacePresignedDownload Kept;
+		Kept.Level = Level;
+		Kept.bIsView = true;
+		Phase = EPhase::Downloading;
+		EmitPhase(TEXT("Downloading"), FString::Printf(TEXT("The %s level is already downloaded."), *Level), -1.0f);
+		BundleCache->DownloadBundle(ActiveItem, Kept); // cache hit -> HandleDownloadCompleteNative
+		return;
+	}
+	// Another level, or none kept: a fresh download, which replaces the slot when it completes.
+	Phase = EPhase::Presigning;
+	EmitPhase(TEXT("Downloading"), FString::Printf(TEXT("Requesting the %s level..."), *Level), -1.0f);
+	VaultClient->GetPresignedLevelUrl(ActiveItem.OrderId, Level, FMantlePlaceManifestThreeLogic::RequestedFiles()); // -> HandlePresignedNative
 }
 
 float UMantlePlaceVaultImportOrchestrator::ResolvePollIntervalSeconds() const
@@ -781,9 +855,17 @@ void UMantlePlaceVaultImportOrchestrator::HandlePresignedNative(bool bSuccess, c
 		}
 	}
 
+	if (!Download.Level.IsEmpty())
+	{
+		// A level download is held like a view: against its own length and its manifest's digest, since
+		// the listing's size and digest describe the Max download.
+		ViewManifestSha256 = Download.ManifestSha256;
+	}
+
 	Phase = EPhase::Downloading;
 	EmitPhase(TEXT("Downloading"),
-		Download.bIsView ? TEXT("Downloading Unreal's files...") : TEXT("Downloading the bundle..."), 0.0f);
+		!Download.Level.IsEmpty() ? FString::Printf(TEXT("Downloading the %s level..."), *Download.Level)
+		: Download.bIsView ? FString(TEXT("Downloading Unreal's files...")) : FString(TEXT("Downloading the bundle...")), 0.0f);
 	BundleCache->DownloadBundle(ActiveItem, Download); // streamed to the local cache; result -> HandleDownloadCompleteNative
 }
 
@@ -871,6 +953,7 @@ void UMantlePlaceVaultImportOrchestrator::FinishImport(bool bSuccess, const FMan
 {
 	UnschedulePoll();
 	Phase = EPhase::Idle;
+	LevelChoice.Reset();
 	if (Steps.IsValid())
 	{
 		// A step still in flight here is the fetch, ended by a failure or a cancel; the import's own
