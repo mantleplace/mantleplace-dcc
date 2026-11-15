@@ -261,16 +261,16 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		const FString NotHeld = TEXT(R"JSON([{"path": "Records/Zoning.dxf", "reason": "The AOI has no zoning record."},
  {"path": "Records/Zoning.gpkg", "reason": "The AOI has no zoning record."},
  {"path": "Records/Habitat.gpkg", "reason": "Pending: the source did not answer in time."}])JSON");
-		const FString Metric = TEXT(R"JSON("horizontal_crs": {"code": "EPSG:32614"}, "horizontal_unit": {"name": "metre", "to_metres": 1})JSON");
 		const TArray<FString> Held = { TEXT("Records/Parcels.dxf"), TEXT("Records/Parcels.gpkg"), TEXT("Records/Floodplain.gpkg"),
 			TEXT("Records/Newfamily.dxf") };
 		const FString Imperial = Manifest(TEXT("{\"name\": \"metre\", \"to_metres\": 1}"),
 			TEXT("\"width\": 1009, \"height\": 505, \"bands\": [\"height\"], \"data_type\": \"UInt16\", \"scale\": 0.01, \"offset\": 0,"
 				" \"frame\": \"local\", \"rectangle\": [-1008, -500, 1008, 516], \"cell_size\": [2, 2]"),
 			NotHeld).Replace(TEXT("\"Elevation/Slope.tif\""), *RecordEntries);
-		const FString MetricText = Imperial.Replace(
-			TEXT(R"JSON("horizontal_crs": {"code": "EPSG:2277"}, "horizontal_unit": {"name": "US survey foot", "to_metres": 0.3048006096})JSON"),
-			*Metric);
+		const FString MetricText = Imperial
+			.Replace(TEXT(R"JSON("horizontal_crs": {"code": "EPSG:2277"})JSON"), TEXT(R"JSON("horizontal_crs": {"code": "EPSG:32614"})JSON"))
+			.Replace(TEXT(R"JSON("horizontal_unit": {"name": "US survey foot", "to_metres": 0.3048006096})JSON"),
+				TEXT(R"JSON("horizontal_unit": {"name": "metre", "to_metres": 1})JSON"));
 		TestNotEqual(TEXT("the metric variant differs"), MetricText, Imperial);
 
 		const FMantlePlaceBundleRead Read = ReadOf(MetricText, TEXT("Bundle/"), Held);
