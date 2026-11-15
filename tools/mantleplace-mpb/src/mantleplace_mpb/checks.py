@@ -242,11 +242,13 @@ def check_frames(manifest: dict, report: Report) -> None:
                            pointer=f"{where}/axis_mapping", file=path)
 
 
-def check_roles(manifest: dict, bundle: Bundle, report: Report, fold_case: bool = False) -> None:
+def check_roles(manifest: dict, bundle: Bundle, report: Report, fold_case: bool = False,
+                unstated: bool = True) -> None:
     """Every file's ODbL role, against its format and its sources.
 
     A missing role reads as `database`, the stricter duty, so it is reported rather than
-    refused while the field is optional.
+    refused while the field is optional. With `unstated` false (a 3.x bundle, whose catalog check
+    already fails a file with no entry), a file with no entry is not reported here a second time.
     """
     report.ran.append("roles")
     raw = manifest.get("file_entries")
@@ -283,6 +285,9 @@ def check_roles(manifest: dict, bundle: Bundle, report: Report, fold_case: bool 
                 report.add("roles", "role.sources-mismatch", "error",
                            f"{path} states odbl_role none, but lists an ODbL source "
                            f"({', '.join(odbl)})", pointer=f"{where}/odbl_role", file=path)
+    if not unstated:
+        return
+
     def fold(value: str) -> str:
         return value.casefold() if fold_case else value
 

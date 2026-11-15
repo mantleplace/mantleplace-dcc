@@ -2525,6 +2525,159 @@
       "reason": "A validator ignores the __MACOSX and .DS_Store entries archive tools add on their own (format.md §10.2). Read as entries, each would break a 2.0 rule; ignored, none is reported. 2.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`)."
     },
     {
+      "id": "bundle.v3Full",
+      "group": "bundle",
+      "file": "bundle/v3-full.json",
+      "expect": "accept",
+      "reason": "The Max download of a 3.0 bundle, whole: the sixty-nine files of the file table (format.md §6) in the seven subject folders, Readme.md and Manifest.json alone at the root, one level, and a catalog with one entry per file, each with its sha256. The 3.x schema is not published yet, so the manifest is held to the format text's rules alone, which the validator reports at info (`schema.pending`).",
+      "expectations": {
+        "hashesVerified": 68
+      }
+    },
+    {
+      "id": "bundle.v3MedWithoutRecords",
+      "group": "bundle",
+      "file": "bundle/v3-med-without-records.json",
+      "expect": "accept",
+      "reason": "A Med download of an AOI with no records: a Records pair is held only where the AOI has that record (format.md §1), so a tree without one conforms, and Med is one level stated once (§8).",
+      "expectations": {
+        "hashesVerified": 5
+      }
+    },
+    {
+      "id": "bundle.v3FileUnknown",
+      "group": "bundle",
+      "file": "bundle/v3-file-unknown.json",
+      "expect": "reject",
+      "reason": "A 3.0 bundle holds no file the 3.0 file table does not list (conformance.md §7). `Records/Easements.gpkg` has a good name and is still not in the tree of the version the bundle declares.",
+      "expectations": {
+        "errors": [
+          "tree.file-unknown"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3MinorFileUnknown",
+      "group": "bundle",
+      "file": "bundle/v3-minor-file-unknown.json",
+      "expect": "accept",
+      "reason": "A 3.x minor may add a file (format.md §3), and a reader of 3.0 still reads that bundle, finding the file by its catalog entry. A bundle that declares 3.1.0 and holds a file the 3.0 table does not list is a warning to a validator that knows only the 3.0 table, never a refusal.",
+      "expectations": {
+        "warnings": [
+          "tree.file-unknown"
+        ],
+        "hashesVerified": 6
+      }
+    },
+    {
+      "id": "bundle.v3Subfolder",
+      "group": "bundle",
+      "file": "bundle/v3-subfolder.json",
+      "expect": "reject",
+      "reason": "Seven subject folders, no subfolders (format.md §1): `Elevation/Tiles/Terrain.glb` sits one folder too deep.",
+      "expectations": {
+        "errors": [
+          "tree.subfolder"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3NameHyphen",
+      "group": "bundle",
+      "file": "bundle/v3-name-hyphen.json",
+      "expect": "reject",
+      "reason": "Naming rule 1 (format.md §2): a name carries no hyphen. `Basemap/Bus-Stops.gpkg` has one.",
+      "expectations": {
+        "errors": [
+          "name.hyphen"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3NameNumber",
+      "group": "bundle",
+      "file": "bundle/v3-name-number.json",
+      "expect": "reject",
+      "reason": "Naming rule 1 (format.md §2): a name carries no number. `Records/Zoning2.gpkg` has one.",
+      "expectations": {
+        "errors": [
+          "name.number"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3NameSuffix",
+      "group": "bundle",
+      "file": "bundle/v3-name-suffix.json",
+      "expect": "reject",
+      "reason": "Naming rules 1 and 4 (format.md §2): no suffix, and no name carries a level. `Elevation/TerrainMed.glb` appends the level to a word of the tree; a level belongs to the download, never to the file name (§8).",
+      "expectations": {
+        "errors": [
+          "name.suffix"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3FileRemoved",
+      "group": "bundle",
+      "file": "bundle/v3-file-removed.json",
+      "expect": "reject",
+      "reason": "A 2.x file 3.0 removed (format.md §12): `Imagery/NDVI.tif` is derived in one step from `Imagery/Imagery.tif`, so it is no longer in the tree.",
+      "expectations": {
+        "errors": [
+          "tree.file-removed"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3LevelSeveral",
+      "group": "bundle",
+      "file": "bundle/v3-level-several.json",
+      "expect": "reject",
+      "reason": "A download holds exactly one level of each file (format.md §8), and the manifest states it once (§9.3). A manifest that states two levels describes two downloads in one.",
+      "expectations": {
+        "errors": [
+          "level.several"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3LevelMissing",
+      "group": "bundle",
+      "file": "bundle/v3-level-missing.json",
+      "expect": "reject",
+      "reason": "The bundle statement states the level of this download (format.md §9.3). A manifest that states none leaves a reader unable to say which level it holds.",
+      "expectations": {
+        "errors": [
+          "level.missing"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3CatalogFileMissing",
+      "group": "bundle",
+      "file": "bundle/v3-catalog-file-missing.json",
+      "expect": "reject",
+      "reason": "One catalog entry per file the download holds (format.md §9.5). An entry for `Imagery/Imagery.png` with no such file in the zip lists a file the download does not hold; a file not held is listed as not held, with its reason (§9.6).",
+      "expectations": {
+        "errors": [
+          "catalog.file-missing"
+        ]
+      }
+    },
+    {
+      "id": "bundle.v3CatalogEntryMissing",
+      "group": "bundle",
+      "file": "bundle/v3-catalog-entry-missing.json",
+      "expect": "reject",
+      "reason": "One catalog entry per file the download holds (format.md §9.5). `Basemap/Roads.dxf` is in the zip with no entry, so no reader finds it by its name in the catalog, and it carries no sha256 to verify.",
+      "expectations": {
+        "errors": [
+          "catalog.entry-missing"
+        ]
+      }
+    },
+    {
       "id": "platform.quote.public",
       "group": "platform",
       "file": "platform/quote-public.json",

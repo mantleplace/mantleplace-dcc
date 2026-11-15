@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Iterator
 
-from .archive import MANIFEST_PATH, open_bundle
+from .archive import open_bundle
 from .report import Report
 
 Vector = tuple[float, float, float]
@@ -529,11 +529,11 @@ def read_bundle(path: str | Path) -> BundleReader:
         reasons = "; ".join(f.message for f in report.findings if f.severity == "error")
         raise BundleError(reasons or f"{path} is not a bundle")
     try:
-        manifest = json.loads(bundle.read(MANIFEST_PATH).decode("utf-8"))
+        manifest = json.loads(bundle.read(bundle.manifest_path).decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as exc:
         bundle.close()
-        raise BundleError(f"{MANIFEST_PATH} is not UTF-8 JSON: {exc}") from None
+        raise BundleError(f"{bundle.manifest_path} is not UTF-8 JSON: {exc}") from None
     if not isinstance(manifest, dict):
         bundle.close()
-        raise BundleError(f"{MANIFEST_PATH} is JSON but not an object")
+        raise BundleError(f"{bundle.manifest_path} is JSON but not an object")
     return BundleReader(bundle, manifest)

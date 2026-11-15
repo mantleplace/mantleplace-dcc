@@ -78,6 +78,7 @@ class SchemaSource:
         self._ledger_read = False
         self._schemas: dict[str, dict] = {}
         self._staged_keys: set[str] = set()
+        self._served: dict[str, bool] = {}
 
     def allowing_staged(self) -> "SchemaSource":
         """The same series, admitting a staged version."""
@@ -138,6 +139,21 @@ class SchemaSource:
                                 True) from exc
         self._schemas[key] = schema
         return schema
+
+    def served(self, key: str) -> bool:
+        """Whether the series serves a schema for `key` at all, staged or frozen.
+
+        Raises `SchemaProblem` (could not check) when the answer is neither yes nor no.
+        """
+        if key not in self._served:
+            try:
+                self._served[key] = self._get(f"{key}.json", optional=True,
+                                              missing_is_unpublished=True) is not None
+            except SchemaProblem as problem:
+                if problem.cannot_check:
+                    raise
+                self._served[key] = False
+        return self._served[key]
 
     @staticmethod
     def _above_ledger(key: str, ledger: dict[str, str]) -> bool:
