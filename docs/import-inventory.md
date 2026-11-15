@@ -307,6 +307,10 @@ these. It places no landscape and imports no asset.
 | T04 | Unreal | `imagery_drape.source`, `.sha256`, `.extent` | all | The one drape the stream serves, extracted when present and valid | partly: as U06 and U07 |
 | T05 | Unreal | `georeference.origin.lon`, `.lat`, `.ground_orthometric_h_m` | all | The Cesium georeference's origin longitude and latitude, set from the bundle at each stream; a manifest the helper cannot read leaves the level's origin untouched. The height is returned and not used | yes: `location.site_origin.longitude`, `.latitude`, `.datum_height_m` |
 
+An MPB 3.0 bundle streams from its terrain tiles Extra, not from the bundle: the platform lists the Extra, the
+plugin fetches it the first time the curator streams, keeps it beside the bundle's zip and serves it as the
+bundled tiles are served. The site origin is the manifest's own longitude and latitude, applied as stated.
+
 ### Read outside the host block, because a download view depends on it
 
 A host download view holds only the files in that host's block. When the order delivered a file the

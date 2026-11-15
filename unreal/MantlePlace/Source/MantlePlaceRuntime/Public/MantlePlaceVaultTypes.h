@@ -228,6 +228,35 @@ struct FMantlePlaceLevelSize
 };
 
 /**
+ * One Extra of an MPB 3.0 order, as its vault listing row lists it (`mpb3.extras`): a free download beside the
+ * bundle, outside the standard (spec/format.md 9.9). Id is the platform's own token (`SiteBrief`, `PlanSheets`,
+ * `TerrainTiles`); the plugin asks for the one it uses by that token and shows the platform's name verbatim.
+ */
+USTRUCT(BlueprintType)
+struct FMantlePlaceVaultExtra
+{
+	GENERATED_BODY()
+
+	/** The Extra's id as the platform spells it ("id"). */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString Id;
+
+	/** The name a curator sees ("name"). */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString Name;
+
+	/** The size of the Extra's download, as a zip ("sizeBytes"); 0 when the row stated none. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	int64 SizeBytes = 0;
+};
+
+/** The id the platform gives the terrain tiles Extra (`mpb3.extras[].id`), spelled exactly. */
+inline const TCHAR* MantlePlaceTerrainTilesExtraId()
+{
+	return TEXT("TerrainTiles");
+}
+
+/**
  * One owned bundle in the curator's vault, as returned by GET /api/v1/vault/bundles.
  *
  * The four sidecar fields (Layers / ManifestVersion / SizeBytes / Sha256) are "null =
@@ -327,6 +356,20 @@ struct FMantlePlaceVaultItem
 	/** Max, Med and Min, in that order, each with its size and counts. Meaningful only when bHasLevels. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	TArray<FMantlePlaceLevelSize> Levels;
+
+	/**
+	 * The Extras the platform lists for this order (`mpb3.extras`). Empty on a 2.x row, and on a 3.0 row that
+	 * lists none: an Extra the list lacks is one the order does not have, and nothing is requested for it.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	TArray<FMantlePlaceVaultExtra> Extras;
+
+	/** The listed Extra with this id, spelled exactly, or null when the platform lists none. */
+	const FMantlePlaceVaultExtra* FindExtra(const FString& ExtraId) const
+	{
+		return Extras.FindByPredicate(
+			[&ExtraId](const FMantlePlaceVaultExtra& Extra) { return Extra.Id.Equals(ExtraId, ESearchCase::CaseSensitive); });
+	}
 };
 
 /**

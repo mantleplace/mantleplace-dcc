@@ -288,6 +288,12 @@ struct FMantlePlaceVaultLogic
 	static void ReadLevelOffer(const TSharedPtr<FJsonObject>& Row, FMantlePlaceVaultItem& Item, FString& OutWarning);
 
 	/**
+	 * JSON request body for one Extra's download (POST .../download): the whole-bundle format and the Extra's
+	 * id, never a level or a file list. Condensed: {"format":"bundle","mpb3":{"version":"3.0","extra":"TerrainTiles"}}.
+	 */
+	static FString BuildExtraDownloadBody(const FString& ExtraId);
+
+	/**
 	 * JSON request body for a 3.0 download (POST .../download): the whole-bundle format, one level and the
 	 * promised files this host reads, by path from the bundle root. Never a view: a 3.0 bundle has no file
 	 * list per host, so the plugin names its own. Condensed:

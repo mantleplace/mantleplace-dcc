@@ -159,4 +159,70 @@ bool FMantlePlaceVaultLevelRequestTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceVaultExtrasTest,
+	"MantlePlace.Vault.Levels.Extras",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceVaultExtrasTest::RunTest(const FString& Parameters)
+{
+	// The platform's Extras are read as the row lists them, verbatim, and asked for by their id.
+	{
+		const FString Extras = TEXT(",\"extras\":["
+			"{\"id\":\"SiteBrief\",\"name\":\"Site Brief\",\"sizeBytes\":1468006},"
+			"{\"id\":\"TerrainTiles\",\"name\":\"Terrain tiles\",\"sizeBytes\":31457},"
+			"{\"name\":\"no id, skipped\"}]");
+		TArray<FMantlePlaceVaultItem> Items;
+		TArray<FString> Warnings;
+		FString Error;
+		TestTrue(TEXT("A row with Extras parses"), FLogic::ParseListResponse(
+			ListWithRow(FString(TEXT("{\"version\":\"3.0\",\"recommendedLevel\":\"Med\",")) + LevelsJson + Extras + TEXT("}")),
+			Items, Error, &Warnings));
+		if (!TestEqual(TEXT("One row"), Items.Num(), 1))
+		{
+			return false;
+		}
+		TestEqual(TEXT("An entry with no id is not an Extra; the other two are"), Items[0].Extras.Num(), 2);
+		const FMantlePlaceVaultExtra* Tiles = Items[0].FindExtra(MantlePlaceTerrainTilesExtraId());
+		if (TestNotNull(TEXT("The terrain tiles Extra is listed"), Tiles))
+		{
+			TestEqual(TEXT("Its name is the platform's"), Tiles->Name, FString(TEXT("Terrain tiles")));
+			TestEqual(TEXT("Its size is the platform's"), Tiles->SizeBytes, static_cast<int64>(31457));
+		}
+		TestNull(TEXT("An id is matched exactly"), Items[0].FindExtra(TEXT("terraintiles")));
+		TestTrue(TEXT("The levels are unharmed"), Items[0].bHasLevels && Items[0].Levels.Num() == 3);
+	}
+
+	// A row that lists no terrain tiles has none to ask for: nothing is requested.
+	{
+		TArray<FMantlePlaceVaultItem> Items;
+		FString Error;
+		FLogic::ParseListResponse(
+			ListWithRow(FString(TEXT("{\"version\":\"3.0\",\"recommendedLevel\":\"Med\",")) + LevelsJson
+				+ TEXT(",\"extras\":[{\"id\":\"SiteBrief\",\"name\":\"Site Brief\",\"sizeBytes\":1}]}")),
+			Items, Error);
+		if (TestEqual(TEXT("One row"), Items.Num(), 1))
+		{
+			TestNull(TEXT("No terrain tiles listed"), Items[0].FindExtra(MantlePlaceTerrainTilesExtraId()));
+		}
+	}
+
+	// A 2.x row lists no Extras at all.
+	{
+		TArray<FMantlePlaceVaultItem> Items;
+		FString Error;
+		FLogic::ParseListResponse(ListWithRow(FString()), Items, Error);
+		if (TestEqual(TEXT("One row"), Items.Num(), 1))
+		{
+			TestEqual(TEXT("A 2.x row has no Extras"), Items[0].Extras.Num(), 0);
+		}
+	}
+
+	// The request names the Extra and nothing else: no level, no files, no view.
+	TestEqual(TEXT("The Extra request, exact bytes"),
+		FLogic::BuildExtraDownloadBody(MantlePlaceTerrainTilesExtraId()),
+		FString(TEXT("{\"format\":\"bundle\",\"mpb3\":{\"version\":\"3.0\",\"extra\":\"TerrainTiles\"}}")));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
