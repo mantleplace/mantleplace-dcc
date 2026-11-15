@@ -170,6 +170,102 @@ internal static class ThreePlanTests
             run.Equal(points?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.NotInFormat, "the points file is skipped: 3.0 has none");
         });
 
+        run.Case("a 3.0 bundle imported again over its own earlier import follows the re-import rule", () =>
+        {
+            // The project's anchor is what the first import of the same 3.0 order wrote: its survey
+            // point and its stated angle. A second import of that bundle meets the rule any re-import
+            // meets: one point and one angle, which is the same anchor when the angle is zero.
+            static ProjectAnchor AnchorOf(SurveyPointPlacement placement) =>
+                new(placement.Origin.Epsg, placement.Origin.Easting!.Value, placement.Origin.Northing!.Value, placement.AngleRadians);
+
+            SurveyPointPlacement level = Step(
+                Plan(Read(Load(FullBundle, manifest => manifest["frames"]!["local"]!["grid_rotation_deg"] = 0.0))),
+                ImportStepKind.SetSharedCoordinates)!.SurveyPoint!;
+            AnchorDecision again = AdjacentBundle.Decide(AnchorOf(level), level);
+            run.False(again.IsRefusal, $"a level grid re-imports at the same anchor: {again.Message}");
+            run.Equal(again.Kind, AnchorDecisionKind.Offset, "placed against the anchor it set");
+            run.False(again.MovesGeometry, "at no offset");
+
+            SurveyPointPlacement turned = Step(Plan(Read(Load(FullBundle))), ImportStepKind.SetSharedCoordinates)!.SurveyPoint!;
+            AnchorDecision turnedAgain = AdjacentBundle.Decide(AnchorOf(turned), turned);
+            run.Equal(turnedAgain.Refusal, AnchorRefusal.RotatedGrid, "a stated non-zero rotation is refused on re-import, as a 2.x one is");
+        });
+
+        run.Case("the terrain's uncropped notice reads as one sentence", () =>
+        {
+            ImportStep? terrain = Step(Plan(Read(Load(FullBundle))), ImportStepKind.ToposurfaceFromSurfaceTin);
+            string notice = SurfaceCrop.NoWindowNotice(terrain?.CropUnavailable, "every vertex in the surface");
+
+            run.False(notice.Contains("..", StringComparison.Ordinal), $"no doubled full stop: {notice}");
+        });
+
+        run.Case("a layer file whose catalog entry names its tables is read at the table of the step's geometry", () =>
+        {
+            // The corpus entries name no tables; a platform export names them (R20), and its water file
+            // holds the waterways and the water bodies as two tables.
+            BundleImportPlan plan = Plan(Read(Load(FullBundle, manifest =>
+            {
+                manifest["catalog"]!["Basemap/Water.gpkg"]!["tables"] = new JsonArray("Water_line", "Water_polygon");
+                manifest["catalog"]!["Basemap/Roads.gpkg"]!["tables"] = new JsonArray("RoadSplines");
+            })));
+
+            ImportStep? water = Step(plan, ImportStepKind.Water);
+            run.Equal(water?.Table, "Water_polygon", "the water bodies are the polygon table");
+            run.False(water?.SoleTable ?? true, "read by that name, not as the file's one table");
+
+            ImportStep? roads = Step(plan, ImportStepKind.RoadCentrelines);
+            run.Equal(roads?.Table, "RoadSplines", "a file that names one table is read at it, whatever the file is called");
+            run.False(roads?.SoleTable ?? true, "by name");
+        });
+
+        run.Case("a 3.0 vertical CRS is stated in the datum words a 2.x import of the order recorded", () =>
+        {
+            BundleImportPlan egm = Plan(Read(Load(FullBundle)));
+            run.Equal(
+                Step(egm, ImportStepKind.ToposurfaceFromSurfaceTin)?.HeightDatum?.Stated,
+                HeightDatums.Egm2008,
+                "EPSG:3855 on EGM2008 is the EGM2008 height a 2.x manifest named");
+
+            BundleImportPlan navd = Plan(Read(Load(FullBundle, manifest =>
+            {
+                foreach (string frame in new[] { "georeferenced", "local" })
+                {
+                    manifest["frames"]![frame]!["vertical_crs"] = new JsonObject { ["code"] = "EPSG:5703" };
+                    manifest["frames"]![frame]!["geoid_model"] = "GEOID18";
+                }
+            })));
+            run.Equal(
+                Step(navd, ImportStepKind.ToposurfaceFromSurfaceTin)?.HeightDatum?.Stated,
+                HeightDatums.Navd88Geoid18,
+                "EPSG:5703 on GEOID18 is the NAVD88 (GEOID18) height a 2.x manifest named");
+            run.True(navd.Steps.Any(step => step.Kind == ImportStepKind.ContextBuildings), "and the site model's buildings are planned on it");
+
+            BundleImportPlan otherGeoid = Plan(Read(Load(FullBundle, manifest =>
+            {
+                manifest["frames"]!["georeferenced"]!["vertical_crs"] = new JsonObject { ["code"] = "EPSG:5703" };
+                manifest["frames"]!["georeferenced"]!["geoid_model"] = "GEOID12B";
+            })));
+            run.Equal(
+                Step(otherGeoid, ImportStepKind.ToposurfaceFromSurfaceTin)?.HeightDatum?.Stated,
+                "EPSG:5703",
+                "NAVD88 on another geoid is not the pair a 2.x manifest named, so it stays the code and fails closed");
+        });
+
+        run.Case("a 3.0 bundle's credits are its attribution", () =>
+        {
+            BundleManifest manifest = Read(Load(FullBundle, root =>
+            {
+                root["credits"] = new JsonArray(
+                    new JsonObject { ["text"] = "Elevation: a survey", ["link"] = "https://example.org/survey" },
+                    new JsonObject { ["text"] = "Imagery: an agency" });
+            }));
+
+            run.Equal(manifest.AttributionSources.Count, 2, "one source per credit");
+            run.Equal(manifest.AttributionSources[0].AttributionText, "Elevation: a survey", "its text, verbatim");
+            run.Equal(manifest.AttributionSources[0].LicenseUrl, "https://example.org/survey", "and its link");
+            run.Equal(manifest.AttributionSources[1].AttributionText, "Imagery: an agency", "a credit with no link still credits");
+        });
+
         run.Case("a 3.0 plan carries no per-category levels, whatever the choice names", () =>
         {
             Dictionary<ImportLayer, FidelityLevel> levels = new()

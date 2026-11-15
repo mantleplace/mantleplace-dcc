@@ -194,7 +194,7 @@ internal sealed class ActiveImport : IDisposable
                 log,
                 new ImportRefusal(
                     "Not a Mantle Place bundle.",
-                    "That zip has no Metadata/manifest.json, so it is not a Mantle Place bundle.",
+                    "That zip has no Manifest.json at its root and no Metadata/manifest.json, so it is not a Mantle Place bundle.",
                     true,
                     ExportReasons.NotABundle),
                 out refusal);
