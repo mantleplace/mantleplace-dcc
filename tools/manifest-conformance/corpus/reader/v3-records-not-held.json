@@ -60,26 +60,26 @@
       {"path": "Site/Site.usdz", "family": "host-ready", "frame": "site", "count": 320000}
     ],
     "skipped": [
-      {"path": "Records/Conservation.dxf", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Conservation.gpkg", "why": "not-held", "reason": "no-data"},
+      {"path": "Records/Conservation.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Conservation.gpkg", "why": "not-held", "reason": "no_data"},
       {"path": "Records/Contamination.dxf", "why": "not-held", "reason": "withheld"},
       {"path": "Records/Contamination.gpkg", "why": "not-held", "reason": "withheld"},
-      {"path": "Records/Floodplain.dxf", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Floodplain.gpkg", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Habitat.dxf", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Habitat.gpkg", "why": "not-held", "reason": "no-data"},
+      {"path": "Records/Floodplain.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Floodplain.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Habitat.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Habitat.gpkg", "why": "not-held", "reason": "no_data"},
       {"path": "Records/Heritage.dxf", "why": "not-held", "reason": "pending"},
       {"path": "Records/Heritage.gpkg", "why": "not-held", "reason": "pending"},
-      {"path": "Records/Hydrography.dxf", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Hydrography.gpkg", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Parcels.dxf", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Parcels.gpkg", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Soils.dxf", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Soils.gpkg", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Wetlands.dxf", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Wetlands.gpkg", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Zoning.dxf", "why": "not-held", "reason": "no-data"},
-      {"path": "Records/Zoning.gpkg", "why": "not-held", "reason": "no-data"}
+      {"path": "Records/Hydrography.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Hydrography.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Parcels.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Parcels.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Soils.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Soils.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Wetlands.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Wetlands.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Zoning.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Zoning.gpkg", "why": "not-held", "reason": "no_data"}
     ]
   }
 }

@@ -32,12 +32,15 @@ MANIFEST_PATH_3 = "Manifest.json"
 MANIFEST_PATH_2 = "Metadata/manifest.json"
 #: The newest major this corpus's readers read; a manifest of a later one is refused.
 NEWEST_MAJOR = 3
-#: The members the manifests of the fixtures state these in, until the 3.x schema is served
-#: (`mantleplace_mpb.layout3` names the first two; `not_held` and `count` follow them).
-CATALOG = "file_entries"
+#: The members a 3.x manifest states these in, as the served 3.0.0 schema names them: the catalog,
+#: an object from a path to its entry; the level; the files it does not hold, a list of
+#: `{"path", "reason"}`; and an entry's count, `{"kind", "value"}`, whose `value` a reader reports.
+CATALOG = "catalog"
 LEVEL = "level"
 NOT_HELD = "not_held"
 COUNT = "count"
+#: Where a 2.x manifest keeps its catalog.
+CATALOG_2 = "file_entries"
 
 LEVELS = ("Max", "Med", "Min")
 WHY = ("not-held", "file-missing")
@@ -156,6 +159,7 @@ def _expected_file(path: str, entry: object, major: int) -> dict:
     if major >= 3:
         family = family_of_3(path)
         count = entry.get(COUNT) if isinstance(entry, dict) else None
+        count = count.get("value") if isinstance(count, dict) else None
         count = count if _is_int(count) else None
     else:
         frame = entry.get("frame") if isinstance(entry, dict) else None
@@ -182,9 +186,10 @@ def check_result_against_bundle(result: dict, fixture: object) -> list[str]:
     if result["level"] != (manifest.get(LEVEL) if major >= 3 else None):
         problems.append(f"`result.level` is {result['level']!r}, but the manifest states "
                         f"{manifest.get(LEVEL) if major >= 3 else None!r}")
-    catalog = manifest.get(CATALOG)
+    member = CATALOG if major >= 3 else CATALOG_2
+    catalog = manifest.get(member)
     if not isinstance(catalog, dict):
-        return problems + [f"the manifest has no `{CATALOG}` catalog to read the files from"]
+        return problems + [f"the manifest has no `{member}` catalog to read the files from"]
     stated = result["files"]
     expected = [_expected_file(path, catalog[path], major) for path in sorted(catalog) if path in files]
     if stated != expected:
@@ -197,13 +202,14 @@ def check_result_against_bundle(result: dict, fixture: object) -> list[str]:
             problems.append(f"`result.files` finds {path}, which the catalog does not name or the "
                             "bundle does not hold")
     held_back = manifest.get(NOT_HELD) if major >= 3 else None
-    if held_back is not None and not isinstance(held_back, dict):
-        return problems + [f"the manifest's `{NOT_HELD}` is not an object"]
+    if held_back is not None and not isinstance(held_back, list):
+        return problems + [f"the manifest's `{NOT_HELD}` is not a list"]
     expected_skips = [{"path": path, "why": "file-missing", "reason": None}
                       for path in sorted(catalog) if path not in files]
-    for path, entry in (held_back or {}).items():
-        reason = entry.get("reason") if isinstance(entry, dict) else None
-        if path in catalog or path in files or not isinstance(reason, str) or not reason:
+    for row in held_back or []:
+        path = row.get("path") if isinstance(row, dict) else None
+        reason = row.get("reason") if isinstance(row, dict) else None
+        if not isinstance(path, str) or path in catalog or path in files                 or not isinstance(reason, str) or not reason:
             problems.append(f"the manifest lists {path} as not held, but holds it, catalogues it or "
                             "states no reason")
         else:

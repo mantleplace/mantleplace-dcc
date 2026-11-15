@@ -9,13 +9,13 @@
     "level": "Max",
     "refusal": null,
     "files": [
-      {"path": "Basemap/Roads.dxf", "family": "georeferenced", "frame": "order", "count": null},
-      {"path": "Basemap/Roads.gpkg", "family": "georeferenced", "frame": "order", "count": null},
-      {"path": "Elevation/Elevation.tif", "family": "georeferenced", "frame": "order", "count": null},
-      {"path": "Elevation/Terrain.glb", "family": "host-ready", "frame": "site", "count": null},
+      {"path": "Basemap/Roads.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Roads.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Elevation/Elevation.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Elevation/Terrain.glb", "family": "host-ready", "frame": "site", "count": 200000},
       {"path": "Manifest.json", "family": null, "frame": null, "count": null},
       {"path": "Readme.md", "family": null, "frame": null, "count": null},
-      {"path": "Records/Easements.gpkg", "family": "georeferenced", "frame": "order", "count": null}
+      {"path": "Records/Easements.gpkg", "family": "georeferenced", "frame": "order", "count": 1}
     ],
     "skipped": []
   }

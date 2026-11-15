@@ -182,8 +182,8 @@ def check_hashes(manifest: dict, bundle: Bundle, report: Report, fold_case: bool
                        "a reader fails closed on it", file=path)
 
 
-def _entries(manifest: dict) -> dict[str, dict]:
-    entries = manifest.get("file_entries")
+def _entries(manifest: dict, member: str = "file_entries") -> dict[str, dict]:
+    entries = manifest.get(member)
     if not isinstance(entries, dict):
         return {}
     return {path: entry for path, entry in entries.items() if isinstance(entry, dict)}
@@ -243,23 +243,24 @@ def check_frames(manifest: dict, report: Report) -> None:
 
 
 def check_roles(manifest: dict, bundle: Bundle, report: Report, fold_case: bool = False,
-                unstated: bool = True) -> None:
+                unstated: bool = True, member: str = "file_entries") -> None:
     """Every file's ODbL role, against its format and its sources.
 
     A missing role reads as `database`, the stricter duty, so it is reported rather than
     refused while the field is optional. With `unstated` false (a 3.x bundle, whose catalog check
     already fails a file with no entry), a file with no entry is not reported here a second time.
+    `member` is the catalog's name: `file_entries` before 3.x, `catalog` in it.
     """
     report.ran.append("roles")
-    raw = manifest.get("file_entries")
+    raw = manifest.get(member)
     if not isinstance(raw, dict):
         report.add("roles", "role.not-stated", "info",
-                   "the manifest carries no file_entries, so no file states its ODbL role; every "
+                   f"the manifest carries no {member}, so no file states its ODbL role; every "
                    "file reads as database")
         return
-    entries = _entries(manifest)
+    entries = _entries(manifest, member)
     for path, entry in sorted(entries.items()):
-        where = f"/file_entries/{escape(path)}"
+        where = f"/{member}/{escape(path)}"
         ext = extension(path)
         role = entry.get("odbl_role")
         if "odbl_role" not in entry:
