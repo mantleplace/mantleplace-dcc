@@ -247,6 +247,11 @@ struct FMantlePlaceRoadSplinesBlock
 	FString EngineVerticalDatum;    // hosts.unreal.road_splines.vertical_datum, verbatim; the schema fixes it to
 	                                // EGM2008-orthometric and FMantlePlaceRoadSplinesLogic::CanPlaceEngineHeights
 	                                // still asks, never assuming it from the pointer's name
+
+	bool bSiteCsvPresent = false;   // an MPB 3.x bundle's `Basemap/Roads.csv` (FMantlePlaceManifestThreeLogic); 2.x never sets it
+	FString SiteCsvPath;            // in-zip path of the host-ready road table, in the local site frame
+	FString SiteCsvSha256;          // its catalog digest
+	double SiteHeightM = 0.0;       // z is metres above the site origin's height, which is this
 };
 
 /**

@@ -45,6 +45,9 @@ struct FMantlePlaceManifestThreeLogic
 	static const TCHAR* TerrainMeshPath() { return TEXT("Elevation/Terrain.glb"); }
 	static const TCHAR* BuildingsPath() { return TEXT("Basemap/Buildings.glb"); }
 	static const TCHAR* TreesPath() { return TEXT("Landcover/Trees.csv"); }
+	static const TCHAR* RoadsPath() { return TEXT("Basemap/Roads.csv"); }
+	/** The folder of the weight maps: every PNG in it is one paint layer, named by its file (format.md §6). */
+	static const TCHAR* MaterialsFolder() { return TEXT("Materials/"); }
 
 	/**
 	 * Fill `OutManifest` from a 3.x read and its manifest text. False, with OutError naming the value,

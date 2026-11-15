@@ -12,10 +12,12 @@ and again on a re-import.
 | Step | The 3.0 file it reads |
 | --- | --- |
 | Landscape | `Elevation/Elevation.png` |
+| Landscape paint layers | The eight `Materials/*.png` weight maps, each layer named by its file |
 | Imagery drape | `Imagery/Imagery.png` |
 | Terrain mesh | `Elevation/Terrain.glb` |
 | Buildings | `Basemap/Buildings.glb` |
 | Tree points | `Landcover/Trees.csv` |
+| Road splines | `Basemap/Roads.csv` |
 
 ## Layers left out of an MPB 3.0 import
 
@@ -24,8 +26,6 @@ Each is shown as skipped, with its reason, in the import window and the import l
 | Layer | Why |
 | --- | --- |
 | Coverage rasters (slope, aspect, hillshade, land cover, canopy height, NDVI) | MPB 3.0 ships them only as georeferenced GeoTIFFs, and the plugin never converts a georeferenced file. |
-| Water mask | MPB 3.0 ships no separate mask: the water coverage is `Materials/Water.png`, a paint layer's weight map. |
-| Landscape paint layers | The eight `Materials` weight maps are not applied in this release; the Landscape is imported unpainted. |
-| Road splines | `Basemap/Roads.csv` is not read in this release. |
+| Water mask | MPB 3.0 ships no separate mask: the water coverage is `Materials/Water.png`, painted as the `Water` layer. |
 | Public-record layers | Not imported from an MPB 3.0 bundle in this release. |
 | Streaming into Cesium | The terrain tiles are an Extra beside an MPB 3.0 bundle, not part of it; not offered in this release. |

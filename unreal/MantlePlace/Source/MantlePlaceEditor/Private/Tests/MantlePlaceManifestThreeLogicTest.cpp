@@ -9,7 +9,10 @@
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportOrchestration.h"
 #include "MantlePlaceImportStepsLogic.h"
+#include "MantlePlaceIntegrityLogic.h"
+#include "MantlePlaceLandscapeWeightsLogic.h"
 #include "MantlePlaceManifestThreeLogic.h"
+#include "MantlePlaceRoadSplinesLogic.h"
 #include "MantlePlaceTreePointsLogic.h"
 
 // An MPB 3.x bundle read into the shape every artifact handler imports from: which promised file feeds
@@ -43,6 +46,10 @@ FString Manifest(const FString& LocalUnit = TEXT("{\"name\": \"metre\", \"to_met
     "Basemap/Buildings.glb": {"family": "host-ready", "sha256": "dd", "mesh": {"up_axis": "y"}, "odbl_role": "produced-work",
         "license": "ODbL-1.0", "sources": [{"name": "OpenStreetMap", "license": "ODbL-1.0"}]},
     "Basemap/Roads.csv": {"family": "host-ready", "sha256": "ee", "count": {"kind": "rows", "value": 12}},
+    "Materials/Water.png": {"family": "host-ready", "sha256": "w1", "raster": {"width": 101, "height": 51, "bands": ["weight"],
+        "data_type": "Byte", "frame": "local"}},
+    "Materials/Grass.png": {"family": "host-ready", "sha256": "g1", "raster": {"width": 101, "height": 51, "bands": ["weight"],
+        "data_type": "Byte", "frame": "local"}},
     "Elevation/Slope.tif": {"family": "georeferenced", "sha256": "ff"}
   },
   "not_held": %s
@@ -54,7 +61,8 @@ FMantlePlaceBundleRead ReadOf(const FString& Text, const FString& Root = FString
 {
 	TArray<FString> Names = { Root + TEXT("Manifest.json"), Root + TEXT("Elevation/Elevation.png"),
 		Root + TEXT("Imagery/Imagery.png"), Root + TEXT("Elevation/Terrain.glb"), Root + TEXT("Basemap/Buildings.glb"),
-		Root + TEXT("Basemap/Roads.csv"), Root + TEXT("Elevation/Slope.tif") };
+		Root + TEXT("Basemap/Roads.csv"), Root + TEXT("Materials/Water.png"), Root + TEXT("Materials/Grass.png"),
+		Root + TEXT("Elevation/Slope.tif") };
 	return FMantlePlaceBundleReaderLogic::Read(Names, [&Text](const FString& Name, FString& OutText)
 	{
 		OutText = Text;
@@ -152,7 +160,46 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("trees not held are not fed"), M.Foliage.bPresent);
 		const FString* Coverage = M.FormatSkips.Find(TEXT("coverage_rasters"));
 		TestTrue(TEXT("coverage rasters: no host-ready file"), Coverage != nullptr && Coverage->Contains(TEXT("never converts")));
-		TestTrue(TEXT("road splines skipped with a reason"), M.FormatSkips.Contains(TEXT("road_splines")));
+		TestFalse(TEXT("road splines are not skipped"), M.FormatSkips.Contains(TEXT("road_splines")));
+		TestTrue(TEXT("the road table is fed"), M.RoadSplines.bSiteCsvPresent);
+		TestEqual(TEXT("found at its archive entry"), M.RoadSplines.SiteCsvPath, FString(TEXT("Bundle/Basemap/Roads.csv")));
+		TestEqual(TEXT("its digest"), M.RoadSplines.SiteCsvSha256, FString(TEXT("ee")));
+		TestEqual(TEXT("the site height to add"), M.RoadSplines.SiteHeightM, 100.0);
+
+		// The paint layers: one grayscale weight map per material, named by its file, in the order the reader lists the files.
+		const FMantlePlaceLandscapeLayer* Weights = M.FindLandscapeLayer(TEXT("material_weights"));
+		if (TestNotNull(TEXT("the Materials weight maps are a paint-layer legend"), Weights))
+		{
+			TestTrue(TEXT("one layer per map, named by its file"), Weights->Materials == TArray<FString>{ TEXT("Grass"), TEXT("Water") });
+			TestEqual(TEXT("each map read"), Weights->UeReady.Num(), 2);
+			TArray<FMantlePlaceWeightBand> Bands;
+			FString BandError;
+			TestTrue(TEXT("the legend resolves: ") + BandError,
+				FMantlePlaceLandscapeWeightsLogic::ResolveBands(*Weights, Bands, BandError));
+			if (Bands.Num() == 2)
+			{
+				TestEqual(TEXT("Water from its own file"), Bands[1].ImagePath, FString(TEXT("Bundle/Materials/Water.png")));
+				TestEqual(TEXT("a grayscale band is channel 0"), Bands[1].Channel, 0);
+			}
+			// A grayscale map decodes to RGBA with its band in every channel; the plane is that band.
+			FMantlePlaceRgbaImage Water{ TEXT("Bundle/Materials/Water.png"), 101, 51 };
+			FMantlePlaceRgbaImage Grass{ TEXT("Bundle/Materials/Grass.png"), 101, 51 };
+			Water.Pixels.Init(200, 101 * 51 * 4);
+			Grass.Pixels.Init(55, 101 * 51 * 4);
+			TArray<FMantlePlaceWeightPlane> Planes;
+			FString PlaneError;
+			TestTrue(TEXT("weight planes build: ") + PlaneError, FMantlePlaceLandscapeWeightsLogic::BuildWeightPlanes(
+				*Weights, { Water, Grass }, H.Resolution, H.bRow0IsNorth, Planes, PlaneError));
+			if (Planes.Num() == 2)
+			{
+				TestEqual(TEXT("the Water plane is named verbatim"), Planes[1].Material, FString(TEXT("Water")));
+				TestEqual(TEXT("the Water plane carries its weight"), static_cast<int32>(Planes[1].Data[0]), 200);
+				TestEqual(TEXT("the Grass plane carries its weight"), static_cast<int32>(Planes[0].Data.Last()), 55);
+			}
+		}
+		TestTrue(TEXT("the maps are declared for the integrity check"),
+			FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(M).ContainsByPredicate(
+				[](const FMantlePlaceDeclaredArtifact& A) { return A.Path == TEXT("Bundle/Materials/Grass.png") && A.Sha256 == TEXT("g1"); }));
 		TestTrue(TEXT("public records skipped with a reason"), M.FormatSkips.Contains(TEXT("public_records")));
 		TestFalse(TEXT("the landscape is not skipped"), M.FormatSkips.Contains(MantlePlaceArtifactId::Landscape()));
 		TestFalse(TEXT("no Cesium terrain is claimed"), M.Cesium.bHasTerrain);
@@ -173,6 +220,12 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 					Step.State == EMantlePlaceImportStepState::Waiting
 						|| (Step.State == EMantlePlaceImportStepState::NotRun && !Step.Reason.IsEmpty()));
 			}
+			const int32 CoverageRow = Steps.Find(TEXT("coverage_rasters"));
+			TestTrue(Label + TEXT("coverage rasters stay Not Run beside the paint layers"), CoverageRow != INDEX_NONE
+				&& Steps.Steps()[CoverageRow].State == EMantlePlaceImportStepState::NotRun);
+			const int32 RoadsRow = Steps.Find(TEXT("road_splines"));
+			TestTrue(Label + TEXT("road splines are planned"), RoadsRow != INDEX_NONE
+				&& Steps.Steps()[RoadsRow].State == EMantlePlaceImportStepState::Waiting);
 			const int32 RecordsRow = Steps.Find(TEXT("public_records"));
 			TestTrue(Label + TEXT("public records are listed Not Run"), RecordsRow != INDEX_NONE
 				&& Steps.Steps()[RecordsRow].State == EMantlePlaceImportStepState::NotRun);
@@ -226,6 +279,38 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("north is +X"), Rows[0].Position.X, 2000.0);
 			TestEqual(TEXT("east is +Y"), Rows[0].Position.Y, 1000.0);
 		}
+	}
+
+	// --- Roads.csv in the local site frame ---------------------------------------------------------
+	{
+		TArray<FMantlePlaceRoadSpline> Splines;
+		int32 Seen = 0, Unreadable = 0;
+		FString Error;
+		const FString Csv = TEXT("road,vertex,x,y,z,class,width_m,name\n"
+			"1,0,10,20,1.5,primary,7.5,\"Main St, North\"\n"
+			"1,1,30,40,2,primary,7.5,\"Main St, North\"\n"
+			"2,0,5,5,0,service,3,\n"
+			"3,0,0,0,0,track,2,Lane\n"
+			"3,1,x,0,0,track,2,Lane\n"
+			"3,2,1,1,1,track,2,Lane\n");
+		TestTrue(TEXT("Roads.csv parses: ") + Error,
+			FMantlePlaceRoadSplinesLogic::ParseSiteCsv(Csv, 100.0, Splines, Seen, Unreadable, Error));
+		TestEqual(TEXT("three roads seen"), Seen, 3);
+		TestEqual(TEXT("a one-vertex road is no spline"), Splines.Num(), 2);
+		TestEqual(TEXT("a row with no numeric x is passed over and counted"), Unreadable, 1);
+		if (Splines.Num() == 2)
+		{
+			TestEqual(TEXT("north is +X, in cm"), Splines[0].PointsUeCm[0].X, 2000.0);
+			TestEqual(TEXT("east is +Y, in cm"), Splines[0].PointsUeCm[0].Y, 1000.0);
+			TestEqual(TEXT("z is above the site height"), Splines[0].PointsUeCm[0].Z, (100.0 + 1.5) * 100.0, 1e-6);
+			TestEqual(TEXT("the name, quoted comma kept"), Splines[0].Name, FString(TEXT("Main St, North")));
+			TestEqual(TEXT("the class, verbatim"), Splines[0].RoadClass, FString(TEXT("primary")));
+			TestEqual(TEXT("the width, verbatim"), Splines[0].WidthMEstimated, 7.5);
+			TestEqual(TEXT("the bad row leaves the road's other two"), Splines[1].PointsUeCm.Num(), 2);
+		}
+		TestFalse(TEXT("a header missing a column is refused"),
+			FMantlePlaceRoadSplinesLogic::ParseSiteCsv(TEXT("road,vertex,x,y,z\n1,0,0,0,0\n"), 0.0, Splines, Seen, Unreadable, Error));
+		TestTrue(TEXT("naming the column: ") + Error, Error.Contains(TEXT("class")));
 	}
 
 	// --- Fail closed on a unit it does not place --------------------------------------------------

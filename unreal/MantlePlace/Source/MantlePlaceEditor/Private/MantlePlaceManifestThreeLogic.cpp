@@ -4,10 +4,12 @@
 
 #include "MantlePlaceArtifactHandler.h" // MantlePlaceArtifactId
 #include "MantlePlaceImportManifest.h"
+#include "MantlePlaceLandscapeWeightsLogic.h"
 #include "MantlePlaceManifestJson.h"
 #include "MantlePlaceOdblLogic.h"
 
 #include "Dom/JsonObject.h"
+#include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -203,8 +205,64 @@ void ReadHeightmap(const FThreeContext& C, double SiteHeightM)
 	H.GridCentreEastM = (Rect[0] + Rect[2]) / 2.0;
 	H.GridCentreNorthM = (Rect[1] + Rect[3]) / 2.0;
 	H.bPresent = true;
-	C.M.FormatNotes.Add(TEXT("Paint layers: the eight Materials weight maps of an MPB 3.0 bundle are not applied in "
-		"this release, so the Landscape is imported unpainted."));
+}
+
+/**
+ * The weight maps in `Materials/`, as the one `material_weights` layer the Landscape paints: one 8-bit
+ * grayscale PNG per paint layer, the layer named by its file verbatim (format.md §6, U13; HPS-33), in
+ * the order the reader lists the files. A map that does not state the local frame or its size is left out and named.
+ */
+void ReadMaterials(const FThreeContext& C)
+{
+	FMantlePlaceLandscapeLayer Layer;
+	Layer.Name = TEXT("material_weights");
+	const FString Folder = FMantlePlaceManifestThreeLogic::MaterialsFolder();
+	for (const FMantlePlaceBundleFile& File : C.Read.Files)
+	{
+		if (!File.Path.StartsWith(Folder, ESearchCase::IgnoreCase) || !File.Path.EndsWith(TEXT(".png"), ESearchCase::IgnoreCase))
+		{
+			continue;
+		}
+		const TSharedPtr<FJsonObject> Entry = C.FindEntry(File.Path);
+		const TSharedPtr<FJsonObject>* Raster = Entry.IsValid() ? GetObject(Entry, TEXT("raster")) : nullptr;
+		if (Raster == nullptr || GetString(*Raster, TEXT("frame")) != TEXT("local")
+			|| GetInt(*Raster, TEXT("width")) <= 0 || GetInt(*Raster, TEXT("height")) <= 0)
+		{
+			C.M.FormatNotes.Add(FString::Printf(TEXT("Paint layer left out: %s does not state its size in the local "
+				"site frame (HPS-53)."), *File.Path));
+			continue;
+		}
+		const FString Material = FPaths::GetBaseFilename(File.Path);
+		FMantlePlaceUeReadyRaster Map;
+		Map.Path = File.EntryName;
+		Map.Sha256 = GetString(Entry, TEXT("sha256"));
+		Map.Encoding = FMantlePlaceLandscapeWeightsLogic::GrayscaleEncoding;
+		Map.Width = GetInt(*Raster, TEXT("width"));
+		Map.Height = GetInt(*Raster, TEXT("height"));
+		Map.ValueMapping.Bands = { Material };
+		Layer.Materials.Add(Material);
+		Layer.UeReady.Add(MoveTemp(Map));
+	}
+	if (Layer.Materials.Num() > 0)
+	{
+		C.M.LandscapeLayers.Layers.Add(MoveTemp(Layer));
+		C.M.LandscapeLayers.bPresent = true;
+	}
+}
+
+/** The host-ready road table, in the local site frame; its heights are metres above the origin's. */
+void ReadRoads(const FThreeContext& C, double SiteHeightM)
+{
+	const FFound Found = C.Find(FMantlePlaceManifestThreeLogic::RoadsPath(), RoadsId);
+	if (Found.File == nullptr)
+	{
+		return;
+	}
+	FMantlePlaceRoadSplinesBlock& R = C.M.RoadSplines;
+	R.SiteCsvPath = Found.File->EntryName;
+	R.SiteCsvSha256 = GetString(Found.Entry, TEXT("sha256"));
+	R.SiteHeightM = SiteHeightM;
+	R.bSiteCsvPresent = true;
 }
 
 void ReadDrape(const FThreeContext& C)
@@ -451,11 +509,15 @@ bool FMantlePlaceManifestThreeLogic::ToVaultManifest(const FMantlePlaceBundleRea
 	ReadHeightmap(C, SiteHeightM);
 	ReadMeshes(C);
 	ReadTrees(C, SiteHeightM);
+	ReadRoads(C, SiteHeightM);
+	if (M.Heightmap.bPresent)
+	{
+		ReadMaterials(C);
+	}
 
 	// The steps with no 3.0 input this plugin places, or wired by another release, each with its reason.
 	C.Skip(CoverageId, NoHostReadyFileReason(TEXT("the slope, aspect, hillshade, land-cover, canopy-height and NDVI "
 		"layers")));
-	C.Skip(RoadsId, TEXT("Road splines are not imported from an MPB 3.0 bundle in this release."));
 	C.Skip(RecordsId, TEXT("Public-record layers are not imported from an MPB 3.0 bundle in this release."));
 	M.FormatNotes.Add(TEXT("Streaming into Cesium is not offered for an MPB 3.0 bundle in this release: its terrain "
 		"tiles are an Extra beside the bundle."));
