@@ -17,7 +17,10 @@ public interface IExportVault
     /// <summary>One materialize start, read as the route an Import press takes.</summary>
     Task<ImportRouteDecision> RouteImportAsync(string orderId, CancellationToken cancellationToken);
 
-    /// <summary>Fetches a complete order's Revit view, or the whole bundle, into the cache.</summary>
+    /// <summary>
+    /// Fetches a complete order's Revit view, or the whole bundle, into the cache; a 3.0 order's
+    /// download at the platform's recommendation, since an export names no level.
+    /// </summary>
     Task<CompleteDownload> DownloadCompleteAsync(
         VaultBundle bundle,
         IReadOnlyCollection<string>? delivered,
@@ -45,8 +48,10 @@ public sealed class VaultExportSource : IExportVault
     {
         ArgumentNullException.ThrowIfNull(bundle);
 
-        // The full hash, as the vault browser's pre-import gate does: once per import.
-        CacheEntry entry = _cache.Inspect(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion);
+        // The full hash, as the vault browser's pre-import gate does: once per import. An export names
+        // no level, so a 3.0 order's slot is the one at the platform's recommendation.
+        CacheEntry entry = _cache.Inspect(
+            bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion, DownloadLevels.SlotLevel(bundle));
         return entry.State == CacheState.CachedValid ? entry.Layout.BundleZipPath : null;
     }
 

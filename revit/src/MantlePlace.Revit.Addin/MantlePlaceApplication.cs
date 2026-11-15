@@ -673,7 +673,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         // Before the first Platform API call (the restore below), so a 426 on it is heard.
         ClientUpdateDialog.Attach();
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
-        _vault = new VaultClient(endpoints, _session);
+        _vault = new VaultClient(endpoints, _session, threeFiles: BundleImportPlanner.ThreeFiles);
         _cache = new BundleCache();
         AuthSession session = _session;
         InterruptedPrepareStore interrupted = new(
