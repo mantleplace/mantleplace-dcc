@@ -787,8 +787,19 @@ void MantlePlaceImportOrchestration::PlanSteps(
 {
 	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
 	{
-		if (!Selection.Includes(Handler->Id()) || !Handler->IsPresent(Manifest))
+		if (!Selection.Includes(Handler->Id()))
 		{
+			continue;
+		}
+		if (!Handler->IsPresent(Manifest))
+		{
+			// A step this host runs for 2.x that a 3.x bundle cannot feed is listed Not Run, with why
+			// (FMantlePlaceVaultManifest::FormatSkips); a 2.x bundle has none, and lists nothing here.
+			if (const FString* Reason = Manifest.FormatSkips.Find(Handler->Id()))
+			{
+				Steps.Add(Handler->Id(), Handler->DisplayName().ToString());
+				Steps.Skip(Handler->Id(), *Reason);
+			}
 			continue;
 		}
 		Steps.Add(Handler->Id(), Handler->DisplayName().ToString());
@@ -797,6 +808,22 @@ void MantlePlaceImportOrchestration::PlanSteps(
 			Steps.Skip(Handler->Id(), TEXT("Not in this download: it was left out of the selection."));
 		}
 	}
+}
+
+TArray<FString> MantlePlaceImportOrchestration::DescribeFormatSkips(
+	const FHandlers& Handlers, const FMantlePlaceVaultManifest& Manifest, const FMantlePlaceImportSelection& Selection)
+{
+	TArray<FString> Lines;
+	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
+	{
+		const FString* Reason = Manifest.FormatSkips.Find(Handler->Id());
+		if (Reason != nullptr && Selection.Includes(Handler->Id()) && !Handler->IsPresent(Manifest))
+		{
+			Lines.Add(FString::Printf(TEXT("Skipped %s: %s"), *Handler->DisplayName().ToString(), **Reason));
+		}
+	}
+	Lines.Append(Manifest.FormatNotes);
+	return Lines;
 }
 
 void MantlePlaceImportOrchestration::RunPrepare(const FHandlers& Handlers, FMantlePlaceImportContext& Context)

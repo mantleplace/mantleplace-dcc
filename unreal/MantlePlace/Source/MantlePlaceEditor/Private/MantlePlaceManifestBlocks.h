@@ -113,6 +113,9 @@ struct FMantlePlaceHeightmapBlock
 	double ZMaxM = 0.0;
 	bool bRow0IsNorth = true;       // PNG row 0 is the northern edge
 	FString Sha256;                 // sha256 of the raw heightmap PNG bytes; schema-required
+	double GridCentreEastM = 0.0;   // the grid's centre from the georeference origin, in metres: zero for a
+	double GridCentreNorthM = 0.0;  // 2.x bundle, whose grid is centred on it by contract; the centre of the
+	                                // stated rectangle for a 3.x one (FMantlePlaceManifestThreeLogic)
 
 	/** Quads per component = SectionsPerComponent * SectionSizeQuads. */
 	int32 GetQuadsPerComponent() const { return SectionsPerComponent * SectionSizeQuads; }
@@ -193,6 +196,8 @@ struct FMantlePlaceFoliagePointsBlock
 	                                // foliage_type column, which the shared tree-points block is the only
 	                                // place to publish: it is read for that and for nothing else, and the
 	                                // path and digest stay this block's own (HPS-33).
+	bool bSiteFrame = false;        // a 3.x `Trees.csv`: x and y are offsets from the georeference origin and
+	double SiteHeightM = 0.0;       // ground_z is metres above the site origin's height, which is SiteHeightM
 };
 
 /** `unreal.landscape_layers`: Landscape-paintable rasters this host is addressed by name. All are

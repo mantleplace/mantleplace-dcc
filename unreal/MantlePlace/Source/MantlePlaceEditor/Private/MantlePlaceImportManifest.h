@@ -97,6 +97,15 @@ struct FMantlePlaceVaultManifest
 	// (FMantlePlaceIntegrityLogic::LeavesOut). Absent, the archive holds everything it declares.
 	FMantlePlaceArchiveView Archive;
 
+	// An MPB 3.x bundle, read by FMantlePlaceManifestThreeLogic rather than Parse. Empty and false for
+	// every 2.x bundle, so nothing below changes for one. FormatSkips holds, by handler id, why a step
+	// this host runs for 2.x is not run for this bundle (no 3.0 host-ready file, a file this download
+	// does not hold, a step another release wires); the import window lists each as Not Run with it.
+	// FormatNotes are the same kind of line for a part of a step, written to the import log.
+	bool bFormatThree = false;
+	TMap<FName, FString> FormatSkips;
+	TArray<FString> FormatNotes;
+
 	// --- Core blocks: not artifacts, read by Parse itself -------------------------------
 	FMantlePlaceGeoreferenceBlock Georef;
 	FMantlePlaceCesiumBlock Cesium;
