@@ -382,6 +382,8 @@ internal static class ImportLayerTests
                 [SkipReasonCode.GeographicOriginOutOfRange] = null,
                 [SkipReasonCode.LeftOutByChoice] = null,
                 [SkipReasonCode.LevelUnavailable] = null,
+                [SkipReasonCode.NotInFormat] = null,
+                [SkipReasonCode.NotHeld] = "This bundle does not hold this. The import log gives the bundle's reason.",
             };
 
             foreach (SkipReasonCode code in Enum.GetValues<SkipReasonCode>())

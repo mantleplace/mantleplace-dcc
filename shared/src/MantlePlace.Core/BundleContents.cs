@@ -79,7 +79,26 @@ public sealed record BundleFile(string Path, FileFamily Family, long? Count, str
     /// for a 2.x file, which states its own.
     /// </summary>
     public LinearUnit Unit { get; init; }
+
+    /// <summary>
+    /// What a 3.x catalog states about a raster (<c>spec/format.md</c> §9.5): its pixel size, the frame
+    /// its rectangle is in and that rectangle. <c>null</c> for a file that is not a raster, and for a
+    /// 2.x file.
+    /// </summary>
+    public RasterGrid? Raster { get; init; }
 }
+
+/// <summary>
+/// A raster as its 3.x catalog entry states it, every value read and none derived.
+/// </summary>
+/// <param name="Width">Its width in pixels, or 0 when the entry states none.</param>
+/// <param name="Height">Its height in pixels, or 0 when the entry states none.</param>
+/// <param name="Frame">The frame its rectangle is in, as stated (<c>local</c> for a host-ready PNG), or <c>null</c>.</param>
+/// <param name="Rectangle">The rectangle it covers in that frame, or <c>null</c> when the entry states none.</param>
+public sealed record RasterGrid(int Width, int Height, string? Frame, RasterRectangle? Rectangle);
+
+/// <summary>The rectangle a raster covers in its frame, west, south, east and north, in that frame's unit.</summary>
+public sealed record RasterRectangle(double Left, double Bottom, double Right, double Top);
 
 /// <summary>A file the reader names and does not read, and why.</summary>
 /// <param name="Path">The path the catalog or the not-held list names.</param>
