@@ -142,6 +142,15 @@ internal static class LocalBundleImportTests
             run.Equal(Regex.Matches(commands + received + windowed, @"OrderImporter\.Prepare\(").Count, 1, "and nothing else opens an order");
         });
 
+        run.Case("an unattended run names its zip in the shared variable, as Revit's does, and the prompt is skipped", () =>
+        {
+            string body = MethodBody(commands, LocalBundleImport.Command);
+            run.Contains(body, "LocalBundleSource.Unattended(Environment.GetEnvironmentVariable(LocalBundleSource.PathVariable))", "the one variable, read through the shared rule");
+            run.True(
+                body.IndexOf("LocalBundleSource.Unattended(", StringComparison.Ordinal) < body.IndexOf("GetFileNameForOpen(", StringComparison.Ordinal),
+                "read before AutoCAD's file prompt, which it skips");
+        });
+
         run.Case("the received-export window is gone: a send opens the shared import window", () =>
         {
             run.False(File.Exists(Path.Combine(folder, "ReceivedExportWindow.cs")), "no window of this host's own");

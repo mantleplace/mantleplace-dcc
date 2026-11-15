@@ -46,7 +46,8 @@ the zip and the whole order is imported into the active drawing in the import wi
 the same words the window shows are written beside the zip in a file ending `.mantleplace-import.log`,
 which is what a script waits for, since the steps run after the command returns. A file that is not a Mantle Place bundle is refused and nothing is
 placed. With `FILEDIA` set to 0, or from a script, the command asks for the zip's path on the command
-line instead of opening a dialog.
+line instead of opening a dialog. With `MANTLEPLACE_BUNDLE_ZIP` set to a zip's path in AutoCAD's
+environment, as for the Revit plugin's Import Bundle, the command asks nothing and imports that zip.
 
 **What an import places.** Everything comes from the order's AutoCAD block in the bundle, and nothing
 is worked out in AutoCAD:

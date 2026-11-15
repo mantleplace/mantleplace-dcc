@@ -90,7 +90,8 @@ public sealed class PluginCommands
     /// </summary>
     /// <remarks>
     /// The zip comes from AutoCAD's own file prompt: a dialog, or the command line under <c>FILEDIA</c> 0 or
-    /// a script, which is how a script runs it with nobody at the screen. The command returns once the
+    /// a script; or, with nobody at the screen, from <c>MANTLEPLACE_BUNDLE_ZIP</c>, the variable Revit's local
+    /// import reads (<see cref="LocalBundleSource.PathVariable"/>), which skips the prompt. The command returns once the
     /// window is open and the steps run after it, one between AutoCAD's messages, so a script waits for the
     /// record written beside the zip when the run is over, as the Revit plugin's local import writes its own;
     /// the command line and the window say the same.
@@ -103,20 +104,28 @@ public sealed class PluginCommands
             return;
         }
 
-        PromptOpenFileOptions options = new("\nMantle Place bundle (.zip) to import: ")
+        // An unattended run names its zip in the shared variable, as Revit's local import reads it, and
+        // no prompt is raised for nobody to answer.
+        string? named = LocalBundleSource.Unattended(Environment.GetEnvironmentVariable(LocalBundleSource.PathVariable));
+        if (named is null)
         {
-            DialogCaption = "Choose a Mantle Place bundle",
-            Filter = "Mantle Place bundle (*.zip)|*.zip",
-            PreferCommandLine = Convert.ToInt32(Autodesk.AutoCAD.ApplicationServices.Core.Application.GetSystemVariable("FILEDIA"), CultureInfo.InvariantCulture) == 0,
-        };
+            PromptOpenFileOptions options = new("\nMantle Place bundle (.zip) to import: ")
+            {
+                DialogCaption = "Choose a Mantle Place bundle",
+                Filter = "Mantle Place bundle (*.zip)|*.zip",
+                PreferCommandLine = Convert.ToInt32(Autodesk.AutoCAD.ApplicationServices.Core.Application.GetSystemVariable("FILEDIA"), CultureInfo.InvariantCulture) == 0,
+            };
 
-        PromptFileNameResult picked = document.Editor.GetFileNameForOpen(options);
-        if (picked.Status != PromptStatus.OK)
-        {
-            return;
+            PromptFileNameResult picked = document.Editor.GetFileNameForOpen(options);
+            if (picked.Status != PromptStatus.OK)
+            {
+                return;
+            }
+
+            named = picked.StringResult;
         }
 
-        string zipPath = LocalBundleImport.Typed(picked.StringResult);
+        string zipPath = LocalBundleImport.Typed(named);
         if (!WindowedImport.Start(document, zipPath, end => WriteRecord(zipPath, end.Summary), out string? refusal))
         {
             MantlePlaceApplication.Say(refusal ?? WindowedImport.AlreadyRunning);
