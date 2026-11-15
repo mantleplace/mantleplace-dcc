@@ -28,7 +28,7 @@
 namespace
 {
 	/** The throwaway world; the caller destroys it. */
-	UWorld* NewWorld(const TCHAR* Name)
+	UWorld* NewExtentTestWorld(const TCHAR* Name)
 	{
 		return UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false, FName(Name));
 	}
@@ -68,7 +68,7 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 
 	// --- The Extent box: placed, located, scaled and read ---------------------------------------------
 	{
-		UWorld* World = NewWorld(TEXT("MantlePlaceExtentBoxTestWorld"));
+		UWorld* World = NewExtentTestWorld(TEXT("MantlePlaceExtentBoxTestWorld"));
 		if (!TestNotNull(TEXT("a throwaway world to spawn into"), World))
 		{
 			return false;
@@ -120,7 +120,7 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 
 	// --- A previous import: the tag finds the order, the record holds its extent ----------------------
 	{
-		UWorld* World = NewWorld(TEXT("MantlePlaceImportExtentTestWorld"));
+		UWorld* World = NewExtentTestWorld(TEXT("MantlePlaceImportExtentTestWorld"));
 		if (!TestNotNull(TEXT("a throwaway world to spawn into"), World))
 		{
 			return false;
@@ -176,7 +176,7 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 
 	// --- The georeferences, read by reflection --------------------------------------------------------
 	{
-		UWorld* World = NewWorld(TEXT("MantlePlaceGeoreferenceTestWorld"));
+		UWorld* World = NewExtentTestWorld(TEXT("MantlePlaceGeoreferenceTestWorld"));
 		if (!TestNotNull(TEXT("a throwaway world to spawn into"), World))
 		{
 			return false;

@@ -33,10 +33,14 @@ FString Manifest(const FString& LocalUnit = TEXT("{\"name\": \"metre\", \"to_met
   "order": {"id": "order-609", "aoi": {"west": -1, "south": 2, "east": 3, "north": 4}, "unit_system": "imperial"},
   "level": "Med",
   "frames": {
-    "georeferenced": {"horizontal_crs": {"code": "EPSG:2277"}, "horizontal_unit": {"name": "US survey foot", "to_metres": 0.3048006096}},
-    "local": {"origin": {"longitude": -97.7, "latitude": 30.3, "height_m": 100.0,
+    "georeferenced": {"horizontal_crs": {"code": "EPSG:2277"}, "vertical_crs": {"code": "EPSG:6360"}, "geoid_model": null,
+                      "horizontal_unit": {"name": "US survey foot", "to_metres": 0.3048006096},
+                      "vertical_unit": {"name": "US survey foot", "to_metres": 0.3048006096},
+                      "axis_order": "east-north", "grid_rotation_deg": 0.0},
+    "local": {"origin": {"longitude": -97.7, "latitude": 30.3, "ellipsoidal_height_m": 70.0, "height_m": 100.0,
                          "projected": {"crs": {"code": "EPSG:32614"}, "x": 500000.0, "y": 4000000.0, "unit": {"name": "metre", "to_metres": 1}}},
-              "vertical_crs": {"code": "EPSG:3855"}, "unit": %s, "axes": {"x": "east", "y": "north", "z": "up"}}
+              "vertical_crs": {"code": "EPSG:3855"}, "geoid_model": null, "unit": %s,
+              "axes": {"x": "east", "y": "north", "z": "up"}, "grid_rotation_deg": 0.0}
   },
   "catalog": {
     "Elevation/Elevation.png": {"family": "host-ready", "sha256": "aa", "count": {"kind": "pixels", "value": 509545}, "raster": {%s}},
@@ -318,6 +322,7 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		const FString Text = Manifest(TEXT("{\"name\": \"US survey foot\", \"to_metres\": 0.3048006096}"));
 		FMantlePlaceVaultManifest M;
 		FString Error;
+		// The reader refuses a local frame that is not in metres before the conversion is reached, naming the unit.
 		TestFalse(TEXT("a site frame not in metres is refused"),
 			FMantlePlaceManifestThreeLogic::ToVaultManifest(ReadOf(Text), Text, M, Error));
 		TestTrue(TEXT("naming the unit: ") + Error, Error.Contains(TEXT("US survey foot")));
