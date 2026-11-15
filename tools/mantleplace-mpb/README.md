@@ -17,6 +17,9 @@ mpb validate site-bundle.zip             # a zip, a folder, or either inside one
 mpb validate site-bundle.zip --json      # the machine-readable report
 ```
 
+The same command checks a 3.x bundle and a 2.x one: it finds the manifest where the bundle's major
+keeps it and holds the bundle to that major's rules ([A 3.x bundle](#a-3x-bundle)).
+
 The package version is the MPB version it was tested against: `1.14.0` is held to the conformance
 corpus written for MPB 1.14.0, and a `.postN` release changes the package and not the suite.
 `mpb --version` and `mantleplace_mpb.__version__` report it.
@@ -29,8 +32,10 @@ corpus written for MPB 1.14.0, and a `.postN` release changes the package and no
 
 ## What it checks
 
-The format is [`spec/format-2.md`](https://github.com/mantleplace/mantleplace-dcc/blob/main/spec/format-2.md); this tool checks a bundle against it and
-against the published schema, and restates neither.
+The format of a 2.x bundle is [`spec/format-2.md`](https://github.com/mantleplace/mantleplace-dcc/blob/main/spec/format-2.md), and of a 3.x bundle
+[`spec/format.md`](https://github.com/mantleplace/mantleplace-dcc/blob/main/spec/format.md); this tool checks a bundle against its major's text and
+against the published schema, and restates neither. The list below is a 2.x and 1.x bundle's;
+[A 3.x bundle](#a-3x-bundle) has its own.
 
 - **The archive.** A zip, a folder, or either with the bundle inside one wrapper folder.
   `__MACOSX/` and `.DS_Store` are skipped wherever they sit. A zip entry that is not a plain
@@ -92,6 +97,60 @@ against the published schema, and restates neither.
 
 It never reprojects, and it derives no placement value: a frame is checked for being whole and
 self-consistent, never recomputed.
+
+## A 3.x bundle
+
+```bash
+mpb validate Site-Max.zip                # Manifest.json at the root: held to the 3.x rules
+mpb validate Site-Max.zip --json         # the same, as the machine-readable report
+```
+
+A bundle whose manifest sits at the root as `Manifest.json` is read as 3.x, and one whose manifest
+is `Metadata/manifest.json` as 2.x or 1.x (`format.md` §11). A manifest in the place its declared
+major does not use is `manifest.place`. A manifest that declares 3.x is held to these checks, and
+not to the 2.x pointer, frame and layout checks above:
+
+- **The schema, once it is published.** The 3.x schema is not served yet. Until it is, a manifest
+  that declares a 3.x version for which no schema is served is held to the rules below alone, and
+  the report says so (`schema.pending`, at info). Once the schema is served, the manifest is held
+  to it like any other, and `--staged` works as above.
+- **The tree and its names** (`format.md` §1, §2, §6, §12), the `names` check:
+
+  | Code | Severity | Rule |
+  | --- | --- | --- |
+  | `tree.subfolder` | error | a file deeper than one of the seven subject folders |
+  | `tree.root-file` | error | a root file other than `Readme.md` and `Manifest.json` |
+  | `tree.file-removed` | error | a 2.x file that 3.0 removed (§12), or a file in a format 3.0 dropped (Shapefile, world file, PDF, SVG, JPEG) |
+  | `tree.file-unknown` | error in 3.0, warning in a later 3.x | a file the 3.0 file table does not list |
+  | `tree.folder-unknown` | error in 3.0, warning in a later 3.x | a folder outside the seven |
+  | `name.number` | error | rule 1: a name with a number |
+  | `name.hyphen` | error | rule 1: a name with a hyphen |
+  | `name.suffix` | error | rules 1 and 4: a suffix after a word of the tree, joined or not (`TerrainMed`, `Terrain_Med`, `Terrain.med.glb`) |
+  | `name.word` | error | rule 1: not one word with its first letter capitalised (an acronym, a second capital) |
+  | `name.extension` | error | rule 5: an extension not in lower case |
+  | `name.charset` | error | rule 5: a name outside ASCII `[A-Za-z0-9._-]` |
+  | `name.case-collision` | error | rule 5: two entries that differ only by case |
+  | `name.case-mismatch` | error | rule 6: a tree name, or a catalog entry, that matches a file only regardless of case |
+
+  A later 3.x minor may add a file (§3), and a reader of 3.0 still reads it, so in a bundle that
+  declares one a file or folder the 3.0 table lacks is a warning; its name is still held to the
+  rules.
+- **One level** (§8, §9.3), the `level` check. The manifest states the download's level once, as
+  `Max`, `Med` or `Min`: none is `level.missing`, two or more `level.several`, anything else
+  `level.unknown`.
+- **The catalog** (§9.5, §9.8), the `catalog` and `sha256` checks. One entry per file the download
+  holds, `Readme.md` and `Manifest.json` included: an entry with no file is
+  `catalog.file-missing`, a file with no entry `catalog.entry-missing`, no catalog at all
+  `catalog.absent`. Every entry but the manifest's states a sha256 (`catalog.sha256-missing`), and
+  each is verified (`sha256.mismatch`). An entry that is not a plain relative path is
+  `pointer.unsafe`.
+- **ODbL roles**, as for 2.x: a vector or tabular data file is never a Produced Work, and a file
+  whose role is `none` lists no ODbL source.
+
+The 3.x schema names the manifest's members. Until it is published, the check reads the catalog
+from `file_entries`, the member the 2.x catalog already has, and the level from `level`; the
+schema's names replace these two in `layout3.py` and nowhere else. A manifest that declares a later
+major is read for its version and nothing else.
 
 ## The report
 

@@ -1,0 +1,73 @@
+{
+  "$comment": "Naming rule 1 (format.md §2): a name carries no number. `Records/Zoning2.gpkg` has one.",
+  "files": {
+    "Manifest.json": {
+      "version": "3.0.0",
+      "level": "Max",
+      "file_entries": {
+        "Basemap/Roads.dxf": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "e197d457e5288f7d13f6f531cee38fe0074ca860776f485125df74538f8fe889"
+        },
+        "Basemap/Roads.gpkg": {
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ],
+          "sha256": "2171729bd7b03bbd1b911c70d3f8f914516e9957ba654fc50c5f79239cfb369b"
+        },
+        "Elevation/Elevation.tif": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "a41a33831d5d6f62628da2c49589d4eda038e1966392b836d6a872bf586f73a9"
+        },
+        "Elevation/Terrain.glb": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "6baa2abd3b49926b9cdad8f74f3cfa699d2ca9e0e50876c6182dd7db0947d37e"
+        },
+        "Manifest.json": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": []
+        },
+        "Readme.md": {
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": [],
+          "sha256": "fa2fa0739228c6d4b64976a8a9acbc48f36fb82fb0956493489e7632e63a3078"
+        },
+        "Records/Zoning2.gpkg": {
+          "odbl_role": "none",
+          "license": "LicenseRef-Synthetic-PublicDomain",
+          "sources": [
+            {
+              "name": "Synthetic public record",
+              "license": "LicenseRef-Synthetic-PublicDomain"
+            }
+          ],
+          "sha256": "d3adfff3317daab38361ecee2d1cef3e73ba2826e1673c088dc35b2de95c1415"
+        }
+      }
+    },
+    "Basemap/Roads.dxf": "placeholder for Basemap/Roads.dxf\n",
+    "Basemap/Roads.gpkg": "placeholder for Basemap/Roads.gpkg\n",
+    "Elevation/Elevation.tif": "placeholder for Elevation/Elevation.tif\n",
+    "Elevation/Terrain.glb": "placeholder for Elevation/Terrain.glb\n",
+    "Readme.md": "A synthetic bundle for the conformance corpus. It holds no real data.\n",
+    "Records/Zoning2.gpkg": "placeholder for Records/Zoning2.gpkg\n"
+  }
+}

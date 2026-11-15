@@ -45,6 +45,8 @@ The second major of the semver era. It removes, moves and renames files and mani
 - **Find each file by its name in the catalog,** not by a `layout` pointer or a host block. A name the catalog lacks is a file the download does not hold.
 - **Rebuild what left from what stayed** ([`format.md`](format.md) §12): Shapefile, the SVG sheets, NDVI, the STAC Item, the geographic and projected GeoPackage twins, the surface points file, the `-Engine` files, the engine PNG copies of slope, aspect, hillshade, NDVI, canopy and land cover, and the RAW, `-Med` and `-Min` suffixed files each have a line naming the 3.0 file it comes from and the one step that derives it.
 
+**The bundle check.** The corpus's `bundle` group gains the 3.0 cases (`bundle.v3*`), and `mpb validate` holds a bundle whose manifest is `Manifest.json` at the root to its tree, its names, its one level and its catalog ([`conformance.md`](conformance.md) §7), and to the 3.0.0 schema once that is served.
+
 **Settled by the dry run before the freeze** ([file-by-host table](file-by-host.md)): `Basemap/Pavement`, `Records/Habitat`, `Landcover/Landcover.dxf` and `Elevation/Slope.dxf` joined the tree; `Trees` stays a GeoPackage and a CSV; `Roads.csv` carries each road's name; `Terrain.obj` stays, written Y-up with its unit in the Readme, beside a `Terrain.mtl` that points at the bundle's imagery; `Materials/Water.png` is the water coverage; and the Basemap DXFs in the order's CRS and units, `Imagery.tif`'s fourth band as near-infrared and every DXF with its attributes are conformance requirements ([`conformance.md`](conformance.md) §7).
 
 ### 2.2.0 — where a heightmap sits on the shared vertical ladder (additive minor; published and frozen)

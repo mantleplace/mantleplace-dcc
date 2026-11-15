@@ -17,7 +17,12 @@ from typing import IO
 
 from .report import Report
 
+#: Where a 2.x or 1.x bundle holds its manifest (`format-2.md`).
 MANIFEST_PATH = "Metadata/manifest.json"
+#: Where a 3.x bundle holds it, at the root (`format.md` §9.1), and every later major too.
+MANIFEST_PATH_3 = "Manifest.json"
+#: The places a manifest is looked for, the newest first: a zip with neither is not a bundle.
+MANIFEST_PATHS = (MANIFEST_PATH_3, MANIFEST_PATH)
 
 _IGNORED_FOLDERS = frozenset({"__MACOSX"})
 _IGNORED_FILES = frozenset({".DS_Store"})
@@ -41,9 +46,10 @@ class Bundle:
     """The files of one bundle, by bundle-relative POSIX path."""
 
     def __init__(self, form: str, root: str, files: dict[str, object],
-                 archive: zipfile.ZipFile | None) -> None:
+                 archive: zipfile.ZipFile | None, manifest_path: str = MANIFEST_PATH) -> None:
         self.form = form
         self.root = root
+        self.manifest_path = manifest_path
         self._files = files
         self._archive = archive
         self.folders = {"/".join(p.split("/")[:i]) for p in files for i in range(1, p.count("/") + 1)}
@@ -148,28 +154,33 @@ def open_bundle(path: Path, report: Report) -> Bundle | None:
         report.cannot_check("archive", "archive.unreadable", f"{path} {what}")
         return None
 
-    root = _root(entries)
-    if root is None:
+    found = _root(entries)
+    if found is None:
         report.add("archive", "archive.no-manifest", "error",
-                   f"no {MANIFEST_PATH} at the top of the bundle, or inside one wrapper folder; "
-                   "it is the one file a reader finds by convention")
+                   f"no {MANIFEST_PATH_3} (3.x) or {MANIFEST_PATH} (2.x and 1.x) at the top of the "
+                   "bundle, or inside one wrapper folder; it is the one file a reader finds by "
+                   "convention")
         if archive is not None:
             archive.close()
         return None
+    root, manifest_path = found
     if root:
         report.add("archive", "archive.wrapped", "info",
                    f"the bundle sits inside the wrapper folder {root!r}; paths are read from there")
     files = {name[len(root):]: handle for name, handle in entries.items() if name.startswith(root)}
-    report.form, report.root, report.manifest_path = form, root, MANIFEST_PATH
-    return Bundle(form, root, files, archive)
+    report.form, report.root, report.manifest_path = form, root, manifest_path
+    return Bundle(form, root, files, archive, manifest_path)
 
 
-def _root(entries: dict[str, object]) -> str | None:
-    if MANIFEST_PATH in entries:
-        return ""
+def _root(entries: dict[str, object]) -> tuple[str, str] | None:
+    """(wrapper prefix, manifest path) for the first manifest found, or None."""
+    for manifest_path in MANIFEST_PATHS:
+        if manifest_path in entries:
+            return "", manifest_path
     tops = {name.split("/", 1)[0] for name in entries}
     if len(tops) == 1 and all("/" in name for name in entries):
         wrapper = tops.pop() + "/"
-        if wrapper + MANIFEST_PATH in entries:
-            return wrapper
+        for manifest_path in MANIFEST_PATHS:
+            if wrapper + manifest_path in entries:
+                return wrapper, manifest_path
     return None

@@ -129,6 +129,16 @@ The 2.0 cases hold every 2.0 bundle to the folder allowlist and the naming rules
 whole, each rule a validator can check has a case that breaks it, and the allowlist's two
 warnings, an unlisted folder and a stray root file, are accept cases.
 
+The 3.0 cases (`bundle.v3*`) hold a 3.x bundle to its tree, its names, its one level and its
+catalog ([`format.md`](../../../spec/format.md) §1, §2, §8, §9.5; the requirements are
+[`conformance.md`](../../../spec/conformance.md) §7): `bundle.v3Full` is a Max download whole,
+`bundle.v3MedWithoutRecords` a Med download of an AOI with no records, and each rejection has a
+case that breaks one rule. `bundle.v3MinorFileUnknown` declares 3.1.0, a minor that may add a file,
+so a file the 3.0 table lacks is a warning there and an error in `bundle.v3FileUnknown`. The 3.x
+schema is not published yet, so these cases carry no `stagedSchema`: the runner holds each manifest
+to the format text's rules and reports the unpublished schema at info. Once the schema is served,
+the same cases are held to it, and a case it refuses is corrected rather than marked.
+
 ## The Platform API groups (`platform/`, `client/`)
 
 These two groups hold **exchanges** with the Platform API, not documents a parser reads: one request
