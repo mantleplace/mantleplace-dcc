@@ -99,7 +99,7 @@ PNG's pixel meaning is stated: a 1.x host block carries `uint16_mapping` and `ue
 a 2.0 bundle states it only in `file_entries[<path>].value_mapping`. A host-block statement is applied
 verbatim and wins, and a block without one reads the file's own entry.
 
-A manifest path matches an archive entry **regardless of case** (format.md 10.3 rule 6). **The engine's
+A manifest path matches an archive entry **regardless of case** (format-2.md 10.3 rule 6). **The engine's
 zip reader already does:** `FZipArchiveReader` keeps its entries in a `TMap<FString, ...>` whose hash and
 key comparison ignore case, so `metadata/MANIFEST.json` finds `Metadata/manifest.json`; checked against
 the UE 5.8 source and by `MantlePlace.Import.BundleLayout`, which writes a real zip in another case than

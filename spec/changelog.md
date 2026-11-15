@@ -22,11 +22,36 @@ history, not contract.
 
 ## Semver era
 
+### 3.0.0 — one subject tree, one name per file, every file promised (major; text frozen, schema to follow)
+
+The second major of the semver era. It removes, moves and renames files and manifest members, which [compatibility](compatibility.md) §2 defines as a MAJOR, and it is the version from which the 3.x promise (compatibility §8) holds. [`format.md`](format.md) describes it whole; this entry lists what changed and what a 2.x reader does about it. The text is frozen when it merges; the 3.0.0 schema and the corpus's 3.x cases are published after it, and the schema is served at `3.0.0.json` and listed in the freeze ledger once it is. Bundles delivered at 2.x keep their version and are never repackaged; their text is [`format-2.md`](format-2.md).
+
+**What a 3.0 bundle is.**
+
+- **Seven one-word subject folders, no subfolders,** and a root that holds only `Readme.md` and `Manifest.json` ([`format.md`](format.md) §1). `Metadata/` and `Drawings/` go; `Features/` becomes `Basemap/`; `LandCover/` becomes `Landcover/`; `Materials/` is new.
+- **Six naming rules** ([`format.md`](format.md) §2): one word, first letter capitalised, no acronyms, hyphens, numbers or suffixes; countable things plural and continuous things singular; the same data in another format shares its name. No name carries a level, a unit, a frame or a CRS.
+- **One promise and the admission rule** ([`format.md`](format.md) §3). Every file in the tree is promised for the life of 3.x. A file joins only if it is a new subject, or a host-ready copy some host can neither read nor derive. The canonical and courtesy split of 2.0 is retired.
+- **Formats** ([`format.md`](format.md) §5): every vector layer is a GeoPackage and DXF pair, in 3D where the data has heights, except the tree points (GeoPackage and CSV); every host-ready raster is PNG.
+- **Units by extension** ([`format.md`](format.md) §4): georeferenced files (tif, gpkg, dxf, landxml, ifc) in the order's CRS and units; host-ready files (glb, usdz, obj, png, csv) in one local site frame in metres. The manifest states both frames once.
+- **Precision per file** ([`format.md`](format.md) §6, §7): each file's data type, scale and no-data value are stated, so no reader depends on a scale tag. Slope is stored to tenths of a degree, aspect to whole degrees, canopy height to whole metres; elevation and imagery are lossless.
+- **Three levels, Max, Med and Min** ([`format.md`](format.md) §8). RAW is retired. One level per download, the same names at every level; host-ready files carry the level and georeferenced files are identical in all three downloads.
+- **The manifest** ([`format.md`](format.md) §9): at the root as `Manifest.json`, public facts only, one generated catalog that states each file's count (rows, features, triangles or pixels), the download's level stated once, the files a bundle does not hold listed with their reason, and **no per-host block**. Each value a 2.x plugin read from a host block has a neutral home or is dropped ([`format.md`](format.md) §13).
+- **The zip** ([`format.md`](format.md) §10): members are DEFLATE-compressed.
+- **Extras** sit beside the bundle, outside the standard: the Site Brief, the plan sheets and the terrain tiles. The manifest names none.
+
+**What a 2.x reader does.**
+
+- **Tell the majors apart by where the manifest is** ([compatibility](compatibility.md) §1): `Manifest.json` at the root is 3.x, `Metadata/manifest.json` is 2.x or 1.x. A 2.x reader finds no `Metadata/manifest.json` in a 3.0 bundle; one that finds a root `Manifest.json` should refuse it as a newer major (compatibility §3).
+- **Find each file by its name in the catalog,** not by a `layout` pointer or a host block. A name the catalog lacks is a file the download does not hold.
+- **Rebuild what left from what stayed** ([`format.md`](format.md) §12): Shapefile, the SVG sheets, NDVI, the STAC Item, the geographic and projected GeoPackage twins, the surface points file, the `-Engine` files, the engine PNG copies of slope, aspect, hillshade, NDVI, canopy and land cover, and the RAW, `-Med` and `-Min` suffixed files each have a line naming the 3.0 file it comes from and the one step that derives it.
+
+**Settled by the dry run before the freeze** ([file-by-host table](file-by-host.md)): `Basemap/Pavement`, `Records/Habitat`, `Landcover/Landcover.dxf` and `Elevation/Slope.dxf` joined the tree; `Trees` stays a GeoPackage and a CSV; `Roads.csv` carries each road's name; `Terrain.obj` stays, written Y-up with its unit in the Readme, beside a `Terrain.mtl` that points at the bundle's imagery; `Materials/Water.png` is the water coverage; and the Basemap DXFs in the order's CRS and units, `Imagery.tif`'s fourth band as near-infrared and every DXF with its attributes are conformance requirements ([`conformance.md`](conformance.md) §7).
+
 ### 2.2.0 — where a heightmap sits on the shared vertical ladder (additive minor; published and frozen)
 
 Two optional members are added to the 16-bit grayscale `value_mapping` of a file entry, a MINOR under
 [compatibility](compatibility.md) §2. Nothing is removed, re-typed or re-meant, and a 2.0 or 2.1 reader
-ignores them as unknown members. [`format.md`](format.md) §6.8 explains them; the schema owns the
+ignores them as unknown members. [`format-2.md`](format-2.md) §6.8 explains them; the schema owns the
 member-level wording, and where it and this entry differ the schema is right.
 
 - **`vertical_tier`**, on a heightmap only: the rung of the shared vertical ladder the PNG is encoded
@@ -45,7 +70,7 @@ relief, and a reader decodes it by `min` and `max` as before. A reader that does
 
 Two optional members are added to `imagery`, a MINOR under [compatibility](compatibility.md) §2.
 Nothing is removed, re-typed or re-meant, and a 2.0 reader ignores them as unknown members.
-[`format.md`](format.md) §6.4 explains them; the schema owns the member-level wording, and where it
+[`format-2.md`](format-2.md) §6.4 explains them; the schema owns the member-level wording, and where it
 and this entry differ the schema is right.
 
 - **`imagery.reflectance_scale`** and **`imagery.reflectance_offset`**, which say how the stored
@@ -64,7 +89,7 @@ did before. A reader that does not stretch imagery is unaffected.
 The first major of the semver era, and the first version written for readers outside Mantle Place. It
 removes, moves, renames and narrows members and files, which [compatibility](compatibility.md) §2
 defines as a MAJOR, and it is the version from which the 2.x promise (compatibility §8) holds.
-[`format.md`](format.md) §9 to §12 describe it; this entry lists what moved and what a 1.x consumer
+[`format-2.md`](format-2.md) §9 to §12 describe it; this entry lists what moved and what a 1.x consumer
 does about it. The schema owns the member-level list, and where it and this entry differ the schema
 is right. It is served at `2.0.0.json` and is in the freeze ledger.
 
@@ -73,15 +98,15 @@ is right. It is served at `2.0.0.json` and is in the freeze ledger.
 - **A profile.** MPB defines no file format. Five formats are canonical (COG, GeoPackage, glTF 2.0,
   OpenUSD, IFC 4.0.2.1 (IFC4 ADD2 TC1)) because each has an open specification, royalty-free use and
   two independent implementations; every other file is a courtesy format, shipped but not promised
-  ([`format.md`](format.md) §9).
+  ([`format-2.md`](format-2.md) §9).
 - **One layout.** Eight top-level folders, an allowlist that is normative for producers, and six
-  naming rules ([`format.md`](format.md) §10). `Metadata/manifest.json` and `README.md` keep their
+  naming rules ([`format-2.md`](format-2.md) §10). `Metadata/manifest.json` and `README.md` keep their
   names.
 - **Frames belong to files.** Every file entry states its own frame, its licence, its sources and its
   `odbl_role` in the neutral part of the manifest (the members 1.14.0 added). A host block becomes a
   set of pointers and pre-computed shortcuts for one host's own plugin; any reader can place every
   file without it.
-- **A media type.** `application/vnd.mantleplace.bundle+zip` ([`format.md`](format.md) §12).
+- **A media type.** `application/vnd.mantleplace.bundle+zip` ([`format-2.md`](format-2.md) §12).
 
 **What moved, for a consumer that read a 1.x bundle.**
 
@@ -91,7 +116,7 @@ is right. It is served at `2.0.0.json` and is in the freeze ledger.
   section. `Records/` is flat and named by the labels the Site Brief uses. The land cover polygons
   are `LandCoverAreas`. **A consumer that located files by pointer needs no change here.** One that
   built a path from a folder name must switch to the pointer values, which is what §3 of
-  [`format.md`](format.md) always required.
+  [`format-2.md`](format-2.md) always required.
 - **Names.** Every basename follows the six rules. Different data no longer shares a basename: the
   two 1.x files called `Drape.png`, in two folders, are now two names. The plugin-only copies of 1.x
   (a vector folder inside `Site/`, `TreePointsMetric.csv`, the State Plane drape) are gone; a frame or
@@ -141,7 +166,7 @@ is right. It is served at `2.0.0.json` and is in the freeze ledger.
 `vector.layers` that lists no `tables` holds exactly one feature table. The producer names it in
 PascalCase after the file stem (`RoadSplines`), not after the layer (`road_splines`), and a reader
 reads that one table whatever it is called and never the only table of a file that holds several
-([`format.md`](format.md) §6.3). No member changes. The conformance corpus gains
+([`format-2.md`](format-2.md) §6.3). No member changes. The conformance corpus gains
 `bundle.v2GpkgSoleTable` and `bundle.v2GpkgSoleTableSeveral`, and `mpb validate` rejects an untabled
 row whose file holds more than one feature table (`gpkg.tables-several`) or none
 (`gpkg.table-none`).
@@ -174,7 +199,7 @@ Two parts are added to `hosts.autocad`, a MINOR under [compatibility](compatibil
 removed, re-typed or re-meant, and every host floor at 1.0.0 reads it: a reader that does not read
 `hosts.autocad` is unaffected, and one that does and predates these members ignores them as unknown
 members. Each host's pin lives in `tools/manifest-conformance/verified-against.json`.
-[`format.md`](format.md) §6.10 explains the members; this entry lists them.
+[`format-2.md`](format-2.md) §6.10 explains the members; this entry lists them.
 
 - **`records`**, the public-record layers in the block's `file_frame`, as `records.layers`: each a
   `name` and a pointer to its drawing (`path`, `sha256`, `horizontal_frame`, `horizontal_units`,
@@ -195,8 +220,8 @@ and places the rest.
 One block is added: `hosts.autocad`, a new `hosts.<hostId>` sub-block, which is a MINOR under
 [compatibility](compatibility.md) §2. Nothing is removed, re-typed or re-meant, and every host floor
 at 1.0.0 reads it: a reader that does not know the host id ignores the block and infers nothing from
-its absence, as for any host id (compatibility §3, [`format.md`](format.md) §4.2). A reader of a later
-`hosts.autocad` reads 1.18.0 blocks as its subset. [`format.md`](format.md) §6.9 explains the
+its absence, as for any host id (compatibility §3, [`format-2.md`](format-2.md) §4.2). A reader of a later
+`hosts.autocad` reads 1.18.0 blocks as its subset. [`format-2.md`](format-2.md) §6.9 explains the
 members; this entry lists them.
 
 - **One host.** The id is `autocad` for AutoCAD and Civil 3D alike. Civil 3D is a part of the host,
@@ -304,7 +329,7 @@ Unreal reads no `hosts.revit` block, so no import behaviour changes there.
 ### 1.14.0 — file frames, the site origin and per-file licensing, in the neutral part of the manifest (additive minor; published and frozen 2026-10-22)
 
 Every item below is additive: no member is removed, re-typed or re-meant, so it is a MINOR under
-[compatibility](compatibility.md) §2, and every host floor at 1.0.0 reads it. [`format.md`](format.md)
+[compatibility](compatibility.md) §2, and every host floor at 1.0.0 reads it. [`format-2.md`](format-2.md)
 §6.8 explains the new members; this entry lists them.
 
 - **`file_entries`**, the optional top-level map from an archive path to what the manifest states
@@ -565,7 +590,7 @@ where `attribution.job_id` stands beside it.
   layer that mixes points, lines and polygons can ship one file per family, each format row naming
   its `geometry_family`, or one GeoPackage whose row names a table per family in `tables`. One layer
   can then carry several rows of one format, and a consumer reads all of them, taking the file of
-  each family it uses ([format](format.md) §6.3).
+  each family it uses ([format](format-2.md) §6.3).
 - **`hosts.revit.vectors.gpkg`** is new: the Revit host's vector layers again, in the same frame,
   as one GeoPackage whose CRS is part of the file, for GIS and CAD tools. It sits beside `layers`,
   and the Revit host reads the GeoJSON files, never this.
@@ -602,7 +627,7 @@ Every item below is additive, and nothing is removed or re-meant, so it is a MIN
 - **`basemap.drape`** is new and optional, present only when the curator picked it: the Stylized
   map as a PNG drape, `Basemap/Drape.png`, baked in the same **fixed** frame as `imagery.drape` and
   under the same size cap. The same frame rule applies: a host whose origin is not the drape's
-  `extent_crs` does not drape it ([format](format.md) §6.4).
+  `extent_crs` does not drape it ([format](format-2.md) §6.4).
 - **`layout.basemap_cog`** and **`layout.basemap_drape`** point at the two files, each present only
   when its file is.
 
@@ -644,18 +669,18 @@ reads it.
   frame, with its `extent`, `extent_crs`, `units`, pixel `width` and `height`, and `sha256`. On a
   State Plane delivery it names a drape baked from the delivered State Plane imagery,
   `Imagery/Drape.StatePlane.png`; where the delivery grid is already the metric UTM grid it names
-  `Imagery/Drape.png`. Why a drape is carried per frame is [format](format.md) §6.4.
+  `Imagery/Drape.png`. Why a drape is carried per frame is [format](format-2.md) §6.4.
 - **`imagery.drape` is unchanged in shape and is now described as what it always was**: the
   fixed-frame drape, on the AOI's metric UTM grid on every delivery. Before 1.3.0 a State Plane
   bundle carried no drape on its delivery grid at all, so a Revit reader that placed
   `imagery.drape` against a State Plane origin had nothing correct to place.
 - **`hosts.<hostId>.file_frame`** is new on `hosts.unreal` and `hosts.revit`, beside the
   `georeference` it is read with: the CRS and the horizontal and vertical units every file the block
-  points at shares, as a projected or a local frame ([format](format.md) §4.2). Unreal's is the
+  points at shares, as a projected or a local frame ([format](format-2.md) §4.2). Unreal's is the
   AOI's metric UTM zone on every delivery; Revit's follows the delivery.
 - **`hosts.revit.vectors`** is new: the vector layers the Revit host places, as GeoJSON in its own
   frame on every delivery, so a State Plane delivery no longer leaves Revit with only a geographic
-  set it may not project ([format](format.md) §6.5). `hosts.revit.readiness` gains `vectors`.
+  set it may not project ([format](format-2.md) §6.5). `hosts.revit.readiness` gains `vectors`.
 - **`vector.crs`** is new: `EPSG:4326`, stating the frame the shared set has always been in.
 - **`landcover.tree_points` and `hosts.unreal.foliage_points` each state their file's frame** —
   `crs`, `units` (the `ground_z` column) and `horizontal_units` (`x`, `y`) — and REQUIRE it. The
@@ -664,7 +689,7 @@ reads it.
   delivery it still names `Landcover/TreePoints.csv`. Before 1.3.0 it named the delivered file on
   every delivery, so on a State Plane delivery a reader subtracting its metric origin put every tree
   a thousand kilometres off site. A foot delivery built before 1.3.0 carries no `foliage_points`
-  until its next rebuild. No column is renamed ([format](format.md) §6.6).
+  until its next rebuild. No column is renamed ([format](format-2.md) §6.6).
 - **`delivery.label`** is new and optional: the display words for the delivery CRS — the EPSG
   registry name of the projected zone, or a fixed phrase on a local grid — the same words the
   platform shows a person. Every earlier bundle lacks it; there, the same words follow from `tier`
@@ -675,7 +700,7 @@ reads it.
 The tree-points CSV gains a sixth column, `foliage_type`, and `landcover.tree_points` gains an
 optional `foliage_type_vocabulary` naming the closed vocabulary its values are drawn from — `"1"`,
 which is `tree` and `shrub`, read from the ESA WorldCover class under each point. The rules a reader
-follows are [format](format.md) §4.4. `hosts.unreal.foliage_points.columns` now states the columns
+follows are [format](format-2.md) §4.4. `hosts.unreal.foliage_points.columns` now states the columns
 the CSV actually carries rather than a fixed list of five.
 
 Nothing is removed or re-meant, so this is a MINOR under [compatibility](compatibility.md) §2 and
@@ -688,13 +713,13 @@ released through `unreal-0.4.0` matched the header as one exact string and count
 the new column would have dropped the whole tree layer on import, with the import still reporting
 success. The platform emits the column only once a tagged Unreal release carries the fixed
 reader — `unreal-0.5.0`, tagged the same day — the order 1.0.0 was shipped in, for the same reason.
-[Format](format.md) §4.4 now states the rule that reader broke.
+[Format](format-2.md) §4.4 now states the rule that reader broke.
 
 ### 1.1.0 — the location block and its time zone (additive minor; published and frozen 2026-09-19)
 
 A new **required** top-level block, `location`, holds facts about the place that are the same for
 every host. Unlike `hosts.<hostId>`, which a host reads only its own of, every host may read it
-([format](format.md) §4.1). Its first member is `location.time_zone`:
+([format](format-2.md) §4.1). Its first member is `location.time_zone`:
 
 | Field                   | Meaning                                                                                   |
 | ----------------------- | ----------------------------------------------------------------------------------------- |
@@ -731,7 +756,7 @@ binds a reader to accepting the block it does not consume.
 
 No schema version was published, and nothing a reader parses changed. The seven names a
 `vector.layers` entry can carry, and what a layer's presence or absence means, are now written down
-in [format §6.3](format.md#63-vector-layers-by-name). The corpus gained
+in [format §6.3](format-2.md#63-vector-layers-by-name). The corpus gained
 `manifest.vectorLayerVocabulary`, which names every layer, and `manifest.vectorLayerUnknownName`,
 which a reader must accept while ignoring the name it does not know.
 
@@ -852,7 +877,7 @@ published pre-history begins at v7.
 - Pointer **values** moved to the tool-free zip layout: the engine- and tool-named folders folded
   into the modality vocabulary. Manifest **key names** were unchanged, and the pointer-driven
   importer needed zero code change — the clearest demonstration of why
-  [the pointer doctrine](format.md#3-the-pointer-doctrine) exists.
+  [the pointer doctrine](format-2.md#3-the-pointer-doctrine) exists.
 - Additive: a top-level updated-at timestamp, re-stamped on each rebuild while the created-at
   timestamp began preserving the original build time; and a layout key recording lazy-migration
   provenance for older archives rebuilt on their next vault pick.

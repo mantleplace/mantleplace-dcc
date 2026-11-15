@@ -341,7 +341,7 @@ Four bundles are a small sample, and one 2026 point is at the bar: a check point
 ### Sharing a project: ODbL content and Prepare for Handover
 
 Content made from files the bundle marks `database` (an ODbL Derivative Database; a file with no
-stated role counts as one, as `spec/format.md` §6.8 says) is kept visibly apart. Every element such
+stated role counts as one, as `spec/format-2.md` §6.8 says) is kept visibly apart. Every element such
 a step makes is filed in a **selection filter** named `Mantle Place ODbL <order>` (with ` (terrain)`
 after it for the ground), which you can see under Manage ▸ Selection and in Visibility/Graphics, and
 which the **Mantle Place Site Context** view draws in orange. A selection filter, because it is the

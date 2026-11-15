@@ -3,918 +3,419 @@
 
 # The MPB format
 
-How a Mantle Place Bundle is put together, and how a consumer is meant to read it.
+How a Mantle Place Bundle of the 3.x major is put together, and how a reader is meant to read it: the tree, the names, the formats, the units, the precision, the levels, the manifest and the promise.
 
-The normative shape of the manifest is the published JSON Schema, cited throughout by block name
-rather than restated: `https://mantle.place/.well-known/schemas/bundle-manifest/`.
-This document explains what the blocks are *for* and which of them a reader is obliged to honour.
+A bundle delivered before 3.0 stays at its version and is never repackaged ([`compatibility.md`](compatibility.md) §8). Its text is [`format-2.md`](format-2.md), which a reader of 2.x bundles still needs. Source comments and documents written for 2.x cite sections as "format.md §N"; those numbers name sections of the 2.x text, now `format-2.md`.
 
-Requirement words — MUST, MUST NOT, SHOULD, MAY — carry their
-[RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) meanings. Every MUST below is decided by the
-schema, by the conformance corpus, or by both; where a corpus group settles the question, this
-document says which one.
+**What decides.** The manifest's members, their types and their permitted values belong to the 3.x schema, published in the schema namespace (`https://mantle.place/.well-known/schemas/bundle-manifest/`). This page names the facts the manifest states, not its members. The file table in §6 is normative for the tree: the producer generates its catalog from one registry, and a check fails the build when that registry and this table disagree.
 
-## 1. A bundle is a zip with one human file and one machine entry point
+Requirement words (MUST, MUST NOT, SHOULD, MAY) carry their [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) meanings.
+
+## 1. A bundle is a zip of seven subject folders
 
 ```
-<bundle>.zip
-  README.md                 the only top-level file — written for a person
-  Metadata/manifest.json    the machine entry point — everything else is reached from here
-  <Modality>/…              the artifacts
+Readme.md   Manifest.json
+Elevation/  Elevation.tif  Elevation.png  Terrain.glb  Terrain.obj  Terrain.mtl  Terrain.dxf  Terrain.landxml
+            Slope.tif  Slope.gpkg  Slope.dxf  Aspect.tif  Hillshade.tif  Contours.dxf
+Imagery/    Imagery.tif  Imagery.png
+Landcover/  Landcover.tif  Landcover.gpkg  Landcover.dxf  Canopy.tif  Trees.gpkg  Trees.csv
+Materials/  Water.png  Grass.png  Forest.png  Dirt.png  Rock.png  Sand.png  Snow.png  Built.png
+Basemap/    Basemap.tif  Basemap.png  Basemap.usdz  Buildings.glb  Roads.csv
+            Buildings, Roads, Pavement, Water, Landuse   (each .gpkg + .dxf)
+Records/    Parcels, Zoning, Floodplain, Wetlands, Soils, Heritage, Conservation, Habitat,
+            Hydrography, Contamination   (each .gpkg + .dxf)
+Site/       Site.usdz  Site.ifc  Site.dxf
 ```
 
-Everything else lives under a modality folder. The README is generated per bundle and is not part of
-the contract; a consumer MUST NOT parse it. This section and §2 describe the layout of a 1.x bundle;
-the layout of a 2.0 bundle is §10.
+- **Seven subject folders, no subfolders.** Every file sits directly in one of `Elevation`, `Imagery`, `Landcover`, `Materials`, `Basemap`, `Records` and `Site`.
+- **The root holds only the two files about the whole bundle.** `Readme.md` is written for a person: it is generated for each download, it is not part of the contract, and a reader MUST NOT parse it. `Manifest.json` is the machine entry point (§9).
+- **A file is held only where the order produced it.** Each `Records` pair is present only where the AOI has that record, as a record always was. The manifest's catalog says which files one bundle holds, and the manifest lists every promised file it does not hold with the reason (§9.6).
+- **Extras are not in the tree.** The Site Brief, the plan sheets and the terrain tiles are separate downloads beside the bundle. They are outside this standard, carry no version promise, and the manifest names none of them (§9.9).
 
-A **sidecar manifest** is also published beside the zip in the vault, carrying the same document
-plus one extra block — see [§7](#7-the-sidecar-manifest). Inside the zip,
-`Metadata/manifest.json` is the manifest.
+## 2. The naming rules
 
-## 2. Modality folders are human-facing, and machines never navigate by them
+⛔ **Normative: a 3.x producer follows all six.**
 
-In a 1.x bundle the top-level folders are one-word nouns naming a **modality**, not a tool: `Basemap`, `Imagery`,
-`Elevation`, `Surface`, `Site`, `Mesh`, `Vector`, `Landcover`, `Flood`, `Metadata`. The vocabulary
-is a frozen allowlist on the producing side — growing it is a deliberate, reviewed act — and it is
-frozen so that a curator opening the zip finds the same words next year.
+1. **One word, first letter capitalised.** No acronyms, hyphens, numbers, spaces or suffixes. The field's own closed compounds stay one word: `Landcover`, `Landuse`, `Hillshade`, `Basemap`.
+2. **A name states its subject.** Countable things are plural and continuous things singular, folders included: `Records`, `Materials`, `Roads`, `Trees` and `Buildings` count; `Imagery`, `Water`, `Pavement` and `Elevation` do not.
+3. **The same data in another format shares its name** and differs only by extension: `Roads.gpkg` and `Roads.dxf` hold the same features and attributes. Different data never shares a name anywhere in the tree, which is why the terrain mesh is `Terrain` and not `Elevation`.
+4. **No name carries a level, a unit, a frame or a CRS.** A file has the same name and path in every download, at every level and on every order. What a name leaves out the manifest states once (§9).
+5. **Extensions are lower case** and are the ones the file table uses (§6). Names are ASCII, and no two entries of one archive differ only by case, so a bundle extracts the same on a case-sensitive and a case-insensitive file system.
+6. **Writers use the exact case; readers match regardless of case.**
 
-The naming rule inside a folder: **basename is artifact identity, extension is format.**
-`Surface.dxf` and `Surface.landxml` are one artifact in two formats. A compound basename appears
-only where a file must still describe itself after being copied out of its folder.
+`Readme.md` and `Manifest.json` follow the same rules. `Manifest.json` keeps its name and its place at the root in every later major, so that a reader written for 3.x can open a newer bundle, read its version and refuse it (§11).
 
-**None of this is a machine contract.** Folder names are human-facing convention for a consumer;
-they have already been reorganised twice (1.12.0 and 2.0), and a pointer-driven consumer needed no
-change to survive either. Which brings us to the rule that matters most in this document.
+## 3. One promise, and the admission rule
 
-## 3. The pointer doctrine
+**Every file in the tree is promised for the life of 3.x.** A 3.x minor may add a file; no 3.x release removes, moves or renames one, or changes its format, its family (§4) or what its values mean (§7). There is one kind of file: the 2.x split between canonical and courtesy formats is retired.
 
-⛔ **A consumer MUST locate every file through a manifest pointer VALUE, and MUST NOT construct a
-path from folder convention.**
+**The admission rule.** A file joins the tree only if it is a new subject, or a host-ready copy of an existing subject that some host can neither read nor derive. A host derives a file when one step over a file already in the tree makes it (§12 lists such steps); a host never converts a format to read a file it has an importer for. A file that joins does so in a minor release, which the [changelog](changelog.md) records.
 
-Two kinds of pointer carry every file in a bundle:
+**A profile, never an encoding.** MPB defines no file format. Every file is in a format somebody else specified and maintains; MPB adds the tree, the names, the manifest and the rules in this page. A producer or a reader needs a library for each format it touches, and a parser for nothing MPB-specific except the manifest.
 
-- the **`layout` block**, whose keys name artifacts and whose values are archive-relative paths; and
-- **per-artifact `path` fields** inside the blocks that describe an artifact in detail.
+**Produced Works and ODbL files.** No file is both. `Site/Site.usdz` and every raster and mesh built from ODbL sources are Produced Works (rasterized, meshed, extruded or baked), which a curator can hand on with a credit line. `Basemap/Basemap.usdz`, the vector layers built from ODbL sources and `Site/Site.dxf` are ODbL files, kept complete, and carry their notice and the licence link inside the file (GeoPackage metadata, the DXF header, USD layer metadata). A file no ODbL source contributes to has no ODbL role. The manifest states each file's role, licence and sources (§9.8), and the Readme lists them for a person. No folder means "ODbL".
 
-The keys are stable; the values move. A pointer is present when its artifact shipped, and some layer
-pointers are explicitly null when their layer is absent — the schema states which behaviour each
-pointer has. Reading a pointer value and extracting exactly that zip entry is the whole procedure.
+## 4. Two families, and units by extension
 
-**The manifest itself is the one exception**, of necessity: `Metadata/manifest.json` is found by
-convention, because a reader has to open it before it can read a pointer to anything. It also
-publishes a pointer to itself, which is how a consumer that already holds the parsed document can
-name the entry it came from. Every *other* file in the bundle is found by pointer.
+Every data file belongs to one of two families, and its extension says which.
 
-The failure this prevents is not hypothetical, and it is not loud. A consumer that hardcodes a
-well-known relative path keeps working until the producer reorganises the archive, and then fails on
-a customer's bundle rather than in anyone's CI.
-
-**Archive paths are untrusted input.** A consumer MUST resolve every pointer inside its extraction
-root and reject entries that escape it. The producer does not emit such paths; a reader that assumes
-so is one malformed zip away from writing outside its own directory.
-
-## 4. The manifest has three registers
-
-One JSON document — but its top-level blocks divide by *who they are for*, and a reader's
-obligations differ by register.
-
-### 4.1 The neutral core — the bundle's own facts
-
-Host-independent truth about what was delivered: the AOI bounds, the build's identity and
-timestamps, the delivery CRS and unit system, the packaging contract this bundle was produced
-against, the completeness verdict, a block per modality describing the artifacts that shipped,
-licensing, attribution, and pipeline provenance.
-
-Every consumer reads this register. It is the half that answers *what is in this bundle, and under
-what terms*.
-
-**`location` — facts about the place (from 1.1.0).** Some facts are the same for every host because
-they describe the place, not a host's frame or units. Those live in the top-level `location` block,
-and every host MAY read it. The first is `location.time_zone`: the IANA zone name, the standard-time
-UTC offset in hours, whether the zone observes daylight saving, and the tzdata release the offsets
-were read from. It is resolved once, at the AOI-bbox centroid, so a bundle has one time zone even
-when its AOI straddles a zone line.
-
-- ⛔ **Apply it; never derive it.** A host MUST NOT compute a time zone from longitude, and MUST NOT
-  parse an offset out of the zone name: POSIX sign inversion makes `Etc/GMT+2` UTC−2.
-- The offset is fractional where the zone is (5.5, 5.75, 12.75) and is **not clamped** to any host's
-  range. Kiritimati is 14. A host whose API accepts only ±12 wraps the value and owns that choice.
-- Daylight-saving **dates** are not published, because they change every year. A host that needs them
-  resolves `iana` with its own tzdata; a host that only takes an on/off switch reads `observes_dst`.
-- `location` is not an artifact family. `licensing.site` classifies the IFC Site model, which is
-  unrelated.
-
-**Per-file frames, the site origin and licensing (from 1.14.0).** The core can also state, file by
-file, how each file is placed and under what terms (`file_entries`), and one point every offset
-file is measured from (`location.site_origin`). Both are optional and neither replaces a host block.
-§6.8 describes them.
-
-### 4.2 `hosts.<hostId>` — pre-derived placement, one subtree per host
-
-Everything host-specific lives under `hosts.<hostId>`, and a consumer targeting a host reads
-**exactly that subtree** of the host blocks. Facts that are identical for every host do not belong
-here. They live in `location` (§4.1), which is never copied into a host subtree.
-
-⛔ **A consumer MUST NOT read another host's block**, and MUST NOT merge two. The blocks are
-deliberately not shaped alike: one host wants a flat projected frame in metric UTM, another wants a
-survey point in the delivery CRS. A reader that takes whichever block it finds first and treats it
-as "the georeference" will report a plausible CRS and place a site in the wrong country, with
-nothing failing. The corpus pins this with a case carrying two conflicting host georeferences on
-purpose.
-
-A host sub-block that places files states the frame they share, at `hosts.<hostId>.file_frame`: a
-CRS, a horizontal linear unit and a vertical linear unit, each declared. A frame is either
-**projected** — the files' coordinates are in the named `crs`, and any origin is placement carried
-elsewhere in the block — or **local** — the files are offsets about an `origin` that is part of the
-frame's identity, on the grid named by `base_crs`, and no `crs` is named because the files are in
-none. Every coordinate-carrying file a block points at is in that block's `file_frame`; the
-producer checks this before it publishes. `file_frame` describes the FILES. The origin keeps its
-own unit, and on a delivery with no projected foot zone the two differ (§6).
-
-A host sub-block always carries its **readiness** verdicts (§6.1). It does not always carry a
-payload: a bundle whose artifacts for that host have not been materialised yet is readiness-only,
-and that is a well-formed manifest, not an error.
-
-New hosts join additively — a new sub-block in a minor release. A consumer MUST ignore host ids it
-does not recognise, and MUST NOT infer anything from their absence.
-
-### 4.3 `platform` — present, reserved, and not part of the contract
-
-Non-normative. It carries values the Mantle Place web application reads instead of hard-coding them.
-
-⛔ **No consumer may depend on the `platform` block.** Its inner shape may change in a minor
-release, which is exactly what "not part of the interchange contract" buys. It is documented here so
-that a reader who encounters it knows it is deliberate rather than an undocumented leak.
-
-### 4.4 Tabular artifacts, and the foliage type
-
-Where a delimited-text artifact's manifest entry publishes `columns`, the file carries that list as
-its header row. ⛔ **A reader MUST resolve those columns by header name, never by position, and MUST
-ignore a column it does not know.** A minor release may append a column; a reader that matches the
-header as one exact string, or counts fields, turns that additive change into a missing layer. The
-corpus pins this in `manifest.treePointsRowCount`, with an appended, a reordered and a missing
-column. That case is scoped to the one host whose block it reads; a host it does not reach pins the
-same rule in its own suite.
-
-`Landcover/TreePoints.csv` is the case that exists today. From 1.2.0 its last column is
-`foliage_type`, and `landcover.tree_points.foliage_type_vocabulary` names the vocabulary its values
-come from. The vocabulary is **closed and owned by the platform**; a host maps each value to its own
-family, symbol or asset and never derives one.
-
-- **Vocabulary `"1"`** is `tree` and `shrub`. A point is a `shrub` where the ESA WorldCover 2021 v200
-  class under it is Shrubland (20), and a `tree` for every other class and where WorldCover has no
-  data. It is never inferred from `height_m` or `crown_radius_m`.
-- ⛔ **A host that reads `foliage_type` MUST read a value it does not know as `tree`.** The
-  vocabulary may grow, and a new value is a new vocabulary version — never a change of meaning for
-  an existing one. So a vocabulary the host does not know is no reason to ignore the column: the
-  values it knows keep their meaning, and it maps them. `manifest.foliageTypeUnknownValue` binds
-  both halves, scoped to the first host that read the value; a second host reading it takes the
-  scope off rather than adding a case of its own.
-- A manifest without `foliage_type_vocabulary` has no `foliage_type` column; read every point as a
-  tree.
-
-## 5. Integrity
-
-Artifacts carry a lowercase-hex sha256 of their exact bytes. The rules for using it are short, and
-the interesting half is what to do when a hash is absent.
-
-⛔ **Where the schema requires a hash, a consumer MUST verify it and MUST fail closed on a
-mismatch** — refuse the import, and name the artifact. Importing bytes that failed verification is
-worse than importing nothing, because the failure surfaces later, as data that looks real.
-
-⛔ **A missing optional hash means _unknown_, not _corrupt_.** Where the schema does not require a
-hash and none is present, the check is skipped and the artifact remains valid. A consumer SHOULD
-report that distinction rather than claim a verification it did not perform. Treating unknown as
-corrupt makes every older bundle un-openable; treating it as verified is a lie. A hash that IS
-required and is absent is a producer bug and a refusal — the two cases are told apart by the schema,
-never by guesswork.
-
-Where an artifact carries no hash of its own, a consumer resolves one by matching its path against
-the manifest's own format tables rather than concluding there is none.
-
-Downloading is outside this spec, but one adjacent practice is worth stating because getting it
-wrong corrupts a cache silently: write a download to a temporary path, verify it, and promote it by
-rename. A consumer that streams onto the final path leaves a truncated file that looks cached, and
-imports it on the next run.
-
-Corpus groups `digest` (NIST FIPS 180-4 known answers, including the streaming-equivalence cases)
-and `cache` are the executable form of this section.
-
-## 6. Placement, coordinates and units
-
-⛔ **Placement values are pre-derived by the platform and MUST be applied verbatim. A consumer MUST
-NOT re-derive them.** Scales, offsets, origins, extents, rotations, quantisation mappings — all of
-it is computed once, upstream, and published. The consumer multiplies published numbers into its own
-coordinate convention and does nothing else.
-
-This is the most important rule in the spec, and it is a rule rather than advice because the failure
-mode is a bundle that imports successfully and is wrong. A consumer that recomputes a transform "to
-be safe" has built a second implementation of a pipeline it cannot see, and the two drift in the
-field rather than in CI. The corpus carries the expected derived values with explicit tolerances;
-compare against those, and never against exact floats.
-
-Two consequences are worth spelling out, because both have bitten:
-
-- **Grid rotation is identity by construction.** The producing emitters reproject per vertex, so
-  meridian convergence is already absorbed into the coordinates. A consumer that assumes rotation
-  must be derived will derive it, and be wrong by metres per kilometre.
-- **The units question has more than one answer in the same bundle, deliberately.** The bundle-level
-  unit system, the delivery tier and its linear unit, and each artifact's own units field describe
-  different scopes, and they can legitimately disagree — a delivery whose region has no projected
-  foot zone ships an origin stated in one unit beside artifacts stated in another, which is exactly
-  why the unit is published next to the coordinates it describes instead of being inferred once per
-  bundle. **Read the unit from the thing you are placing.** The schema is the authority on which
-  field describes which scope.
-
-⛔ **A consumer MUST fail closed on a unit or an enum value it does not understand**, naming the
-offending value. A linear unit misread by a factor is a site misplaced by a whole ratio, and a
-silent fallback to a default is how that happens. The schema states unknown-value behaviour per
-enum: some are informational and are echoed opaquely, others are load-bearing and fail closed.
-
-**A height has a datum, and one bundle can carry two.** Every height is an orthometric height in a
-named vertical datum. The files in the delivery CRS can be in a national datum while the content
-made for an engine keeps one datum on every order, so that a fixed-frame host's ground is the same
-everywhere. Which content is in which is the schema's to say: its `$defs/verticalDatum`, and the
-`vertical_datum` each entry that carries heights declares. **A host whose ground is in one datum
-places only heights in that datum.** A fixed-frame host's ground is the engine's, so where it
-places a file that is not engine content it reads the datum the file states and refuses by name a
-height in any other. An order-frame host's ground and everything it places from one bundle are
-delivery-CRS content, and within one bundle they share the delivery's datum. A consumer MUST NOT
-convert one datum to the other: the published difference between them is one number for the site,
-while the producer shifted its content point by point, and applying that number is re-deriving a
-placement value. A datum a consumer reads and does not know fails closed.
-
-⛔ **Where the manifest states a value twice over, a consumer MUST verify the identity and refuse on
-mismatch** rather than picking one. Those redundancies are published where a host's own API demands
-internal consistency; they exist to be checked.
-
-**Local projection is permitted in exactly one narrow case.** Where a bundle ships geometry whose
-own coordinates are geographic — a vector layer in lon/lat, which the manifest describes as a layer
-rather than vertex by vertex — a consumer must project in order to place it, and MAY do so. That is
-the only projection a consumer performs; it is not licence to carry a geoprocessing stack. A
-consumer that does project MUST match the corpus `projection` group's known answers, southern-
-hemisphere false northing included. Getting a zone wrong places geometry kilometres away while every
-test that does not check numbers still passes.
-
-### 6.1 Honest absence
-
-Three parts of the manifest exist so that a consumer can explain a missing artifact instead of
-dead-ending on an empty import:
-
-- **`packaging`** — the format contract this bundle was produced against: what was requested, what
-  was delivered, and one honest row per requested-but-absent item saying why.
-- **`completeness`** — the bundle's own verdict against its must-ship set.
-- **`hosts.<hostId>.readiness`** — per-import-path verdicts for that host: present or not, and when
-  not, the stated reason.
-
-⛔ **A consumer MUST surface the stated reason rather than matching on it.** The reason vocabulary
-is the schema's to grow; a consumer that branches on the values it knows shows a blank dialog for
-the value it does not. Echo it.
-
-An absent artifact is not an error. "Not produced", "not selected" and "available on request" are
-three different sentences to show a user, and the manifest is what distinguishes them.
-
-### 6.2 Is this bundle usable at all
-
-⛔ **A consumer MUST decide "has this bundle been materialised" from the manifest's neutral signals,
-not from the presence of its own host block.** The signals are host-agnostic — a non-empty `hosts`
-object, or a non-empty set of vector layers — and any one of them is sufficient. Note what that
-means: a bundle materialised for a host this consumer has never heard of still reads as
-materialised, which is the point. Such a bundle is a well-formed manifest that the consumer parses
-and then declines to *import*, with guidance — not an invalid document, and not an unmaterialised
-one. The corpus decides this one, row by row.
-
-⛔ **A bundle with no host block at all MUST still parse.** The top-level facts — bounds, layout
-pointers, packaging, the order identity — are readable and MUST be read before returning "not
-importable", so that a caller can still identify the bundle it is holding.
-
-Two identifiers appear in the manifest and are **not interchangeable**: the per-rebuild job identity
-and the order identity. Only the order identity joins a bundle to its vault entry.
-
-### 6.3 Vector layers, by name
-
-The `vector` block describes the vector set: one entry in `vector.layers` per layer, each carrying a
-`name` and one row per delivered format. A layer that mixes geometry families may instead be
-**split** by family: it then carries one row per family in a format, each naming its
-`geometry_family` and pointing at a file that holds that family alone, or one GeoPackage row that
-names a table per family in `tables`. The [changelog](changelog.md) records when splitting
-arrived. A consumer finds a layer by its `name` and then its files by
-their format rows, and it reads every row of the format it takes: a row naming no family is the
-whole layer, and of a split layer it takes the file of each family it uses. It MUST NOT guess a
-layer from a file name (§3). It also MUST NOT fall back to a format it cannot read when the one it
-wants is missing, nor take one family's file for another's. The corpus pins the first two:
-`manifest.roadSplinesGeojsonWins` puts a decoy layer beside the one being selected, and
-`manifest.roadSplinesGpkgOnly` offers only a format the reader does not take. The Revit host's
-`manifest.revitSplitLayerFallback` lists a split layer's line file before the polygon file that host
-cuts water bodies from.
-
-**A GeoPackage row that lists no `tables` holds exactly one feature table.** The row is then the
-whole layer in one file, and the table is the one the file holds. A producer names that table in
-PascalCase after the file stem (`RoadSplines` in `RoadSplines.gpkg`), and not after the layer
-(`road_splines`). The spec states neither name for such a row, so a reader MUST NOT look the table
-up by the layer's name: it reads the file's one feature table whatever it is called. It MUST NOT
-take the only table of a file that holds several. A row whose file holds several lists them in
-`tables`, and a reader reads the table it wants by name from that list. The same holds for the
-`-Projected` twin of an untabled row. `mpb validate` rejects an untabled row whose file holds more
-than one feature table (`gpkg.tables-several`) or none (`gpkg.table-none`). The corpus pins it:
-`bundle.v2GpkgSoleTable` is a valid untabled row whose one table is CamelCase, and
-`bundle.v2GpkgSoleTableSeveral` an invalid one whose file holds two.
-
-The schema types `name` as a plain string on purpose. **This table states the vocabulary**, and
-the corpus case `manifest.vectorLayerVocabulary` carries every name in it:
-
-| `name` | What it holds | Geometry | Where it comes from |
+| Family | Extensions | Coordinates | Unit |
 | --- | --- | --- | --- |
-| `building` | Building footprints, with subtype and a height where the source has one | Polygons | Overture buildings |
-| `road` | Road centrelines (road segments only, not rail or paths), with class, subclass and name | Lines | Overture transportation |
-| `water` | Water as the source maps it: streams as centrelines, water bodies as polygons | Lines, polygons and points | Overture base |
-| `land_use` | Land-use areas, with class and subtype | Mostly polygons; lines and points occur | Overture base |
-| `land_cover` | Physical ground cover, with a subtype such as forest | Polygons | Overture base |
-| `road_splines` | The `road` centrelines draped onto the delivered elevation, carrying an estimated width, class and name | Lines with Z | Derived from `road`, and marked with `derived_from` |
-| `road_polygons` | Road surfaces: the `road` centrelines widened by the same estimated width, merged per class, and cut so no two overlap (the wider class keeps the ground where classes meet), carrying class and width | Polygons | Derived from `road`, and marked with `derived_from` |
-
-A layer's geometry can mix the families its row names, so a reader keys on each feature's own
-geometry type rather than on the layer; each file of a split layer holds one family, and its format
-row names it. Every layer's coordinates are geographic, and the block
-says so: `vector.crs` is `EPSG:4326` whenever the set shipped. §6's one projection exception
-applies to all of them — and a host whose own block carries the layer in its own frame (§6.5)
-reads that copy instead. The heights `road_splines` carries are the delivered elevation's, in its
-datum, and the layer states that datum: a host whose ground is in another places none of them (§6).
-
-What presence and absence mean:
-
-- **A base layer is present exactly when the AOI holds at least one of its features after the clip
-  to the AOI.** An absent base layer means *zero features*, never a failure. The producer does not
-  ship a vector set with a layer it failed to read or write: when any base layer fails, the whole
-  set is withheld. The `vector` block then says `present: false` and lists no layers, and `packaging`
-  says why (§6.1).
-- **A layer is never emitted empty.** The producer writes no entry with a feature count of zero,
-  and no placeholder entry for a layer the AOI does not have.
-- **The derived layers are best-effort.** `road_splines` and `road_polygons` can each be absent
-  while `road` is present, and their absence says nothing about whether the AOI has roads. A
-  consumer that wants roads and finds no derived layer SHOULD say so rather than report an AOI
-  without roads.
-- ⛔ **A consumer MUST ignore a layer name it does not recognise.** The vocabulary grows additively.
-  A new name is a change to this table and to the corpus, not to the schema. A consumer that
-  refuses a bundle for carrying an unfamiliar layer turns every new layer into a breaking release.
-  The corpus case `manifest.vectorLayerUnknownName` pins this.
-
-### 6.4 The imagery drape, per host
-
-A drape is an image stretched over terrain, and its only coordinates are its extent. That extent is
-placement, stated in one projected CRS and one linear unit, and a consumer can use it only where
-that CRS is the one its own origin is in. A rectangle aligned to one grid is not a rectangle on
-another — a UTM-aligned image is rotated on a State Plane grid — so an extent in the wrong CRS
-cannot be made right by arithmetic on its four numbers.
-
-The bundle therefore carries the drape once per frame a host needs, never once for everyone:
-
-- **`imagery.drape` is the fixed-frame drape**, on the AOI's metric UTM grid whatever the delivery
-  CRS. It is the image `hosts.unreal.imagery_drape` points at.
-- **A host whose frame follows the delivery reads its own drape pointer in its own block.** Where the
-  delivery grid is already the metric UTM grid, that pointer names the same file as
-  `imagery.drape`; on a State Plane delivery it names a second image baked on the State Plane grid.
-  The producer publishes the pointer only after checking that its extent is in the host origin's
-  CRS and unit and agrees with the image's own pixel grid.
-
-What a host does with a drape it cannot show to be in its frame — refuse it, name why, and never
-reproject it — is the host standard's (`HPS-52`, `HPS-53`), not this document's.
-
-**What the stored values of a Sentinel-2 raster mean (from 2.1.0).** The imagery entry of a
-Sentinel-2 order may carry `reflectance_scale` and `reflectance_offset`, which say how the COG's
-stored values map to reflectance: the value times the scale, plus the offset. They restate the band
-scale and offset the COG itself declares, so a reader that opens the COG with a raster library gets
-the same two numbers. They matter wherever `display_stretch` is applied, because the stretch is stated
-in reflectance after the offset has come off, and a reader that ignores the offset renders a scene
-from a later processing baseline washed out. Both members are absent on NAIP, whose pixels are
-already display values, and a null offset reads as 0. A reader that cannot honour them shows the
-imagery as it did before 2.1.0 and says so, rather than guessing at a stretch.
-
-### 6.5 A host's own copy of the vector layers
-
-The shared vector set is geographic, which suits a GIS reader and no one else. §6 lets a consumer
-project lon/lat locally in one narrow case, and a host whose origin is not on a grid that case
-reaches cannot place the set at all. So the bundle hands such a host its own copy, already in its
-own frame, rather than asking it to convert.
-
-`hosts.revit.vectors` is that copy for the Revit host, on every delivery:
-
-- One GeoJSON file per layer, named by the §6.3 vocabulary, with its `path`, `feature_count` and
-  `sha256`. The Revit copy carries `road_splines`, `road_polygons`, `water`, `land_use` and
-  `land_cover`; `building` is the site model's, and raw `road` is carried as `road_splines`.
-- Each layer states its `horizontal_frame` and `units`, and they are the same for every layer on a
-  delivery: absolute coordinates in the delivery CRS wherever a projected CRS in the delivery unit
-  exists, and east/north offsets about the origin where none does. Either way the file is in
-  `hosts.revit.file_frame` (§4.2), and a reader places it by subtraction and offset alone.
-- A projected file carries a GeoJSON `crs` member naming `file_frame.crs`. An offset file carries
-  none, because its frame has no CRS; a reader that insists on one has misread the frame.
-- `road_splines` alone has heights, and says so with `vertical_reference: absolute`: real
-  orthometric height in the file's `units`, never an offset from the origin.
-- The set is all or nothing. A layer missing from it had no features in the AOI; a layer that could
-  not be converted withholds the whole copy, and `hosts.revit.readiness.vectors` says the copy is
-  absent and why.
-
-The shared set beside it is unchanged, and no host block points at it.
-
-### 6.6 Tree points, per host
-
-`Landcover/TreePoints.csv` follows the delivered elevation: `x` and `y` are in the delivery CRS and
-`ground_z` is in the delivered elevation's vertical unit, so on a State Plane delivery all three are
-feet, and on a delivery whose region has no projected foot zone the coordinates are metres beside
-foot heights. `height_m` and `crown_radius_m` are metres on every delivery, as their names say.
-From 1.3.0 `landcover.tree_points` states that frame beside the path — `crs`, `units` (the
-`ground_z` column) and `horizontal_units` (`x`, `y`) — so a reader can refuse a file it cannot show
-to be in its frame instead of assuming one. No column is renamed: `x`, `y` and `ground_z` assert no
-unit, and the two that do are honest.
-
-A fixed-frame host reads points in its own frame, and the delivered file is only in that frame on a
-metric delivery. So the bundle carries the trees once per frame a host needs:
-
-- **`hosts.unreal.foliage_points` names only a file in the Unreal frame** — its `crs` is
-  `georeference.crs_projected`, its `units` and `horizontal_units` are `m`, and its `ground_z` is in
-  the engine's datum (§6), by schema. On a metric delivery whose heights are in that datum, the
-  delivered `Landcover/TreePoints.csv` is that file, and one file carries both pointers. On any foot
-  delivery, and on any delivery whose heights are in another datum, it is
-  `Landcover/TreePointsMetric.csv`: the same trees in the metric UTM grid with `ground_z` re-sampled
-  in metres on the engine's ground, every other column carried verbatim.
-- The producer chooses between the two by comparing the frames the files state with the host's, and
-  never by the delivery tier. Where neither file is in the Unreal frame — a foot delivery built
-  before 1.3.0, until its next rebuild — the block carries no `foliage_points` at all, rather than a
-  pointer at a foot file.
-- `sha256` and `point_count` on the pointer are the named file's, not the delivered file's; the two
-  files hold the same trees, so `point_count` agrees, and the hashes differ.
-
-What a host does with a tree-point file it cannot show to be in its frame — refuse it, name why, and
-never convert it — is the host standard's (`HPS-52`, `HPS-53`), not this document's.
-
-### 6.7 Published contours, per host
-
-`Surface/Contours.dxf` is the contour linework the order was built with: one flat polyline per
-contour, each at its elevation. `elevation.contours` points at it for any reader and states its
-vertical unit and interval, but no horizontal frame, so a host that must show a file is in its frame
-before placing it (§6) cannot place it from that pointer.
-
-From 1.4.0 the Revit host has its own:
-
-- **`hosts.revit.contours` names the same file**, one file under two pointers, and is present only
-  when the file is in `hosts.revit.file_frame` (§4.2): absolute in the delivery CRS wherever a
-  projected CRS in the delivery unit exists, and east/north offsets about the origin where none does.
-  It states its `horizontal_frame`, its X/Y unit and its heights' unit, and the two units are stated
-  apart.
-- **A reader takes both units from the pointer, never from the drawing.** A DXF states one unit for
-  the whole drawing, and a file whose X/Y and heights are in different units cannot state itself
-  truthfully there.
-- The heights are real orthometric heights, as `vertical_reference: absolute` says: never an offset
-  from the origin. The contour interval stays on `elevation.contours`.
-- A bundle whose contours were built before 1.4.0 carries no pointer, and
-  `hosts.revit.readiness.contours` says so.
-
-What a host does with contours it cannot show to be in its frame is the host standard's
-(`HPS-52`, `HPS-53`), not this document's.
-
-### 6.8 File frames, the site origin and licensing (from 1.14.0)
-
-From 1.14.0 the neutral register can place a file and state its terms without a reader opening any
-`hosts.<hostId>` block. Two optional members carry it: `location.site_origin`, one point for the
-whole bundle, and `file_entries`, one entry per file keyed by its archive path. A bundle made before
-its producer writes them carries neither, and the host blocks (§4.2) keep stating the same facts
-through 1.x, so a host that reads only its own block loses nothing. `file_entries` is not the
-`files` member of 1.10.0: `files` exists only on a bundle stored as parts and describes storage
-(part, size, digest), where `file_entries` describes meaning and is valid on every bundle.
-
-**The File frame, field by field.** An entry's `frame` is the file's full frame, written whole or
-not at all. Every field is optional in the schema, so what follows is what each one says and what
-its absence means; the schema owns the types and the permitted values.
-
-- `horizontal_crs` is the CRS of the file's coordinates, or of its grid for a raster.
-- `vertical_crs` is the CRS the heights are in, as a reference of its own (an NAVD88 height, an
-  EGM2008 height), never folded into the horizontal one. It is absent for a file with no heights.
-- `unit_to_metres` is the horizontal linear unit as a number, the factor to metres: 1 for metres,
-  0.3048 for the international foot, 1200/3937 for the US survey foot. A number rather than a name,
-  so that no reader maps "foot" to the wrong foot. It is the vertical unit too, unless
-  `vertical_unit_to_metres` is present, which states a vertical unit that differs.
-- `geoid_model` names the geoid the heights are referenced to (`GEOID18`, `EGM2008`). It is absent
-  when the vertical CRS is ellipsoidal or the file has no heights.
-- `axis_order` is the order of the horizontal axes as the file stores them: easting first, or
-  latitude first.
-- `axis_mapping` says which way each of the file's three axes points. A glTF file is x east, y up,
-  z south; a projected GeoTIFF or a USD file is x east, y north, z up. A reader never assumes an
-  engine's convention for a file that states its own.
-- `coordinate_mode` is `absolute` (the coordinates are full values in `horizontal_crs`) or `offset`
-  (they are displacements from the site origin, below).
-- `pixel_convention` and `row_order` are for rasters only: whether a pixel value describes its cell
-  or the point at its centre, and whether row 0 is the northern or the southern edge.
-- `coordinate_epoch` is a decimal year, present where the CRS is dynamic or the realisation
-  matters, and absent otherwise.
-
-**No file relies on a compound EPSG code alone.** A CRS is named in exactly one of three forms: a
-`code` such as `EPSG:5703`, a PROJJSON object, or a WKT2 string. The form is chosen per CRS, and the
-horizontal and the vertical CRS are separate references, so a reader gets each from its own field
-and never has to take one apart from a compound code. Datums that have no authority code yet ride
-PROJJSON or WKT2 and arrive as a `code` later, which changes a value and not a field.
-
-⛔ **The frame's value sets fail closed.** An axis direction, an axis order, a coordinate mode, a
-pixel convention or a row order the reader does not know is a frame it cannot read, which is a file
-it cannot place: refuse the file by name. An unknown key beside the known ones is tolerated, as a
-later minor may add one.
-
-**The site origin.** `location.site_origin` is readable by any host, unlike a host block. It is one
-point: its latitude and longitude, its height above the ellipsoid, and its height in the order's
-vertical datum, which `vertical_datum` names. The difference of the two heights is the datum offset
-at the site. It is computed once and applied verbatim; a reader never re-derives it (§6). Two
-optional members add to it: `geodetic_crs`, for a reader that needs more than WGS 84 to the metre,
-and `projected`, the same point in a projected CRS with a height, so that a reader places every
-offset file by arithmetic. The six members of `projected` come together or the block is invalid.
-
-**How glTF and USD offsets relate to it.** glTF and USD files hold 32-bit floats, which lose
-precision at full projected coordinates, so their frames say `coordinate_mode: offset`. Each
-coordinate is then a displacement from the site origin, in the file's own axes (`axis_mapping`) and
-its own unit (`unit_to_metres`). Where `projected` is present, a reader adds the file's x and y to
-`projected.x` and `projected.y`, and its z to `projected.z`, whose height `projected.z_reference`
-names (ellipsoidal, or the vertical datum), and never reprojects. The offset is in the file's unit and
-the origin in `projected.unit`, and §6 applies: the unit is read from each, never assumed alike.
-Where `projected` is absent the origin is a latitude, longitude and heights only, and a reader
-reprojects that one point once to place the file. An `absolute` file, a GeoTIFF for example, needs
-no site origin; its own `horizontal_crs` places it. None of this changes §4.2: a host is handed only
-files in its own frame, and converts nothing.
-
-**The neutral PNG mappings.** A PNG rendition's entry may carry `value_mapping`, which says how to
-read a pixel back as data outside any host block. It states what the Unreal host block's heightmap
-and UE-ready raster mappings state, for any reader, and those copies stay through 1.x. Its
-`encoding` decides what else it must carry:
-
-- a 16-bit grayscale needs `min` (the value pixel code 0 stands for), `max` (the value 65535 stands
-  for) and `to_value`, the decoding formula in words, and may add `value_units`, `datum`,
-  `nodata_value` and `quantization_step`;
-- a 16-bit grayscale **heightmap** may add, from 2.2.0, `vertical_tier` and `vertical_grid_index`,
-  which place it on the vertical ladder every Mantle Place heightmap shares: the tier fixes the step
-  (`quantization_step` states it), and the grid index is `min` in whole steps on a grid whose zero is
-  0 m in the vertical datum. Two tiles of one tier therefore share one code lattice, and a reader that
-  tiles a landscape from several lines them up by the grid index and not by each file's own `min` and
-  `max`. A heightmap without them is stretched over its own relief and is read by `min` and `max`;
-- a mask needs `true_value` and `false_value`, the two pixel codes;
-- an indexed layer needs `classes`, either the list of pixel codes in use or an object from code to
-  class name, and a reader accepts both. The class codes are the legend and are never rescaled;
-- an RGBA raster needs `bands`, naming the four channels in order;
-- an 8-bit grayscale passthrough carries `identity: true`, as its codes are the data.
-
-⛔ A reader that cannot decode an `encoding` skips the file and says so. It never guesses at what a
-pixel means.
-
-**The three licensing fields.** Each entry may carry `odbl_role`, `license` and `sources`.
-
-- `odbl_role` is one of `database` (an ODbL Derivative Database, licensed ODbL), `produced-work`
-  (rasterized, meshed, extruded or baked output, which is not ODbL-licensed) and `none` (no ODbL
-  source contributes). Every file is exactly one of them.
-- `license` is what the file ships under: an SPDX licence expression, a single id or ids joined by
-  `AND`, `OR` or `WITH`, whose ids are SPDX ids or `LicenseRef-` ids. Free text is not a licence. A
-  `produced-work` entry never names ODbL here. A compound expression lives only in the manifest,
-  because the STAC Item beside it carries a single id per asset.
-- `sources` lists the upstream sources the file was made from, each with a `name` and a `license`
-  that is always a single id, never an expression, and optionally its registry id, its landing page
-  and `license_unconfirmed`, true when the id is the best reading but the publisher has not confirmed
-  it. The list is empty when the platform alone authored the file.
-
-⛔ **A missing role reads as `database`**, the stricter duty, and so does a role the reader does not
-know. An entry without `odbl_role` is not a `none`, and a reader that wants the lighter reading must
-hold the role that earns it.
-
-### 6.9 The AutoCAD host block: one host, three parts (from 1.18.0)
-
-AutoCAD and Civil 3D are one host to the manifest. The host id is `autocad`, and Civil 3D is a part
-of that host rather than a second id: a plugin running in plain AutoCAD and one running in Civil 3D
-read the same `hosts.autocad` subtree and nothing else (§4.2). The block hands the plugin everything
-it needs to place an order, so the plugin applies values and derives none. It carries three parts,
-each with its own pointer and its own readiness verdict:
-
-- **`hosts.autocad.file_frame`** states the frame the block's files share, as §4.2 defines it. Every
-  coordinate-carrying file the block points at is in it, and the producer checks that before it
-  publishes. It follows the delivery wherever a projected CRS in the delivery unit exists, and is a
-  local frame about the origin where none does.
-- **`hosts.autocad.contours`** names the published contour linework (`Surface/Contours.dxf`, §6.7),
-  one file under two pointers. It is present only when the file is in the block's `file_frame`, and
-  has the shape of `hosts.revit.contours`: `horizontal_frame` (`absolute_projected`, or offsets about
-  the origin), `vertical_reference: absolute`, `horizontal_units` for X and Y and `vertical_units`
-  for the heights, **stated apart**, `vertical_datum` and the file's `sha256`. A reader takes both
-  units from the pointer, never from the drawing, which states one unit for all of it.
-- **`hosts.autocad.surface`** is the terrain source for a Civil 3D surface: one file that Civil 3D
-  builds a surface from, with `path`, `format`, `sha256`, and its frame stated beside the path as the
-  contours state theirs (`horizontal_frame`, `horizontal_units`, `vertical_units`,
-  `vertical_reference`, `vertical_datum`). The `format` is the pointer's own word for the file, and a
-  reader that does not know it declines the surface and names the format; it never guesses. A surface
-  is Civil 3D's, and plain AutoCAD has no object to place it as.
-- **`hosts.autocad.aerial`** is the aerial image with its insertion already worked out. Beside the
-  image's `path`, `format`, pixel `width` and `height` and `sha256`, an `insertion` object states
-  where and how the image goes in the drawing, in the block's `file_frame` and its horizontal unit:
-  the `x` and `y` of the image's lower-left corner, the ground `width` and `height` of the whole
-  image (not of a pixel), and `rotation_deg`. A plugin inserts the image at those numbers. It does not
-  work an insertion point or a scale out of an extent, a pixel size or a CRS, and it never
-  reprojects the image: an image the block does not show to be in the frame is absent, with a verdict
-  that says why (§6.4).
-
-**Readiness, a verdict for each part.** `hosts.autocad.readiness` states `contours`, `surface` and
-`aerial`, each as the §6.1 verdict: `present`, and when not, the stated `reason`, which a reader
-echoes and never matches on. A bundle built before 1.18.0 carries no `hosts.autocad` block, and a
-reader says so rather than reading another host's block (§4.2).
-
-The `surface` verdict carries one member more, `requires`, naming the host part that can place the
-file. For a surface it is `civil3d`. This is what lets a plain AutoCAD reader say the surface is
-unavailable in this host from its own block alone: a reader that does not hold the named part,
-or does not recognise the name, reports the surface as unavailable here ("needs Civil 3D") and
-imports nothing from it. It does not open another host's block to find out, and it does not treat the
-pointer's presence as a promise that its own host can use the file. `requires` is on the verdict
-whether or not the file shipped, so the answer is the same on an order whose surface is absent.
-
-What a host does with a part it cannot show to be in its frame is the host standard's (`HPS-52`,
-`HPS-53`), not this document's.
-
-### 6.10 The AutoCAD block's public records and site linework (from 1.19.0)
-
-From 1.19.0 the AutoCAD block carries two parts more, each with its own pointer and its own readiness
-verdict, so a plugin can place the order's public-record layers and its site linework as drawings,
-from its own block and nothing else (§4.2):
-
-- **`hosts.autocad.records`** lists the public-record layers in the block's `file_frame`, one entry
-  per layer in `records.layers`. Each entry is a `name`, the record layer it is (`parcels`,
-  `zoning`), and a pointer to that layer's drawing: `path`, `sha256`, `horizontal_frame`
-  (`absolute_projected`, or offsets about the origin), and `horizontal_units` for X and Y and
-  `vertical_units` for any heights the drawing carries, **stated apart**, as the contours state
-  theirs (§6.9). The names grow additively, and a reader places a name it does not know under that
-  name. The set is all or nothing: a layer missing from it is one the order delivers no drawing for,
-  and the record pointers ([changelog](changelog.md), 1.11.0) say who holds a record a bundle does
-  not deliver; a layer whose drawing is not in the frame withholds the whole set, and the verdict
-  says the records are absent and why.
-- **`hosts.autocad.linework`** names the site linework drawing, with the same members as a record
-  layer's pointer but no `name`. It is present only when the drawing is in the block's `file_frame`.
-
-A reader takes both units from the pointer, never from the drawing, which states one unit for all
-of it, and never from the neutral `layout` or a folder: a drawing `layout` names that the block does
-not is not one the block has shown to be in its frame (§3).
-
-**Readiness.** `hosts.autocad.readiness` states `records` and `linework` beside the three parts of
-§6.9, each as the §6.1 verdict: `present`, and when not, the stated `reason`, echoed and never
-matched on. `records` is one verdict for the set, not one per layer. A part that is not ready is a
-notice to the user, never a reason to refuse the order. A bundle built before 1.19.0 carries neither
-pointer and neither verdict, which is a well-formed block: a reader says the bundle states no
-verdict for them and places the parts it does carry.
-
-## 7. The sidecar manifest
-
-The vault publishes a versioned copy of the manifest beside the zip, so that a listing can show a
-bundle's version, size and digest without downloading and unzipping it.
-
-The sidecar is the same document plus one block — `bundle`, carrying the zip's own sha256, size and
-filename. **That block is sidecar-only.** It never appears inside the zip's own
-`Metadata/manifest.json`; a consumer MUST NOT require it, and MUST NOT read its absence from an
-in-zip manifest as an error.
-
-## 8. Reading a bundle, start to finish
-
-The whole procedure, for a consumer holding a zip:
-
-1. **Extract and parse `Metadata/manifest.json`.**
-2. **Check the version.** Its JSON type tells you the era — a number is the integer pre-history, a
-   string is MPB semver. Compare the major component, and refuse an unknown higher major gracefully
-   (§11, [`compatibility.md`](compatibility.md)).
-3. **Decide materialisation** from the neutral signals (§6.2). If the bundle carries no payload for
-   your host, read the top-level facts, then report the readiness reasons rather than an empty
-   import.
-4. **Locate each file** by reading its `layout` pointer or its per-artifact `path` and extracting
-   exactly that entry, resolved inside your extraction root (§3).
-5. **Verify integrity** per §5 — fail closed where the schema requires a hash; skip, and say so,
-   where it does not.
-6. **Place the geometry** by applying your host block's published values verbatim (§6), reading each
-   unit from the field that describes the thing you are placing.
-7. **Honour the licensing obligations.** The `licensing` and `attribution` blocks state which
-   families carry which terms; the platform's own [licensing](https://mantle.place/licensing) and
-   [attributions](https://mantle.place/attributions) pages are the authority on the text those terms
-   require, and nothing in this repository restates them. From 1.14.0, `file_entries` also states
-   each file's `odbl_role`, `license` and `sources` (§6.8), and a missing role reads as `database`.
-
-If a step above is under-specified for a bundle you hold, that is a spec bug worth an issue. If it
-is under-specified in a way the corpus does not catch, it is a corpus bug too — see
-[`conformance.md`](conformance.md).
-
-## 9. MPB is a profile: canonical and courtesy formats
-
-**A profile, never an encoding.** Mantle Place does not invent a way to store data, and MPB does not
-define a file format. Every file in a bundle is in a format somebody else already specified and
-maintains. What MPB adds is the layer above the files: the manifest, the placement rules (§6, §6.8)
-and the licence and source facts of every file (§6.8). A team writing a producer or a reader needs a
-library for each format it touches, and never a parser for anything MPB-specific except the manifest.
-
-### 9.1 The admission test
-
-A format is **canonical**, which is to say promised by this spec, only if it passes all three of:
-
-1. **An open specification**: anyone can read the format's specification without a licence
-   agreement, an account or a fee.
-2. **Royalty-free use**: reading and writing the format needs no royalty and no patent licence.
-3. **Two independent implementations**: at least two implementations that share no code and no
-   owner, so that no single party can change what the format means.
-
-A format that fails any of the three is never canonical, however widely it is used.
-
-### 9.2 The canonical list
-
-| Format | What a bundle carries in it |
+| **Georeferenced** | `tif`, `gpkg`, `dxf`, `landxml`, `ifc` | Absolute, in the order's CRS; heights in the order's vertical datum | The order's: Imperial or Metric, as the order resolved it |
+| **Host-ready** | `glb`, `usdz`, `obj`, `png`, `csv` | Offsets in the local site frame (below) | Metres, on every order |
+
+`Terrain.mtl` is the companion of `Terrain.obj`: text with no coordinates, in neither family, and it carries no level, so it is the same at every level. The manifest states both frames once (§9.4). No file name carries a unit, and no file carries a second frame.
+
+**The georeferenced frame** is the order's delivery: its projected CRS, its vertical datum and geoid, and its horizontal and vertical linear units. Every georeferenced file is in it, and every DXF among them as well: a DXF in longitude and latitude, or with no unit, does not conform.
+
+**The local site frame** is one flat frame for the whole bundle, in metres:
+
+- its origin is the site origin, one point the manifest states in longitude, latitude and height, and again in the projected CRS whose grid the frame's axes follow;
+- x points east and y north along that grid, and z up; a height is metres above the site origin's height, in the vertical datum the manifest names for the frame;
+- it is flat by definition: no curvature, no projection and no rotation inside it. The angle between its grid north and true north at the origin is stated once (§9.4), for a host that sets one.
+
+Each host-ready format holds that frame in its own convention, which is fixed here and never assumed by a reader for a format that states its own:
+
+- **glTF** (`.glb`) and **OBJ** (`.obj`) are Y-up: x east, y up, z south.
+- **OpenUSD** (`.usdz`) is Z-up, in metres: x east, y north, z up.
+- **CSV** (`.csv`) carries `x`, `y` and a height column in the frame's axes: x east, y north, z up.
+- **PNG** (`.png`) is a grid over the site with row 0 at its north edge; the manifest states the rectangle it covers in the frame (§9.5).
+
+⛔ **Placement values are pre-derived and MUST be applied verbatim; a reader MUST NOT re-derive them.** The site origin, its height, the frame's grid and datum, each raster's rectangle and each value scale are computed once, by the producer, and published. A reader multiplies published numbers into its host's convention (metres to centimetres, say) and does nothing else. A reader that recomputes a transform "to be safe" has built a second implementation of a pipeline it cannot see, and the two drift in a curator's project rather than in CI.
+
+⛔ **A reader MUST fail closed on a unit, a datum, an axis or a value it does not understand**, naming the value. A linear unit misread by a factor is a site misplaced by a whole ratio.
+
+**No reader projects.** Every georeferenced file is in the order's CRS and every host-ready file in the local site frame, so the 2.x permission to project a layer stated in longitude and latitude has nothing left to apply to. The only geographic values in a 3.x bundle are the site origin and the AOI rectangle in the manifest.
+
+## 5. Formats
+
+- **Vector layers ship as pairs.** Every vector layer is a `.gpkg` and a `.dxf` holding the same features and the same attributes, in 3D where the data has heights (the roads, draped on the ground) and in 2D where it has none. There are two exceptions: the tree points, where `Trees` ships as a `.gpkg` and a `.csv`, with no `.dxf`; and the contours, where `Contours` ships as a `.dxf` alone, with no `.gpkg`.
+- **Every DXF carries its attributes**, stored as extended data on each entity, as the producer's writer stores them. A DXF with geometry and no attributes does not conform.
+- **Georeferenced rasters are tiled GeoTIFFs (COG)**, compressed losslessly, with a predictor where it helps.
+- **Every host-ready raster is a PNG.**
+- **Meshes:** glTF 2.0 binary (`.glb`), OBJ with its material file (`.obj` and `.mtl`), OpenUSD packages (`.usdz`), the DXF 3D faces of the terrain and the LandXML surface of the terrain.
+- **The site model** is IFC 4.0.2.1 (IFC4 ADD2 TC1).
+- **Tables** are UTF-8 CSV with a header row and a comma separator. ⛔ **A reader MUST resolve the columns by header name, never by position, and MUST ignore a column it does not know.** A minor release may add a column.
+- **The foliage type.** The last column of `Trees.csv`, and the attribute of the same name in `Trees.gpkg`, is `foliage_type`, whose closed vocabulary the platform owns and the manifest names. Today it is `tree` and `shrub`. ⛔ **A reader MUST read a value it does not know as `tree`.** A new value is a new vocabulary version, never a change of meaning for an existing one.
+
+## 6. The file table
+
+One row per file of the tree, sixty-nine in all. **Family** is §4's. **Level** says whether the file is built at each level (§8): `yes` means the Med and Min downloads hold a coarser file under the same name; `no` means the three downloads hold the same bytes. **Precision** is the data type, the scale (what one stored unit means) and the no-data value; no reader depends on a scale tag inside the file, because this column and the catalog state it (§7). **Count** is what the catalog counts for that file (§9.5); `None` means the file has nothing to count, and its catalog entry states no count. Every file's entry states its size and its sha256, except that of `Manifest.json`, which cannot carry its own hash.
+
+| File | Subject | Format | Family | Level | Precision | Count |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Readme.md` | The bundle, for a person | Markdown | Whole bundle | Per download | Text | None |
+| `Manifest.json` | The bundle, for a machine | JSON | Whole bundle | Per download | Text | None |
+| `Elevation/Elevation.tif` | Ground elevation | GeoTIFF | Georeferenced | no | Float32; one unit is one vertical unit of the order, in its datum, exact as the source states it; no-data −32768 | Pixels |
+| `Elevation/Elevation.png` | Ground elevation, for a heightmap import | PNG, 16-bit grayscale | Host-ready | yes | UInt16; height in the local site frame, in metres, = offset + code × step, both stated in its catalog entry; no no-data code: every pixel holds a height | Pixels |
+| `Elevation/Terrain.glb` | The terrain mesh | glTF 2.0 binary | Host-ready | yes | Float32 vertices, metres; Y-up | Triangles |
+| `Elevation/Terrain.obj` | The terrain mesh | OBJ | Host-ready | yes | Decimal text, metres; Y-up; texture coordinates on every vertex | Triangles |
+| `Elevation/Terrain.mtl` | The terrain mesh's material | OBJ material library | Companion of `Terrain.obj` | no | Text: one material whose diffuse map is `../Imagery/Imagery.png` | None |
+| `Elevation/Terrain.dxf` | The terrain surface | DXF, 3D faces | Georeferenced | no | Double coordinates in the order's unit | Triangles |
+| `Elevation/Terrain.landxml` | The terrain surface | LandXML TIN | Georeferenced | no | Decimal text in the order's unit | Triangles |
+| `Elevation/Slope.tif` | Slope of the ground | GeoTIFF | Georeferenced | no | UInt16; one unit is a tenth of a degree; no-data 65535 | Pixels |
+| `Elevation/Slope.gpkg` | Steep ground, as areas | GeoPackage, 2D polygons | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Elevation/Slope.dxf` | Steep ground, as areas | DXF, 2D polygons | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Elevation/Aspect.tif` | Aspect of the ground | GeoTIFF | Georeferenced | no | UInt16; one unit is a whole degree, clockwise from grid north; no-data 65535 | Pixels |
+| `Elevation/Hillshade.tif` | Shaded relief | GeoTIFF | Georeferenced | no | Byte; brightness 1 to 255; no-data 0 | Pixels |
+| `Elevation/Contours.dxf` | Contour lines | DXF, 3D polylines | Georeferenced | no | Double coordinates in the order's unit; each line at its height | Features |
+| `Imagery/Imagery.tif` | Aerial imagery | GeoTIFF, four bands | Georeferenced | no | Byte ×4: red, green, blue, near-infrared, untouched from the source; no no-data code | Pixels |
+| `Imagery/Imagery.png` | Aerial imagery, for a drape | PNG, RGB | Host-ready | yes | Byte ×3: red, green, blue; no no-data code | Pixels |
+| `Landcover/Landcover.tif` | Land cover classes | GeoTIFF, paletted | Georeferenced | no | Byte; one code per class, the legend in its catalog entry; no-data 0 | Pixels |
+| `Landcover/Landcover.gpkg` | Land cover, as areas | GeoPackage, 2D polygons | Georeferenced | no | Double coordinates in the order's unit; the class as an attribute | Features |
+| `Landcover/Landcover.dxf` | Land cover, as areas | DXF, 2D polygons | Georeferenced | no | Double coordinates in the order's unit; the class as an attribute | Features |
+| `Landcover/Canopy.tif` | Canopy height | GeoTIFF | Georeferenced | no | Byte; one unit is a whole metre; no-data 255 | Pixels |
+| `Landcover/Trees.gpkg` | Tree points | GeoPackage, 3D points | Georeferenced | no | Double coordinates in the order's unit; the tree's attributes as in `Trees.csv` | Features |
+| `Landcover/Trees.csv` | Tree points | CSV | Host-ready | yes | Decimal metres to the centimetre | Rows |
+| `Materials/Water.png` | Water weight; the water coverage | PNG, 8-bit grayscale | Host-ready | yes | Byte; 0 none to 255 full; no no-data code | Pixels |
+| `Materials/Grass.png` | Grass weight | PNG, 8-bit grayscale | Host-ready | yes | Byte; 0 none to 255 full; no no-data code | Pixels |
+| `Materials/Forest.png` | Forest weight | PNG, 8-bit grayscale | Host-ready | yes | Byte; 0 none to 255 full; no no-data code | Pixels |
+| `Materials/Dirt.png` | Dirt weight | PNG, 8-bit grayscale | Host-ready | yes | Byte; 0 none to 255 full; no no-data code | Pixels |
+| `Materials/Rock.png` | Rock weight | PNG, 8-bit grayscale | Host-ready | yes | Byte; 0 none to 255 full; no no-data code | Pixels |
+| `Materials/Sand.png` | Sand weight | PNG, 8-bit grayscale | Host-ready | yes | Byte; 0 none to 255 full; no no-data code | Pixels |
+| `Materials/Snow.png` | Snow weight | PNG, 8-bit grayscale | Host-ready | yes | Byte; 0 none to 255 full; no no-data code | Pixels |
+| `Materials/Built.png` | Built-surface weight | PNG, 8-bit grayscale | Host-ready | yes | Byte; 0 none to 255 full; no no-data code | Pixels |
+| `Basemap/Basemap.tif` | The rendered map | GeoTIFF, RGB | Georeferenced | no | Byte ×3: red, green, blue; no no-data code | Pixels |
+| `Basemap/Basemap.png` | The rendered map, for a drape | PNG, RGB | Host-ready | yes | Byte ×3: red, green, blue; no no-data code | Pixels |
+| `Basemap/Basemap.usdz` | The map's features as curves, points and polygons | OpenUSD package | Host-ready | yes | Float32 coordinates, metres; Z-up | Features |
+| `Basemap/Buildings.glb` | Extruded buildings | glTF 2.0 binary | Host-ready | yes | Float32 vertices, metres; Y-up | Triangles |
+| `Basemap/Roads.csv` | Road centrelines, one row per vertex | CSV | Host-ready | yes | Decimal metres to the centimetre | Rows |
+| `Basemap/Buildings.gpkg` | Building footprints | GeoPackage, 2D polygons | Georeferenced | no | Double coordinates in the order's unit; height as an attribute | Features |
+| `Basemap/Buildings.dxf` | Building footprints | DXF, 2D polygons | Georeferenced | no | Double coordinates in the order's unit; height as an attribute | Features |
+| `Basemap/Roads.gpkg` | Road centrelines, draped | GeoPackage, 3D lines | Georeferenced | no | Double coordinates in the order's unit and vertical datum | Features |
+| `Basemap/Roads.dxf` | Road centrelines, draped | DXF, 3D polylines | Georeferenced | no | Double coordinates in the order's unit and vertical datum | Features |
+| `Basemap/Pavement.gpkg` | Road surfaces, as areas | GeoPackage, 2D polygons | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Basemap/Pavement.dxf` | Road surfaces, as areas | DXF, 2D polygons | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Basemap/Water.gpkg` | Water bodies and waterways | GeoPackage, 2D | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Basemap/Water.dxf` | Water bodies and waterways | DXF, 2D | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Basemap/Landuse.gpkg` | Land use, as areas | GeoPackage, 2D polygons | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Basemap/Landuse.dxf` | Land use, as areas | DXF, 2D polygons | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Parcels.gpkg` | Parcel boundaries | GeoPackage | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Parcels.dxf` | Parcel boundaries | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Zoning.gpkg` | Zoning districts | GeoPackage | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Zoning.dxf` | Zoning districts | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Floodplain.gpkg` | Flood hazard zones | GeoPackage | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Floodplain.dxf` | Flood hazard zones | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Wetlands.gpkg` | Wetlands | GeoPackage | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Wetlands.dxf` | Wetlands | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Soils.gpkg` | Soil map units | GeoPackage | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Soils.dxf` | Soil map units | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Heritage.gpkg` | Historic places | GeoPackage | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Heritage.dxf` | Historic places | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Conservation.gpkg` | Protected areas | GeoPackage | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Conservation.dxf` | Protected areas | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Habitat.gpkg` | Critical habitat | GeoPackage | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Habitat.dxf` | Critical habitat | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Hydrography.gpkg` | Streams and water features | GeoPackage | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Hydrography.dxf` | Streams and water features | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Contamination.gpkg` | Contaminated sites | GeoPackage | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Records/Contamination.dxf` | Contaminated sites | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Site/Site.usdz` | The site as one model: terrain, buildings, roads, water, land use and trees, textured | OpenUSD package | Host-ready | yes | Float32 coordinates, metres; Z-up | Triangles |
+| `Site/Site.ifc` | The site model | IFC 4.0.2.1 | Georeferenced | no | Double coordinates in the order's unit, placed by the model's map conversion | Features |
+| `Site/Site.dxf` | The flat plan drawing, with its paper-space layouts | DXF | Georeferenced | no | Double coordinates in the order's unit | Features |
+
+**What some rows need said.**
+
+- **`Terrain.obj` is written Y-up, in metres, with texture coordinates,** and names `Terrain.mtl` as its material library. OBJ has no unit field, so the Readme states the unit: a host that reads OBJ in metres imports it at 1, and a host that reads OBJ in centimetres imports it at 100. It is the bundle's one fallback mesh, for tools that read neither glTF, USD nor DXF.
+- **`Terrain.mtl` points at the bundle's imagery,** with the relative path `../Imagery/Imagery.png`, so the mesh opens textured and no second copy of the pixels is shipped. The texture coordinates of `Terrain.obj` address the pixels of `Imagery.png` at the same level.
+- **`Imagery.tif`'s fourth band is near-infrared.** It is written undeclared, with a band description that says near-infrared, and never declared as alpha, so no host reads it as transparency. NDVI is `(band 4 - band 1) / (band 4 + band 1)` of this file (§12).
+- **`Elevation.png` sits on the shared vertical ladder.** Its step is one of the ladder's, and its catalog entry states the step, the height of code 0 and its place on the ladder; two heightmaps at one step share one code lattice, so a reader that tiles several lines them up by their stated places and not by each file's range. At every level its side is a size heightmap hosts accept.
+- **The eight `Materials` PNGs are weight maps,** one per surface, over the same grid. They are the paint layers a terrain host blends, named by their files. `Water.png` is also the water coverage: no separate water mask ships.
+- **`Trees.csv`** has the columns `x`, `y`, `ground_z`, `height_m`, `crown_radius_m` and `foliage_type`. The platform thins the trees by canopy, water and land cover when it writes the file, and ranks them: the Med and Min files are the first rows of the Max file, so a tree keeps its row at every level. `Trees.gpkg` holds the same trees as the Max `Trees.csv`, with the same attributes, in the georeferenced frame.
+- **`Roads.csv`** has one row per vertex, with the columns `road`, `vertex`, `x`, `y`, `z`, `class`, `width_m` and `name`. Rows of one road share its `road` number and are in vertex order.
+- **`Pavement`** holds the road surfaces as areas, not centrelines: the platform builds them, and a host never buffers a centreline to make them.
+- **`Habitat`** is a critical-habitat designation; like every record, it is present only where the AOI has one. The `Parcels` pair is in the tree although many AOIs have no parcel source.
+- **`Basemap.usdz` and `Site.usdz` are kept apart on purpose:** `Basemap.usdz` holds the ODbL features as a database, with their attributes, and `Site.usdz` is the Produced Work scene. `Basemap.usdz` composes onto `Site.usdz` as a sublayer.
+- **`Site.dxf`** is the flat plan drawing of the site with its paper-space layouts, so a CAD user can plot the plan sheets.
+
+## 7. Precision
+
+**Precision is stated, and never finer than the source.** Elevation is exact and imagery untouched: both are lossless, and equal to the source pixel for pixel. Slope is stored to tenths of a degree, aspect to whole degrees and canopy height to whole metres. Every raster's data type, scale and no-data value are in the file table (§6) and again in its catalog entry (§9.5), so a reader decodes a pixel from the text and the manifest and never from a scale or offset tag a library may or may not honour.
+
+⛔ **A reader that cannot decode a file's stated encoding skips the file and says so.** It never guesses at what a pixel means.
+
+## 8. Levels
+
+**Three levels: Max, Med and Min.** Max is the bundle in full. Med has half the resolution or count of Max and Min a quarter: in linear resolution for a grid, and in count for a mesh or a set of rows or features. A grid still lands on a size hosts accept. The meaning is the same on every site.
+
+- **Every order builds all three.** A level is never priced and is the same for a free and a paid order.
+- **A level belongs to the download, not to the file name.** A download holds exactly one level of each file, under the same name and path at every level. The manifest states the download's level once (§9.3), and the zip's name carries it.
+- **Host-ready files carry the level; georeferenced files do not.** A `glb`, `usdz`, `obj`, `png` or `csv` is built at each level; `Terrain.mtl` is the same at every level. A `tif`, `gpkg`, `dxf`, `landxml` or `ifc` is byte-identical in all three downloads. By bytes a Med or Min download is therefore larger than a half or a quarter of Max; each download states its measured size.
+- **A level omits or coarsens; it never moves, invents or reclassifies.** A coarser grid is resampled from the same source, a coarser mesh has fewer triangles over the same ground, and a coarser set keeps a subset of the same rows.
+- **A request that names no level receives Max.** The level the platform recommends for a host is the platform's answer to that host, not a fact in the manifest.
+
+## 9. The manifest
+
+### 9.1 Where it is, and how it is found
+
+`Manifest.json` sits at the root of the zip, beside `Readme.md`. It is the one file found by its name before anything else is read; every other file is found by its name in the manifest's catalog. The manifest states its version as a semver string; [`compatibility.md`](compatibility.md) says how a reader compares it.
+
+### 9.2 Public facts only
+
+The manifest is public, and holds only public facts: what the bundle is, where it is, what each file is and under what terms. It carries no commit, no image path, no build budget, threshold or parameter, and no register reserved for the platform's internal use. It has **one** file catalog, generated from the producer's registry and never written by hand.
+
+### 9.3 The bundle statement
+
+Facts about the whole bundle, stated once: the order's identity (the one identifier that joins a bundle to its vault entry), the AOI as a rectangle in longitude and latitude and as an area, the order's unit system and the delivery it resolved to, the time zone of the place, the build date, and **the level of this download**.
+
+### 9.4 The two frames
+
+Both frames are stated once, for every file of their family (§4).
+
+- **The georeferenced frame:** the order's projected CRS, its vertical CRS and geoid, the horizontal linear unit and the vertical linear unit, each as a factor to metres so no reader maps "foot" to the wrong foot, and the order of the horizontal axes. It also states the grid rotation at the site origin: the angle between the CRS's grid north and true north there.
+- **The local site frame:** the site origin, as longitude, latitude, height above the ellipsoid and height in the frame's vertical datum, and again as x, y and z in the projected CRS whose grid the frame's axes follow, with that CRS and its unit; the vertical datum its heights are in; and its unit, which is the metre on every order.
+
+A CRS is named whole: a code, a PROJJSON object or a WKT2 string, with the horizontal and vertical CRS as separate references. No reader takes a compound code apart.
+
+### 9.5 The catalog
+
+One entry per file the download holds, keyed by its path in the zip. A file has the same name in storage as in the zip. Each entry states:
+
+- **what it is:** its subject, its format and its family;
+- **its bytes:** its size and its sha256;
+- **its count:** rows for a table, features for a vector layer, triangles for a mesh, pixels for a raster. A count is what lets a reader estimate an import before starting it;
+- **for a raster:** its width and height in pixels, its cell size, the rectangle it covers in its frame, its data type, scale, offset and no-data value (§7), its band names, and the legend of a class raster (each code and its class);
+- **for a mesh:** its up axis, as its format fixes it (§4);
+- **for a table:** its columns, and for the tree points the foliage-type vocabulary (§5);
+- **its terms:** its ODbL role, its licence and its sources (§9.8).
+
+### 9.6 What a bundle does not hold
+
+The manifest lists every promised file that the bundle does not hold, each with its reason: the AOI has no such data, or the file is **pending** because a public-record source did not answer in time. A pending layer is added by the platform when the source answers, and the next download of the bundle includes it.
+
+⛔ **A reader MUST show the stated reason rather than match on it.** The reasons can grow; a reader that branches on the ones it knows shows nothing for the one it does not. An absent file is not an error.
+
+### 9.7 No per-host block
+
+The manifest has **no** block for any one host. A reader finds each file it wants by its name in the catalog, and a name the catalog lacks is a file this download does not hold. Every value a 2.x plugin read from its host block has a neutral home in this page or a line saying it is dropped (§13). A new host needs nothing added to the manifest.
+
+### 9.8 Integrity, licensing and attribution
+
+⛔ **Every catalog entry carries a sha256, and a reader MUST verify it and MUST fail closed on a mismatch**, naming the file. Importing bytes that failed verification is worse than importing nothing. Write a download to a temporary path, verify it, and promote it by rename; a reader that streams onto the final path leaves a truncated file that looks cached.
+
+Each entry states its **ODbL role** (an ODbL database, a Produced Work, or no ODbL source), the **licence** the file ships under as an SPDX expression, and its **sources**, each with its name and licence. ⛔ **A missing role, or one the reader does not know, reads as an ODbL database**, the stricter duty. The platform's [licensing](https://mantle.place/licensing) and [attributions](https://mantle.place/attributions) pages are the authority on the text those terms require.
+
+### 9.9 Extras are not in the manifest
+
+`Manifest.json` describes the bundle and names no Extra. The platform lists a bundle's Extras, in the vault and to a plugin that asks, and each Extra states its own sources and credits, since it travels without the bundle's Readme.
+
+## 10. The zip
+
+- **Members are compressed with DEFLATE.** A member that compression does not shrink MAY be stored instead. The length of a download is still known before its stream starts.
+- **A download opens in the standard zip readers** (Windows Explorer, the .NET zip reader, the Python zip reader), and each member still verifies on its own against its catalog digest.
+- **The zip's name carries the download's level.** Nothing else in the zip does, besides the manifest's one statement.
+- **Archive paths are untrusted input.** A reader MUST resolve every path inside its extraction root and reject an entry that escapes it.
+- **The media type** is `application/vnd.mantleplace.bundle+zip`, and the extension stays `.zip`, because `.mpb` belongs to other applications. A server that serves a bundle SHOULD send that type. A reader MUST NOT refuse a bundle because it arrived as `application/zip` or `application/octet-stream`: what makes a file a 3.x bundle is `Manifest.json` at its root.
+
+## 11. Reading a bundle, start to finish
+
+1. **Find the manifest.** `Manifest.json` at the root is a 3.x bundle. `Metadata/manifest.json` is a 2.x or 1.x bundle, read by [`format-2.md`](format-2.md). A zip with neither is not a bundle.
+2. **Check the version.** Parse the major; refuse a higher major gracefully, before extracting anything ([`compatibility.md`](compatibility.md) §3).
+3. **Read the bundle statement and the two frames** (§9.3, §9.4), including the level.
+4. **Find each file by its name in the catalog**, resolved inside the extraction root (§10). A name the catalog lacks is not held; the manifest says why (§9.6).
+5. **Verify each file** against its sha256 (§9.8).
+6. **Place each file by its family:** a georeferenced file by the order's CRS, a host-ready file by the local site frame, applying every published value verbatim (§4).
+7. **Show what is missing and why,** pending layers included (§9.6).
+8. **Honour each file's terms** (§9.8).
+
+If a step is under-specified for a bundle you hold, that is a spec bug worth an issue, and a corpus bug too if no case catches it ([`conformance.md`](conformance.md)).
+
+## 12. What left since 2.x, and how to derive it
+
+Every 2.x file is either in the 3.x tree under a name, an Extra, or derived in one step from a file that stays. A curator who needs a removed file makes it from the 3.x file named here; a host plugin that needs one derives it the same way, from a pre-derived file, never by placing anything.
+
+| 2.x file | 3.x file it comes from | The step |
+| --- | --- | --- |
+| `README.md`, `Metadata/manifest.json` | `Readme.md`, `Manifest.json` | Renamed and moved to the root |
+| `Metadata/stac-item.json` (the STAC Item) | `Manifest.json` | Generate a STAC Item from the manifest's catalog |
+| Every Shapefile set (`.shp` and its sidecars, the geometry splits such as `Water-Lines.shp` included) | The layer's `.gpkg` | Export the GeoPackage layer to Shapefile |
+| The `-Projected` GeoPackage twins, and the geographic GeoPackages | The layer's `.gpkg`, already in the order's CRS | Reproject the GeoPackage, where another CRS is wanted |
+| `Elevation/DEM.tif` | `Elevation/Elevation.tif` | Renamed |
+| `Elevation/Heightmap.png` | `Elevation/Elevation.png` | Renamed |
+| `Elevation/Surface.dxf`, `Surface.landxml` | `Elevation/Terrain.dxf`, `Terrain.landxml` | Renamed |
+| `Elevation/SurfacePoints.csv` | `Elevation/Terrain.dxf` (or `Terrain.landxml`) | Export the surface's vertices as points |
+| `Elevation/SteepSlopes.gpkg` | `Elevation/Slope.gpkg` | Renamed; `Slope.dxf` is its new pair |
+| `Elevation/Slope.png`, `Aspect.png`, `Hillshade.png` | `Elevation/Slope.tif`, `Aspect.tif`, `Hillshade.tif` | Re-encode the raster as PNG, by the scale §6 states |
+| `Elevation/Terrain.jpg` (the OBJ's texture) | `Imagery/Imagery.png`, named by `Terrain.mtl` | None: the material file points at the imagery |
+| `Elevation/Terrain/` (the quantized-mesh tileset) | The terrain tiles Extra | Download the Extra beside the bundle |
+| `Imagery/Imagery.pgw`, `Imagery.prj` | `Imagery/Imagery.tif` | Write a world file from the GeoTIFF's georeference |
+| `Imagery/NDVI.tif`, `NDVI.png` | `Imagery/Imagery.tif` | `(band 4 - band 1) / (band 4 + band 1)` |
+| `Imagery/Imagery-Engine.png` | `Imagery/Imagery.png`, now in the local site frame | None |
+| `LandCover/LandCover.tif` | `Landcover/Landcover.tif` | Renamed |
+| `LandCover/LandCover.png` | `Landcover/Landcover.tif` | Re-encode the raster as PNG |
+| `LandCover/LandCoverAreas.gpkg`, `.dxf` | `Landcover/Landcover.gpkg`, `.dxf` | Renamed |
+| `LandCover/CanopyHeight.tif` | `Landcover/Canopy.tif` | Renamed; stored to whole metres (§7) |
+| `LandCover/CanopyHeight.png` | `Landcover/Canopy.tif` | Re-encode the raster as PNG |
+| `LandCover/WaterMask.tif`, `WaterMask.png` | `Materials/Water.png` | Read a non-zero weight as water |
+| `LandCover/MaterialWeights.tif`, `MaterialWeights-1To4.png`, `MaterialWeights-5To8.png` | The eight `Materials` PNGs | Pack four weight maps into the four channels of one texture |
+| `LandCover/TreePoints.csv` | `Landcover/Trees.gpkg` (the order's frame) or `Landcover/Trees.csv` (the local site frame) | Renamed; the same six columns |
+| `LandCover/TreePoints-Engine.csv` | `Landcover/Trees.csv` | None: it is now in the local site frame |
+| `Features/StylizedMap.tif`, `.png` | `Basemap/Basemap.tif`, `.png` | Renamed |
+| `Features/Buildings.glb` | `Basemap/Buildings.glb` | Moved |
+| `Features/BuildingFootprints` | `Basemap/Buildings.gpkg`, `.dxf` | Renamed |
+| `Features/RoadsDraped` | `Basemap/Roads.gpkg`, `.dxf` | Renamed |
+| `Features/Roads` (the 2D centrelines) | `Basemap/Roads.gpkg` | Drop the heights |
+| `Features/RoadsDraped-Engine.gpkg` | `Basemap/Roads.csv` | None: one row per vertex in the local site frame, with the road's name |
+| `Features/RoadSurfaces` | `Basemap/Pavement.gpkg`, `.dxf` | Renamed |
+| `Features/Water`, `Features/LandUse` | `Basemap/Water`, `Basemap/Landuse` | Renamed |
+| `Records/FloodZones` | `Records/Floodplain` | Renamed; the DXF is new |
+| `Records/HistoricPlaces` | `Records/Heritage` | Renamed |
+| `Records/ProtectedAreas` | `Records/Conservation` | Renamed |
+| `Records/CriticalHabitat` | `Records/Habitat` | Renamed |
+| `Site/Model.ifc` | `Site/Site.ifc` | Renamed |
+| `Site/Context.usdz` | `Site/Site.usdz` | Renamed |
+| `Site/Features.usdz` | `Basemap/Basemap.usdz` | Renamed and moved |
+| `Site/Brief.pdf` | The Site Brief Extra | Download the Extra beside the bundle |
+| `Drawings/Linework.dxf` | `Site/Site.dxf` | Renamed and moved |
+| `Drawings/SitePlan-Small.pdf`, `SitePlan-Large.pdf` | The plan sheets Extra; the same sheets are the layouts of `Site/Site.dxf` | Download the Extra, or plot the layouts |
+| `Drawings/SitePlan-Small.svg`, `SitePlan-Large.svg` | The plan sheets Extra | Convert the PDF page to SVG |
+| The `-Raw` level files | The same file at Max | None: the native file is in the bundle |
+| The `-Med` and `-Min` level files (`Terrain-Med.glb`, `Context-Min.usdz` and the like) | The same name in the Med or Min download | Download that level |
+
+The `Records` layers keep their names where 2.x already used one word (`Parcels`, `Zoning`, `Wetlands`, `Soils`, `Hydrography`, `Contamination`).
+
+## 13. Where each 2.x host-block value lives in 3.x
+
+The inventory in [`docs/import-inventory.md`](../docs/import-inventory.md#every-value-read-from-a-host-block) lists every value the Unreal, Revit and AutoCAD plugins read from a 2.x host block, and the values a host's download view depended on. Its row ids are used here. Each row has a neutral home in a 3.x manifest or a line saying it is dropped. "Catalog" is §9.5, "frames" §9.4, "bundle statement" §9.3 and "not held" §9.6.
+
+| Row | 3.x home |
 | --- | --- |
-| **COG** (Cloud Optimized GeoTIFF) | Rasters: elevation, imagery, the derived surfaces, land cover |
-| **GeoPackage** | Vector layers and the public records, with attributes |
-| **glTF 2.0** | Meshes: the terrain, extruded buildings |
-| **OpenUSD** | The packaged site: the Context file and the Features file (`.usdz`) |
-| **IFC**, named as **IFC 4.0.2.1 (IFC4 ADD2 TC1)** | The site model |
+| R01 | Frames: the site origin's longitude and latitude |
+| R02 | Frames: the site origin as x and y in the georeferenced frame's CRS, with its unit |
+| R03 | Frames: the georeferenced frame's horizontal CRS |
+| R04 | Frames: the georeferenced frame's vertical CRS, and the site origin's height in it |
+| R05 | Frames: the grid rotation at the site origin |
+| R06 | Dropped as a value: a file's family settles it. Every georeferenced file is absolute in the order's CRS, every host-ready file is offsets in the local site frame |
+| R07 | Frames: the georeferenced frame's CRS, and the CRS the local site frame's axes follow |
+| R08 | Frames: the site origin in the georeferenced frame, with its unit |
+| R09 | Frames: the georeferenced frame's horizontal and vertical units; the local site frame is always metres |
+| R10 | Not held: each promised file the bundle does not hold, with its reason. A per-host part has no verdict of its own: a host's part is the files it names |
+| R11 | Catalog, by name: `Elevation/Terrain.dxf` (the surface) and `Site/Site.ifc`. The points file left; the plugin's own first route, the surface's triangles, reads `Terrain.dxf` (§12) |
+| R12 | Catalog: every entry's sha256 |
+| R13 | Frames, by the file's family |
+| R14 | Dropped as a value: the family settles it (as R06) |
+| R15 | Frames, by the family: a georeferenced file's heights are absolute in the order's vertical datum, and a host-ready file's are metres above the site origin's height |
+| R16 | Frames: the georeferenced frame's units and vertical CRS, which `Elevation/Contours.dxf` is in |
+| R17 | Catalog: `Imagery/Imagery.png` and the rectangle it covers in the local site frame, or `Imagery/Imagery.tif` and its georeference; the format is the extension |
+| R18 | Bundle statement: the download's level. Catalog: each file's count, which states what the level costs. The per-file choice of a level, its cuts and its pointers are dropped: a download holds one level of every file (§8), and the counts of all three levels are the platform's answer to a host |
+| R19 | Catalog, by name: each layer's `.gpkg` (`Basemap/Roads`, `Landuse`, `Water`, `Pavement`, `Landcover/Landcover`, `Records/Floodplain`, `Elevation/Slope`), every one in the order's CRS |
+| R20 | Catalog: one GeoPackage per layer; the entry names its tables |
+| A01 | Dropped as a value: the family settles it (as R06) |
+| A02 | Frames: the georeferenced frame's CRS |
+| A03 | Frames: the site origin in the georeferenced frame, with its unit |
+| A04 | Frames: the georeferenced frame's horizontal and vertical units |
+| A05 | Catalog, by name: `Elevation/Contours.dxf`, `Elevation/Terrain.landxml`, `Imagery/Imagery.png`, `Site/Site.dxf` and each `Records/*.dxf` |
+| A06 | The file's name: `Records/Zoning.dxf` is the Zoning layer |
+| A07 | Catalog: every entry's sha256 |
+| A08 | Catalog: the format; the extension says it too |
+| A09 | Dropped as a value: the family settles it (as R06) |
+| A10 | Frames, by the file's family |
+| A11 | Frames, by the family (as R15) |
+| A12 | Frames: the georeferenced frame's vertical CRS |
+| A13 | Catalog: the width and height of `Imagery/Imagery.png` |
+| A14 | Catalog: the rectangle `Imagery/Imagery.tif` covers in the order's CRS and unit, which is the insertion point and the size; `Imagery.png` at Max holds the same pixels. The rotation is zero: every georeferenced raster is north-up on the order's grid |
+| A15 | Not held, as R10. "Requires" (a surface needs Civil 3D) is dropped: it is a fact about a host, not about a bundle |
+| U01 | Catalog: `Elevation/Elevation.png` and its sha256 |
+| U02 | Catalog: the width and height of `Elevation/Elevation.png` |
+| U03 | Fixed by this text: row 0 of every raster is its north edge (§4) |
+| U04 | Catalog: the offset and step of `Elevation/Elevation.png` (§6) |
+| U05 | Catalog: the cell size of `Elevation/Elevation.png` in metres, and its offset and step, which the host multiplies into its own units. The section size and component counts are dropped: they are the engine's layout for the stated pixel size, and the producer writes `Elevation.png` at a size that layout accepts |
+| U06 | Catalog: `Imagery/Imagery.png` and its sha256, in the local site frame on every order |
+| U07 | Catalog: the rectangle `Imagery/Imagery.png` covers in the local site frame |
+| U08 | Catalog: the rectangles of `Elevation/Elevation.png` and `Imagery/Imagery.png`, both in the local site frame; a reader compares the two as stated. The separate claim is dropped |
+| U09 | Catalog: `Elevation/Terrain.glb`, its sha256 and its up axis, which glTF fixes (§4) |
+| U10 | Dropped: a host's own choice. The catalog's triangle count is the fact it can choose by |
+| U11 | Not held, as R10 |
+| U12 | Catalog: `Basemap/Buildings.glb` and its up axis |
+| U13 | Catalog, by name: the eight `Materials` PNGs, whose names are the paint layers' names. The engine copies of NDVI, slope, aspect, land cover, canopy and hillshade left; each derives from its GeoTIFF (§12) |
+| U14 | Catalog: each PNG's data type, width, height, size and sha256 |
+| U15 | Catalog: each raster's scale, offset, no-data value, band names and class legend (§7) |
+| U16 | Catalog: `Landcover/Trees.csv`, its sha256 and its row count |
+| U17 | Frames: `Trees.csv` is host-ready, so it is in the local site frame in metres |
+| U18 | Bundle statement: the download's level; the Med and Min `Trees.csv` are the first rows of Max (§6) |
+| U19 | Catalog: `Basemap/Roads.csv` in the local site frame, with each road's name; its heights are in the local site frame's vertical datum. `Basemap/Roads.gpkg` is the same roads in the order's CRS |
+| U20 | Frames: the CRS the local site frame's axes follow |
+| U21 | Frames: the site origin as x and y in that CRS |
+| U22 | Frames: the site origin's height in the vertical datum |
+| U23 | Dropped: the local site frame is flat by definition (§4) |
+| T01 | Dropped from the manifest: the terrain tiles are an Extra, which the platform lists and a signed-in plugin downloads (§9.9) |
+| T02 | Dropped from the manifest: the platform's listing of the Extra states it |
+| T03 | Bundle statement: the AOI rectangle in longitude and latitude |
+| T04 | Catalog: as U06 and U07 |
+| T05 | Frames: the site origin's longitude, latitude and height |
+| O01 | Catalog: `Landcover/Trees.csv` and `Landcover/Trees.gpkg`. No view question remains: a download holds every file of the tree at one level |
+| O02 | Not applicable, as in 2.x: a download holds every file the AutoCAD import reads |
+| O03 | Catalog: `Records/Floodplain.gpkg` |
+| O04 | Dropped from the manifest: the terrain tiles Extra, as T01 |
 
-The IFC row names one published release on purpose. IFC 4.3 is allowed in a later release of this
-spec, as an addition (§11) and not a replacement, so a reader that supports only IFC 4.0.2.1 is
-never broken by it.
+**The values a 2.x block declared and no plugin read** (the inventory's last list: the version floors, the unit notes, the formats, the ground sample distances, the caps, the ranks, the notes and the rest) are dropped. The facts among them that a 3.x reader can use are in the catalog already: a file's format, its size, its count and its pixel size.
 
-What "promised" obliges. For as long as 2.x lasts (§11), a canonical format stays on the list. A
-reader that reads every canonical format can read the data content of every bundle, because the
-producer ships each kind of data content (rasters, vector layers, meshes, the packaged site, the
-site model) in a canonical format wherever it ships that content at all. A reader MUST NOT need a
-courtesy format to read that data content.
+## 14. Stability, and a higher major
 
-Four kinds of file are exempt from that rule, and only these: the **documents** (the Site Brief and
-the plan sheets, PDF and SVG); the **drawings** (`Drawings/Linework.dxf` and the contour linework
-`Elevation/Contours.dxf`), which exist as drawings for CAD tools; the **point tables**
-(`Elevation/SurfacePoints.csv` and `LandCover/TreePoints.csv`), which are point lists for tools that
-read CSV; and the **LandXML and DXF encodings of the surface** (`Elevation/Surface.landxml`,
-`Elevation/Surface.dxf`), whose surface is carried canonically by the elevation COG,
-`Elevation/DEM.tif`, in the same folder. A bundle's exempt files
-are courtesy files, and nothing in the bundle's data content depends on them.
+**Within 3.x nothing breaks.** The full promise is [`compatibility.md`](compatibility.md) §8: the tree, the names, the families, the formats and the precision of every file only grow, and no file is removed, moved or renamed.
 
-### 9.3 The courtesy list
+**A higher major is refused gracefully.** A reader opens `Manifest.json` at the root, reads its version and nothing else, and compares the parsed major. If it is higher than any the reader supports, the reader stops before it extracts a file, and tells the user the bundle's version, the versions it supports, and that the software needs updating.
 
-Every other file in a bundle is a **courtesy format**: shipped and described in the manifest, never
-promised. The courtesy formats of this release are:
+## 15. The file-by-host table
 
-- **DXF**: the linework, the contours, the surfaces and the feature layers. DXF is a courtesy
-  format everywhere, whatever it carries, so no content has to be argued into an exception to the
-  admission test.
-- **Shapefile**, which Civil 3D and CityEngine read where they do not read GeoPackage.
-- **LandXML**, which Revit and Civil 3D read. The LandXML standard is no longer maintained; it
-  stays only because those tools read it.
-- **OBJ**, with its `.mtl` and texture, for tools that read no glTF.
-- **CSV**, the point tables.
-- **The PNG renditions** of a raster, and the **16-bit heightmap**.
-- **The quantized-mesh tileset** of the terrain.
-- **The PDF and SVG sheets**: the Site Brief and the plan sheets.
-
-A courtesy format stays in the producer's catalogue only while a named tool that curators use reads
-it natively and reads no canonical format for the same content. When no such tool is left, the
-format is dropped from the catalogue, in a release that records it in the
-[changelog](changelog.md). A reader MUST NOT fail a bundle because a courtesy file it once used is
-absent, and reads the manifest's pointers (§3) to learn which files exist.
-
-## 10. The 2.0 layout
-
-MPB 2.0 restructured the archive once so that it can be held steady. The layout below is what a 2.0
-producer writes. The pointer doctrine (§3) is unchanged and stronger for it: a consumer still finds
-every file through a manifest pointer value, and the layout is for the people who unzip.
-
-### 10.1 What a 2.0 bundle contains
-
-The root holds the README and the folders, and nothing else. This tree is the default download of a
-new order at its finest level. It is informative: the pointers decide which of these a given bundle
-holds, and a bundle holds only what the AOI and its sources produced.
-
-```
-README.md
-Metadata/   manifest.json  stac-item.json
-Site/       Brief.pdf  Model.ifc  Context.usdz  Features.usdz
-Elevation/  DEM.tif  Heightmap.png  Hillshade.tif .png  Slope.tif .png  Aspect.tif .png
-            SteepSlopes.gpkg  Contours.dxf  Surface.landxml .dxf  SurfacePoints.csv
-            Terrain.glb .obj .mtl .jpg  Terrain/ (quantized-mesh tileset)
-Imagery/    Imagery.tif  Imagery.png .pgw .prj  NDVI.tif .png
-LandCover/  LandCover.tif .png  LandCoverAreas.gpkg .shp .dxf  CanopyHeight.tif .png
-            WaterMask.tif .png  MaterialWeights.tif  MaterialWeights-1To4.png
-            MaterialWeights-5To8.png  TreePoints.csv
-Features/   StylizedMap.tif .png  Buildings.glb
-            BuildingFootprints, Roads, RoadsDraped, RoadSurfaces, Water, LandUse: each .gpkg .shp .dxf
-Records/    FloodZones, Parcels, Zoning, Wetlands, Soils, Hydrography, Contamination,
-            CriticalHabitat, HistoricPlaces, ProtectedAreas: each .gpkg .dxf
-Drawings/   Linework.dxf  SitePlan-Small.pdf .svg  SitePlan-Large.pdf .svg
-```
-
-Outside that default download, or only on some deliveries, a bundle can also hold the lighter levels
-of a surface or model (`Terrain-Med.glb`, `Context-Min.usdz`), the engine-frame variants, only where
-the order's frame differs from the engine's (`TreePoints-Engine.csv`, `Imagery-Engine.png`), the
-projected-CRS twins of the vector layers, only where a layer is not already in the order's CRS
-(`RoadsDraped-Projected.gpkg`), and the Shapefile geometry splits (`Water-Lines.shp` with its
-sidecars).
-
-Four files carry most of what an outsider needs:
-
-- **`Metadata/manifest.json`** is the machine entry point (§1), and the only file found by
-  convention.
-- **`Metadata/stac-item.json`** is the same bundle as a STAC 1.1.0 Item, generated from the manifest,
-  for tools that already catalogue assets. Its asset keys match the manifest's pointer keys and its
-  hrefs are relative. It is a convenience and never an authority: where it and the manifest differ,
-  the manifest is right, and a reader that needs a frame, a role or a licence reads it from the
-  manifest.
-- **`Site/Context.usdz`** is the site as one handover-safe model: the terrain, extruded buildings,
-  roads, water and land use as meshes grouped by class, baked trees, and the imagery as textures. It
-  holds only Produced Work content (§10.4) and no curves, instancing or feature ids. Its up axis is Z,
-  its unit is the metre and its default prim is `/Site`. The `mpb:` georeference on `/Site` is the
-  file's frame, and the file stores its coordinates as offsets from the site origin (§6.8).
-- **`Site/Features.usdz`** is the vector data of the same site as curves, points and polygons with
-  their attributes, in the Context file's coordinates, and composes onto it as a sublayer. Its role
-  is `database`, and its layer metadata carries the ODbL notice.
-
-### 10.2 The folder allowlist
-
-⛔ **Normative: the folders of a 2.0 bundle are exactly these eight.** `Metadata`, `Site`,
-`Elevation`, `Imagery`, `LandCover`, `Features`, `Records` and `Drawings`.
-
-- **A producer MUST put no file at the root but `README.md`, and MUST use no top-level folder
-  outside the list.** The only way to add a folder is a new release of this spec (§11).
-- **A consumer MUST NOT depend on it.** The allowlist binds the producer. A consumer finds a file by
-  its pointer (§3), so a folder it has never heard of is no reason to refuse a bundle.
-- **A validator warns on a folder outside the list.** It is a warning because the consumer rule above
-  holds either way. A validator ignores the entries `__MACOSX` and `.DS_Store` that archive tools
-  add on their own.
-
-Each folder is named for what is in it, as a noun a curator would say. `Features/` holds the shared
-vector layers, rasterised map and building meshes; `Records/` holds the public-record layers, flat
-and named by the labels the Site Brief uses; `Site/` holds the files that describe the whole site and
-need no prefix for it. The land cover polygons are `LandCoverAreas`, not `LandCover`, because they
-are a separate vector product: they are processed differently from `LandCover.tif` and may be
-licensed differently, so they cannot share its basename (rule 1 below).
-
-**Licensing shows per file, never by folder.** A file's terms are its `odbl_role`, `license` and
-`sources` (§6.8), and the bundle's README lists them in a table. No folder means "ODbL".
-
-### 10.3 The six naming rules
-
-⛔ **Normative: a 2.0 producer follows all six.**
-
-1. **One noun per basename.** A basename names one thing, as a PascalCase noun a curator would say,
-   and the extension is the format. Two files that share a basename in one folder are
-   **renditions**: the same data in another encoding, at the same extent, with values possibly
-   quantized and never resampled or reprojected. Different data never shares a basename anywhere in
-   the bundle. (`Surface.dxf` and `Surface.landxml` are one surface in two encodings.)
-2. **Plural for countable things, singular for mass nouns.** `Roads`, `Parcels` and `TreePoints`
-   count things; `Imagery`, `LandCover` and `Water` do not.
-3. **Variant qualifiers are hyphenated, in a fixed order: subset, then frame, then level.** A
-   **variant** exists only for a frame or a format that a whole class of tools needs, never for one
-   plugin; it is named for what it is and sits beside the file it varies. No dots, underscores or
-   spaces.
-   - Subsets: `-Small`, `-1To4`, `-Lines`. A subset is a naming qualifier and never a storage part.
-   - Frames: `-Engine` and `-Projected`. A file with `-Engine` is in the frame a fixed-frame engine
-     host places files in (§6.4, §6.6): the AOI's metric UTM grid, in metres, with heights in the
-     engine content's datum. It is written only for an order whose delivered frame differs, beside
-     the file in the order's frame. A `-Projected` file is a vector layer's twin for a reader that
-     works in a projected CRS: the same tables, columns and types in the order's projected CRS and
-     unit, with absolute coordinates, and the manifest names each twin in
-     `layout.projected_variants`. A layer already in that CRS has no twin.
-   - Levels: `-Raw`, `-Med`, `-Min`. A coarser level of a surface or model is a separate file, because
-     none of the shipped formats holds levels portably. `Terrain-Med.glb` follows `Terrain.glb`.
-4. **Fixed names keep their convention.** A name that software or a convention looks up keeps it:
-   `README.md`, `Metadata/manifest.json`, `Metadata/stac-item.json`, and the names inside a format's
-   own structure (tileset internals, Shapefile sidecars, an OBJ's material and texture, world-file
-   and `.prj` sidecars). `Metadata/manifest.json` is fixed so that a reader written for an older
-   major can still open it, read its version and refuse a newer major (§11).
-5. **Character set.** Names are ASCII, from `[A-Za-z0-9._-]`, and no two entries of one archive
-   differ only by case, so that the bundle extracts the same on a case-sensitive and a
-   case-insensitive file system.
-6. **Case matching.** Writers use the exact case. Readers match a manifest path to an archive entry
-   regardless of case.
-
-### 10.4 Produced Works and ODbL files
-
-No file is both a Produced Work and an ODbL file. The Context file and the plan sheets are Produced
-Works at full quality, so a curator can hand them on with a credit line. The Features file, the
-vector layers built from ODbL sources and `Linework.dxf` are ODbL files, kept complete, and they
-carry their notice and the licence link inside the file (GeoPackage metadata, the DXF header, USD
-layer metadata). A file no ODbL source contributes to has the role `none`. The README says which is
-which; the manifest says it for a machine (`odbl_role`, §6.8).
-
-## 11. Stability, and a higher major
-
-**Within 2.x nothing breaks.** The full promise is [`compatibility.md`](compatibility.md) §8: a
-2.x consumer reads every 2.x bundle, and a 2.x producer's bundle stays readable by a consumer
-written against an earlier 2.x. For this document it means that the canonical list (§9.2) and the
-folder allowlist (§10.2) only grow, and that the naming rules (§10.3) never change meaning.
-
-**A higher major is refused gracefully.** A reader opens `Metadata/manifest.json` first, which is
-why rule 4 fixes its name, reads `version` and nothing else of the document, and compares the parsed
-major (compatibility §1, §3). If the major is higher than any it supports, it stops: it does not
-read a pointer, extract an artifact or import part of the bundle. It tells the user the bundle's
-version, the versions it supports, and what to do about it, which is to update the software. A 1.x
-reader refuses a 2.0 bundle in exactly this way, and a 2.x reader refuses a 3.0 bundle the same.
-
-## 12. The bundle's media type
-
-A bundle is a zip and keeps the `.zip` extension, because `.mpb` belongs to other applications. Its
-media type is:
-
-```
-application/vnd.mantleplace.bundle+zip
-```
-
-A server that serves a bundle SHOULD send that type, and a file that is a bundle SHOULD be offered to
-a reader under it. The `+zip` suffix says a generic zip reader can still open the file. The type is
-not registered with IANA yet; it follows the vendor-tree form so that the name is stable if it is
-registered later, and a reader MUST NOT refuse a bundle because it arrived as `application/zip` or
-as `application/octet-stream`. What makes a file a bundle is `Metadata/manifest.json` inside it.
+Before this text was frozen, three bundles were repacked into this tree and sixty files of the tree were opened in eight hosts with their own importers: QGIS, Blender, 3ds Max, AutoCAD, Civil 3D, Revit, Unreal Engine and Twinmotion. Unreal Engine and Twinmotion were given only the host-ready files. Of the sixty, fifty-eight opened in at least one host; `Readme.md` and `Manifest.json` (text) opened in none, since no host has an importer for them. The other nine files of the tree were not opened by any host: they joined the tree on the run's findings or had no source in the three bundles. The result, a row per file and a column per host, is [`file-by-host.md`](file-by-host.md). It is evidence for the tree, not part of the contract: a host's importer can change, and the promise in §3 does not.
