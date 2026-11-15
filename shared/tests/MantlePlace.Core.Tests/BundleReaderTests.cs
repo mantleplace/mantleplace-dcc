@@ -230,8 +230,8 @@ internal static class BundleReaderTests
         string? hosts = null)
     {
         string entries = """
-            "Elevation/Elevation.tif": {"odbl_role": "none", "license": "LicenseRef-MantlePlace-Terms", "sources": [], "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "count": 4294967296},
-            "Elevation/Terrain.glb": {"odbl_role": "none", "license": "LicenseRef-MantlePlace-Terms", "sources": [], "count": 1200},
+            "Elevation/Elevation.tif": {"odbl_role": "none", "license": "LicenseRef-MantlePlace-Terms", "sources": [], "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "count": {"kind": "pixels", "value": 4294967296}},
+            "Elevation/Terrain.glb": {"odbl_role": "none", "license": "LicenseRef-MantlePlace-Terms", "sources": [], "count": {"kind": "triangles", "value": 1200}},
             "Readme.md": {"odbl_role": "none", "license": "LicenseRef-MantlePlace-Terms", "sources": []}
             """;
         if (extraEntry is not null)
@@ -247,7 +247,7 @@ internal static class BundleReaderTests
 
         if (catalog is not null)
         {
-            members.Add(catalog.Length == 0 ? $"\"file_entries\": {{{entries}}}" : $"\"file_entries\": \"{catalog}\"");
+            members.Add(catalog.Length == 0 ? $"\"catalog\": {{{entries}}}" : $"\"catalog\": \"{catalog}\"");
         }
 
         if (hosts is not null)

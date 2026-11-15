@@ -15,12 +15,10 @@ namespace MantlePlace.Core;
 /// source to that.
 /// </para>
 /// <para>
-/// The members read are the ones the corpus's fixtures state (<c>tools/manifest-conformance/corpus/README.md</c>,
-/// "The reader group"): the level, the catalog, each entry's count and digest, and the not-held list.
-/// The 3.0.0 schema is now served with other names and with the two frames (§9.4), which the fixtures
-/// do not state yet. When the corpus's 3.0 cases are held to that schema, its names replace these and
-/// the frames are read here: each CRS, each unit and the site origin, failing closed on a value this
-/// reader does not understand (§4). Until then no frame value is read.
+/// The members read are the served 3.0.0 schema's: the level, the <c>catalog</c>, each entry's
+/// <c>count.value</c> and digest, and the <c>not_held</c> list of <c>{path, reason}</c>. The two
+/// frames (§9.4) are not read yet: the local frame's metre is assumed, and no CRS or unit is taken
+/// from the manifest.
 /// </para>
 /// </remarks>
 internal static class ManifestThreeReader
@@ -29,10 +27,13 @@ internal static class ManifestThreeReader
     private const string LevelMember = "level";
 
     /// <summary>The one file catalog, keyed by each file's path in the zip (§9.5).</summary>
-    private const string CatalogMember = "file_entries";
+    private const string CatalogMember = "catalog";
 
     /// <summary>A catalog entry's count of rows, features, triangles or pixels (§9.5).</summary>
     private const string CountMember = "count";
+
+    /// <summary>The number inside a count, <c>{"kind", "value"}</c>.</summary>
+    private const string CountValueMember = "value";
 
     /// <summary>A catalog entry's digest (§9.8).</summary>
     private const string DigestMember = "sha256";
@@ -41,6 +42,9 @@ internal static class ManifestThreeReader
     private const string NotHeldMember = "not_held";
 
     private const string ReasonMember = "reason";
+
+    /// <summary>A not-held entry's path.</summary>
+    private const string PathMember = "path";
 
     /// <summary>The extensions of the georeferenced family (§4).</summary>
     private static readonly HashSet<string> Georeferenced =
@@ -185,22 +189,21 @@ internal static class ManifestThreeReader
 
         // A file listed as not held is shown with the reason as the manifest states it, never matched
         // on (§9.6): the reasons grow. A path the catalog also names is the catalog's.
-        if (root.Object(NotHeldMember) is { } notHeld)
+        if (root.TryGetProperty(NotHeldMember, out JsonElement notHeld) && notHeld.ValueKind == JsonValueKind.Array)
         {
-            foreach (JsonProperty entry in notHeld.EnumerateObject())
+            foreach (JsonElement entry in notHeld.EnumerateArray())
             {
-                if (!catalogued.Contains(entry.Name))
+                if (entry.ValueKind == JsonValueKind.Object
+                    && entry.OptionalStr(PathMember) is { } path
+                    && !catalogued.Contains(path))
                 {
-                    string? reason = entry.Value.ValueKind == JsonValueKind.Object
-                        ? entry.Value.OptionalStr(ReasonMember)
-                        : null;
-                    skipped.Add(new SkippedFile(entry.Name, SkipCause.NotHeld, reason));
+                    skipped.Add(new SkippedFile(path, SkipCause.NotHeld, entry.OptionalStr(ReasonMember)));
                 }
             }
         }
 
         // The terms of each file, read as a 2.x catalog's are: the members did not change (§9.8).
-        BundleManifestReader.ReadFileEntries(manifest, root);
+        BundleManifestReader.ReadFileEntries(manifest, root, CatalogMember);
 
         manifest.Contents = new BundleContents
         {
@@ -241,7 +244,9 @@ internal static class ManifestThreeReader
 
     /// <summary>The count an entry states, as a non-negative integer; <c>null</c> when it states none.</summary>
     private static long? Count(JsonElement entry) =>
-        entry.TryGetProperty(CountMember, out JsonElement count)
+        entry.TryGetProperty(CountMember, out JsonElement counted)
+        && counted.ValueKind == JsonValueKind.Object
+        && counted.TryGetProperty(CountValueMember, out JsonElement count)
         && count.ValueKind == JsonValueKind.Number
         && count.TryGetInt64(out long value)
         && value >= 0

@@ -323,9 +323,9 @@ public static class BundleManifestReader
     /// <see cref="OdblRole.Database"/> (<c>spec/format.md</c> §6.8). Dropping such an entry would read
     /// the same, but keeping it lets a later reader tell a file the manifest listed from one it did not.
     /// </remarks>
-    internal static void ReadFileEntries(BundleManifest manifest, JsonElement root)
+    internal static void ReadFileEntries(BundleManifest manifest, JsonElement root, string member = "file_entries")
     {
-        if (root.Object("file_entries") is not { } entries)
+        if (root.Object(member) is not { } entries)
         {
             return;
         }
