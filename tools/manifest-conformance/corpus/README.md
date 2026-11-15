@@ -147,8 +147,7 @@ except where the rule it breaks is one the schema states too: a catalog key outs
 table, a level stated twice or not at all, an entry with no count, or a per-host block. Those
 cases expect the schema's refusal (`schema.invalid`) beside their own code. The zip's compression
 is no schema rule: `bundle.v3ZipMethod` writes one member with BZIP2 and `bundle.v3ZipStoredShrinks`
-stores one that DEFLATE would shrink, each a reject, and `bundle.v3ZipStoredSmall` stores a member
-DEFLATE would not shrink and is an accept. No schema is served for 3.1.0, so
+stores one that DEFLATE would shrink, each a reject. No schema is served for 3.1.0, so
 `bundle.v3MinorFileUnknown` is held to the format text's rules, and the runner reports the
 unpublished schema at info (`schema.pending`).
 
