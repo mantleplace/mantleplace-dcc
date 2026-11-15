@@ -118,8 +118,9 @@ Two case fields say how a case is built and fetched, not what it must report:
 
 - `stagedSchema: true` marks a case whose manifest declares a **staged** version: served for
   readers, not yet in the freeze ledger. The runner holds it to the served schema, as
-  `mpb validate --staged` does. The 2.0 cases (`bundle.v2*`) carry it while 2.0.0 is staged; once
-  it is frozen the field changes nothing and is removed.
+  `mpb validate --staged` does, and reports it at info (`schema.staged`). The 3.0 cases that
+  declare 3.0.0 carry it while 3.0.0 is staged; once it is frozen the field changes nothing and is
+  removed, as it was from the 2.0 cases when 2.0.0 was frozen.
 - A case whose paths differ only by case (`bundle.v2NameCaseCollision`) is built as the zip and
   the wrapped zip only. No folder on a case-insensitive file system can hold it, which is the
   reason for the rule it tests.
@@ -136,10 +137,13 @@ catalog ([`format.md`](../../../spec/format.md) §1, §2, §8, §9.5; the requir
 `bundle.v3MedWithoutRecords` a Med download of an AOI with no records, `bundle.v3RecordsNotHeld` a Max
 download that lists the twenty Records files it does not hold with each reason, `bundle.majorAhead` a
 manifest of a major no schema is published for, and each rejection has a case that breaks one rule. `bundle.v3MinorFileUnknown` declares 3.1.0, a minor that may add a file,
-so a file the 3.0 table lacks is a warning there and an error in `bundle.v3FileUnknown`. The 3.x
-schema is not published yet, so these cases carry no `stagedSchema`: the runner holds each manifest
-to the format text's rules and reports the unpublished schema at info. Once the schema is served,
-the same cases are held to it, and a case it refuses is corrected rather than marked.
+so a file the 3.0 table lacks is a warning there and an error in `bundle.v3FileUnknown`. Every case
+that declares 3.0.0 is held to the served 3.0.0 schema (`stagedSchema`), and is valid against it
+except where the rule it breaks is one the schema states too: a catalog key outside the 3.0 file
+table, or a level stated twice or not at all. Those cases expect the schema's refusal
+(`schema.invalid`) beside their own code. No schema is served for 3.1.0, so
+`bundle.v3MinorFileUnknown` is held to the format text's rules, and the runner reports the
+unpublished schema at info (`schema.pending`).
 
 ## The reader group (`reader/`)
 
@@ -200,10 +204,9 @@ the result's. A reader claims the group by running every case and failing on one
 (`reader_cases.py`): the members, their types and the closed vocabularies; the lists sorted, with each
 path once; a `reject` case for a refusal and an `accept` case for a read; and the whole result
 **re-derived from the bundle's manifest**, so the answer cannot drift from the fixture it answers for.
-The bundle's manifest states the level in `level`, the catalog in `file_entries`, a count in `count`
-and the files it does not hold in `not_held`, an object from a path to `{"reason"}`; those are the
-names the fixtures use until the 3.x schema is served, and the schema's names replace them here and
-nowhere else.
+The bundle's manifest states them in the served 3.0.0 schema's members: the level in `level`, the
+catalog in `catalog`, a count in an entry's `count` as `{"kind", "value"}`, whose `value` is the
+result's count, and the files it does not hold in `not_held`, a list of `{"path", "reason"}`.
 
 The cases: `reader.v3FullMax`, `reader.v3FullMed` and `reader.v3FullMin` are the whole 3.0 file table
 at each level; `reader.v3RecordsNotHeld` and `reader.v3MedWithoutRecords` are a bundle missing optional
