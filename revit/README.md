@@ -457,6 +457,8 @@ only what the lower one left out; at a lower level it creates nothing and delete
 log says how many it kept. Trees from a level with a file of its own are not matched to another
 level's rows: that import creates no trees, deletes none, and says which to delete to change level. The unattended path imports `MAX`.
 
+**A 3.0 bundle's rows say what they will take, and a row that would break five minutes starts unticked.** A 3.0 download holds one level, so a row has no level list; its estimate is the count the bundle's catalog states for its file times the measured cost per unit for the Revit you are running, for the rows that have a measured unit cost (the trees and the road surfaces). A row whose estimate, at its slowest, is over five minutes starts unticked, with its estimate and one line saying why; tick it and all of it imports, since the plugin never thins or samples a layer to fit. What you ticked last time does not tick such a row on another bundle. The unattended path is unchanged. A 2.x bundle is estimated as before.
+
 **An import is staged, and shows itself.** Once `Import` is pressed the window lists the chosen
 steps, marks each one `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts
 the context buildings and the trees in as they go. The import runs one step, or one chunk of 200

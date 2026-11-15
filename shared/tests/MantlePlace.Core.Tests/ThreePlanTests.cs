@@ -402,19 +402,19 @@ internal static class ThreePlanTests
         });
     }
 
-    private static ImportStep? Step(BundleImportPlan plan, ImportStepKind kind) =>
+    internal static ImportStep? Step(BundleImportPlan plan, ImportStepKind kind) =>
         plan.Steps.FirstOrDefault(step => step.Kind == kind);
 
     private static SkippedImport? Skip(BundleImportPlan plan, ImportStepKind kind) =>
         plan.Skipped.FirstOrDefault(skip => skip.Kind == kind);
 
-    private static BundleImportPlan Plan(BundleManifest manifest) =>
+    internal static BundleImportPlan Plan(BundleManifest manifest) =>
         BundleImportPlanner.Plan(
             manifest,
             manifest.Contents!.Files.Select(file => file.Path),
             _ => new ImageSize(1024, 1024));
 
-    private static BundleManifest Read(Dictionary<string, string> files) =>
+    internal static BundleManifest Read(Dictionary<string, string> files) =>
         BundleReader.Read(files.Keys, entry => files.TryGetValue(entry, out string? text) ? text : null)
         ?? throw new InvalidOperationException("the reader found no manifest");
 
@@ -422,14 +422,14 @@ internal static class ThreePlanTests
     private static void Rectangle(JsonObject manifest, double left, double bottom, double right, double top) =>
         manifest["catalog"]!["Imagery/Imagery.png"]!["raster"]!["rectangle"] = new JsonArray(left, bottom, right, top);
 
-    private static JsonObject Manifest(Dictionary<string, string> files) =>
+    internal static JsonObject Manifest(Dictionary<string, string> files) =>
         JsonNode.Parse(files["Manifest.json"])!.AsObject();
 
     /// <summary>
     /// A corpus bundle's files as text, its manifest edited by <paramref name="edit"/> first. A file
     /// given as a string is its text; the manifest is written out as JSON.
     /// </summary>
-    private static Dictionary<string, string> Load(string bundleFile, Action<JsonObject>? edit = null)
+    internal static Dictionary<string, string> Load(string bundleFile, Action<JsonObject>? edit = null)
     {
         string root = ConformanceCorpus.FindCorpusDirectory() ?? throw new InvalidOperationException("the corpus is not found");
         JsonObject fixture = JsonNode.Parse(File.ReadAllText(Path.Combine(root, bundleFile.Replace('/', Path.DirectorySeparatorChar))))!.AsObject();
