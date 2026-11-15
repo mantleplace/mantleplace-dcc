@@ -653,8 +653,6 @@ bool FMantlePlaceManifestThreeLogic::ToVaultManifest(const FMantlePlaceBundleRea
 	// The steps with no 3.0 input this plugin places, or wired by another release, each with its reason.
 	C.Skip(CoverageId, NoHostReadyFileReason(TEXT("the slope, aspect, hillshade, land-cover, canopy-height and NDVI "
 		"layers")));
-	M.FormatNotes.Add(TEXT("Streaming into Cesium is not offered for an MPB 3.0 bundle in this release: its terrain "
-		"tiles are an Extra beside the bundle."));
 
 	M.bValid = true;
 	return true;
