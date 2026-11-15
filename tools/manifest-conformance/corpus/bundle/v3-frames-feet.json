@@ -1,0 +1,196 @@
+{
+  "$comment": "A Med download of an order in feet: the horizontal unit is the US survey foot and the vertical the international foot, each by the factor the manifest states, the horizontal axes run north then east, the grid rotation is negative, and the CRS are named in each of the three forms (a code, a WKT2 string, a PROJJSON object). The local frame states its own geoid and the georeferenced frame names none. A reader that assumed the metre, or read a unit by its name, or took a CRS apart, is wrong here.",
+  "files": {
+    "Manifest.json": {
+      "version": "3.0.0",
+      "order": {
+        "id": "corpus-bundle",
+        "aoi": {
+          "west": -74.02,
+          "south": 40.7,
+          "east": -73.93,
+          "north": 40.81,
+          "area_km2": 92.6
+        },
+        "unit_system": "metric",
+        "time_zone": "America/New_York",
+        "built_on": "2026-01-01"
+      },
+      "level": "Med",
+      "frames": {
+        "georeferenced": {
+          "horizontal_crs": {
+            "code": "EPSG:2263"
+          },
+          "vertical_crs": {
+            "wkt2": "VERTCRS[\"Synthetic height (ft)\",VDATUM[\"Synthetic vertical datum\"],CS[vertical,1],AXIS[\"gravity-related height (H)\",up],LENGTHUNIT[\"foot\",0.3048]]"
+          },
+          "horizontal_unit": {
+            "name": "US survey foot",
+            "to_metres": 0.3048006096012192
+          },
+          "vertical_unit": {
+            "name": "foot",
+            "to_metres": 0.3048
+          },
+          "axis_order": "north-east",
+          "grid_rotation_deg": -1.2
+        },
+        "local": {
+          "origin": {
+            "longitude": -73.975,
+            "latitude": 40.755,
+            "ellipsoidal_height_m": -12.5,
+            "height_m": 20.0,
+            "projected": {
+              "crs": {
+                "projjson": {
+                  "type": "ProjectedCRS",
+                  "name": "Synthetic grid (ftUS)",
+                  "id": {
+                    "authority": "EPSG",
+                    "code": 2263
+                  }
+                }
+              },
+              "x": 988000.5,
+              "y": 214000.25,
+              "unit": {
+                "name": "US survey foot",
+                "to_metres": 0.3048006096012192
+              }
+            }
+          },
+          "vertical_crs": {
+            "code": "EPSG:5703"
+          },
+          "geoid_model": "GEOID18",
+          "unit": {
+            "name": "metre",
+            "to_metres": 1
+          },
+          "axes": {
+            "x": "east",
+            "y": "north",
+            "z": "up"
+          },
+          "grid_rotation_deg": -1.2
+        }
+      },
+      "catalog": {
+        "Basemap/Roads.dxf": {
+          "subject": "Road centrelines, draped",
+          "format": "DXF, 3D polylines",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 34,
+          "sha256": "e197d457e5288f7d13f6f531cee38fe0074ca860776f485125df74538f8fe889",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ]
+        },
+        "Basemap/Roads.gpkg": {
+          "subject": "Road centrelines, draped",
+          "format": "GeoPackage, 3D lines",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 35,
+          "sha256": "2171729bd7b03bbd1b911c70d3f8f914516e9957ba654fc50c5f79239cfb369b",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ]
+        },
+        "Elevation/Elevation.tif": {
+          "subject": "Ground elevation",
+          "format": "GeoTIFF",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 40,
+          "sha256": "a41a33831d5d6f62628da2c49589d4eda038e1966392b836d6a872bf586f73a9",
+          "count": {
+            "kind": "pixels",
+            "value": 1048576
+          },
+          "raster": {
+            "width": 1024,
+            "height": 1024,
+            "bands": [
+              "elevation"
+            ],
+            "data_type": "Float32",
+            "scale": 1,
+            "offset": 0,
+            "unit": "metre",
+            "nodata": -32768,
+            "frame": "georeferenced"
+          },
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": []
+        },
+        "Elevation/Terrain.glb": {
+          "subject": "The terrain mesh",
+          "format": "glTF 2.0 binary",
+          "family": "host-ready",
+          "levelled": true,
+          "size_bytes": 38,
+          "sha256": "6baa2abd3b49926b9cdad8f74f3cfa699d2ca9e0e50876c6182dd7db0947d37e",
+          "count": {
+            "kind": "triangles",
+            "value": 100000
+          },
+          "mesh": {
+            "up_axis": "y"
+          },
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": []
+        },
+        "Manifest.json": {
+          "subject": "The bundle, for a machine",
+          "format": "JSON",
+          "family": "bundle",
+          "levelled": true,
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": []
+        },
+        "Readme.md": {
+          "subject": "The bundle, for a person",
+          "format": "Markdown",
+          "family": "bundle",
+          "levelled": true,
+          "size_bytes": 70,
+          "sha256": "fa2fa0739228c6d4b64976a8a9acbc48f36fb82fb0956493489e7632e63a3078",
+          "odbl_role": "none",
+          "license": "LicenseRef-MantlePlace-Terms",
+          "sources": []
+        }
+      },
+      "not_held": []
+    },
+    "Basemap/Roads.dxf": "placeholder for Basemap/Roads.dxf\n",
+    "Basemap/Roads.gpkg": "placeholder for Basemap/Roads.gpkg\n",
+    "Elevation/Elevation.tif": "placeholder for Elevation/Elevation.tif\n",
+    "Elevation/Terrain.glb": "placeholder for Elevation/Terrain.glb\n",
+    "Readme.md": "A synthetic bundle for the conformance corpus. It holds no real data.\n"
+  }
+}

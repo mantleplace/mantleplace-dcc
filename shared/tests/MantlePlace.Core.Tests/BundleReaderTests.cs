@@ -23,6 +23,7 @@ internal static class BundleReaderTests
 
         RunPathCases(run);
         RunThreeCases(run);
+        RunFrameCases(run);
         RunHostBlockCases(run);
         RunTwoCases(run);
 
@@ -147,6 +148,111 @@ internal static class BundleReaderTests
         });
     }
 
+    private static void RunFrameCases(TestRun run)
+    {
+        run.Case("the two frames are read from the manifest and put on the result once", () =>
+        {
+            BundleFrames? frames = Read(Three())?.Contents?.Frames;
+            run.True(frames is not null, "frames on the result");
+            if (frames is null)
+            {
+                return;
+            }
+
+            GeoreferencedFrame order = frames.Georeferenced;
+            run.Equal(order.HorizontalCrs.Code, "EPSG:32618", "horizontal CRS, as named");
+            run.Equal(order.VerticalCrs.Code, "EPSG:3855", "vertical CRS, as named");
+            run.Equal(order.GeoidModel, "EGM2008", "geoid");
+            run.Equal(order.HorizontalUnit.Name, "metre", "horizontal unit name");
+            run.True(order.HorizontalUnit.ToMetres == 1.0, "horizontal unit factor");
+            run.Equal(order.HorizontalUnit.Unit, LinearUnit.Metre, "horizontal unit");
+            run.Equal(order.VerticalUnit.Unit, LinearUnit.Metre, "vertical unit");
+            run.Equal(order.AxisOrder, AxisOrder.EastNorth, "axis order");
+            run.True(order.GridRotationDegrees == 0.67, "grid rotation at the site origin");
+
+            LocalSiteFrame site = frames.Local;
+            run.True(site.Origin.Longitude == -73.975 && site.Origin.Latitude == 40.755, "origin, geographic");
+            run.True(site.Origin.EllipsoidalHeightMetres == -12.5, "height above the ellipsoid");
+            run.True(site.Origin.HeightMetres == 20.0, "height in the vertical datum");
+            run.Equal(site.Origin.Projected.Crs.Code, "EPSG:32618", "projected origin's CRS");
+            run.True(site.Origin.Projected.X == 586500.0 && site.Origin.Projected.Y == 4512000.0, "projected origin");
+            run.Equal(site.Origin.Projected.Unit.Unit, LinearUnit.Metre, "projected origin's unit");
+            run.Equal(site.VerticalCrs.Code, "EPSG:3855", "local vertical datum");
+            run.Equal(site.Unit.Unit, LinearUnit.Metre, "local unit");
+            run.True(site.GridRotationDegrees == 0.67, "local grid rotation");
+        });
+
+        run.Case("a unit is the factor the manifest states, and a file's unit follows its frame's", () =>
+        {
+            BundleManifest? manifest = Read(Three(frames: FeetFrames));
+            run.True(manifest?.IsValid == true, $"read (refused with: {manifest?.Error})");
+            GeoreferencedFrame? order = manifest?.Contents?.Frames?.Georeferenced;
+            run.Equal(order?.HorizontalUnit.Unit ?? LinearUnit.Unspecified, LinearUnit.UsSurveyFoot, "US survey foot, by factor");
+            run.Equal(order?.VerticalUnit.Unit ?? LinearUnit.Unspecified, LinearUnit.InternationalFoot, "international foot, by factor");
+            run.Equal(order?.AxisOrder ?? AxisOrder.EastNorth, AxisOrder.NorthEast, "north-east axes");
+            run.Equal(manifest?.Contents?.Frames?.Local.Origin.Projected.Unit.Unit ?? LinearUnit.Unspecified, LinearUnit.UsSurveyFoot, "projected origin in feet");
+            run.Equal(manifest?.Contents?.Frames?.Local.Unit.Unit ?? LinearUnit.Unspecified, LinearUnit.Metre, "local unit, read");
+            run.Equal(manifest?.Contents?.Find("Elevation/Elevation.tif")?.Unit ?? LinearUnit.Unspecified, LinearUnit.UsSurveyFoot, "a georeferenced file is in the horizontal unit");
+            run.Equal(manifest?.Contents?.Find("Elevation/Terrain.glb")?.Unit ?? LinearUnit.Unspecified, LinearUnit.Metre, "a host-ready file is in the local unit");
+        });
+
+        run.Case("a CRS is kept whole, in the form the manifest names it", () =>
+        {
+            string frames = DefaultFrames
+                .Replace("\"horizontal_crs\": {\"code\": \"EPSG:32618\"}", "\"horizontal_crs\": {\"projjson\": {\"type\": \"ProjectedCRS\", \"name\": \"X\"}}", StringComparison.Ordinal)
+                .Replace("\"vertical_crs\": {\"code\": \"EPSG:3855\"}, \"geoid_model\": \"EGM2008\", \"horizontal_unit\"", "\"vertical_crs\": {\"wkt2\": \"VERTCRS[X]\"}, \"geoid_model\": \"EGM2008\", \"horizontal_unit\"", StringComparison.Ordinal);
+            GeoreferencedFrame? order = Read(Three(frames: frames))?.Contents?.Frames?.Georeferenced;
+            run.Contains(order?.HorizontalCrs.ProjJson, "\"ProjectedCRS\"", "PROJJSON, as stated");
+            run.True(order?.HorizontalCrs.Code is null, "no code invented for it");
+            run.Equal(order?.VerticalCrs.Wkt2, "VERTCRS[X]", "WKT2, as stated");
+        });
+
+        run.Case("a unit the reader does not know is refused, naming it", () =>
+        {
+            Refused(run, DefaultFrames.Replace("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 1}", "\"horizontal_unit\": {\"name\": \"centimetre\", \"to_metres\": 0.01}", StringComparison.Ordinal), "centimetre");
+            Refused(run, DefaultFrames.Replace("\"vertical_unit\": {\"name\": \"metre\", \"to_metres\": 1}", "\"vertical_unit\": {\"name\": \"fathom\", \"to_metres\": 1.8288}", StringComparison.Ordinal), "fathom");
+            Refused(run, DefaultFrames.Replace("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 1}", "\"horizontal_unit\": {\"name\": \"metre\"}", StringComparison.Ordinal), "horizontal_unit");
+            Refused(run, DefaultFrames.Replace("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 1}", "\"horizontal_unit\": {\"name\": \"zero\", \"to_metres\": 0}", StringComparison.Ordinal), "zero");
+        });
+
+        run.Case("a local unit that is not the metre is refused, not assumed", () =>
+        {
+            Refused(run, DefaultFrames.Replace("\"unit\": {\"name\": \"metre\", \"to_metres\": 1}, \"axes\"", "\"unit\": {\"name\": \"foot\", \"to_metres\": 0.3048}, \"axes\"", StringComparison.Ordinal), "foot");
+            Refused(run, DefaultFrames.Replace("\"unit\": {\"name\": \"metre\", \"to_metres\": 1}, \"axes\"", "\"unit\": {\"name\": \"metre\"}, \"axes\"", StringComparison.Ordinal), "frames.local.unit");
+        });
+
+        run.Case("an axis order the reader does not know is refused, naming it", () =>
+        {
+            Refused(run, DefaultFrames.Replace("\"east-north\"", "\"south-west\"", StringComparison.Ordinal), "south-west");
+            Refused(run, DefaultFrames.Replace("\"axis_order\": \"east-north\", ", string.Empty, StringComparison.Ordinal), "axis_order");
+            Refused(run, DefaultFrames.Replace("\"y\": \"north\"", "\"y\": \"south\"", StringComparison.Ordinal), "south");
+        });
+
+        run.Case("a vertical datum the reader cannot name is refused, naming what it found", () =>
+        {
+            Refused(run, DefaultFrames.Replace("\"vertical_crs\": {\"code\": \"EPSG:3855\"}, \"geoid_model\": \"EGM2008\", \"horizontal_unit\"", "\"vertical_crs\": {\"code\": \"not a code\"}, \"geoid_model\": \"EGM2008\", \"horizontal_unit\"", StringComparison.Ordinal), "not a code");
+            Refused(run, DefaultFrames.Replace("\"vertical_crs\": {\"code\": \"EPSG:3855\"}, \"geoid_model\": \"EGM2008\", \"unit\"", "\"vertical_crs\": {}, \"geoid_model\": \"EGM2008\", \"unit\"", StringComparison.Ordinal), "frames.local.vertical_crs");
+        });
+
+        run.Case("a manifest with no frames, or half of one, is refused", () =>
+        {
+            BundleManifest? none = Read(Three(frames: null));
+            run.False(none?.IsValid ?? true, "no frames is refused");
+            run.Contains(none?.Error, "frames", "names the member");
+            Refused(run, DefaultFrames.Replace("\"local\": {", "\"elsewhere\": {", StringComparison.Ordinal), "frames.local");
+            Refused(run, DefaultFrames.Replace("\"grid_rotation_deg\": 0.67}, \"local\"", "\"grid_rotation_deg\": \"left\"}, \"local\"", StringComparison.Ordinal), "grid_rotation_deg");
+        });
+    }
+
+    private static void Refused(TestRun run, string frames, string named)
+    {
+        BundleManifest? manifest = Read(Three(frames: frames));
+        run.False(manifest?.IsValid ?? true, $"refused ({named})");
+        run.Contains(manifest?.Error, named, "the refusal names the value");
+        run.Equal(manifest?.Contents?.Refusal ?? BundleRefusal.None, BundleRefusal.Unreadable, "an unreadable manifest, not a newer one");
+        run.True(manifest?.Contents?.Frames is null, "no frames on a refusal");
+    }
+
     private static void RunHostBlockCases(TestRun run)
     {
         run.Case("a 3.x manifest's per-host block is never read", () =>
@@ -209,6 +315,16 @@ internal static class BundleReaderTests
         });
     }
 
+    /// <summary>The two frames of a metric order, as the served 3.0.0 schema names them (<c>spec/format.md</c> §9.4).</summary>
+    private const string DefaultFrames = """
+        {"georeferenced": {"horizontal_crs": {"code": "EPSG:32618"}, "vertical_crs": {"code": "EPSG:3855"}, "geoid_model": "EGM2008", "horizontal_unit": {"name": "metre", "to_metres": 1}, "vertical_unit": {"name": "metre", "to_metres": 1}, "axis_order": "east-north", "grid_rotation_deg": 0.67}, "local": {"origin": {"longitude": -73.975, "latitude": 40.755, "ellipsoidal_height_m": -12.5, "height_m": 20.0, "projected": {"crs": {"code": "EPSG:32618"}, "x": 586500.0, "y": 4512000.0, "unit": {"name": "metre", "to_metres": 1}}}, "vertical_crs": {"code": "EPSG:3855"}, "geoid_model": "EGM2008", "unit": {"name": "metre", "to_metres": 1}, "axes": {"x": "east", "y": "north", "z": "up"}, "grid_rotation_deg": 0.67}}
+        """;
+
+    /// <summary>An order in feet: the horizontal unit is the US survey foot, the vertical the international foot, and the axes run north then east.</summary>
+    private const string FeetFrames = """
+        {"georeferenced": {"horizontal_crs": {"code": "EPSG:2263"}, "vertical_crs": {"code": "EPSG:6360"}, "geoid_model": null, "horizontal_unit": {"name": "US survey foot", "to_metres": 0.3048006096012192}, "vertical_unit": {"name": "foot", "to_metres": 0.3048}, "axis_order": "north-east", "grid_rotation_deg": -1.2}, "local": {"origin": {"longitude": -73.975, "latitude": 40.755, "ellipsoidal_height_m": -12.5, "height_m": 20.0, "projected": {"crs": {"code": "EPSG:2263"}, "x": 988000.5, "y": 214000.25, "unit": {"name": "US survey foot", "to_metres": 0.3048006096012192}}}, "vertical_crs": {"code": "EPSG:3855"}, "unit": {"name": "metre", "to_metres": 1}, "axes": {"x": "east", "y": "north", "z": "up"}, "grid_rotation_deg": -1.2}}
+        """;
+
     private const string HostsBlock = """
         {
           "revit": {
@@ -227,7 +343,8 @@ internal static class BundleReaderTests
         string? level = "\"Max\"",
         string? catalog = "",
         string? extraEntry = null,
-        string? hosts = null)
+        string? hosts = null,
+        string? frames = DefaultFrames)
     {
         string entries = """
             "Elevation/Elevation.tif": {"odbl_role": "none", "license": "LicenseRef-MantlePlace-Terms", "sources": [], "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "count": {"kind": "pixels", "value": 4294967296}},
@@ -243,6 +360,11 @@ internal static class BundleReaderTests
         if (level is not null)
         {
             members.Add($"\"level\": {level}");
+        }
+
+        if (frames is not null)
+        {
+            members.Add($"\"frames\": {frames}");
         }
 
         if (catalog is not null)

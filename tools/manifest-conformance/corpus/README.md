@@ -165,7 +165,7 @@ A `reader` case is a pair. The case file names a bundle and holds the result:
 | Member | What it holds |
 | --- | --- |
 | `bundle` | the path, under the corpus, of the `bundle` case file that describes the bundle (`bundle/v3-full.json`). The bundle is built from its `files` as the `bundle` group says: a folder, a zip and a zip in one wrapper folder, with the same result from all three. A bundle a validator refuses may be read by a reader (`reader.v3CatalogFileMissing`) |
-| `result` | exactly the members below, in this order |
+| `result` | exactly the members below, in this order (and `frames` after `level` on a 3.x read) |
 
 | `result` member | What the reader must report |
 | --- | --- |
@@ -173,9 +173,21 @@ A `reader` case is a pair. The case file names a bundle and holds the result:
 | `major`, `version` | the major and the semver string it read from the manifest |
 | `manifestPath` | where it found the manifest: `Manifest.json` for a 3.x or later bundle, `Metadata/manifest.json` before ([`compatibility.md`](../../../spec/compatibility.md) §1) |
 | `level` | the download's level, `Max`, `Med` or `Min`, as the manifest states it once; `null` where a bundle states none (every 2.x bundle) or the reader refused |
-| `refusal` | `null` for a read; `major-ahead` for a major above 3, refused before any file is extracted ([`format.md`](../../../spec/format.md) §14). The case's `errorContains` is the version, which the message names |
+| `frames` | **only on a 3.x read, directly after `level`**: the two frames the manifest states once ([`format.md`](../../../spec/format.md) §9.4), as the manifest words them, with each frame's `geoid_model` always stated (`null` where the manifest names none). No value is derived or renamed |
+| `refusal` | `null` for a read; `major-ahead` for a major above 3, refused before any file is extracted ([`format.md`](../../../spec/format.md) §14), where the case's `errorContains` is the version, which the message names; `unreadable` for a 3.x manifest the reader cannot apply, where `errorContains` is the value it refused, which the message names |
 | `files` | the files it finds, one object each, sorted by `path`: a catalog name that the bundle holds |
 | `skipped` | the files it names and does not read, one object each, sorted by `path` |
+
+The **frames** are the manifest's `frames` member, answered whole: the georeferenced frame's horizontal and
+vertical CRS, geoid, horizontal and vertical unit as `{"name", "to_metres"}`, axis order and grid rotation, and
+the local site frame's origin (geographic, and projected with its CRS and unit), vertical CRS, geoid, unit, axes
+and grid rotation. A CRS is answered as the manifest names it, a `code`, a `projjson` object or a `wkt2` string,
+and no reader takes one apart. A reader **fails closed** on a unit whose factor to metres is not the metre, the
+international foot or the US survey foot, on an axis order that is not `east-north` or `north-east`, on a CRS that
+names no form a reader can apply, on local axes that are not east, north and up, and on a local unit that is not the
+metre: it refuses the manifest as `unreadable` and the message names the value
+([`format.md`](../../../spec/format.md) §4). A unit is the factor, never the name: a reader that mapped "foot" to a foot
+reads an order in either one wrongly.
 
 A **found file** is `{"path", "family", "frame", "count"}`. `path` is the catalog's key. `family` is
 `georeferenced` or `host-ready`, or `null` for a file in neither (`Readme.md`, `Manifest.json`, `Terrain.mtl`);
@@ -209,8 +221,8 @@ the result's. A reader claims the group by running every case and failing on one
 
 `check_manifest_conformance.py` holds every case file to this shape, and to its bundle
 (`reader_cases.py`): the members, their types and the closed vocabularies; the lists sorted, with each
-path once; a `reject` case for a refusal and an `accept` case for a read; and the whole result
-**re-derived from the bundle's manifest**, so the answer cannot drift from the fixture it answers for.
+path once; a `reject` case for a refusal and an `accept` case for a read; the frames a reader refuses, and the frames it
+reads, told apart by the rules above; and the whole result **re-derived from the bundle's manifest**, so the answer cannot drift from the fixture it answers for.
 The bundle's manifest states them in the served 3.0.0 schema's members: the level in `level`, the
 catalog in `catalog`, a count in an entry's `count` as `{"kind", "value"}`, whose `value` is the
 result's count, and the files it does not hold in `not_held`, a list of `{"path", "reason"}`.
@@ -220,7 +232,12 @@ at each level; `reader.v3RecordsNotHeld` and `reader.v3MedWithoutRecords` are a 
 subjects, with and without a not-held list; `reader.v3MinorFileUnknown` is a 3.x minor's added file,
 found by its catalog name; `reader.v3CatalogFileMissing` is a catalog name with no file;
 `reader.v2Full` is a manifest at the 2.x location, read by the same runner; `reader.majorAhead` is a
-major above 3, refused. Every `bundle` case that conforms and declares 3.x has a case.
+major above 3, refused. The `reader.v3Frames*` cases are the frames: `reader.v3FramesFeet` is an order in feet,
+north-east, with a CRS in each of the three forms, read by each factor; `reader.v3FramesUnitUnknown`,
+`reader.v3FramesAxisOrderUnknown`, `reader.v3FramesLocalUnitNotMetre` and
+`reader.v3FramesVerticalDatumUnreadable` are each a value a reader of 3.0 does not understand, refused with the value
+named. Every `bundle` case that conforms and declares 3.x has a case, and the case of a bundle a validator refuses
+(`reader.v3FramesAxisOrderUnknown`) shows a reader may still read what a validator refuses.
 
 ## The Platform API groups (`platform/`, `client/`)
 

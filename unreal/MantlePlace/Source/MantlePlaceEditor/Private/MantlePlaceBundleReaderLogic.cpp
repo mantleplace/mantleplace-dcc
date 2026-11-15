@@ -81,7 +81,291 @@ const TSharedPtr<FJsonObject>* ReadObject(const TSharedPtr<FJsonObject>& Object,
 	const TSharedPtr<FJsonValue> Value = Object.IsValid() ? Object->TryGetField(Key) : nullptr;
 	return Value.IsValid() && Value->Type == EJson::Object && Value->TryGetObject(Out) ? Out : nullptr;
 }
+
+// The frames' reading, as ManifestFramesReader.cs reads them: a unit is known by its factor to metres.
+constexpr double FactorTolerance = 1e-9;
+constexpr double InternationalFootToMetres = 0.3048;
+constexpr double UsSurveyFootToMetres = 1200.0 / 3937.0;
+
+bool NearFactor(double Stated, double Known)
+{
+	return FMath::Abs(Stated - Known) <= Known * FactorTolerance;
+}
+
+/** A stated value as a message names it: a string in quotes, a number as written. */
+FString Raw(const TSharedPtr<FJsonValue>& Value)
+{
+	if (!Value.IsValid() || Value->Type == EJson::Null)
+	{
+		return TEXT("null");
+	}
+	switch (Value->Type)
+	{
+		case EJson::String:  return TEXT("\"") + Value->AsString() + TEXT("\"");
+		case EJson::Number:  return FString::SanitizeFloat(Value->AsNumber());
+		case EJson::Boolean: return Value->AsBool() ? TEXT("true") : TEXT("false");
+		default:             return TEXT("(a structure)");
+	}
+}
+
+bool RefuseFrames(FString& Error, const FString& Message)
+{
+	Error = Message;
+	return false;
+}
+
+const TSharedPtr<FJsonObject>* FramesMember(
+	const TSharedPtr<FJsonObject>& Parent, const TCHAR* Name, const FString& Where, FString& Error)
+{
+	const TSharedPtr<FJsonObject>* Object = ReadObject(Parent, Name);
+	if (Object == nullptr)
+	{
+		Error = Parent.IsValid() && Parent->HasField(Name)
+			? FString::Printf(TEXT("Manifest.json's %s.%s is not an object."), *Where, Name)
+			: FString::Printf(TEXT("Manifest.json states no %s.%s, which a reader of its frames needs."), *Where, Name);
+	}
+	return Object;
+}
+
+/** A stated number; false, with the refusal, when absent or not a finite number. */
+bool FramesNumber(const TSharedPtr<FJsonObject>& Parent, const TCHAR* Name, const FString& Where, FString& Error)
+{
+	const TSharedPtr<FJsonValue> Value = Parent->TryGetField(Name);
+	if (!Value.IsValid())
+	{
+		return RefuseFrames(Error, FString::Printf(
+			TEXT("Manifest.json states no %s.%s, which a reader of its frames needs."), *Where, Name));
+	}
+	if (Value->Type != EJson::Number || !FMath::IsFinite(Value->AsNumber()))
+	{
+		return RefuseFrames(Error, FString::Printf(
+			TEXT("Manifest.json's %s.%s states %s, which is not a number."), *Where, Name, *Raw(Value)));
+	}
+	return true;
+}
+
+/** A linear unit: a name, and a factor that is the metre, the international foot or the US survey foot. */
+bool FramesUnit(const TSharedPtr<FJsonObject>& Parent, const TCHAR* Name, const FString& Where, bool bMustBeMetre,
+	FString& Error)
+{
+	const FString At = Where + TEXT(".") + Name;
+	const TSharedPtr<FJsonObject>* Unit = FramesMember(Parent, Name, Where, Error);
+	if (Unit == nullptr)
+	{
+		return false;
+	}
+	FString UnitName;
+	ReadString(*Unit, TEXT("name"), UnitName);
+	if (UnitName.IsEmpty())
+	{
+		return RefuseFrames(Error, FString::Printf(TEXT("Manifest.json's %s states no name for its unit."), *At));
+	}
+	const TSharedPtr<FJsonValue> Factor = (*Unit)->TryGetField(TEXT("to_metres"));
+	if (!Factor.IsValid() || Factor->Type != EJson::Number)
+	{
+		return RefuseFrames(Error, FString::Printf(
+			TEXT("Manifest.json's %s (%s) states no to_metres factor, so its unit is not known."), *At, *UnitName));
+	}
+	const double ToMetres = Factor->AsNumber();
+	const bool bPositive = FMath::IsFinite(ToMetres) && ToMetres > 0.0;
+	const bool bMetre = bPositive && NearFactor(ToMetres, 1.0);
+	const bool bKnown = bMetre
+		|| (bPositive && (NearFactor(ToMetres, InternationalFootToMetres) || NearFactor(ToMetres, UsSurveyFootToMetres)));
+	if (!bKnown)
+	{
+		return RefuseFrames(Error, FString::Printf(
+			TEXT("Manifest.json's %s states the unit %s (%s metres), which this plugin does not understand: "
+			     "it reads the metre, the international foot and the US survey foot."),
+			*At, *UnitName, *Raw(Factor)));
+	}
+	if (bMustBeMetre && !bMetre)
+	{
+		return RefuseFrames(Error, FString::Printf(
+			TEXT("Manifest.json states the local site frame's unit as %s (%s metres), but that frame is in metres on every order."),
+			*UnitName, *Raw(Factor)));
+	}
+	return true;
+}
+
+/** An authority code as the served schema words it: `EPSG:32618`. */
+bool IsAuthorityCode(const FString& Code)
+{
+	int32 Colon = INDEX_NONE;
+	if (!Code.FindChar(TEXT(':'), Colon) || Colon == 0 || Colon == Code.Len() - 1)
+	{
+		return false;
+	}
+	for (int32 I = 0; I < Code.Len(); ++I)
+	{
+		const TCHAR C = Code[I];
+		if (I == Colon)
+		{
+			continue;
+		}
+		const bool bUpper = C >= TEXT('A') && C <= TEXT('Z');
+		const bool bRest = bUpper || (C >= TEXT('a') && C <= TEXT('z')) || (C >= TEXT('0') && C <= TEXT('9')) || C == TEXT('.');
+		if (I < Colon ? !bUpper : !bRest)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+/** A CRS as the manifest names it: whole, as a code, a PROJJSON object or a WKT2 string. */
+bool FramesCrs(const TSharedPtr<FJsonObject>& Parent, const TCHAR* Name, const FString& Where, FString& Error)
+{
+	const FString At = Where + TEXT(".") + Name;
+	const TSharedPtr<FJsonObject>* Crs = FramesMember(Parent, Name, Where, Error);
+	if (Crs == nullptr)
+	{
+		return false;
+	}
+	bool bNamed = false;
+	if ((*Crs)->HasField(TEXT("code")))
+	{
+		FString Code;
+		if (!ReadString(*Crs, TEXT("code"), Code) || !IsAuthorityCode(Code))
+		{
+			return RefuseFrames(Error, FString::Printf(
+				TEXT("Manifest.json's %s names the code %s, which is not an authority code such as EPSG:32618."),
+				*At, *Raw((*Crs)->TryGetField(TEXT("code")))));
+		}
+		bNamed = true;
+	}
+	if ((*Crs)->HasField(TEXT("projjson")))
+	{
+		if (ReadObject(*Crs, TEXT("projjson")) == nullptr)
+		{
+			return RefuseFrames(Error, FString::Printf(TEXT("Manifest.json's %s.projjson is not a PROJJSON object."), *At));
+		}
+		bNamed = true;
+	}
+	if ((*Crs)->HasField(TEXT("wkt2")))
+	{
+		FString Wkt;
+		if (!ReadString(*Crs, TEXT("wkt2"), Wkt) || Wkt.IsEmpty())
+		{
+			return RefuseFrames(Error, FString::Printf(TEXT("Manifest.json's %s.wkt2 is not a WKT2 string."), *At));
+		}
+		bNamed = true;
+	}
+	return bNamed ? true : RefuseFrames(Error, FString::Printf(
+		TEXT("Manifest.json's %s names no code, PROJJSON object or WKT2 string, so it names no CRS."), *At));
+}
+
+/** `geoid_model` is a name or null; absent is stated as null, so every read has the same shape. */
+bool FramesGeoid(const TSharedPtr<FJsonObject>& Frame, const FString& Where, FString& Error)
+{
+	const TSharedPtr<FJsonValue> Value = Frame->TryGetField(TEXT("geoid_model"));
+	if (!Value.IsValid() || Value->Type == EJson::Null)
+	{
+		Frame->SetField(TEXT("geoid_model"), MakeShared<FJsonValueNull>());
+		return true;
+	}
+	return Value->Type == EJson::String
+		? true
+		: RefuseFrames(Error, FString::Printf(TEXT("Manifest.json's %s.geoid_model is not a name or null."), *Where));
+}
 } // namespace
+
+bool FMantlePlaceBundleReaderLogic::ReadFrames(
+	const TSharedPtr<FJsonObject>& Manifest, TSharedPtr<FJsonObject>& OutFrames, FString& OutError)
+{
+	OutFrames.Reset();
+	const TSharedPtr<FJsonObject>* Frames = ReadObject(Manifest, TEXT("frames"));
+	if (Frames == nullptr)
+	{
+		return RefuseFrames(OutError, Manifest.IsValid() && Manifest->HasField(TEXT("frames"))
+			? FString(TEXT("Manifest.json's frames is not an object."))
+			: FString(TEXT("Manifest.json states no frames, which a reader needs to place any file (spec/format.md §9.4).")));
+	}
+	const TSharedPtr<FJsonObject>* Georeferenced = FramesMember(*Frames, TEXT("georeferenced"), TEXT("frames"), OutError);
+	const TSharedPtr<FJsonObject>* Local = Georeferenced ? FramesMember(*Frames, TEXT("local"), TEXT("frames"), OutError) : nullptr;
+	if (Georeferenced == nullptr || Local == nullptr)
+	{
+		return false;
+	}
+
+	// The georeferenced frame.
+	const FString Order = TEXT("frames.georeferenced");
+	if (!FramesCrs(*Georeferenced, TEXT("horizontal_crs"), Order, OutError)
+		|| !FramesCrs(*Georeferenced, TEXT("vertical_crs"), Order, OutError)
+		|| !FramesGeoid(*Georeferenced, Order, OutError)
+		|| !FramesUnit(*Georeferenced, TEXT("horizontal_unit"), Order, /*bMustBeMetre=*/false, OutError)
+		|| !FramesUnit(*Georeferenced, TEXT("vertical_unit"), Order, /*bMustBeMetre=*/false, OutError))
+	{
+		return false;
+	}
+	FString AxisOrder = TEXT("(absent)");
+	ReadString(*Georeferenced, TEXT("axis_order"), AxisOrder);
+	if (AxisOrder != TEXT("east-north") && AxisOrder != TEXT("north-east"))
+	{
+		return RefuseFrames(OutError, FString::Printf(
+			TEXT("Manifest.json's %s.axis_order states %s, which is not east-north or north-east."), *Order, *AxisOrder));
+	}
+	if (!FramesNumber(*Georeferenced, TEXT("grid_rotation_deg"), Order, OutError))
+	{
+		return false;
+	}
+
+	// The local site frame.
+	const FString Site = TEXT("frames.local");
+	const FString OriginAt = Site + TEXT(".origin");
+	const FString ProjectedAt = OriginAt + TEXT(".projected");
+	const TSharedPtr<FJsonObject>* Origin = FramesMember(*Local, TEXT("origin"), Site, OutError);
+	const TSharedPtr<FJsonObject>* Projected = Origin ? FramesMember(*Origin, TEXT("projected"), OriginAt, OutError) : nullptr;
+	if (Origin == nullptr || Projected == nullptr)
+	{
+		return false;
+	}
+	for (const TCHAR* Name : { TEXT("longitude"), TEXT("latitude"), TEXT("ellipsoidal_height_m"), TEXT("height_m") })
+	{
+		if (!FramesNumber(*Origin, Name, OriginAt, OutError))
+		{
+			return false;
+		}
+	}
+	if (!FramesCrs(*Projected, TEXT("crs"), ProjectedAt, OutError)
+		|| !FramesNumber(*Projected, TEXT("x"), ProjectedAt, OutError)
+		|| !FramesNumber(*Projected, TEXT("y"), ProjectedAt, OutError)
+		|| !FramesUnit(*Projected, TEXT("unit"), ProjectedAt, /*bMustBeMetre=*/false, OutError)
+		|| !FramesCrs(*Local, TEXT("vertical_crs"), Site, OutError)
+		|| !FramesUnit(*Local, TEXT("unit"), Site, /*bMustBeMetre=*/false, OutError))
+	{
+		return false;
+	}
+	const TSharedPtr<FJsonObject>* Axes = FramesMember(*Local, TEXT("axes"), Site, OutError);
+	if (Axes == nullptr)
+	{
+		return false;
+	}
+	struct FAxis
+	{
+		const TCHAR* Name;
+		const TCHAR* Direction;
+	};
+	for (const FAxis& Axis : { FAxis{ TEXT("x"), TEXT("east") }, FAxis{ TEXT("y"), TEXT("north") }, FAxis{ TEXT("z"), TEXT("up") } })
+	{
+		FString Stated = TEXT("(absent)");
+		ReadString(*Axes, Axis.Name, Stated);
+		if (Stated != Axis.Direction)
+		{
+			return RefuseFrames(OutError, FString::Printf(
+				TEXT("Manifest.json's %s.axes states the %s axis as %s, which is not %s: the local site frame runs east, north, up."),
+				*Site, Axis.Name, *Stated, Axis.Direction));
+		}
+	}
+	// The local frame is in metres on every order: any other unit is refused, never converted.
+	if (!FramesUnit(*Local, TEXT("unit"), Site, /*bMustBeMetre=*/true, OutError)
+		|| !FramesGeoid(*Local, Site, OutError)
+		|| !FramesNumber(*Local, TEXT("grid_rotation_deg"), Site, OutError))
+	{
+		return false;
+	}
+	OutFrames = *Frames;
+	return true;
+}
 
 bool FMantlePlaceBundleReaderLogic::IsReadableEntry(const FString& EntryName)
 {
@@ -212,6 +496,20 @@ FMantlePlaceBundleRead FMantlePlaceBundleReaderLogic::Read(const TArray<FString>
 			*Out.ManifestPath, *Out.Version, bThree ? TEXT("3.x") : TEXT("2.x or 1.x"),
 			bThree ? ManifestPath3() : ManifestPath2());
 		return Out;
+	}
+
+	// A 3.x manifest's two frames, stated once. A unit, datum, axis order or frame this reader does not
+	// understand refuses the manifest, naming the value (format.md §4); nothing is converted or derived.
+	if (bThree)
+	{
+		FString FramesError;
+		if (!ReadFrames(Manifest, Out.Frames, FramesError))
+		{
+			Out.Outcome = EMantlePlaceBundleReadOutcome::Refused;
+			Out.Refusal = UnreadableRefusal();
+			Out.Error = FramesError;
+			return Out;
+		}
 	}
 
 	// The download's level, as the manifest states it once. 2.x states none.

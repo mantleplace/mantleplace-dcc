@@ -1,0 +1,14 @@
+{
+  "$comment": "A vertical datum the reader cannot name is refused, naming what the manifest states (format.md §4, §9.4): heights in a datum no host can name are heights in an unknown datum.",
+  "bundle": "bundle/v3-frames-vertical-datum-unreadable.json",
+  "result": {
+    "outcome": "refused",
+    "major": 3,
+    "version": "3.0.0",
+    "manifestPath": "Manifest.json",
+    "level": null,
+    "refusal": "unreadable",
+    "files": [],
+    "skipped": []
+  }
+}

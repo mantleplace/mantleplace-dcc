@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "Templates/Function.h"
 
+class FJsonObject;
+
 /** The family a bundle file belongs to (spec/format.md §4), or neither (`Readme.md`, `Terrain.mtl`). */
 enum class EMantlePlaceBundleFamily : uint8
 {
@@ -58,7 +60,7 @@ struct FMantlePlaceBundleSkipped
 enum class EMantlePlaceBundleReadOutcome : uint8
 {
 	Read,    // the manifest was read and the catalog walked
-	Refused, // a major above any this reader speaks: stopped after the version, nothing extracted
+	Refused, // a major above any this reader speaks, or 3.x frames it cannot apply: stopped, nothing extracted
 	Failed,  // not a bundle this reader can read at all: no manifest, not JSON, no version, below the floor
 };
 
@@ -70,13 +72,16 @@ enum class EMantlePlaceBundleReadOutcome : uint8
 struct FMantlePlaceBundleRead
 {
 	EMantlePlaceBundleReadOutcome Outcome = EMantlePlaceBundleReadOutcome::Failed;
-	FString Refusal;      // "major-ahead" on a refusal, else empty
+	FString Refusal;      // "major-ahead" or "unreadable" on a refusal, else empty
 	FString Error;        // the user-facing message on a refusal or a failure, else empty
 	FString Version;      // the manifest's version string, verbatim
 	int32 Major = 0;      // its parsed major; 0 when it did not parse
 	FString ManifestPath; // where the manifest is, from the bundle's root: Manifest.json or Metadata/manifest.json
 	FString Root;         // the one wrapper folder the bundle sits in ("Bundle/"), or empty
 	FString Level;        // the download's level as the manifest states it once (Max, Med, Min); empty for 2.x
+	/** A 3.x read: the manifest's `frames` member as stated, with each `geoid_model` stated (null when the
+	 *  manifest names none). Nothing in it is derived. Null for 2.x and for a refusal. */
+	TSharedPtr<FJsonObject> Frames;
 	TArray<FMantlePlaceBundleFile> Files;      // sorted by Path
 	TArray<FMantlePlaceBundleSkipped> Skipped; // sorted by Path
 
@@ -116,6 +121,19 @@ struct FMantlePlaceBundleReaderLogic
 
 	/** The refusal's one word for a later major, as the corpus names it. */
 	static const TCHAR* MajorAheadRefusal() { return TEXT("major-ahead"); }
+
+	/** The refusal's one word for a 3.x manifest whose frames state a unit, datum, axis order or frame this
+	 *  reader does not understand (format.md §4); the message names the value. */
+	static const TCHAR* UnreadableRefusal() { return TEXT("unreadable"); }
+
+	/**
+	 * Reads the `frames` member of a 3.x manifest (format.md §9.4) as the .NET reader does: the metre, the
+	 * international foot and the US survey foot are the units, the local frame is east, north, up and in
+	 * metres, a CRS is a code, a PROJJSON object or a WKT2 string. False with `OutError` naming the value
+	 * it cannot apply. On success `OutFrames` is the stated object with each `geoid_model` stated.
+	 * Nothing is converted or derived.
+	 */
+	static bool ReadFrames(const TSharedPtr<FJsonObject>& Manifest, TSharedPtr<FJsonObject>& OutFrames, FString& OutError);
 
 	/** Reads one archive entry, by the name the archive lists it under, as text. */
 	using FReadText = TFunctionRef<bool(const FString& EntryName, FString& OutText)>;

@@ -73,9 +73,10 @@ public sealed record BundleFile(string Path, FileFamily Family, long? Count, str
     };
 
     /// <summary>
-    /// The unit of a 3.x host-ready file, which is the metre on every order (<c>spec/format.md</c> §4).
-    /// <see cref="LinearUnit.Unspecified"/> for any other file: a georeferenced file is in the order's
-    /// units, stated once for the whole family, and a 2.x file states its own.
+    /// The unit of a 3.x file, read from the frame its family is in (<c>spec/format.md</c> §4, §9.4): a
+    /// host-ready file's is the local site frame's unit, and a georeferenced file's is the georeferenced
+    /// frame's horizontal unit. <see cref="LinearUnit.Unspecified"/> for a file in neither family, and
+    /// for a 2.x file, which states its own.
     /// </summary>
     public LinearUnit Unit { get; init; }
 }
@@ -104,6 +105,12 @@ public sealed class BundleContents
 
     /// <summary>The download's level as the manifest states it once; <c>null</c> for a bundle before 3.0, or a refusal.</summary>
     public FidelityLevel? Level { get; init; }
+
+    /// <summary>
+    /// The two frames a 3.x manifest states once (<c>spec/format.md</c> §9.4), read from it and applied
+    /// verbatim by a host; <c>null</c> for a bundle before 3.0, which states its frames per file, or a refusal.
+    /// </summary>
+    public BundleFrames? Frames { get; init; }
 
     /// <summary>Why the reading stopped at the manifest, or <see cref="BundleRefusal.None"/>.</summary>
     public BundleRefusal Refusal { get; init; }
