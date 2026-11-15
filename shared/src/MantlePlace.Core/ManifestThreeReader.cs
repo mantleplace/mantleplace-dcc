@@ -15,9 +15,12 @@ namespace MantlePlace.Core;
 /// source to that.
 /// </para>
 /// <para>
-/// The members read are the ones the corpus's fixtures state until the 3.x schema is served
-/// (<c>tools/manifest-conformance/corpus/README.md</c>, "The reader group"): the level, the catalog,
-/// each entry's count and digest, and the not-held list. The schema's names replace them here.
+/// The members read are the ones the corpus's fixtures state (<c>tools/manifest-conformance/corpus/README.md</c>,
+/// "The reader group"): the level, the catalog, each entry's count and digest, and the not-held list.
+/// The 3.0.0 schema is now served with other names and with the two frames (§9.4), which the fixtures
+/// do not state yet. When the corpus's 3.0 cases are held to that schema, its names replace these and
+/// the frames are read here: each CRS, each unit and the site origin, failing closed on a value this
+/// reader does not understand (§4). Until then no frame value is read.
 /// </para>
 /// </remarks>
 internal static class ManifestThreeReader
@@ -173,8 +176,9 @@ internal static class ManifestThreeReader
                 entry.Value.ValueKind == JsonValueKind.Object ? Count(entry.Value) : null,
                 entry.Value.ValueKind == JsonValueKind.Object ? entry.Value.OptionalStr(DigestMember) : null)
             {
-                // The local site frame is in metres on every order; the order's units are the
-                // georeferenced frame's, stated once for the family (spec/format.md §4).
+                // The local site frame is in metres on every order (spec/format.md §4, §9.4); the
+                // order's units are the georeferenced frame's, stated once for the family. Neither is
+                // read from the frames yet: see the remarks above.
                 Unit = family == FileFamily.HostReady ? LinearUnit.Metre : LinearUnit.Unspecified,
             });
         }
