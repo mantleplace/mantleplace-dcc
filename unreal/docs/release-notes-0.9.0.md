@@ -22,6 +22,16 @@ and again on a re-import.
 
 A record layer is placed only where the order's georeferenced frame, which the manifest states once, is the frame this host places in (metric, the grid the site origin is stated in); a file in any other grid is named and left out, never converted. Each layer shows the sources and licence its catalog entry states as its credit, a standing notice, and every record file the download does not hold with the reason the manifest gives. The 3.0 manifest carries no per-layer disclaimer or notice text, so none is shown beside a layer; a per-layer disclaimer and notice in the manifest is an open data-contract request (the issue titled "Data contract: per-layer disclaimer and notice for public-record layers"), and the plugin shows what the manifest states once it does.
 
+## Choosing a level before the download
+
+An MPB 3.0 order from the vault is downloaded at one level. The import window shows `Fidelity Level`
+with Max, Med and Min, each with its download size and the platform's recommendation preselected and
+marked `Recommended`, and `Download` fetches the chosen level. The download holds only the files listed
+above, at that level, with the manifest. The plugin keeps one download per order: importing the same
+level again reuses it with no download, and choosing another level downloads that level and replaces
+it. An import with no window to choose in (a script) takes the recommendation. A 2.x order downloads as
+in 0.8, with no level to choose.
+
 ## Layers left out of an MPB 3.0 import
 
 Each is shown as skipped, with its reason, in the import window and the import log.

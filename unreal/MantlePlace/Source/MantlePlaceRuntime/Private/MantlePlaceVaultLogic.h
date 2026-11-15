@@ -42,6 +42,7 @@ struct FMantlePlaceVaultLogic
 	 * invalid JSON or a missing/non-array top-level "bundles".
 	 */
 	static bool ParseListResponse(const FString& JsonStr, TArray<FMantlePlaceVaultItem>& OutItems, FString& OutError, TArray<FString>* OutWarnings = nullptr);
+	// A row's 3.0 offer is read by ReadLevelOffer; one it cannot read is a warning, never a skipped row.
 
 	/**
 	 * Parse the download-mint response: { "url", "expiresAt" }. Returns true on success.
@@ -268,6 +269,38 @@ struct FMantlePlaceVaultLogic
 	 */
 	static EMantlePlaceViewFetch DecideViewFetch(
 		const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown, const TArray<FString>& Delivered);
+
+	//~ ----- An MPB 3.0 order: one level, and the files this host reads -----
+
+	/** The three levels a 3.0 download offers, most to least, as the listing, request and manifest spell them. */
+	static const TArray<FString>& OfferedLevels();
+
+	/** True iff Level is one of OfferedLevels(), spelled exactly (`Max`, `Med`, `Min`). */
+	static bool IsOfferedLevel(const FString& Level);
+
+	/**
+	 * Read a listing row's 3.0 offer (`mpb3`) into Item: the recommendation and Max, Med and Min with
+	 * their sizes and counts. A 2.x row has none and is left as it is (returns true, no warning). A row
+	 * whose offer does not state a size for each of the three levels is left as a 2.x row and OutWarning
+	 * says why, so a malformed offer never blanks the vault. A recommendation that is absent or not one
+	 * of the three is left empty: nothing is preselected (HPS-59), rather than a guess.
+	 */
+	static void ReadLevelOffer(const TSharedPtr<FJsonObject>& Row, FMantlePlaceVaultItem& Item, FString& OutWarning);
+
+	/**
+	 * JSON request body for a 3.0 download (POST .../download): the whole-bundle format, one level and the
+	 * promised files this host reads, by path from the bundle root. Never a view: a 3.0 bundle has no file
+	 * list per host, so the plugin names its own. Condensed:
+	 * {"format":"bundle","mpb3":{"version":"3.0","level":"Med","files":[...]}}.
+	 */
+	static FString BuildLevelDownloadBody(const FString& Level, const TArray<FString>& Files);
+
+	/**
+	 * Parse the answer to a 3.0 download request. The link is read as ParseDownloadResponse reads it, and
+	 * the download is marked as this level's: held against the length and manifest digest the platform
+	 * stated for it, like a view, since the listing's size and digest describe the Max download of every file.
+	 */
+	static bool ParseLevelDownloadResponse(const FString& JsonStr, const FString& Level, FMantlePlacePresignedDownload& OutDownload, FString& OutError);
 
 	/** The tokens whose files Unreal reads from outside `hosts.unreal` (named by `layout`, not by the host block). */
 	static const TArray<FString>& ReadOutsideHostBlock();

@@ -80,6 +80,11 @@
     "bundle.v3CatalogFileMissing": [],
     "bundle.v3FileRemoved": [],
     "bundle.v3FileUnknown": [],
+    "bundle.v3FramesAxisOrderUnknown": [],
+    "bundle.v3FramesFeet": [],
+    "bundle.v3FramesLocalUnitNotMetre": [],
+    "bundle.v3FramesUnitUnknown": [],
+    "bundle.v3FramesVerticalDatumUnreadable": [],
     "bundle.v3Full": [],
     "bundle.v3FullMed": [],
     "bundle.v3FullMin": [],
@@ -520,6 +525,31 @@
       "unreal"
     ],
     "reader.v3CatalogFileMissing": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
+    "reader.v3FramesAxisOrderUnknown": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
+    "reader.v3FramesFeet": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
+    "reader.v3FramesLocalUnitNotMetre": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
+    "reader.v3FramesUnitUnknown": [
+      "autocad",
+      "revit",
+      "unreal"
+    ],
+    "reader.v3FramesVerticalDatumUnreadable": [
       "autocad",
       "revit",
       "unreal"

@@ -234,6 +234,22 @@ void CompareResult(FAutomationTestBase& T, const FString& Label, const TSharedPt
 		T.TestTrue(Label + TEXT("a refusal carries a message"), !Read.Error.IsEmpty());
 	}
 
+	// `frames`: stated for a 3.x read and only then, equal to what the reader put on the read, every
+	// member exactly (a geoid the manifest names none for is `null`).
+	const TSharedPtr<FJsonObject>* ExpectedFrames = nullptr;
+	if (Result->TryGetObjectField(TEXT("frames"), ExpectedFrames) && ExpectedFrames != nullptr)
+	{
+		if (T.TestTrue(Label + TEXT("the reader read the frames"), Read.Frames.IsValid()))
+		{
+			T.TestTrue(Label + TEXT("the frames are the case's"),
+				FJsonValue::CompareEqual(FJsonValueObject(*ExpectedFrames), FJsonValueObject(Read.Frames)));
+		}
+	}
+	else
+	{
+		T.TestFalse(Label + TEXT("the reader read frames the case does not state"), Read.Frames.IsValid());
+	}
+
 	// `files`, as a set keyed by path, every member exactly.
 	TMap<FString, FString> ExpectedFiles;
 	const TArray<TSharedPtr<FJsonValue>>* Files = nullptr;
@@ -332,6 +348,20 @@ void CompareResult(FAutomationTestBase& T, const FString& Label, const TSharedPt
 		}
 	}
 }
+
+/** The two frames a readable 3.x manifest states (format.md §9.4): a metric order and the local site frame.
+ *  A 3.x manifest without them is refused as unreadable, as the .NET reader refuses it. */
+const TCHAR* const MetricFrames = TEXT(
+	"\"frames\": {\"georeferenced\": {\"horizontal_crs\": {\"code\": \"EPSG:32618\"},"
+	" \"vertical_crs\": {\"code\": \"EPSG:3855\"}, \"geoid_model\": \"EGM2008\","
+	" \"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 1}, \"vertical_unit\": {\"name\": \"metre\", \"to_metres\": 1},"
+	" \"axis_order\": \"east-north\", \"grid_rotation_deg\": 0.67},"
+	" \"local\": {\"origin\": {\"longitude\": -73.975, \"latitude\": 40.755, \"ellipsoidal_height_m\": -12.5,"
+	" \"height_m\": 20.0, \"projected\": {\"crs\": {\"code\": \"EPSG:32618\"}, \"x\": 586500.0, \"y\": 4512000.0,"
+	" \"unit\": {\"name\": \"metre\", \"to_metres\": 1}}},"
+	" \"vertical_crs\": {\"code\": \"EPSG:3855\"}, \"geoid_model\": \"EGM2008\","
+	" \"unit\": {\"name\": \"metre\", \"to_metres\": 1}, \"axes\": {\"x\": \"east\", \"y\": \"north\", \"z\": \"up\"},"
+	" \"grid_rotation_deg\": 0.67}}");
 } // namespace
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -483,8 +513,18 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 	}
 	{
 		FInMemoryBundle Three;
-		Three.Entries.Add(TEXT("Manifest.json"), TEXT("{\"version\": \"3.4.0\", \"level\": \"Med\", \"catalog\": {\"Manifest.json\": {}}}"));
+		Three.Entries.Add(TEXT("Manifest.json"), FString(TEXT("{\"version\": \"3.4.0\", \"level\": \"Med\", ")) + MetricFrames
+			+ TEXT(", \"catalog\": {\"Manifest.json\": {}}}"));
 		TestEqual(TEXT("any 3.x minor is read"), Three.Read().Outcome, EMantlePlaceBundleReadOutcome::Read);
+
+		// A 3.x manifest that states no frames is refused, naming what is missing, and reads no catalog.
+		FInMemoryBundle Bare;
+		Bare.Entries.Add(TEXT("Manifest.json"), TEXT("{\"version\": \"3.0.0\", \"level\": \"Med\", \"catalog\": {\"Manifest.json\": {}}}"));
+		const FMantlePlaceBundleRead BareRead = Bare.Read();
+		TestEqual(TEXT("a 3.x manifest with no frames is refused"), BareRead.Outcome, EMantlePlaceBundleReadOutcome::Refused);
+		TestEqual(TEXT("... as unreadable"), BareRead.Refusal, FString(L::UnreadableRefusal()));
+		TestTrue(TEXT("... naming the frames"), BareRead.Error.Contains(TEXT("frames")));
+		TestEqual(TEXT("... with no level and no catalog read"), BareRead.Level.Len() + BareRead.Files.Num() + BareRead.Skipped.Num(), 0);
 	}
 	{
 		// The 2.x reader keeps its own message, word for word: the shared text is one function now.
@@ -513,8 +553,7 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 		// A 3.x manifest that carries a host block anyway: the file it names is not in the catalog, so it
 		// is not found, and the block's catalog-looking member is never read as one.
 		FInMemoryBundle Hosted;
-		Hosted.Entries.Add(TEXT("Manifest.json"), TEXT(
-			"{\"version\": \"3.0.0\", \"level\": \"Max\","
+		Hosted.Entries.Add(TEXT("Manifest.json"), FString(TEXT("{\"version\": \"3.0.0\", \"level\": \"Max\", ")) + MetricFrames + TEXT(","
 			" \"catalog\": {\"Elevation/Elevation.tif\": {\"count\": {\"kind\": \"pixels\", \"value\": 4}}},"
 			" \"hosts\": {\"unreal\": {\"heightmap\": \"Elevation/Elevation.png\","
 			"   \"file_entries\": {\"Elevation/Elevation.png\": {}}}}}"));
@@ -533,8 +572,8 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 	// --- What a catalog entry states, and what it does not ------------------------------------------
 	{
 		FInMemoryBundle Counts;
-		Counts.Entries.Add(TEXT("Manifest.json"), TEXT(
-			"{\"version\": \"3.0.0\", \"level\": \"Min\", \"catalog\": {"
+		Counts.Entries.Add(TEXT("Manifest.json"), FString(TEXT("{\"version\": \"3.0.0\", \"level\": \"Min\", ")) + MetricFrames + TEXT(
+			", \"catalog\": {"
 			" \"A.csv\": {\"count\": {\"kind\": \"rows\", \"value\": 12}}, \"B.csv\": {\"count\": {\"kind\": \"rows\", \"value\": 1.5}},"
 			" \"C.csv\": {\"count\": {\"kind\": \"rows\", \"value\": -1}}, \"D.csv\": {\"count\": {\"kind\": \"rows\", \"value\": true}},"
 			" \"E.csv\": {\"count\": {\"kind\": \"rows\", \"value\": \"7\"}}, \"G.csv\": {\"count\": 5}, \"F.csv\": {}},"

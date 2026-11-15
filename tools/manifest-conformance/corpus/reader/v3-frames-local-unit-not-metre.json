@@ -1,0 +1,14 @@
+{
+  "$comment": "The local frame's unit is read and not assumed: a unit that is not the metre is refused, naming it, rather than converted (format.md §4, §9.4), since no host re-derives a placement.",
+  "bundle": "bundle/v3-frames-local-unit-not-metre.json",
+  "result": {
+    "outcome": "refused",
+    "major": 3,
+    "version": "3.0.0",
+    "manifestPath": "Manifest.json",
+    "level": null,
+    "refusal": "unreadable",
+    "files": [],
+    "skipped": []
+  }
+}

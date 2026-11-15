@@ -26,7 +26,7 @@ FString UMantlePlaceBundleCache::GetCachedBundlePath(const FMantlePlaceVaultItem
 	return FCacheLogic::DeriveBundlePath(GetCacheRoot(), Item.OrderId);
 }
 
-FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePlaceVaultItem& Item) const
+FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePlaceVaultItem& Item, const FString* WantedLevel) const
 {
 	const FString Root = GetCacheRoot();
 	IFileManager& Files = IFileManager::Get();
@@ -63,6 +63,7 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 				Cached.ManifestVersion = Meta.ManifestVersion;
 				Cached.DownloadedAtUtc = Meta.DownloadedAtUtc;
 				Cached.Format = Meta.Format;
+				Cached.Level = Meta.Level;
 			}
 		}
 	}
@@ -85,6 +86,11 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 	{
 		Cached.State = EMantlePlaceCacheState::CachedStale;
 	}
+	// One slot per order, holding one level: a download of another level is not served from it.
+	if (WantedLevel != nullptr)
+	{
+		Cached.State = FCacheLogic::StateAtLevel(Cached.State, Cached.Level, *WantedLevel);
+	}
 	return Cached;
 }
 
@@ -103,6 +109,11 @@ bool UMantlePlaceBundleCache::CachedHoldsView(const FMantlePlaceVaultItem& Item)
 bool UMantlePlaceBundleCache::IsCachedAndValid(const FMantlePlaceVaultItem& Item) const
 {
 	return ResolveCached(Item).State == EMantlePlaceCacheState::CachedValid;
+}
+
+bool UMantlePlaceBundleCache::IsCachedAndValidAtLevel(const FMantlePlaceVaultItem& Item, const FString& Level) const
+{
+	return ResolveCached(Item, &Level).State == EMantlePlaceCacheState::CachedValid;
 }
 
 bool UMantlePlaceBundleCache::EvictCache(const FMantlePlaceVaultItem& Item)
@@ -125,8 +136,9 @@ void UMantlePlaceBundleCache::DownloadBundle(
 	}
 
 	// Offline re-import: a valid cached bundle is served without any network round-trip (the
-	// anti-streaming guarantee made literal). Checked before the URL so it works fully offline.
-	const FMantlePlaceCachedBundle Cached = ResolveCached(Item);
+	// anti-streaming guarantee made literal). Checked before the URL so it works fully offline. The slot
+	// serves only the level it holds (none, for a 2.x download): another 3.0 level is fetched and replaces it.
+	const FMantlePlaceCachedBundle Cached = ResolveCached(Item, &Presigned.Level);
 	if (Cached.State == EMantlePlaceCacheState::CachedValid)
 	{
 		NotifyDownloadComplete(true, Cached.LocalPath, TEXT("Cache hit - re-importing the kept local bundle."));
@@ -160,6 +172,7 @@ void UMantlePlaceBundleCache::DownloadBundle(
 	ActivePartPath = FCacheLogic::DerivePartPath(Root, Item.OrderId);
 	bActiveIsView = Presigned.bIsView;
 	ActiveViewSizeBytes = Presigned.bHasSizeBytes ? Presigned.SizeBytes : 0;
+	ActiveLevel = Presigned.Level;
 	ExpectedTotalBytes = bActiveIsView
 		? static_cast<uint64>(FMath::Max<int64>(0, ActiveViewSizeBytes))
 		: (Item.bHasSizeBytes ? static_cast<uint64>(Item.SizeBytes) : 0);
@@ -297,6 +310,7 @@ void UMantlePlaceBundleCache::HandleDownloadComplete(
 	Meta.Format = TEXT("glb");
 	Meta.bHoldsView = bActiveIsView;
 	Meta.ListingSha256 = ActiveItem.bHasSha256 ? ActiveItem.Sha256 : FString();
+	Meta.Level = ActiveLevel;
 	FFileHelper::SaveStringToFile(
 		FCacheLogic::SerializeMeta(Meta), *FCacheLogic::DeriveMetaPath(GetCacheRoot(), ActiveItem.OrderId));
 

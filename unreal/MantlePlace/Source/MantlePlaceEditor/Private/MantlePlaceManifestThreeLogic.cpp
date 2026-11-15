@@ -471,6 +471,30 @@ void ReadLicensing(const FThreeContext& C)
 }
 }
 
+const TArray<FString>& FMantlePlaceManifestThreeLogic::RequestedFiles()
+{
+	static const TArray<FString> Files = []()
+	{
+		TArray<FString> Out = {
+			HeightmapPath(),
+			DrapePath(),
+			TerrainMeshPath(),
+			BuildingsPath(),
+			TreesPath(),
+			RoadsPath(),
+		};
+		// The paint layers: every weight map the published description promises in the folder. The import
+		// reads each PNG it finds there; the request has to name them, since a 3.0 request takes file names.
+		for (const TCHAR* Layer : { TEXT("Water"), TEXT("Grass"), TEXT("Forest"), TEXT("Dirt"),
+				 TEXT("Rock"), TEXT("Sand"), TEXT("Snow"), TEXT("Built") })
+		{
+			Out.Add(FString(MaterialsFolder()) + Layer + TEXT(".png"));
+		}
+		return Out;
+	}();
+	return Files;
+}
+
 FString FMantlePlaceManifestThreeLogic::NoHostReadyFileReason(const FString& What)
 {
 	return FString::Printf(TEXT("MPB 3.0 ships %s only as georeferenced files, and this plugin never converts a "

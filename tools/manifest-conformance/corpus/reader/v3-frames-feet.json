@@ -1,0 +1,112 @@
+{
+  "$comment": "A bundle in feet: a reader reads each frame's unit by its factor to metres, the axis order, the grid rotation and each CRS as the manifest states them, takes the local unit from the manifest and not from the metre it is on every order, and reports a geoid the manifest names none for as null (format.md §9.4).",
+  "bundle": "bundle/v3-frames-feet.json",
+  "result": {
+    "outcome": "read",
+    "major": 3,
+    "version": "3.0.0",
+    "manifestPath": "Manifest.json",
+    "level": "Med",
+    "frames": {
+      "georeferenced": {
+        "horizontal_crs": {
+          "code": "EPSG:2263"
+        },
+        "vertical_crs": {
+          "wkt2": "VERTCRS[\"Synthetic height (ft)\",VDATUM[\"Synthetic vertical datum\"],CS[vertical,1],AXIS[\"gravity-related height (H)\",up],LENGTHUNIT[\"foot\",0.3048]]"
+        },
+        "horizontal_unit": {
+          "name": "US survey foot",
+          "to_metres": 0.3048006096012192
+        },
+        "vertical_unit": {
+          "name": "foot",
+          "to_metres": 0.3048
+        },
+        "axis_order": "north-east",
+        "grid_rotation_deg": -1.2,
+        "geoid_model": null
+      },
+      "local": {
+        "origin": {
+          "longitude": -73.975,
+          "latitude": 40.755,
+          "ellipsoidal_height_m": -12.5,
+          "height_m": 20.0,
+          "projected": {
+            "crs": {
+              "projjson": {
+                "type": "ProjectedCRS",
+                "name": "Synthetic grid (ftUS)",
+                "id": {
+                  "authority": "EPSG",
+                  "code": 2263
+                }
+              }
+            },
+            "x": 988000.5,
+            "y": 214000.25,
+            "unit": {
+              "name": "US survey foot",
+              "to_metres": 0.3048006096012192
+            }
+          }
+        },
+        "vertical_crs": {
+          "code": "EPSG:5703"
+        },
+        "geoid_model": "GEOID18",
+        "unit": {
+          "name": "metre",
+          "to_metres": 1
+        },
+        "axes": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "grid_rotation_deg": -1.2
+      }
+    },
+    "refusal": null,
+    "files": [
+      {
+        "path": "Basemap/Roads.dxf",
+        "family": "georeferenced",
+        "frame": "order",
+        "count": 120
+      },
+      {
+        "path": "Basemap/Roads.gpkg",
+        "family": "georeferenced",
+        "frame": "order",
+        "count": 120
+      },
+      {
+        "path": "Elevation/Elevation.tif",
+        "family": "georeferenced",
+        "frame": "order",
+        "count": 1048576
+      },
+      {
+        "path": "Elevation/Terrain.glb",
+        "family": "host-ready",
+        "frame": "site",
+        "count": 100000
+      },
+      {
+        "path": "Manifest.json",
+        "family": null,
+        "frame": null,
+        "count": null
+      },
+      {
+        "path": "Readme.md",
+        "family": null,
+        "frame": null,
+        "count": null
+      }
+    ],
+    "skipped": []
+  }
+}

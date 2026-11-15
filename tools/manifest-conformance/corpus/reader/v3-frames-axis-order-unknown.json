@@ -1,0 +1,14 @@
+{
+  "$comment": "An axis order the reader does not know is refused, naming it (format.md §4, §9.4): reading the coordinates of every georeferenced file as the other order swaps easting and northing.",
+  "bundle": "bundle/v3-frames-axis-order-unknown.json",
+  "result": {
+    "outcome": "refused",
+    "major": 3,
+    "version": "3.0.0",
+    "manifestPath": "Manifest.json",
+    "level": null,
+    "refusal": "unreadable",
+    "files": [],
+    "skipped": []
+  }
+}

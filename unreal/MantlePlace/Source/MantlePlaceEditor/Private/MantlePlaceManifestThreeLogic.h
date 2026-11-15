@@ -57,6 +57,15 @@ struct FMantlePlaceManifestThreeLogic
 	static const TCHAR* RecordsFolder() { return TEXT("Records/"); }
 
 	/**
+	 * The promised files a 3.0 download names for this host, by path from the bundle root: one per step
+	 * above, and each weight map in MaterialsFolder() by the name the published Platform API description
+	 * lists. Declared once, here, beside the steps that read them; a file joins the list when a step that
+	 * reads it lands and leaves it when the last such step goes. `Manifest.json` comes with every download,
+	 * named or not. The download holds these files at the one level the curator chose.
+	 */
+	static const TArray<FString>& RequestedFiles();
+
+	/**
 	 * Fill `OutManifest` from a 3.x read and its manifest text. False, with OutError naming the value,
 	 * when the manifest is not one this host can place at all (no site origin, a frame not in metres, an
 	 * axis it does not know); every per-step problem is a named skip instead.
