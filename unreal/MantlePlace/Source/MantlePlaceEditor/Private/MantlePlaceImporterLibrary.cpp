@@ -3,10 +3,12 @@
 #include "MantlePlaceImporterLibrary.h"
 
 #include "MantlePlaceArtifactHandler.h"
+#include "MantlePlaceBundleReaderLogic.h"
 #include "MantlePlaceCesiumAvailabilityLogic.h"
 #include "MantlePlaceDeliveryLogic.h"
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceLevelFrameLogic.h"
+#include "MantlePlaceManifestThreeLogic.h"
 #include "MantlePlaceEditorSettings.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportProvenance.h"
@@ -184,6 +186,53 @@ namespace
 	TUniquePtr<FMantlePlaceLocalTileServer> GBundleStreamServer;
 }
 
+namespace MantlePlaceFormatThree
+{
+	/** True when the zip's manifest is a 3.x one: Manifest.json at its root, or inside one wrapper folder. */
+	bool IsFormatThree(const FZipArchiveReader& Reader)
+	{
+		FString Root, ManifestPath;
+		return FMantlePlaceBundleReaderLogic::FindManifest(Reader.GetFileNames(), Root, ManifestPath)
+			&& ManifestPath.Equals(FMantlePlaceBundleReaderLogic::ManifestPath3(), ESearchCase::IgnoreCase);
+	}
+
+	/**
+	 * A 3.x bundle's manifest, read by FMantlePlaceBundleReaderLogic and turned into the shape the import
+	 * runs on by FMantlePlaceManifestThreeLogic. The bytes are the manifest's, for the identity's hash.
+	 * False with OutError on a read that refused (a later major) or failed; true otherwise, with the
+	 * verdict in OutManifest.bValid and OutError, as MantlePlaceImportManifest::Parse leaves it.
+	 */
+	bool Read(const FZipArchiveReader& Reader, TArray<uint8>& OutBytes, FMantlePlaceVaultManifest& OutManifest, FString& OutError)
+	{
+		const FMantlePlaceBundleRead BundleRead = FMantlePlaceBundleReaderLogic::Read(Reader.GetFileNames(),
+			[&Reader](const FString& Name, FString& OutText)
+			{
+				TArray<uint8> Bytes;
+				if (!Reader.TryReadFile(Name, Bytes))
+				{
+					return false;
+				}
+				FFileHelper::BufferToString(OutText, Bytes.GetData(), Bytes.Num());
+				return true;
+			});
+		if (!BundleRead.IsRead())
+		{
+			OutError = BundleRead.Error;
+			return false;
+		}
+		if (!Reader.TryReadFile(BundleRead.Root + BundleRead.ManifestPath, OutBytes))
+		{
+			OutError = FString::Printf(TEXT("Bundle has no readable %s."), *BundleRead.ManifestPath);
+			return false;
+		}
+		// A 3.x manifest this host cannot place is a refusal with its reason, never an incomplete bundle
+		// to materialize: 3.x has no per-host formats to generate (format.md §9.7).
+		FString Text;
+		FFileHelper::BufferToString(Text, OutBytes.GetData(), OutBytes.Num());
+		return FMantlePlaceManifestThreeLogic::ToVaultManifest(BundleRead, Text, OutManifest, OutError);
+	}
+}
+
 bool UMantlePlaceImporterLibrary::ReadManifestSha256(const FString& ZipPath, FString& OutSha256, FString& OutError)
 {
 	OutSha256.Reset();
@@ -210,7 +259,17 @@ bool UMantlePlaceImporterLibrary::ReadManifestSha256(const FString& ZipPath, FSt
 	}
 
 	TArray<uint8> ManifestBytes;
-	if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
+	if (MantlePlaceFormatThree::IsFormatThree(Reader))
+	{
+		// Only the bytes are wanted: a manifest this host cannot place still has a digest.
+		FMantlePlaceVaultManifest Unused;
+		if (!MantlePlaceFormatThree::Read(Reader, ManifestBytes, Unused, OutError) && ManifestBytes.Num() == 0)
+		{
+			return false;
+		}
+		OutError.Reset();
+	}
+	else if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
 	{
 		OutError = TEXT("Bundle has no Metadata/manifest.json.");
 		return false;
@@ -247,6 +306,10 @@ bool UMantlePlaceImporterLibrary::ReadVaultManifest(
 	}
 
 	TArray<uint8> ManifestBytes;
+	if (MantlePlaceFormatThree::IsFormatThree(Reader))
+	{
+		return MantlePlaceFormatThree::Read(Reader, ManifestBytes, OutManifest, OutError);
+	}
 	if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
 	{
 		OutError = TEXT("Bundle has no Metadata/manifest.json.");
@@ -416,17 +479,30 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 
 	// --- Read + parse the manifest ---
 	TArray<uint8> ManifestBytes;
-	if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
-	{
-		Result.Message = TEXT("Bundle has no Metadata/manifest.json.");
-		return Result;
-	}
-	FString ManifestText;
-	FFileHelper::BufferToString(ManifestText, ManifestBytes.GetData(), ManifestBytes.Num());
-
 	FString ParseError;
 	// Not const: the one thing set on it after the parse is the level offset, once the level has been read.
-	FMantlePlaceVaultManifest Manifest = MantlePlaceImportManifest::Parse(ManifestText, ParseError);
+	FMantlePlaceVaultManifest Manifest;
+	if (MantlePlaceFormatThree::IsFormatThree(Reader))
+	{
+		// An MPB 3.x bundle: read by its own reader into the same shape, so every step below runs as
+		// it does for 2.x, from the file 3.x promises for it (FMantlePlaceManifestThreeLogic).
+		if (!MantlePlaceFormatThree::Read(Reader, ManifestBytes, Manifest, ParseError))
+		{
+			Result.Message = FString::Printf(TEXT("Manifest error: %s"), *ParseError);
+			return Result;
+		}
+	}
+	else
+	{
+		if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
+		{
+			Result.Message = TEXT("Bundle has no Metadata/manifest.json.");
+			return Result;
+		}
+		FString ManifestText;
+		FFileHelper::BufferToString(ManifestText, ManifestBytes.GetData(), ManifestBytes.Num());
+		Manifest = MantlePlaceImportManifest::Parse(ManifestText, ParseError);
+	}
 	Result.JobId = Manifest.JobId;
 	if (!Manifest.bValid)
 	{
@@ -455,6 +531,9 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 		Steps->Add(IntegrityStep, TEXT("Integrity Check"));
 		MantlePlaceImportOrchestration::PlanSteps(Handlers, Manifest, Selection, *Steps);
 	}
+	// The steps a 3.x bundle cannot feed, and the parts of one it does not, in the log too: an import
+	// run from a script has no window. A 2.x bundle has none of either.
+	Log.Append(MantlePlaceImportOrchestration::DescribeFormatSkips(Handlers, Manifest, Selection));
 
 	// A cancel before anything in the project changed: nothing to undo, nothing to record.
 	const auto CancelledUntouched = [&Result, Steps]()
@@ -792,6 +871,13 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 	}
 
 	TArray<uint8> ManifestBytes;
+	if (MantlePlaceFormatThree::IsFormatThree(Reader))
+	{
+		// A 3.x bundle holds no terrain tiles: they are an Extra beside it (spec/format.md §12).
+		Info.Message = TEXT("Streaming into Cesium is not offered for an MPB 3.0 bundle in this release: its "
+			"terrain tiles are an Extra beside the bundle.");
+		return Info;
+	}
 	if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
 	{
 		Info.Message = TEXT("Bundle has no Metadata/manifest.json.");
