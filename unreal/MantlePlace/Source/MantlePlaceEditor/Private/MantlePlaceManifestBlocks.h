@@ -316,7 +316,7 @@ struct FMantlePlaceRecordLayer
 	TArray<FMantlePlaceRecordPointer> Pointers;
 	// The text the manifest carries for the layer, verbatim and shown as published. Empty = absent.
 	// `Credit` falls back to the sources each file entry states (name, link, licence). No published
-	// schema version declares a per-layer disclaimer or notice, so those two are read by their
+	// schema version declares a per-layer disclaimer or notice (an open data-contract request tracks it), so those two are read by their
 	// provisional names and are usually empty; the standing notice
 	// (FMantlePlacePublicRecordsLogic::StandingNotice) is shown regardless.
 	FString Credit;

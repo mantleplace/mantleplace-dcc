@@ -20,7 +20,7 @@ and again on a re-import.
 | Road splines | `Basemap/Roads.csv` |
 | Public-record layers | Each `Records/<Name>.dxf`, drawn as one toggleable overlay of lines laid on the Landscape; each `Records/<Name>.gpkg` is verified and kept in the bundle |
 
-A record layer is placed only where the order's georeferenced frame, which the manifest states once, is the frame this host places in (metric, the grid the site origin is stated in); a file in any other grid is named and left out, never converted. Each layer shows the sources and licence its catalog entry states as its credit, a standing notice, and every record file the download does not hold with the reason the manifest gives. The 3.0 manifest carries no per-layer disclaimer or notice text, so none is shown beside a layer; a per-layer disclaimer and notice in the manifest is a request to the platform's data contract, and the plugin shows what the manifest states once it does.
+A record layer is placed only where the order's georeferenced frame, which the manifest states once, is the frame this host places in (metric, the grid the site origin is stated in); a file in any other grid is named and left out, never converted. Each layer shows the sources and licence its catalog entry states as its credit, a standing notice, and every record file the download does not hold with the reason the manifest gives. The 3.0 manifest carries no per-layer disclaimer or notice text, so none is shown beside a layer; a per-layer disclaimer and notice in the manifest is an open data-contract request (the issue titled "Data contract: per-layer disclaimer and notice for public-record layers"), and the plugin shows what the manifest states once it does.
 
 ## Layers left out of an MPB 3.0 import
 
