@@ -183,9 +183,11 @@ One of the three versions of a bundle a download can hold, from most to least: M
 _Avoid_: scale, tier, quality, LOD, resolution, detail level
 
 **Download view**:
-The selection of a bundle's files one download carries — a host's own files at the fidelity levels
-it asked for, or every file at every level — delivered as one zip whose manifest still describes the
-whole bundle. A host asks for its view; it never assembles one from file names.
+The selection of a bundle's files one download carries, delivered as one zip. For a 3.0 order a
+plugin names the promised files it reads, by path, and one fidelity level, and the download holds
+those files at that level with the manifest. For a 2.x order it is a host's own files at the fidelity
+levels it asked for, or every file at every level, and the manifest still describes the whole
+bundle; there, and for 2.x only, a host asks for its view and never assembles one from file names.
 _Avoid_: subset, partial bundle, export, package
 
 **Export**:

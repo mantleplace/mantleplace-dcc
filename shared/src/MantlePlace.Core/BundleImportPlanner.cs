@@ -8,6 +8,33 @@ namespace MantlePlace.Core;
 public static class BundleImportPlanner
 {
     /// <summary>
+    /// The promised files of a 3.0 bundle that Revit's import steps read, by path from the bundle root:
+    /// what a 3.0 download asks for (<see cref="DownloadLevels.BuildRequestBody"/>). Declared once,
+    /// here, beside the steps.
+    /// </summary>
+    /// <remarks>
+    /// One file per step's source, as each <see cref="ImportStepKind"/> reads it in 2.x: the terrain's
+    /// TIN and the published contours, the site model (linked, and its buildings copied), the roads,
+    /// land use, land cover and water layers, the tree points, the imagery drape, the flood zones and
+    /// the steep ground. <c>Manifest.json</c> comes with every download, named or not. A file joins
+    /// the list when a step that reads it lands, and leaves it when the last step that reads it goes.
+    /// </remarks>
+    public static IReadOnlyList<string> ThreeFiles { get; } =
+    [
+        "Elevation/Terrain.dxf",
+        "Elevation/Contours.dxf",
+        "Elevation/Slope.gpkg",
+        "Site/Site.ifc",
+        "Basemap/Roads.gpkg",
+        "Basemap/Water.gpkg",
+        "Basemap/Landuse.gpkg",
+        "Landcover/Landcover.gpkg",
+        "Landcover/Trees.csv",
+        "Imagery/Imagery.png",
+        "Records/Floodplain.gpkg",
+    ];
+
+    /// <summary>
     /// How far a corroborated extent may disagree with the image's own grid, in pixels per axis.
     /// </summary>
     /// <remarks>

@@ -23,8 +23,9 @@ namespace MantlePlace.AutoCad.Addin;
 /// import window before pressing Import.
 /// </para>
 /// </remarks>
-internal sealed class AutoCadExportImportHost : IExportImportHost
+internal sealed class AutoCadExportImportHost(VaultExportSource levels) : IExportImportHost
 {
+    private readonly VaultExportSource _levels = levels ?? throw new ArgumentNullException(nameof(levels));
     private readonly object _gate = new();
     private string? _holding;
     private ReceivedExportWindow? _window;
@@ -61,12 +62,19 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
         ConnectedHostService? connected = MantlePlaceApplication.Connected;
         try
         {
-            ReceivedExportWindow window = new(export, zipPath, MantlePlaceApplication.MainWindowHandle());
+            // A send names no level: a 3.0 order was fetched at the recommendation, and the window opens
+            // with the control on it. Another choice is downloaded through the fetch's own source.
+            ReceivedExportWindow window = new(
+                export,
+                zipPath,
+                MantlePlaceApplication.MainWindowHandle(),
+                LevelControl.For(_levels.Listed(export.OrderId)),
+                level => Task.Run(() => _levels.FetchLevelAsync(export.OrderId, level, new Progress<string>(_ => { }), CancellationToken.None)));
             bool began = false;
             window.ImportRequested += (_, _) =>
             {
                 began = true;
-                RunImport(export, zipPath, window, connected);
+                RunImport(export, window.ZipPath, window, connected);
             };
             window.Closed += (_, _) =>
             {

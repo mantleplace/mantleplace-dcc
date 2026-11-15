@@ -27,6 +27,16 @@ public sealed record ImportWindowRequest(
     /// calls into the host.
     /// </summary>
     public IReadOnlyDictionary<ImportStepKind, TimeSpan>? MeasuredCosts { get; init; }
+
+    /// <summary>
+    /// A received send's 3.0 order: the level control, on the level the bundle on disk is at
+    /// (<see cref="LevelChoiceRow"/>). <c>null</c> for a 2.x order and for a window the curator opened
+    /// from the vault, where the level was chosen before the fetch.
+    /// </summary>
+    public LevelControl? Levels { get; init; }
+
+    /// <summary>A line under the level control: what the last level choice did. <c>null</c> for none.</summary>
+    public string? LevelNote { get; init; }
 }
 
 /// <summary>
@@ -191,6 +201,9 @@ public sealed class ImportWindowThread
     /// <summary>Closes the window whatever it shows, asking nothing. Called on the host's thread.</summary>
     public void CloseNow() => Post(() => _window?.CloseNow());
 
+    /// <summary>The chosen level could not be downloaded: the control goes back to <paramref name="held"/>, with why.</summary>
+    public void LevelKept(FidelityLevel held, string note) => Post(() => _window?.LevelKept(held, note));
+
     /// <summary>Runs <paramref name="action"/> where nothing may be thrown: this thread's last nets.</summary>
     private static void Quietly(Action action)
     {
@@ -284,5 +297,7 @@ public sealed class ImportWindowThread
         public void Note(string line) => thread.ToHost(() => host.Note(line));
 
         public void Fault(Exception fault) => thread.ToHost(() => host.Fault(fault));
+
+        public void ChooseLevel(FidelityLevel level) => thread.ToHost(() => host.ChooseLevel(level));
     }
 }

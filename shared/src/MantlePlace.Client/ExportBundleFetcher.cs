@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MantlePlace.Core;
 
 namespace MantlePlace.Client;
@@ -17,11 +18,26 @@ public interface IExportVault
     /// <summary>One materialize start, read as the route an Import press takes.</summary>
     Task<ImportRouteDecision> RouteImportAsync(string orderId, CancellationToken cancellationToken);
 
-    /// <summary>Fetches a complete order's Revit view, or the whole bundle, into the cache.</summary>
+    /// <summary>
+    /// Fetches a complete order's Revit view, or the whole bundle, into the cache; a 3.0 order's
+    /// download at the platform's recommendation, since an export names no level.
+    /// </summary>
     Task<CompleteDownload> DownloadCompleteAsync(
         VaultBundle bundle,
         IReadOnlyCollection<string>? delivered,
         CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// A sent order downloaded again at the level the curator chose: ready with the slot's zip, or the
+/// reason it is not (the slot then still holds the level it had).
+/// </summary>
+/// <param name="Ready">Whether the slot holds the chosen level, fully checked.</param>
+/// <param name="ZipPath">The slot's zip when ready.</param>
+/// <param name="Message">Why not, when not ready.</param>
+public readonly record struct LevelFetch(bool Ready, string ZipPath, string Message)
+{
+    internal static LevelFetch Failed(string message) => new(false, string.Empty, message);
 }
 
 /// <summary>The real vault and the real cache.</summary>
@@ -31,6 +47,7 @@ public sealed class VaultExportSource : IExportVault
 
     private readonly VaultClient _vault;
     private readonly BundleCache _cache;
+    private readonly ConcurrentDictionary<string, VaultBundle> _listed = new(StringComparer.Ordinal);
 
     public VaultExportSource(VaultClient vault, BundleCache cache)
     {
@@ -38,15 +55,80 @@ public sealed class VaultExportSource : IExportVault
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
     }
 
-    public Task<(VaultListing? Listing, string? Error)> ListAsync(CancellationToken cancellationToken)
-        => _vault.ListAsync(cancellationToken);
+    public async Task<(VaultListing? Listing, string? Error)> ListAsync(CancellationToken cancellationToken)
+    {
+        (VaultListing? listing, string? error) = await _vault.ListAsync(cancellationToken).ConfigureAwait(false);
+        foreach (VaultBundle row in listing?.Bundles ?? [])
+        {
+            _listed[row.OrderId] = row;
+        }
+
+        return (listing, error);
+    }
+
+    /// <summary>
+    /// The row the last fetch listed for <paramref name="orderId"/>, or <c>null</c>: what the window a send
+    /// opens builds its level control from (<see cref="LevelControl.For"/>), without a second listing.
+    /// </summary>
+    public VaultBundle? Listed(string orderId)
+        => _listed.TryGetValue(orderId, out VaultBundle? row) ? row : null;
+
+    /// <summary>
+    /// Downloads a sent 3.0 order at the level the curator chose in the window the send opened, into the
+    /// host's slot at that level, and answers the slot's zip once it is fully checked. Never throws.
+    /// </summary>
+    public async Task<LevelFetch> FetchLevelAsync(
+        string orderId,
+        FidelityLevel level,
+        IProgress<string> say,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(say);
+        try
+        {
+            if (Listed(orderId) is not { Levels: not null } bundle)
+            {
+                return LevelFetch.Failed("this order offers no levels to choose from");
+            }
+
+            string slot = DownloadLevels.SlotLevel(bundle, level);
+            CacheEntry held = _cache.Inspect(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion, slot);
+            if (held.State == CacheState.CachedValid)
+            {
+                return new LevelFetch(true, held.Layout.BundleZipPath, string.Empty);
+            }
+
+            CompleteDownload download = await _vault.DownloadCompleteAsync(
+                bundle, delivered: null, _cache, say, cancellationToken, level).ConfigureAwait(false);
+            CacheEntry entry = _cache.Inspect(
+                download.Bundle.OrderId, download.Bundle.SizeBytes, download.Bundle.Sha256, download.Bundle.ManifestVersion, slot);
+            if (!download.Ready || entry.State != CacheState.CachedValid)
+            {
+                return LevelFetch.Failed(download.Ready ? entry.Describe() : download.Message);
+            }
+
+            return new LevelFetch(true, entry.Layout.BundleZipPath, string.Empty);
+        }
+        catch (OperationCanceledException)
+        {
+            return LevelFetch.Failed("the download was stopped");
+        }
+#pragma warning disable CA1031 // The window must go on at the level it holds, whatever the fault was.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            return LevelFetch.Failed(ex.Message);
+        }
+    }
 
     public string? CachedZip(VaultBundle bundle)
     {
         ArgumentNullException.ThrowIfNull(bundle);
 
-        // The full hash, as the vault browser's pre-import gate does: once per import.
-        CacheEntry entry = _cache.Inspect(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion);
+        // The full hash, as the vault browser's pre-import gate does: once per import. An export names
+        // no level, so a 3.0 order's slot is the one at the platform's recommendation.
+        CacheEntry entry = _cache.Inspect(
+            bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion, DownloadLevels.SlotLevel(bundle));
         return entry.State == CacheState.CachedValid ? entry.Layout.BundleZipPath : null;
     }
 

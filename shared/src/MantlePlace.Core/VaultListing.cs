@@ -74,6 +74,12 @@ public sealed class VaultBundle
     /// </summary>
     public CuratorExtent? Extent { get; init; }
 
+    /// <summary>
+    /// The levels a 3.0 order offers, with the platform's recommendation; <c>null</c> on a 2.x order,
+    /// whose download and levels are as they were (<see cref="DownloadLevels"/>).
+    /// </summary>
+    public LevelOffer? Levels { get; init; }
+
     /// <summary>Whether this row can be downloaded right now.</summary>
     public bool IsDownloadable => Status == BundleStatus.Available;
 }
@@ -158,7 +164,12 @@ public static class VaultListingReader
                     continue;
                 }
 
-                parsed.Add(ReadBundle(row, orderId));
+                parsed.Add(ReadBundle(row, orderId, out string? levelWarning));
+                if (levelWarning is not null)
+                {
+                    warnings.Add($"vault row {index} ({orderId}): {levelWarning}");
+                }
+
                 index++;
             }
 
@@ -185,8 +196,9 @@ public static class VaultListingReader
         _ => BundleStatus.Unknown,
     };
 
-    private static VaultBundle ReadBundle(JsonElement row, string orderId) => new()
+    private static VaultBundle ReadBundle(JsonElement row, string orderId, out string? levelWarning) => new()
     {
+        Levels = DownloadLevels.ReadOffer(row, out levelWarning),
         OrderId = orderId,
         AoiLabel = row.Str("aoiLabel"),
         CreatedAt = row.Str("createdAt"),

@@ -83,7 +83,7 @@ internal static class MantlePlaceApplication
         // Before the first Platform API call (the restore below), so a 426 on it is heard.
         ClientUpdateDialog.Attach();
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
-        _vault = new VaultClient(endpoints, _session);
+        _vault = new VaultClient(endpoints, _session, threeFiles: AutoCadImportPlan.ThreeFiles);
         _cache = new BundleCache();
         _announced = new AnnouncedOrderStore(AnnouncedOrderStore.DefaultPath);
         _news = new VaultNewsChecker(new SessionNewsSource(_session, _vault), _announced, () => VaultBrowser.IsOpen);
@@ -94,14 +94,17 @@ internal static class MantlePlaceApplication
         // the UI thread by AutoCadExportImportHost.
         ConnectedHostLog connectedLog = new(ConnectedHostLog.DefaultPath);
         string connectionId = ConnectionIdSource.ThisLaunch.Id;
-        ExportBundleFetcher fetcher = new(new VaultExportSource(_vault, _cache), new VaultPrepareSteps(_vault, _cache));
+        // The fetch's own source: the window a send opens builds its level control from the row the fetch
+        // listed, and a different level chosen there is downloaded through it.
+        VaultExportSource exportSource = new(_vault, _cache);
+        ExportBundleFetcher fetcher = new(exportSource, new VaultPrepareSteps(_vault, _cache));
         _connected = new ConnectedHostService(
             connectionId,
             () => RealtimeClient.For(endpoints, connectionId, connectedLog.Append),
             new ExportsClient(endpoints, new AuthBearerSession(_session)),
             fetcher.FetchAsync,
             connectedLog.Append);
-        _connected.Attach(new AutoCadExportImportHost());
+        _connected.Attach(new AutoCadExportImportHost(exportSource));
 
         AcApplication.DocumentManager.DocumentBecameCurrent += OnDocumentBecameCurrent;
         PluginRibbon.Attach();
