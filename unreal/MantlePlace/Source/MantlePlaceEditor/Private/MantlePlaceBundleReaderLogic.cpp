@@ -11,9 +11,10 @@
 
 namespace
 {
-/** The catalog and the two statements beside it, by the names the corpus's fixtures use until the 3.x
- *  schema is served (tools/manifest-conformance/corpus/README.md); the schema's names replace them here. */
-const TCHAR* const CatalogKey = TEXT("file_entries");
+/** The names the served 3.0.0 manifest schema gives the catalog and the statements beside it; a 2.x
+ *  manifest keeps its catalog in `file_entries`. */
+const TCHAR* const CatalogKey3 = TEXT("catalog");
+const TCHAR* const CatalogKey2 = TEXT("file_entries");
 const TCHAR* const LevelKey = TEXT("level");
 const TCHAR* const NotHeldKey = TEXT("not_held");
 const TCHAR* const CountKey = TEXT("count");
@@ -38,10 +39,17 @@ FString ExtensionOf(const FString& Path)
 	return Name.FindLastChar(TEXT('.'), Dot) ? Name.Mid(Dot + 1).ToLower() : FString();
 }
 
-/** A count the catalog states: a JSON number that is a whole number, not negative. Nothing else is a count. */
+/** A count the catalog states: the `value` of the entry's `count` object, a JSON number that is a whole
+ *  number, not negative. Nothing else is a count. */
 bool ReadCount(const TSharedPtr<FJsonObject>& Entry, int64& OutCount)
 {
-	const TSharedPtr<FJsonValue> Value = Entry.IsValid() ? Entry->TryGetField(CountKey) : nullptr;
+	const TSharedPtr<FJsonValue> Counted = Entry.IsValid() ? Entry->TryGetField(CountKey) : nullptr;
+	const TSharedPtr<FJsonObject>* CountObject = nullptr;
+	if (!Counted.IsValid() || Counted->Type != EJson::Object || !Counted->TryGetObject(CountObject))
+	{
+		return false;
+	}
+	const TSharedPtr<FJsonValue> Value = (*CountObject)->TryGetField(TEXT("value"));
 	if (!Value.IsValid() || Value->Type != EJson::Number)
 	{
 		return false;
@@ -212,8 +220,9 @@ FMantlePlaceBundleRead FMantlePlaceBundleReaderLogic::Read(const TArray<FString>
 		ReadString(Manifest, LevelKey, Out.Level);
 	}
 
-	// The one catalog. A per-host block is never consulted: this reads `file_entries` and nothing under
+	// The one catalog. A per-host block is never consulted: this reads the catalog and nothing under
 	// `hosts`, in either major.
+	const TCHAR* const CatalogKey = bThree ? CatalogKey3 : CatalogKey2;
 	const TSharedPtr<FJsonObject>* Catalog = ReadObject(Manifest, CatalogKey);
 	if (Catalog == nullptr)
 	{
@@ -260,21 +269,22 @@ FMantlePlaceBundleRead FMantlePlaceBundleReaderLogic::Read(const TArray<FString>
 
 	// The promised files this download does not hold, each with the reason the manifest states,
 	// verbatim: a reader shows it and never matches on it (format.md §9.6).
-	if (const TSharedPtr<FJsonObject>* NotHeld = bThree ? ReadObject(Manifest, NotHeldKey) : nullptr)
+	// The list is `{path, reason}` rows. A row with no path is no statement about a file.
+	const TSharedPtr<FJsonValue> NotHeldValue = bThree ? Manifest->TryGetField(NotHeldKey) : nullptr;
+	if (NotHeldValue.IsValid() && NotHeldValue->Type == EJson::Array)
 	{
-		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*NotHeld)->Values)
+		for (const TSharedPtr<FJsonValue>& Row : NotHeldValue->AsArray())
 		{
-			if (Named.Contains(Pair.Key))
+			const TSharedPtr<FJsonObject>* Statement = nullptr;
+			FString Path;
+			if (!Row.IsValid() || Row->Type != EJson::Object || !Row->TryGetObject(Statement)
+				|| !ReadString(*Statement, TEXT("path"), Path) || Named.Contains(Path))
 			{
 				continue; // the catalog's word on a file it names stands
 			}
 			FString Reason;
-			const TSharedPtr<FJsonObject>* Statement = nullptr;
-			if (Pair.Value.IsValid() && Pair.Value->Type == EJson::Object && Pair.Value->TryGetObject(Statement))
-			{
-				ReadString(*Statement, TEXT("reason"), Reason);
-			}
-			Out.Skipped.Add({ Pair.Key, EMantlePlaceBundleSkip::NotHeld, Reason });
+			ReadString(*Statement, TEXT("reason"), Reason);
+			Out.Skipped.Add({ Path, EMantlePlaceBundleSkip::NotHeld, Reason });
 		}
 	}
 

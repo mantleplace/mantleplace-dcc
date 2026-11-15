@@ -472,7 +472,7 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 	// --- The major gate --------------------------------------------------------------------------------
 	{
 		FInMemoryBundle Ahead;
-		Ahead.Entries.Add(TEXT("Manifest.json"), TEXT("{\"version\": \"4.0.0\", \"file_entries\": {\"Readme.md\": {}}}"));
+		Ahead.Entries.Add(TEXT("Manifest.json"), TEXT("{\"version\": \"4.0.0\", \"catalog\": {\"Readme.md\": {}}}"));
 		Ahead.Entries.Add(TEXT("Readme.md"), TEXT("text"));
 		const FMantlePlaceBundleRead Read = Ahead.Read();
 		TestEqual(TEXT("a major above 3 is refused"), Read.Outcome, EMantlePlaceBundleReadOutcome::Refused);
@@ -483,7 +483,7 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 	}
 	{
 		FInMemoryBundle Three;
-		Three.Entries.Add(TEXT("Manifest.json"), TEXT("{\"version\": \"3.4.0\", \"level\": \"Med\", \"file_entries\": {\"Manifest.json\": {}}}"));
+		Three.Entries.Add(TEXT("Manifest.json"), TEXT("{\"version\": \"3.4.0\", \"level\": \"Med\", \"catalog\": {\"Manifest.json\": {}}}"));
 		TestEqual(TEXT("any 3.x minor is read"), Three.Read().Outcome, EMantlePlaceBundleReadOutcome::Read);
 	}
 	{
@@ -515,7 +515,7 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 		FInMemoryBundle Hosted;
 		Hosted.Entries.Add(TEXT("Manifest.json"), TEXT(
 			"{\"version\": \"3.0.0\", \"level\": \"Max\","
-			" \"file_entries\": {\"Elevation/Elevation.tif\": {\"count\": 4}},"
+			" \"catalog\": {\"Elevation/Elevation.tif\": {\"count\": {\"kind\": \"pixels\", \"value\": 4}}},"
 			" \"hosts\": {\"unreal\": {\"heightmap\": \"Elevation/Elevation.png\","
 			"   \"file_entries\": {\"Elevation/Elevation.png\": {}}}}}"));
 		Hosted.Entries.Add(TEXT("Elevation/Elevation.tif"), TEXT("tif"));
@@ -534,11 +534,12 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 	{
 		FInMemoryBundle Counts;
 		Counts.Entries.Add(TEXT("Manifest.json"), TEXT(
-			"{\"version\": \"3.0.0\", \"level\": \"Min\", \"file_entries\": {"
-			" \"A.csv\": {\"count\": 12}, \"B.csv\": {\"count\": 1.5}, \"C.csv\": {\"count\": -1},"
-			" \"D.csv\": {\"count\": true}, \"E.csv\": {\"count\": \"7\"}, \"F.csv\": {}},"
-			" \"not_held\": {\"Records/Parcels.gpkg\": {\"reason\": \"pending\"}}}"));
-		for (const TCHAR* Name : { TEXT("A.csv"), TEXT("b.CSV"), TEXT("C.csv"), TEXT("D.csv"), TEXT("E.csv") })
+			"{\"version\": \"3.0.0\", \"level\": \"Min\", \"catalog\": {"
+			" \"A.csv\": {\"count\": {\"kind\": \"rows\", \"value\": 12}}, \"B.csv\": {\"count\": {\"kind\": \"rows\", \"value\": 1.5}},"
+			" \"C.csv\": {\"count\": {\"kind\": \"rows\", \"value\": -1}}, \"D.csv\": {\"count\": {\"kind\": \"rows\", \"value\": true}},"
+			" \"E.csv\": {\"count\": {\"kind\": \"rows\", \"value\": \"7\"}}, \"G.csv\": {\"count\": 5}, \"F.csv\": {}},"
+			" \"not_held\": [{\"path\": \"Records/Parcels.gpkg\", \"reason\": \"pending\"}]}"));
+		for (const TCHAR* Name : { TEXT("A.csv"), TEXT("b.CSV"), TEXT("C.csv"), TEXT("D.csv"), TEXT("E.csv"), TEXT("G.csv") })
 		{
 			Counts.Entries.Add(Name, TEXT("x"));
 		}
@@ -546,7 +547,7 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the level is the manifest's"), Read.Level, FString(TEXT("Min")));
 		const FMantlePlaceBundleFile* A = FindFile(Read, TEXT("A.csv"));
 		TestTrue(TEXT("a whole count is read"), A != nullptr && A->bHasCount && A->Count == 12);
-		for (const TCHAR* Name : { TEXT("B.csv"), TEXT("C.csv"), TEXT("D.csv"), TEXT("E.csv") })
+		for (const TCHAR* Name : { TEXT("B.csv"), TEXT("C.csv"), TEXT("D.csv"), TEXT("E.csv"), TEXT("G.csv") })
 		{
 			const FMantlePlaceBundleFile* File = FindFile(Read, Name);
 			TestTrue(FString::Printf(TEXT("%s: a count that is not a non-negative whole number is none"), Name),
