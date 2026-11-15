@@ -10,11 +10,13 @@ from pathlib import Path
 from .archive import MANIFEST_PATH, MANIFEST_PATH_3, open_bundle
 from .checks import check_frames, check_hashes, check_pointers, check_roles
 from .geopackage import check_geopackage
-from .layout3 import CATALOG, check_catalog, check_level, check_tree, major
+from .layout3 import (CATALOG, check_catalog, check_host_block, check_level, check_tree,
+                      major)
 from .names import check_names, is_layout_2
 from .report import Report
 from .schema_subset import UnsupportedSchema, errors
 from .schemas import SchemaProblem, SchemaSource, version_key
+from .zipmethods import check_zip
 
 #: Past this many, schema errors are summarised: one broken block can fan out into hundreds.
 MAX_SCHEMA_FINDINGS = 100
@@ -55,7 +57,9 @@ def validate(path: str | Path, *, schemas: SchemaSource | None = None,
             # The 3.x tree: one catalog, one level, no per-file frames and no layout pointers.
             check_tree(bundle, report, manifest.get("version"))
             check_level(manifest, report)
+            check_host_block(manifest, report)
             check_catalog(manifest, bundle, report)
+            check_zip(bundle, report)
             check_roles(manifest, bundle, report, unstated=False, member=CATALOG)
             return report
         if (declared or 0) > 3:
