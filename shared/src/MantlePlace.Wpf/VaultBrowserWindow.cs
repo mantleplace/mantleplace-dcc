@@ -98,10 +98,10 @@ public sealed class VaultBrowserWindow : Window
     /// <summary>
     /// A 3.0 order's level control, beside Import: Max, Med and Min with their sizes, on the platform's
     /// recommendation (<see cref="LevelControl"/>). Shown only for a 3.0 row, in a host that imports
-    /// from this window; a 2.x row's levels stay in the import checklist.
+    /// from this window; a 2.x row's levels stay in the import checklist. The same row the window a
+    /// received send opens shows (<see cref="LevelChoiceRow"/>).
     /// </summary>
-    private readonly ComboBox _level = new() { MinWidth = 220, Margin = new Thickness(8, 0, 0, 0) };
-    private readonly DockPanel _levelRow = new() { Margin = new Thickness(0, 0, 0, 8), Visibility = Visibility.Collapsed };
+    private readonly LevelChoiceRow _levelRow = new();
     private LevelControl? _levelControl;
 
     /// <summary>
@@ -177,7 +177,7 @@ public sealed class VaultBrowserWindow : Window
 
         _search.TextChanged += (_, _) => OnSearchChanged();
         _list.SelectionChanged += (_, _) => OnSelectionChanged();
-        _level.SelectionChanged += (_, _) => OnLevelChosen();
+        _levelRow.Chosen += OnLevelChosen;
 
         if (_import is not null)
         {
@@ -295,16 +295,6 @@ public sealed class VaultBrowserWindow : Window
         search.Children.Add(_search);
 
         // Under the buttons, so the level is chosen before Import fetches it.
-        TextBlock levelLabel = new()
-        {
-            Text = LevelControl.Heading,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        DockPanel.SetDock(levelLabel, Dock.Left);
-        _level.HorizontalAlignment = HorizontalAlignment.Left;
-        _levelRow.Children.Add(levelLabel);
-        _levelRow.Children.Add(_level);
-
         DockPanel root = new() { Margin = new Thickness(12) };
         BrandChrome.AddHeader(root, WindowLabels.VaultHeading);
         DockPanel.SetDock(_buttons, Dock.Top);
@@ -365,25 +355,12 @@ public sealed class VaultBrowserWindow : Window
         }
 
         _levelControl = _import is null ? null : LevelControl.For(bundle);
-        _level.Items.Clear();
-        if (_levelControl is null)
-        {
-            _levelRow.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        foreach (DownloadLevelOption option in _levelControl.Options)
-        {
-            _level.Items.Add(new ComboBoxItem { Content = option.Label, ToolTip = option.ToolTip, Tag = option.Level });
-        }
-
-        _level.SelectedIndex = _levelControl.SelectedIndex;
-        _levelRow.Visibility = Visibility.Visible;
+        _levelRow.Show(_levelControl);
     }
 
-    private void OnLevelChosen()
+    private void OnLevelChosen(FidelityLevel level)
     {
-        if (_levelControl is null || _level.SelectedItem is not ComboBoxItem { Tag: FidelityLevel level })
+        if (_levelControl is null)
         {
             return;
         }

@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using MantlePlace.Client;
 using MantlePlace.Core;
 using MantlePlace.Wpf;
 
@@ -69,11 +70,43 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// <summary>Whether the running import came from the vault window, which is who hears about it.</summary>
     private bool _fromVault;
 
-    /// <summary>An export's zip the connected host queued, opened at the next raise. Guarded by <see cref="_gate"/>.</summary>
-    private (string ExportId, string ZipPath)? _queuedExport;
+    /// <summary>
+    /// An export's zip the connected host queued, opened at the next raise; or the same export queued
+    /// again after the curator chose another level in its window (<c>Level</c> set). Guarded by
+    /// <see cref="_gate"/>.
+    /// </summary>
+    private sealed record QueuedExport(string ExportId, string OrderId, string ZipPath, FidelityLevel? Level = null, string? LevelNote = null);
+
+    private QueuedExport? _queuedExport;
 
     /// <summary>The export the open import was opened for, or <c>null</c> for one the curator opened.</summary>
     private string? _exportId;
+
+    /// <summary>The order the open export's import is for, which its level control is built from.</summary>
+    private string? _exportOrderId;
+
+    /// <summary>The level the open export's 3.0 bundle is at in the slot; <c>null</c> for a 2.x order.</summary>
+    private FidelityLevel? _exportLevel;
+
+    /// <summary>
+    /// An export's chosen level downloading into the slot: its import is dropped (its archive holds the
+    /// zip the download replaces) and its window stays on screen saying so, until the export reopens
+    /// on the new level. Set on Revit's thread under <see cref="_gate"/>.
+    /// </summary>
+    private sealed record LevelRefetch(
+        string ExportId,
+        string OrderId,
+        string ZipPath,
+        FidelityLevel Chosen,
+        FidelityLevel Held,
+        ActiveImport Import,
+        ImportWindowThread? Window,
+        CancellationTokenSource Stop);
+
+    private LevelRefetch? _refetch;
+
+    /// <summary>The source a received send's level control and its fresh download come from; set once, at startup.</summary>
+    private VaultExportSource? _levels;
 
     /// <summary>
     /// Raised on Revit's thread with one line for the vault window's status: why an import it asked
@@ -86,15 +119,20 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// Whether an import is open — running, or waiting on its checklist. One at a time: two would
     /// interleave in one document.
     /// </summary>
-    internal bool IsImporting => _import is not null;
+    internal bool IsImporting => _import is not null || _refetch is not null;
 
     /// <summary>Why a second import cannot open now, in the words that fit which state the first is in.</summary>
-    internal string BusyReason => _import?.Staged is null
+    internal string BusyReason => _refetch is not null
+        ? "An import window is downloading the level chosen in it — wait for it to reopen, or close it."
+        : _import?.Staged is null
         ? "An import is waiting in its window — press Import there, or close it."
         : "An import is already running — wait for it, or cancel it in its window.";
 
     /// <summary>The event this handler re-raises between slices. Set once, at startup.</summary>
     internal void Attach(ExternalEvent externalEvent) => _event = externalEvent;
+
+    /// <summary>The source of a received send's levels and its fresh downloads. Set once, at startup.</summary>
+    internal void AttachLevels(VaultExportSource levels) => _levels = levels;
 
     /// <summary>Queues a zip from the vault window. The last one queued before the event fires is the one that runs.</summary>
     internal void QueueImport(string zipPath)
@@ -114,16 +152,16 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// thread and says busy then (<see cref="OpenQueuedExport"/>), so a stale answer costs a turn, not
     /// a second window.
     /// </remarks>
-    internal bool QueueExport(string exportId, string zipPath)
+    internal bool QueueExport(string exportId, string orderId, string zipPath)
     {
         lock (_gate)
         {
-            if (_import is not null || _queuedExport is not null)
+            if (_import is not null || _queuedExport is not null || _refetch is not null)
             {
                 return false;
             }
 
-            _queuedExport = (exportId, zipPath);
+            _queuedExport = new QueuedExport(exportId, orderId, zipPath);
         }
 
         return true;
@@ -141,6 +179,16 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             {
                 _queuedExport = null;
             }
+        }
+
+        if (_refetch is { } refetch && string.Equals(refetch.ExportId, exportId, StringComparison.Ordinal))
+        {
+            // The web cancelled it while its chosen level downloaded: the download stops, the window
+            // goes, and nothing reopens. The desk has already moved the export on.
+            DropRefetch(refetch);
+            refetch.Window?.CloseNow();
+            MantlePlaceApplication.Connected?.TurnFree();
+            return;
         }
 
         if (!string.Equals(_exportId, exportId, StringComparison.Ordinal) || _import is not { Staged: null } import)
@@ -186,7 +234,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         ArgumentNullException.ThrowIfNull(application);
 
         string? zipPath;
-        (string ExportId, string ZipPath)? export;
+        QueuedExport? export;
         lock (_gate)
         {
             zipPath = _zipPath;
@@ -202,7 +250,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
 
         if (export is { } queuedExport)
         {
-            OpenQueuedExport(application, queuedExport.ExportId, queuedExport.ZipPath);
+            OpenQueuedExport(application, queuedExport);
         }
 
         // An import still on its checklist has nothing to advance: it was either opened by this very
@@ -247,7 +295,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
 
     private void OpenQueued(UIApplication application, string zipPath)
     {
-        if (_import is not null)
+        if (_import is not null || _refetch is not null)
         {
             _window?.BringForward();
             Completed?.Invoke(this, BusyReason);
@@ -270,11 +318,28 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     }
 
     /// <summary>Opens the import window for an export, on Revit's thread, and tells the connected host how it went.</summary>
-    private void OpenQueuedExport(UIApplication application, string exportId, string zipPath)
+    private void OpenQueuedExport(UIApplication application, QueuedExport queued)
     {
         if (MantlePlaceApplication.Connected is not { } connected)
         {
             return;
+        }
+
+        string exportId = queued.ExportId;
+        string zipPath = queued.ZipPath;
+
+        // Reopened after a level choice, the web already heard the window open: a refusal now is the
+        // end of an import that never ran, and the window it held is free again.
+        void Refuse(string reason, string message)
+        {
+            if (queued.Level is null)
+            {
+                connected.ImportRefused(exportId, reason, message);
+                return;
+            }
+
+            connected.ImportEnded(exportId, ImportEnding.Failed, message);
+            connected.TurnFree();
         }
 
         if (_import is not null)
@@ -285,8 +350,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
 
         if (application.ActiveUIDocument?.Document is not Document document)
         {
-            connected.ImportRefused(
-                exportId,
+            Refuse(
                 ExportReasons.NoDocument,
                 "Revit has no project open to import into. Open one, then send the bundle again.");
             return;
@@ -294,18 +358,29 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
 
         if (ActiveImport.Open(application.Application, document, zipPath, out ImportRefusal? refusal) is not { } import)
         {
-            connected.ImportRefused(exportId, refusal!.Code, refusal.Instruction + " " + refusal.Message);
+            Refuse(refusal!.Code, refusal.Instruction + " " + refusal.Message);
             return;
         }
 
-        import.Note($"Opened for export {exportId}, sent from the web vault.");
-        if (!Show(import, application.MainWindowHandle, fromVault: false))
+        // A send names no level: a 3.0 order was fetched at the recommendation, and its window opens
+        // with the control on it; reopened after a level choice, on the level now in the slot.
+        VaultBundle? listed = _levels?.Listed(queued.OrderId);
+        LevelControl? levels = queued.Level is { } held ? LevelControl.At(listed, held) : LevelControl.For(listed);
+
+        import.Note(queued.Level is { } level
+            ? $"Reopened for export {exportId} at the {DownloadLevels.Word(level)} level."
+            : $"Opened for export {exportId}, sent from the web vault.");
+        if (!Show(import, application.MainWindowHandle, fromVault: false, levels, queued.LevelNote))
         {
-            connected.ImportRefused(exportId, ExportReasons.WindowFailed, "The import window could not be opened in Revit.");
+            Refuse(ExportReasons.WindowFailed, "The import window could not be opened in Revit.");
             return;
         }
 
         _exportId = exportId;
+        _exportOrderId = queued.OrderId;
+        _exportLevel = levels?.Selected;
+
+        // After a reopen this is nothing to the desk: the export is already awaiting options.
         connected.ImportOpened(exportId);
     }
 
@@ -325,7 +400,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     /// late from an earlier import's window acts on nothing it does not own.
     /// </remarks>
     /// <returns>Whether the window opened, and the import is this handler's.</returns>
-    private bool Show(ActiveImport import, IntPtr revitWindow, bool fromVault)
+    private bool Show(ActiveImport import, IntPtr revitWindow, bool fromVault, LevelControl? levels = null, string? levelNote = null)
     {
         // No measured costs: Revit's are said by the step itself, beside its clock (SlowStepNotice),
         // as they always were.
@@ -335,7 +410,11 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
             import.UnitsDisagreement,
             import.Checklist,
             revitWindow,
-            new WindowCalls(this, import));
+            new WindowCalls(this, import))
+        {
+            Levels = levels,
+            LevelNote = levelNote,
+        };
 
         ImportWindowThread? host;
         Exception? failure;
@@ -487,6 +566,13 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         }
 
         _exportId = null;
+        _exportOrderId = null;
+        _exportLevel = null;
+        if (_refetch is { } refetch)
+        {
+            DropRefetch(refetch);
+        }
+
         lock (_gate)
         {
             _queuedExport = null;
@@ -565,6 +651,20 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
     {
         // Only this window's import, and only one that never began: the window treats a close after
         // Import as a cancel, so a dismissal that reaches a begun import is a stale one.
+        if (_refetch is { } refetch && ReferenceEquals(refetch.Import, import))
+        {
+            // Closed while its chosen level downloaded: the download stops, and the export ends as
+            // dismissed before an import started.
+            DropRefetch(refetch);
+            if (MantlePlaceApplication.Connected is { } connected)
+            {
+                connected.ImportEnded(refetch.ExportId, ImportEnding.DismissedBeforeStart, string.Empty);
+                connected.TurnFree();
+            }
+
+            return;
+        }
+
         if (!ReferenceEquals(import, _import) || import.Staged is not null)
         {
             return;
@@ -572,6 +672,104 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
 
         import.CancelBeforeStart();
         End(import);
+    }
+
+    /// <summary>
+    /// Revit's thread. The curator chose another level of a sent 3.0 order before Import. The import
+    /// is dropped, since its archive holds the zip the download replaces; the window stays, saying the
+    /// level is downloading; and the export reopens on the new level once it is in the slot, or on the
+    /// level it held when the download fails (<see cref="Refetched"/>).
+    /// </summary>
+    private void ChooseLevel(ActiveImport import, FidelityLevel level)
+    {
+        if (!ReferenceEquals(import, _import) || import.Staged is not null || _refetch is not null)
+        {
+            return;
+        }
+
+        if (_exportId is not { } exportId || _exportOrderId is not { } orderId || _exportLevel is not { } held
+            || _levels is not { } source)
+        {
+            _window?.LevelKept(_exportLevel ?? level, "The level cannot be changed in this window.");
+            return;
+        }
+
+        import.Note($"The {DownloadLevels.Word(level)} level was chosen in the window, so it is downloaded before Import.");
+        import.CancelBeforeStart();
+        import.Dispose();
+
+        LevelRefetch refetch = new(exportId, orderId, import.ZipPath, level, held, import, _window, new CancellationTokenSource());
+        lock (_gate)
+        {
+            _refetch = refetch;
+        }
+
+        _import = null;
+        _window = null;
+        _exportId = null;
+        _exportOrderId = null;
+        _exportLevel = null;
+
+        _ = Task.Run(async () =>
+        {
+            LevelFetch fetched = await source.FetchLevelAsync(orderId, level, new Progress<string>(_ => { }), refetch.Stop.Token).ConfigureAwait(false);
+            MantlePlaceApplication.OnUiThread(() => Refetched(refetch, fetched));
+        });
+    }
+
+    /// <summary>Revit's thread: the chosen level's download ended. The export reopens on whichever level the slot now holds.</summary>
+    private void Refetched(LevelRefetch refetch, LevelFetch fetched)
+    {
+        if (!ReferenceEquals(_refetch, refetch))
+        {
+            // Closed, cancelled from the web, or Revit shut down while it downloaded.
+            return;
+        }
+
+        FidelityLevel now = fetched.Ready ? refetch.Chosen : refetch.Held;
+        string note = fetched.Ready
+            ? WindowLabels.LevelDownloaded(refetch.Chosen)
+            : WindowLabels.LevelNotDownloaded(refetch.Chosen, refetch.Held, fetched.Message);
+        refetch.Window?.CloseNow();
+
+        lock (_gate)
+        {
+            _refetch = null;
+            _queuedExport = new QueuedExport(
+                refetch.ExportId,
+                refetch.OrderId,
+                fetched.Ready ? fetched.ZipPath : refetch.ZipPath,
+                now,
+                note);
+        }
+
+        ExternalEventRequest request = _event?.Raise() ?? ExternalEventRequest.Denied;
+        if (request is ExternalEventRequest.Accepted or ExternalEventRequest.Pending)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            _queuedExport = null;
+        }
+
+        if (MantlePlaceApplication.Connected is { } connected)
+        {
+            connected.ImportEnded(refetch.ExportId, ImportEnding.Failed, $"Revit did not accept the request to reopen the import window ({request}).");
+            connected.TurnFree();
+        }
+    }
+
+    /// <summary>Stops a level download and forgets it; nothing reopens.</summary>
+    private void DropRefetch(LevelRefetch refetch)
+    {
+        lock (_gate)
+        {
+            _refetch = null;
+        }
+
+        refetch.Stop.Cancel();
     }
 
     /// <summary>
@@ -635,6 +833,8 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         _import = null;
         _window = null;
         _exportId = null;
+        _exportOrderId = null;
+        _exportLevel = null;
 
         if (MantlePlaceApplication.Connected is { } connected)
         {
@@ -676,5 +876,7 @@ internal sealed class BundleImportEventHandler : IExternalEventHandler
         public void Note(string line) => handler.OutsideSlice(() => import.Note(line));
 
         public void Fault(Exception fault) => handler.OutsideSlice(() => MantlePlaceApplication.SayFault(fault));
+
+        public void ChooseLevel(FidelityLevel level) => handler.OutsideSlice(() => handler.ChooseLevel(import, level));
     }
 }

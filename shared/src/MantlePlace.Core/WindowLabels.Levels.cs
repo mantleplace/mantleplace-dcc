@@ -124,7 +124,7 @@ public static partial class WindowLabels
     }
 
     /// <summary>
-    /// The label beside a 3.0 order's level control, in the vault window of every host: the glossary's
+    /// The label beside a 3.0 order's level control, in every host's vault window and in the window a received send opens: the glossary's
     /// term, the same as the checklist column's.
     /// </summary>
     public const string DownloadLevelHeading = LevelHeading;
@@ -152,4 +152,16 @@ public static partial class WindowLabels
             DownloadLevels.Count(size.Features),
             DownloadLevels.Count(size.Triangles),
             DownloadLevels.Count(size.Pixels));
+
+    /// <summary>What the window a received send opens says while the chosen level downloads into the slot.</summary>
+    public static string LevelDownloading(FidelityLevel level)
+        => $"Downloading the {DownloadLevels.Word(level)} level before Import…";
+
+    /// <summary>What it says once the chosen level is in the slot.</summary>
+    public static string LevelDownloaded(FidelityLevel level)
+        => $"The {DownloadLevels.Word(level)} level is downloaded and checked. Import reads it.";
+
+    /// <summary>What it says when the chosen level could not be downloaded: the slot still holds the level it had.</summary>
+    public static string LevelNotDownloaded(FidelityLevel chosen, FidelityLevel held, string why)
+        => $"The {DownloadLevels.Word(chosen)} level could not be downloaded ({why.Trim().TrimEnd('.')}). Import reads the {DownloadLevels.Word(held)} level already downloaded.";
 }

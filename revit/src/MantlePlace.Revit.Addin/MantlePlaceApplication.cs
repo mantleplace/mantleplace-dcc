@@ -704,7 +704,11 @@ public sealed class MantlePlaceApplication : IExternalApplication
         // handler's, through the same ExternalEvent the vault window raises.
         ConnectedHostLog connectedLog = new(ConnectedHostLog.DefaultPath);
         string connectionId = ConnectionIdSource.ThisLaunch.Id;
-        ExportBundleFetcher fetcher = new(new VaultExportSource(_vault, _cache), new VaultPrepareSteps(_vault, _cache));
+        // The fetch's own source: the window a send opens builds its level control from the row the fetch
+        // listed, and a different level chosen there is downloaded through it.
+        VaultExportSource exportSource = new(_vault, _cache);
+        _importHandler.AttachLevels(exportSource);
+        ExportBundleFetcher fetcher = new(exportSource, new VaultPrepareSteps(_vault, _cache));
         _connected = new ConnectedHostService(
             connectionId,
             () => RealtimeClient.For(endpoints, connectionId, connectedLog.Append),

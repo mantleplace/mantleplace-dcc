@@ -13,14 +13,17 @@ public readonly record struct DownloadLevelOption(FidelityLevel Level, string La
 /// </summary>
 /// <remarks>
 /// <para>
-/// The same control, words and place in every .NET host: the shared vault window shows it beside
-/// Import, and both hosts open that window, so the choice is made before the bundle is fetched. A
+/// The same control and words in every .NET host (the shared <c>LevelChoiceRow</c>): the shared vault
+/// window shows it beside Import, so the choice is made before the bundle is fetched, and the window
+/// a received send opens shows it too, on the level the send was fetched at (<see cref="LevelSwitch"/>). A
 /// 2.x order has no control (<see cref="For"/> answers <c>null</c>): its levels stay per category,
 /// in Revit's checklist column.
 /// </para>
 /// <para>
 /// Every time the control is built for a bundle it starts on the recommendation, including when an
-/// export from the web vault opens the window on that bundle: an export names no level.
+/// export from the web vault opens the window on that bundle: an export names no level, so it is
+/// fetched at the recommendation. A window reopened after the curator chose another level is built
+/// <see cref="At"/> that level.
 /// </para>
 /// </remarks>
 public sealed class LevelControl
@@ -61,6 +64,17 @@ public sealed class LevelControl
     /// <summary>The control for <paramref name="bundle"/>, on the recommendation; <c>null</c> for a 2.x order.</summary>
     public static LevelControl? For(VaultBundle? bundle)
         => bundle?.Levels is { } offer ? new LevelControl(bundle, offer) : null;
+
+    /// <summary>
+    /// The control for <paramref name="bundle"/>, on <paramref name="level"/>: the level a window reopened
+    /// after a fresh download holds. <c>null</c> for a 2.x order; on the recommendation for a level not offered.
+    /// </summary>
+    public static LevelControl? At(VaultBundle? bundle, FidelityLevel level)
+    {
+        LevelControl? control = For(bundle);
+        _ = control?.Choose(level);
+        return control;
+    }
 
     /// <summary>The curator chooses <paramref name="level"/>. <c>false</c>, and nothing changes, for a level not offered.</summary>
     public bool Choose(FidelityLevel level)

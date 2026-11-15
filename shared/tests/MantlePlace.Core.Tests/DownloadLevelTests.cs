@@ -83,6 +83,33 @@ internal static class DownloadLevelTests
             run.Equal(DownloadLevels.SlotLevel(Two()), HostViews.EveryEntryLevel, "a 2.x order's slot is the one it always was");
         });
 
+        run.Case("a received send's window opens on the recommendation; another level downloads into the slot before Import", () =>
+        {
+            VaultBundle large = ListedExample("mpb3LargeSite");
+            LevelSwitch sent = new(LevelControl.For(large)!);
+
+            run.Equal(sent.Control.Selected, FidelityLevel.Med, "the window a send opens is on the recommendation");
+            run.Equal(sent.Held, FidelityLevel.Med, "which is the level the send was fetched at");
+            run.True(sent.CanImport, "so Import may run at once");
+            run.True(sent.Choose(FidelityLevel.Med) is null, "choosing the level the slot holds fetches nothing");
+
+            run.True(sent.Choose(FidelityLevel.Min) == FidelityLevel.Min, "another level is downloaded");
+            run.False(sent.CanImport, "and Import waits for it");
+            run.True(sent.Choose(FidelityLevel.Max) is null, "one download at a time");
+            sent.Fetched(ready: true);
+            run.Equal(sent.Held, FidelityLevel.Min, "the slot now holds Min");
+            run.True(sent.CanImport, "and Import reads it");
+
+            run.True(sent.Choose(FidelityLevel.Max) == FidelityLevel.Max, "another choice");
+            sent.Fetched(ready: false);
+            run.Equal(sent.Control.Selected, FidelityLevel.Min, "a failed download puts the control back on the level the slot holds");
+            run.True(sent.CanImport, "and Import reads that");
+
+            run.Equal(LevelControl.At(large, FidelityLevel.Min)!.Selected, FidelityLevel.Min, "a window reopened on a fresh download is on its level");
+            run.Equal(LevelControl.At(large, FidelityLevel.Raw)!.Selected, FidelityLevel.Med, "a level not offered leaves it on the recommendation");
+            run.True(LevelControl.At(Two(), FidelityLevel.Min) is null, "a 2.x order shows no control");
+        });
+
         run.Case("the 3.0 request names this host's files and one level; the 2.x request is unchanged", () =>
         {
             JsonNode three = JsonNode.Parse(DownloadLevels.BuildRequestBody(FidelityLevel.Min, ["Elevation/Contours.dxf", "Site/Site.ifc"]))!;
