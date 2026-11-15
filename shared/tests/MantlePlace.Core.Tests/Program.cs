@@ -70,6 +70,7 @@ exitCode |= ImportFailurePolicyTests.Run();
 exitCode |= SlowStepNoticeTests.Run();
 exitCode |= StagedImportTests.Run();
 exitCode |= ImportWindowStateTests.Run();
+exitCode |= DownloadLevelTests.Run();
 exitCode |= ImportChunkingTests.Run();
 exitCode |= ReadinessReasonTests.Run();
 exitCode |= LocalBundleArchiveTests.Run();

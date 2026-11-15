@@ -122,4 +122,46 @@ public static partial class WindowLabels
             ? string.Format(CultureInfo.InvariantCulture, "{0} {1}", low, high == 1 ? unit.TrimEnd('s') : unit)
             : string.Format(CultureInfo.InvariantCulture, "{0} to {1} {2}", low, high, unit);
     }
+
+    /// <summary>
+    /// The label beside a 3.0 order's level control, in every host's vault window and in the window a received send opens: the glossary's
+    /// term, the same as the checklist column's.
+    /// </summary>
+    public const string DownloadLevelHeading = LevelHeading;
+
+    /// <summary>The words that mark the level the platform recommends for this host and site.</summary>
+    public const string RecommendedLevel = "recommended";
+
+    /// <summary>
+    /// One choice in a 3.0 order's level control: the level as the bundle spells it, the size of its
+    /// download, and the recommendation when it is the one. <c>Med — 1.4 GB (recommended)</c>.
+    /// </summary>
+    public static string LevelChoice(FidelityLevel level, long sizeBytes, bool recommended)
+    {
+        string choice = $"{DownloadLevels.Word(level)} — {VaultRows.SizeText(sizeBytes)}";
+        return recommended ? $"{choice} ({RecommendedLevel})" : choice;
+    }
+
+    /// <summary>The counts behind one level's size, for its tooltip.</summary>
+    public static string LevelCounts(LevelSize size)
+        => string.Format(
+            CultureInfo.InvariantCulture,
+            "{0}: {1} rows, {2} features, {3} triangles, {4} pixels",
+            DownloadLevels.Word(size.Level),
+            DownloadLevels.Count(size.Rows),
+            DownloadLevels.Count(size.Features),
+            DownloadLevels.Count(size.Triangles),
+            DownloadLevels.Count(size.Pixels));
+
+    /// <summary>What the window a received send opens says while the chosen level downloads into the slot.</summary>
+    public static string LevelDownloading(FidelityLevel level)
+        => $"Downloading the {DownloadLevels.Word(level)} level before Import…";
+
+    /// <summary>What it says once the chosen level is in the slot.</summary>
+    public static string LevelDownloaded(FidelityLevel level)
+        => $"The {DownloadLevels.Word(level)} level is downloaded and checked. Import reads it.";
+
+    /// <summary>What it says when the chosen level could not be downloaded: the slot still holds the level it had.</summary>
+    public static string LevelNotDownloaded(FidelityLevel chosen, FidelityLevel held, string why)
+        => $"The {DownloadLevels.Word(chosen)} level could not be downloaded ({why.Trim().TrimEnd('.')}). Import reads the {DownloadLevels.Word(held)} level already downloaded.";
 }

@@ -76,6 +76,11 @@ internal sealed partial class ImportWindow : Window
     };
 
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, MinHeight = 20 };
+
+    /// <summary>A received send's 3.0 order's level control, and the line under it; collapsed otherwise.</summary>
+    private readonly LevelChoiceRow _levelRow = new();
+    private readonly TextBlock _levelNote = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Visibility = Visibility.Collapsed };
+    private readonly LevelSwitch? _levels;
     private readonly TextBox _report = new()
     {
         IsReadOnly = true,
@@ -120,6 +125,10 @@ internal sealed partial class ImportWindow : Window
 
         _checklist = request.Checklist;
         _host = request.Host;
+        _levels = request.Levels is { } levels ? new LevelSwitch(levels) : null;
+        _levelRow.Show(request.Levels);
+        _levelRow.Chosen += OnLevelChosen;
+        SayLevel(request.LevelNote);
         _hostWindow = request.HostWindow;
         _state = new ImportWindowState(_checklist is not null, WindowLabels.HostName(HostIdentity.Id), request.MeasuredCosts);
 
@@ -341,7 +350,7 @@ internal sealed partial class ImportWindow : Window
     private void PaintButtons()
     {
         _import.Visibility = _state.ImportVisible ? Visibility.Visible : Visibility.Collapsed;
-        _import.IsEnabled = _state.ImportEnabled(_checklist?.CanImport ?? false);
+        _import.IsEnabled = _state.ImportEnabled(_checklist?.CanImport ?? false) && (_levels?.CanImport ?? true);
         _cancel.IsEnabled = _state.CancelEnabled;
         _close.Visibility = _state.CloseVisible ? Visibility.Visible : Visibility.Collapsed;
         _close.IsEnabled = _state.CloseEnabled;
@@ -391,6 +400,10 @@ internal sealed partial class ImportWindow : Window
             top.Children.Add(new TextBlock { Text = unitsDisagreement, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
         }
 
+        // Above the checklist, which is read from the files at this level: a different level is
+        // downloaded, and the window reopens on it, before anything is chosen below.
+        top.Children.Add(_levelRow);
+        top.Children.Add(_levelNote);
         top.Children.Add(_body);
         top.Children.Add(_progress);
         top.Children.Add(_status);
@@ -548,9 +561,54 @@ internal sealed partial class ImportWindow : Window
             return;
         }
 
+        _levelRow.IsEnabled = false;
         PaintButtons();
         RefreshChecklist();
         _host.Begin(_checklist.Choice);
+    }
+
+    /// <summary>
+    /// Another level, before Import: Import and the control go dark while the host downloads it, and
+    /// the window reopens on the new level (<see cref="LevelSwitch"/>).
+    /// </summary>
+    private void OnLevelChosen(FidelityLevel level)
+    {
+        if (_levels?.Choose(level) is not { } fetch)
+        {
+            if (_levels is not null)
+            {
+                _levelRow.Select(_levels.Control);
+            }
+
+            return;
+        }
+
+        _levelRow.IsEnabled = false;
+        _import.IsEnabled = false;
+        SayLevel(WindowLabels.LevelDownloading(fetch));
+        _host.ChooseLevel(fetch);
+    }
+
+    /// <summary>The host kept the level it holds: the control goes back to it, with why.</summary>
+    internal void LevelKept(FidelityLevel held, string note)
+    {
+        if (_levels is null)
+        {
+            return;
+        }
+
+        _levels.Fetched(ready: false);
+        _ = _levels.Control.Choose(held);
+        _levelRow.Select(_levels.Control);
+        _levelRow.IsEnabled = true;
+        SayLevel(note);
+        PaintButtons();
+    }
+
+    private void SayLevel(string? note)
+    {
+        _levelNote.Text = note ?? string.Empty;
+        _levelNote.Visibility = string.IsNullOrEmpty(note) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void Cancel()

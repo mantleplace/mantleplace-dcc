@@ -61,15 +61,25 @@ public sealed class VaultClient
     private readonly MantlePlaceEndpoints _endpoints;
     private readonly AuthSession _session;
     private readonly HttpMessageHandler? _handler;
+    private readonly IReadOnlyList<string> _threeFiles;
 
     /// <param name="endpoints">Where the platform is.</param>
     /// <param name="session">The sign-in.</param>
     /// <param name="handler">A message handler for the Platform API calls, for tests; the shared one when <c>null</c>.</param>
-    public VaultClient(MantlePlaceEndpoints endpoints, AuthSession session, HttpMessageHandler? handler = null)
+    /// <param name="threeFiles">
+    /// The promised files of a 3.0 bundle this host's import reads, which its shell declares beside its
+    /// import steps; a 3.0 download names them (<see cref="DownloadLevels.BuildRequestBody"/>).
+    /// </param>
+    public VaultClient(
+        MantlePlaceEndpoints endpoints,
+        AuthSession session,
+        HttpMessageHandler? handler = null,
+        IReadOnlyList<string>? threeFiles = null)
     {
         _endpoints = endpoints;
         _session = session;
         _handler = handler;
+        _threeFiles = threeFiles ?? [];
     }
 
     /// <summary>Lists the curator's bundles.</summary>
@@ -156,16 +166,27 @@ public sealed class VaultClient
     /// would leave out a file the import reads (<see cref="HostViews"/>).
     /// </summary>
     /// <param name="delivered">What the order delivered, from the no-op; <c>null</c> when unknown.</param>
+    /// <param name="level">
+    /// For a 3.0 order, the level the curator chose; <c>null</c> is the platform's recommendation, which
+    /// is what an export from the web vault fetches. Ignored for a 2.x order.
+    /// </param>
     public async Task<CompleteDownload> DownloadCompleteAsync(
         VaultBundle bundle,
         IReadOnlyCollection<string>? delivered,
         BundleCache cache,
         IProgress<string> say,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        FidelityLevel? level = null)
     {
         ArgumentNullException.ThrowIfNull(bundle);
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(say);
+
+        if (bundle.Levels is { } offer)
+        {
+            return await DownloadLevelAsync(bundle, level ?? offer.Recommended, cache, say, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         (int status, string body, string? error) = await SendAsync(
             (api, ct) => api.GetVaultBundleDownloadAsync(bundle.OrderId, new Body4(), ct),
@@ -244,14 +265,74 @@ public sealed class VaultClient
         }
     }
 
+    /// <summary>
+    /// A 3.0 order's download: this host's promised files at one level, into the host's slot at that
+    /// level, replacing whatever level the slot held.
+    /// </summary>
+    /// <remarks>
+    /// The listing's size and digest describe the Max download of every file, so they describe no
+    /// level download of a host's files: the download is checked against the size the link states and
+    /// recorded as its own (<c>holdsView</c>), and the files inside it against the manifest's digests
+    /// at import, as a 2.x view is.
+    /// </remarks>
+    private async Task<CompleteDownload> DownloadLevelAsync(
+        VaultBundle bundle,
+        FidelityLevel level,
+        BundleCache cache,
+        IProgress<string> say,
+        CancellationToken cancellationToken)
+    {
+        (int status, string body, string? error) = await SendAsync(
+            (api, ct) => api.GetVaultBundleDownloadAsync(bundle.OrderId, new Body4(), ct),
+            DownloadLevels.BuildRequestBody(level, _threeFiles),
+            cancellationToken).ConfigureAwait(false);
+
+        HostViewLink link = default;
+        error ??= Refusal(status, body) ?? HostViews.TryParse(body, out link);
+        if (error is not null)
+        {
+            return new CompleteDownload(false, false, error, bundle, ViewFetch.View);
+        }
+
+        if (IsExpired(link.ExpiresAt))
+        {
+            return new CompleteDownload(false, false, ExpiredLink, bundle, ViewFetch.View);
+        }
+
+        string word = DownloadLevels.Word(level);
+        say.Report(link.SizeBytes is { } bytes
+            ? $"Downloading {word} ({VaultRows.SizeText(bytes)})…"
+            : $"Downloading {word}…");
+
+        string slot = DownloadLevels.SlotLevel(bundle, level);
+        string? levelError = await cache.PromoteAsync(
+            bundle.OrderId,
+            StreamFrom(link.Url),
+            link.SizeBytes,
+            expectedSha256: null,
+            bundle.ManifestVersion,
+            DateTimeOffset.UtcNow,
+            cancellationToken,
+            holdsView: true,
+            expectedManifestSha256: link.ManifestSha256,
+            level: slot).ConfigureAwait(false);
+
+        return Settled(cache, bundle, levelError, ViewFetch.View, slot);
+    }
+
     private const string ExpiredLink = "The download link expired before it could be used. Try again.";
 
     private static bool IsExpired(string expiresAt)
         => new PresignedDownload(string.Empty, expiresAt).IsExpired(DateTimeOffset.UtcNow);
 
-    private static CompleteDownload Settled(BundleCache cache, VaultBundle bundle, string? error, ViewFetch fetch)
+    private static CompleteDownload Settled(
+        BundleCache cache,
+        VaultBundle bundle,
+        string? error,
+        ViewFetch fetch,
+        string level = BundleCache.HighestLevel)
     {
-        CacheEntry entry = cache.InspectQuick(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion);
+        CacheEntry entry = cache.InspectQuick(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion, level);
         return new CompleteDownload(
             error is null && entry.State == CacheState.CachedValid,
             false,

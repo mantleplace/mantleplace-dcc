@@ -28,7 +28,7 @@ internal sealed class RevitExportImportHost : IExportImportHost
 
     public bool RequestOpen(HostExport export, string zipPath)
     {
-        if (!_handler.QueueExport(export.Id, zipPath))
+        if (!_handler.QueueExport(export.Id, export.OrderId, zipPath))
         {
             return false;
         }
