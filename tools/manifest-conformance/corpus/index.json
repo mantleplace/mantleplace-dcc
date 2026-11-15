@@ -1141,6 +1141,91 @@
       }
     },
     {
+      "id": "manifest.unrealPublicRecordsPublishedFrame",
+      "group": "manifest",
+      "file": "manifest/public-records-published-frame.json",
+      "expect": "accept",
+      "manifestVersion": "1.14.0",
+      "appliesTo": "unreal",
+      "reason": "The Unreal host places a public-record layer by the frame the published manifest states for the file, and shows the credit the file entry states, with no host block and none of the provisional keys of `manifest.unrealPublicRecordsFolder`. From 1.14.0 a file’s full frame is in the neutral `file_entries[<path>].frame` (`fileEntryFrame`), so the reader finds the parcels linework in the metric UTM grid the order is placed in (`coordinate_mode` `absolute`, one metre to the unit) and states it; it states the zoning linework’s foot grid as it is, for the placement rule to refuse and never convert (HPS-53); and a wetlands entry that states `{ \"placed\": false }` has no frame, which reads as unstated, never as a match. The family blocks carry no `credit`, `disclaimer` or `notice`: the credit the host shows is the sources and licence the file entry states, and the bundle’s `attribution.notice` is shown once. The fixture is the 1.12.0 records-folder case at 1.14.0 with `file_entries` added for four of its files, and every member validates against the published 1.14.0 schema. A reader that places a file because it sits in `Records/` fails here, and so does one that reads only `file_frame`. Unreal-scoped because the layers it lists are this host’s reading of them.",
+      "expectations": {
+        "jobId": "public-records-published",
+        "orderId": "ord-public-records-published-1",
+        "publicRecordFamilies": [
+          "parcels",
+          "zoning",
+          "flood",
+          "wetlands",
+          "soils",
+          "protected",
+          "hydrography",
+          "habitat",
+          "contamination",
+          "historic",
+          "easements"
+        ],
+        "publicRecordPaths": [
+          "Records/Parcels/Parcels.gpkg",
+          "Records/Parcels/Parcels.dxf",
+          "Records/Zoning/Zoning.gpkg",
+          "Records/Zoning/Zoning.dxf",
+          "Records/Flood/FloodZones.gpkg",
+          "Records/Wetlands/Wetlands.gpkg",
+          "Records/Wetlands/Wetlands.dxf",
+          "Records/Soils/Soils.gpkg",
+          "Records/Soils/Soils.dxf",
+          "Records/Protected/Protected.gpkg",
+          "Records/Protected/Protected.dxf",
+          "Records/Hydrography/Hydrography.gpkg",
+          "Records/Hydrography/Hydrography.dxf",
+          "Records/Habitat/Habitat.gpkg",
+          "Records/Habitat/Habitat.dxf",
+          "Records/Contamination/Contamination.gpkg",
+          "Records/Contamination/Contamination.dxf",
+          "Records/Historic/Historic.gpkg",
+          "Records/Historic/Historic.dxf",
+          "Records/Easements/Easements.gpkg",
+          "Records/Easements/Easements.dxf"
+        ],
+        "publicRecordVerifiedPaths": [
+          "Records/Parcels/Parcels.gpkg",
+          "Records/Parcels/Parcels.dxf",
+          "Records/Zoning/Zoning.gpkg",
+          "Records/Zoning/Zoning.dxf",
+          "Records/Flood/FloodZones.gpkg",
+          "Records/Wetlands/Wetlands.gpkg",
+          "Records/Wetlands/Wetlands.dxf",
+          "Records/Soils/Soils.gpkg",
+          "Records/Soils/Soils.dxf",
+          "Records/Protected/Protected.gpkg",
+          "Records/Protected/Protected.dxf",
+          "Records/Hydrography/Hydrography.gpkg",
+          "Records/Hydrography/Hydrography.dxf",
+          "Records/Habitat/Habitat.gpkg",
+          "Records/Habitat/Habitat.dxf",
+          "Records/Contamination/Contamination.gpkg",
+          "Records/Contamination/Contamination.dxf",
+          "Records/Historic/Historic.gpkg",
+          "Records/Historic/Historic.dxf",
+          "Records/Easements/Easements.gpkg",
+          "Records/Easements/Easements.dxf"
+        ],
+        "publicRecordPointers": [
+          "parcels:Example County:no_open_source",
+          "parcels:Sample County:terms_restrict_commercial_use",
+          "zoning:Example City:no_open_source"
+        ],
+        "publicRecordSkippedSources": [
+          "zoning:Example City:source_down"
+        ],
+        "publicRecordFrames": [
+          "parcels.gpkg=EPSG:32613 m",
+          "parcels.dxf=EPSG:32613 m",
+          "zoning.dxf=EPSG:2258 0.3048006096 m per unit"
+        ]
+      }
+    },
+    {
       "id": "manifest.revitFidelityLevels",
       "group": "manifest",
       "file": "manifest/revit-fidelity-levels.json",

@@ -7,6 +7,7 @@
 #include "MantlePlaceLandscapeWeightsLogic.h"
 #include "MantlePlaceManifestJson.h"
 #include "MantlePlaceOdblLogic.h"
+#include "MantlePlacePublicRecordsLogic.h"
 
 #include "Dom/JsonObject.h"
 #include "Misc/Paths.h"
@@ -340,6 +341,107 @@ void ReadTrees(const FThreeContext& C, double SiteHeightM)
 	F.bPresent = true;
 }
 
+/**
+ * The public-record layers (format.md §6): each `Records/<Name>.gpkg` and `.dxf` the catalog lists is a
+ * file of the family `<name>`, found by its catalog name and never by a folder walk. Every one is in the
+ * georeferenced frame the manifest states once, and that statement is written onto each file verbatim for
+ * FMantlePlacePublicRecordsLogic::CanPlaceFrame to judge (HPS-53). A file's credit is the sources its entry
+ * names; 3.0 publishes no per-layer disclaimer or notice, so those stay empty and the standing notice is
+ * the one every import shows. A promised record file the download does not hold is listed with the reason
+ * the manifest gives.
+ */
+void ReadRecords(const FThreeContext& C, const TSharedPtr<FJsonObject>& Root)
+{
+	const FString Folder = FMantlePlaceManifestThreeLogic::RecordsFolder();
+	FMantlePlacePublicRecordsBlock& Block = C.M.PublicRecords;
+
+	FMantlePlaceRecordFrame Frame;
+	const TSharedPtr<FJsonObject>* Frames = GetObject(Root, TEXT("frames"));
+	const TSharedPtr<FJsonObject>* Georeferenced = Frames != nullptr ? GetObject(*Frames, TEXT("georeferenced")) : nullptr;
+	if (Georeferenced != nullptr)
+	{
+		const TSharedPtr<FJsonObject>* Horizontal = GetObject(*Georeferenced, TEXT("horizontal_crs"));
+		const TSharedPtr<FJsonObject>* Unit = GetObject(*Georeferenced, TEXT("horizontal_unit"));
+		Frame = FMantlePlacePublicRecordsLogic::StatedFrame(TEXT("projected"),
+			Horizontal != nullptr ? GetString(*Horizontal, TEXT("code")) : FString(), Unit != nullptr && (*Unit)->HasTypedField<EJson::Number>(TEXT("to_metres")),
+			Unit != nullptr ? GetNumber(*Unit, TEXT("to_metres")) : 0.0, Unit != nullptr ? GetString(*Unit, TEXT("name")) : FString());
+	}
+
+	auto IsRecordFile = [&Folder](const FString& Path, FString& OutKind)
+	{
+		OutKind = Path.EndsWith(TEXT(".gpkg"), ESearchCase::IgnoreCase) ? TEXT("gpkg")
+			: (Path.EndsWith(TEXT(".dxf"), ESearchCase::IgnoreCase) ? TEXT("dxf") : TEXT(""));
+		return Path.StartsWith(Folder, ESearchCase::IgnoreCase) && !OutKind.IsEmpty();
+	};
+	auto FamilyOf = [](const FString& Path) { return FPaths::GetBaseFilename(Path).ToLower(); };
+
+	for (const FMantlePlaceBundleFile& File : C.Read.Files)
+	{
+		FString Kind;
+		const TSharedPtr<FJsonObject> Entry = C.FindEntry(File.Path);
+		if (!IsRecordFile(File.Path, Kind) || !Entry.IsValid())
+		{
+			continue;
+		}
+		const FString Family = FamilyOf(File.Path);
+		FMantlePlaceRecordLayer* Layer = Block.Layers.FindByPredicate(
+			[&Family](const FMantlePlaceRecordLayer& Have) { return Have.Family == Family; });
+		if (Layer == nullptr)
+		{
+			Layer = &Block.Layers.AddDefaulted_GetRef();
+			Layer->Family = Family;
+		}
+		FMantlePlaceRecordFile Record;
+		Record.Kind = Kind;
+		Record.Path = File.EntryName;
+		Record.Sha256 = GetString(Entry, TEXT("sha256"));
+		Record.License = GetString(Entry, TEXT("license"));
+		Record.Frame = Frame;
+		TArray<FString> Named;
+		const TArray<TSharedPtr<FJsonValue>>* Sources = nullptr;
+		if (Entry->TryGetArrayField(TEXT("sources"), Sources) && Sources != nullptr)
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Sources)
+			{
+				const TSharedPtr<FJsonObject> Source = Value.IsValid() ? Value->AsObject() : nullptr;
+				const FString Name = Source.IsValid() ? GetString(Source, TEXT("name")) : FString();
+				if (!Name.IsEmpty())
+				{
+					const FString Link = GetString(Source, TEXT("link"));
+					Named.Add(Link.IsEmpty() ? Name : FString::Printf(TEXT("%s (%s)"), *Name, *Link));
+				}
+			}
+		}
+		Record.Source = FString::Join(Named, TEXT("; "));
+		Layer->Files.Add(MoveTemp(Record));
+	}
+	for (FMantlePlaceRecordLayer& Layer : Block.Layers)
+	{
+		// The GeoPackage first, then the linework, as a 2.x layer lists them.
+		Layer.Files.StableSort([](const FMantlePlaceRecordFile& A, const FMantlePlaceRecordFile& B)
+		{
+			return A.IsDxf() < B.IsDxf();
+		});
+	}
+
+	for (const FMantlePlaceBundleSkipped& Skipped : C.Read.Skipped)
+	{
+		FString Kind;
+		if (IsRecordFile(Skipped.Path, Kind))
+		{
+			Block.NotHeld.Add(FMantlePlaceRecordNotHeld{ FamilyOf(Skipped.Path), Skipped.Path,
+				Skipped.Reason.IsEmpty() ? FString(TEXT("the download holds no such file.")) : Skipped.Reason });
+		}
+	}
+
+	FMantlePlacePublicRecordsLogic::OrderLayers(Block.Layers);
+	Block.bPresent = Block.Layers.Num() > 0 || Block.NotHeld.Num() > 0;
+	if (!Block.bPresent)
+	{
+		C.Skip(RecordsId, TEXT("This download holds no public-record layer."));
+	}
+}
+
 void ReadLicensing(const FThreeContext& C)
 {
 	for (const FMantlePlaceBundleFile& File : C.Read.Files)
@@ -538,11 +640,11 @@ bool FMantlePlaceManifestThreeLogic::ToVaultManifest(const FMantlePlaceBundleRea
 	{
 		ReadMaterials(C);
 	}
+	ReadRecords(C, Root);
 
 	// The steps with no 3.0 input this plugin places, or wired by another release, each with its reason.
 	C.Skip(CoverageId, NoHostReadyFileReason(TEXT("the slope, aspect, hillshade, land-cover, canopy-height and NDVI "
 		"layers")));
-	C.Skip(RecordsId, TEXT("Public-record layers are not imported from an MPB 3.0 bundle in this release."));
 	M.FormatNotes.Add(TEXT("Streaming into Cesium is not offered for an MPB 3.0 bundle in this release: its terrain "
 		"tiles are an Extra beside the bundle."));
 
