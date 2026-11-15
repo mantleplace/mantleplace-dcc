@@ -617,6 +617,14 @@ bool FMantlePlaceManifestThreeLogic::ToVaultManifest(const FMantlePlaceBundleRea
 	G.OriginNorthingM = (*Projected)->GetNumberField(TEXT("y"));
 	G.GroundOrthometricHM = (*Origin)->GetNumberField(TEXT("height_m"));
 	G.PlanetShape = TEXT("Flat"); // the local site frame is flat by definition (format.md §4)
+	// The same point in longitude and latitude, as the manifest states it: the streamed terrain's Cesium
+	// georeference is set from it, verbatim. Absent, the stream leaves the level's georeference alone.
+	if ((*Origin)->HasTypedField<EJson::Number>(TEXT("longitude")) && (*Origin)->HasTypedField<EJson::Number>(TEXT("latitude")))
+	{
+		G.bHasGeographicOrigin = true;
+		G.OriginLongitudeDeg = (*Origin)->GetNumberField(TEXT("longitude"));
+		G.OriginLatitudeDeg = (*Origin)->GetNumberField(TEXT("latitude"));
+	}
 	if (const TSharedPtr<FJsonObject>* Datum = GetObject(*Local, TEXT("vertical_crs")))
 	{
 		M.SiteVerticalDatum = GetString(*Datum, TEXT("code"));
@@ -645,8 +653,6 @@ bool FMantlePlaceManifestThreeLogic::ToVaultManifest(const FMantlePlaceBundleRea
 	// The steps with no 3.0 input this plugin places, or wired by another release, each with its reason.
 	C.Skip(CoverageId, NoHostReadyFileReason(TEXT("the slope, aspect, hillshade, land-cover, canopy-height and NDVI "
 		"layers")));
-	M.FormatNotes.Add(TEXT("Streaming into Cesium is not offered for an MPB 3.0 bundle in this release: its terrain "
-		"tiles are an Extra beside the bundle."));
 
 	M.bValid = true;
 	return true;

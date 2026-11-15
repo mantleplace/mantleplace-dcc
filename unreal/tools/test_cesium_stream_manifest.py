@@ -99,5 +99,20 @@ class ManifestMemberCase(unittest.TestCase):
             self.helper._read_manifest(path)
 
 
+class StreamOriginCase(unittest.TestCase):
+    """An MPB 3.x bundle reports its origin from the C++ stream; a 2.x one reports none."""
+
+    def setUp(self):
+        self.helper = load_helper()
+
+    def test_a_3x_stream_reports_its_origin_as_stated(self):
+        info = types.SimpleNamespace(has_origin=True, origin_longitude_deg=-97.7, origin_latitude_deg=30.3)
+        self.assertEqual(self.helper._info_origin(info), (-97.7, 30.3))
+
+    def test_a_2x_stream_reports_none_so_the_manifest_is_read(self):
+        info = types.SimpleNamespace(has_origin=False, origin_longitude_deg=0.0, origin_latitude_deg=0.0)
+        self.assertIsNone(self.helper._info_origin(info))
+
+
 if __name__ == "__main__":
     unittest.main()

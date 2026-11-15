@@ -294,6 +294,38 @@ void FMantlePlaceVaultLogic::ReadLevelOffer(const TSharedPtr<FJsonObject>& Row, 
 	Item.RecommendedLevel = IsOfferedLevel(Recommended) ? Recommended : FString();
 	Item.Levels = MoveTemp(Sizes);
 	Item.bHasLevels = true;
+
+	// The Extras the row lists. An entry with no id is skipped and the rest are kept: an Extra the plugin does
+	// not use must never cost it the levels above, and one it cannot read is as good as unlisted.
+	Item.Extras.Reset();
+	const TArray<TSharedPtr<FJsonValue>>* ExtrasArr = nullptr;
+	if ((*Offer)->TryGetArrayField(TEXT("extras"), ExtrasArr) && ExtrasArr != nullptr)
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *ExtrasArr)
+		{
+			const TSharedPtr<FJsonObject>* Obj = nullptr;
+			FMantlePlaceVaultExtra Extra;
+			if (Value.IsValid() && Value->TryGetObject(Obj) && Obj != nullptr && Obj->IsValid()
+				&& (*Obj)->TryGetStringField(TEXT("id"), Extra.Id) && !Extra.Id.IsEmpty())
+			{
+				(*Obj)->TryGetStringField(TEXT("name"), Extra.Name);
+				ReadCount(*Obj, TEXT("sizeBytes"), Extra.SizeBytes);
+				Item.Extras.Add(MoveTemp(Extra));
+			}
+		}
+	}
+}
+
+FString FMantlePlaceVaultLogic::BuildExtraDownloadBody(const FString& ExtraId)
+{
+	const TSharedRef<FJsonObject> Mpb3 = MakeShared<FJsonObject>();
+	Mpb3->SetStringField(TEXT("version"), TEXT("3.0"));
+	Mpb3->SetStringField(TEXT("extra"), ExtraId);
+
+	const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+	Root->SetStringField(TEXT("format"), WholeBundleFormat());
+	Root->SetObjectField(TEXT("mpb3"), Mpb3);
+	return VaultSerializeCondensed(Root);
 }
 
 FString FMantlePlaceVaultLogic::BuildLevelDownloadBody(const FString& Level, const TArray<FString>& Files)
