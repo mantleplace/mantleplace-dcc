@@ -433,6 +433,8 @@ private:
 
 		TArray<FMantlePlaceRecordPolyline> Lines;
 		TArray<FString> Drawn;
+		int32 LinesDrawn = 0;  // lines and area outlines, as the file states them
+		int32 PointsDrawn = 0; // each drawn as a marker
 		bool bAnyDxf = false;
 		for (const FMantlePlaceRecordFile& File : Layer.Files)
 		{
@@ -456,11 +458,19 @@ private:
 			FString Text, Error;
 			FFileHelper::BufferToString(Text, Bytes.GetData(), Bytes.Num());
 			TArray<FMantlePlaceRecordPolyline> FileLines;
+			TArray<FVector2D> FilePoints;
 			int32 EntitiesSkipped = 0;
-			if (!FMantlePlacePublicRecordsLogic::ParseDxf(Text, FileLines, EntitiesSkipped, Error))
+			if (!FMantlePlacePublicRecordsLogic::ParseDxf(Text, FileLines, FilePoints, EntitiesSkipped, Error))
 			{
 				Ctx.Log.Add(FString::Printf(TEXT("%s skipped (%s): %s."), *Name, *File.Path, *Error));
 				continue;
+			}
+			const int32 FileLineCount = FileLines.Num();
+			// A point is drawn as a small marker centred on the file's own coordinates; it joins the lines so the
+			// on-site backstop below weighs it like any other vertex.
+			for (const FVector2D& Point : FilePoints)
+			{
+				FileLines.Add(FMantlePlacePublicRecordsLogic::MarkerOutline(Point));
 			}
 			// The one-way backstop behind a stated frame: a producer can state a frame wrongly.
 			if (!FMantlePlacePublicRecordsLogic::AnyVertexOnSite(
@@ -475,9 +485,11 @@ private:
 			if (EntitiesSkipped > 0)
 			{
 				Ctx.Log.Add(FString::Printf(
-					TEXT("%s: %d drawing entit%s in %s that are not lines were left out."), *Name, EntitiesSkipped,
+					TEXT("%s: %d drawing entit%s in %s that are not lines, areas or points were left out."), *Name, EntitiesSkipped,
 					EntitiesSkipped == 1 ? TEXT("y") : TEXT("ies"), *File.Path));
 			}
+			LinesDrawn += FileLineCount;
+			PointsDrawn += FilePoints.Num();
 			Lines.Append(FileLines);
 			Drawn.Add(File.Path);
 		}
@@ -496,7 +508,7 @@ private:
 		}
 		if (Lines.Num() == 0)
 		{
-			Ctx.Log.Add(FString::Printf(TEXT("%s: the linework holds no lines to show."), *Name));
+			Ctx.Log.Add(FString::Printf(TEXT("%s: the drawing holds no lines, areas or points to show."), *Name));
 			return;
 		}
 
@@ -573,8 +585,9 @@ private:
 		Actor->Tags.Add(FName(*FString::Printf(TEXT("record_family=%s"), *Layer.Family)));
 		Ctx.Result.CreatedActors.Add(Actor->GetActorLabel());
 		Ctx.Log.Add(FString::Printf(
-			TEXT("%s: %d line(s) from %s, one overlay (%s). Hide or show it in the Outliner to toggle the layer."), *Name,
-			Lines.Num(), *FString::Join(Drawn, TEXT(", ")), *Actor->GetActorLabel()));
+			TEXT("%s: %d line(s) or area outline(s) and %d point marker(s) from %s, one overlay (%s). Hide or show it in the "
+			     "Outliner to toggle the layer."),
+			*Name, LinesDrawn, PointsDrawn, *FString::Join(Drawn, TEXT(", ")), *Actor->GetActorLabel()));
 		if (Landscape == nullptr)
 		{
 			Ctx.Log.Add(FString::Printf(
