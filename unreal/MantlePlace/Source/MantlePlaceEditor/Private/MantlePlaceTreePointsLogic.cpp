@@ -13,9 +13,14 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
     int32 DeclaredPointCount,
     TArray<FMantlePlaceTreePointRow>& OutRows,
     FString& OutError,
-    const FString& FoliageTypeVocabulary)
+    const FString& FoliageTypeVocabulary,
+    FString* OutNote)
 {
 	OutRows.Reset();
+	if (OutNote != nullptr)
+	{
+		OutNote->Reset();
+	}
 
 	TArray<FString> Lines;
 	CsvText.ParseIntoArrayLines(Lines, /*bCullEmpty*/ true);
@@ -119,7 +124,12 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	}
 	const double HalfSpanNorthCm = LandscapeSpanUeCm.X / 2.0;
 	const double HalfSpanEastCm = LandscapeSpanUeCm.Y / 2.0;
+	// A point on the extent's edge is inside it, and the edge is the published span to the
+	// centimetre: the span is a product of a scale and a quad count, so the same point reads a
+	// hair either side of the edge by rounding alone.
+	const double EdgeToleranceCm = EdgeToleranceCmValue;
 	int32 OutsideCount = 0;
+	int32 TotalRows = 0;
 	FString FirstOutsideX, FirstOutsideY;
 
 	OutRows.Reserve(Lines.Num() - 1);
@@ -155,49 +165,77 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		{
 			Row.FoliageType = ReadFoliageType(Fields[FoliageColumn]);
 		}
-		OutRows.Add(Row);
+		++TotalRows;
 
 		// The landscape is centred on the origin, so its extent in this frame is +/- half its span.
 		// A comparison of two published values, in the units they were published in.
 		if (bHasExtent
-		    && (FMath::Abs(Row.Position.X) > HalfSpanNorthCm || FMath::Abs(Row.Position.Y) > HalfSpanEastCm))
+		    && (FMath::Abs(Row.Position.X) > HalfSpanNorthCm + EdgeToleranceCm
+		        || FMath::Abs(Row.Position.Y) > HalfSpanEastCm + EdgeToleranceCm))
 		{
+			// Counted, never kept: whether the file is refused or only trimmed is decided below,
+			// once the share of the file this is is known.
 			if (OutsideCount++ == 0)
 			{
 				FirstOutsideX = Fields[ColumnIndex[ColumnX]];
 				FirstOutsideY = Fields[ColumnIndex[ColumnY]];
 			}
+			continue;
 		}
+		OutRows.Add(Row);
 	}
 
-	// HPS-53: a point outside the extent this host's own block publishes is not in this frame, and
-	// the frame belongs to the FILE — so the rows that happened to land inside go too. The failure
-	// this guards is arithmetic that succeeds: foot State Plane coordinates minus a metre UTM origin
-	// is a finite number a thousand kilometres away that looks exactly like a position. Never a
+	// HPS-53: a file with a real share of its points outside the extent this host's own block
+	// publishes is not in this frame, and the frame belongs to the FILE — so the rows that happened
+	// to land inside go too. The failure this guards is arithmetic that succeeds: foot State Plane
+	// coordinates minus a metre UTM origin is a finite number a thousand kilometres away that looks
+	// exactly like a position, and every point of such a file is off the landscape. Never a
 	// conversion (HPS-33): nothing here scales a unit or reprojects to reconcile the mismatch.
+	//
+	// A handful of points just past the edge of a file that is otherwise on the landscape is the
+	// other case — a tree whose point sits on or over the border of the tile — and refusing the
+	// whole layer for it throws away a real forest. The share a file may have outside and still be
+	// placed is MaxOutsideSharePercentValue: those points are left out and counted, the rest are placed.
 	if (OutsideCount > 0)
 	{
-		OutError = FString::Printf(
-		    TEXT("The tree-point file is not in this host's frame: %d of %d point(s) fall outside the landscape "
-		         "extent the manifest publishes (%.1f m east-west by %.1f m north-south, centred on the "
-		         "origin); the first is x=%s, y=%s. Unreal places metric UTM coordinates only, and a file "
-		         "stated on another grid or in another unit is refused rather than converted."),
-		    OutsideCount, OutRows.Num(), LandscapeSpanUeCm.Y / 100.0, LandscapeSpanUeCm.X / 100.0,
-		    *FirstOutsideX, *FirstOutsideY);
-		OutRows.Reset();
-		return EMantlePlaceTreePointsOutcome::Unplaceable;
+		if (static_cast<int64>(OutsideCount) * 100 > static_cast<int64>(TotalRows) * MaxOutsideSharePercentValue)
+		{
+			OutError = FString::Printf(
+			    TEXT("The tree-point file is not in this host's frame: %d of %d point(s) fall outside the "
+			         "landscape extent the manifest publishes (%.1f m east-west by %.1f m north-south, centred "
+			         "on the origin); the first is x=%s, y=%s. Unreal places metric UTM coordinates only, and "
+			         "a file stated on another grid or in another unit is refused rather than converted."),
+			    OutsideCount, TotalRows, LandscapeSpanUeCm.Y / 100.0, LandscapeSpanUeCm.X / 100.0,
+			    *FirstOutsideX, *FirstOutsideY);
+			OutRows.Reset();
+			return EMantlePlaceTreePointsOutcome::Unplaceable;
+		}
+		if (OutNote != nullptr)
+		{
+			*OutNote = FString::Printf(
+			    TEXT("%d of %d point(s) fall outside the landscape extent the manifest publishes (%.1f m "
+			         "east-west by %.1f m north-south, centred on the origin) and were left out; the first "
+			         "is x=%s, y=%s. The other %d are inside it and were placed."),
+			    OutsideCount, TotalRows, LandscapeSpanUeCm.Y / 100.0, LandscapeSpanUeCm.X / 100.0,
+			    *FirstOutsideX, *FirstOutsideY, OutRows.Num());
+		}
 	}
 
 	// The manifest's own row count, checked against what this reader produced. A mismatch is a
 	// failure rather than a warning: the rows it did produce are a silent subset of the layer, and
-	// a foliage scatter built from a subset looks like a sparse forest, not like an error.
-	if (DeclaredPointCount > 0 && OutRows.Num() != DeclaredPointCount)
+	// a foliage scatter built from a subset looks like a sparse forest, not like an error. The
+	// points left out above were read, so they count: the payload and the manifest agree on them.
+	if (DeclaredPointCount > 0 && TotalRows != DeclaredPointCount)
 	{
 		OutError = FString::Printf(
 		    TEXT("The tree-point file parsed %d row(s) but the manifest declares point_count %d. The "
 		         "payload and the manifest disagree; refusing to import a subset of the layer."),
-		    OutRows.Num(), DeclaredPointCount);
+		    TotalRows, DeclaredPointCount);
 		OutRows.Reset();
+		if (OutNote != nullptr)
+		{
+			OutNote->Reset();
+		}
 		return EMantlePlaceTreePointsOutcome::CountMismatch;
 	}
 	return EMantlePlaceTreePointsOutcome::Parsed;
