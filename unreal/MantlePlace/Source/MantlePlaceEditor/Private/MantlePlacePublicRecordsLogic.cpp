@@ -71,7 +71,124 @@ struct FDxfEntity
 	double EndX = 0.0;
 	double EndY = 0.0;
 	bool bHasEnd = false;
+	TArray<FDxfPair> Raw; // HATCH only: every pair after the type, read in order by ReadHatchBoundaries
 };
+
+/** Where the next pair with `Code` is, from `From`, or INDEX_NONE. */
+int32 FindCode(const TArray<FDxfPair>& Pairs, int32 From, int32 Code)
+{
+	for (int32 Index = From; Index < Pairs.Num(); ++Index)
+	{
+		if (Pairs[Index].Code == Code)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
+/**
+ * The boundary loops of one HATCH, each as a closed outline in the file's own coordinates. A polyline path
+ * (92 flag bit 2) gives its vertices; an edge path gives its LINE edges, joined in the order the file lists
+ * them. An arc, ellipse or spline edge, or a path that does not read as stated, makes the whole hatch
+ * unreadable (false, nothing kept): half an outline is not drawn. A polyline path's arc bulges (code 42)
+ * are not read, as for an LWPOLYLINE: the vertices are joined straight, never re-derived.
+ */
+bool ReadHatchBoundaries(const TArray<FDxfPair>& Raw, TArray<FMantlePlaceRecordPolyline>& OutRings)
+{
+	OutRings.Reset();
+	int32 At = FindCode(Raw, 0, 91);
+	if (At == INDEX_NONE)
+	{
+		return false;
+	}
+	const int32 PathCount = FCString::Atoi(*Raw[At].Value);
+	++At;
+	for (int32 Path = 0; Path < PathCount; ++Path)
+	{
+		At = FindCode(Raw, At, 92);
+		if (At == INDEX_NONE)
+		{
+			return false;
+		}
+		const int32 Flags = FCString::Atoi(*Raw[At].Value);
+		++At;
+		FMantlePlaceRecordPolyline Ring;
+		Ring.bClosed = true; // a hatch boundary is a closed loop by definition
+		At = FindCode(Raw, At, 93);
+		if (At == INDEX_NONE)
+		{
+			return false;
+		}
+		const int32 Count = FCString::Atoi(*Raw[At].Value);
+		++At;
+		if ((Flags & 2) != 0)
+		{
+			// A polyline path: Count vertices, each a 10/20 pair (a 42 bulge between them is not read).
+			int32 YsRead = 0;
+			for (; At < Raw.Num() && YsRead < Count; ++At)
+			{
+				if (Raw[At].Code == 10)
+				{
+					Ring.Points.Add(FVector2D(FCString::Atod(*Raw[At].Value), 0.0));
+				}
+				else if (Raw[At].Code == 20 && Ring.Points.Num() > 0)
+				{
+					Ring.Points.Last().Y = FCString::Atod(*Raw[At].Value);
+					++YsRead;
+				}
+			}
+			if (YsRead < Count)
+			{
+				return false;
+			}
+		}
+		else
+		{
+			// An edge path: Count edges, each opened by its type in code 72. Only a straight edge (1) is read.
+			FVector2D LastEnd = FVector2D::ZeroVector;
+			for (int32 Edge = 0; Edge < Count; ++Edge)
+			{
+				if (At >= Raw.Num() || Raw[At].Code != 72 || FCString::Atoi(*Raw[At].Value) != 1)
+				{
+					return false;
+				}
+				++At;
+				FVector2D Start = FVector2D::ZeroVector;
+				FVector2D End = FVector2D::ZeroVector;
+				int32 Have = 0; // a bit per coordinate read: 10, 20, 11, 21
+				for (; At < Raw.Num() && Have != 15; ++At)
+				{
+					switch (Raw[At].Code)
+					{
+					case 10: Start.X = FCString::Atod(*Raw[At].Value); Have |= 1; break;
+					case 20: Start.Y = FCString::Atod(*Raw[At].Value); Have |= 2; break;
+					case 11: End.X = FCString::Atod(*Raw[At].Value); Have |= 4; break;
+					case 21: End.Y = FCString::Atod(*Raw[At].Value); Have |= 8; break;
+					default: break;
+					}
+				}
+				if (Have != 15)
+				{
+					return false;
+				}
+				Ring.Points.Add(Start);
+				LastEnd = End;
+			}
+			// The last edge ends where the first began; a file that leaves it open still closes.
+			if (Ring.Points.Num() > 0 && !LastEnd.Equals(Ring.Points[0], 1e-9))
+			{
+				Ring.Points.Add(LastEnd);
+			}
+		}
+		if (Ring.Points.Num() < 3)
+		{
+			return false;
+		}
+		OutRings.Add(MoveTemp(Ring));
+	}
+	return OutRings.Num() > 0;
+}
 }
 
 bool FMantlePlacePublicRecordsLogic::IsKnownFamily(const FString& Family)
@@ -198,10 +315,12 @@ bool FMantlePlacePublicRecordsLogic::CanPlaceFrame(
 bool FMantlePlacePublicRecordsLogic::ParseDxf(
     const FString& Text,
     TArray<FMantlePlaceRecordPolyline>& OutLines,
+    TArray<FVector2D>& OutPoints,
     int32& OutEntitiesSkipped,
     FString& OutError)
 {
 	OutLines.Reset();
+	OutPoints.Reset();
 	OutEntitiesSkipped = 0;
 	OutError.Reset();
 
@@ -304,6 +423,33 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 				++OutEntitiesSkipped;
 			}
 		}
+		else if (Entity.Type == TEXT("HATCH"))
+		{
+			// A filled area: its boundary loops are the outlines. The fill is not drawn.
+			TArray<FMantlePlaceRecordPolyline> Rings;
+			if (ReadHatchBoundaries(Entity.Raw, Rings))
+			{
+				for (FMantlePlaceRecordPolyline& Ring : Rings)
+				{
+					Keep(MoveTemp(Ring));
+				}
+			}
+			else
+			{
+				++OutEntitiesSkipped;
+			}
+		}
+		else if (Entity.Type == TEXT("POINT"))
+		{
+			if (Entity.Points.Num() > 0)
+			{
+				OutPoints.Add(Entity.Points[0]);
+			}
+			else
+			{
+				++OutEntitiesSkipped;
+			}
+		}
 		else
 		{
 			++OutEntitiesSkipped;
@@ -340,6 +486,10 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 		if (Entity.Type.IsEmpty())
 		{
 			continue;
+		}
+		if (Entity.Type == TEXT("HATCH"))
+		{
+			Entity.Raw.Add(Pair);
 		}
 		switch (Pair.Code)
 		{
@@ -378,6 +528,17 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 		return false;
 	}
 	return true;
+}
+
+FMantlePlaceRecordPolyline FMantlePlacePublicRecordsLogic::MarkerOutline(const FVector2D& Point)
+{
+	FMantlePlaceRecordPolyline Marker;
+	Marker.bClosed = true;
+	Marker.Points.Add(FVector2D(Point.X + MarkerRadiusM, Point.Y));
+	Marker.Points.Add(FVector2D(Point.X, Point.Y + MarkerRadiusM));
+	Marker.Points.Add(FVector2D(Point.X - MarkerRadiusM, Point.Y));
+	Marker.Points.Add(FVector2D(Point.X, Point.Y - MarkerRadiusM));
+	return Marker;
 }
 
 bool FMantlePlacePublicRecordsLogic::AnyVertexOnSite(
