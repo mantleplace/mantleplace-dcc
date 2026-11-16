@@ -19,7 +19,8 @@ layers. The tree points land as a data table, PCG-ready scatter input, and on re
 (parcels, zoning, flood zones and the families that follow them) are credited in the import log, and their
 DXF linework is drawn as one toggleable overlay per family where the file states a frame that is this
 host's. Importing a local bundle
-needs no account and no sign-in.
+needs no account and no sign-in. It reads MPB 3.0 bundles and MPB 2.x bundles side by side; what a
+3.0 bundle imports is in [`docs/release-notes-0.9.0.md`](docs/release-notes-0.9.0.md).
 
 What this plugin does not do yet, and what it leaves out on purpose, is the
 [host support matrix](../docs/host-support.md) — one row per feature, beside every other host.
@@ -49,8 +50,17 @@ source build: see [Building](../README.md#building) in the root README.
   was bought has nothing left to build, so the plugin downloads Unreal's own view of it — the files
   this import reads, without the meshes and rasters other hosts use — and imports, with no Prepare.
   An order built on demand is prepared first, as before.
+
+  An MPB 3.0 order is downloaded at one level. The window shows `Fidelity Level` with Max, Med and
+  Min, each with its download size and the platform's recommendation preselected and marked
+  `Recommended`; `Download` fetches the chosen level. Importing the same level again reuses the
+  download, and choosing another replaces it. A 2.x order has no level to choose.
 - **Browse...** — pick a bundle `.zip` you downloaded from [mantle.place](https://mantle.place),
   leave the mode at *Landscape*, and press **Import**.
+
+For a first look with no account, download a sample bundle zip from the public
+[samples page](https://mantle.place/mpb-samples) and import it with **Browse...**. The samples there are
+MPB 2.0 bundles.
 
 Either way the **Bundle Import** window opens and lists the import's steps in order: *Download* when
 the bundle is fetched, *Integrity Check*, then one per thing the bundle builds. Each row reads
