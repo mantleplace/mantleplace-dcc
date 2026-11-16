@@ -403,7 +403,7 @@ bool FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
 
 	// The columns are found by name in the header (format.md section 6), never by position.
 	static const TCHAR* const Required[] = {
-		TEXT("road"), TEXT("vertex"), TEXT("x"), TEXT("y"), TEXT("z"), TEXT("class"), TEXT("width_m"), TEXT("name") };
+		TEXT("road"), TEXT("vertex"), TEXT("x"), TEXT("y"), TEXT("z"), TEXT("class"), TEXT("width_m") };
 	TMap<FString, int32> Columns;
 	for (int32 Index = 0; Index < Rows[0].Num(); ++Index)
 	{
@@ -419,7 +419,10 @@ bool FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
 	}
 	const int32 RoadCol = Columns[TEXT("road")], VertexCol = Columns[TEXT("vertex")];
 	const int32 XCol = Columns[TEXT("x")], YCol = Columns[TEXT("y")], ZCol = Columns[TEXT("z")];
-	const int32 ClassCol = Columns[TEXT("class")], WidthCol = Columns[TEXT("width_m")], NameCol = Columns[TEXT("name")];
+	const int32 ClassCol = Columns[TEXT("class")], WidthCol = Columns[TEXT("width_m")];
+	// `name` is optional: a 3.0 bundle's table has none, and a road with no name is left unnamed.
+	const int32* NameColPtr = Columns.Find(TEXT("name"));
+	const int32 NameCol = NameColPtr ? *NameColPtr : INDEX_NONE;
 	int32 MaxCol = 0;
 	for (const TPair<FString, int32>& Pair : Columns)
 	{
@@ -479,7 +482,7 @@ bool FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
 			double Width = 0.0;
 			Current.WidthMEstimated = ReadNumber(Row[WidthCol], Width) ? Width : 0.0;
 			Current.RoadClass = FString(Row[ClassCol]).TrimStartAndEnd();
-			Current.Name = FString(Row[NameCol]);
+			Current.Name = NameCol == INDEX_NONE ? FString() : FString(Row[NameCol]);
 		}
 		Current.PointsUeCm.Add(FMantlePlaceVaultManifest::ProjectedToUeCm(X, Y, SiteHeightM + Z));
 	}
