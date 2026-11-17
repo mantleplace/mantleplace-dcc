@@ -615,13 +615,17 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 namespace
 {
 /** A 3.x manifest stating `MetricFrames` with one stated fragment replaced by another. */
-FMantlePlaceBundleRead ReadWithFrames(const TCHAR* From, const TCHAR* To)
+FMantlePlaceBundleRead ReadFramesFragment(FAutomationTestBase& Test, const TCHAR* From, const TCHAR* To)
 {
 	FString Frames = MetricFrames;
 	if (From != nullptr)
 	{
 		const int32 Found = Frames.Find(From, ESearchCase::CaseSensitive);
-		check(Found != INDEX_NONE); // the test's own fragment must exist, or it proves nothing
+		if (Found == INDEX_NONE) // the test's own fragment must exist, or it proves nothing
+		{
+			Test.AddError(FString::Printf(TEXT("the test's own fragment is not in the metric frames: %s"), From));
+			return FMantlePlaceBundleRead();
+		}
 		Frames = Frames.Left(Found) + To + Frames.Mid(Found + FCString::Strlen(From));
 	}
 	FInMemoryBundle Bundle;
@@ -639,6 +643,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 {
 	using L = FMantlePlaceBundleReaderLogic;
+
+	const auto ReadWithFrames = [this](const TCHAR* From, const TCHAR* To)
+	{
+		return ReadFramesFragment(*this, From, To);
+	};
 
 	// A refusal: the manifest is refused as unreadable, the message names the value, no level is read.
 	const auto ExpectRefused = [this](const FString& What, const FMantlePlaceBundleRead& Read, std::initializer_list<const TCHAR*> Named)
@@ -661,24 +670,24 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 	ExpectRead(TEXT("the metric frames"), ReadWithFrames(nullptr, nullptr));
 
 	// A unit is its factor, never its name.
-	const TCHAR* const OrderUnit = TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 1}");
+	const TCHAR* const HorizontalUnit = TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 1}");
 	ExpectRefused(TEXT("a metre named so, at twice the factor"),
-		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 2}")), { TEXT("metre"), TEXT("2") });
+		ReadWithFrames(HorizontalUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 2}")), { TEXT("states the unit metre (2") });
 	ExpectRefused(TEXT("a unit of an unknown name and factor"),
-		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"furlong\", \"to_metres\": 201.168}")),
+		ReadWithFrames(HorizontalUnit, TEXT("\"horizontal_unit\": {\"name\": \"furlong\", \"to_metres\": 201.168}")),
 		{ TEXT("furlong"), TEXT("201.168") });
 	ExpectRefused(TEXT("a foot named so at the wrong factor"),
-		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"foot\", \"to_metres\": 0.3}")), { TEXT("foot"), TEXT("0.3") });
+		ReadWithFrames(HorizontalUnit, TEXT("\"horizontal_unit\": {\"name\": \"foot\", \"to_metres\": 0.3}")), { TEXT("states the unit foot (0.3") });
 	ExpectRefused(TEXT("a zero factor"),
-		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 0}")), { TEXT("horizontal_unit") });
+		ReadWithFrames(HorizontalUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 0}")), { TEXT("horizontal_unit") });
 	ExpectRefused(TEXT("a negative factor"),
-		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": -1}")), { TEXT("horizontal_unit") });
+		ReadWithFrames(HorizontalUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": -1}")), { TEXT("horizontal_unit") });
 	ExpectRefused(TEXT("a unit with no factor"),
-		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"foot\"}")), { TEXT("horizontal_unit"), TEXT("foot") });
+		ReadWithFrames(HorizontalUnit, TEXT("\"horizontal_unit\": {\"name\": \"foot\"}")), { TEXT("horizontal_unit"), TEXT("foot") });
 	ExpectRead(TEXT("the international foot by its factor, whatever it is called"),
-		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 0.3048}")));
+		ReadWithFrames(HorizontalUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 0.3048}")));
 	ExpectRead(TEXT("the US survey foot by its factor"),
-		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"US survey foot\", \"to_metres\": 0.3048006096012192}")));
+		ReadWithFrames(HorizontalUnit, TEXT("\"horizontal_unit\": {\"name\": \"US survey foot\", \"to_metres\": 0.3048006096012192}")));
 
 	// An axis order that is neither east-north nor north-east.
 	const TCHAR* const AxisOrder = TEXT("\"axis_order\": \"east-north\"");
@@ -688,7 +697,9 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 	ExpectRefused(TEXT("an axis order with the up axis"),
 		ReadWithFrames(AxisOrder, TEXT("\"axis_order\": \"east-north-up\"")), { TEXT("east-north-up") });
 	ExpectRefused(TEXT("an axis order that is not a string"),
-		ReadWithFrames(AxisOrder, TEXT("\"axis_order\": 1")), { TEXT("axis_order") });
+		ReadWithFrames(AxisOrder, TEXT("\"axis_order\": 1")), { TEXT("axis_order states 1") });
+	ExpectRefused(TEXT("an axis order that is null"),
+		ReadWithFrames(AxisOrder, TEXT("\"axis_order\": null")), { TEXT("axis_order states null") });
 
 	// A CRS that names no code, PROJJSON object or WKT2 string.
 	const TCHAR* const OrderCrs = TEXT("\"horizontal_crs\": {\"code\": \"EPSG:32618\"}");
@@ -709,8 +720,10 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 	ExpectRefused(TEXT("a local frame whose up is down"),
 		ReadWithFrames(LocalAxes, TEXT("\"axes\": {\"x\": \"east\", \"y\": \"north\", \"z\": \"down\"}")), { TEXT("down") });
 	ExpectRefused(TEXT("a local frame with its x and y swapped"),
-		ReadWithFrames(LocalAxes, TEXT("\"axes\": {\"x\": \"north\", \"y\": \"east\", \"z\": \"up\"}")), { TEXT("axes"), TEXT("north") });
-	ExpectRefused(TEXT("a local frame stating no axes"), ReadWithFrames(LocalAxes, TEXT("\"axes\": {}")), { TEXT("axes") });
+		ReadWithFrames(LocalAxes, TEXT("\"axes\": {\"x\": \"north\", \"y\": \"east\", \"z\": \"up\"}")), { TEXT("the x axis as north,") });
+	ExpectRefused(TEXT("a local frame stating no axes"), ReadWithFrames(LocalAxes, TEXT("\"axes\": {}")), { TEXT("the x axis as (absent)") });
+	ExpectRefused(TEXT("a local frame whose up is not a string"),
+		ReadWithFrames(LocalAxes, TEXT("\"axes\": {\"x\": \"east\", \"y\": \"north\", \"z\": 5}")), { TEXT("the z axis as 5") });
 	const TCHAR* const LocalUnit = TEXT("\"unit\": {\"name\": \"metre\", \"to_metres\": 1}, \"axes\"");
 	ExpectRefused(TEXT("a local unit that is a foot"),
 		ReadWithFrames(LocalUnit, TEXT("\"unit\": {\"name\": \"foot\", \"to_metres\": 0.3048}, \"axes\"")), { TEXT("foot"), TEXT("0.3048") });
@@ -722,7 +735,7 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 
 	// The frames come back as the manifest states them: nothing converted, derived or renamed.
 	{
-		const FMantlePlaceBundleRead Feet = ReadWithFrames(OrderUnit,
+		const FMantlePlaceBundleRead Feet = ReadWithFrames(HorizontalUnit,
 			TEXT("\"horizontal_unit\": {\"name\": \"US survey foot\", \"to_metres\": 0.3048006096012192}"));
 		ExpectRead(TEXT("an order in US survey feet"), Feet);
 		if (Feet.Frames.IsValid())
