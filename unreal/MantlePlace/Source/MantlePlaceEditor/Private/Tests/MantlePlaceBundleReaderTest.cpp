@@ -606,4 +606,143 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// --- The frames, value by value ----------------------------------------------------------------------
+// The corpus's `reader.v3Frames*` cases pin one refusal each. This pins each rule on its own, against
+// the metric frames above with one value changed: a unit is its factor and never its name, an axis
+// order, a CRS that names no form, the local axes and the local unit, and that a read hands the
+// manifest's frames back as stated, never converted.
+
+namespace
+{
+/** A 3.x manifest stating `MetricFrames` with one stated fragment replaced by another. */
+FMantlePlaceBundleRead ReadWithFrames(const TCHAR* From, const TCHAR* To)
+{
+	FString Frames = MetricFrames;
+	if (From != nullptr)
+	{
+		const int32 Found = Frames.Find(From, ESearchCase::CaseSensitive);
+		check(Found != INDEX_NONE); // the test's own fragment must exist, or it proves nothing
+		Frames = Frames.Left(Found) + To + Frames.Mid(Found + FCString::Strlen(From));
+	}
+	FInMemoryBundle Bundle;
+	Bundle.Entries.Add(TEXT("Manifest.json"),
+		FString(TEXT("{\"version\": \"3.0.0\", \"level\": \"Med\", ")) + Frames + TEXT(", \"catalog\": {\"Manifest.json\": {}}}"));
+	return Bundle.Read();
+}
+} // namespace
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceBundleReaderFramesTest,
+	"MantlePlace.Import.BundleReaderFrames",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
+{
+	using L = FMantlePlaceBundleReaderLogic;
+
+	// A refusal: the manifest is refused as unreadable, the message names the value, no level is read.
+	const auto ExpectRefused = [this](const FString& What, const FMantlePlaceBundleRead& Read, std::initializer_list<const TCHAR*> Named)
+	{
+		TestEqual(What + TEXT(": refused"), Read.Outcome, EMantlePlaceBundleReadOutcome::Refused);
+		TestEqual(What + TEXT(": as unreadable"), Read.Refusal, FString(L::UnreadableRefusal()));
+		TestEqual(What + TEXT(": with no level read"), Read.Level.Len(), 0);
+		for (const TCHAR* Value : Named)
+		{
+			TestTrue(What + FString::Printf(TEXT(": the message names %s: %s"), Value, *Read.Error),
+				Read.Error.Contains(Value, ESearchCase::CaseSensitive));
+		}
+	};
+	const auto ExpectRead = [this](const FString& What, const FMantlePlaceBundleRead& Read)
+	{
+		TestEqual(What + TEXT(": read"), Read.Outcome, EMantlePlaceBundleReadOutcome::Read);
+		TestTrue(What + TEXT(": frames handed back"), Read.Frames.IsValid());
+	};
+
+	ExpectRead(TEXT("the metric frames"), ReadWithFrames(nullptr, nullptr));
+
+	// A unit is its factor, never its name.
+	const TCHAR* const OrderUnit = TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 1}");
+	ExpectRefused(TEXT("a metre named so, at twice the factor"),
+		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 2}")), { TEXT("metre"), TEXT("2") });
+	ExpectRefused(TEXT("a unit of an unknown name and factor"),
+		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"furlong\", \"to_metres\": 201.168}")),
+		{ TEXT("furlong"), TEXT("201.168") });
+	ExpectRefused(TEXT("a foot named so at the wrong factor"),
+		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"foot\", \"to_metres\": 0.3}")), { TEXT("foot"), TEXT("0.3") });
+	ExpectRefused(TEXT("a zero factor"),
+		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 0}")), { TEXT("horizontal_unit") });
+	ExpectRefused(TEXT("a negative factor"),
+		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": -1}")), { TEXT("horizontal_unit") });
+	ExpectRefused(TEXT("a unit with no factor"),
+		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"foot\"}")), { TEXT("horizontal_unit"), TEXT("foot") });
+	ExpectRead(TEXT("the international foot by its factor, whatever it is called"),
+		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 0.3048}")));
+	ExpectRead(TEXT("the US survey foot by its factor"),
+		ReadWithFrames(OrderUnit, TEXT("\"horizontal_unit\": {\"name\": \"US survey foot\", \"to_metres\": 0.3048006096012192}")));
+
+	// An axis order that is neither east-north nor north-east.
+	const TCHAR* const AxisOrder = TEXT("\"axis_order\": \"east-north\"");
+	ExpectRead(TEXT("north-east"), ReadWithFrames(AxisOrder, TEXT("\"axis_order\": \"north-east\"")));
+	ExpectRefused(TEXT("an axis order of another word"),
+		ReadWithFrames(AxisOrder, TEXT("\"axis_order\": \"NE\"")), { TEXT("axis_order"), TEXT("NE") });
+	ExpectRefused(TEXT("an axis order with the up axis"),
+		ReadWithFrames(AxisOrder, TEXT("\"axis_order\": \"east-north-up\"")), { TEXT("east-north-up") });
+	ExpectRefused(TEXT("an axis order that is not a string"),
+		ReadWithFrames(AxisOrder, TEXT("\"axis_order\": 1")), { TEXT("axis_order") });
+
+	// A CRS that names no code, PROJJSON object or WKT2 string.
+	const TCHAR* const OrderCrs = TEXT("\"horizontal_crs\": {\"code\": \"EPSG:32618\"}");
+	ExpectRead(TEXT("a PROJJSON object CRS"),
+		ReadWithFrames(OrderCrs, TEXT("\"horizontal_crs\": {\"projjson\": {\"type\": \"ProjectedCRS\"}}")));
+	ExpectRead(TEXT("a WKT2 string CRS"),
+		ReadWithFrames(OrderCrs, TEXT("\"horizontal_crs\": {\"wkt2\": \"PROJCRS[\\\"Synthetic\\\"]\"}")));
+	ExpectRefused(TEXT("a CRS naming nothing"), ReadWithFrames(OrderCrs, TEXT("\"horizontal_crs\": {}")), { TEXT("horizontal_crs") });
+	ExpectRefused(TEXT("a CRS that is a bare number"),
+		ReadWithFrames(OrderCrs, TEXT("\"horizontal_crs\": {\"code\": \"32618\"}")), { TEXT("horizontal_crs"), TEXT("32618") });
+	ExpectRefused(TEXT("a vertical datum that names nothing"),
+		ReadWithFrames(TEXT("\"vertical_crs\": {\"code\": \"EPSG:3855\"}, \"geoid_model\": \"EGM2008\", \"horizontal_unit\""),
+			TEXT("\"vertical_crs\": {\"name\": \"local datum\"}, \"geoid_model\": \"EGM2008\", \"horizontal_unit\"")),
+		{ TEXT("frames.georeferenced.vertical_crs") });
+
+	// The local frame runs east, north, up, in metres.
+	const TCHAR* const LocalAxes = TEXT("\"axes\": {\"x\": \"east\", \"y\": \"north\", \"z\": \"up\"}");
+	ExpectRefused(TEXT("a local frame whose up is down"),
+		ReadWithFrames(LocalAxes, TEXT("\"axes\": {\"x\": \"east\", \"y\": \"north\", \"z\": \"down\"}")), { TEXT("down") });
+	ExpectRefused(TEXT("a local frame with its x and y swapped"),
+		ReadWithFrames(LocalAxes, TEXT("\"axes\": {\"x\": \"north\", \"y\": \"east\", \"z\": \"up\"}")), { TEXT("axes"), TEXT("north") });
+	ExpectRefused(TEXT("a local frame stating no axes"), ReadWithFrames(LocalAxes, TEXT("\"axes\": {}")), { TEXT("axes") });
+	const TCHAR* const LocalUnit = TEXT("\"unit\": {\"name\": \"metre\", \"to_metres\": 1}, \"axes\"");
+	ExpectRefused(TEXT("a local unit that is a foot"),
+		ReadWithFrames(LocalUnit, TEXT("\"unit\": {\"name\": \"foot\", \"to_metres\": 0.3048}, \"axes\"")), { TEXT("foot"), TEXT("0.3048") });
+	ExpectRefused(TEXT("a local unit that is the US survey foot"),
+		ReadWithFrames(LocalUnit, TEXT("\"unit\": {\"name\": \"US survey foot\", \"to_metres\": 0.3048006096012192}, \"axes\"")),
+		{ TEXT("US survey foot") });
+	ExpectRefused(TEXT("a local unit that is unknown"),
+		ReadWithFrames(LocalUnit, TEXT("\"unit\": {\"name\": \"cubit\", \"to_metres\": 0.4572}, \"axes\"")), { TEXT("cubit") });
+
+	// The frames come back as the manifest states them: nothing converted, derived or renamed.
+	{
+		const FMantlePlaceBundleRead Feet = ReadWithFrames(OrderUnit,
+			TEXT("\"horizontal_unit\": {\"name\": \"US survey foot\", \"to_metres\": 0.3048006096012192}"));
+		ExpectRead(TEXT("an order in US survey feet"), Feet);
+		if (Feet.Frames.IsValid())
+		{
+			const TSharedPtr<FJsonObject>* Georeferenced = nullptr;
+			const TSharedPtr<FJsonObject>* Unit = nullptr;
+			if (TestTrue(TEXT("verbatim: the georeferenced frame is there"), Feet.Frames->TryGetObjectField(TEXT("georeferenced"), Georeferenced))
+				&& TestTrue(TEXT("verbatim: its horizontal unit is there"), (*Georeferenced)->TryGetObjectField(TEXT("horizontal_unit"), Unit)))
+			{
+				TestEqual(TEXT("verbatim: the unit's name is the manifest's"), (*Unit)->GetStringField(TEXT("name")), FString(TEXT("US survey foot")));
+				TestEqual(TEXT("verbatim: the unit's factor is the manifest's, not 1 and not 0.3048"),
+					(*Unit)->GetNumberField(TEXT("to_metres")), 0.3048006096012192);
+				TestEqual(TEXT("verbatim: the axis order is the manifest's"),
+					(*Georeferenced)->GetStringField(TEXT("axis_order")), FString(TEXT("east-north")));
+				TestEqual(TEXT("verbatim: the grid rotation is the manifest's"),
+					(*Georeferenced)->GetNumberField(TEXT("grid_rotation_deg")), 0.67);
+			}
+		}
+	}
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
