@@ -5,9 +5,9 @@ everything in it is world-readable.**
 
 Read that line before running any write command. Both halves matter — see "The three rules" below.
 
-**Workflow** — worktrees, branches, issues, landing, finishing a session — is the Mantle Place agent
-standard, loaded by the maintainers' tooling at session start. This file holds only what is specific
-to this repository; nothing a contributor needs lives only in that standard.
+**Workflow** — worktrees, branches, commits, the gate, closing an issue, landing — is
+[`docs/agents/contributor-procedure.md`](docs/agents/contributor-procedure.md). This file holds only
+what is specific to this repository; the procedure stands on its own and cites nothing outside it.
 
 <!-- content-law -->
 ## Content law
@@ -110,10 +110,11 @@ Mantle Place project tree mounts this repo at `Plugins/MantlePlaceDcc/` and docu
 ## Worktrees
 
 Worktrees live under `.claude/worktrees/<type>-<slug>` inside the checkout, on branch
-`<type>/<slug>`, per the agent standard; do not create them beside the checkout or with `../<dir>`.
-Make them from a standalone clone of this repo, never from a consumer's submodule mount under
-`Plugins/`: a worktree there puts a second `MantlePlace.uplugin` inside the consumer's recursive
-plugin scan. Everything else about worktrees is the agent standard's.
+`<type>/<slug>`; do not create them beside the checkout or with `../<dir>`. Make them from a
+standalone clone of this repo, never from a consumer's submodule mount under `Plugins/`: a worktree
+there puts a second `MantlePlace.uplugin` inside the consumer's recursive plugin scan. The commands,
+and everything else about worktrees, are in
+[`docs/agents/contributor-procedure.md`](docs/agents/contributor-procedure.md).
 
 ## Releases
 
@@ -181,6 +182,8 @@ Most facts already have exactly one home. Find it before writing a fact down any
 - **What each host imports, by default or not, and what it costs** →
   [`docs/import-inventory.md`](docs/import-inventory.md); Revit's measured figures stay in
   `SlowStepNotice.Measured` and are cited there.
+- **Worktrees, branches, the gate, closing an issue, landing** →
+  [`docs/agents/contributor-procedure.md`](docs/agents/contributor-procedure.md).
 - **Writing anything public** → [`docs/agents/public-surface.md`](docs/agents/public-surface.md).
 - **CI jobs, required checks, workflow rules** → [`docs/agents/ci.md`](docs/agents/ci.md).
 - **What a word means** → [`CONTEXT.md`](CONTEXT.md) — the glossary only; no rule, decision or

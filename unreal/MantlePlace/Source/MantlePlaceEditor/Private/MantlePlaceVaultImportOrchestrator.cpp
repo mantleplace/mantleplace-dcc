@@ -900,6 +900,7 @@ void UMantlePlaceVaultImportOrchestrator::HandlePresignedNative(bool bSuccess, c
 		// the listing's size and digest describe the Max download.
 		ViewManifestSha256 = Download.ManifestSha256;
 	}
+	LevelAbsentFiles = Download.AbsentFiles;
 
 	Phase = EPhase::Downloading;
 	EmitPhase(TEXT("Downloading"),
@@ -944,6 +945,26 @@ void UMantlePlaceVaultImportOrchestrator::HandleDownloadCompleteNative(bool bSuc
 		{
 			BundleCache->EvictCache(ActiveItem);
 			FailImport(TEXT("The download's manifest did not match its checksum and was discarded. Try again."));
+			return;
+		}
+	}
+
+	// A file the platform refused as not in this bundle must not be one the bundle's own manifest lists:
+	// that is a platform fault, and importing on would show it to the curator as a layer the site lacks.
+	const TArray<FString> RefusedFiles = MoveTemp(LevelAbsentFiles);
+	LevelAbsentFiles.Reset();
+	if (RefusedFiles.Num() > 0)
+	{
+		TArray<FString> Listed;
+		FString ListedError;
+		if (UMantlePlaceImporterLibrary::FindListedFiles(LocalBundlePath, RefusedFiles, Listed, ListedError) && Listed.Num() > 0)
+		{
+			BundleCache->EvictCache(ActiveItem);
+			FailImport(FString::Printf(
+				TEXT("The platform refused %s as not in this bundle, but the bundle's manifest lists it. Nothing was "
+					"imported: this is a fault on the platform's side, not a layer the site lacks. Try again, and "
+					"report it if it repeats."),
+				*FString::Join(Listed, TEXT(", "))));
 			return;
 		}
 	}
@@ -995,6 +1016,7 @@ void UMantlePlaceVaultImportOrchestrator::FinishImport(bool bSuccess, const FMan
 {
 	UnschedulePoll();
 	Phase = EPhase::Idle;
+	LevelAbsentFiles.Reset();
 	LevelChoice.Reset();
 	ScriptedLevel.Reset();
 	if (Steps.IsValid())

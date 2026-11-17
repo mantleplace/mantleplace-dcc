@@ -160,6 +160,54 @@ bool FMantlePlaceVaultLevelRequestTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceVaultLevelNotInBundleTest,
+	"MantlePlace.Vault.Levels.NotInBundle",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceVaultLevelNotInBundleTest::RunTest(const FString& Parameters)
+{
+	// A promised file the bundle does not hold (a layer the site lacks) is refused by name: HTTP 404,
+	// code file_not_in_bundle, the names in `files`. An absent file is not an error, so the request is
+	// asked again naming only the rest.
+	const TArray<FString> Asked = { TEXT("Elevation/Elevation.png"), TEXT("Basemap/Roads.csv"), TEXT("Landcover/Trees.csv") };
+	const FString Refusal = TEXT("{\"error\":\"This bundle holds no file named Basemap/Roads.csv\","
+		"\"code\":\"file_not_in_bundle\",\"reason\":\"unknown_file\",\"files\":[\"Basemap/Roads.csv\"]}");
+
+	TArray<FString> Remaining;
+	TArray<FString> Absent;
+	TestTrue(TEXT("A refused promised file is dropped"),
+		FLogic::FilesLeftAfterNotInBundle(404, Refusal, Asked, Remaining, Absent));
+	TestEqual(TEXT("The rest are asked for, in order"), FString::Join(Remaining, TEXT(",")),
+		FString(TEXT("Elevation/Elevation.png,Landcover/Trees.csv")));
+	TestEqual(TEXT("The absent file is named"), FString::Join(Absent, TEXT(",")), FString(TEXT("Basemap/Roads.csv")));
+
+	// Several absent at once: every name the refusal lists goes.
+	{
+		const FString Two = TEXT("{\"error\":\"x\",\"code\":\"file_not_in_bundle\",\"files\":[\"Basemap/Roads.csv\",\"Landcover/Trees.csv\"]}");
+		TArray<FString> R2;
+		TArray<FString> A2;
+		TestTrue(TEXT("Two absent files are dropped"), FLogic::FilesLeftAfterNotInBundle(404, Two, Asked, R2, A2));
+		TestEqual(TEXT("One is left"), FString::Join(R2, TEXT(",")), FString(TEXT("Elevation/Elevation.png")));
+	}
+
+	// Anything else stays a failure.
+	TArray<FString> Unused;
+	TArray<FString> UnusedAbsent;
+	TestFalse(TEXT("Another code is not an absent file"), FLogic::FilesLeftAfterNotInBundle(404,
+		TEXT("{\"error\":\"No such order\",\"code\":\"not_found\"}"), Asked, Unused, UnusedAbsent));
+	TestFalse(TEXT("Another status is not an absent file"), FLogic::FilesLeftAfterNotInBundle(400, Refusal, Asked, Unused, UnusedAbsent));
+	TestFalse(TEXT("A refusal naming no file is not retried"), FLogic::FilesLeftAfterNotInBundle(404,
+		TEXT("{\"error\":\"x\",\"code\":\"file_not_in_bundle\"}"), Asked, Unused, UnusedAbsent));
+	TestFalse(TEXT("A refusal naming a file not asked for is not retried"), FLogic::FilesLeftAfterNotInBundle(404,
+		TEXT("{\"error\":\"x\",\"code\":\"file_not_in_bundle\",\"files\":[\"Site/Site.ifc\"]}"), Asked, Unused, UnusedAbsent));
+	TestFalse(TEXT("Nothing left to ask for is not retried"), FLogic::FilesLeftAfterNotInBundle(404,
+		TEXT("{\"error\":\"x\",\"code\":\"file_not_in_bundle\",\"files\":[\"Elevation/Elevation.png\",\"Basemap/Roads.csv\",\"Landcover/Trees.csv\"]}"),
+		Asked, Unused, UnusedAbsent));
+	TestFalse(TEXT("Malformed JSON is not retried"), FLogic::FilesLeftAfterNotInBundle(404, TEXT("not json"), Asked, Unused, UnusedAbsent));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceVaultExtrasTest,
 	"MantlePlace.Vault.Levels.Extras",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)

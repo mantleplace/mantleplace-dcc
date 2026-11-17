@@ -74,6 +74,14 @@ public:
 	static bool ReadManifestSha256(const FString& ZipPath, FString& OutSha256, FString& OutError);
 
 	/**
+	 * Of `Names`, the ones a downloaded bundle's manifest lists (FMantlePlaceManifestThreeLogic::ListedAmong).
+	 * Not a UFUNCTION (plain out-params).
+	 *
+	 * @return  false + OutError when the zip is missing or unreadable, or its manifest cannot be read.
+	 */
+	static bool FindListedFiles(const FString& ZipPath, const TArray<FString>& Names, TArray<FString>& OutListed, FString& OutError);
+
+	/**
 	 * Open a native file-open dialog filtered to *.zip and return the chosen bundle path.
 	 * Editor-only; the Editor Utility Widget's Browse button calls this so the user never types a path.
 	 *

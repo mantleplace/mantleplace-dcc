@@ -406,6 +406,12 @@ private:
 	/** The manifest digest the platform stated for the view being downloaded; empty when it stated none. */
 	FString ViewManifestSha256;
 
+	/**
+	 * The files the platform refused as not in this level's bundle, so the download was asked for without
+	 * them (FMantlePlacePresignedDownload::AbsentFiles). Held against the downloaded manifest before import.
+	 */
+	TArray<FString> LevelAbsentFiles;
+
 	/** A 3.0 order's level control while it is offered; null otherwise. */
 	TSharedPtr<FMantlePlaceLevelChoice> LevelChoice;
 
