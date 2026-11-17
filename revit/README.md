@@ -16,6 +16,10 @@ that build's .NET follows the 2025 install it is compiled against. From `revit-1
 a .NET 10 build, so Revit 2025 and 2026 need their .5 update; a version without it stays on
 `revit-1.0.0` ([issue 581](https://github.com/mantleplace/mantleplace-dcc/issues/581)).
 
+**Bundle formats:** from `revit-1.2.0` the plugin reads MPB 3.0 bundles and MPB 2.x bundles side by side.
+A 2.x bundle imports exactly as before; what a 3.0 bundle imports, and what it leaves out, is in the
+[1.2.0 notes](docs/release-notes-1.2.0.md).
+
 ## What it does today
 
 `Mantle Place ▸ Account ▸ Sign In` opens your system browser (`HPS-05` — never an embedded webview,
@@ -133,7 +137,7 @@ in `Core`, asserted headlessly; the shim only reads the order id and the site lo
 `Mantle Place ▸ Bundles ▸ Import Bundle` takes a bundle you already downloaded and:
 
 - refuses anything below manifest **MPB 1.0.0**, and anything whose MAJOR is above the newest it
-  reads (1.x and 2.x), naming re-download and plugin-update respectively rather than guessing at a
+  reads (1.x, 2.x and 3.x), naming re-download and plugin-update respectively rather than guessing at a
   newer major (`HPS-31`).
   The integer pre-history (v7–v19) is below the floor as a family: a bundle cut before the MPB
   re-baseline is not merely old, it is written in a dialect this reader does not speak. Both
@@ -374,6 +378,12 @@ else logs beside that zip. `Logs` selects the newest log under the cache, and wh
 none it opens the cache and says that a zip from elsewhere logged elsewhere. The About window's `Logs`
 button reaches the same place through the same function, so the two can never disagree.
 
+**Try it with a sample, with no account.** Download a bundle zip from the
+[samples page](https://mantle.place/mpb-samples), do not unzip it, press `Import Bundle` and pick it.
+Nothing in that path needs a sign-in. The samples there are MPB 2.0 bundles, so they take the 2.x path;
+an MPB 3.0 bundle comes from an order of your own. The steps a store reviewer follows are in
+[`store-review-1.2.0.md`](docs/store-review-1.2.0.md).
+
 **An import brings in what you tick.** Both ways in — `Import Bundle` and the vault window's
 `Import` — open the modeless `Bundle Import` window on a checklist headed `Include`. Above it, under
 the bundle's name, one line says what the order's `delivery` block publishes — unit system, linear
@@ -456,6 +466,16 @@ import is listed, says `not available in this version of Mantle Place`, and cann
 only what the lower one left out; at a lower level it creates nothing and deletes nothing, and the
 log says how many it kept. Trees from a level with a file of its own are not matched to another
 level's rows: that import creates no trees, deletes none, and says which to delete to change level. The unattended path imports `MAX`.
+
+**An MPB 3.0 order's level is chosen before the download.** In the vault, a 3.0 order shows a `Fidelity Level`
+control beside `Import`, with `Max`, `Med` and `Min`, each with its download size, and the platform's
+recommendation (marked `recommended`) preselected; the counts behind a size are in its tooltip. `Import`
+downloads the level shown, and choosing another level downloads that one afresh and replaces the
+first, since a download holds one level. A 2.x order has no such control: its levels stay per category,
+in the checklist column above. The `Bundle Import` window a 3.0 bundle opens is the same window, with a
+row for each layer the bundle carries and no level list on a row; a step whose file the bundle does not
+hold is shown as skipped, naming the file, and the 1.2.0 notes list what a 3.0 import reads and leaves
+out ([`docs/release-notes-1.2.0.md`](docs/release-notes-1.2.0.md)).
 
 **A 3.0 bundle's rows say what they will take, and a row that would break five minutes starts unticked.** A 3.0 download holds one level, so a row has no level list; its estimate is the count the bundle's catalog states for its file times the measured cost per unit for the Revit you are running, for the rows that have a measured unit cost (the trees and the road surfaces). A row whose estimate, at its slowest, is over five minutes starts unticked, with its estimate and one line saying why; tick it and all of it imports, since the plugin never thins or samples a layer to fit. What you ticked last time does not tick such a row on another bundle. The unattended path is unchanged. A 2.x bundle is estimated as before.
 
