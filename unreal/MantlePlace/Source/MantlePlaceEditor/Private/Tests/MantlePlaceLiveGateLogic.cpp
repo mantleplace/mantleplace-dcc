@@ -2,6 +2,10 @@
 
 #include "MantlePlaceLiveGateLogic.h"
 
+#include "MantlePlaceArtifactHandler.h"
+#include "MantlePlaceImportManifest.h"
+#include "MantlePlaceImportOrchestration.h"
+
 void FMantlePlaceDzStatistics::Add(double Dz)
 {
 	++Count;
@@ -50,4 +54,47 @@ bool FMantlePlaceLiveGateLogic::MeanWithinTolerance(const FMantlePlaceDzStatisti
 bool FMantlePlaceLiveGateLogic::RmsWithinTolerance(const FMantlePlaceDzStatistics& Stats)
 {
 	return Stats.Count > 0 && Stats.Rms() <= MaxRmsCm;
+}
+
+FString FMantlePlaceLiveGateLogic::DrapeSkipLine(const FMantlePlaceVaultManifest& Manifest)
+{
+	// Only the drape handler, asked through the importer's own report, so another step's skip never reads as this one's.
+	MantlePlaceArtifacts::FHandlers Drape;
+	for (TUniquePtr<IMantlePlaceArtifactHandler>& Handler : MantlePlaceArtifacts::MakeAll())
+	{
+		if (Handler->Id() == FName(TEXT("drape")))
+		{
+			Drape.Add(MoveTemp(Handler));
+		}
+	}
+	for (const FString& Line : MantlePlaceImportOrchestration::DescribeFormatSkips(
+			 Drape, Manifest, FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode::Both)))
+	{
+		if (Line.StartsWith(TEXT("Skipped ")))
+		{
+			return Line;
+		}
+	}
+	return FString();
+}
+
+FString FMantlePlaceLiveGateLogic::JudgeDrape(
+	const FMantlePlaceVaultManifest& Manifest, const FString& ImportMessage, bool bMaterialIsDrape)
+{
+	if (Manifest.Drape.bPresent)
+	{
+		return bMaterialIsDrape
+			? FString()
+			: FString(TEXT("the import placed an imagery drape, but the landscape component is on the engine default surface"));
+	}
+	const FString SkipLine = DrapeSkipLine(Manifest);
+	if (!SkipLine.IsEmpty())
+	{
+		return ImportMessage.Contains(SkipLine, ESearchCase::CaseSensitive)
+			? FString()
+			: FString::Printf(TEXT("the import skipped the imagery drape but its log does not say so; expected: %s"), *SkipLine);
+	}
+	return ImportMessage.Contains(TEXT("No imagery drape in this bundle (geometry only)."), ESearchCase::CaseSensitive)
+		? FString()
+		: FString(TEXT("the bundle declares no drape, and the import log does not report the landscape as geometry only"));
 }
