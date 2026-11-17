@@ -128,7 +128,11 @@ public sealed class PluginCommands
         string zipPath = LocalBundleImport.Typed(named);
         if (!WindowedImport.Start(document, zipPath, end => WriteRecord(zipPath, end.Summary), out string? refusal))
         {
-            MantlePlaceApplication.Say(refusal ?? WindowedImport.AlreadyRunning);
+            // Nothing started, so no run will end to write the record: write it now, with the reason,
+            // or a script waiting for it waits until it gives up.
+            string reason = refusal ?? WindowedImport.AlreadyRunning;
+            MantlePlaceApplication.Say(reason);
+            WriteRecord(zipPath, reason);
         }
     }
 

@@ -151,6 +151,14 @@ internal static class LocalBundleImportTests
                 "read before AutoCAD's file prompt, which it skips");
         });
 
+        run.Case("a refused start still writes the record beside the zip, so a script waiting for it hears why", () =>
+        {
+            string body = MethodBody(commands, LocalBundleImport.Command);
+            run.True(
+                Regex.IsMatch(body, @"if \(!WindowedImport\.Start\([^\n]*\)\)\s*\{[^}]*WriteRecord\(zipPath, "),
+                "the branch taken when no import starts writes the record, with the reason");
+        });
+
         run.Case("the received-export window is gone: a send opens the shared import window", () =>
         {
             run.False(File.Exists(Path.Combine(folder, "ReceivedExportWindow.cs")), "no window of this host's own");
