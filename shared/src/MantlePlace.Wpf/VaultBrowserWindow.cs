@@ -104,6 +104,9 @@ public sealed class VaultBrowserWindow : Window
     private readonly LevelChoiceRow _levelRow = new();
     private LevelControl? _levelControl;
 
+    /// <summary>The levels the curator has chosen in this window, which a refreshed row keeps.</summary>
+    private readonly LevelChoices _choices = new();
+
     /// <summary>
     /// A row for every bundle the listing gave, whether the filter shows it or not. The list holds
     /// the subset <see cref="VaultRows.Matches"/> keeps, as the same row objects, so a row rewritten
@@ -341,20 +344,14 @@ public sealed class VaultBrowserWindow : Window
     private VaultBundle? Selected => (_list.SelectedItem as VaultRow)?.Bundle;
 
     /// <summary>
-    /// A different row: a 3.0 order's control is rebuilt on the recommendation, and a 2.x order, or a
-    /// host with no import here, shows none.
+    /// A row is selected: a 3.0 order's control is built on the curator's choice for it, else on the
+    /// recommendation, and a 2.x order, or a host with no import here, shows none. A refreshed row is
+    /// re-seated, which clears the selection and selects it again, so the choice is held in
+    /// <see cref="_choices"/> and not in the control this builds.
     /// </summary>
     private void OnSelectionChanged()
     {
-        VaultBundle? bundle = Selected;
-        if (_levelControl is not null && bundle is not null
-            && string.Equals(_levelControl.Bundle.OrderId, bundle.OrderId, StringComparison.Ordinal))
-        {
-            // The same order re-seated after a download: the curator's choice stands.
-            return;
-        }
-
-        _levelControl = _import is null ? null : LevelControl.For(bundle);
+        _levelControl = _import is null ? null : _choices.ControlFor(Selected);
         _levelRow.Show(_levelControl);
     }
 
@@ -365,7 +362,7 @@ public sealed class VaultBrowserWindow : Window
             return;
         }
 
-        if (_levelControl.Choose(level) && Selected is { } bundle)
+        if (_choices.Choose(_levelControl, level) && Selected is { } bundle)
         {
             UpdateRow(bundle, QuickEntry(bundle));
         }

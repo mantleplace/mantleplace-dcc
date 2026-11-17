@@ -125,6 +125,32 @@ internal static class DownloadLevelTests
                 "the 2.x view request is today's");
         });
 
+        run.Case("a chosen level stands when the window re-seats the row; the recommendation is only the start", () =>
+        {
+            VaultBundle large = ListedExample("mpb3LargeSite");
+            LevelChoices choices = new();
+
+            LevelControl shown = choices.ControlFor(large)!;
+            run.Equal(shown.Selected, FidelityLevel.Med, "before any choice, the control is on the recommendation");
+            run.True(choices.Choose(shown, FidelityLevel.Min), "the curator chooses Min");
+
+            // A row refresh clears the list's selection and seats the row again: the window asks for
+            // the control twice, once for no row and once for the same order, now a fresh listing row.
+            run.True(choices.ControlFor(null) is null, "no row selected shows no control");
+            LevelControl reseated = choices.ControlFor(ListedExample("mpb3LargeSite"))!;
+            run.Equal(reseated.Selected, FidelityLevel.Min, "the control still shows the choice");
+            run.Equal(reseated.SlotLevel, "MIN", "and Download requests that level");
+
+            run.False(choices.Choose(reseated, FidelityLevel.Raw), "a level not offered is no choice");
+            run.Equal(choices.ControlFor(large)!.Selected, FidelityLevel.Min, "and the choice stands");
+
+            run.True(choices.Choose(reseated, FidelityLevel.Max), "the curator chooses again");
+            run.Equal(choices.ControlFor(large)!.Selected, FidelityLevel.Max, "the latest choice stands");
+
+            run.True(choices.ControlFor(Two()) is null, "a 2.x order has no control, as before");
+            run.True(new LevelChoices().ControlFor(large)!.Selected == FidelityLevel.Med, "a window with no choice is on the recommendation");
+        });
+
         run.Case("Revit's 3.0 files are files the published description promises", () =>
             AssertPromised(run, BundleImportPlanner.ThreeFiles, "Revit"));
 
