@@ -2,8 +2,8 @@
 
 The body the `unreal-0.9.0` release takes, titled `unreal-0.9.0 — Mantle Place for Unreal` and written to
 [`docs/releases.md`](../../docs/releases.md), then the detail behind its MPB 3.0 lines. A 2.x bundle imports exactly
-as in 0.8.1. The **Verification** section is filled in from the release gate when the release is cut; until then each
-of its lines says what is still to run. The published body cites each pull request by its bare number, as
+as in 0.8.1. The **Verification** section holds the release gate's results on the packaged zip; its published-asset
+and storefront lines are filled in when the release is cut and the zip is submitted. The published body cites each pull request by its bare number, as
 [`docs/releases.md`](../../docs/releases.md) asks; this file links each number instead, because a bare number in a
 tracked file is refused by the public-reference gate.
 
@@ -39,10 +39,18 @@ Upgrade by replacing the `MantlePlace` folder; see below for what an MPB 3.0 ord
 
 ## Verification
 
-- Built from `<short sha>` on `main`. <Gate result at that commit: the automation suite in the full editor on a World Partition level; a live import of a dev-built 3.0 order at Max, Med and Min and of a 2.x bundle; a bundle sent from the web vault and imported.>
+- Built from `95140cc` on `main` (`git archive` of that commit, then `RunUAT BuildPlugin`, `Intermediate/` and every `*.pdb` removed, `LICENSE` and `TRADEMARK.md` added; 241 files). Gate result at that commit, on the Win64 zip installed clean in a fresh Unreal 5.8 project and signed in on the dev platform, six runs one at a time against one dev-built 3.0.0 order (Max, Med, Min and the whole bundle) and one 2.2.0 order: the automation suite (all 101 automation tests), the live import at each 3.0 level and of the 2.x order, and a bundle sent from the web vault and imported.
+
+  - `unreal.automation-suite v1: pass, 4 of 4 assertions, unreal 5.8, plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 2 artefacts`
+  - `unreal.import-check v2: pass, 17 of 17 assertions, unreal 5.8, bundle 3.0.0 level Max (vault order), plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 3 artefacts`
+  - `unreal.import-check v2: pass, 17 of 17 assertions, unreal 5.8, bundle 3.0.0 level Med (vault order), plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 3 artefacts`
+  - `unreal.import-check v2: pass, 17 of 17 assertions, unreal 5.8, bundle 3.0.0 level Min (vault order), plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 3 artefacts`
+  - `unreal.import-check v2: pass, 16 of 16 assertions, unreal 5.8, bundle 2.2.0 (vault order), plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 3 artefacts`
+  - `vault.round-trip v1: pass, 14 of 14 assertions, vault unreal-5.8, plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 3 artefacts`
+
 - Published asset: <check from step 4 and its date>.
-- `MantlePlace-UE5.8-Win64-0.9.0.zip` sha256 `<hash>`
-- Storefront: <submitted to Fab on date>, from the Source zip built from the same commit (`MantlePlace-UE5.8-Source-0.9.0.zip`, sha256 `<hash>`).
+- `MantlePlace-UE5.8-Win64-0.9.0.zip` sha256 `7ef23e358f2993f474566b7b64add0e7fd72f3e6de3a69f30d0003ffd316643f`
+- Storefront: <submitted to Fab on date>, from the Source zip built from the same commit (`MantlePlace-UE5.8-Source-0.9.0.zip`, sha256 `495839b66c3928e39ca4902f475d32c7a2af8e0a36a9d21f690540ff2f39c1c7`).
 
 Previous: [unreal-0.8.1](https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.8.1)
 ```
