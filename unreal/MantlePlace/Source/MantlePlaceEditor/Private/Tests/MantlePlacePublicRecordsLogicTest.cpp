@@ -43,6 +43,17 @@ bool FMantlePlacePublicRecordsFamiliesTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(FString::Printf(TEXT("%s is a known family"), Known), FMantlePlacePublicRecordsLogic::IsKnownFamily(Known));
 	}
+	// The names an MPB 3.x file table gives three of them read as the family they stand for.
+	for (const TCHAR* Alias : { TEXT("floodplain"), TEXT("conservation"), TEXT("heritage") })
+	{
+		TestTrue(FString::Printf(TEXT("%s is a known family"), Alias), FMantlePlacePublicRecordsLogic::IsKnownFamily(Alias));
+	}
+	TestEqual(TEXT("floodplain reads as flood zones"),
+		FMantlePlacePublicRecordsLogic::DisplayName(TEXT("floodplain")), FString(TEXT("Flood zones")));
+	TestEqual(TEXT("conservation reads as protected areas"),
+		FMantlePlacePublicRecordsLogic::DisplayName(TEXT("conservation")), FString(TEXT("Protected areas")));
+	TestEqual(TEXT("heritage reads as historic"),
+		FMantlePlacePublicRecordsLogic::DisplayName(TEXT("heritage")), FString(TEXT("Historic")));
 	TestFalse(TEXT("an unseen family is not known"), FMantlePlacePublicRecordsLogic::IsKnownFamily(TEXT("easements")));
 	TestFalse(TEXT("a known family is matched exactly"), FMantlePlacePublicRecordsLogic::IsKnownFamily(TEXT("Parcels")));
 
@@ -128,6 +139,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 {
 	TArray<FMantlePlaceRecordPolyline> Lines;
+	TArray<FVector2D> Points;
 	int32 Skipped = 0;
 	FString Error;
 
@@ -139,7 +151,7 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 		    TEXT("10\n442059.5\n20\n4014372.5\n")
 		    TEXT("10\n442059.5\n20\n4014472.5\n")
 		    TEXT("10\n441959.5\n20\n4014472.5\n"));
-		TestTrue(TEXT("lwpolyline parses"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Skipped, Error));
+		TestTrue(TEXT("lwpolyline parses"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Points, Skipped, Error));
 		TestEqual(TEXT("no error"), Error, FString());
 		TestEqual(TEXT("one line"), Lines.Num(), 1);
 		if (Lines.Num() == 1)
@@ -160,7 +172,7 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 		    TEXT("0\nVERTEX\n8\nZONING\n10\n150.0\n20\n250.0\n30\n0.0\n")
 		    TEXT("0\nVERTEX\n8\nZONING\n10\n170.0\n20\n260.0\n30\n0.0\n")
 		    TEXT("0\nSEQEND\n8\nZONING\n"));
-		TestTrue(TEXT("polyline parses"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Skipped, Error));
+		TestTrue(TEXT("polyline parses"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Points, Skipped, Error));
 		TestEqual(TEXT("one line"), Lines.Num(), 1);
 		if (Lines.Num() == 1)
 		{
@@ -180,7 +192,7 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 		    TEXT("0\nLINE\n10\n10.0\n20\n20.0\n11\n30.0\n21\n40.0\n")
 		    TEXT("0\nTEXT\n10\n5.0\n20\n5.0\n1\nlabel\n")
 		    TEXT("0\nPOINT\n10\n6.0\n20\n6.0\n"));
-		TestTrue(TEXT("mixed drawing parses"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Skipped, Error));
+		TestTrue(TEXT("mixed drawing parses"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Points, Skipped, Error));
 		TestEqual(TEXT("only the LINE is a line"), Lines.Num(), 1);
 		if (Lines.Num() == 1)
 		{
@@ -188,13 +200,88 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("its end easting"), Lines[0].Points[1].X, 30.0, 1e-9);
 			TestEqual(TEXT("its end northing"), Lines[0].Points[1].Y, 40.0, 1e-9);
 		}
-		TestEqual(TEXT("the polyface, the text and the point are counted as left out"), Skipped, 3);
+		TestEqual(TEXT("the point is kept as a point"), Points.Num(), 1);
+		TestEqual(TEXT("the polyface and the text are counted as left out"), Skipped, 2);
+	}
+
+	// --- HATCH: each boundary loop is a closed outline; the header's 10/20/30 and the pattern's seed are not vertices ---
+	{
+		const FString Text = Drawing(
+		    TEXT("0\nHATCH\n8\nFloodZones\n100\nAcDbHatch\n10\n0\n20\n0\n30\n0\n210\n0\n220\n0\n230\n1\n2\nSOLID\n70\n1\n71\n0\n")
+		    TEXT("91\n2\n")
+		    TEXT("92\n2\n72\n0\n73\n1\n93\n3\n10\n100.5\n20\n200.5\n10\n110.5\n20\n200.5\n10\n110.5\n20\n210.5\n97\n0\n")
+		    TEXT("92\n2\n72\n1\n73\n1\n93\n3\n10\n102.0\n20\n202.0\n42\n0.0\n10\n104.0\n20\n202.0\n42\n0.0\n10\n104.0\n20\n204.0\n42\n0.0\n97\n0\n")
+		    TEXT("75\n0\n76\n1\n98\n1\n10\n999.0\n20\n999.0\n"));
+		TestTrue(TEXT("hatch parses"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Points, Skipped, Error));
+		TestEqual(TEXT("one outline per boundary loop"), Lines.Num(), 2);
+		if (Lines.Num() == 2)
+		{
+			TestTrue(TEXT("a loop is closed"), Lines[0].bClosed);
+			TestEqual(TEXT("three vertices"), Lines[0].Points.Num(), 3);
+			TestEqual(TEXT("first easting is the file's own"), Lines[0].Points[0].X, 100.5, 1e-9);
+			TestEqual(TEXT("last northing is the file's own"), Lines[0].Points[2].Y, 210.5, 1e-9);
+			TestEqual(TEXT("a bulge is not a vertex"), Lines[1].Points.Num(), 3);
+			TestEqual(TEXT("second loop's middle easting"), Lines[1].Points[1].X, 104.0, 1e-9);
+		}
+		TestEqual(TEXT("the pattern seed point is not a point"), Points.Num(), 0);
+		TestEqual(TEXT("nothing left out"), Skipped, 0);
+	}
+
+	// --- HATCH with an edge path of straight edges; one with an arc edge is left out whole ---
+	{
+		const FString Text = Drawing(
+		    TEXT("0\nHATCH\n10\n0\n20\n0\n30\n0\n2\nSOLID\n70\n1\n71\n0\n91\n1\n")
+		    TEXT("92\n1\n93\n3\n")
+		    TEXT("72\n1\n10\n0.0\n20\n0.0\n11\n10.0\n21\n0.0\n")
+		    TEXT("72\n1\n10\n10.0\n20\n0.0\n11\n10.0\n21\n10.0\n")
+		    TEXT("72\n1\n10\n10.0\n20\n10.0\n11\n0.0\n21\n0.0\n")
+		    TEXT("97\n0\n75\n0\n76\n1\n98\n0\n")
+		    TEXT("0\nHATCH\n10\n0\n20\n0\n30\n0\n2\nSOLID\n70\n1\n71\n0\n91\n1\n")
+		    TEXT("92\n1\n93\n2\n")
+		    TEXT("72\n2\n10\n5.0\n20\n5.0\n40\n3.0\n50\n0.0\n51\n180.0\n73\n1\n")
+		    TEXT("72\n1\n10\n2.0\n20\n5.0\n11\n8.0\n21\n5.0\n")
+		    TEXT("97\n0\n75\n0\n76\n1\n98\n0\n"));
+		TestTrue(TEXT("edge-path hatches parse"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Points, Skipped, Error));
+		TestEqual(TEXT("only the straight-edged loop is drawn"), Lines.Num(), 1);
+		if (Lines.Num() == 1)
+		{
+			TestEqual(TEXT("one vertex per edge, the closing end not repeated"), Lines[0].Points.Num(), 3);
+			TestEqual(TEXT("its second vertex"), Lines[0].Points[1].X, 10.0, 1e-9);
+		}
+		TestEqual(TEXT("the arc-edged hatch is counted as left out"), Skipped, 1);
+	}
+
+	// --- POINT: kept at the file's own coordinates, with the marker centred on it ---
+	{
+		const FString Text = Drawing(
+		    TEXT("0\nPOINT\n8\nCONTAMINATION\n100\nAcDbPoint\n10\n619838.25\n20\n3349107.75\n30\n0.0\n1001\nMP\n1000\nREGISTRY_ID=1\n")
+		    TEXT("0\nPOINT\n8\nCONTAMINATION\n10\n619900.0\n20\n3349200.0\n30\n0.0\n"));
+		TestTrue(TEXT("points parse"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Points, Skipped, Error));
+		TestEqual(TEXT("no lines"), Lines.Num(), 0);
+		TestEqual(TEXT("a point per POINT"), Points.Num(), 2);
+		TestEqual(TEXT("nothing left out"), Skipped, 0);
+		if (Points.Num() == 2)
+		{
+			TestEqual(TEXT("easting is the file's own"), Points[0].X, 619838.25, 1e-6);
+			TestEqual(TEXT("northing is the file's own"), Points[0].Y, 3349107.75, 1e-6);
+			const FMantlePlaceRecordPolyline Marker = FMantlePlacePublicRecordsLogic::MarkerOutline(Points[0]);
+			TestTrue(TEXT("the marker is a closed outline"), Marker.bClosed);
+			TestEqual(TEXT("with four corners"), Marker.Points.Num(), 4);
+			double SumX = 0.0, SumY = 0.0;
+			for (const FVector2D& Corner : Marker.Points)
+			{
+				SumX += Corner.X;
+				SumY += Corner.Y;
+			}
+			TestEqual(TEXT("centred on the point's easting"), SumX / 4.0, Points[0].X, 1e-6);
+			TestEqual(TEXT("centred on the point's northing"), SumY / 4.0, Points[0].Y, 1e-6);
+		}
 	}
 
 	// --- CRLF line ends, and a drawing with no lines in it is a success with none ------------
 	{
 		const FString Text = Drawing(TEXT("0\nTEXT\n10\n5.0\n20\n5.0\n1\nlabel\n")).Replace(TEXT("\n"), TEXT("\r\n"));
-		TestTrue(TEXT("CRLF drawing parses"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Skipped, Error));
+		TestTrue(TEXT("CRLF drawing parses"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Points, Skipped, Error));
 		TestEqual(TEXT("no lines"), Lines.Num(), 0);
 		TestEqual(TEXT("the text is counted"), Skipped, 1);
 	}
@@ -202,15 +289,15 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 	// --- Fail closed on what is not an ASCII drawing -----------------------------------------
 	{
 		TestFalse(TEXT("binary DXF is refused"),
-			FMantlePlacePublicRecordsLogic::ParseDxf(TEXT("AutoCAD Binary DXF\r\n"), Lines, Skipped, Error));
+			FMantlePlacePublicRecordsLogic::ParseDxf(TEXT("AutoCAD Binary DXF\r\n"), Lines, Points, Skipped, Error));
 		TestTrue(TEXT("and named as binary"), Error.Contains(TEXT("binary")));
 
 		TestFalse(TEXT("text that is not group codes is refused"),
-			FMantlePlacePublicRecordsLogic::ParseDxf(TEXT("hello\nworld\n"), Lines, Skipped, Error));
+			FMantlePlacePublicRecordsLogic::ParseDxf(TEXT("hello\nworld\n"), Lines, Points, Skipped, Error));
 		TestTrue(TEXT("and the line is named"), Error.Contains(TEXT("line 1")));
 
 		TestFalse(TEXT("a drawing with no ENTITIES section is refused"),
-			FMantlePlacePublicRecordsLogic::ParseDxf(TEXT("0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nEOF\n"), Lines, Skipped, Error));
+			FMantlePlacePublicRecordsLogic::ParseDxf(TEXT("0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nEOF\n"), Lines, Points, Skipped, Error));
 		TestTrue(TEXT("and the missing section is named"), Error.Contains(TEXT("ENTITIES")));
 		TestEqual(TEXT("a refusal keeps no lines"), Lines.Num(), 0);
 	}
@@ -381,6 +468,69 @@ bool FMantlePlacePublicRecordsWordsTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("one pointer, one source"), Lines.Num(), 2);
 		TestTrue(TEXT("the pointer first"), Lines.Num() > 0 && Lines[0].StartsWith(TEXT("Parcels")));
 		TestTrue(TEXT("the source after"), Lines.Num() > 1 && Lines[1].StartsWith(TEXT("Zoning")));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FMantlePlacePublicRecordsPublishedFrameTest,
+    "MantlePlace.Import.PublicRecordsLogic.PublishedFrame",
+    EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlacePublicRecordsPublishedFrameTest::RunTest(const FString& Parameters)
+{
+	// A frame the published manifest states is written into the reader's shape verbatim; CanPlaceFrame judges it.
+	TestEqual(TEXT("an absolute file is a projected one"),
+		FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(TEXT("absolute")), FString(TEXT("projected")));
+	TestEqual(TEXT("an offset file is a local one"),
+		FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(TEXT("offset")), FString(TEXT("local")));
+	TestEqual(TEXT("a mode nobody has met is shown as stated"),
+		FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(TEXT("tiled")), FString(TEXT("tiled")));
+
+	FString Refusal;
+	{
+		const FMantlePlaceRecordFrame Frame = FMantlePlacePublicRecordsLogic::StatedFrame(TEXT("projected"), TEXT("EPSG:32613"), true, 1.0);
+		TestTrue(TEXT("a factor of exactly 1 is the metre"), Frame.bStated && Frame.HorizontalUnit == TEXT("m"));
+		TestTrue(TEXT("a metric file in the host's grid is placed: ") + Refusal,
+			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:32613"), Refusal));
+		TestFalse(TEXT("the same file is not placed in another grid"),
+			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:32614"), Refusal));
+	}
+	{
+		const FMantlePlaceRecordFrame Frame = FMantlePlacePublicRecordsLogic::StatedFrame(
+			TEXT("projected"), TEXT("EPSG:2277"), true, 0.3048006096, TEXT("US survey foot"));
+		TestEqual(TEXT("a foot is stated as it is, factor and name"), Frame.HorizontalUnit, FString(TEXT("US survey foot (0.3048006096 m)")));
+		TestFalse(TEXT("a foot grid is refused, never scaled"),
+			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:2277"), Refusal));
+		TestTrue(TEXT("and the refusal names the unit: ") + Refusal, Refusal.Contains(TEXT("US survey foot")));
+	}
+	{
+		const FMantlePlaceRecordFrame Frame = FMantlePlacePublicRecordsLogic::StatedFrame(TEXT("projected"), TEXT("EPSG:4326"), false, 0.0);
+		TestTrue(TEXT("a geographic CRS states no unit factor, so no unit"), Frame.bStated && Frame.HorizontalUnit.IsEmpty());
+		TestFalse(TEXT("and is refused as stated only in part"),
+			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:4326"), Refusal));
+	}
+	{
+		const FMantlePlaceRecordFrame Frame = FMantlePlacePublicRecordsLogic::StatedFrame(
+			FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(TEXT("offset")), TEXT("EPSG:32613"), true, 1.0);
+		TestFalse(TEXT("an offset file is not in the host's absolute grid"),
+			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:32613"), Refusal));
+	}
+
+	// What a 3.x download does not hold: one line per layer and stated reason, the reason verbatim.
+	{
+		FMantlePlacePublicRecordsBlock Block;
+		Block.NotHeld.Add({ TEXT("zoning"), TEXT("Records/Zoning.dxf"), TEXT("The AOI has no zoning record.") });
+		Block.NotHeld.Add({ TEXT("zoning"), TEXT("Records/Zoning.gpkg"), TEXT("The AOI has no zoning record.") });
+		Block.NotHeld.Add({ TEXT("floodplain"), TEXT("Records/Floodplain.gpkg"), FString() });
+		const TArray<FString> Lines = FMantlePlacePublicRecordsLogic::DescribeNotDelivered(Block);
+		if (TestEqual(TEXT("two layers, two lines"), Lines.Num(), 2))
+		{
+			TestEqual(TEXT("the two files share a line and the reason"), Lines[0],
+				FString(TEXT("Zoning not in this download (Records/Zoning.dxf, Records/Zoning.gpkg): The AOI has no zoning record.")));
+			TestEqual(TEXT("no stated reason is not invented"), Lines[1],
+				FString(TEXT("Flood zones not in this download (Records/Floodplain.gpkg).")));
+		}
 	}
 	return true;
 }

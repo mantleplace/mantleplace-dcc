@@ -152,6 +152,12 @@ internal sealed class WindowedImport : IImportWindowHost
     }
 
     /// <inheritdoc/>
+    /// <remarks>Never called: the window is given no level control (<see cref="AutoCadExportImportHost"/>).</remarks>
+    public void ChooseLevel(FidelityLevel level)
+    {
+    }
+
+    /// <inheritdoc/>
     public void CancelRun() => _run?.RequestCancel();
 
     /// <inheritdoc/>

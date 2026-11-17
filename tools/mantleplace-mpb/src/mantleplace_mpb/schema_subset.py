@@ -53,14 +53,21 @@ def errors(schema: dict, instance: object) -> list[tuple[str, str]]:
     dialect = schema.get("$schema")
     if dialect is not None and dialect.rstrip("#") != DIALECT:
         raise UnsupportedSchema(f"dialect {dialect!r} is not JSON Schema 2020-12")
-    _audit(schema, schema, "#")
+    _audit(schema, schema, "#", set())
     out: list[tuple[str, str]] = []
     _Evaluator(schema).evaluate(schema, instance, "", out)
     return out
 
 
-def _audit(root: dict, node: object, where: str) -> None:
-    """Refuse, up front, any keyword or reference the evaluator would not honour."""
+def _audit(root: dict, node: object, where: str, seen: set[str]) -> None:
+    """Refuse, up front, any keyword or reference the evaluator would not honour.
+
+    The audit follows evaluation: every subschema an applicator reaches, and every schema a `$ref`
+    reaches. `$defs` is not walked on its own, because it is a store a `$ref` reads by pointer and
+    may group schemas under a name that is not a keyword (the 3.0 schema's `$defs.files.<path>`);
+    each schema in it is audited when, and only when, a reference reaches it, which is every way
+    the evaluator can apply one.
+    """
     if isinstance(node, bool):
         return
     if not isinstance(node, dict):
@@ -69,16 +76,21 @@ def _audit(root: dict, node: object, where: str) -> None:
         if key not in KNOWN_KEYWORDS:
             raise UnsupportedSchema(f"{where} uses the keyword {key!r}, which this validator "
                                     "does not evaluate")
+        if key == "$defs":
+            continue
         if key in _SCHEMA_MAPS:
             for name, sub in value.items():
-                _audit(root, sub, f"{where}/{key}/{escape(name)}")
+                _audit(root, sub, f"{where}/{key}/{escape(name)}", seen)
         elif key in _SCHEMA_ONE:
-            _audit(root, value, f"{where}/{key}")
+            _audit(root, value, f"{where}/{key}", seen)
         elif key in _SCHEMA_LIST:
             for i, sub in enumerate(value):
-                _audit(root, sub, f"{where}/{key}/{i}")
+                _audit(root, sub, f"{where}/{key}/{i}", seen)
         elif key == "$ref":
-            _resolve(root, value)
+            target = _resolve(root, value)
+            if value not in seen:
+                seen.add(value)
+                _audit(root, target, value, seen)
         elif key == "pattern":
             _compile(value)
     for pattern in (node.get("patternProperties") or {}):

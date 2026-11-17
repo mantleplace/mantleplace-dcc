@@ -71,6 +71,65 @@ FMantlePlaceRecordFile ReadFile(
 	return File;
 }
 
+/**
+ * What the published manifest states for a record file in the neutral `file_entries[<path>]`
+ * (MPB 1.14.0 on): its full frame (`fileEntryFrame`), its licence and the sources it was made from.
+ * Each is taken only where the file's own block entry did not already state it, verbatim and judged
+ * nowhere here: a frame is CanPlaceFrame's call, a credit is shown as published.
+ */
+void ApplyPublishedEntry(FMantlePlaceRecordFile& File, const TSharedPtr<FJsonObject>& Root)
+{
+	const TSharedPtr<FJsonObject> Entry = FindFileEntry(Root, File.Path);
+	if (!Entry.IsValid())
+	{
+		return;
+	}
+	if (!File.Frame.bStated)
+	{
+		const TSharedPtr<FJsonObject>* Frame = GetObject(Entry, TEXT("frame"));
+		bool bPlaced = true;
+		if (Frame != nullptr)
+		{
+			(*Frame)->TryGetBoolField(TEXT("placed"), bPlaced); // `{ "placed": false }` states no spatial frame
+		}
+		if (Frame != nullptr && bPlaced)
+		{
+			FString Crs;
+			if (const TSharedPtr<FJsonObject>* Horizontal = GetObject(*Frame, TEXT("horizontal_crs")))
+			{
+				Crs = GetString(*Horizontal, TEXT("code")); // a PROJJSON or WKT2 form states no code: left empty, a named refusal
+			}
+			const bool bHasFactor = (*Frame)->HasTypedField<EJson::Number>(TEXT("unit_to_metres"));
+			File.Frame = FMantlePlacePublicRecordsLogic::StatedFrame(
+				FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(GetString(*Frame, TEXT("coordinate_mode"))), Crs,
+				bHasFactor, bHasFactor ? (*Frame)->GetNumberField(TEXT("unit_to_metres")) : 0.0);
+		}
+	}
+	if (File.License.IsEmpty())
+	{
+		File.License = GetString(Entry, TEXT("license"));
+	}
+	if (File.Source.IsEmpty())
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Sources = nullptr;
+		TArray<FString> Named;
+		if (Entry->TryGetArrayField(TEXT("sources"), Sources) && Sources != nullptr)
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Sources)
+			{
+				const TSharedPtr<FJsonObject> Source = Value.IsValid() ? Value->AsObject() : TSharedPtr<FJsonObject>();
+				const FString Name = Source.IsValid() ? GetString(Source, TEXT("name")) : FString();
+				if (!Name.IsEmpty())
+				{
+					const FString Link = GetString(Source, TEXT("link"));
+					Named.Add(Link.IsEmpty() ? Name : FString::Printf(TEXT("%s (%s)"), *Name, *Link));
+				}
+			}
+		}
+		File.Source = FString::Join(Named, TEXT("; "));
+	}
+}
+
 FMantlePlaceRecordPointer ReadPointer(const TSharedPtr<FJsonObject>& Row)
 {
 	FMantlePlaceRecordPointer Pointer;
@@ -105,7 +164,7 @@ void AddPointer(FMantlePlaceRecordLayer& Layer, const FMantlePlaceRecordPointer&
 /** Whether a top-level member is a public-record family block, and if so its layer (otherwise Layer stays empty). */
 bool ReadLayer(
 	const FString& Key, const TSharedPtr<FJsonObject>& Block, const TSharedPtr<FJsonObject>& Layout,
-	const TSharedPtr<FJsonObject>& Files, FMantlePlaceRecordLayer& Layer)
+	const TSharedPtr<FJsonObject>& Files, const TSharedPtr<FJsonObject>& Root, FMantlePlaceRecordLayer& Layer)
 {
 	const bool bKnown = FMantlePlacePublicRecordsLogic::IsKnownFamily(Key);
 
@@ -160,6 +219,7 @@ bool ReadLayer(
 			continue;
 		}
 		FMantlePlaceRecordFile File = ReadFile(EntryKey, *Entry, Files);
+		ApplyPublishedEntry(File, Root);
 		if (Layer.Credit.IsEmpty())
 		{
 			Layer.Credit = GetString(*Entry, TEXT("credit"));
@@ -198,6 +258,7 @@ bool ReadLayer(
 		{
 			File.Sha256 = GetString(*Listed, TEXT("sha256"));
 		}
+		ApplyPublishedEntry(File, Root);
 		Layer.Files.Add(MoveTemp(File));
 	};
 	AddFromLayout(Key + TEXT("_gpkg"), TEXT("gpkg"));
@@ -252,10 +313,15 @@ public:
 				continue;
 			}
 			FMantlePlaceRecordLayer Layer;
-			if (ReadLayer(Member.Key, *MemberObject, Layout, Files, Layer))
+			if (ReadLayer(Member.Key, *MemberObject, Layout, Files, In.Root, Layer))
 			{
 				Block.Layers.Add(MoveTemp(Layer));
 			}
+		}
+
+		if (const TSharedPtr<FJsonObject>* AttributionPtr = GetObject(In.Root, TEXT("attribution")))
+		{
+			Block.BundleNotice = GetString(*AttributionPtr, TEXT("notice")); // the bundle's own, shown once
 		}
 
 		if (const TSharedPtr<FJsonObject>* CompletenessPtr = GetObject(In.Root, TEXT("completeness")))
@@ -308,7 +374,7 @@ public:
 		// A layer with an empty family key could only come from a pointer row naming no layer: it is
 		// kept (the holder is worth showing) and reads as "Record" in the sentence.
 		FMantlePlacePublicRecordsLogic::OrderLayers(Block.Layers);
-		Block.bPresent = Block.Layers.Num() > 0 || Block.SkippedSources.Num() > 0;
+		Block.bPresent = Block.Layers.Num() > 0 || Block.SkippedSources.Num() > 0 || Block.NotHeld.Num() > 0;
 		return true;
 	}
 
@@ -341,6 +407,10 @@ public:
 		// The notice comes first and whatever else follows: it is the one thing every public-record
 		// import says, whether or not the manifest carries a notice of its own for a layer.
 		Ctx.Log.Add(FMantlePlacePublicRecordsLogic::StandingNotice());
+		if (!Block.BundleNotice.IsEmpty())
+		{
+			Ctx.Log.Add(FString::Printf(TEXT("The bundle's notice: %s"), *Block.BundleNotice));
+		}
 		for (const FMantlePlaceRecordLayer& Layer : Block.Layers)
 		{
 			if (Layer.Files.Num() == 0)
@@ -363,6 +433,8 @@ private:
 
 		TArray<FMantlePlaceRecordPolyline> Lines;
 		TArray<FString> Drawn;
+		int32 LinesDrawn = 0;  // lines and area outlines, as the file states them
+		int32 PointsDrawn = 0; // each drawn as a marker
 		bool bAnyDxf = false;
 		for (const FMantlePlaceRecordFile& File : Layer.Files)
 		{
@@ -386,11 +458,19 @@ private:
 			FString Text, Error;
 			FFileHelper::BufferToString(Text, Bytes.GetData(), Bytes.Num());
 			TArray<FMantlePlaceRecordPolyline> FileLines;
+			TArray<FVector2D> FilePoints;
 			int32 EntitiesSkipped = 0;
-			if (!FMantlePlacePublicRecordsLogic::ParseDxf(Text, FileLines, EntitiesSkipped, Error))
+			if (!FMantlePlacePublicRecordsLogic::ParseDxf(Text, FileLines, FilePoints, EntitiesSkipped, Error))
 			{
 				Ctx.Log.Add(FString::Printf(TEXT("%s skipped (%s): %s."), *Name, *File.Path, *Error));
 				continue;
+			}
+			const int32 FileLineCount = FileLines.Num();
+			// A point is drawn as a small marker centred on the file's own coordinates; it joins the lines so the
+			// on-site backstop below weighs it like any other vertex.
+			for (const FVector2D& Point : FilePoints)
+			{
+				FileLines.Add(FMantlePlacePublicRecordsLogic::MarkerOutline(Point));
 			}
 			// The one-way backstop behind a stated frame: a producer can state a frame wrongly.
 			if (!FMantlePlacePublicRecordsLogic::AnyVertexOnSite(
@@ -405,9 +485,11 @@ private:
 			if (EntitiesSkipped > 0)
 			{
 				Ctx.Log.Add(FString::Printf(
-					TEXT("%s: %d drawing entit%s in %s that are not lines were left out."), *Name, EntitiesSkipped,
+					TEXT("%s: %d drawing entit%s in %s that are not lines, areas or points were left out."), *Name, EntitiesSkipped,
 					EntitiesSkipped == 1 ? TEXT("y") : TEXT("ies"), *File.Path));
 			}
+			LinesDrawn += FileLineCount;
+			PointsDrawn += FilePoints.Num();
 			Lines.Append(FileLines);
 			Drawn.Add(File.Path);
 		}
@@ -426,7 +508,7 @@ private:
 		}
 		if (Lines.Num() == 0)
 		{
-			Ctx.Log.Add(FString::Printf(TEXT("%s: the linework holds no lines to show."), *Name));
+			Ctx.Log.Add(FString::Printf(TEXT("%s: the drawing holds no lines, areas or points to show."), *Name));
 			return;
 		}
 
@@ -503,8 +585,9 @@ private:
 		Actor->Tags.Add(FName(*FString::Printf(TEXT("record_family=%s"), *Layer.Family)));
 		Ctx.Result.CreatedActors.Add(Actor->GetActorLabel());
 		Ctx.Log.Add(FString::Printf(
-			TEXT("%s: %d line(s) from %s, one overlay (%s). Hide or show it in the Outliner to toggle the layer."), *Name,
-			Lines.Num(), *FString::Join(Drawn, TEXT(", ")), *Actor->GetActorLabel()));
+			TEXT("%s: %d line(s) or area outline(s) and %d point marker(s) from %s, one overlay (%s). Hide or show it in the "
+			     "Outliner to toggle the layer."),
+			*Name, LinesDrawn, PointsDrawn, *FString::Join(Drawn, TEXT(", ")), *Actor->GetActorLabel()));
 		if (Landscape == nullptr)
 		{
 			Ctx.Log.Add(FString::Printf(

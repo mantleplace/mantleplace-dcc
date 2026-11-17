@@ -158,6 +158,23 @@ public sealed class BundleArtifact
     /// could place.
     /// </summary>
     public BundleArtifact? GeoJsonFallback { get; init; }
+
+    /// <summary>
+    /// For a file of an MPB 3.0 bundle, the family its extension puts it in (<c>spec/format.md</c> §4),
+    /// which settles its frame: a georeferenced file is absolute in the order's CRS and unit, a
+    /// host-ready file is offsets from the site origin in metres. <c>null</c> for every 2.x pointer,
+    /// which states its frame itself.
+    /// </summary>
+    internal FileFamily? Family { get; init; }
+
+    /// <summary>
+    /// For a host-ready file of an MPB 3.0 bundle, the site origin's height its heights are measured
+    /// above, in metres, as the manifest states it; <c>null</c> otherwise (<see cref="ImportStep.HeightBaseM"/>).
+    /// </summary>
+    internal double? HeightBaseM { get; init; }
+
+    /// <summary>For a raster of an MPB 3.0 bundle, what its catalog entry states about it; <c>null</c> otherwise.</summary>
+    internal RasterGrid? Raster { get; init; }
 }
 
 /// <summary>One <c>hosts.&lt;hostId&gt;.readiness.&lt;path&gt;</c> entry.</summary>
@@ -791,6 +808,14 @@ public sealed class BundleManifest
     public GeoOrigin? SurveyPoint { get; internal set; }
 
     public bool HasPreDerivedSurveyPoint => SurveyPoint is { IsUsable: true };
+
+    /// <summary>
+    /// What <see cref="BundleReader"/> found in the bundle, for either major: where the manifest was,
+    /// the download's level, each file found by its catalog name with its family, frame and count, and
+    /// each file named and not read. <c>null</c> on a manifest parsed alone, with no bundle around it
+    /// (<see cref="BundleManifestReader.Parse"/>).
+    /// </summary>
+    public BundleContents? Contents { get; internal set; }
 
     /// <summary>
     /// Directory prefix of a Cesium terrain pointer: <c>"Elevation/Terrain/layer.json"</c> yields

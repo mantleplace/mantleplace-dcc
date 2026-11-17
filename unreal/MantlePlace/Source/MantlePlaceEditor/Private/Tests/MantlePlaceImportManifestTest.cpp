@@ -777,6 +777,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 {
+	if (MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
+	{
+		return true;
+	}
+
 	// --- The corpus drives every manifest vector -------------------------------------------
 	TArray<FCase> Cases;
 	FString LoadError;
@@ -1323,11 +1328,25 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 {
+	// --- When a missing corpus skips: in a packaged plugin always, in a source tree only where CI
+	// is unset. Asserted before the skip itself, so it holds in a release zip's run too, where
+	// nothing below can run. ---
+	TestTrue(TEXT("no corpus, source tree, CI unset: the corpus tests skip"), MissingCorpusSkips(FString(), false));
+	TestFalse(TEXT("no corpus, source tree, CI=true: the corpus tests fail"), MissingCorpusSkips(TEXT("true"), false));
+	TestFalse(TEXT("no corpus, source tree, CI=1: the corpus tests fail"), MissingCorpusSkips(TEXT("1"), false));
+	TestTrue(TEXT("no corpus, packaged, CI=true: the corpus tests skip"), MissingCorpusSkips(TEXT("true"), true));
+	TestTrue(TEXT("no corpus, packaged, CI unset: the corpus tests skip"), MissingCorpusSkips(FString(), true));
+
+	if (SkipWithoutCorpus(*this))
+	{
+		return true;
+	}
+
 	const FString CorpusRoot = FindCorpusRoot();
 	if (CorpusRoot.IsEmpty())
 	{
 		AddError(TEXT("could not locate tools/manifest-conformance/corpus/ — without it the reader ")
-		         TEXT("self-test (HPS-46) cannot run, and it must fail rather than skip"));
+		         TEXT("self-test (HPS-46) cannot run, and in CI it must fail rather than skip"));
 		return false;
 	}
 	const FString SelfTestDir = FPaths::Combine(CorpusRoot, TEXT("self-test"));

@@ -200,6 +200,7 @@ Most facts already have exactly one home. Find it before writing a fact down any
   **0017** the **mpb reader** is a CI-published Python track, tagged `mpb-<version>` ·
   **0018** the **Revit track goes to 1.0.0** for its storefront; Unreal's numbering is unaffected.
   Amendment A1: any track published to the Autodesk storefront starts at 1.0.0, and the AutoCAD track starts at `autocad-1.0.0`.
+  **0019** plugins share **a common core, a .NET home and corpus cases**; each host keeps its **own version track**.
   When to write one, and the two edits it takes: [`docs/agents/domain.md`](docs/agents/domain.md).
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
   authority; never restate a value it owns or hardcode a version in prose — each host's verified
@@ -211,6 +212,10 @@ Most facts already have exactly one home. Find it before writing a fact down any
   [`changelog.md`](spec/changelog.md) is the one place versions appear. The conformance corpus is
   maintainer-owned: a case is proposed by pull request, never forked
   ([`corpus/README.md`](tools/manifest-conformance/corpus/README.md)).
+- **Building the reader for a new host** → [`docs/building-a-reader-for-mpb-3.md`](docs/building-a-reader-for-mpb-3.md):
+  how to tell 2.x from 3.0, the catalog, the two families, the level, what to request, the common core,
+  running the corpus reader cases and the checklist before a first release. It links the rules and
+  restates none.
 - **Cross-host normative rules** → [`docs/host-plugin-standard.md`](docs/host-plugin-standard.md),
   cited by `HPS-NN` id. A public file may cite only a rule whose text is published there
   ([ADR 0007](docs/adr/0007-publicly-cited-standard-rules-are-published-here.md)), and

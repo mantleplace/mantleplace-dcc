@@ -382,6 +382,8 @@ internal static class ImportLayerTests
                 [SkipReasonCode.GeographicOriginOutOfRange] = null,
                 [SkipReasonCode.LeftOutByChoice] = null,
                 [SkipReasonCode.LevelUnavailable] = null,
+                [SkipReasonCode.NotInFormat] = null,
+                [SkipReasonCode.NotHeld] = "This bundle does not hold this. The import log gives the bundle's reason.",
             };
 
             foreach (SkipReasonCode code in Enum.GetValues<SkipReasonCode>())
@@ -606,6 +608,19 @@ internal static class ImportLayerTests
             }
 
             run.Equal(checklist.SlowLayerWarnings.Count, 0, "nothing ticked by default warns");
+        });
+
+        run.Case("a 2.x plan carries no catalog cost, so its checklist estimates no layer and unticks none for its time", () =>
+        {
+            BundleImportPlan plan = PlanFor(Everything, EverythingBundle);
+            run.True(plan.Steps.All(step => step.Cost is null), "no step carries a count of its file");
+
+            ImportChecklist checklist = ImportChecklist.For(plan, "2026");
+            foreach (ImportLayer layer in checklist.Layers)
+            {
+                run.True(checklist.EstimateNote(layer) is null, $"{layer} has no estimate note");
+                run.False(checklist.IsOverBudget(layer), $"{layer} is not over a budget");
+            }
         });
 
         run.Case("no box is slow, so none warns in any version", () =>

@@ -161,6 +161,14 @@ void PlanSteps(
 	FMantlePlaceImportSteps& Steps);
 
 /**
+ * The import log's lines for an MPB 3.x bundle: one per step the selection includes that the bundle
+ * cannot feed, `Skipped <step>: <reason>` (the rows PlanSteps lists Not Run), then each note on part of
+ * a step. Empty for a 2.x bundle.
+ */
+TArray<FString> DescribeFormatSkips(
+	const FHandlers& Handlers, const FMantlePlaceVaultManifest& Manifest, const FMantlePlaceImportSelection& Selection);
+
+/**
  * Each included handler's Prepare / Import / Finalize, in registry order.
  *
  * With Context.Steps set, a cancel takes effect between handlers, never inside one: before a handler's

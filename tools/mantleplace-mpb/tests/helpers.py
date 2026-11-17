@@ -33,6 +33,19 @@ SYNTHETIC_SCHEMA = {
 SYNTHETIC_SCHEMA_2 = {**SYNTHETIC_SCHEMA, "properties": {**SYNTHETIC_SCHEMA["properties"],
                                                         "version": {"const": "2.0.0"}}}
 
+#: Stands in for the 3.0 schema: the members a 3.x manifest is read by, and no `layout`.
+SYNTHETIC_SCHEMA_3 = {
+    "$schema": SCHEMA_2020_12,
+    "type": "object",
+    "required": ["version", "level", "catalog", "not_held"],
+    "properties": {
+        "version": {"const": "3.0.0"},
+        "level": {"enum": ["Max", "Med", "Min"]},
+        "catalog": {"type": "object"},
+        "not_held": {"type": "array"},
+    },
+}
+
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -83,11 +96,15 @@ def make_folder(root: Path, files: dict[str, bytes]) -> Path:
     return root
 
 
-def make_zip(path: Path, files: dict[str, bytes], prefix: str = "") -> Path:
+def make_zip(path: Path, files: dict[str, bytes], prefix: str = "",
+             methods: dict[str, int] | None = None) -> Path:
+    """A zip of `files`, DEFLATE-compressed as a conforming bundle is; `methods` names the zip
+    method (`zipfile.ZIP_STORED` and the like) of the members that differ."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(path, "w") as archive:
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, data in files.items():
-            archive.writestr(prefix + name, data)
+            archive.writestr(prefix + name, data, compress_type=(methods or {}).get(
+                name, zipfile.ZIP_DEFLATED))
     return path
 
 

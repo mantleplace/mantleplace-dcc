@@ -1,0 +1,77 @@
+{
+  "$comment": "The catalog names `Imagery/Imagery.png`, and the download holds no such file. A validator refuses this bundle; a reader does not: it reports the name as skipped, `file-missing`, and reads every file it does find. A name with no file is reported, never fatal.",
+  "bundle": "bundle/v3-catalog-file-missing.json",
+  "result": {
+    "outcome": "read",
+    "major": 3,
+    "version": "3.0.0",
+    "manifestPath": "Manifest.json",
+    "level": "Max",
+    "frames": {
+      "georeferenced": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "geoid_model": "EGM2008",
+        "horizontal_unit": {
+          "name": "metre",
+          "to_metres": 1
+        },
+        "vertical_unit": {
+          "name": "metre",
+          "to_metres": 1
+        },
+        "axis_order": "east-north",
+        "grid_rotation_deg": 0.67
+      },
+      "local": {
+        "origin": {
+          "longitude": -73.975,
+          "latitude": 40.755,
+          "ellipsoidal_height_m": -12.5,
+          "height_m": 20.0,
+          "projected": {
+            "crs": {
+              "code": "EPSG:32618"
+            },
+            "x": 586500.0,
+            "y": 4512000.0,
+            "unit": {
+              "name": "metre",
+              "to_metres": 1
+            }
+          }
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "geoid_model": "EGM2008",
+        "unit": {
+          "name": "metre",
+          "to_metres": 1
+        },
+        "axes": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "grid_rotation_deg": 0.67
+      }
+    },
+    "refusal": null,
+    "files": [
+      {"path": "Basemap/Roads.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Roads.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Elevation/Elevation.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Elevation/Terrain.glb", "family": "host-ready", "frame": "site", "count": 200000},
+      {"path": "Manifest.json", "family": null, "frame": null, "count": null},
+      {"path": "Readme.md", "family": null, "frame": null, "count": null}
+    ],
+    "skipped": [
+      {"path": "Imagery/Imagery.png", "why": "file-missing", "reason": null}
+    ]
+  }
+}

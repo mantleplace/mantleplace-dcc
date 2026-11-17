@@ -191,6 +191,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceOdblManifestTest::RunTest(const FString& Parameters)
 {
+	if (MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
+	{
+		return true;
+	}
+
 	const FString Root = MantlePlaceConformanceCorpus::FindCorpusRoot();
 	if (!TestFalse(TEXT("the shared corpus is found"), Root.IsEmpty()))
 	{

@@ -1,0 +1,76 @@
+{
+  "$comment": "A 3.1.0 bundle holds `Records/Easements.gpkg`, a file the 3.0 table lacks. A reader of 3.0 finds it by its catalog name, as a 3.x minor may add a file (format.md §3), and gives it the family its extension states.",
+  "bundle": "bundle/v3-minor-file-unknown.json",
+  "result": {
+    "outcome": "read",
+    "major": 3,
+    "version": "3.1.0",
+    "manifestPath": "Manifest.json",
+    "level": "Max",
+    "frames": {
+      "georeferenced": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "geoid_model": "EGM2008",
+        "horizontal_unit": {
+          "name": "metre",
+          "to_metres": 1
+        },
+        "vertical_unit": {
+          "name": "metre",
+          "to_metres": 1
+        },
+        "axis_order": "east-north",
+        "grid_rotation_deg": 0.67
+      },
+      "local": {
+        "origin": {
+          "longitude": -73.975,
+          "latitude": 40.755,
+          "ellipsoidal_height_m": -12.5,
+          "height_m": 20.0,
+          "projected": {
+            "crs": {
+              "code": "EPSG:32618"
+            },
+            "x": 586500.0,
+            "y": 4512000.0,
+            "unit": {
+              "name": "metre",
+              "to_metres": 1
+            }
+          }
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "geoid_model": "EGM2008",
+        "unit": {
+          "name": "metre",
+          "to_metres": 1
+        },
+        "axes": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "grid_rotation_deg": 0.67
+      }
+    },
+    "refusal": null,
+    "files": [
+      {"path": "Basemap/Roads.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Roads.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Elevation/Elevation.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Elevation/Terrain.glb", "family": "host-ready", "frame": "site", "count": 200000},
+      {"path": "Manifest.json", "family": null, "frame": null, "count": null},
+      {"path": "Readme.md", "family": null, "frame": null, "count": null},
+      {"path": "Records/Easements.gpkg", "family": "georeferenced", "frame": "order", "count": 1}
+    ],
+    "skipped": []
+  }
+}

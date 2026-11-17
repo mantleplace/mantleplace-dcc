@@ -209,6 +209,35 @@ public static class SlowStepNotice
     }
 
     /// <summary>
+    /// The seconds a layer may take alone before the checklist starts it unticked: the five minutes
+    /// Revit promises an import (spec issue 300's rule), held against the slowest run's estimate.
+    /// </summary>
+    public const double BudgetSeconds = 300;
+
+    /// <summary>Whether <paramref name="estimate"/> breaks <see cref="BudgetSeconds"/> at its slowest.</summary>
+    public static bool BreaksBudget(LevelEstimate estimate)
+    {
+        ArgumentNullException.ThrowIfNull(estimate);
+        return estimate.Seconds.High > BudgetSeconds;
+    }
+
+    /// <summary>
+    /// A 3.0 catalog's count for the file <paramref name="kind"/> reads, as the cost driver that step's
+    /// measured cost per unit applies to (<see cref="EstimateLevel"/>), or <c>null</c> where the catalog
+    /// states no count or the step has no measured cost per unit.
+    /// </summary>
+    /// <remarks>
+    /// The unit is the step's own: a catalog counts the road surfaces' features and the trees' rows,
+    /// and the measured costs are per subdivision cut and per element placed, one of each per feature
+    /// or row. A step with no <see cref="StepMeasurement.PerUnit"/> is not estimated, as a 2.x level
+    /// with no unit cost is not.
+    /// </remarks>
+    public static CostDriver? CostOfCatalogCount(ImportStepKind kind, long? count)
+        => count is { } stated && Measured(kind)?.PerUnit is { } perUnit
+            ? new CostDriver(perUnit.Unit, perUnit.Unit.ToString().ToLowerInvariant(), stated)
+            : null;
+
+    /// <summary>
     /// What <paramref name="kind"/> was measured at, or <c>null</c> for a step never measured — which
     /// is then not announced, whatever it costs.
     /// </summary>

@@ -5,14 +5,15 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from helpers import (SYNTHETIC_SCHEMA, SYNTHETIC_SCHEMA_2, bundle_files, make_folder, make_zip,
-                     manifest, write_schema_dir)
+from helpers import (SYNTHETIC_SCHEMA, SYNTHETIC_SCHEMA_2, SYNTHETIC_SCHEMA_3, bundle_files,
+                     make_folder, make_zip, manifest, write_schema_dir)
 from mantleplace_mpb.cli import main
 
 
@@ -161,6 +162,30 @@ class TheCorpusCommand(unittest.TestCase):
         code, out = run("corpus", str(self.corpus), "--schema-dir", staged)
         self.assertEqual(0, code, out)
 
+    def test_a_3x_case_marked_staged_is_held_to_the_staged_3x_schema(self) -> None:
+        """A served 3.x schema is no longer pending: a staged case is held to it, so a case it
+        refuses fails the run, and one it accepts passes."""
+        staged = str(write_schema_dir(self.tmp / "staged3", {"2.0.0": SYNTHETIC_SCHEMA_2,
+                                                             "3.0.0": SYNTHETIC_SCHEMA_3},
+                                      staged=("3.0.0",)))
+        readme = "A synthetic bundle.\n"
+        document = {"version": "3.0.0", "level": "Max", "not_held": [], "catalog": {
+            "Manifest.json": {"odbl_role": "none"},
+            "Readme.md": {"odbl_role": "none",
+                          "sha256": hashlib.sha256(readme.encode("utf-8")).hexdigest()}}}
+        case = {"id": "bundle.v3", "group": "bundle", "file": "bundle/v3.json", "expect": "accept",
+                "reason": "r", "stagedSchema": True, "expectations": {"hashesVerified": 1}}
+        self.write([case], {"bundle/v3.json": {"files": {"Manifest.json": document,
+                                                         "Readme.md": readme}}})
+        code, out = run("corpus", str(self.corpus), "--schema-dir", staged)
+        self.assertEqual(0, code, out)
+        del document["not_held"]
+        self.write([case], {"bundle/v3.json": {"files": {"Manifest.json": document,
+                                                         "Readme.md": readme}}})
+        code, out = run("corpus", str(self.corpus), "--schema-dir", staged)
+        self.assertEqual(1, code, out)
+        self.assertIn("schema.invalid", out)
+
     def test_a_case_whose_names_collide_by_case_is_built_only_as_zips(self) -> None:
         """No folder can hold it on a case-insensitive file system, which is the rule's point."""
         self.write(
@@ -175,6 +200,25 @@ class TheCorpusCommand(unittest.TestCase):
         code, out = run("corpus", str(self.corpus), "--schema-dir", schemas)
         self.assertEqual(0, code, out)
         self.assertNotIn("(folder)", out)
+
+    def test_a_case_with_a_zip_method_is_built_only_as_zips_and_holds_it(self) -> None:
+        """A folder has no zip method; the case's `zipMethods` is written into the zips."""
+        body = self.body(manifest(version="2.0.0"))
+        body["zipMethods"] = {"README.md": "stored"}
+        case = {"id": "bundle.stored", "group": "bundle", "file": "bundle/stored.json",
+                "expect": "accept", "reason": "r"}
+        self.write([case], {"bundle/stored.json": body})
+        schemas = str(write_schema_dir(self.tmp / "v2", {"2.0.0": SYNTHETIC_SCHEMA_2}))
+        code, out = run("corpus", str(self.corpus), "--schema-dir", schemas)
+        self.assertEqual(0, code, out)
+        from mantleplace_mpb.corpus import _forms
+
+        self.assertEqual(("zip", "wrapped"), _forms({"README.md": b"x"}, {"README.md": 0}))
+        body["zipMethods"] = {"README.md": "zstd"}
+        self.write([case], {"bundle/stored.json": body})
+        code, out = run("corpus", str(self.corpus), "--schema-dir", schemas)
+        self.assertEqual(1, code, out)
+        self.assertIn("zipMethods", out)
 
     def test_an_empty_bundle_group_fails(self) -> None:
         self.write([], {})

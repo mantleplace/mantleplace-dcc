@@ -11,6 +11,10 @@ or it has **no meaning** in that host. A host that does the same job with a diff
 toposolid subdivision where the other paints a landscape layer) is `supported`, and a link says why
 the construct differs where an ADR records it.
 
+**Building the plugin for a new host starts at
+[Building a reader for MPB 3.0](building-a-reader-for-mpb-3.md),** which walks the common core below and
+the standard's rules in order; a new host then adds its own column here.
+
 **This file states status and nothing else.** How a feature behaves is the host's own README
 ([Unreal](../unreal/README.md), [Revit](../revit/README.md); `autocad` has none until its first release); when a gap will close is
 [`ROADMAP.md`](../ROADMAP.md); why a host differs is its ADR or issue, linked from the cell. None of

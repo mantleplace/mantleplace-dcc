@@ -568,6 +568,9 @@ internal static class AutoCadImportPlanTests
             run.Equal(AutoCadBundleEntries.Resolve(["Metadata/manifest.json"], "Surface/Contours.dxf"), null, "absent");
         });
 
+        run.Case("AutoCAD's 3.0 files are files the published description promises", () =>
+            DownloadLevelTests.AssertPromised(run, AutoCadImportPlan.ThreeFiles, "AutoCAD"));
+
         return run.Report("AutoCAD import plan");
     }
 }

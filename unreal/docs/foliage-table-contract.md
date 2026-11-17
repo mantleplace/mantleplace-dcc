@@ -34,7 +34,7 @@ migration.
   vocabulary does not contain reads as `Tree`, and the vocabulary id itself is not judged, so a value
   this build knows keeps its meaning under a vocabulary it was not taught. Values match exactly.
   Nothing is inferred from `HeightM` or `CrownRadiusM`. The rule is
-  [`spec/format.md`](../../spec/format.md) section 4.4, and corpus case
+  [`spec/format-2.md`](../../spec/format-2.md) section 4.4, and corpus case
   `manifest.foliageTypeUnknownValue` binds it for both hosts.
 - **The centimetre columns are a unit change, not a derived value**, the one `Position` already
   makes. The metre columns stay as the platform published them.

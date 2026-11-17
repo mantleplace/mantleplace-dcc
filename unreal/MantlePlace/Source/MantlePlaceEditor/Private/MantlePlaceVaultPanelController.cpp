@@ -3,6 +3,7 @@
 #include "MantlePlaceVaultPanelController.h"
 
 #include "MantlePlaceVaultImportOrchestrator.h"
+#include "MantlePlaceLevelChoiceLogic.h"
 
 void UMantlePlaceVaultPanelController::Initialize()
 {
@@ -18,6 +19,7 @@ void UMantlePlaceVaultPanelController::Initialize()
 	Orchestrator->OnClientUpdateRequiredNative.AddUObject(this, &UMantlePlaceVaultPanelController::HandleClientUpdateRequired);
 	Orchestrator->OnImportStepsNative.RemoveAll(this);
 	Orchestrator->OnImportStepsNative.AddUObject(this, &UMantlePlaceVaultPanelController::HandleImportSteps);
+	Orchestrator->OnOfferLevelChoiceNative.BindUObject(this, &UMantlePlaceVaultPanelController::HandleOfferLevelChoice);
 }
 
 void UMantlePlaceVaultPanelController::Shutdown()
@@ -30,6 +32,7 @@ void UMantlePlaceVaultPanelController::Shutdown()
 		Orchestrator->OnAuthChanged.RemoveAll(this);
 		Orchestrator->OnClientUpdateRequiredNative.RemoveAll(this);
 		Orchestrator->OnImportStepsNative.RemoveAll(this);
+		Orchestrator->OnOfferLevelChoiceNative.Unbind();
 		// Closing the tab mid-import must stop the in-flight poll/download - BeginDestroy alone does not.
 		Orchestrator->CancelImport();
 	}
@@ -39,6 +42,7 @@ void UMantlePlaceVaultPanelController::Shutdown()
 	OnAuthChanged.Clear();
 	OnClientUpdateRequired.Clear();
 	OnImportSteps.Clear();
+	OnOfferLevelChoice.Unbind();
 	ActiveOrderId.Reset();
 }
 
@@ -118,6 +122,11 @@ void UMantlePlaceVaultPanelController::CancelImport()
 void UMantlePlaceVaultPanelController::HandleImportSteps(TSharedRef<FMantlePlaceImportSteps> Steps)
 {
 	OnImportSteps.Broadcast(Steps);
+}
+
+bool UMantlePlaceVaultPanelController::HandleOfferLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice)
+{
+	return OnOfferLevelChoice.IsBound() && OnOfferLevelChoice.Execute(Choice);
 }
 
 bool UMantlePlaceVaultPanelController::IsActiveItem(const FMantlePlaceVaultItem& Item) const

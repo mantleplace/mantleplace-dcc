@@ -194,6 +194,69 @@ struct FMantlePlaceVaultArtifact
 };
 
 /**
+ * What one level of an MPB 3.0 order downloads as, as its vault listing row states it (`mpb3.levels`):
+ * the platform's figures, shown verbatim and never summed or worked out here (HPS-59, HPS-33).
+ */
+USTRUCT(BlueprintType)
+struct FMantlePlaceLevelSize
+{
+	GENERATED_BODY()
+
+	/** The level as a 3.0 listing, request and manifest spell it: `Max`, `Med` or `Min`. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString Level;
+
+	/** The size of this level's download, every file, as a zip ("sizeBytes"). */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	int64 SizeBytes = 0;
+
+	/** Rows across the level's CSV files ("counts.rows"). */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	int64 Rows = 0;
+
+	/** Features across the GeoPackages, the same at every level ("counts.features"). */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	int64 Features = 0;
+
+	/** Triangles across the meshes ("counts.triangles"). */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	int64 Triangles = 0;
+
+	/** Pixels of the imagery ("counts.pixels"). */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	int64 Pixels = 0;
+};
+
+/**
+ * One Extra of an MPB 3.0 order, as its vault listing row lists it (`mpb3.extras`): a free download beside the
+ * bundle, outside the standard (spec/format.md 9.9). Id is the platform's own token (`SiteBrief`, `PlanSheets`,
+ * `TerrainTiles`); the plugin asks for the one it uses by that token and shows the platform's name verbatim.
+ */
+USTRUCT(BlueprintType)
+struct FMantlePlaceVaultExtra
+{
+	GENERATED_BODY()
+
+	/** The Extra's id as the platform spells it ("id"). */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString Id;
+
+	/** The name a curator sees ("name"). */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString Name;
+
+	/** The size of the Extra's download, as a zip ("sizeBytes"); 0 when the row stated none. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	int64 SizeBytes = 0;
+};
+
+/** The id the platform gives the terrain tiles Extra (`mpb3.extras[].id`), spelled exactly. */
+inline const TCHAR* MantlePlaceTerrainTilesExtraId()
+{
+	return TEXT("TerrainTiles");
+}
+
+/**
  * One owned bundle in the curator's vault, as returned by GET /api/v1/vault/bundles.
  *
  * The four sidecar fields (Layers / ManifestVersion / SizeBytes / Sha256) are "null =
@@ -274,6 +337,39 @@ struct FMantlePlaceVaultItem
 	/** Per-format downloadable artifacts ("download.formats"). */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	TArray<FMantlePlaceVaultArtifact> DownloadFormats;
+
+	/**
+	 * True on an MPB 3.0 order whose listing row offers its levels (`mpb3`): its download takes one level,
+	 * chosen before the fetch, and names the files this host reads. False on a 2.x order, whose download
+	 * and cache are exactly as they were, and on a row whose offer could not be read (a list warning says so).
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	bool bHasLevels = false;
+
+	/**
+	 * The level the platform recommends for this host and site (`mpb3.recommendedLevel`), applied verbatim;
+	 * empty when the row named none, and then nothing is preselected (HPS-59). Meaningful only when bHasLevels.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString RecommendedLevel;
+
+	/** Max, Med and Min, in that order, each with its size and counts. Meaningful only when bHasLevels. */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	TArray<FMantlePlaceLevelSize> Levels;
+
+	/**
+	 * The Extras the platform lists for this order (`mpb3.extras`). Empty on a 2.x row, and on a 3.0 row that
+	 * lists none: an Extra the list lacks is one the order does not have, and nothing is requested for it.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	TArray<FMantlePlaceVaultExtra> Extras;
+
+	/** The listed Extra with this id, spelled exactly, or null when the platform lists none. */
+	const FMantlePlaceVaultExtra* FindExtra(const FString& ExtraId) const
+	{
+		return Extras.FindByPredicate(
+			[&ExtraId](const FMantlePlaceVaultExtra& Extra) { return Extra.Id.Equals(ExtraId, ESearchCase::CaseSensitive); });
+	}
 };
 
 /**
@@ -324,6 +420,13 @@ struct FMantlePlacePresignedDownload
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	FString ManifestSha256;
+
+	/**
+	 * The one level an MPB 3.0 download holds (`Max`, `Med` or `Min`), as it was asked for; empty for a 2.x
+	 * download. The bundle cache records it, so another level is a fresh download that replaces the slot.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	FString Level;
 };
 
 /**

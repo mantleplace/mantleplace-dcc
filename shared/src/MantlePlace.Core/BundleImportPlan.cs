@@ -283,6 +283,27 @@ public enum SkipReasonCode
     /// last so every code before it keeps its number.
     /// </remarks>
     LevelUnavailable,
+
+    /// <summary>
+    /// The bundle is MPB 3.0 or later, and the format has no file this step reads: its 2.x input left
+    /// the tree, and making it from a file that stayed would be converting a georeferenced file, which
+    /// this host never does (<see cref="BundleImportPlanner.ThreeLeftOut"/>).
+    /// </summary>
+    /// <remarks>
+    /// No download can change it, and no vault holds it. Declared last so every code before it keeps
+    /// its number.
+    /// </remarks>
+    NotInFormat,
+
+    /// <summary>
+    /// The bundle's manifest lists the file this step reads among the promised files it does not hold,
+    /// with its reason (<c>spec/format.md</c> §9.6), which the skip shows as stated.
+    /// </summary>
+    /// <remarks>
+    /// Never split by the reason: the reasons grow, and one the plugin does not know must still be
+    /// shown. Declared last so every code before it keeps its number.
+    /// </remarks>
+    NotHeld,
 }
 
 /// <summary>
@@ -733,11 +754,31 @@ public sealed class ImportStep
     public StatedDatum? HeightDatum { get; init; }
 
     /// <summary>
+    /// The height every height in this step's file is measured above, in metres in
+    /// <see cref="HeightDatum"/>: the site origin's height, as an MPB 3.0 manifest states it, for a
+    /// host-ready file, whose heights are metres above the site origin (<c>spec/format.md</c> §4).
+    /// <c>null</c> for a file whose heights are absolute, which is every file of a 2.x bundle.
+    /// </summary>
+    /// <remarks>
+    /// Stated, never worked out: the importer adds it to each height as published (<c>HPS-33</c>).
+    /// </remarks>
+    public double? HeightBaseM { get; init; }
+
+    /// <summary>
     /// The fidelity levels the entry this step reads publishes, or <c>null</c> for one that is MAX
     /// only: what the import window offers for the step's row. The entry's own, even when the step
     /// reads a pointer level's file.
     /// </summary>
     public FidelityLevels? Levels { get; init; }
+
+    /// <summary>
+    /// What the file this step reads holds, as an MPB 3.0 catalog counts it, in the unit this step's
+    /// measured cost is per (<see cref="SlowStepNotice.CostOfCatalogCount"/>); <c>null</c> for a 2.x
+    /// plan, whose levels state their own cost, for a file whose catalog entry states no count, and for
+    /// a step with no measured cost per unit. The import window's estimate and its budget read it
+    /// (<see cref="ImportChecklist.EstimateNote"/>); the step still reads the whole file.
+    /// </summary>
+    public CostDriver? Cost { get; internal set; }
 
     /// <summary>The level this step imports, as applied; <c>null</c> for an entry with no levels.</summary>
     public AppliedLevel? Level { get; init; }

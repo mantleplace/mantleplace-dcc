@@ -39,4 +39,11 @@ public interface IImportWindowHost
 
     /// <summary>A fault of the window's, for the host's fault dialog.</summary>
     void Fault(Exception fault);
+
+    /// <summary>
+    /// Before Import, the curator chose another level of a received send's 3.0 order
+    /// (<see cref="ImportWindowRequest.Levels"/>): the host downloads it into the slot and reopens the
+    /// window on it, or keeps the level it holds (<see cref="ImportWindowThread.LevelKept"/>).
+    /// </summary>
+    void ChooseLevel(FidelityLevel level);
 }

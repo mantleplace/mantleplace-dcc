@@ -3,6 +3,7 @@
 #include "MantlePlaceImportManifest.h"
 
 #include "MantlePlaceArtifactHandler.h"
+#include "MantlePlaceBundleReaderLogic.h" // the version messages, one text for both readers
 #include "MantlePlaceManifestJson.h"
 #include "MantlePlaceRoadSplinesLogic.h"    // FMantlePlaceRoadSplinesDatum
 #include "MantlePlaceTreePointsLogic.h"     // FMantlePlaceTreePointsFrame
@@ -79,8 +80,11 @@ FVector FMantlePlaceVaultManifest::GetLandscapeSpawnLocation() const
 	// by half the (scaled) quad span so the AOI centre lands on world (0,0). Identity rotation,
 	// so TransformVector(scale) is a component-wise multiply. In a level that already holds another
 	// import the AOI centre lands on that import's offset instead (ToLevelFrame).
+	// A 3.x heightmap states the rectangle it covers, whose centre need not be the origin; a 2.x grid is
+	// centred on it, and its centre is zero.
 	const FVector2D AoiSize = GetAoiSizeUeCm();
-	return ToLevelFrame(FVector(-AoiSize.X / 2.0, -AoiSize.Y / 2.0, Heightmap.LocationZOffsetCm));
+	const FVector Centre = ProjectedToUeCm(Heightmap.GridCentreEastM, Heightmap.GridCentreNorthM, 0.0);
+	return ToLevelFrame(FVector(Centre.X - AoiSize.X / 2.0, Centre.Y - AoiSize.Y / 2.0, Heightmap.LocationZOffsetCm));
 }
 
 FVector FMantlePlaceVaultManifest::GetMeshLocation() const
@@ -129,7 +133,9 @@ void FMantlePlaceVaultManifest::GetDrapeUvTransform(FVector2D& OutScale, FVector
 	}
 
 	const FVector2D AoiSize = GetAoiSizeUeCm();
-	const FVector2D AoiMin(-AoiSize.X / 2.0, -AoiSize.Y / 2.0); // AOI centred on world (0,0)
+	// The grid centred on world (0,0) for 2.x, on its stated centre for 3.x (GetLandscapeSpawnLocation).
+	const FVector Centre = ProjectedToUeCm(Heightmap.GridCentreEastM, Heightmap.GridCentreNorthM, 0.0);
+	const FVector2D AoiMin(Centre.X - AoiSize.X / 2.0, Centre.Y - AoiSize.Y / 2.0);
 
 	OutScale = FVector2D(AoiSize.X / DrapeSize.X, AoiSize.Y / DrapeSize.Y);
 	OutOffset = FVector2D(
@@ -467,11 +473,8 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	    FMantlePlaceManifestVersion::Parse(MantlePlaceMinSupportedManifestVersion);
 	if (!Parsed.bValid || Parsed < Floor)
 	{
-		OutError = FString::Printf(
-		    TEXT("Bundle manifest version %s is no longer supported (minimum %s). Re-download this "
-		         "AOI from your vault at mantle.place/vault — rebuilding it there re-cuts the bundle "
-		         "on the current pipeline."),
-		    M.Version.IsEmpty() ? TEXT("(absent)") : *M.Version, *MantlePlaceMinSupportedManifestVersion);
+		// One text for both readers (FMantlePlaceBundleReaderLogic): the words are as they shipped.
+		OutError = FMantlePlaceBundleReaderLogic::BelowFloorMessage(M.Version, MantlePlaceMinSupportedManifestVersion);
 		return M;
 	}
 
@@ -485,13 +488,12 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	// This reader speaks 1.x and 2.x (MantlePlaceMaxSupportedManifestMajor): a 2.0 bundle changed the
 	// folders and the names, and every file here is found through a pointer value, so the same
 	// parse reads both. What a 2.0 bundle moved is read where it moved to (the heightmap's and the
-	// UE-ready rasters' value mappings, in `file_entries`), never by branching on the version.
+	// UE-ready rasters' value mappings, in `file_entries`), never by branching on the version. A 3.x
+	// manifest is at the bundle's root, not here, and FMantlePlaceBundleReaderLogic reads it; this path
+	// is the 2.x one, frozen as it ships.
 	if (Parsed.Major > MantlePlaceMaxSupportedManifestMajor)
 	{
-		OutError = FString::Printf(
-		    TEXT("Bundle manifest version %s is newer than this plugin understands (it reads up to %d.x). "
-		         "Update the Mantle Place plugin to import this bundle."),
-		    *M.Version, MantlePlaceMaxSupportedManifestMajor);
+		OutError = FMantlePlaceBundleReaderLogic::NewerMajorMessage(M.Version, MantlePlaceMaxSupportedManifestMajor);
 		return M;
 	}
 

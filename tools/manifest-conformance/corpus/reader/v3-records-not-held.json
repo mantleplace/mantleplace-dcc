@@ -1,0 +1,139 @@
+{
+  "$comment": "A bundle missing a whole optional subject: no Records file is held, and the manifest lists each with its reason (format.md §9.6). A reader finds the forty-nine files it holds, skips the twenty it does not, and shows each stated reason as written, the one it has never seen included. An absent file is not an error.",
+  "bundle": "bundle/v3-records-not-held.json",
+  "result": {
+    "outcome": "read",
+    "major": 3,
+    "version": "3.0.0",
+    "manifestPath": "Manifest.json",
+    "level": "Max",
+    "frames": {
+      "georeferenced": {
+        "horizontal_crs": {
+          "code": "EPSG:32618"
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "geoid_model": "EGM2008",
+        "horizontal_unit": {
+          "name": "metre",
+          "to_metres": 1
+        },
+        "vertical_unit": {
+          "name": "metre",
+          "to_metres": 1
+        },
+        "axis_order": "east-north",
+        "grid_rotation_deg": 0.67
+      },
+      "local": {
+        "origin": {
+          "longitude": -73.975,
+          "latitude": 40.755,
+          "ellipsoidal_height_m": -12.5,
+          "height_m": 20.0,
+          "projected": {
+            "crs": {
+              "code": "EPSG:32618"
+            },
+            "x": 586500.0,
+            "y": 4512000.0,
+            "unit": {
+              "name": "metre",
+              "to_metres": 1
+            }
+          }
+        },
+        "vertical_crs": {
+          "code": "EPSG:3855"
+        },
+        "geoid_model": "EGM2008",
+        "unit": {
+          "name": "metre",
+          "to_metres": 1
+        },
+        "axes": {
+          "x": "east",
+          "y": "north",
+          "z": "up"
+        },
+        "grid_rotation_deg": 0.67
+      }
+    },
+    "refusal": null,
+    "files": [
+      {"path": "Basemap/Basemap.png", "family": "host-ready", "frame": "site", "count": 1048576},
+      {"path": "Basemap/Basemap.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Basemap/Basemap.usdz", "family": "host-ready", "frame": "site", "count": 4000},
+      {"path": "Basemap/Buildings.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Buildings.glb", "family": "host-ready", "frame": "site", "count": 90000},
+      {"path": "Basemap/Buildings.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Landuse.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Landuse.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Pavement.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Pavement.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Roads.csv", "family": "host-ready", "frame": "site", "count": 1600},
+      {"path": "Basemap/Roads.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Roads.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Water.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Water.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Elevation/Aspect.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Elevation/Contours.dxf", "family": "georeferenced", "frame": "order", "count": 340},
+      {"path": "Elevation/Elevation.png", "family": "host-ready", "frame": "site", "count": 1018081},
+      {"path": "Elevation/Elevation.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Elevation/Hillshade.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Elevation/Slope.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Elevation/Slope.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Elevation/Slope.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Elevation/Terrain.dxf", "family": "georeferenced", "frame": "order", "count": 200000},
+      {"path": "Elevation/Terrain.glb", "family": "host-ready", "frame": "site", "count": 200000},
+      {"path": "Elevation/Terrain.landxml", "family": "georeferenced", "frame": "order", "count": 200000},
+      {"path": "Elevation/Terrain.mtl", "family": null, "frame": null, "count": null},
+      {"path": "Elevation/Terrain.obj", "family": "host-ready", "frame": "site", "count": 200000},
+      {"path": "Imagery/Imagery.png", "family": "host-ready", "frame": "site", "count": 1048576},
+      {"path": "Imagery/Imagery.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Landcover/Canopy.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Landcover/Landcover.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Landcover/Landcover.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Landcover/Landcover.tif", "family": "georeferenced", "frame": "order", "count": 1048576},
+      {"path": "Landcover/Trees.csv", "family": "host-ready", "frame": "site", "count": 5000},
+      {"path": "Landcover/Trees.gpkg", "family": "georeferenced", "frame": "order", "count": 5000},
+      {"path": "Manifest.json", "family": null, "frame": null, "count": null},
+      {"path": "Materials/Built.png", "family": "host-ready", "frame": "site", "count": 1048576},
+      {"path": "Materials/Dirt.png", "family": "host-ready", "frame": "site", "count": 1048576},
+      {"path": "Materials/Forest.png", "family": "host-ready", "frame": "site", "count": 1048576},
+      {"path": "Materials/Grass.png", "family": "host-ready", "frame": "site", "count": 1048576},
+      {"path": "Materials/Rock.png", "family": "host-ready", "frame": "site", "count": 1048576},
+      {"path": "Materials/Sand.png", "family": "host-ready", "frame": "site", "count": 1048576},
+      {"path": "Materials/Snow.png", "family": "host-ready", "frame": "site", "count": 1048576},
+      {"path": "Materials/Water.png", "family": "host-ready", "frame": "site", "count": 1048576},
+      {"path": "Readme.md", "family": null, "frame": null, "count": null},
+      {"path": "Site/Site.dxf", "family": "georeferenced", "frame": "order", "count": 4000},
+      {"path": "Site/Site.ifc", "family": "georeferenced", "frame": "order", "count": 4000},
+      {"path": "Site/Site.usdz", "family": "host-ready", "frame": "site", "count": 320000}
+    ],
+    "skipped": [
+      {"path": "Records/Conservation.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Conservation.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Contamination.dxf", "why": "not-held", "reason": "withheld"},
+      {"path": "Records/Contamination.gpkg", "why": "not-held", "reason": "withheld"},
+      {"path": "Records/Floodplain.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Floodplain.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Habitat.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Habitat.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Heritage.dxf", "why": "not-held", "reason": "pending"},
+      {"path": "Records/Heritage.gpkg", "why": "not-held", "reason": "pending"},
+      {"path": "Records/Hydrography.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Hydrography.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Parcels.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Parcels.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Soils.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Soils.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Wetlands.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Wetlands.gpkg", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Zoning.dxf", "why": "not-held", "reason": "no_data"},
+      {"path": "Records/Zoning.gpkg", "why": "not-held", "reason": "no_data"}
+    ]
+  }
+}

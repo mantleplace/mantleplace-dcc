@@ -96,6 +96,15 @@ public sealed class VaultBrowserWindow : Window
     private Button? _cancel;
 
     /// <summary>
+    /// A 3.0 order's level control, beside Import: Max, Med and Min with their sizes, on the platform's
+    /// recommendation (<see cref="LevelControl"/>). Shown only for a 3.0 row, in a host that imports
+    /// from this window; a 2.x row's levels stay in the import checklist. The same row the window a
+    /// received send opens shows (<see cref="LevelChoiceRow"/>).
+    /// </summary>
+    private readonly LevelChoiceRow _levelRow = new();
+    private LevelControl? _levelControl;
+
+    /// <summary>
     /// A row for every bundle the listing gave, whether the filter shows it or not. The list holds
     /// the subset <see cref="VaultRows.Matches"/> keeps, as the same row objects, so a row rewritten
     /// while hidden reads right when the filter lets it back in.
@@ -167,6 +176,8 @@ public sealed class VaultBrowserWindow : Window
         Content = BuildLayout(WindowLabels.VaultButtons(importing is not null, WindowLabels.HostName(HostIdentity.Id)));
 
         _search.TextChanged += (_, _) => OnSearchChanged();
+        _list.SelectionChanged += (_, _) => OnSelectionChanged();
+        _levelRow.Chosen += OnLevelChosen;
 
         if (_import is not null)
         {
@@ -283,12 +294,15 @@ public sealed class VaultBrowserWindow : Window
         search.Children.Add(searchLabel);
         search.Children.Add(_search);
 
+        // Under the buttons, so the level is chosen before Import fetches it.
         DockPanel root = new() { Margin = new Thickness(12) };
         BrandChrome.AddHeader(root, WindowLabels.VaultHeading);
         DockPanel.SetDock(_buttons, Dock.Top);
+        DockPanel.SetDock(_levelRow, Dock.Top);
         DockPanel.SetDock(search, Dock.Top);
         DockPanel.SetDock(_status, Dock.Bottom);
         root.Children.Add(_buttons);
+        root.Children.Add(_levelRow);
         root.Children.Add(search);
         root.Children.Add(_status);
         root.Children.Add(_list);
@@ -325,6 +339,46 @@ public sealed class VaultBrowserWindow : Window
     /// a different bundle as soon as the filter hid a row above it.
     /// </summary>
     private VaultBundle? Selected => (_list.SelectedItem as VaultRow)?.Bundle;
+
+    /// <summary>
+    /// A different row: a 3.0 order's control is rebuilt on the recommendation, and a 2.x order, or a
+    /// host with no import here, shows none.
+    /// </summary>
+    private void OnSelectionChanged()
+    {
+        VaultBundle? bundle = Selected;
+        if (_levelControl is not null && bundle is not null
+            && string.Equals(_levelControl.Bundle.OrderId, bundle.OrderId, StringComparison.Ordinal))
+        {
+            // The same order re-seated after a download: the curator's choice stands.
+            return;
+        }
+
+        _levelControl = _import is null ? null : LevelControl.For(bundle);
+        _levelRow.Show(_levelControl);
+    }
+
+    private void OnLevelChosen(FidelityLevel level)
+    {
+        if (_levelControl is null)
+        {
+            return;
+        }
+
+        if (_levelControl.Choose(level) && Selected is { } bundle)
+        {
+            UpdateRow(bundle, QuickEntry(bundle));
+        }
+    }
+
+    /// <summary>The level the selected 3.0 order downloads at; <c>null</c> for a 2.x order.</summary>
+    private FidelityLevel? ChosenLevel(VaultBundle bundle)
+        => _levelControl is { } control && string.Equals(control.Bundle.OrderId, bundle.OrderId, StringComparison.Ordinal)
+            ? control.Selected
+            : null;
+
+    /// <summary>The cache slot level for <paramref name="bundle"/>: its chosen level, else its recommendation.</summary>
+    private string SlotLevel(VaultBundle bundle) => DownloadLevels.SlotLevel(bundle, ChosenLevel(bundle));
 
     private async Task RefreshAsync()
     {
@@ -469,7 +523,8 @@ public sealed class VaultBrowserWindow : Window
 
         // The full hash, not InspectQuick: this is the pre-import gate, and it is exactly the "once
         // per import" cost Inspect's remark defends.
-        CacheEntry entry = _cache.Inspect(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion);
+        // A 3.0 order at another level than the slot holds is a miss: the fetch below replaces the slot.
+        CacheEntry entry = _cache.Inspect(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion, SlotLevel(bundle));
         UpdateRow(bundle, entry);
 
         if (entry.State != CacheState.CachedValid)
@@ -534,7 +589,8 @@ public sealed class VaultBrowserWindow : Window
                 route.Delivered,
                 _cache,
                 new Progress<string>(Report),
-                _work!.Token).ConfigureAwait(true);
+                _work!.Token,
+                ChosenLevel(bundle)).ConfigureAwait(true);
 
             if (download.NeedsPrepare)
             {
@@ -542,7 +598,11 @@ public sealed class VaultBrowserWindow : Window
             }
 
             CacheEntry entry = _cache.Inspect(
-                download.Bundle.OrderId, download.Bundle.SizeBytes, download.Bundle.Sha256, download.Bundle.ManifestVersion);
+                download.Bundle.OrderId,
+                download.Bundle.SizeBytes,
+                download.Bundle.Sha256,
+                download.Bundle.ManifestVersion,
+                SlotLevel(download.Bundle));
             UpdateRow(download.Bundle, entry);
 
             if (!download.Ready || entry.State != CacheState.CachedValid)
@@ -590,8 +650,7 @@ public sealed class VaultBrowserWindow : Window
         // HPS-44: eviction is explicit and per-order, and this button is the only thing that does
         // it. Nothing in this plugin reclaims disk on the curator's behalf.
         _cache.Remove(bundle.OrderId);
-        UpdateRow(bundle, _cache.InspectQuick(
-            bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion));
+        UpdateRow(bundle, QuickEntry(bundle));
         Report($"Removed the local copy of {bundle.AoiLabel}. It stays in your vault and can be downloaded again.");
     }
 
@@ -752,7 +811,7 @@ public sealed class VaultBrowserWindow : Window
     }
 
     private CacheEntry QuickEntry(VaultBundle bundle)
-        => _cache.InspectQuick(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion);
+        => _cache.InspectQuick(bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion, SlotLevel(bundle));
 
     private string Describe(VaultBundle bundle) => Describe(bundle, QuickEntry(bundle));
 

@@ -18,9 +18,28 @@ const TCHAR* const KnownDisplayNames[] = {
 
 static_assert(UE_ARRAY_COUNT(KnownFamilies) == UE_ARRAY_COUNT(KnownDisplayNames), "one display name per known family");
 
+/** The names an MPB 3.x file table gives a family a 2.x manifest keyed otherwise (format.md section 12), and the key each stands for. */
+struct FFamilyAlias
+{
+	const TCHAR* Name;
+	const TCHAR* Family;
+};
+const FFamilyAlias FamilyAliases[] = {
+	{ TEXT("floodplain"), TEXT("flood") },
+	{ TEXT("conservation"), TEXT("protected") },
+	{ TEXT("heritage"), TEXT("historic") },
+};
+
 /** The position in the published order, or INDEX_NONE for a family this reader has not met. */
 int32 KnownIndex(const FString& Family)
 {
+	for (const FFamilyAlias& Alias : FamilyAliases)
+	{
+		if (Family.Equals(Alias.Name, ESearchCase::CaseSensitive))
+		{
+			return KnownIndex(FString(Alias.Family));
+		}
+	}
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(KnownFamilies); ++Index)
 	{
 		if (Family.Equals(KnownFamilies[Index], ESearchCase::CaseSensitive))
@@ -52,7 +71,124 @@ struct FDxfEntity
 	double EndX = 0.0;
 	double EndY = 0.0;
 	bool bHasEnd = false;
+	TArray<FDxfPair> Raw; // HATCH only: every pair after the type, read in order by ReadHatchBoundaries
 };
+
+/** Where the next pair with `Code` is, from `From`, or INDEX_NONE. */
+int32 FindCode(const TArray<FDxfPair>& Pairs, int32 From, int32 Code)
+{
+	for (int32 Index = From; Index < Pairs.Num(); ++Index)
+	{
+		if (Pairs[Index].Code == Code)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
+/**
+ * The boundary loops of one HATCH, each as a closed outline in the file's own coordinates. A polyline path
+ * (92 flag bit 2) gives its vertices; an edge path gives its LINE edges, joined in the order the file lists
+ * them. An arc, ellipse or spline edge, or a path that does not read as stated, makes the whole hatch
+ * unreadable (false, nothing kept): half an outline is not drawn. A polyline path's arc bulges (code 42)
+ * are not read, as for an LWPOLYLINE: the vertices are joined straight, never re-derived.
+ */
+bool ReadHatchBoundaries(const TArray<FDxfPair>& Raw, TArray<FMantlePlaceRecordPolyline>& OutRings)
+{
+	OutRings.Reset();
+	int32 At = FindCode(Raw, 0, 91);
+	if (At == INDEX_NONE)
+	{
+		return false;
+	}
+	const int32 PathCount = FCString::Atoi(*Raw[At].Value);
+	++At;
+	for (int32 Path = 0; Path < PathCount; ++Path)
+	{
+		At = FindCode(Raw, At, 92);
+		if (At == INDEX_NONE)
+		{
+			return false;
+		}
+		const int32 Flags = FCString::Atoi(*Raw[At].Value);
+		++At;
+		FMantlePlaceRecordPolyline Ring;
+		Ring.bClosed = true; // a hatch boundary is a closed loop by definition
+		At = FindCode(Raw, At, 93);
+		if (At == INDEX_NONE)
+		{
+			return false;
+		}
+		const int32 Count = FCString::Atoi(*Raw[At].Value);
+		++At;
+		if ((Flags & 2) != 0)
+		{
+			// A polyline path: Count vertices, each a 10/20 pair (a 42 bulge between them is not read).
+			int32 YsRead = 0;
+			for (; At < Raw.Num() && YsRead < Count; ++At)
+			{
+				if (Raw[At].Code == 10)
+				{
+					Ring.Points.Add(FVector2D(FCString::Atod(*Raw[At].Value), 0.0));
+				}
+				else if (Raw[At].Code == 20 && Ring.Points.Num() > 0)
+				{
+					Ring.Points.Last().Y = FCString::Atod(*Raw[At].Value);
+					++YsRead;
+				}
+			}
+			if (YsRead < Count)
+			{
+				return false;
+			}
+		}
+		else
+		{
+			// An edge path: Count edges, each opened by its type in code 72. Only a straight edge (1) is read.
+			FVector2D LastEnd = FVector2D::ZeroVector;
+			for (int32 Edge = 0; Edge < Count; ++Edge)
+			{
+				if (At >= Raw.Num() || Raw[At].Code != 72 || FCString::Atoi(*Raw[At].Value) != 1)
+				{
+					return false;
+				}
+				++At;
+				FVector2D Start = FVector2D::ZeroVector;
+				FVector2D End = FVector2D::ZeroVector;
+				int32 Have = 0; // a bit per coordinate read: 10, 20, 11, 21
+				for (; At < Raw.Num() && Have != 15; ++At)
+				{
+					switch (Raw[At].Code)
+					{
+					case 10: Start.X = FCString::Atod(*Raw[At].Value); Have |= 1; break;
+					case 20: Start.Y = FCString::Atod(*Raw[At].Value); Have |= 2; break;
+					case 11: End.X = FCString::Atod(*Raw[At].Value); Have |= 4; break;
+					case 21: End.Y = FCString::Atod(*Raw[At].Value); Have |= 8; break;
+					default: break;
+					}
+				}
+				if (Have != 15)
+				{
+					return false;
+				}
+				Ring.Points.Add(Start);
+				LastEnd = End;
+			}
+			// The last edge ends where the first began; a file that leaves it open still closes.
+			if (Ring.Points.Num() > 0 && !LastEnd.Equals(Ring.Points[0], 1e-9))
+			{
+				Ring.Points.Add(LastEnd);
+			}
+		}
+		if (Ring.Points.Num() < 3)
+		{
+			return false;
+		}
+		OutRings.Add(MoveTemp(Ring));
+	}
+	return OutRings.Num() > 0;
+}
 }
 
 bool FMantlePlacePublicRecordsLogic::IsKnownFamily(const FString& Family)
@@ -107,6 +243,37 @@ void FMantlePlacePublicRecordsLogic::OrderLayers(TArray<FMantlePlaceRecordLayer>
 	});
 }
 
+FString FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(const FString& CoordinateMode)
+{
+	if (CoordinateMode == TEXT("absolute"))
+	{
+		return TEXT("projected");
+	}
+	if (CoordinateMode == TEXT("offset"))
+	{
+		return TEXT("local");
+	}
+	return CoordinateMode;
+}
+
+FMantlePlaceRecordFrame FMantlePlacePublicRecordsLogic::StatedFrame(
+    const FString& Type, const FString& Crs, bool bHasUnitFactor, double UnitToMetres, const FString& UnitName)
+{
+	FMantlePlaceRecordFrame Frame;
+	Frame.bStated = true;
+	Frame.Type = Type;
+	Frame.Crs = Crs;
+	if (bHasUnitFactor)
+	{
+		// A factor of exactly 1 is the metre. Any other is stated as it is and refused by CanPlaceFrame.
+		Frame.HorizontalUnit = UnitToMetres == 1.0
+		                           ? FString(TEXT("m"))
+		                           : (UnitName.IsEmpty() ? FString::Printf(TEXT("%.10g m per unit"), UnitToMetres)
+		                                                 : FString::Printf(TEXT("%s (%.10g m)"), *UnitName, UnitToMetres));
+	}
+	return Frame;
+}
+
 bool FMantlePlacePublicRecordsLogic::CanPlaceFrame(
     const FMantlePlaceRecordFrame& Frame, const FString& HostCrs, FString& OutReason)
 {
@@ -148,10 +315,12 @@ bool FMantlePlacePublicRecordsLogic::CanPlaceFrame(
 bool FMantlePlacePublicRecordsLogic::ParseDxf(
     const FString& Text,
     TArray<FMantlePlaceRecordPolyline>& OutLines,
+    TArray<FVector2D>& OutPoints,
     int32& OutEntitiesSkipped,
     FString& OutError)
 {
 	OutLines.Reset();
+	OutPoints.Reset();
 	OutEntitiesSkipped = 0;
 	OutError.Reset();
 
@@ -254,6 +423,33 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 				++OutEntitiesSkipped;
 			}
 		}
+		else if (Entity.Type == TEXT("HATCH"))
+		{
+			// A filled area: its boundary loops are the outlines. The fill is not drawn.
+			TArray<FMantlePlaceRecordPolyline> Rings;
+			if (ReadHatchBoundaries(Entity.Raw, Rings))
+			{
+				for (FMantlePlaceRecordPolyline& Ring : Rings)
+				{
+					Keep(MoveTemp(Ring));
+				}
+			}
+			else
+			{
+				++OutEntitiesSkipped;
+			}
+		}
+		else if (Entity.Type == TEXT("POINT"))
+		{
+			if (Entity.Points.Num() > 0)
+			{
+				OutPoints.Add(Entity.Points[0]);
+			}
+			else
+			{
+				++OutEntitiesSkipped;
+			}
+		}
 		else
 		{
 			++OutEntitiesSkipped;
@@ -290,6 +486,10 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 		if (Entity.Type.IsEmpty())
 		{
 			continue;
+		}
+		if (Entity.Type == TEXT("HATCH"))
+		{
+			Entity.Raw.Add(Pair);
 		}
 		switch (Pair.Code)
 		{
@@ -328,6 +528,17 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 		return false;
 	}
 	return true;
+}
+
+FMantlePlaceRecordPolyline FMantlePlacePublicRecordsLogic::MarkerOutline(const FVector2D& Point)
+{
+	FMantlePlaceRecordPolyline Marker;
+	Marker.bClosed = true;
+	Marker.Points.Add(FVector2D(Point.X + MarkerRadiusM, Point.Y));
+	Marker.Points.Add(FVector2D(Point.X, Point.Y + MarkerRadiusM));
+	Marker.Points.Add(FVector2D(Point.X - MarkerRadiusM, Point.Y));
+	Marker.Points.Add(FVector2D(Point.X, Point.Y - MarkerRadiusM));
+	return Marker;
 }
 
 bool FMantlePlacePublicRecordsLogic::AnyVertexOnSite(
@@ -463,6 +674,29 @@ TArray<FString> FMantlePlacePublicRecordsLogic::DescribeNotDelivered(const FMant
 	for (const FMantlePlaceSkippedSource& Source : Block.SkippedSources)
 	{
 		Out.Add(DescribeSkippedSource(Source));
+	}
+	// A 3.x download's promised files it does not hold: one line per family and stated reason, the
+	// reason shown as the manifest wrote it and never matched on (it can grow).
+	TArray<FString> Seen;
+	for (const FMantlePlaceRecordNotHeld& First : Block.NotHeld)
+	{
+		const FString Key = First.Family + TEXT("|") + First.Reason;
+		if (Seen.Contains(Key))
+		{
+			continue;
+		}
+		Seen.Add(Key);
+		TArray<FString> Paths;
+		for (const FMantlePlaceRecordNotHeld& Other : Block.NotHeld)
+		{
+			if (Other.Family == First.Family && Other.Reason == First.Reason)
+			{
+				Paths.Add(Other.Path);
+			}
+		}
+		Out.Add(FString::Printf(
+		    TEXT("%s not in this download (%s)%s"), *DisplayName(First.Family), *FString::Join(Paths, TEXT(", ")),
+		    First.Reason.IsEmpty() ? TEXT(".") : *FString::Printf(TEXT(": %s"), *First.Reason)));
 	}
 	return Out;
 }

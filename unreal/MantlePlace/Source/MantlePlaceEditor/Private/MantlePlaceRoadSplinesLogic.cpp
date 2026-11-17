@@ -7,6 +7,7 @@
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Serialization/JsonReader.h"
+#include "Serialization/Csv/CsvParser.h"
 #include "Serialization/JsonSerializer.h"
 
 namespace
@@ -377,4 +378,114 @@ FString FMantlePlaceRoadSplinesLogic::DescribeOutcome(int32 LinesSeen, int32 Spl
 		    SplinesCreated, LinesSeen, LinesSeen - SplinesCreated);
 	}
 	return FString::Printf(TEXT("Road splines created (%d spline actor(s))."), SplinesCreated);
+}
+
+bool FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
+    const FString& CsvText,
+    double SiteHeightM,
+    TArray<FMantlePlaceRoadSpline>& OutSplines,
+    int32& OutLinesSeen,
+    int32& OutRowsUnreadable,
+    FString& OutError)
+{
+	OutSplines.Reset();
+	OutLinesSeen = 0;
+	OutRowsUnreadable = 0;
+	OutError.Reset();
+
+	const FCsvParser Parser(CsvText);
+	const FCsvParser::FRows& Rows = Parser.GetRows();
+	if (Rows.Num() == 0)
+	{
+		OutError = TEXT("the road table has no header row.");
+		return false;
+	}
+
+	// The columns are found by name in the header (format.md section 6), never by position.
+	static const TCHAR* const Required[] = {
+		TEXT("road"), TEXT("vertex"), TEXT("x"), TEXT("y"), TEXT("z"), TEXT("class"), TEXT("width_m") };
+	TMap<FString, int32> Columns;
+	for (int32 Index = 0; Index < Rows[0].Num(); ++Index)
+	{
+		Columns.Add(FString(Rows[0][Index]).TrimStartAndEnd().ToLower(), Index);
+	}
+	for (const TCHAR* Column : Required)
+	{
+		if (!Columns.Contains(Column))
+		{
+			OutError = FString::Printf(TEXT("the road table has no `%s` column."), Column);
+			return false;
+		}
+	}
+	const int32 RoadCol = Columns[TEXT("road")], VertexCol = Columns[TEXT("vertex")];
+	const int32 XCol = Columns[TEXT("x")], YCol = Columns[TEXT("y")], ZCol = Columns[TEXT("z")];
+	const int32 ClassCol = Columns[TEXT("class")], WidthCol = Columns[TEXT("width_m")];
+	// `name` is optional: a 3.0 bundle's table has none, and a road with no name is left unnamed.
+	const int32* NameColPtr = Columns.Find(TEXT("name"));
+	const int32 NameCol = NameColPtr ? *NameColPtr : INDEX_NONE;
+	int32 MaxCol = 0;
+	for (const TPair<FString, int32>& Pair : Columns)
+	{
+		MaxCol = FMath::Max(MaxCol, Pair.Value);
+	}
+
+	const auto ReadNumber = [](const TCHAR* Field, double& Out)
+	{
+		const FString Text = FString(Field).TrimStartAndEnd();
+		if (Text.IsEmpty() || !FCString::IsNumeric(*Text))
+		{
+			return false;
+		}
+		Out = FCString::Atod(*Text);
+		return true;
+	};
+
+	// One row per vertex; the rows of one road share its `road` number and are in vertex order, so a
+	// road ends where the number changes. Nothing is reordered or derived: the offsets are metres in
+	// the local site frame and a height is metres above the site origin's height (format.md section 4).
+	FMantlePlaceRoadSpline Current;
+	FString CurrentRoad;
+	bool bHaveRoad = false;
+	const auto Flush = [&]()
+	{
+		if (!bHaveRoad)
+		{
+			return;
+		}
+		++OutLinesSeen;
+		if (Current.PointsUeCm.Num() >= 2)
+		{
+			OutSplines.Add(MoveTemp(Current));
+		}
+		Current = FMantlePlaceRoadSpline();
+		bHaveRoad = false;
+	};
+	for (int32 RowIndex = 1; RowIndex < Rows.Num(); ++RowIndex)
+	{
+		const TArray<const TCHAR*>& Row = Rows[RowIndex];
+		if (Row.Num() == 1 && FString(Row[0]).TrimStartAndEnd().IsEmpty())
+		{
+			continue; // a blank line
+		}
+		double X = 0.0, Y = 0.0, Z = 0.0;
+		if (Row.Num() <= MaxCol || !ReadNumber(Row[XCol], X) || !ReadNumber(Row[YCol], Y) || !ReadNumber(Row[ZCol], Z))
+		{
+			++OutRowsUnreadable;
+			continue;
+		}
+		const FString Road = FString(Row[RoadCol]).TrimStartAndEnd();
+		if (!bHaveRoad || Road != CurrentRoad)
+		{
+			Flush();
+			CurrentRoad = Road;
+			bHaveRoad = true;
+			double Width = 0.0;
+			Current.WidthMEstimated = ReadNumber(Row[WidthCol], Width) ? Width : 0.0;
+			Current.RoadClass = FString(Row[ClassCol]).TrimStartAndEnd();
+			Current.Name = NameCol == INDEX_NONE ? FString() : FString(Row[NameCol]);
+		}
+		Current.PointsUeCm.Add(FMantlePlaceVaultManifest::ProjectedToUeCm(X, Y, SiteHeightM + Z));
+	}
+	Flush();
+	return true;
 }

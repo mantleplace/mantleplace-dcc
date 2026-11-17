@@ -12,6 +12,8 @@ namespace
 	constexpr int32 RgbaChannels = 4;
 }
 
+const TCHAR* const FMantlePlaceLandscapeWeightsLogic::GrayscaleEncoding = TEXT("png-8bit-grayscale");
+
 int32 FMantlePlaceLandscapeWeightsLogic::SampleIndex(int32 Post, int32 PostCount, int32 PixelCount)
 {
 	if (PostCount <= 1 || PixelCount <= 0)
@@ -44,6 +46,18 @@ bool FMantlePlaceLandscapeWeightsLogic::ResolveBands(
 		bool bFound = false;
 		for (const FMantlePlaceUeReadyRaster& Raster : Layer.UeReady)
 		{
+			// An MPB 3.x weight map is one 8-bit grayscale PNG per material (format.md section 6): its one
+			// band is the material it names, and the RGBA decode carries that band in every colour channel.
+			if (Raster.Encoding == GrayscaleEncoding)
+			{
+				if (Raster.ValueMapping.Bands.Num() == 1 && Raster.ValueMapping.Bands[0] == Material)
+				{
+					OutBands.Add(FMantlePlaceWeightBand{ Material, Raster.Path, 0 });
+					bFound = true;
+					break;
+				}
+				continue;
+			}
 			if (Raster.Encoding != RgbaEncoding)
 			{
 				continue;
@@ -67,9 +81,9 @@ bool FMantlePlaceLandscapeWeightsLogic::ResolveBands(
 		if (!bFound)
 		{
 			OutError = FString::Printf(
-				TEXT("material \"%s\" is in the band legend but no %s companion of "
+				TEXT("material \"%s\" is in the band legend but no %s or %s companion of "
 				     "landscape_layers.material_weights names it."),
-				*Material, RgbaEncoding);
+				*Material, RgbaEncoding, GrayscaleEncoding);
 			return false;
 		}
 	}

@@ -208,10 +208,162 @@ bool FMantlePlaceVaultLogic::ParseListResponse(const FString& JsonStr, TArray<FM
 			}
 			continue;
 		}
+
+		// A 3.0 row's offer. One that cannot be read leaves the row as a 2.x row and says so: a
+		// malformed offer must not blank the curator's vault any more than a malformed row does.
+		FString LevelWarning;
+		ReadLevelOffer(*Obj, Item, LevelWarning);
+		if (!LevelWarning.IsEmpty() && OutWarnings != nullptr)
+		{
+			OutWarnings->Add(FString::Printf(TEXT("Vault entry %s: %s"), *Item.OrderId, *LevelWarning));
+		}
 		Items.Add(MoveTemp(Item));
 	}
 
 	OutItems = MoveTemp(Items);
+	return true;
+}
+
+const TArray<FString>& FMantlePlaceVaultLogic::OfferedLevels()
+{
+	static const TArray<FString> Levels = { TEXT("Max"), TEXT("Med"), TEXT("Min") };
+	return Levels;
+}
+
+bool FMantlePlaceVaultLogic::IsOfferedLevel(const FString& Level)
+{
+	// Exact spelling: `MED` is a 2.x category token, never a 3.0 level.
+	return OfferedLevels().ContainsByPredicate(
+		[&Level](const FString& Offered) { return Offered.Equals(Level, ESearchCase::CaseSensitive); });
+}
+
+void FMantlePlaceVaultLogic::ReadLevelOffer(const TSharedPtr<FJsonObject>& Row, FMantlePlaceVaultItem& Item, FString& OutWarning)
+{
+	OutWarning.Reset();
+	Item.bHasLevels = false;
+	Item.RecommendedLevel.Reset();
+	Item.Levels.Reset();
+
+	const TSharedPtr<FJsonObject>* Offer = nullptr;
+	if (!Row.IsValid() || !Row->TryGetObjectField(TEXT("mpb3"), Offer) || Offer == nullptr || !Offer->IsValid())
+	{
+		return; // a 2.x row
+	}
+
+	const auto ReadCount = [](const TSharedPtr<FJsonObject>& Parent, const TCHAR* Field, int64& Out) -> bool
+	{
+		double Value = 0.0;
+		if (Parent.IsValid() && Parent->TryGetNumberField(Field, Value) && Value >= 0.0)
+		{
+			Out = static_cast<int64>(Value);
+			return true;
+		}
+		return false;
+	};
+
+	const TSharedPtr<FJsonObject>* LevelsObj = nullptr;
+	(*Offer)->TryGetObjectField(TEXT("levels"), LevelsObj);
+	TArray<FMantlePlaceLevelSize> Sizes;
+	for (const FString& Level : OfferedLevels())
+	{
+		const TSharedPtr<FJsonObject>* Entry = nullptr;
+		FMantlePlaceLevelSize Size;
+		Size.Level = Level;
+		if (LevelsObj == nullptr || !LevelsObj->IsValid() || !(*LevelsObj)->TryGetObjectField(Level, Entry)
+			|| Entry == nullptr || !ReadCount(*Entry, TEXT("sizeBytes"), Size.SizeBytes))
+		{
+			// Every level is offered with its size, or the choice is not offered at all: a curator chooses
+			// on the size (HPS-59), and a level shown without one is a choice made blind.
+			OutWarning = FString::Printf(TEXT("its 3.0 levels could not be read (no size for %s), so its level cannot be chosen"), *Level);
+			return;
+		}
+		const TSharedPtr<FJsonObject>* Counts = nullptr;
+		if ((*Entry)->TryGetObjectField(TEXT("counts"), Counts) && Counts != nullptr)
+		{
+			ReadCount(*Counts, TEXT("rows"), Size.Rows);
+			ReadCount(*Counts, TEXT("features"), Size.Features);
+			ReadCount(*Counts, TEXT("triangles"), Size.Triangles);
+			ReadCount(*Counts, TEXT("pixels"), Size.Pixels);
+		}
+		Sizes.Add(MoveTemp(Size));
+	}
+
+	// The recommendation is the platform's, applied verbatim; one this build cannot read preselects nothing.
+	FString Recommended;
+	(*Offer)->TryGetStringField(TEXT("recommendedLevel"), Recommended);
+	Item.RecommendedLevel = IsOfferedLevel(Recommended) ? Recommended : FString();
+	Item.Levels = MoveTemp(Sizes);
+	Item.bHasLevels = true;
+
+	// The Extras the row lists. An entry with no id is skipped and the rest are kept: an Extra the plugin does
+	// not use must never cost it the levels above, and one it cannot read is as good as unlisted.
+	Item.Extras.Reset();
+	const TArray<TSharedPtr<FJsonValue>>* ExtrasArr = nullptr;
+	if ((*Offer)->TryGetArrayField(TEXT("extras"), ExtrasArr) && ExtrasArr != nullptr)
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *ExtrasArr)
+		{
+			const TSharedPtr<FJsonObject>* Obj = nullptr;
+			FMantlePlaceVaultExtra Extra;
+			if (Value.IsValid() && Value->TryGetObject(Obj) && Obj != nullptr && Obj->IsValid()
+				&& (*Obj)->TryGetStringField(TEXT("id"), Extra.Id) && !Extra.Id.IsEmpty())
+			{
+				(*Obj)->TryGetStringField(TEXT("name"), Extra.Name);
+				ReadCount(*Obj, TEXT("sizeBytes"), Extra.SizeBytes);
+				Item.Extras.Add(MoveTemp(Extra));
+			}
+		}
+	}
+}
+
+FString FMantlePlaceVaultLogic::BuildExtraDownloadBody(const FString& ExtraId)
+{
+	const TSharedRef<FJsonObject> Mpb3 = MakeShared<FJsonObject>();
+	Mpb3->SetStringField(TEXT("version"), TEXT("3.0"));
+	Mpb3->SetStringField(TEXT("extra"), ExtraId);
+
+	const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+	Root->SetStringField(TEXT("format"), WholeBundleFormat());
+	Root->SetObjectField(TEXT("mpb3"), Mpb3);
+	return VaultSerializeCondensed(Root);
+}
+
+FString FMantlePlaceVaultLogic::BuildLevelDownloadBody(const FString& Level, const TArray<FString>& Files)
+{
+	const TSharedRef<FJsonObject> Mpb3 = MakeShared<FJsonObject>();
+	Mpb3->SetStringField(TEXT("version"), TEXT("3.0"));
+	Mpb3->SetStringField(TEXT("level"), Level);
+	if (Files.Num() > 0)
+	{
+		// With no files named the platform sends every file of the level, so the plugin always names its own.
+		TArray<TSharedPtr<FJsonValue>> Named;
+		for (const FString& File : Files)
+		{
+			Named.Add(MakeShared<FJsonValueString>(File));
+		}
+		Mpb3->SetArrayField(TEXT("files"), Named);
+	}
+
+	const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+	Root->SetStringField(TEXT("format"), WholeBundleFormat());
+	Root->SetObjectField(TEXT("mpb3"), Mpb3);
+	return VaultSerializeCondensed(Root);
+}
+
+bool FMantlePlaceVaultLogic::ParseLevelDownloadResponse(
+	const FString& JsonStr, const FString& Level, FMantlePlacePresignedDownload& OutDownload, FString& OutError)
+{
+	FMantlePlacePresignedDownload Parsed;
+	if (!ParseDownloadResponse(JsonStr, Parsed, OutError))
+	{
+		return false;
+	}
+	// The listing's size and digest are the Max download of every file, so they describe no level download
+	// of this host's files: it is held against what the platform stated for it, as a view is.
+	Parsed.bIsView = true;
+	Parsed.bPartial = false;
+	Parsed.Level = Level;
+	OutDownload = MoveTemp(Parsed);
 	return true;
 }
 

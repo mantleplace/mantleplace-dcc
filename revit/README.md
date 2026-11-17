@@ -341,7 +341,7 @@ Four bundles are a small sample, and one 2026 point is at the bar: a check point
 ### Sharing a project: ODbL content and Prepare for Handover
 
 Content made from files the bundle marks `database` (an ODbL Derivative Database; a file with no
-stated role counts as one, as `spec/format.md` §6.8 says) is kept visibly apart. Every element such
+stated role counts as one, as `spec/format-2.md` §6.8 says) is kept visibly apart. Every element such
 a step makes is filed in a **selection filter** named `Mantle Place ODbL <order>` (with ` (terrain)`
 after it for the ground), which you can see under Manage ▸ Selection and in Visibility/Graphics, and
 which the **Mantle Place Site Context** view draws in orange. A selection filter, because it is the
@@ -456,6 +456,8 @@ import is listed, says `not available in this version of Mantle Place`, and cann
 only what the lower one left out; at a lower level it creates nothing and deletes nothing, and the
 log says how many it kept. Trees from a level with a file of its own are not matched to another
 level's rows: that import creates no trees, deletes none, and says which to delete to change level. The unattended path imports `MAX`.
+
+**A 3.0 bundle's rows say what they will take, and a row that would break five minutes starts unticked.** A 3.0 download holds one level, so a row has no level list; its estimate is the count the bundle's catalog states for its file times the measured cost per unit for the Revit you are running, for the rows that have a measured unit cost (the trees and the road surfaces). A row whose estimate, at its slowest, is over five minutes starts unticked, with its estimate and one line saying why; tick it and all of it imports, since the plugin never thins or samples a layer to fit. What you ticked last time does not tick such a row on another bundle. The unattended path is unchanged. A 2.x bundle is estimated as before.
 
 **An import is staged, and shows itself.** Once `Import` is pressed the window lists the chosen
 steps, marks each one `Waiting`, `Importing`, `Done`, `Failed`, `Cancelled` or `Not Run`, and counts

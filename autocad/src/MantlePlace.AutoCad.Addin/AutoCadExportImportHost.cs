@@ -21,6 +21,12 @@ namespace MantlePlace.AutoCad.Addin;
 /// opens, the web hears it open and begin, and Cancel stops it between steps, which the web hears as
 /// cancelled. While another import runs, from disk or from an earlier send, the export waits its turn.
 /// </para>
+/// <para>
+/// A send names no level, so a 3.0 order arrives at the recommendation. The window gets no level control:
+/// the import begins as it opens, so there is no moment before Import to choose another level, and this
+/// plugin reads no 3.0 bundle yet (<see cref="ManifestVersions.NewestSupportedMajor"/>), so the window
+/// reports a 3.0 send as refused whatever its level.
+/// </para>
 /// </remarks>
 internal sealed class AutoCadExportImportHost : IExportImportHost
 {

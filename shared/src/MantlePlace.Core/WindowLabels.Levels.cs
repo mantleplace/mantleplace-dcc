@@ -80,6 +80,30 @@ public static partial class WindowLabels
         return text;
     }
 
+    /// <summary>
+    /// What a row of a 3.0 bundle says beside its box: what its file holds, what importing it is
+    /// estimated to take in this Revit, and where that breaks the budget, the one plain line that says
+    /// why the box starts unticked and that ticking it imports all of it.
+    /// </summary>
+    /// <param name="cost">The file's catalog count.</param>
+    /// <param name="estimate">That count times this Revit's measured cost per unit.</param>
+    /// <param name="overBudget">Whether the estimate breaks the budget (<see cref="SlowStepNotice.BreaksBudget"/>).</param>
+    public static string EstimateNote(CostDriver cost, SlowStepNotice.LevelEstimate estimate, bool overBudget)
+    {
+        ArgumentNullException.ThrowIfNull(cost);
+        ArgumentNullException.ThrowIfNull(estimate);
+
+        string text = CostText(cost) + ", about " + Duration(estimate.Seconds);
+        if (!estimate.Timed)
+        {
+            text += string.Format(CultureInfo.InvariantCulture, " (as timed in Revit {0})", estimate.Version);
+        }
+
+        return overBudget
+            ? text + ". That is over five minutes, so it starts unticked. Tick it to import all of it."
+            : text;
+    }
+
     /// <summary>A <c>same_as</c> reason in the curator's words.</summary>
     public static string SameAsReasonPhrase(SameAsReason reason) => reason switch
     {
@@ -122,4 +146,46 @@ public static partial class WindowLabels
             ? string.Format(CultureInfo.InvariantCulture, "{0} {1}", low, high == 1 ? unit.TrimEnd('s') : unit)
             : string.Format(CultureInfo.InvariantCulture, "{0} to {1} {2}", low, high, unit);
     }
+
+    /// <summary>
+    /// The label beside a 3.0 order's level control, in every host's vault window and in the window a received send opens: the glossary's
+    /// term, the same as the checklist column's.
+    /// </summary>
+    public const string DownloadLevelHeading = LevelHeading;
+
+    /// <summary>The words that mark the level the platform recommends for this host and site.</summary>
+    public const string RecommendedLevel = "recommended";
+
+    /// <summary>
+    /// One choice in a 3.0 order's level control: the level as the bundle spells it, the size of its
+    /// download, and the recommendation when it is the one. <c>Med — 1.4 GB (recommended)</c>.
+    /// </summary>
+    public static string LevelChoice(FidelityLevel level, long sizeBytes, bool recommended)
+    {
+        string choice = $"{DownloadLevels.Word(level)} — {VaultRows.SizeText(sizeBytes)}";
+        return recommended ? $"{choice} ({RecommendedLevel})" : choice;
+    }
+
+    /// <summary>The counts behind one level's size, for its tooltip.</summary>
+    public static string LevelCounts(LevelSize size)
+        => string.Format(
+            CultureInfo.InvariantCulture,
+            "{0}: {1} rows, {2} features, {3} triangles, {4} pixels",
+            DownloadLevels.Word(size.Level),
+            DownloadLevels.Count(size.Rows),
+            DownloadLevels.Count(size.Features),
+            DownloadLevels.Count(size.Triangles),
+            DownloadLevels.Count(size.Pixels));
+
+    /// <summary>What the window a received send opens says while the chosen level downloads into the slot.</summary>
+    public static string LevelDownloading(FidelityLevel level)
+        => $"Downloading the {DownloadLevels.Word(level)} level before Import…";
+
+    /// <summary>What it says once the chosen level is in the slot.</summary>
+    public static string LevelDownloaded(FidelityLevel level)
+        => $"The {DownloadLevels.Word(level)} level is downloaded and checked. Import reads it.";
+
+    /// <summary>What it says when the chosen level could not be downloaded: the slot still holds the level it had.</summary>
+    public static string LevelNotDownloaded(FidelityLevel chosen, FidelityLevel held, string why)
+        => $"The {DownloadLevels.Word(chosen)} level could not be downloaded ({why.Trim().TrimEnd('.')}). Import reads the {DownloadLevels.Word(held)} level already downloaded.";
 }

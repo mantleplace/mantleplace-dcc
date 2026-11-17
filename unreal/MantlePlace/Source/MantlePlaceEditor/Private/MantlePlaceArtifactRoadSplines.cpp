@@ -134,11 +134,16 @@ public:
 
 	bool IsPresent(const FMantlePlaceVaultManifest& M) const override
 	{
-		return M.RoadSplines.bEnginePresent || M.RoadSplines.bPresent || M.RoadSplines.bGpkgPresent;
+		return M.RoadSplines.bEnginePresent || M.RoadSplines.bPresent || M.RoadSplines.bGpkgPresent
+			|| M.RoadSplines.bSiteCsvPresent;
 	}
 
 	void CollectDeclared(const FMantlePlaceVaultManifest& M, TArray<FMantlePlaceDeclaredArtifact>& Out) const override
 	{
+		if (M.RoadSplines.bSiteCsvPresent)
+		{
+			Out.Add(FMantlePlaceDeclaredArtifact{ M.RoadSplines.SiteCsvPath, M.RoadSplines.SiteCsvSha256 });
+		}
 		if (M.RoadSplines.bEnginePresent)
 		{
 			Out.Add(FMantlePlaceDeclaredArtifact{ M.RoadSplines.EnginePath, M.RoadSplines.EngineSha256 });
@@ -175,7 +180,15 @@ public:
 		// layer. A source that cannot be read (missing from the zip, not a GeoPackage, in another
 		// frame) says why in the log and gives way to the next, so a layer is never lost to the source
 		// that was tried first. The first that reads is the one placed.
-		const TArray<FMantlePlaceRoadSplinesCandidate> Plan = Manifest.GetRoadSplinesPlan();
+		//
+		// An MPB 3.x bundle has one source, its host-ready `Basemap/Roads.csv` in the local site frame,
+		// whose heights are in that frame's vertical datum: the Landscape's, so there is no datum to ask.
+		if (Manifest.RoadSplines.bSiteCsvPresent)
+		{
+			bParsed = ReadSiteCsv(Ctx, Splines, LinesSeen);
+		}
+		const TArray<FMantlePlaceRoadSplinesCandidate> Plan =
+			Manifest.RoadSplines.bSiteCsvPresent ? TArray<FMantlePlaceRoadSplinesCandidate>() : Manifest.GetRoadSplinesPlan();
 		for (const FMantlePlaceRoadSplinesCandidate& Candidate : Plan)
 		{
 			if (!Candidate.bPlaceable)
@@ -241,6 +254,35 @@ public:
 	}
 
 private:
+	/** An MPB 3.x bundle's host-ready road table; false (with the reason logged) when it cannot be read. */
+	static bool ReadSiteCsv(FMantlePlaceImportContext& Ctx, TArray<FMantlePlaceRoadSpline>& OutSplines, int32& OutLinesSeen)
+	{
+		const FMantlePlaceRoadSplinesBlock& Block = Ctx.Manifest.RoadSplines;
+		TArray<uint8> CsvBytes;
+		if (!Ctx.ReadBytes(Block.SiteCsvPath, CsvBytes))
+		{
+			Ctx.Log.Add(FString::Printf(TEXT("Road splines skipped: bundle is missing %s."), *Block.SiteCsvPath));
+			return false;
+		}
+		FString CsvText, CsvError;
+		FFileHelper::BufferToString(CsvText, CsvBytes.GetData(), CsvBytes.Num());
+		int32 RowsUnreadable = 0;
+		if (!FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
+		        CsvText, Block.SiteHeightM, OutSplines, OutLinesSeen, RowsUnreadable, CsvError))
+		{
+			Ctx.Log.Add(FString::Printf(TEXT("Road splines skipped: %s %s"), *Block.SiteCsvPath, *CsvError));
+			return false;
+		}
+		Ctx.Log.Add(FString::Printf(TEXT("Road splines read from %s."), *Block.SiteCsvPath));
+		if (RowsUnreadable > 0)
+		{
+			Ctx.Log.Add(FString::Printf(
+				TEXT("Road splines: %d row(s) in %s had no numeric x, y or z and were passed over."),
+				RowsUnreadable, *Block.SiteCsvPath));
+		}
+		return true;
+	}
+
 	/**
 	 * The Unreal block's own copy (`hosts.unreal.road_splines`); false (with the reason logged) when
 	 * it cannot be read, and the shared layer is tried next when it is placeable.

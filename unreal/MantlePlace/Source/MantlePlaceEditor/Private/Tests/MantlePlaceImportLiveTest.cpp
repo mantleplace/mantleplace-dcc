@@ -4,7 +4,8 @@
 
 #if WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
 
-#include "MantlePlaceArtifactHandler.h"  // the importer's own handlers: what it can place from this archive
+#include "MantlePlaceArtifactHandler.h"
+#include "MantlePlaceBundleReaderLogic.h" // FindManifest: which manifest generation a bundle is  // the importer's own handlers: what it can place from this archive
 #include "MantlePlaceEditorSettings.h"   // the generated content root (the refusal touches nothing under it)
 #include "MantlePlaceImportOrchestration.h" // ExplainNothingToImport: the refusal this test checks when it applies
 #include "MantlePlaceIntegrityLogic.h"   // HoldsCesiumTerrain: whether the refusal may offer the stream
@@ -215,10 +216,28 @@ namespace MantlePlaceImportLiveTest
 	 *
 	 * `Wanted` points are taken evenly through the file. Returns false, with the reason, when the bundle
 	 * publishes no points this test can read.
+	 *
+	 * A 3.x bundle (Manifest.json at its root) states no `elevation.points_csv` or `navd88_minus_egm2008_m`:
+	 * its surface points file is derived from the terrain file, not stated, so there is nothing stated to
+	 * compare against and this derives nothing. That returns false with `bOutNotStatedBy3x` set, which the
+	 * caller logs as information, not as a skipped gate.
 	 */
-	bool ReadCheckPoints(FZipArchiveReader& Reader, int32 Wanted, TArray<FCheckPoint>& Out, FString& OutReason)
+	bool ReadCheckPoints(FZipArchiveReader& Reader, int32 Wanted, TArray<FCheckPoint>& Out, FString& OutReason,
+		bool& bOutNotStatedBy3x)
 	{
 		Out.Reset();
+		bOutNotStatedBy3x = false;
+		{
+			FString Root, FoundPath;
+			if (FMantlePlaceBundleReaderLogic::FindManifest(Reader.GetFileNames(), Root, FoundPath)
+				&& FoundPath.Equals(FMantlePlaceBundleReaderLogic::ManifestPath3(), ESearchCase::IgnoreCase))
+			{
+				bOutNotStatedBy3x = true;
+				OutReason = TEXT("a 3.x manifest states no surface points file or datum difference to check the "
+					"landscape against, and this gate derives none");
+				return false;
+			}
+		}
 		TArray<uint8> ManifestBytes;
 		if (!Reader.TryReadFile(TEXT("Metadata/manifest.json"), ManifestBytes))
 		{
@@ -935,17 +954,22 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		TArray<FCheckPoint> CheckPoints;
 		FString NoPoints;
 		bool bRead = false;
+		bool bNotStatedBy3x = false;
 		if (IFileHandle* Handle = Platform.OpenRead(*Zip))
 		{
 			FZipArchiveReader Reader(Handle); // takes ownership of the handle
-			bRead = ReadCheckPoints(Reader, WantedPoints, CheckPoints, NoPoints);
+			bRead = ReadCheckPoints(Reader, WantedPoints, CheckPoints, NoPoints, bNotStatedBy3x);
 		}
 		else
 		{
 			NoPoints = FString::Printf(TEXT("could not reopen the bundle \"%s\""), *Zip);
 		}
 
-		if (!bRead)
+		if (!bRead && bNotStatedBy3x)
+		{
+			AddInfo(FString::Printf(TEXT("Placement gate not applicable to a 3.x bundle: %s."), *NoPoints));
+		}
+		else if (!bRead)
 		{
 			// The skip rule the rest of this test lives by: a warning locally, an error under CI.
 			const FString Reason = FString::Printf(TEXT("Placement gate not run: %s."), *NoPoints);

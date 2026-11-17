@@ -99,7 +99,24 @@ PNG's pixel meaning is stated: a 1.x host block carries `uint16_mapping` and `ue
 a 2.0 bundle states it only in `file_entries[<path>].value_mapping`. A host-block statement is applied
 verbatim and wins, and a block without one reads the file's own entry.
 
-A manifest path matches an archive entry **regardless of case** (format.md 10.3 rule 6). **The engine's
+**An MPB 3.x manifest has a second reading path,** `FMantlePlaceBundleReaderLogic` (opened on a folder or
+a zip by `MantlePlaceBundleArchive`): `Manifest.json` at the bundle's root is 3.x, `Metadata/manifest.json`
+is 2.x, either inside one wrapper folder. A major above `NewestMajor` (3) is refused with the update
+message the 2.x parse uses, before any catalog is read. Every 3.x file is found by its name in the one
+catalog, never through a per-host block; family, frame and unit follow the extension, and the level and
+each count are what the manifest states. The manifest's `frames` are read as the shared reader reads them: the metre, the
+international foot and the US survey foot, a local frame in metres and east, north, up; any other value is
+refused as `unreadable`, naming it, and nothing is converted. `MantlePlace.Import.ReaderCorpus` runs every corpus `reader`
+case against it. The 2.x parse above is frozen as it ships. **A 3.x bundle imports through the same
+handlers:** `FMantlePlaceManifestThreeLogic` fills `FMantlePlaceVaultManifest` from the catalog (each step's
+promised file, its stated values in centimetres, the site origin as this host's origin) and names, in
+`FormatSkips`, every step a 3.0 bundle cannot feed; the import window lists those Not Run with the reason.
+The public-record layers of a 3.x bundle are read from the same catalog (`Records/<Name>.dxf` and `.gpkg`, the family
+named by the file), each file's frame the one `frames.georeferenced` the manifest states once, judged by
+`FMantlePlacePublicRecordsLogic::CanPlaceFrame` and never converted. What is left out is
+[`docs/release-notes-0.9.0.md`](docs/release-notes-0.9.0.md).
+
+A manifest path matches an archive entry **regardless of case** (format-2.md 10.3 rule 6). **The engine's
 zip reader already does:** `FZipArchiveReader` keeps its entries in a `TMap<FString, ...>` whose hash and
 key comparison ignore case, so `metadata/MANIFEST.json` finds `Metadata/manifest.json`; checked against
 the UE 5.8 source and by `MantlePlace.Import.BundleLayout`, which writes a real zip in another case than
@@ -124,8 +141,12 @@ run reporting any `No editor` skip is not green.**
 
 - **Corpus.** The conformance tests walk up (at most eight levels) from the plugin directory looking
   for `tools/manifest-conformance/corpus/index.json`
-  (`FindCorpusDir` in `MantlePlaceConformanceCorpus.h`) and fail if they do not find it. A scratch
-  project holding only `MantlePlace/` under `Plugins/` cannot reach it: place the scratch project (or
+  (`FindCorpusDir` in `MantlePlaceConformanceCorpus.h`). When they do not find it, a source tree
+  fails where `CI` is set; a packaged plugin (its descriptor says `Installed`) and a source tree with
+  `CI` unset warn `Conformance corpus not present` and pass (`SkipWithoutCorpus`): a release zip
+  does not ship the corpus, so its suite skips them, in a strict run too. **A run carrying that warning has
+  not proven conformance and is not green for a change**, whatever the count says. A scratch
+  project holding only `MantlePlace/` under `Plugins/` cannot reach the corpus: place the scratch project (or
   a copy of the plugin) beneath a directory that has `tools/manifest-conformance/corpus/`, or copy
   that `corpus/` folder to `tools/manifest-conformance/corpus/` in a directory above the plugin.
 - **`MantlePlace.Import.LiveFreeTier`** runs offline against a local bundle zip: set

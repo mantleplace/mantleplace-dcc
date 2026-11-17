@@ -75,6 +75,11 @@ struct FMantlePlaceGeoreferenceBlock
 	double OriginEastingM = 0.0;
 	double OriginNorthingM = 0.0;
 	double GroundOrthometricHM = 0.0; // elevation at the centroid (= mesh ground z=0 reference)
+	bool bHasGeographicOrigin = false; // an MPB 3.x site origin stated in longitude and latitude (frames.local.origin);
+	                                   // read for ONE purpose: a Cesium georeference is set in degrees. Never
+	                                   // derived from the projected origin above, and never read from a 2.x bundle.
+	double OriginLongitudeDeg = 0.0;
+	double OriginLatitudeDeg = 0.0;
 	FString PlanetShape;              // contract: "Flat" only; Parse rejects any other value
 };
 
@@ -113,6 +118,9 @@ struct FMantlePlaceHeightmapBlock
 	double ZMaxM = 0.0;
 	bool bRow0IsNorth = true;       // PNG row 0 is the northern edge
 	FString Sha256;                 // sha256 of the raw heightmap PNG bytes; schema-required
+	double GridCentreEastM = 0.0;   // the grid's centre from the georeference origin, in metres: zero for a
+	double GridCentreNorthM = 0.0;  // 2.x bundle, whose grid is centred on it by contract; the centre of the
+	                                // stated rectangle for a 3.x one (FMantlePlaceManifestThreeLogic)
 
 	/** Quads per component = SectionsPerComponent * SectionSizeQuads. */
 	int32 GetQuadsPerComponent() const { return SectionsPerComponent * SectionSizeQuads; }
@@ -193,6 +201,8 @@ struct FMantlePlaceFoliagePointsBlock
 	                                // foliage_type column, which the shared tree-points block is the only
 	                                // place to publish: it is read for that and for nothing else, and the
 	                                // path and digest stay this block's own (HPS-33).
+	bool bSiteFrame = false;        // a 3.x `Trees.csv`: x and y are offsets from the georeference origin and
+	double SiteHeightM = 0.0;       // ground_z is metres above the site origin's height, which is SiteHeightM
 };
 
 /** `unreal.landscape_layers`: Landscape-paintable rasters this host is addressed by name. All are
@@ -242,6 +252,11 @@ struct FMantlePlaceRoadSplinesBlock
 	FString EngineVerticalDatum;    // hosts.unreal.road_splines.vertical_datum, verbatim; the schema fixes it to
 	                                // EGM2008-orthometric and FMantlePlaceRoadSplinesLogic::CanPlaceEngineHeights
 	                                // still asks, never assuming it from the pointer's name
+
+	bool bSiteCsvPresent = false;   // an MPB 3.x bundle's `Basemap/Roads.csv` (FMantlePlaceManifestThreeLogic); 2.x never sets it
+	FString SiteCsvPath;            // in-zip path of the host-ready road table, in the local site frame
+	FString SiteCsvSha256;          // its catalog digest
+	double SiteHeightM = 0.0;       // z is metres above the site origin's height, which is this
 };
 
 /**
@@ -255,10 +270,12 @@ struct FMantlePlaceRoadSplinesBlock
  */
 
 /**
- * The frame a record file states for itself: the same object as `hosts.unreal.file_frame`. Read when
- * a file's entry carries one; no published manifest version declares it for these files yet, so
- * today it is usually absent, and a file that states none cannot be shown to be in this host's frame
- * (HPS-53). FMantlePlacePublicRecordsLogic::CanPlaceFrame decides what a stated one means.
+ * The frame a record file states for itself, verbatim. A 2.x manifest states it as the neutral
+ * `file_entries[<path>].frame` (MPB 1.14.0, `fileEntryFrame`); the provisional `file_frame` a family
+ * block's own entry could carry is read first when it is there. A 3.x manifest states one frame for
+ * every georeferenced file (`frames.georeferenced`), which each record file of that family is in. A
+ * file that states none cannot be shown to be in this host's frame (HPS-53).
+ * FMantlePlacePublicRecordsLogic::CanPlaceFrame decides what a stated one means.
  */
 struct FMantlePlaceRecordFrame
 {
@@ -303,8 +320,10 @@ struct FMantlePlaceRecordLayer
 	TArray<FMantlePlaceRecordFile> Files;
 	TArray<FMantlePlaceRecordPointer> Pointers;
 	// The text the manifest carries for the layer, verbatim and shown as published. Empty = absent.
-	// No published schema version declares these keys yet; they are read by these provisional names
-	// and the standing notice (FMantlePlacePublicRecordsLogic::StandingNotice) is shown regardless.
+	// `Credit` falls back to the sources each file entry states (name, link, licence). No published
+	// schema version declares a per-layer disclaimer or notice (an open data-contract request tracks it), so those two are read by their
+	// provisional names and are usually empty; the standing notice
+	// (FMantlePlacePublicRecordsLogic::StandingNotice) is shown regardless.
 	FString Credit;
 	FString Disclaimer;
 	FString Notice;
@@ -319,9 +338,19 @@ struct FMantlePlaceSkippedSource
 	FString Reason;                 // verbatim: source_down | source_failed | source_timeout
 };
 
+/** A record file the manifest promises and this download does not hold, with the reason it states (MPB 3.x `not_held`). */
+struct FMantlePlaceRecordNotHeld
+{
+	FString Family;                 // the layer the file belongs to, as FMantlePlaceRecordLayer::Family
+	FString Path;                   // the promised file's catalog path
+	FString Reason;                 // the manifest's stated reason, verbatim; never matched on
+};
+
 struct FMantlePlacePublicRecordsBlock
 {
 	bool bPresent = false;          // at least one layer, or at least one source that delivered nothing
+	FString BundleNotice;           // the bundle's own `attribution.notice` (2.x), shown once beside the standing notice
+	TArray<FMantlePlaceRecordNotHeld> NotHeld; // a 3.x download's promised record files that are not in it
 	TArray<FMantlePlaceRecordLayer> Layers; // in the order FMantlePlacePublicRecordsLogic::OrderLayers gives
 	TArray<FMantlePlaceSkippedSource> SkippedSources;
 };

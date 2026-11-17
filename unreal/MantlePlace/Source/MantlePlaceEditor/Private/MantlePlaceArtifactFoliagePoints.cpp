@@ -184,10 +184,13 @@ public:
 			Frame.HorizontalUnits = Level.HorizontalUnits;
 		}
 		TArray<FMantlePlaceTreePointRow> Rows;
+		FString OutsideNote;
+		// A 3.x Trees.csv is already offsets from the origin (FMantlePlaceFoliagePointsBlock::bSiteFrame).
+		const bool bSiteFrame = Manifest.Foliage.bSiteFrame;
 		const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
-			CsvText, Manifest.Georef.OriginEastingM, Manifest.Georef.OriginNorthingM, Frame,
+			CsvText, bSiteFrame ? 0.0 : Manifest.Georef.OriginEastingM, bSiteFrame ? 0.0 : Manifest.Georef.OriginNorthingM, Frame,
 			Manifest.GetAoiSizeUeCm(), // zero when the block publishes no landscape transform
-			Level.DeclaredCount, Rows, TreesError, Manifest.Foliage.FoliageTypeVocabulary);
+			Level.DeclaredCount, Rows, TreesError, Manifest.Foliage.FoliageTypeVocabulary, &OutsideNote);
 		if (Outcome == EMantlePlaceTreePointsOutcome::CountMismatch)
 		{
 			// A count that disagrees with the payload FAILS the import rather than skipping the
@@ -200,10 +203,22 @@ public:
 		}
 		if (Outcome == EMantlePlaceTreePointsOutcome::Parsed)
 		{
+			if (!OutsideNote.IsEmpty())
+			{
+				// A few points past the landscape's edge are named, not silently dropped (HPS-53).
+				Ctx.Log.Add(FString::Printf(TEXT("Tree points (%s): %s"), *Level.Path, *OutsideNote));
+			}
 			// The rows were read and checked in the bundle's own frame (the HPS-53 extent test is
 			// against this block's landscape about its origin); only now do they move to the level's.
 			for (FMantlePlaceTreePointRow& Row : Rows)
 			{
+				// A 3.x ground height is metres above the site origin's: the stated height is added, so
+				// the table holds the same absolute heights a 2.x one does.
+				if (bSiteFrame && Row.bGroundKnown)
+				{
+					Row.GroundZM += static_cast<float>(Manifest.Foliage.SiteHeightM);
+					Row.Position.Z += Manifest.Foliage.SiteHeightM * 100.0;
+				}
 				Row.Position = Manifest.ToLevelFrame(Row.Position);
 			}
 		}

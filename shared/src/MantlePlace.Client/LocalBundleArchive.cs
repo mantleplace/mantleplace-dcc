@@ -46,15 +46,17 @@ public sealed class LocalBundleArchive : IDisposable
     }
 
     /// <summary>
-    /// The parsed manifest, or <c>null</c> when the zip carries no <c>Metadata/manifest.json</c> at
-    /// all — which is how "this file is not a Mantle Place bundle" is distinguished from "this
+    /// The bundle as <see cref="BundleReader"/> reads it, of either major: a <c>Manifest.json</c> at
+    /// the root as 3.x, a <c>Metadata/manifest.json</c> as 2.x or 1.x. <c>null</c> when the zip holds
+    /// neither — which is how "this file is not a Mantle Place bundle" is distinguished from "this
     /// bundle is too old", a refusal the manifest itself explains.
     /// </summary>
     public BundleManifest? Manifest { get; }
 
     /// <summary>
-    /// The manifest's text as the zip holds it, or <c>null</c> when there is none: for a host whose own
-    /// block this reader does not read (the AutoCAD plugin reads <c>hosts.autocad</c> from it).
+    /// The 2.x or 1.x manifest's text as the zip holds it, or <c>null</c> when there is none, a 3.x
+    /// bundle included: for a host whose own block this reader does not read (the AutoCAD plugin reads
+    /// <c>hosts.autocad</c> from it). A 3.x manifest has no host block (<c>spec/format.md</c> §9.7).
     /// </summary>
     public string? ManifestText { get; }
 
@@ -78,7 +80,7 @@ public sealed class LocalBundleArchive : IDisposable
         ZipArchive archive = ZipFile.OpenRead(zipPath);
 
         string? manifestText = ReadManifestText(archive);
-        BundleManifest? manifest = manifestText is null ? null : BundleManifestReader.Parse(manifestText);
+        BundleManifest? manifest = BundleReader.Read(archive.Entries.Select(entry => entry.FullName), name => ReadEntryText(archive, name));
 
         // The filing key -- the order id, or the id an older bundle's attribution carries -- is
         // what makes the hand-downloaded zip and the vault download the same cache entry. A bundle
@@ -358,7 +360,7 @@ public sealed class LocalBundleArchive : IDisposable
         try
         {
             using ZipArchive archive = ZipFile.OpenRead(zipPath);
-            if (FindManifest(archive) is not { } entry)
+            if (FindEitherManifest(archive) is not { } entry)
             {
                 return string.Empty;
             }
@@ -370,6 +372,36 @@ public sealed class LocalBundleArchive : IDisposable
         {
             return string.Empty;
         }
+    }
+
+    /// <summary>
+    /// Reads this zip again as a bundle of either major (<see cref="BundleReader"/>): a fresh reading
+    /// of what <see cref="Manifest"/> holds. <c>null</c> when it holds neither manifest.
+    /// </summary>
+    public BundleManifest? ReadBundle() => BundleReader.Read(EntryNames, name => ReadEntryText(_archive, name));
+
+    private static string? ReadEntryText(ZipArchive archive, string entryName)
+    {
+        if (archive.GetEntry(entryName) is not { } entry)
+        {
+            return null;
+        }
+
+        using StreamReader reader = new(entry.Open());
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>
+    /// The manifest member <see cref="BundleReader"/> reads: the root <c>Manifest.json</c> of a 3.x
+    /// bundle, else the 2.x <c>Metadata/manifest.json</c>, found as the reader finds them.
+    /// </summary>
+    private static ZipArchiveEntry? FindEitherManifest(ZipArchive archive)
+    {
+        BundleEntryIndex index = new(archive.Entries.Select(entry => entry.FullName));
+        string? root = index.Resolve(BundleReader.ManifestPath);
+        string? beforeThree = index.Resolve(BundleReader.ManifestPathBeforeThree);
+        string? name = root is not null && !string.Equals(root, beforeThree, StringComparison.Ordinal) ? root : beforeThree;
+        return name is null ? FindManifest(archive) : archive.GetEntry(name);
     }
 
     private static ZipArchiveEntry? FindManifest(ZipArchive archive)
