@@ -107,7 +107,7 @@ catalog, never through a per-host block; family, frame and unit follow the exten
 each count are what the manifest states. The manifest's `frames` are read as the shared reader reads them: the metre, the
 international foot and the US survey foot, a local frame in metres and east, north, up; any other value is
 refused as `unreadable`, naming it, and nothing is converted. `MantlePlace.Import.ReaderCorpus` runs every corpus `reader`
-case against it. The 2.x parse above is frozen as it ships. **A 3.x bundle imports through the same
+case against it. `MantlePlace.Import.BundleReaderFrames` pins each frames rule on its own (a unit is its factor and never its name; an axis order, a CRS that names no form, the local axes and the local unit), and that the frames come back as stated. The 2.x parse above is frozen as it ships. **A 3.x bundle imports through the same
 handlers:** `FMantlePlaceManifestThreeLogic` fills `FMantlePlaceVaultManifest` from the catalog (each step's
 promised file, its stated values in centimetres, the site origin as this host's origin) and names, in
 `FormatSkips`, every step a 3.0 bundle cannot feed; the import window lists those Not Run with the reason.
