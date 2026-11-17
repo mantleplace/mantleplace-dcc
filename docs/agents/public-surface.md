@@ -37,8 +37,18 @@ is right.
   accident: it hands a stranger a private repository's name and a 404. The gate excepts this
   repository's own name.
 - **A private sibling repository's name.** Refused structurally — this project's naming stem where
-  the tail is not `dcc`. No private repository is named in the gate's own source; the only literals
-  it carries are the tracked artifact filenames a legitimate commit message must be able to name.
+  the tail is not `dcc` — on all six surfaces, tracked files included. No private repository is named
+  in the gate's own source; the only literals it carries are the two tracked artifact filenames a
+  legitimate message must be able to name. A tracked file additionally carries product strings a
+  commit message does not, so the file surface lets two kinds through: the PascalCase brand casing
+  the plugins write into layer and archive names (a repository name is lowercase), and a short
+  list of tracked identifiers matched as whole tokens (a published package, temporary-directory
+  prefixes). A longer name sharing one of them is a different name and is refused.
+- **Agent tooling that is not published here.** Refused on every surface, by structure and never by
+  name: a plugin referenced as `name@catalogue` where the catalogue is called after the project's
+  stem (an install command and a setting that enables one both write that token), and a slash command
+  namespaced by such a plugin. A code span is **not** an exemption for these, because an install line
+  is nearly always written in one. Say what a step does, not which private tool runs it.
 - **A `D-` plus two capitals decision-log id.** It names a document in the private project
   repository that a reader cannot open, and unlike a rule id it is not a stable public identifier.
 - **The shorthand shape** — a lowercase project short name immediately followed by a reference —

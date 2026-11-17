@@ -286,6 +286,31 @@ class AdrIndexTests(GateTestCase):
         self.assertRefused("no ADR index bullet found")
 
 
+class ContributorProcedureTests(unittest.TestCase):
+    """Root CLAUDE.md used to point at a workflow document a reader here cannot open. The public
+    procedure replaces it, so it is pinned: the guide links it, it exists, and it is one of the
+    documents the gate reads for links and frontmatter."""
+
+    PROCEDURE = "docs/agents/contributor-procedure.md"
+
+    def test_the_guide_points_at_the_public_procedure_and_no_outside_standard(self) -> None:
+        guide = (gate.REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn(f"]({self.PROCEDURE})", guide)
+        self.assertNotIn("agent standard", guide.lower())
+        self.assertTrue((gate.REPO_ROOT / self.PROCEDURE).is_file())
+
+    def test_the_procedure_is_a_document_the_gate_reads(self) -> None:
+        self.assertIn(self.PROCEDURE, gate.tracked_markdown(gate.REPO_ROOT))
+        self.assertTrue(gate.needs_frontmatter(self.PROCEDURE))
+
+    def test_the_procedure_states_what_a_contributor_needs(self) -> None:
+        text = (gate.REPO_ROOT / self.PROCEDURE).read_text(encoding="utf-8")
+        for needle in ("## Worktrees", "## Branches", "## The gate", "## Closing the issue",
+                       ".claude/worktrees/<type>-<slug>", "Closes #<number>"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+
 class UnitTests(unittest.TestCase):
     def test_blanked_code_keeps_line_numbers_true(self) -> None:
         text = "one\n```\ntwo\n```\n[x](y.md)\n"
