@@ -68,6 +68,22 @@ renders there differs in kind:
   nat `#`NNN      The shorthand shape that reached a real pull request body. Lowercase and followed
                   by a reference, so prose about NAT traversal is untouched.
 
+Two further families apply here. The sibling pattern now applies to tracked files too, with the same
+exemptions (a code span, a link target) and the same two artifact filenames, plus the two things a
+tracked tree legitimately carries that a commit message does not: the product's PascalCase strings
+(the brand casing followed by a capitalised word, written into layer and archive names) and a short
+list of tracked identifiers (see FILE_ARTIFACT_NAMES). And agent tooling that is not published here
+is refused on EVERY surface, files included, by structure rather than by name:
+
+  plugin@catalogue  A plugin installed from, or enabled by a setting naming, a catalogue called after
+                    the project's stem. One pattern covers an install command and an enabling
+                    setting, because both write the same `name@catalogue` token.
+  /stem-x:command   A slash command namespaced by such a plugin.
+
+A code span is deliberately NOT an exemption for these two: an install line is nearly always written
+inside one, so exempting spans would gut the check. No private name is written in this file; the
+only literal either pattern carries is the stem itself.
+
 A branch name additionally has a shape rule: a path segment that starts with digits is an issue
 number wearing a slash, whatever tracker it came from — the convention is type/short-description.
 
@@ -119,6 +135,44 @@ DECISION_REFERENCE = re.compile(r"\bD-[A-Z]{2}\b")
 QUALIFIED_REFERENCE = re.compile(r"\b[\w.-]+(?:/[\w.-]+)?#\d+")
 PRIVATE_SIBLING = re.compile(
     r"(?i)\bmantleplace-(?!dcc\b|import\.log|terrain[\w-]*\.log)[a-z][a-z0-9-]*\b(?!#)"
+)
+
+# Agent tooling that is not published here. Structural: the project's stem is the only literal. A
+# catalogue is `@` + the stem (optionally with a hyphenated tail); the trailing lookahead keeps an
+# email address at the stem's own domain (`@stem.com`) out, and the leading class keeps an npm scope
+# or a version pin out because neither is followed by the stem. The command pattern needs the slash
+# NOT to be mid-path or mid-URL, and a letter after the colon so a port number is never one.
+PLUGIN_AT_CATALOGUE = re.compile(r"(?i)\b[\w.-]+@mantleplace(?:-[a-z0-9]+)*(?![\w-]|\.[a-z0-9])")
+NAMESPACED_COMMAND = re.compile(r"(?i)(?<![\w/.:~])/mantleplace(?:-[a-z0-9]+)*:[a-z][\w-]*")
+
+# File surface only. A tracked tree carries product strings a commit message never does.
+#
+# The brand casing: `MantlePlace-Surface`, `MantlePlace-Terms` are PascalCase strings the plugins
+# write into a user's project (layer names, archive names, bundle terms). A repository name is
+# lowercase, and the retypings (`Mantleplace-X`, all capitals) stay refused. The tail must open with
+# a capital or a digit so a brand-cased repository name with a lowercase tail does not slip through.
+BRAND_CASED = re.compile(r"MantlePlace-[A-Z0-9]")
+
+# Tracked identifiers, matched as the WHOLE token the pattern captures, never as a prefix: a longer
+# name sharing one of these is a different name and trips. Each is a string this tree itself writes
+# or publishes: the published reader package and its distribution folder, an Autodesk bundle folder
+# name, and test-only temporary-directory prefixes. Naming no private repository is the test for an
+# entry; a case in the test corpus pins that a longer name still trips.
+FILE_ARTIFACT_NAMES = frozenset(
+    {
+        "mantleplace-mpb",
+        "mantleplace-mpb-dist",
+        "mantleplace-autocad-bundle",
+        "mantleplace-revit-bundle",
+        "mantleplace-adjacent",
+        "mantleplace-carrier",
+        "mantleplace-levels",
+        "mantleplace-local-import-tests",
+        "mantleplace-platform-api",
+        "mantleplace-stamp",
+        "mantleplace-timing-declined",
+        "mantleplace-trusted",
+    }
 )
 SHORTNAME_REFERENCE = re.compile(r"\b[Nn]at(?=\s+(?:(?i:PR|issue)\s+)?#\d+)")
 OWN_REPOSITORY = frozenset({"mantleplace-dcc", "mantleplace/mantleplace-dcc"})
@@ -188,6 +242,8 @@ REDACTIONS = {
     "qualified": "a refused token",
     "sibling": "a refused token",
     "shorthand": "a refused token",
+    "plugin": "a refused token",
+    "command": "a refused token",
     "decision": "a refused token",
     "branch": "this branch name",
 }
@@ -281,6 +337,45 @@ def violations_in_text(
     for number, line in enumerate(text.splitlines(), start=1):
         spans = code_spans(line) + link_spans(line)
 
+        # Agent tooling first, on every surface and with no code-span exemption. Its spans are kept
+        # so the sibling name inside `plugin-x@catalogue` or `/plugin-x:command` is not reported a
+        # second time: one token is one finding.
+        tooling: list[tuple[int, int]] = []
+        for pattern, kind, what in (
+            (
+                PLUGIN_AT_CATALOGUE,
+                "plugin",
+                "names a plugin from a catalogue that is not public (an install reference or a "
+                "setting that enables one)",
+            ),
+            (
+                NAMESPACED_COMMAND,
+                "command",
+                "is a slash command namespaced by agent tooling that is not published here",
+            ),
+        ):
+            for match in pattern.finditer(line):
+                tooling.append(match.span())
+                found.append(
+                    f"{label}:{number}: {shown(match.group(), kind, redact)} {what}; "
+                    f"describe what the step does, not the tooling that runs it"
+                )
+
+        for match in PRIVATE_SIBLING.finditer(line):
+            if exempt(line, match.start(), spans):
+                continue
+            if any(low <= match.start() < high for low, high in tooling):
+                continue
+            if surface == "file" and (
+                BRAND_CASED.match(match.group()) or match.group() in FILE_ARTIFACT_NAMES
+            ):
+                continue
+            found.append(
+                f"{label}:{number}: {shown(match.group(), 'sibling', redact)} names a private "
+                f"sibling repository; "
+                f"say which side owns the work without naming what a reader cannot open"
+            )
+
         if surface == "file":
             for match in ISSUE_REFERENCE.finditer(line):
                 if not exempt(line, match.start(), spans):
@@ -306,14 +401,6 @@ def violations_in_text(
                         f"{label}:{number}: {shown(match.group(), 'qualified', redact)} cites an issue "
                         f"in another repository "
                         f"— a stranger meets a 404, and the rule forbids the citation either way"
-                    )
-
-            for match in PRIVATE_SIBLING.finditer(line):
-                if not exempt(line, match.start(), spans):
-                    found.append(
-                        f"{label}:{number}: {shown(match.group(), 'sibling', redact)} names a private "
-                        f"sibling repository; "
-                        f"say which side owns the work without naming what a reader cannot open"
                     )
 
             for match in SHORTNAME_REFERENCE.finditer(line):

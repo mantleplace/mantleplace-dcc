@@ -331,13 +331,161 @@ class SurfacesStaySeparate(unittest.TestCase):
     """Each surface's pattern set is calibrated to what renders there. These two cases pin the
     calibration so a refactor cannot quietly merge the sets in either direction."""
 
-    def test_the_file_surface_never_learns_the_sibling_pattern(self):
-        # In a tracked file, `mantleplace-import.log` appears as plain prose far more often than a
-        # sibling repo name ever could; the file surface's patterns stay as they are.
+    def test_the_file_surface_learned_the_sibling_pattern_but_keeps_the_artifact_filenames(self):
+        # The file surface now refuses a sibling repository's name, and still lets the two tracked
+        # artifact filenames through: `mantleplace-import.log` is plain prose in this tree.
         self.assertEqual(scan("The importer writes .mantleplace-import.log beside the zip.\n"), [])
 
     def test_the_metadata_surface_never_learns_the_bare_number_pattern(self):
         self.assertEqual(scan_text("see #91 for the trace\n"), [])
+
+
+class SiblingNamesInTrackedFiles(unittest.TestCase):
+    """The file surface refuses the same structural sibling pattern the metadata surfaces do, with
+    the same exemptions. Every fixture here is an invented name built on the project stem: if a case
+    needed a real private name to pass, the gate would have become the list it exists to keep out."""
+
+    def test_a_sibling_name_in_a_markdown_file_is_refused(self):
+        found = scan("The fix lands in mantleplace-widgets first.\n")
+        self.assertEqual(len(found), 1)
+        self.assertIn("sample.md:1", found[0])
+        self.assertIn("mantleplace-widgets", found[0])
+
+    def test_a_sibling_name_in_source_is_refused(self):
+        self.assertEqual(len(scan('// owned by mantleplace-widgets\n', "a.cs")), 1)
+        self.assertEqual(len(scan("# synced from mantleplace-widgets\n", "a.py")), 1)
+        self.assertEqual(len(scan("uses: mantleplace/mantleplace-widgets/.x@v1\n", "a.yml")), 1)
+
+    def test_the_natural_retypings_trip_too(self):
+        self.assertEqual(len(scan("Mantleplace-Widgets owns that half.\n")), 1)
+        self.assertEqual(len(scan("MANTLEPLACE-WIDGETS owns that half.\n")), 1)
+
+    def test_a_sibling_sharing_an_allowlisted_stem_still_trips(self):
+        self.assertEqual(len(scan("mantleplace-import-api owns that half\n")), 1)
+        self.assertEqual(len(scan("lands in mantleplace-terrain-service first\n")), 1)
+
+    def test_the_two_tracked_artifact_filenames_pass(self):
+        self.assertEqual(scan("The importer writes .mantleplace-import.log beside the zip.\n"), [])
+        self.assertEqual(scan("The probe writes mantleplace-terrain-probe.log beside it.\n"), [])
+
+    def test_this_repository_by_name_passes(self):
+        self.assertEqual(scan("clone https://github.com/mantleplace/mantleplace-dcc.git\n"), [])
+
+    def test_a_code_span_is_how_the_rule_documents_itself(self):
+        self.assertEqual(scan("The gate refuses `mantleplace-widgets` shapes.\n"), [])
+
+    def test_the_product_brand_casing_is_a_string_the_plugins_write_not_a_repository(self):
+        # Layer names, archive names and bundle terms are PascalCase product strings
+        # (`MantlePlace-Surface`, `MantlePlace-Terms`). A repository name is lowercase.
+        self.assertEqual(scan('layer = "MantlePlace-Surface-x";\n', "a.cs"), [])
+        self.assertEqual(scan("ships MantlePlace-Revit-1.2.0.zip\n"), [])
+
+    def test_the_tracked_identifiers_in_code_pass_only_as_exact_tokens(self):
+        # A published package, temp-directory prefixes and an export format id this tree writes.
+        self.assertEqual(scan("pip install mantleplace-mpb\n"), [])
+        self.assertEqual(scan('var id = "mantleplace-autocad-bundle";\n', "a.cs"), [])
+        # A longer name sharing the prefix is a different name, and trips.
+        self.assertEqual(len(scan("pip install mantleplace-mpb-secrets\n")), 1)
+
+    def test_a_finding_in_a_file_redacts_for_a_published_report(self):
+        found = gate.violations_in_text(
+            "see mantleplace-widgets\n", "a.md", surface="file", redact=True
+        )
+        self.assertEqual(len(found), 1)
+        self.assertNotIn("mantleplace-widgets", found[0])
+
+    def test_the_gates_own_script_is_held_to_the_rule(self):
+        # The script is not on the exempt list, so it must carry no sibling name; the stem alone,
+        # with no tail, names nothing.
+        root = pathlib.Path(gate.__file__).resolve().parents[2]
+        script = pathlib.Path(gate.__file__)
+        relative = script.resolve().relative_to(root).as_posix()
+        self.assertEqual(
+            [line for line in gate.violations(script, relative) if "sibling" in line], []
+        )
+
+
+class AgentToolingIsRefusedOnEverySurface(unittest.TestCase):
+    """Agent tooling that is not published here must not be named here. The identifiers have a
+    structure, built from the project's naming stem: a plugin installed from a catalogue named for
+    the stem, a setting that enables one, and a slash command namespaced by one. A code span is NOT
+    an exemption: the install line is nearly always written in one, so exempting spans would gut the
+    check. The names below are invented."""
+
+    INSTALL = "/plugin install widgets@mantleplace"
+    INSTALL_TAILED = "claude plugin install mantleplace-widgets@mantleplace-internal"
+    SETTING = '  "enabledPlugins": { "widgets@mantleplace": true }'
+    COMMAND = "run /mantleplace-widgets:close when the branch is green"
+
+    def surfaces(self, text: str):
+        return {
+            "markdown": scan(text + "\n"),
+            "source": scan(text + "\n", "a.py"),
+            "json": scan(text + "\n", "settings.json"),
+            "pr body": scan_text(text + "\n"),
+            "commit message": gate.violations_in_text(text + "\n", "commit abc", surface="metadata"),
+            "branch": gate.branch_name_violations(text.replace(" ", "-")),
+        }
+
+    def assert_refused_everywhere(self, text: str, fragment: str):
+        for surface, found in self.surfaces(text).items():
+            with self.subTest(surface=surface, text=text):
+                self.assertTrue(found, f"{surface} let {text!r} through")
+                self.assertTrue(any(fragment in line for line in found), found)
+
+    def test_a_plugin_install_reference_is_refused(self):
+        self.assert_refused_everywhere(self.INSTALL, "widgets@mantleplace")
+        self.assert_refused_everywhere(self.INSTALL_TAILED, "@mantleplace-internal")
+
+    def test_a_plugin_enabling_setting_is_refused(self):
+        self.assert_refused_everywhere(self.SETTING, "widgets@mantleplace")
+
+    def test_a_namespaced_slash_command_is_refused(self):
+        self.assert_refused_everywhere(self.COMMAND, "/mantleplace-widgets:close")
+        self.assert_refused_everywhere("then /mantleplace:close", "/mantleplace:close")
+
+    def test_each_reference_is_one_finding_not_two(self):
+        self.assertEqual(len(scan(self.INSTALL + "\n", "a.py")), 1)
+        self.assertEqual(len(scan_text(self.COMMAND + "\n")), 1)
+
+    def test_a_code_span_does_not_exempt_tooling(self):
+        self.assertEqual(len(scan(f"Run `{self.INSTALL}` first.\n")), 1)
+        self.assertEqual(len(scan_text(f"Run `{self.COMMAND}`.\n")), 1)
+
+    def test_a_multiline_settings_block_is_caught_on_the_entry_line(self):
+        block = '{\n  "enabledPlugins": {\n    "widgets@mantleplace": true\n  }\n}\n'
+        found = scan(block, "settings.json")
+        self.assertEqual(len(found), 1)
+        self.assertIn("settings.json:3", found[0])
+
+    def test_findings_redact_for_a_published_report(self):
+        for text in (self.INSTALL, self.SETTING, self.COMMAND):
+            with self.subTest(text=text):
+                found = gate.violations_in_text(text + "\n", "issue body", surface="metadata",
+                                                redact=True)
+                self.assertEqual(len(found), 1)
+                self.assertNotIn("widgets", found[0])
+
+    def test_no_pattern_the_gate_carries_names_a_private_thing(self):
+        # The patterns are the stem plus structure. Whatever they say, they say it of any name.
+        for pattern in (gate.PRIVATE_SIBLING, gate.PLUGIN_AT_CATALOGUE, gate.NAMESPACED_COMMAND):
+            for private in ("widgets", "vault", "skl", "cdx", "host", "web"):
+                self.assertNotIn(private, pattern.pattern)
+
+    # What must keep passing.
+
+    def test_an_email_address_at_the_stem_domain_is_not_a_catalogue(self):
+        self.assertEqual(scan("write to hello@mantleplace.com or me@mantleplace.example\n"), [])
+        self.assertEqual(scan_text("Signed-off-by: A <a@mantleplace.com>\n"), [])
+
+    def test_an_npm_scope_or_a_package_at_a_version_is_not_a_catalogue(self):
+        self.assertEqual(scan("npm i @types/node@20 and pip install foo@1.2\n"), [])
+
+    def test_a_url_with_a_port_is_not_a_slash_command(self):
+        self.assertEqual(scan("open http://mantleplace:8080/x and http://mantleplace:abc/y\n"), [])
+
+    def test_an_ordinary_slash_command_is_not_ours(self):
+        self.assertEqual(scan("run /plugin install and /help and /compact\n"), [])
 
 
 class TrackerTextIsTheSixthSurface(unittest.TestCase):
