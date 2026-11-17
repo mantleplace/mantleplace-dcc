@@ -501,6 +501,23 @@ const TArray<FString>& FMantlePlaceManifestThreeLogic::RequestedFiles()
 	return Files;
 }
 
+TArray<FString> FMantlePlaceManifestThreeLogic::ListedAmong(const FMantlePlaceBundleRead& Read, const TArray<FString>& Names)
+{
+	TArray<FString> Listed;
+	for (const FString& Name : Names)
+	{
+		const bool bHeld = Read.Files.ContainsByPredicate(
+			[&Name](const FMantlePlaceBundleFile& F) { return F.Path.Equals(Name, ESearchCase::IgnoreCase); });
+		const bool bCatalogued = Read.Skipped.ContainsByPredicate([&Name](const FMantlePlaceBundleSkipped& S)
+			{ return S.Why == EMantlePlaceBundleSkip::FileMissing && S.Path.Equals(Name, ESearchCase::IgnoreCase); });
+		if (bHeld || bCatalogued)
+		{
+			Listed.Add(Name);
+		}
+	}
+	return Listed;
+}
+
 FString FMantlePlaceManifestThreeLogic::NoHostReadyFileReason(const FString& What)
 {
 	return FString::Printf(TEXT("MPB 3.0 ships %s only as georeferenced files, and this plugin never converts a "

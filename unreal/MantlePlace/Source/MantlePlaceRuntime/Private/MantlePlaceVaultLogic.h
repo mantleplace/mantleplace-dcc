@@ -308,6 +308,16 @@ struct FMantlePlaceVaultLogic
 	 */
 	static bool ParseLevelDownloadResponse(const FString& JsonStr, const FString& Level, FMantlePlacePresignedDownload& OutDownload, FString& OutError);
 
+	/**
+	 * The files a refused 3.0 level request is asked again for. A promised file the bundle does not hold
+	 * (a layer the site lacks) is refused by name: HTTP 404, code `file_not_in_bundle`, the names in
+	 * `files`. An absent file is not an error, so the request goes again naming only the rest. True with
+	 * the rest (in the order asked) and the absent names; false for any other refusal, one naming no file
+	 * or a file not asked for, or one that would leave nothing to ask for.
+	 */
+	static bool FilesLeftAfterNotInBundle(int32 ResponseCode, const FString& JsonStr, const TArray<FString>& Asked,
+		TArray<FString>& OutRemaining, TArray<FString>& OutAbsent);
+
 	/** The tokens whose files Unreal reads from outside `hosts.unreal` (named by `layout`, not by the host block). */
 	static const TArray<FString>& ReadOutsideHostBlock();
 
