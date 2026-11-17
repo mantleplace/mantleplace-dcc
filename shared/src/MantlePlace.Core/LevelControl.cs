@@ -14,8 +14,9 @@ public readonly record struct DownloadLevelOption(FidelityLevel Level, string La
 /// <remarks>
 /// <para>
 /// The same control and words in every .NET host (the shared <c>LevelChoiceRow</c>): the shared vault
-/// window shows it beside Import, so the choice is made before the bundle is fetched, and the window
-/// a received send opens shows it too, on the level the send was fetched at (<see cref="LevelSwitch"/>). A
+/// window shows it beside Import, so the choice is made before the bundle is fetched, and in Revit the
+/// window a received send opens shows it too, on the level the send was fetched at (<see cref="LevelSwitch"/>);
+/// AutoCAD's import window has no before-Import stage, so a send there shows no control. A
 /// 2.x order has no control (<see cref="For"/> answers <c>null</c>): its levels stay per category,
 /// in Revit's checklist column.
 /// </para>

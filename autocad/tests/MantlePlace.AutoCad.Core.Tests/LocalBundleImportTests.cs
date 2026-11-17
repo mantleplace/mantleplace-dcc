@@ -121,6 +121,7 @@ internal static class LocalBundleImportTests
         string commands = File.ReadAllText(Path.Combine(folder, "PluginCommands.cs"));
         string received = File.ReadAllText(Path.Combine(folder, "AutoCadExportImportHost.cs"));
         string importer = File.ReadAllText(Path.Combine(folder, "OrderImporter.cs"));
+        string windowed = File.ReadAllText(Path.Combine(folder, "WindowedImport.cs"));
 
         run.Case("Import Bundle is a registered command, and the panel's button types it", () =>
         {
@@ -130,12 +131,38 @@ internal static class LocalBundleImportTests
                 "the panel's Import Bundle button (HPS-51's words)");
         });
 
-        run.Case("the command and a received export reach the same importer", () =>
+        run.Case("the command and a received export reach the same importer, through the shared import window (HPS-60)", () =>
         {
             string body = MethodBody(commands, LocalBundleImport.Command);
-            run.Contains(body, "OrderImporter.Import(", "Import Bundle places through the importer");
-            run.Contains(received, "OrderImporter.Import(", "so does the received export's Import button");
-            run.Equal(Regex.Matches(commands + received, @"OrderImporter\.Import\(").Count, 2, "and nothing else places an order");
+            run.Contains(body, "WindowedImport.Start(", "Import Bundle imports in the import window");
+            run.Contains(received, "WindowedImport.Start(", "so does a received export");
+            run.Equal(Regex.Matches(commands + received, @"WindowedImport\.Start\(").Count, 2, "and nothing else starts an import");
+            run.Contains(windowed, "ImportWindowThread.Open(", "the shared window, not one of this host's own");
+            run.Contains(windowed, "OrderImporter.Prepare(", "which places through the one importer");
+            run.Equal(Regex.Matches(commands + received + windowed, @"OrderImporter\.Prepare\(").Count, 1, "and nothing else opens an order");
+        });
+
+        run.Case("an unattended run names its zip in the shared variable, as Revit's does, and the prompt is skipped", () =>
+        {
+            string body = MethodBody(commands, LocalBundleImport.Command);
+            run.Contains(body, "LocalBundleSource.Unattended(Environment.GetEnvironmentVariable(LocalBundleSource.PathVariable))", "the one variable, read through the shared rule");
+            run.True(
+                body.IndexOf("LocalBundleSource.Unattended(", StringComparison.Ordinal) < body.IndexOf("GetFileNameForOpen(", StringComparison.Ordinal),
+                "read before AutoCAD's file prompt, which it skips");
+        });
+
+        run.Case("a refused start still writes the record beside the zip, so a script waiting for it hears why", () =>
+        {
+            string body = MethodBody(commands, LocalBundleImport.Command);
+            run.True(
+                Regex.IsMatch(body, @"if \(!WindowedImport\.Start\([^\n]*\)\)\s*\{[^}]*WriteRecord\(zipPath, "),
+                "the branch taken when no import starts writes the record, with the reason");
+        });
+
+        run.Case("the received-export window is gone: a send opens the shared import window", () =>
+        {
+            run.False(File.Exists(Path.Combine(folder, "ReceivedExportWindow.cs")), "no window of this host's own");
+            run.False(received.Contains("ReceivedExportWindow", StringComparison.Ordinal), "and the connected host names none");
         });
 
         run.Case("the importer opens every bundle through the core's check, so both get the same refusal", () =>

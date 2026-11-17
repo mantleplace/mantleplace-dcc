@@ -84,13 +84,17 @@ public sealed class PluginCommands
         => VaultBrowser.Open(MantlePlaceApplication.MainWindowHandle(), selectOrderId: null);
 
     /// <summary>
-    /// Import Bundle (HPS-61): a bundle zip on disk, placed in the active drawing by the importer a received
-    /// export's Import button uses, so the same zone check, refusal and surface. No account is needed.
+    /// Import Bundle (HPS-61): a bundle zip on disk, imported into the active drawing in the shared import
+    /// window (HPS-60), as a send from the web vault is, so the same zone check, refusal and surface. No
+    /// account is needed.
     /// </summary>
     /// <remarks>
     /// The zip comes from AutoCAD's own file prompt: a dialog, or the command line under <c>FILEDIA</c> 0 or
-    /// a script, which is how a script runs it with nobody at the screen. What happened is said on the
-    /// command line and written beside the zip, as the Revit plugin's local import writes its record.
+    /// a script; or, with nobody at the screen, from <c>MANTLEPLACE_BUNDLE_ZIP</c>, the variable Revit's local
+    /// import reads (<see cref="LocalBundleSource.PathVariable"/>), which skips the prompt. The command returns once the
+    /// window is open and the steps run after it, one between AutoCAD's messages, so a script waits for the
+    /// record written beside the zip when the run is over, as the Revit plugin's local import writes its own;
+    /// the command line and the window say the same.
     /// </remarks>
     [CommandMethod("MANTLEPLACEIMPORTBUNDLE")]
     public void ImportBundle()
@@ -100,43 +104,51 @@ public sealed class PluginCommands
             return;
         }
 
-        PromptOpenFileOptions options = new("\nMantle Place bundle (.zip) to import: ")
+        // An unattended run names its zip in the shared variable, as Revit's local import reads it, and
+        // no prompt is raised for nobody to answer.
+        string? named = LocalBundleSource.Unattended(Environment.GetEnvironmentVariable(LocalBundleSource.PathVariable));
+        if (named is null)
         {
-            DialogCaption = "Choose a Mantle Place bundle",
-            Filter = "Mantle Place bundle (*.zip)|*.zip",
-            PreferCommandLine = Convert.ToInt32(Autodesk.AutoCAD.ApplicationServices.Core.Application.GetSystemVariable("FILEDIA"), CultureInfo.InvariantCulture) == 0,
-        };
+            PromptOpenFileOptions options = new("\nMantle Place bundle (.zip) to import: ")
+            {
+                DialogCaption = "Choose a Mantle Place bundle",
+                Filter = "Mantle Place bundle (*.zip)|*.zip",
+                PreferCommandLine = Convert.ToInt32(Autodesk.AutoCAD.ApplicationServices.Core.Application.GetSystemVariable("FILEDIA"), CultureInfo.InvariantCulture) == 0,
+            };
 
-        PromptFileNameResult picked = document.Editor.GetFileNameForOpen(options);
-        if (picked.Status != PromptStatus.OK)
-        {
-            return;
+            PromptFileNameResult picked = document.Editor.GetFileNameForOpen(options);
+            if (picked.Status != PromptStatus.OK)
+            {
+                return;
+            }
+
+            named = picked.StringResult;
         }
 
-        string zipPath = LocalBundleImport.Typed(picked.StringResult);
-        string outcome;
-        try
+        string zipPath = LocalBundleImport.Typed(named);
+        if (!WindowedImport.Start(document, zipPath, end => WriteRecord(zipPath, end.Summary), out string? refusal))
         {
-            PresenceVerdict presence = Presence.Decide(HostObservations.Observe());
-            outcome = OrderImporter.Import(document, zipPath, presence).Summary;
-            MantlePlaceApplication.Say(outcome);
+            // Nothing started, so no run will end to write the record: write it now, with the reason,
+            // or a script waiting for it waits until it gives up.
+            string reason = refusal ?? WindowedImport.AlreadyRunning;
+            MantlePlaceApplication.Say(reason);
+            WriteRecord(zipPath, reason);
         }
-#pragma warning disable CA1031 // An import that throws is reported, never left to take AutoCAD down.
-        catch (System.Exception ex)
-#pragma warning restore CA1031
-        {
-            outcome = $"The import stopped on an error: {ex.Message}. What it placed before the error stays in the drawing.";
-            MantlePlaceApplication.Say(outcome);
-            MantlePlaceApplication.SayFault(ex);
-        }
+    }
 
+    /// <summary>
+    /// Writes what the import did beside the zip, once the run is over: the record a script waits for,
+    /// since the import's steps run after the command has returned.
+    /// </summary>
+    private static void WriteRecord(string zipPath, string outcome)
+    {
         try
         {
             File.WriteAllText(LocalBundleSource.LogPathFor(zipPath), outcome + Environment.NewLine);
         }
-        catch (System.Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (System.Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            // A folder that cannot be written to keeps no record; the command line has it.
+            // A folder that cannot be written to keeps no record; the command line and the window have it.
         }
     }
 

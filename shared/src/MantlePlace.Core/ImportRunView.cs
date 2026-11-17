@@ -1,7 +1,24 @@
 namespace MantlePlace.Core;
 
 /// <summary>One step's row in the import window: which step, and where it stands.</summary>
-public readonly record struct ImportRunRow(ImportStepKind Kind, ImportStepState State);
+/// <param name="Kind">The step, for a host whose steps are the shared planner's.</param>
+/// <param name="State">Where it stands.</param>
+/// <param name="Name">
+/// The row's own name, for a host whose steps are its own (<see cref="Named"/>); <c>null</c> reads the
+/// shared step's name. A named row's <see cref="Kind"/> is not read for its words or its measured cost.
+/// </param>
+public readonly record struct ImportRunRow(ImportStepKind Kind, ImportStepState State, string? Name = null)
+{
+    /// <summary>What the row says: its own name, or the shared step's (<see cref="WindowLabels.StepName"/>).</summary>
+    public string StepName => Name ?? WindowLabels.StepName(Kind);
+
+    /// <summary>A row a host names itself, for a step that is not one of the shared planner's.</summary>
+    public static ImportRunRow Named(string name, ImportStepState state)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        return new ImportRunRow(default, state, name);
+    }
+}
 
 /// <summary>
 /// What the import window shows of a <see cref="StagedImport"/>, copied at one moment. Pure and
@@ -46,6 +63,12 @@ public sealed class ImportRunView
 
     /// <summary>The step in flight, or <c>null</c> when none is.</summary>
     public ImportStepKind? Current => CurrentIndex >= 0 ? Rows[CurrentIndex].Kind : null;
+
+    /// <summary>The step in flight's name, as its row says it, or <c>null</c> when none is.</summary>
+    public string? CurrentName => CurrentIndex >= 0 ? Rows[CurrentIndex].StepName : null;
+
+    /// <summary>Whether the step in flight is one of the shared planner's, so a cost measured for its kind is its own.</summary>
+    public bool CurrentIsSharedStep => CurrentIndex >= 0 && Rows[CurrentIndex].Name is null;
 
     /// <summary>How far the step in flight has got, or <c>null</c> for a step that has counted nothing.</summary>
     public StepProgress? Progress { get; }

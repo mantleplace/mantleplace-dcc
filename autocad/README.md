@@ -21,26 +21,33 @@ other logo.
 | Sign In | `MANTLEPLACESIGNIN` | Opens your browser to sign in; AutoCAD never sees your password. A small window waits for the browser and stays out of the way. Signing in here signs you in for every Mantle Place plugin on this machine. |
 | Sign Out | `MANTLEPLACESIGNOUT` | Drops the session and forgets the stored credential. |
 | Vault | `MANTLEPLACEVAULT` | The bundles you keep, with a search box, which of them are on this machine, removing a local copy, and reporting a problem with one. Needs you signed in. There is no Prepare or download in AutoCAD yet: an order comes into a drawing as an export sent from the web vault, or through Import Bundle. |
-| Import Bundle | `MANTLEPLACEIMPORTBUNDLE` | Asks for a Mantle Place bundle zip on this computer and places it in the active drawing, exactly as Import does for an export from the web: the same checks, the same refusals, the same surface. It needs no account. |
-| About | `MANTLEPLACEABOUT` | Which build is loaded, whether the Civil 3D part is on, whether you are signed in, and a link to the [privacy page](https://mantle.place/privacy). |
+| Import Bundle | `MANTLEPLACEIMPORTBUNDLE` | Asks for a Mantle Place bundle zip on this computer and imports it into the active drawing in the import window, exactly as an export from the web is imported: the same checks, the same refusals, the same surface. It needs no account. |
+| About Mantle Place | `MANTLEPLACEABOUT` | Which build is loaded, whether the Civil 3D part is on, whether you are signed in, and a link to the [privacy page](https://mantle.place/privacy). |
 | Send Feedback | `MANTLEPLACEFEEDBACK` | The Mantle Place feedback form in your browser. It needs no account. Only this plugin's version and your AutoCAD year go with the link: nothing from your drawing, and nothing about you. |
 
 **Notices.** When an order turns up in your vault that you did not ask this plugin to look at, a small
 notice appears in a corner of AutoCAD's window; clicking it opens the vault on that bundle.
 
 **Exports from the web.** While you are signed in, this AutoCAD appears as a destination in your web
-vault. Sending an export to it fetches the bundle, checks it, and opens a window saying where it is.
-Pressing **Import** places the whole order in the active drawing in one go, and the window then says
-what went in and what did not, with each reason. Closing the window without importing ends the export
-as cancelled.
+vault. Sending an export to it fetches the bundle, checks it, and imports the whole order into the
+active drawing in the import window, the one Revit uses. AutoCAD offers no choice of layers, so the
+import begins as the window opens.
+
+**The import window.** Every import, from the web or from Import Bundle, runs in the **Bundle Import**
+window: it lists the steps (**Verify Files**, then each part the order places) with each one's state,
+the step in flight and its **Elapsed** clock. **Cancel** stops the import between steps, never inside
+one: what was placed stays in the drawing, and the steps it never reached read **Not Run**. When it is
+over the window says what went in and what did not, with each reason, and so does the command line. A
+second import waits until the first is over; an export sent from the web meanwhile waits its turn.
 
 **Import Bundle.** A bundle zip you already have (downloaded from the web vault, copied from a
 colleague, or the bundle cache's copy of one sent to this AutoCAD) goes in with **Import Bundle**. Pick
-the zip and the whole order is placed in the active drawing in one go; the command line then says what
-went in and what did not, with each reason, and the same words are written beside the zip in a file
-ending `.mantleplace-import.log`. A file that is not a Mantle Place bundle is refused and nothing is
+the zip and the whole order is imported into the active drawing in the import window; when it is over
+the same words the window shows are written beside the zip in a file ending `.mantleplace-import.log`,
+which is what a script waits for, since the steps run after the command returns. A file that is not a Mantle Place bundle is refused and nothing is
 placed. With `FILEDIA` set to 0, or from a script, the command asks for the zip's path on the command
-line instead of opening a dialog.
+line instead of opening a dialog. With `MANTLEPLACE_BUNDLE_ZIP` set to a zip's path in AutoCAD's
+environment, as for the Revit plugin's Import Bundle, the command asks nothing and imports that zip.
 
 **What an import places.** Everything comes from the order's AutoCAD block in the bundle, and nothing
 is worked out in AutoCAD:
@@ -97,7 +104,8 @@ dotnet run --project autocad/tests/MantlePlace.AutoCad.Core.Tests/MantlePlace.Au
 
 It runs the shared conformance corpus over the compiled-in sources, plus the AutoCAD bundle manifest,
 the ribbon panel and the tab it goes on, the host identity the platform is told, the export receipt, what
-Import Bundle refuses and that it reaches the same importer as an export, the About
+Import Bundle refuses and that it reaches the same importer as an export, through the shared
+import window, the import's steps and Cancel between them, the About
 text and the Civil 3D presence decision.
 
 Building the shell and the Civil 3D part needs the Autodesk assemblies. `AutoCadApiDirNet10`

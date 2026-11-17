@@ -217,6 +217,31 @@ internal static class ImportWindowStateTests
             run.Equal(state.StatusLine(TimeSpan.FromSeconds(55)), "Planting: 5 s", "a step with no measured cost says only its clock");
         });
 
+        run.Case("a host whose steps are its own names its rows, and its status line says that name with no estimate", () =>
+        {
+            // The kind a named row carries is not read for its words or its cost: AutoCAD's steps are
+            // not Revit's, and a measured cost keyed on a Revit kind must not be said beside them.
+            Dictionary<ImportStepKind, TimeSpan> measured = new() { [default] = TimeSpan.FromSeconds(150) };
+            ImportWindowState state = new(offersChecklist: false, "AutoCAD", measured);
+            ImportRunView view = ImportRunView.From(
+                [ImportRunRow.Named("Verify Files", ImportStepState.Done), ImportRunRow.Named("Contours", ImportStepState.Importing), ImportRunRow.Named("Site Linework", ImportStepState.Waiting)],
+                currentIndex: 1,
+                committing: true);
+            state.ShowRun(view, TimeSpan.Zero);
+
+            run.Equal(Names(state), "Verify Files|Contours|Site Linework", "each row reads the host's own name");
+            run.Equal(States(state), "Done|Importing|Waiting", "in the shared state words");
+            run.Equal(view.CurrentName, "Contours", "the step in flight, by its name");
+            run.Equal(state.StatusLine(TimeSpan.FromSeconds(12)), "Contours: AutoCAD is committing, 12 s", "the clock alone, no estimate");
+        });
+
+        run.Case("a row with no name of its own reads the shared step name", () =>
+        {
+            ImportRunRow row = new(ImportStepKind.PublishedContours, ImportStepState.Waiting);
+            run.Equal(row.StepName, WindowLabels.StepName(ImportStepKind.PublishedContours), "Revit's rows are as they were");
+            run.Equal(ImportRunRow.Named("Aerial Image", ImportStepState.Waiting).StepName, "Aerial Image", "a named row reads its name");
+        });
+
         return run.Report("import window state");
     }
 

@@ -7,8 +7,8 @@ namespace MantlePlace.Wpf;
 /// <summary>
 /// A 3.0 order's level control as every .NET host draws it: the glossary's heading, then Max, Med and
 /// Min with their sizes, the recommendation marked and the counts in each tooltip
-/// (<see cref="LevelControl"/>). The shared vault window, Revit's import window and AutoCAD's
-/// received-export window all show this one row, so the control is the same in both hosts.
+/// (<see cref="LevelControl"/>). The shared vault window and Revit's import window both show this
+/// one row, so the control is the same wherever it is drawn.
 /// </summary>
 /// <remarks>
 /// Collapsed until it is shown a control; a 2.x order shows none. <see cref="Chosen"/> is raised for

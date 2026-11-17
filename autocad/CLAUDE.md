@@ -89,9 +89,11 @@ key this suite must assert, or it fails.
   the import window, with their brand chrome and window styles, are the one set in
   [`shared/src/MantlePlace.Wpf`](../shared/README.md); the shell opens them and hands them its main
   window, its feedback launcher and its About sentences, and its ribbon reads the monogram from the
-  same assembly (`MarkImages`). Only the received-export window is this host's own. The import window
-  (`ImportWindowThread`) opens with no checklist for a host with no per-layer choice, and shows the steps
-  the host posts; the host implements `IImportWindowHost` to hear Cancel. This plugin does not open it yet. The vault browser
+  same assembly (`MarkImages`). The shell declares no window of its own. Every import opens the import
+  window (`ImportWindowThread`, `HPS-60`) through `WindowedImport`, with no checklist, so the run begins
+  as it opens; its steps and their states are `AutoCadImportRun` (Core), each row named by this host
+  (`ImportRunRow.Named`): `Verify Files`, then each placed part, one transaction a step, posted one per
+  dispatcher operation so Cancel is heard between steps. The vault browser
   has no Prepare, download or import yet: an order comes into a drawing through an export sent from the web vault, or through
   Import Bundle (`MANTLEPLACEIMPORTBUNDLE`, `HPS-61`), which takes a zip on disk.
 - **The ribbon panel is built in code, on a `Mantle Place` tab of the plugin's own** (`HPS-57`), as
@@ -107,9 +109,9 @@ key this suite must assert, or it fails.
   `hosts.autocad` block: what is placed, where, in which units, what is skipped and why, and whether
   the drawing's geographic location refuses the import. The shell (`OrderImporter`) observes the
   location (`DrawingObservations`), verifies every file before drawing anything, and applies the plan
-  verbatim. The window an export from the web opens (`AutoCadExportImportHost`) has the Import button;
-  closing it before the press ends the export as cancelled. Import Bundle hands a zip on disk to the
-  same `OrderImporter.Import`, which opens every bundle through `LocalBundleImport.TryOpen` (Core), so
+  verbatim, one step at a time. A send from the web (`AutoCadExportImportHost`) and Import Bundle both
+  start `WindowedImport`; a cancelled run ends the export as cancelled. Both reach the same
+  `OrderImporter.Prepare`, which opens every bundle through `LocalBundleImport.TryOpen` (Core), so
   a file that is not a bundle is refused in one set of words either way.
 - **Civil 3D adds the zone check and the surface, through its part alone.** When the presence test
   lets the part load, it reads the drawing's zone code (never sets it), which the shell resolves to an

@@ -13,8 +13,8 @@ namespace MantlePlace.Core;
 /// download that fails puts the control back on the level the slot still holds.
 /// </para>
 /// <para>
-/// The same state in both hosts: AutoCAD's received-export window runs it in place, and Revit's import
-/// window, whose checklist is read from the files, reopens on the fresh download at the chosen level.
+/// Revit's import window, whose checklist is read from the files, reopens on the fresh download at the
+/// chosen level. AutoCAD's import begins as its window opens, so it shows no level control.
 /// </para>
 /// </remarks>
 public sealed class LevelSwitch
