@@ -20,6 +20,8 @@ class UMantlePlaceAuthSystemBase;
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnVaultListedNative, bool /*bSuccess*/, const TArray<FMantlePlaceVaultItem>& /*Bundles*/, const FString& /*Message*/);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnPresignedNative, bool /*bSuccess*/, const FMantlePlacePresignedDownload& /*Download*/, const FString& /*Message*/);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStartedNative, bool /*bSuccess*/, const FMantlePlaceMaterializeStart& /*Start*/, const FString& /*Message*/);
+/** A 3.0 level download is about to be requested: the order, the level and the files named (native: the files are a plain array). */
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnLevelRequestedNative, const FString& /*OrderId*/, const FString& /*Level*/, const TArray<FString>& /*Files*/);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStatusNative, bool /*bOk*/, const FMantlePlaceMaterializeStatus& /*Status*/, const FString& /*Message*/);
 
 /**
@@ -212,6 +214,13 @@ public:
 	FMantlePlaceOnVaultListedNative OnVaultListedNative;
 	FMantlePlaceOnPresignedNative OnPresignedUrlReadyNative;
 	FMantlePlaceOnMaterializeStartedNative OnMaterializeStartedNative;
+
+	/**
+	 * Fired by GetPresignedLevelUrl for a level it accepts, before the request is sent and whether or not
+	 * a session is held. What a headless test reads to see which level, and which files, the host asks the
+	 * platform for; the request body is built from exactly these (FMantlePlaceVaultLogic::BuildLevelDownloadBody).
+	 */
+	FMantlePlaceOnLevelRequestedNative OnLevelRequestedNative;
 
 	/**
 	 * The platform answered a call with HTTP 426 `client_update_required`: this plugin is below the
