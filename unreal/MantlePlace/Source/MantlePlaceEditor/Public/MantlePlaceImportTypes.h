@@ -57,6 +57,14 @@ struct FMantlePlaceImportResult
 	/** Where generated content was written, after the project's content-root setting. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
 	FString ContentPath;
+
+	/**
+	 * The level the imported bundle holds (`Max`, `Med` or `Min`), read back from the bundle cache's record
+	 * of the download: what a caller got, beside what it asked for. Empty for a 2.x order and for an import
+	 * that never reached a downloaded bundle (a refusal, a failed download, a cancel).
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Import")
+	FString Level;
 };
 
 /**

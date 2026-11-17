@@ -212,6 +212,7 @@ void UMantlePlaceVaultClient::GetPresignedLevelUrl(const FString& OrderId, const
 			FString::Printf(TEXT("'%s' is not a level a download offers. Expected Max, Med or Min."), *Level));
 		return;
 	}
+	OnLevelRequestedNative.Broadcast(OrderId, Level, Files);
 	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ false, Level, Files);
 }
 
