@@ -287,6 +287,8 @@ void UMantlePlaceVaultClient::MintDownload(const FString& OrderId, const FString
 		Body = bView ? FMantlePlaceVaultLogic::BuildViewDownloadBody() : FMantlePlaceVaultLogic::BuildDownloadBody(Format);
 	}
 	PendingDownloadLevel = Level;
+	PendingDownloadOrderId = OrderId;
+	PendingDownloadFiles = Files;
 
 	ActiveRequest = FMantlePlaceClientHttp::CreateRequest(TEXT("POST"), Url);
 	ActiveRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
@@ -449,6 +451,22 @@ void UMantlePlaceVaultClient::HandleDownloadResponse(
 		// LastOperation is how it was sent, captured before it went out.
 		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
 		{
+			return;
+		}
+
+		// A promised file this bundle does not hold (a layer the site lacks) is refused by name. An absent
+		// file is not an error: ask again for the same level naming only the files it holds. Each retry
+		// names strictly fewer files, so this ends.
+		TArray<FString> Remaining;
+		TArray<FString> Absent;
+		if (!PendingDownloadLevel.IsEmpty()
+			&& FMantlePlaceVaultLogic::FilesLeftAfterNotInBundle(ResponseCode, Content, PendingDownloadFiles, Remaining, Absent))
+		{
+			UE_LOG(LogMantlePlaceVault, Log, TEXT("This bundle does not hold %s; asking for the %s level without it."),
+			       *FString::Join(Absent, TEXT(", ")), *PendingDownloadLevel);
+			const FString RetryOrderId = PendingDownloadOrderId;
+			const FString RetryLevel = PendingDownloadLevel;
+			MintDownload(RetryOrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ false, RetryLevel, Remaining);
 			return;
 		}
 

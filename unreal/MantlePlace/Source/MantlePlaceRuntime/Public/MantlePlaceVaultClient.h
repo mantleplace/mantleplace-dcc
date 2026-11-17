@@ -302,6 +302,9 @@ private:
 
 	/** The 3.0 level the in-flight download mint asked for; empty for a 2.x request. Read by its answer. */
 	FString PendingDownloadLevel;
+	/** The order and files the in-flight 3.0 mint asked for: what it is asked again without a file the bundle lacks. */
+	FString PendingDownloadOrderId;
+	TArray<FString> PendingDownloadFiles;
 	void SendMaterializeRequest(const FString& OrderId, const FString& Body, const FString& Jwt);
 
 	void HandleMaterializeStartResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
