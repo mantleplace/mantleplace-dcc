@@ -153,9 +153,9 @@ class RefusesInMetadata(unittest.TestCase):
     def test_the_real_leak_that_reached_a_merged_commit(self):
         # Verbatim from the commit body that sat on main. The qualified form is not better than a
         # bare number: it hands a stranger the name of a private repository and a 404.
-        found = scan_text("Refs mantleplace-nat#90.\n")
+        found = scan_text("Refs mantleplace-foo#90.\n")
         self.assertEqual(len(found), 1)
-        self.assertIn("mantleplace-nat#90", found[0])
+        self.assertIn("mantleplace-foo#90", found[0])
 
     def test_an_owner_qualified_reference_to_another_repository(self):
         found = scan_text("carried over from acme/widgets#5\n")
@@ -164,11 +164,11 @@ class RefusesInMetadata(unittest.TestCase):
     def test_a_sibling_repository_never_named_in_the_gate_still_trips(self):
         # The pattern is structural. If this case needs a new literal in the gate's source to pass,
         # the gate has become the very list of private names it exists to keep out of this tree.
-        found = scan_text("the fix lands in mantleplace-vault first\n")
+        found = scan_text("the fix lands in mantleplace-quux first\n")
         self.assertEqual(len(found), 1)
 
     def test_a_sibling_name_with_no_issue_number_is_still_a_citation(self):
-        found = scan_text("the outcome goes into the mantleplace-nat first-import runbook\n")
+        found = scan_text("the outcome goes into the mantleplace-foo first-import runbook\n")
         self.assertEqual(len(found), 1)
 
     def test_the_shorthand_forms_that_reached_a_pull_request_body(self):
@@ -183,7 +183,7 @@ class RefusesInMetadata(unittest.TestCase):
         # rule.
         self.assertEqual(len(scan_text("Ported from Nat PR #68, before the move.\n")), 1)
         self.assertEqual(len(scan_text("ported from nat issue #68 against this code\n")), 1)
-        self.assertEqual(len(scan_text("the fix lands in Mantleplace-Vault first\n")), 1)
+        self.assertEqual(len(scan_text("the fix lands in Mantleplace-Quux first\n")), 1)
 
     def test_a_sibling_sharing_an_allowlisted_stem_still_trips(self):
         # The allowlist is two artifact FILENAMES, not two stem families. A hypothetical
@@ -199,7 +199,7 @@ class RefusesInMetadata(unittest.TestCase):
     def test_metadata_findings_carry_the_label_they_were_given(self):
         # "PR body:3:" is what lets a CI failure point at the field to edit rather than at a file
         # that does not exist.
-        found = gate.violations_in_text("fine\nfine\nsee mantleplace-nat#1\n", "PR body",
+        found = gate.violations_in_text("fine\nfine\nsee mantleplace-foo#1\n", "PR body",
                                         surface="metadata")
         self.assertTrue(found[0].startswith("PR body:3:"))
 
@@ -230,7 +230,7 @@ class AllowsInMetadata(unittest.TestCase):
     def test_a_code_span_is_how_this_rule_documents_itself(self):
         # The escape hatch that lets a PR body explain what the gate refuses without tripping it —
         # the same reasoning as the file surface's code-span exemption.
-        self.assertEqual(scan_text("the gate refuses `mantleplace-nat#90` shapes\n"), [])
+        self.assertEqual(scan_text("the gate refuses `mantleplace-foo#90` shapes\n"), [])
 
     def test_a_public_url_fragment_is_not_a_cross_repository_reference(self):
         self.assertEqual(scan_text("see https://mantle.place/spec#3 for the block\n"), [])
@@ -263,7 +263,7 @@ class BranchNames(unittest.TestCase):
         self.assertEqual(len(gate.branch_name_violations("fix/gh-88-subdivision-drape")), 1)
 
     def test_a_sibling_repository_name_in_a_branch_is_a_citation(self):
-        self.assertEqual(len(gate.branch_name_violations("sync/mantleplace-vault-pin")), 1)
+        self.assertEqual(len(gate.branch_name_violations("sync/mantleplace-quux-pin")), 1)
 
     def test_digits_inside_a_word_are_a_version_not_an_issue(self):
         # ue5-8, net10, mpb-1.0.0 — the digits that belong in branch names. The rule is anchored to
@@ -285,16 +285,16 @@ class CommitMessageFiles(unittest.TestCase):
             "fix: tidy the gate's own corpus\n"
             "\n"
             "# Please enter the commit message for your changes.\n"
-            "# On branch chore/x — mantleplace-vault-notes.txt untracked\n"
+            "# On branch chore/x — mantleplace-quux-notes.txt untracked\n"
             "# ------------------------ >8 ------------------------\n"
             "diff --git a/t.py b/t.py\n"
-            '+        scan_text("the fix lands in mantleplace-vault first\\n")\n'
+            '+        scan_text("the fix lands in mantleplace-quux first\\n")\n'
         )
         self.assertEqual(gate.violations_in_text(
             gate.commit_message_body(editmsg), "commit message", surface="metadata"), [])
 
     def test_what_survives_cleanup_is_still_judged(self):
-        editmsg = "Refs mantleplace-nat#90.\n# a comment\n"
+        editmsg = "Refs mantleplace-foo#90.\n# a comment\n"
         found = gate.violations_in_text(
             gate.commit_message_body(editmsg), "commit message", surface="metadata")
         self.assertEqual(len(found), 1)
@@ -367,6 +367,27 @@ class SiblingNamesInTrackedFiles(unittest.TestCase):
     def test_the_two_tracked_artifact_filenames_pass(self):
         self.assertEqual(scan("The importer writes .mantleplace-import.log beside the zip.\n"), [])
         self.assertEqual(scan("The probe writes mantleplace-terrain-probe.log beside it.\n"), [])
+
+    def test_a_capitalised_or_upper_case_sibling_tail_is_refused_in_a_file(self):
+        # The brand allowance is a closed set, not "any capitalised tail".
+        for name in ("MantlePlace-Foo", "MantlePlace-QUUX", "MantlePlace-Example1", "MantlePlace-Zzz-Bundle",
+                     "Mantleplace-Foo", "MANTLEPLACE-TERMS", "mantleplace-Terms", "MantlePlace-Termsfoo"):
+            with self.subTest(name=name):
+                self.assertEqual(len(scan(f"The fix lands in {name} first.\n")), 1)
+
+    def test_every_tracked_brand_string_still_passes(self):
+        for tail in sorted(gate.BRAND_TAILS):
+            with self.subTest(tail=tail):
+                self.assertEqual(scan(f'x = "MantlePlace-{tail}";\n', "a.cs"), [])
+                self.assertEqual(scan(f"ships MantlePlace-{tail}-x.zip\n"), [])
+        self.assertEqual(
+            gate.BRAND_TAILS,
+            frozenset({"Terms", "Surface", "Revit", "UE5", "AutoCad", "Linework", "Contours",
+                       "Aerial", "Records", "Sample"}),
+        )
+
+    def test_brand_strings_are_not_an_allowance_on_the_metadata_surface(self):
+        self.assertEqual(len(scan_text("see MantlePlace-Terms\n")), 1)
 
     def test_this_repository_by_name_passes(self):
         self.assertEqual(scan("clone https://github.com/mantleplace/mantleplace-dcc.git\n"), [])
@@ -469,8 +490,17 @@ class AgentToolingIsRefusedOnEverySurface(unittest.TestCase):
     def test_no_pattern_the_gate_carries_names_a_private_thing(self):
         # The patterns are the stem plus structure. Whatever they say, they say it of any name.
         for pattern in (gate.PRIVATE_SIBLING, gate.PLUGIN_AT_CATALOGUE, gate.NAMESPACED_COMMAND):
-            for private in ("widgets", "vault", "skl", "cdx", "host", "web"):
+            for private in ("foo", "quux", "zzz", "example"):
                 self.assertNotIn(private, pattern.pattern)
+
+    def test_a_namespaced_name_without_the_slash_is_refused(self):
+        for text in ("`mantleplace-widgets:close`", "run mantleplace-foo-bar:go now"):
+            with self.subTest(text=text):
+                self.assertEqual(len(scan(text + "\n")), 1)
+                self.assertEqual(len(scan_text(text + "\n")), 1)
+
+    def test_this_repositorys_own_name_with_a_tag_is_not_a_namespaced_name(self):
+        self.assertEqual(scan("docker run mantleplace-dcc:latest\n"), [])
 
     # What must keep passing.
 
@@ -497,12 +527,12 @@ class TrackerTextIsTheSixthSurface(unittest.TestCase):
         self.assertEqual(scan_text("Superseded by #76; take the masks there.\n", "issue #93 body"), [])
 
     def test_the_qualified_form_is_refused_in_an_issue_body(self):
-        found = scan_text("Blocked on mantleplace-nat#113.\n", "issue #94 body")
+        found = scan_text("Blocked on mantleplace-foo#113.\n", "issue #94 body")
         self.assertEqual(len(found), 1)
         self.assertIn("issue #94 body", found[0])
 
     def test_a_private_sibling_name_is_refused_in_a_comment(self):
-        found = scan_text("The numbers live in mantleplace-nat.\n", "comment 5051 on issue #94")
+        found = scan_text("The numbers live in mantleplace-foo.\n", "comment 5051 on issue #94")
         self.assertEqual(len(found), 1)
 
     def test_a_decision_log_id_is_refused_in_an_issue_title(self):
@@ -518,24 +548,24 @@ class RedactedFindingsDoNotRepublish(unittest.TestCase):
 
     def test_the_refused_token_is_not_echoed(self):
         found = gate.violations_in_text(
-            "Blocked on mantleplace-nat#113.\n", "issue #94 body", surface="metadata", redact=True
+            "Blocked on mantleplace-foo#113.\n", "issue #94 body", surface="metadata", redact=True
         )
         self.assertEqual(len(found), 1)
-        self.assertNotIn("mantleplace-nat", found[0])
+        self.assertNotIn("mantleplace-foo", found[0])
         self.assertNotIn("#113", found[0])
 
     def test_a_redacted_finding_still_says_where_and_what_rule(self):
         # A report that redacts everything is a report nobody can act on. Location and rule stay.
         found = gate.violations_in_text(
-            "Blocked on mantleplace-nat#113.\n", "issue #94 body", surface="metadata", redact=True
+            "Blocked on mantleplace-foo#113.\n", "issue #94 body", surface="metadata", redact=True
         )
         self.assertIn("issue #94 body:1", found[0])
         self.assertIn("another repository", found[0])
 
     def test_every_refusal_shape_redacts(self):
         cases = [
-            "Blocked on mantleplace-nat#113.\n",
-            "The numbers live in mantleplace-nat.\n",
+            "Blocked on mantleplace-foo#113.\n",
+            "The numbers live in mantleplace-foo.\n",
             "Recorded there as D-CX.\n",
             "Ported from nat #68 against this code\n",
         ]
@@ -543,7 +573,7 @@ class RedactedFindingsDoNotRepublish(unittest.TestCase):
             with self.subTest(text=text):
                 found = gate.violations_in_text(text, "issue body", surface="metadata", redact=True)
                 self.assertEqual(len(found), 1)
-                self.assertNotIn("mantleplace-nat", found[0])
+                self.assertNotIn("mantleplace-foo", found[0])
                 self.assertNotIn("D-CX", found[0])
                 self.assertNotIn("#68", found[0])
 
@@ -555,8 +585,8 @@ class RedactedFindingsDoNotRepublish(unittest.TestCase):
 
     def test_unredacted_is_still_the_default(self):
         # CI's own log names the token, because the person reading it is us.
-        found = scan_text("Blocked on mantleplace-nat#113.\n")
-        self.assertIn("mantleplace-nat#113", found[0])
+        found = scan_text("Blocked on mantleplace-foo#113.\n")
+        self.assertIn("mantleplace-foo#113", found[0])
 
     def test_the_branch_shape_rule_redacts_its_name(self):
         found = gate.branch_name_violations("88-fix-the-drape", redact=True)
@@ -571,7 +601,7 @@ class TheTrackerReportSaysWhatItIs(unittest.TestCase):
 
     def test_the_posted_body_carries_no_refused_token(self):
         findings = gate.violations_in_text(
-            "Blocked on mantleplace-nat#113, recorded as D-CX.\n",
+            "Blocked on mantleplace-foo#113, recorded as D-CX.\n",
             "issue 94 body",
             surface="metadata",
             redact=True,
@@ -582,7 +612,7 @@ class TheTrackerReportSaysWhatItIs(unittest.TestCase):
             run_url="https://example.invalid/run/1",
             footer=reporter.FOOTER,
         )
-        self.assertNotIn("mantleplace-nat", body)
+        self.assertNotIn("mantleplace-foo", body)
         self.assertNotIn("#113", body)
         self.assertNotIn("D-CX", body)
 
