@@ -244,6 +244,11 @@ public:
 	//~ End UObject interface
 
 private:
+#if WITH_DEV_AUTOMATION_TESTS
+	/** The suite drives the answer path with no network (MantlePlace.Vault.Levels.NotInBundleClient). */
+	friend struct FMantlePlaceVaultClientTestAccess;
+#endif
+
 	/** Validate config + auth and fetch the JWT; fills OutError on failure. */
 	bool EnsureReady(FString& OutError, FString& OutJwt) const;
 
@@ -289,6 +294,10 @@ private:
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	void HandleDownloadResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
+	/** The platform's answer to a download mint, by status and body: everything HandleDownloadResponse does past the transport. */
+	void HandleDownloadAnswer(int32 ResponseCode, const FString& Content);
+	/** Announce a 3.0 level request (OnLevelRequestedNative) and send it: the first one and each one asked again. */
+	void RequestLevel(const FString& OrderId, const FString& Level, const TArray<FString>& Files);
 	void HandleProbeResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	/**
@@ -305,6 +314,12 @@ private:
 	/** The order and files the in-flight 3.0 mint asked for: what it is asked again without a file the bundle lacks. */
 	FString PendingDownloadOrderId;
 	TArray<FString> PendingDownloadFiles;
+	/**
+	 * The files the platform refused as not in the bundle across this level request's tries (404
+	 * `file_not_in_bundle`). Each retry names strictly fewer files, so the tries end within the file count.
+	 * Handed to the download (FMantlePlacePresignedDownload::AbsentFiles) to be held against its manifest.
+	 */
+	TArray<FString> LevelAbsentFiles;
 	void SendMaterializeRequest(const FString& OrderId, const FString& Body, const FString& Jwt);
 
 	void HandleMaterializeStartResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,

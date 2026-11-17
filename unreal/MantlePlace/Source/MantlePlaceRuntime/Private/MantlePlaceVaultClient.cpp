@@ -212,6 +212,12 @@ void UMantlePlaceVaultClient::GetPresignedLevelUrl(const FString& OrderId, const
 			FString::Printf(TEXT("'%s' is not a level a download offers. Expected Max, Med or Min."), *Level));
 		return;
 	}
+	LevelAbsentFiles.Reset();
+	RequestLevel(OrderId, Level, Files);
+}
+
+void UMantlePlaceVaultClient::RequestLevel(const FString& OrderId, const FString& Level, const TArray<FString>& Files)
+{
 	OnLevelRequestedNative.Broadcast(OrderId, Level, Files);
 	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ false, Level, Files);
 }
@@ -433,8 +439,12 @@ void UMantlePlaceVaultClient::HandleDownloadResponse(
 		return;
 	}
 
-	const int32 ResponseCode = Response->GetResponseCode();
-	const FString Content = Response->GetContentAsString();
+	HandleDownloadAnswer(Response->GetResponseCode(), Response->GetContentAsString());
+}
+
+void UMantlePlaceVaultClient::HandleDownloadAnswer(int32 ResponseCode, const FString& Content)
+{
+	const FMantlePlacePresignedDownload Empty;
 
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
@@ -456,7 +466,8 @@ void UMantlePlaceVaultClient::HandleDownloadResponse(
 
 		// A promised file this bundle does not hold (a layer the site lacks) is refused by name. An absent
 		// file is not an error: ask again for the same level naming only the files it holds. Each retry
-		// names strictly fewer files, so this ends.
+		// names strictly fewer files, so the tries end within the file count. The refused names go with the
+		// download, which holds them against its own manifest (a manifest that lists one fails the import).
 		TArray<FString> Remaining;
 		TArray<FString> Absent;
 		if (!PendingDownloadLevel.IsEmpty()
@@ -464,9 +475,13 @@ void UMantlePlaceVaultClient::HandleDownloadResponse(
 		{
 			UE_LOG(LogMantlePlaceVault, Log, TEXT("This bundle does not hold %s; asking for the %s level without it."),
 			       *FString::Join(Absent, TEXT(", ")), *PendingDownloadLevel);
+			for (const FString& Name : Absent)
+			{
+				LevelAbsentFiles.AddUnique(Name);
+			}
 			const FString RetryOrderId = PendingDownloadOrderId;
 			const FString RetryLevel = PendingDownloadLevel;
-			MintDownload(RetryOrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ false, RetryLevel, Remaining);
+			RequestLevel(RetryOrderId, RetryLevel, Remaining);
 			return;
 		}
 
@@ -494,6 +509,10 @@ void UMantlePlaceVaultClient::HandleDownloadResponse(
 	{
 		NotifyPresigned(false, Empty, ParseError);
 		return;
+	}
+	if (!PendingDownloadLevel.IsEmpty())
+	{
+		Download.AbsentFiles = LevelAbsentFiles;
 	}
 
 	UE_LOG(LogMantlePlaceVault, Log, TEXT("Minted presigned URL (expires %s, %s)."), *Download.ExpiresAt,
