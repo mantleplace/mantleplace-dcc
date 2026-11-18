@@ -162,7 +162,7 @@ struct FGround
 	}
 };
 
-struct FCase
+struct FCollisionCase
 {
 	FString Level;
 	FString Mode;
@@ -305,7 +305,7 @@ bool SweepDown(UWorld* World, const FVector2D& XY, const FGround& Ground, const 
  * each point; every one is judged, and each that fails is described.
  */
 void MeasureRoofs(UWorld* World, const FGround& Ground, const TArray<AActor*>& Landscape, const TArray<AActor*>& Mesh,
-	const TArray<AActor*>& Other, const TArray<AActor*>& Buildings, FCase& Out)
+	const TArray<AActor*>& Other, const TArray<AActor*>& Buildings, FCollisionCase& Out)
 {
 	TArray<AActor*> Terrain = Landscape;
 	Terrain.Append(Mesh);
@@ -388,7 +388,7 @@ void FinishCompiling()
 
 /** Measure the level as it stands, against the ground. Mesh actors outside `Mesh` are ignored with the rest. */
 void Measure(UWorld* World, const FGround& Ground, const TArray<AActor*>& Landscape, const TArray<AActor*>& Mesh,
-	const TArray<AActor*>& Other, FCase& Out)
+	const TArray<AActor*>& Other, FCollisionCase& Out)
 {
 	TArray<AActor*> IgnoreOther = Other;
 	TArray<AActor*> IgnoreOtherAndMesh = Other;
@@ -542,7 +542,7 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 	const FString MeshLabelPrefix = TEXT("MP_Mesh_");
 	const FString BuildingsLabelPrefix = TEXT("MP_Buildings_");
 	FGround Ground;
-	TArray<FCase> Cases;
+	TArray<FCollisionCase> Cases;
 
 	struct FMode
 	{
@@ -567,7 +567,7 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 			{
 				continue;
 			}
-			FCase& Case = Cases.AddDefaulted_GetRef();
+			FCollisionCase& Case = Cases.AddDefaulted_GetRef();
 			Case.Level = Level;
 			Case.Mode = Mode.Name;
 
@@ -656,7 +656,7 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 	}
 
 	FString Table = TEXT("Terrain collision, measured:\n");
-	for (const FCase& Case : Cases)
+	for (const FCollisionCase& Case : Cases)
 	{
 		Table += Case.Row() + TEXT("\n");
 	}
