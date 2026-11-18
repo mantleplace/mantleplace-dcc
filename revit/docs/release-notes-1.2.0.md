@@ -18,14 +18,15 @@ Upgrade by closing Revit and running the new `Install.cmd` over the old one; see
 - **An MPB 3.0 order is downloaded at one level.** The vault shows `Fidelity Level` with Max, Med and Min, each with its download size and the platform's recommendation preselected. A 2.x order downloads as before.
 - **Some 2.x items are not part of an MPB 3.0 import.** The toposurface points file, cropping the terrain and contours to the area of interest, the project's time zone, and the flood map's and steep ground's details on the hazard plan's key. Each is shown as skipped, with its reason, in the import window and the import log.
 - **An earlier version cannot download an MPB 3.0 order.** The platform asks it to update to this one first.
+- **Import an MPB 3.0 order into a project that holds no earlier import.** A project that already holds one refuses an MPB 3.0 bundle, the same order again included, says why, and is left unchanged. This holds until the format settles which angle to true north a 3.x host applies ([677](https://github.com/mantleplace/mantleplace-dcc/issues/677)).
 
 ## What's new
 
-- **MPB 3.0 bundles import**, beside 2.x: terrain, contours, context buildings and the linked site model, shared coordinates, roads, road surfaces, water, land use, land cover, trees, the imagery drape and the hazard plan, from the vault, from a zip on disk, and again over an earlier import ([654](https://github.com/mantleplace/mantleplace-dcc/pull/654), [662](https://github.com/mantleplace/mantleplace-dcc/pull/662), [667](https://github.com/mantleplace/mantleplace-dcc/pull/667), [676](https://github.com/mantleplace/mantleplace-dcc/pull/676)).
+- **MPB 3.0 bundles import**, beside 2.x: terrain, contours, context buildings and the linked site model, shared coordinates, roads, road surfaces, water, land use, land cover, trees, the imagery drape and the hazard plan, from the vault, from a zip on disk and from a send out of the web vault ([654](https://github.com/mantleplace/mantleplace-dcc/pull/654), [662](https://github.com/mantleplace/mantleplace-dcc/pull/662), [667](https://github.com/mantleplace/mantleplace-dcc/pull/667), [676](https://github.com/mantleplace/mantleplace-dcc/pull/676)).
 - **Choose the level before the download.** Max, Med or Min, each with its size; a send from the web vault opens on the recommendation, and the level you choose stays chosen while the vault window refreshes ([660](https://github.com/mantleplace/mantleplace-dcc/pull/660), [694](https://github.com/mantleplace/mantleplace-dcc/pull/694)).
 - **A 3.0 layer's import time is estimated before you start**, and a layer estimated at over five minutes starts unticked, saying why ([684](https://github.com/mantleplace/mantleplace-dcc/pull/684)).
 - **About is a window** in place of a dialog, with a link to the privacy page; its Logs button opens the same folder as the ribbon's Open Logs ([646](https://github.com/mantleplace/mantleplace-dcc/pull/646)).
-- **Fixes for 3.0 bundles:** trees and shrubs stand on the toposolid at the site, not far from it ([714](https://github.com/mantleplace/mantleplace-dcc/pull/714)); shrubs are planted as shrubs ([702](https://github.com/mantleplace/mantleplace-dcc/pull/702)); two 3.0 orders in one project each get their own land and hazard plans ([700](https://github.com/mantleplace/mantleplace-dcc/pull/700)); and a 3.0 import's heights are checked against the vertical datum a 2.x import recorded, by name ([698](https://github.com/mantleplace/mantleplace-dcc/pull/698)); a 3.0 order that lacks a layer the site does not have still downloads, and its step is shown as skipped ([715](https://github.com/mantleplace/mantleplace-dcc/pull/715)); and a 3.0 order sent from the web vault is taken, where it was refused as a version the plugin does not read ([715](https://github.com/mantleplace/mantleplace-dcc/pull/715)).
+- **Fixes for 3.0 bundles:** trees and shrubs stand on the toposolid at the site, not far from it ([714](https://github.com/mantleplace/mantleplace-dcc/pull/714)); shrubs are planted as shrubs ([702](https://github.com/mantleplace/mantleplace-dcc/pull/702)); a 3.0 order that lacks a layer the site does not have still downloads, and its step is shown as skipped ([715](https://github.com/mantleplace/mantleplace-dcc/pull/715)); and a 3.0 order sent from the web vault is taken, where it was refused as a version the plugin does not read ([715](https://github.com/mantleplace/mantleplace-dcc/pull/715)).
 
 ## Verification
 
@@ -83,9 +84,13 @@ and a 3.0 download holds one level of every file, so no step takes a per-categor
 A step whose file the bundle does not hold is shown as skipped, naming the file, with the manifest's own
 reason where it gives one.
 
-A 3.0 bundle imports from the vault, from a zip on disk, and again over an earlier import, by the same rules
+A 3.0 bundle imports from the vault, from a zip on disk and from a send out of the web vault, by the same rules
 as a 2.x bundle. The project's shared coordinates are turned by the grid rotation the manifest's local frame
-states, verbatim. A layer file whose catalog entry names its tables is read
+states, verbatim. That rotation is the grid's angle to true north at the site, which is not zero for a real
+order, and the plugin never places a bundle on a rotated grid beside an earlier import: so a project that already
+holds an import refuses a 3.0 bundle, the same order again included, and is left unchanged. Which angle a 3.x
+host applies is an open question of the format ([677](https://github.com/mantleplace/mantleplace-dcc/issues/677));
+until it is settled, a 3.0 order goes into a project that holds no earlier import. A layer file whose catalog entry names its tables is read
 at the table of the step's geometry (the water bodies from `Water_polygon`), and the manifest's credits are
 the import's attribution. The land and hazard plans are named for the order, since a 3.0 manifest states no
 job id.
