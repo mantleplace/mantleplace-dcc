@@ -31,10 +31,6 @@ Mantle Place turns open geospatial data for any site into a bundle: one download
 aerial imagery, buildings, roads, land cover and more for the area you chose. This plugin brings that
 bundle into Revit, placed at the site's real coordinates.
 
-**One ribbon tab.** A **Mantle Place** tab holds the commands: Import Bundle, Vault, Prepare for
-Handover, Open in Curator and, in the panel's slide-out, Probe Terrain and Logs. The Account button on the
-same tab signs you in through your browser.
-
 **What an import brings in.** A **Bundle Import** window opens on a checklist headed **Include**, one row
 for each layer the bundle carries, and nothing runs until you press **Import**:
 
@@ -64,6 +60,10 @@ recommendation preselected, so you download only the level you want. In the impo
 that would take more than about five minutes starts unticked with its estimate; tick it and all of it
 imports.
 
+**One ribbon tab.** A **Mantle Place** tab holds the commands: Import Bundle, Vault, Prepare for
+Handover, Open in Curator and, in the panel's slide-out, Probe Terrain and Logs. The Account button on the
+same tab signs you in through your browser.
+
 **Your vault, in Revit.** Sign in once in your browser. The Vault window lists the bundles you keep,
 prepares their Revit files, downloads them and imports them, and Revit stays usable while it works. A
 notice tells you when a bundle is ready.
@@ -71,10 +71,16 @@ notice tells you when a bundle is ready.
 **Open in Curator.** Opens the web curator in your browser on the extent your project already knows, to
 order the next area.
 
-**Sharing a project.** Content made from OpenStreetMap-derived data is kept in selection filters of its
+**Credit and sharing.** Content made from OpenStreetMap-derived data is kept in selection filters of its
 own, and **Prepare for Handover** removes it, leaves the credit text in the project and is one undo step.
 
-**Yours to keep.** The import is ordinary Revit elements in your project.
+**Yours to keep.** The bundle is downloaded to you, and the import is ordinary Revit elements in your
+project.
+
+**Account and sign-in.** A bundle import needs no account and no sign-in. Signing in, to reach your
+vault, happens once in your browser. Ordering a bundle needs a mantle.place account.
+
+**Support.** Report a problem or send feedback at `https://mantle.place/feedback`. It needs no account.
 
 ## What is new in 1.2.0
 
@@ -86,9 +92,9 @@ own, and **Prepare for Handover** removes it, leaves the credit text in the proj
 
 ## Technical details
 
-- Revit 2025.5 or later, Revit 2026.5 or later, and Revit 2027, from one build.
-- Windows 64-bit. The plugin installs for your Windows account and needs no administrator rights.
+- Compatibility: Revit 2025.5 or later, Revit 2026.5 or later, and Revit 2027, from one build.
+- Platform: Windows 64-bit. The plugin installs for your Windows account and needs no administrator rights.
 - Network: signing in and the vault need an internet connection; importing a bundle from disk does not.
 - Install from the storefront, or unzip the release package and run `Install.cmd`. Use one way in, not
   both.
-- Distribution: a `.bundle` package with the add-in files and an `Install.cmd` and `Uninstall.cmd`.
+- Distribution: a `.bundle` package with the plugin files and an `Install.cmd` and `Uninstall.cmd`.
