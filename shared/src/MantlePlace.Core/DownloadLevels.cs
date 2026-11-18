@@ -193,6 +193,8 @@ public static class DownloadLevels
             foreach (JsonElement value in named.EnumerateArray())
             {
                 // A name this request never asked for: not a refusal it can answer by asking less.
+                // Names are compared exactly, case included: catalog file names are case-sensitive, so a
+                // name differing only in case is another file, and its refusal is reported as it stands.
                 if (value.ValueKind != JsonValueKind.String
                     || value.GetString() is not { } name
                     || !asked.Contains(name, StringComparer.Ordinal))
