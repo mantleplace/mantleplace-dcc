@@ -183,6 +183,12 @@ run reporting any `No editor` skip is not green.**
   **`MantlePlace.Import.LiveHandover`** imports the same bundle, checks every ODbL actor is in its
   order's `ODbL` folder, then runs Prepare for handover and checks the ODbL content is gone and the
   credit actor holds every credit line the import recorded.
+  **`MantlePlace.Import.LiveTerrainCollision`** reads the same `MP_LIVETEST_BUNDLE`. A bundle with no
+  heightmap is its skip (an error where `CI` is set); one with no `Terrain.glb` (an MPB 1.x fixture) is
+  measured in Landscape mode only and warns that the Mesh and Both modes were not. Its roof check expects
+  the buildings at an open roof and the ground where the drawn ground lies over a roof (a building
+  levelled to its lowest ground on a slope steeper than its height over its length); the pure judgement
+  is `MantlePlace.Import.RoofTraceLogic`.
 - **Scratch hygiene.** Set `EditorStartupMap` and `GameDefaultMap` to a `/Game` map or
   `/Engine/Maps/Templates/Template_Default`, never `/Engine/Maps/Entry`; never save an `/Engine`
   package (one such save overwrote an install's `Entry.umap` and broke other projects' tests). In Git
