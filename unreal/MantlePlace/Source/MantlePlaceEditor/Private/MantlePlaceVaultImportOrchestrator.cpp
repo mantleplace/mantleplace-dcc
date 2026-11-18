@@ -12,6 +12,7 @@
 #include "MantlePlaceImportStepsLogic.h"
 #include "MantlePlaceLevelChoiceLogic.h"
 #include "MantlePlaceManifestThreeLogic.h" // the files a 3.0 download names
+#include "MantlePlaceScriptedLevelLogic.h"
 #include "MantlePlaceSha256.h"         // whole-bundle sha256 for the no-orderId local match
 
 #include "HAL/PlatformFileManager.h"
@@ -148,6 +149,35 @@ void UMantlePlaceVaultImportOrchestrator::RefreshVaultList()
 
 bool UMantlePlaceVaultImportOrchestrator::StartVaultImport(const FMantlePlaceVaultItem& Item, EMantlePlaceImportMode Mode, const FString& Scope)
 {
+	return BeginVaultImport(Item, Mode, Scope, FString());
+}
+
+FString UMantlePlaceVaultImportOrchestrator::GetLevelImportRefusal(const FMantlePlaceVaultItem& Item, const FString& Level)
+{
+	return FMantlePlaceScriptedLevelLogic::Refusal(Item, Level);
+}
+
+bool UMantlePlaceVaultImportOrchestrator::StartVaultImportAtLevel(
+	const FMantlePlaceVaultItem& Item, EMantlePlaceImportMode Mode, const FString& Scope, const FString& Level)
+{
+	if (IsBusy())
+	{
+		EmitPhase(TEXT("Busy"), TEXT("An import is already in progress."), -1.0f);
+		return false;
+	}
+	// Refused before any state changes and before any request: the order's own offer decides, in words.
+	const FString Refusal = FMantlePlaceScriptedLevelLogic::Refusal(Item, Level);
+	if (!Refusal.IsEmpty())
+	{
+		EmitPhase(TEXT("Error"), Refusal, -1.0f);
+		return false;
+	}
+	return BeginVaultImport(Item, Mode, Scope, Level);
+}
+
+bool UMantlePlaceVaultImportOrchestrator::BeginVaultImport(
+	const FMantlePlaceVaultItem& Item, EMantlePlaceImportMode Mode, const FString& Scope, const FString& Level)
+{
 	if (IsBusy())
 	{
 		EmitPhase(TEXT("Busy"), TEXT("An import is already in progress."), -1.0f);
@@ -181,6 +211,7 @@ bool UMantlePlaceVaultImportOrchestrator::StartVaultImport(const FMantlePlaceVau
 	ViewDelivered.Reset();
 	ViewManifestSha256.Reset();
 	LevelChoice.Reset();
+	ScriptedLevel = Level;
 	bMaterializeRunObserved = false;
 	MaterializeRepicks = 0;
 	LastOutstanding.Reset();
@@ -205,6 +236,14 @@ void UMantlePlaceVaultImportOrchestrator::BeginItemImport()
 	// Unreal format to generate and no view to ask for. A 2.x order takes the path below, unchanged.
 	if (!bLocalImport && ActiveItem.bHasLevels)
 	{
+		if (!ScriptedLevel.IsEmpty())
+		{
+			// A script named the level: no control to offer and nobody to press Download, so the download the
+			// button would start starts here. Nothing to recover either, as in BeginLevelChoice.
+			bAttemptedMaterializeRecovery = true;
+			DownloadLevel(ScriptedLevel);
+			return;
+		}
 		BeginLevelChoice();
 		return;
 	}
@@ -861,6 +900,7 @@ void UMantlePlaceVaultImportOrchestrator::HandlePresignedNative(bool bSuccess, c
 		// the listing's size and digest describe the Max download.
 		ViewManifestSha256 = Download.ManifestSha256;
 	}
+	LevelAbsentFiles = Download.AbsentFiles;
 
 	Phase = EPhase::Downloading;
 	EmitPhase(TEXT("Downloading"),
@@ -909,6 +949,26 @@ void UMantlePlaceVaultImportOrchestrator::HandleDownloadCompleteNative(bool bSuc
 		}
 	}
 
+	// A file the platform refused as not in this bundle must not be one the bundle's own manifest lists:
+	// that is a platform fault, and importing on would show it to the curator as a layer the site lacks.
+	const TArray<FString> RefusedFiles = MoveTemp(LevelAbsentFiles);
+	LevelAbsentFiles.Reset();
+	if (RefusedFiles.Num() > 0)
+	{
+		TArray<FString> Listed;
+		FString ListedError;
+		if (UMantlePlaceImporterLibrary::FindListedFiles(LocalBundlePath, RefusedFiles, Listed, ListedError) && Listed.Num() > 0)
+		{
+			BundleCache->EvictCache(ActiveItem);
+			FailImport(FString::Printf(
+				TEXT("The platform refused %s as not in this bundle, but the bundle's manifest lists it. Nothing was "
+					"imported: this is a fault on the platform's side, not a layer the site lacks. Try again, and "
+					"report it if it repeats."),
+				*FString::Join(Listed, TEXT(", "))));
+			return;
+		}
+	}
+
 	// Pre-flight the manifest before announcing an import: the listing's completeness signal
 	// decided the download, but the downloaded bytes are the authority — the listing has advertised
 	// completeness a base bundle did not have. A bundle that arrived without its Unreal payload is
@@ -939,6 +999,9 @@ void UMantlePlaceVaultImportOrchestrator::HandleDownloadCompleteNative(bool bSuc
 	// freshly downloaded, materialized bundle is imported here - for a local import that means the
 	// completed cloud bundle, not the user's incomplete local copy (which is left untouched on disk).
 	FMantlePlaceImportResult Result = RunBundleImport(LocalBundlePath);
+	// What the slot holds is what was imported: the level the caller got, which the result states beside the
+	// one it asked for. Read after the import, from the cache's own record of the download.
+	Result.Level = BundleCache->InspectCache(ActiveItem).Level;
 	if (bLocalImport && Result.bSuccess)
 	{
 		Result.Message = FString::Printf(
@@ -953,7 +1016,9 @@ void UMantlePlaceVaultImportOrchestrator::FinishImport(bool bSuccess, const FMan
 {
 	UnschedulePoll();
 	Phase = EPhase::Idle;
+	LevelAbsentFiles.Reset();
 	LevelChoice.Reset();
+	ScriptedLevel.Reset();
 	if (Steps.IsValid())
 	{
 		// A step still in flight here is the fetch, ended by a failure or a cancel; the import's own

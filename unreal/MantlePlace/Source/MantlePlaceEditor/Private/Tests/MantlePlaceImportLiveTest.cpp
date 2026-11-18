@@ -14,7 +14,7 @@
 #include "MantlePlaceImportNaming.h"   // subfolder layout, so this asserts the standard not a copy of it
 #include "MantlePlaceVaultTypes.h"     // MantlePlaceMinSupportedManifestVersion (stale-fixture skip)
 #include "MantlePlaceImportTypes.h"
-#include "MantlePlaceLiveGateLogic.h"   // the placement gate's unit factors and tolerances
+#include "MantlePlaceLiveGateLogic.h"   // the placement gate's unit factors and tolerances; the drape check's verdict
 #include "MantlePlaceRoadSplinesLogic.h" // the importer's own datum decision, asked not recomputed
 #include "MantlePlaceRoadSpline.h"       // the road gate reads the placed splines back
 #include "MantlePlaceCoverageRasterLogic.h"  // IsCoverageRaster (which layers to expect)
@@ -708,10 +708,17 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// Drape smoke check: the imagery drape material must reach the landscape's render material — the
-	// component must NOT be left on the engine default surface (the symptom of the "material needs a
-	// manual re-apply" bug). This guards the plumbing headlessly; pixel-accurate render timing (does it
-	// show on the import frame with no re-apply / refresh) is verified live in the editor.
+	// Drape smoke check: when the import placed an imagery drape, its material must reach the landscape's
+	// render material -- the component must NOT be left on the engine default surface (the symptom of the
+	// "material needs a manual re-apply" bug). This guards the plumbing headlessly; pixel-accurate render
+	// timing (does it show on the import frame with no re-apply / refresh) is verified live in the editor.
+	//
+	// "When the import placed a drape" is the manifest's own answer (`Drape.bPresent`). A drape the import
+	// skipped by design -- imagery that states no rectangle cannot be placed (HPS-53), which is every 3.x
+	// bundle whose Imagery/Imagery.png carries none -- leaves the component on the default surface, so the
+	// check asserts the import reported the skip instead (MantlePlaceLiveGateLogic: JudgeDrape). A drape
+	// placed but absent from the material still fails. The decision is tested headless without a bundle
+	// (`MantlePlace.Import.LiveDrapeCheck`).
 	//
 	// The component set is ASSERTED, not used as a silent precondition. This block used to open
 	// `if (Landscape->LandscapeComponents.Num() > 0)` and fall straight through an empty array --
@@ -729,8 +736,21 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			UMaterialInstance* Instance = Component->GetMaterialInstance(0, /*InDynamic*/ false);
 			UMaterial* Base = Instance ? Instance->GetMaterial() : nullptr;
 			TestNotNull(TEXT("landscape component has a material instance"), Instance);
-			TestTrue(TEXT("landscape component material is not the engine default surface"),
-				Base != nullptr && Base != UMaterial::GetDefaultMaterial(MD_Surface));
+			const bool bMaterialIsDrape = Base != nullptr && Base != UMaterial::GetDefaultMaterial(MD_Surface);
+			const FString DrapeFailure = FMantlePlaceLiveGateLogic::JudgeDrape(Manifest, Result.Message, bMaterialIsDrape);
+			if (!Manifest.Drape.bPresent)
+			{
+				AddInfo(FString::Printf(TEXT("Imagery drape not placed by the import; checked its report instead: %s"),
+					*FMantlePlaceLiveGateLogic::DrapeSkipLine(Manifest)));
+			}
+			TestTrue(Manifest.Drape.bPresent
+					? TEXT("landscape component material is not the engine default surface (the drape was placed)")
+					: TEXT("the import reports the imagery drape it did not place"),
+				DrapeFailure.IsEmpty());
+			if (!DrapeFailure.IsEmpty())
+			{
+				AddError(DrapeFailure);
+			}
 		}
 	}
 

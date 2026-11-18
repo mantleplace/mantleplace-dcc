@@ -26,6 +26,7 @@ exitCode |= PlatformConformanceTests.Run();
 exitCode |= ReaderConformanceTests.Run();
 exitCode |= AutoCadManifestConformanceTests.Run();
 exitCode |= AutoCadImportPlanTests.Run();
+exitCode |= AutoCadImportRunTests.Run();
 exitCode |= DownloadLevelTests.Run();
 exitCode |= AutoCadRecordSetTests.Run();
 exitCode |= LandXmlSurfaceTests.Run();
@@ -37,7 +38,8 @@ exitCode |= ExportReceiptTests.Run();
 exitCode |= LocalBundleImportTests.Run();
 exitCode |= AboutPageTests.Run();
 exitCode |= HostReleaseYearTests.Run();
-exitCode |= ShimWindowTests.Run("autocad/src/MantlePlace.AutoCad.Addin", "shim windows");
+// The shell declares no window of its own: every window it opens is the shared set (SharedWindowsTests).
+exitCode |= ShimWindowTests.Run("autocad/src/MantlePlace.AutoCad.Addin", "shim windows", declaresWindows: false);
 exitCode |= SharedWindowsTests.Run();
 
 if (exitCode == 0)

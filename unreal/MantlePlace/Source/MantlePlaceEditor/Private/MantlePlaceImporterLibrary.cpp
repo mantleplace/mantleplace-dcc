@@ -223,9 +223,10 @@ namespace MantlePlaceFormatThree
 	 * False with OutError on a read that refused (a later major) or failed; true otherwise, with the
 	 * verdict in OutManifest.bValid and OutError, as MantlePlaceImportManifest::Parse leaves it.
 	 */
-	bool Read(const FZipArchiveReader& Reader, TArray<uint8>& OutBytes, FMantlePlaceVaultManifest& OutManifest, FString& OutError)
+	/** The zip's entries and manifest, read by FMantlePlaceBundleReaderLogic. */
+	FMantlePlaceBundleRead ReadBundle(const FZipArchiveReader& Reader)
 	{
-		const FMantlePlaceBundleRead BundleRead = FMantlePlaceBundleReaderLogic::Read(Reader.GetFileNames(),
+		return FMantlePlaceBundleReaderLogic::Read(Reader.GetFileNames(),
 			[&Reader](const FString& Name, FString& OutText)
 			{
 				TArray<uint8> Bytes;
@@ -236,6 +237,11 @@ namespace MantlePlaceFormatThree
 				FFileHelper::BufferToString(OutText, Bytes.GetData(), Bytes.Num());
 				return true;
 			});
+	}
+
+	bool Read(const FZipArchiveReader& Reader, TArray<uint8>& OutBytes, FMantlePlaceVaultManifest& OutManifest, FString& OutError)
+	{
+		const FMantlePlaceBundleRead BundleRead = ReadBundle(Reader);
 		if (!BundleRead.IsRead())
 		{
 			OutError = BundleRead.Error;
@@ -252,6 +258,35 @@ namespace MantlePlaceFormatThree
 		FFileHelper::BufferToString(Text, OutBytes.GetData(), OutBytes.Num());
 		return FMantlePlaceManifestThreeLogic::ToVaultManifest(BundleRead, Text, OutManifest, OutError);
 	}
+}
+
+bool UMantlePlaceImporterLibrary::FindListedFiles(const FString& ZipPath, const TArray<FString>& Names,
+	TArray<FString>& OutListed, FString& OutError)
+{
+	OutListed.Reset();
+	OutError.Reset();
+
+	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+	IFileHandle* Handle = ZipPath.IsEmpty() || !PlatformFile.FileExists(*ZipPath) ? nullptr : PlatformFile.OpenRead(*ZipPath);
+	if (Handle == nullptr)
+	{
+		OutError = FString::Printf(TEXT("Could not open the download: %s"), *ZipPath);
+		return false;
+	}
+	FZipArchiveReader Reader(Handle); // takes ownership of the handle
+	if (!Reader.IsValid())
+	{
+		OutError = FString::Printf(TEXT("Not a readable zip archive: %s"), *ZipPath);
+		return false;
+	}
+	const FMantlePlaceBundleRead BundleRead = MantlePlaceFormatThree::ReadBundle(Reader);
+	if (!BundleRead.IsRead())
+	{
+		OutError = BundleRead.Error;
+		return false;
+	}
+	OutListed = FMantlePlaceManifestThreeLogic::ListedAmong(BundleRead, Names);
+	return true;
 }
 
 bool UMantlePlaceImporterLibrary::ReadManifestSha256(const FString& ZipPath, FString& OutSha256, FString& OutError)

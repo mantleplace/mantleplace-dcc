@@ -511,4 +511,81 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceManifestThreeAbsentFilesTest,
+	"MantlePlace.Import.ManifestThreeAbsentFiles",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceManifestThreeAbsentFilesTest::RunTest(const FString& Parameters)
+{
+	// A file the platform refused as not in the bundle is held against the downloaded manifest: a manifest
+	// that lists it (held, or catalogued and missing from the zip) contradicts the refusal, and the import
+	// fails naming it, rather than reading a platform fault as a layer the site lacks.
+	const TArray<FString> Refused = { TEXT("Basemap/Roads.csv") };
+	const FString RoadsEntry =
+		TEXT("\"Basemap/Roads.csv\": {\"family\": \"host-ready\", \"sha256\": \"ee\", \"count\": {\"kind\": \"rows\", \"value\": 12}},");
+	const FString RoadsNotHeld = TEXT("[{\"path\": \"Basemap/Roads.csv\", \"reason\": \"no_data\"}]");
+	const FString DefaultUnit = TEXT("{\"name\": \"metre\", \"to_metres\": 1}");
+	const FString DefaultRaster = TEXT("\"width\": 1009, \"height\": 505, \"bands\": [\"height\"], \"data_type\": \"UInt16\","
+		" \"scale\": 0.01, \"offset\": -12.5, \"unit\": \"metre\", \"nodata\": null, \"frame\": \"local\","
+		" \"rectangle\": [-1008, -500, 1008, 516], \"cell_size\": [2, 2]");
+
+	// Catalogued and held: the refusal is contradicted.
+	{
+		const FMantlePlaceBundleRead Read = ReadOf(Manifest());
+		TestEqual(TEXT("a held file the platform refused is named"),
+			FString::Join(FMantlePlaceManifestThreeLogic::ListedAmong(Read, Refused), TEXT(",")), FString(TEXT("Basemap/Roads.csv")));
+		TestEqual(TEXT("matched regardless of case"),
+			FMantlePlaceManifestThreeLogic::ListedAmong(Read, { TEXT("basemap/roads.CSV") }).Num(), 1);
+	}
+
+	// Catalogued but missing from the zip: still listed as present, still a contradiction.
+	{
+		const FString Text = Manifest();
+		const FMantlePlaceBundleRead Read = FMantlePlaceBundleReaderLogic::Read(
+			{ TEXT("Manifest.json"), TEXT("Elevation/Elevation.png") },
+			[&Text](const FString& Name, FString& OutText) { OutText = Text; return Name.EndsWith(TEXT("Manifest.json")); });
+		TestTrue(TEXT("the reader read it"), Read.IsRead());
+		TestEqual(TEXT("a catalogued file the zip lacks is named"),
+			FMantlePlaceManifestThreeLogic::ListedAmong(Read, Refused).Num(), 1);
+	}
+
+	// Stated not held (no_data), or not named at all: the refusal stands and nothing is named.
+	{
+		const FString Text = Manifest(DefaultUnit, DefaultRaster, RoadsNotHeld).Replace(*RoadsEntry, TEXT(""));
+		TestFalse(TEXT("the fixture really drops the catalog entry"), Text.Contains(TEXT("\"Basemap/Roads.csv\": {")));
+		const FMantlePlaceBundleRead Read = ReadOf(Text);
+		TestTrue(TEXT("the reader read it"), Read.IsRead());
+		TestEqual(TEXT("a file stated not held is not named"), FMantlePlaceManifestThreeLogic::ListedAmong(Read, Refused).Num(), 0);
+
+		const FString Silent = Manifest(DefaultUnit, DefaultRaster, TEXT("[]")).Replace(*RoadsEntry, TEXT(""));
+		TestEqual(TEXT("a file the manifest never names is not named"),
+			FMantlePlaceManifestThreeLogic::ListedAmong(ReadOf(Silent), Refused).Num(), 0);
+		TestEqual(TEXT("nothing refused, nothing named"),
+			FMantlePlaceManifestThreeLogic::ListedAmong(ReadOf(Manifest()), TArray<FString>()).Num(), 0);
+
+		// The layer the site lacks is shown to the curator: the import window lists its step Not Run with the
+		// manifest's reason, and the result text the window shows names it too.
+		FMantlePlaceVaultManifest M;
+		FString Error;
+		TestTrue(TEXT("a 3.0 manifest without roads converts"), FMantlePlaceManifestThreeLogic::ToVaultManifest(Read, Text, M, Error));
+		const MantlePlaceArtifacts::FHandlers Handlers = MantlePlaceArtifacts::MakeAll();
+		const FMantlePlaceImportSelection Selection = FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode::Landscape, false);
+		FMantlePlaceImportSteps Steps;
+		MantlePlaceImportOrchestration::PlanSteps(Handlers, M, Selection, Steps);
+		const int32 RoadsRow = Steps.Find(TEXT("road_splines"));
+		if (TestTrue(TEXT("the window lists the road step"), RoadsRow != INDEX_NONE))
+		{
+			const FMantlePlaceImportStep& Row = Steps.Steps()[RoadsRow];
+			TestTrue(TEXT("as Not Run"), Row.State == EMantlePlaceImportStepState::NotRun);
+			TestTrue(TEXT("naming the file and the manifest's reason"),
+				Row.Reason.Contains(TEXT("Basemap/Roads.csv")) && Row.Reason.Contains(TEXT("no_data")));
+		}
+		const TArray<FString> Lines = MantlePlaceImportOrchestration::DescribeFormatSkips(Handlers, M, Selection);
+		TestTrue(TEXT("the result text names the skipped roads"), Lines.ContainsByPredicate(
+			[](const FString& Line) { return Line.StartsWith(TEXT("Skipped")) && Line.Contains(TEXT("Basemap/Roads.csv")); }));
+	}
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

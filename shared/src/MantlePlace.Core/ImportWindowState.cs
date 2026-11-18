@@ -145,7 +145,7 @@ public sealed class ImportWindowState
     /// <summary>The run's steps, in plan order, in the window's words; empty before they arrive.</summary>
     public IReadOnlyList<ImportWindowRow> Rows => _view is null
         ? []
-        : [.. _view.Rows.Select(row => new ImportWindowRow(WindowLabels.StepName(row.Kind), WindowLabels.StateWord(row.State)))];
+        : [.. _view.Rows.Select(row => new ImportWindowRow(row.StepName, WindowLabels.StateWord(row.State)))];
 
     /// <summary>The view the window shows, or <c>null</c> before the steps arrive.</summary>
     public ImportRunView? View => _view;
@@ -287,7 +287,7 @@ public sealed class ImportWindowState
             return null;
         }
 
-        TimeSpan? estimate = view.Current is { } kind && _measured is not null && _measured.TryGetValue(kind, out TimeSpan cost)
+        TimeSpan? estimate = view.CurrentIsSharedStep && view.Current is { } kind && _measured is not null && _measured.TryGetValue(kind, out TimeSpan cost)
             ? cost
             : null;
         return WindowLabels.StatusLine(_cancelAsked ? view.WithCancelRequested() : view, Elapsed(now), _hostName, estimate);

@@ -146,6 +146,32 @@ is not seen. Assets in the Content Browser are not touched; only what the level 
 - **Content lands somewhere unexpected**: check *Generated content root* in the project setting
   above. An unusable value falls back to the default rather than failing the import.
 
+## Importing a 3.0 order at a named level from a script
+
+The import window's **Fidelity Level** control has no counterpart outside the window, so a script (or an
+unattended release check) names the level itself. `StartVaultImportAtLevel(Item, Mode, Scope, Level)` on
+`unreal.MantlePlaceVaultImportOrchestrator` takes the path the window's **Download** takes: the same request
+naming Unreal's files, the same kept-level rule (the level the cache already holds is imported again with
+no download; another level replaces it), the same steps, and the same `on_import_phase` and
+`on_import_finished` events. `StartVaultImport` still takes the platform's recommended level.
+
+```python
+import unreal
+orchestrator = unreal.MantlePlaceVaultImportOrchestrator()
+
+def on_finished(success, result):
+    print(success, result.level)        # the level the imported bundle holds: Max, Med or Min
+
+orchestrator.on_import_finished.add_callable(on_finished)
+# item: a row from on_vault_listed (orchestrator.refresh_vault_list())
+print(orchestrator.get_level_import_refusal(item, "Min") or "offered")
+orchestrator.start_vault_import_at_level(item, unreal.MantlePlaceImportMode.LANDSCAPE, "unreal", "Min")
+```
+
+It refuses, returning `False` with the reason in an `on_import_phase` `Error` and before any request, a level
+the order does not offer, any level on a 2.x order (whose request is unchanged), and an empty level. It needs
+a signed-in session like any vault import.
+
 ## Stream to compare
 
 The plugin can also stream the *same* bundle through

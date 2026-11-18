@@ -171,6 +171,24 @@ public:
 	bool StartVaultImport(const FMantlePlaceVaultItem& Item, EMantlePlaceImportMode Mode, const FString& Scope);
 
 	/**
+	 * Import a 3.0 order at the level the caller names (`Max`, `Med` or `Min`), for editor scripting (and
+	 * unattended gates) that cannot press the import window's Download. It goes down the path that button
+	 * takes: the same request naming Unreal's files, the same cache rule (the level the slot holds is
+	 * imported again with no download, another level replaces it), the same steps, and the same OnImportPhase
+	 * and OnImportFinished events. FMantlePlaceImportResult::Level says which level was downloaded.
+	 *
+	 * Refused before any request, returning false with the reason in an OnImportPhase "Error" (and in
+	 * GetLevelImportRefusal): a level the order does not offer, any level on a 2.x order, and an empty level
+	 * (StartVaultImport takes the platform's recommendation). Also false when an import is already running.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
+	bool StartVaultImportAtLevel(const FMantlePlaceVaultItem& Item, EMantlePlaceImportMode Mode, const FString& Scope, const FString& Level);
+
+	/** Why StartVaultImportAtLevel would refuse Item at Level, in words; empty when it would not. */
+	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
+	static FString GetLevelImportRefusal(const FMantlePlaceVaultItem& Item, const FString& Level);
+
+	/**
 	 * One-click convenience for the EUW: list the vault, auto-pick the first incomplete (BASE) bundle
 	 * (or the first bundle if none are incomplete), and run StartVaultImport on it. Keeps the whole
 	 * pick-and-import decision in C++ so the surface is a single button. Returns false if already busy.
@@ -213,6 +231,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
 	static FString GetBundleTierLabel(const FMantlePlaceVaultItem& Item);
 
+	/**
+	 * The vault client this orchestrator drives (null until the first call that needs one). Exposed for a
+	 * headless test that reads the requests it makes; the surface never calls the client directly.
+	 */
+	UMantlePlaceVaultClient* GetVaultClient() const { return VaultClient; }
+
 	//~ Begin UObject interface
 	virtual void BeginDestroy() override;
 	//~ End UObject interface
@@ -250,6 +274,9 @@ private:
 
 	/** Mint a presigned "glb" URL for ActiveItem, then download it. */
 	void BeginPresign();
+
+	/** The shared start of StartVaultImport and StartVaultImportAtLevel: Level empty is the window's choice (or the recommendation). */
+	bool BeginVaultImport(const FMantlePlaceVaultItem& Item, EMantlePlaceImportMode Mode, const FString& Scope, const FString& Level);
 
 	/** A 3.0 order: offer its level control, and download what it confirms (or the recommendation, unattended). */
 	void BeginLevelChoice();
@@ -379,8 +406,17 @@ private:
 	/** The manifest digest the platform stated for the view being downloaded; empty when it stated none. */
 	FString ViewManifestSha256;
 
+	/**
+	 * The files the platform refused as not in this level's bundle, so the download was asked for without
+	 * them (FMantlePlacePresignedDownload::AbsentFiles). Held against the downloaded manifest before import.
+	 */
+	TArray<FString> LevelAbsentFiles;
+
 	/** A 3.0 order's level control while it is offered; null otherwise. */
 	TSharedPtr<FMantlePlaceLevelChoice> LevelChoice;
+
+	/** The level a scripted import named; empty for every other import (the window's choice, or a 2.x order). */
+	FString ScriptedLevel;
 
 	//~ Local-zip import bookkeeping (all empty/false for a vault-row import).
 	bool bLocalImport = false;    // this flow originated from a local .zip

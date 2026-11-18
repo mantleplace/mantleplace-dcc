@@ -108,6 +108,18 @@ FString Raw(const TSharedPtr<FJsonValue>& Value)
 	}
 }
 
+/** What a member states, for a refusal: a string as it is, any other present value serialized, `(absent)` when missing. */
+FString StatedOrAbsent(const TSharedPtr<FJsonObject>& Object, const TCHAR* Key)
+{
+	FString Text;
+	if (ReadString(Object, Key, Text))
+	{
+		return Text;
+	}
+	const TSharedPtr<FJsonValue> Value = Object.IsValid() ? Object->TryGetField(Key) : nullptr;
+	return Value.IsValid() ? Raw(Value) : FString(TEXT("(absent)"));
+}
+
 bool RefuseFrames(FString& Error, const FString& Message)
 {
 	Error = Message;
@@ -297,8 +309,7 @@ bool FMantlePlaceBundleReaderLogic::ReadFrames(
 	{
 		return false;
 	}
-	FString AxisOrder = TEXT("(absent)");
-	ReadString(*Georeferenced, TEXT("axis_order"), AxisOrder);
+	const FString AxisOrder = StatedOrAbsent(*Georeferenced, TEXT("axis_order"));
 	if (AxisOrder != TEXT("east-north") && AxisOrder != TEXT("north-east"))
 	{
 		return RefuseFrames(OutError, FString::Printf(
@@ -347,8 +358,7 @@ bool FMantlePlaceBundleReaderLogic::ReadFrames(
 	};
 	for (const FAxis& Axis : { FAxis{ TEXT("x"), TEXT("east") }, FAxis{ TEXT("y"), TEXT("north") }, FAxis{ TEXT("z"), TEXT("up") } })
 	{
-		FString Stated = TEXT("(absent)");
-		ReadString(*Axes, Axis.Name, Stated);
+		const FString Stated = StatedOrAbsent(*Axes, Axis.Name);
 		if (Stated != Axis.Direction)
 		{
 			return RefuseFrames(OutError, FString::Printf(

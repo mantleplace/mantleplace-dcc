@@ -1,7 +1,59 @@
-# Unreal 0.9.0: what an MPB 3.0 bundle imports
+# Unreal 0.9.0: release notes
 
-The notes the `unreal-0.9.0` release body takes for importing an MPB 3.0 bundle ([`docs/releases.md`](../../docs/releases.md)
-holds the body's template). A 2.x bundle imports exactly as in 0.8.
+The body the `unreal-0.9.0` release takes, titled `unreal-0.9.0 — Mantle Place for Unreal` and written to
+[`docs/releases.md`](../../docs/releases.md), then the detail behind its MPB 3.0 lines. A 2.x bundle imports exactly
+as in 0.8.1. The **Verification** section holds the release gate's results on the packaged zip; its published-asset
+and storefront lines are filled in when the release is cut and the zip is submitted. The published body cites each pull request by its bare number, as
+[`docs/releases.md`](../../docs/releases.md) asks; this file links each number instead, because a bare number in a
+tracked file is refused by the public-reference gate.
+
+## The release body
+
+```markdown
+**Unreal Engine 5.8, Windows 64-bit.** Extract the zip into your project's `Plugins/` folder and open the project. [Install guide](https://github.com/mantleplace/mantleplace-dcc/blob/main/unreal/README.md#install)
+Upgrade by replacing the `MantlePlace` folder; see below for what an MPB 3.0 order changes.
+
+## Upgrading from 0.8.1
+
+- **An MPB 3.0 order is downloaded at one level.** The import window asks for Max, Med or Min before the download, with the platform's recommendation preselected. A 2.x order downloads as before.
+- **Some 2.x layers are not part of an MPB 3.0 import.** The coverage rasters (slope, aspect, hillshade, land cover, canopy height, NDVI) are skipped, the water mask is painted as the `Water` layer instead, and the foliage scatter runs without the canopy-height, water and land-cover filters those rasters fed. Each skip is named, with its reason, in the import window and the import log.
+- **Streaming a 3.0 order into Cesium needs a signed-in session the first time.** Its terrain tiles are fetched beside the bundle on the first stream.
+
+## What's new
+
+- **MPB 3.0 bundles import.** Landscape, paint layers, imagery drape, terrain mesh, buildings, tree points and road splines, from the vault or a zip on disk, in each import mode ([657](https://github.com/mantleplace/mantleplace-dcc/pull/657), [663](https://github.com/mantleplace/mantleplace-dcc/pull/663)).
+- **Choose the level before the download.** Max, Med or Min, each with its download size; importing the same level again reuses the download ([666](https://github.com/mantleplace/mantleplace-dcc/pull/666)).
+- **Editor scripting imports a 3.0 order at a named level**, from Blueprint or editor Python ([688](https://github.com/mantleplace/mantleplace-dcc/pull/688)).
+- **Public-record layers are drawn on the Landscape.** Each layer is one toggleable overlay of lines, area outlines and point markers, with its sources and licence as its credit ([664](https://github.com/mantleplace/mantleplace-dcc/pull/664), [683](https://github.com/mantleplace/mantleplace-dcc/pull/683)).
+- **Streaming a 3.0 order into Cesium** fetches the order's terrain tiles and keeps them beside the bundle ([674](https://github.com/mantleplace/mantleplace-dcc/pull/674)).
+- **A Bundle Import window** lists every step as it runs and can stop between steps ([631](https://github.com/mantleplace/mantleplace-dcc/pull/631)).
+- **A second bundle is placed beside the one already in the level** ([574](https://github.com/mantleplace/mantleplace-dcc/pull/574)).
+- **Open in curator** opens the web curator on the extent the level already knows, from the panel or from editor Python ([526](https://github.com/mantleplace/mantleplace-dcc/pull/526), [553](https://github.com/mantleplace/mantleplace-dcc/pull/553)).
+- **The plugin tells you when the platform needs a newer version**, instead of failing the sign-in or the download ([523](https://github.com/mantleplace/mantleplace-dcc/pull/523)).
+- **"Did this import come in right?"** After an import, a Yes or No opens the feedback form for that bundle ([500](https://github.com/mantleplace/mantleplace-dcc/pull/500)).
+- **Fixes for 3.0 bundles:** a heightmap whose unit is stated as `m` ([675](https://github.com/mantleplace/mantleplace-dcc/pull/675)), a road table with no name column ([682](https://github.com/mantleplace/mantleplace-dcc/pull/682)), and tree points that lie on the Landscape's edge ([686](https://github.com/mantleplace/mantleplace-dcc/pull/686)).
+
+## Known issues
+
+- **A public-record layer shows no per-layer disclaimer.** The MPB 3.0 manifest does not carry one yet; the layer's credit and the standing notice are shown.
+
+## Verification
+
+- Built from `95140cc` on `main` (`git archive` of that commit, then `RunUAT BuildPlugin`, `Intermediate/` and every `*.pdb` removed, `LICENSE` and `TRADEMARK.md` added; 241 files). Gate result at that commit, on the Win64 zip installed clean in a fresh Unreal 5.8 project and signed in on the dev platform, six runs one at a time against one dev-built 3.0.0 order (Max, Med, Min and the whole bundle) and one 2.2.0 order: the automation suite (all 101 automation tests), the live import at each 3.0 level and of the 2.x order, and a bundle sent from the web vault and imported.
+
+  - `unreal.automation-suite v1: pass, 4 of 4 assertions, unreal 5.8, plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 2 artefacts`
+  - `unreal.import-check v2: pass, 17 of 17 assertions, unreal 5.8, bundle 3.0.0 level Max (vault order), plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 3 artefacts`
+  - `unreal.import-check v2: pass, 17 of 17 assertions, unreal 5.8, bundle 3.0.0 level Med (vault order), plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 3 artefacts`
+  - `unreal.import-check v2: pass, 17 of 17 assertions, unreal 5.8, bundle 3.0.0 level Min (vault order), plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 3 artefacts`
+  - `unreal.import-check v2: pass, 16 of 16 assertions, unreal 5.8, bundle 2.2.0 (vault order), plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 3 artefacts`
+  - `vault.round-trip v1: pass, 14 of 14 assertions, vault unreal-5.8, plugin 0.9.0 (release zip MantlePlace-UE5.8-Win64-0.9.0.zip, sha256 7ef23e358f29), harness 0.15.0, 3 artefacts`
+
+- Published asset: <check from step 4 and its date>.
+- `MantlePlace-UE5.8-Win64-0.9.0.zip` sha256 `7ef23e358f2993f474566b7b64add0e7fd72f3e6de3a69f30d0003ffd316643f`
+- Storefront: <submitted to Fab on date>, from the Source zip built from the same commit (`MantlePlace-UE5.8-Source-0.9.0.zip`, sha256 `495839b66c3928e39ca4902f475d32c7a2af8e0a36a9d21f690540ff2f39c1c7`).
+
+Previous: [unreal-0.8.1](https://github.com/mantleplace/mantleplace-dcc/releases/tag/unreal-0.8.1)
+```
 
 ## What an MPB 3.0 bundle imports
 
@@ -29,17 +81,20 @@ with Max, Med and Min, each with its download size and the platform's recommenda
 marked `Recommended`, and `Download` fetches the chosen level. The download holds only the files listed
 above, at that level, with the manifest. The plugin keeps one download per order: importing the same
 level again reuses it with no download, and choosing another level downloads that level and replaces
-it. An import with no window to choose in (a script) takes the recommendation. A 2.x order downloads as
-in 0.8, with no level to choose.
+it. A script names the level with `StartVaultImportAtLevel` (Blueprint and editor Python), and one that names
+none takes the recommendation. A 2.x order downloads as in 0.8.1, with no level to choose.
 
-## Layers left out of an MPB 3.0 import
+## Every 2.x item an MPB 3.0 import leaves out
 
-Each is shown as skipped, with its reason, in the import window and the import log.
+What a 2.x bundle brought into the level that a 3.0 bundle does not, and why. Every other 2.x step has its 3.0 file in
+the table above. Each skip is shown, with its reason, in the import window and the import log.
 
-| Layer | Why |
-| --- | --- |
-| Coverage rasters (slope, aspect, hillshade, land cover, canopy height, NDVI) | MPB 3.0 ships them only as georeferenced GeoTIFFs, and the plugin never converts a georeferenced file. |
-| Water mask | MPB 3.0 ships no separate mask: the water coverage is `Materials/Water.png`, painted as the `Water` layer. |
+| 2.x item | In a 3.0 import | Why |
+| --- | --- | --- |
+| Coverage rasters (slope, aspect, hillshade, land cover, canopy height, NDVI) | Skipped | MPB 3.0 ships them only as georeferenced GeoTIFFs, and the plugin never converts a georeferenced file. |
+| Water mask | Painted as the `Water` paint layer | MPB 3.0 ships no separate mask: the water coverage is `Materials/Water.png`. |
+| The foliage scatter's canopy-height, water and land-cover filters | The scatter runs unfiltered, and its log line names the filters it lacks | Those filters were read from the coverage rasters above. |
+| Terrain tiles inside the bundle | Fetched from the order's terrain tiles Extra on the first stream | MPB 3.0 holds no terrain tiles; the platform lists them beside the bundle (below). |
 
 ## Streaming into Cesium
 
@@ -47,4 +102,4 @@ An MPB 3.0 bundle holds no terrain tiles: the platform lists them as an Extra be
 stream of a downloaded 3.0 order fetches them (a signed-in session is needed), keeps them beside the bundle's
 zip and streams when they arrive; a second stream reuses them. An order the platform lists no terrain tiles
 for, or a zip from outside the plugin's download folder with none beside it, is refused with the reason. A 2.x
-bundle streams its own tiles, as in 0.8.
+bundle streams its own tiles, as in 0.8.1.

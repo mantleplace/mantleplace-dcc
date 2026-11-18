@@ -3,30 +3,18 @@ using MantlePlace.Core;
 namespace MantlePlace.AutoCad;
 
 /// <summary>
-/// What an AutoCAD or Civil 3D user is told when the web vault sends them an export: the bundle has
-/// arrived and is safe on this machine, and Import places it in the active drawing.
+/// What an AutoCAD or Civil 3D user is told on the command line when the web vault sends them an
+/// export: the bundle has arrived and is safe on this machine, and it is importing into the active
+/// drawing.
 /// </summary>
 /// <remarks>
-/// The Revit plugin opens its import window here, with a checklist. This window has none: one press of
-/// Import places the whole order as <see cref="AutoCadImportPlanner"/> plans it, and the window then
-/// shows what was placed and what was skipped, with each reason. Closing it before the press is the
-/// web's <c>cancelled</c>: nothing was imported, and the export says so rather than staying open.
+/// The export opens the shared import window (<c>HPS-60</c>), as Revit's does. AutoCAD offers no
+/// per-layer choice, so the window opens on its steps and the import begins at once, placing the whole
+/// order as <see cref="AutoCadImportPlanner"/> plans it; Cancel stops it between steps.
 /// </remarks>
 public static class ExportReceipt
 {
-    /// <summary>The window's title.</summary>
-    public const string WindowTitle = "Mantle Place Export Received";
-
-    /// <summary>The window's heading.</summary>
-    public const string Heading = "Export Received";
-
-    /// <summary>The button that shows the bundle's folder.</summary>
-    public const string ShowFolder = "Show in Folder";
-
-    /// <summary>The button that places the order: the shared label, so both plugins call the action one thing.</summary>
-    public const string ImportButton = WindowLabels.Import;
-
-    /// <summary>The sentence the window opens with, and the plugin's command line repeats.</summary>
+    /// <summary>The sentence the command line says as the import window opens.</summary>
     /// <param name="export">The export the web sent.</param>
     /// <param name="zipPath">Where the fetched, verified bundle is.</param>
     public static string Describe(HostExport export, string zipPath)
@@ -35,7 +23,7 @@ public static class ExportReceipt
 
         return $"Your vault sent order {export.OrderId} to this drawing session. "
             + $"Mantle Place downloaded the bundle and checked it; it is {where}. "
-            + "Press Import to place the order in the active drawing, at the order's own coordinates and units. "
-            + "Closing this window without importing ends the export as cancelled.";
+            + "It is importing into the active drawing, at the order's own coordinates and units. "
+            + $"{WindowLabels.Cancel} in the import window stops it between steps.";
     }
 }

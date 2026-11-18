@@ -20,6 +20,8 @@ class UMantlePlaceAuthSystemBase;
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnVaultListedNative, bool /*bSuccess*/, const TArray<FMantlePlaceVaultItem>& /*Bundles*/, const FString& /*Message*/);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnPresignedNative, bool /*bSuccess*/, const FMantlePlacePresignedDownload& /*Download*/, const FString& /*Message*/);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStartedNative, bool /*bSuccess*/, const FMantlePlaceMaterializeStart& /*Start*/, const FString& /*Message*/);
+/** A 3.0 level download is about to be requested: the order, the level and the files named (native: the files are a plain array). */
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnLevelRequestedNative, const FString& /*OrderId*/, const FString& /*Level*/, const TArray<FString>& /*Files*/);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStatusNative, bool /*bOk*/, const FMantlePlaceMaterializeStatus& /*Status*/, const FString& /*Message*/);
 
 /**
@@ -214,6 +216,13 @@ public:
 	FMantlePlaceOnMaterializeStartedNative OnMaterializeStartedNative;
 
 	/**
+	 * Fired by GetPresignedLevelUrl for a level it accepts, before the request is sent and whether or not
+	 * a session is held. What a headless test reads to see which level, and which files, the host asks the
+	 * platform for; the request body is built from exactly these (FMantlePlaceVaultLogic::BuildLevelDownloadBody).
+	 */
+	FMantlePlaceOnLevelRequestedNative OnLevelRequestedNative;
+
+	/**
 	 * The platform answered a call with HTTP 426 `client_update_required`: this plugin is below the
 	 * minimum it serves. Fired once per such answer, before the failing completion signal; the surface
 	 * offers the update from FMantlePlaceClientUpdate::DownloadUrl.
@@ -235,6 +244,11 @@ public:
 	//~ End UObject interface
 
 private:
+#if WITH_DEV_AUTOMATION_TESTS
+	/** The suite drives the answer path with no network (MantlePlace.Vault.Levels.NotInBundleClient). */
+	friend struct FMantlePlaceVaultClientTestAccess;
+#endif
+
 	/** Validate config + auth and fetch the JWT; fills OutError on failure. */
 	bool EnsureReady(FString& OutError, FString& OutJwt) const;
 
@@ -280,6 +294,10 @@ private:
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	void HandleDownloadResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
+	/** The platform's answer to a download mint, by status and body: everything HandleDownloadResponse does past the transport. */
+	void HandleDownloadAnswer(int32 ResponseCode, const FString& Content);
+	/** Announce a 3.0 level request (OnLevelRequestedNative) and send it: the first one and each one asked again. */
+	void RequestLevel(const FString& OrderId, const FString& Level, const TArray<FString>& Files);
 	void HandleProbeResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	/**
@@ -293,6 +311,15 @@ private:
 
 	/** The 3.0 level the in-flight download mint asked for; empty for a 2.x request. Read by its answer. */
 	FString PendingDownloadLevel;
+	/** The order and files the in-flight 3.0 mint asked for: what it is asked again without a file the bundle lacks. */
+	FString PendingDownloadOrderId;
+	TArray<FString> PendingDownloadFiles;
+	/**
+	 * The files the platform refused as not in the bundle across this level request's tries (404
+	 * `file_not_in_bundle`). Each retry names strictly fewer files, so the tries end within the file count.
+	 * Handed to the download (FMantlePlacePresignedDownload::AbsentFiles) to be held against its manifest.
+	 */
+	TArray<FString> LevelAbsentFiles;
 	void SendMaterializeRequest(const FString& OrderId, const FString& Body, const FString& Jwt);
 
 	void HandleMaterializeStartResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,

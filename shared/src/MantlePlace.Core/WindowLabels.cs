@@ -343,9 +343,9 @@ public static partial class WindowLabels
         ArgumentException.ThrowIfNullOrEmpty(hostName);
 
         string name;
-        if (view.Current is { } kind)
+        if (view.CurrentName is { } current)
         {
-            name = StepName(kind);
+            name = current;
         }
         else if (view.Finishing)
         {

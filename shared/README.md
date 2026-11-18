@@ -32,7 +32,7 @@ tools/platform-api/            The script that re-vendors the Platform API spec 
   host's main window. The host runs its own steps and posts `ImportRunView`s; it implements
   `IImportWindowHost` to hear Import, Cancel, a dismissal, a log line and a fault, each posted back to
   its own thread. A host with no per-layer choice passes no checklist, and the window shows the steps
-  only. What every press, close and view does, and the status line with its clock and the host's
+  only; a host whose steps are its own names each row (`ImportRunRow.Named`), as AutoCAD does. What every press, close and view does, and the status line with its clock and the host's
   measured cost where it gives one, is `ImportWindowState` in the core, held by `ImportWindowStateTests`.
 - **No version of its own.** A plugin's version has one home per host; what the platform is told is
   the version the host hands `HostIdentity`.
