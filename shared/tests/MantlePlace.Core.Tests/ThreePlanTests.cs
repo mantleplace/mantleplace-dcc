@@ -298,16 +298,16 @@ internal static class ThreePlanTests
 
     private static void RunDrapeCases(TestRun run)
     {
-        run.Case("the drape is placed on the catalog's rectangle in the local site frame, verbatim", () =>
+        run.Case("the drape is placed on the corpus catalog's rectangle in the local site frame, verbatim", () =>
         {
-            BundleImportPlan plan = Plan(Read(Load(FullBundle, manifest => Rectangle(manifest, -512.0, -400.5, 512.0, 623.5))));
+            BundleImportPlan plan = Plan(Read(Load(FullBundle)));
 
             ImportStep? drape = Step(plan, ImportStepKind.ImageryDrape);
             run.Equal(drape?.EntryName, "Imagery/Imagery.png", "the drape is the host-ready imagery");
             run.Within(drape?.Drape?.LeftM ?? 0, -512.0, 1e-12, "west edge");
-            run.Within(drape?.Drape?.BottomM ?? 0, -400.5, 1e-12, "south edge");
+            run.Within(drape?.Drape?.BottomM ?? 0, -512.0, 1e-12, "south edge");
             run.Within(drape?.Drape?.RightM ?? 0, 512.0, 1e-12, "east edge");
-            run.Within(drape?.Drape?.TopM ?? 0, 623.5, 1e-12, "north edge");
+            run.Within(drape?.Drape?.TopM ?? 0, 512.0, 1e-12, "north edge");
             run.True(drape?.Drape?.ExtentFromDrapeBlock ?? false, "a stated rectangle, not an inferred one");
             run.Equal(
                 Step(plan, ImportStepKind.ToposurfaceFromSurfaceTin)?.ToposolidType ?? TerrainToposolidType.Project,
@@ -317,7 +317,7 @@ internal static class ThreePlanTests
 
         run.Case("a drape whose image is not the size the catalog states is skipped, saying so", () =>
         {
-            Dictionary<string, string> files = Load(FullBundle, manifest => Rectangle(manifest, -512.0, -512.0, 512.0, 512.0));
+            Dictionary<string, string> files = Load(FullBundle);
             BundleImportPlan plan = BundleImportPlanner.Plan(Read(files), files.Keys, _ => new ImageSize(2048, 2048));
 
             SkippedImport? skip = Skip(plan, ImportStepKind.ImageryDrape);
@@ -327,7 +327,7 @@ internal static class ThreePlanTests
 
         run.Case("a drape whose catalog entry states no rectangle is skipped, saying so", () =>
         {
-            BundleImportPlan plan = Plan(Read(Load(FullBundle)));
+            BundleImportPlan plan = Plan(Read(Load(FullBundle, WithoutRectangle)));
 
             SkippedImport? skip = Skip(plan, ImportStepKind.ImageryDrape);
             run.Equal(skip?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.ExtentNotCorroborated, "no rectangle to place it on");
@@ -418,9 +418,9 @@ internal static class ThreePlanTests
         BundleReader.Read(files.Keys, entry => files.TryGetValue(entry, out string? text) ? text : null)
         ?? throw new InvalidOperationException("the reader found no manifest");
 
-    /// <summary>Gives Imagery.png's raster the rectangle it covers in the local site frame, which the corpus bundle leaves out.</summary>
-    private static void Rectangle(JsonObject manifest, double left, double bottom, double right, double top) =>
-        manifest["catalog"]!["Imagery/Imagery.png"]!["raster"]!["rectangle"] = new JsonArray(left, bottom, right, top);
+    /// <summary>Takes the rectangle off Imagery.png's raster, which the corpus bundle states.</summary>
+    private static void WithoutRectangle(JsonObject manifest) =>
+        manifest["catalog"]!["Imagery/Imagery.png"]!["raster"]!.AsObject().Remove("rectangle");
 
     internal static JsonObject Manifest(Dictionary<string, string> files) =>
         JsonNode.Parse(files["Manifest.json"])!.AsObject();
