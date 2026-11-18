@@ -11,8 +11,9 @@ namespace MantlePlace.Core;
 /// layer is named for what it publishes, not for what grows there.
 /// </remarks>
 /// <param name="GroundElevationM">
-/// Absolute orthometric height of the ground beneath it, in metres whatever unit the file carried
-/// it in.
+/// Height of the ground beneath it, in metres whatever unit the file carried it in: absolute
+/// orthometric for a 2.x file, and for a 3.x file the site origin's height with the file's offset
+/// above it already added, so it is the same height the terrain stands at.
 /// </param>
 /// <param name="HeightM">Total height, ground to apex.</param>
 /// <param name="CrownRadiusM">Crown radius at its widest.</param>
@@ -75,10 +76,14 @@ public sealed record TreePointsParse
 /// </summary>
 /// <remarks>
 /// <para>
-/// The file is absolute, in the delivery CRS its manifest entry states — so unlike the toposurface
+/// A 2.x file is absolute, in the delivery CRS its manifest entry states — so unlike the toposurface
 /// points it is not already local, and unlike the vector layers it is not geographic.
 /// <see cref="SiteFrame"/> owns both the subtraction and the refusal when that CRS is not the
-/// origin's.
+/// origin's. A 3.x file is host-ready, so it is already local: its <c>x</c> and <c>y</c> are metres
+/// east and north of the site origin and its <c>ground_z</c> is metres above the origin's height
+/// (<c>spec/format.md</c> §4). The step says which it is, as <paramref name="layer"/>, and the
+/// origin's height as <paramref name="groundBaseM"/>; both are applied as published
+/// (<c>HPS-33</c>), and reading a local file as absolute would subtract the origin twice.
 /// </para>
 /// <para>
 /// Columns are resolved from the HEADER, not by position. The manifest publishes
@@ -126,6 +131,17 @@ public static class TreePointsReader
     /// (<c>spec/format.md</c> §6.6). Required rather than defaulted to metres: a caller that forgot
     /// it would stand every tree on a foot delivery at 3.28 times its ground height.
     /// </param>
+    /// <param name="layer">
+    /// The frame the file's <c>x</c> and <c>y</c> are in, as the planner stated it for the step
+    /// (<see cref="ImportStep.Layer"/>), or <c>null</c> where it states none, which is every 2.x file:
+    /// absolute in the origin's CRS, placed by subtracting the origin. A 3.x host-ready file states
+    /// <see cref="LayerCoordinates.LocalOffsets"/>, and its offsets are taken as they are.
+    /// </param>
+    /// <param name="groundBaseM">
+    /// The height <c>ground_z</c> is measured above, in metres
+    /// (<see cref="ImportStep.HeightBaseM"/>): the site origin's height for a 3.x file, added to each
+    /// ground height as published. Zero for a 2.x file, whose heights are absolute.
+    /// </param>
     /// <param name="rowLimit">
     /// A fidelity level's row cut: only the first this-many data rows are read, header excluded,
     /// whether or not each one parses — the cut is of the published file's rows, and the row number
@@ -138,7 +154,9 @@ public static class TreePointsReader
         SiteFrame frame,
         string? foliageVocabulary,
         LinearUnit groundUnit,
-        int? rowLimit = null)
+        int? rowLimit = null,
+        LayerFrame? layer = null,
+        double groundBaseM = 0.0)
     {
         ArgumentNullException.ThrowIfNull(frame);
 
@@ -192,7 +210,7 @@ public static class TreePointsReader
             }
 
             dataRows++;
-            RowReading row = ReadRow(fields, columns, frame, groundUnit, out SiteTreePoint point);
+            RowReading row = ReadRow(fields, columns, frame, groundUnit, layer, groundBaseM, out SiteTreePoint point);
             switch (row)
             {
                 case RowReading.NoGround:
@@ -304,6 +322,8 @@ public static class TreePointsReader
         Dictionary<string, int> columns,
         SiteFrame frame,
         LinearUnit groundUnit,
+        LayerFrame? layer,
+        double groundBaseM,
         out SiteTreePoint point)
     {
         point = default;
@@ -312,7 +332,7 @@ public static class TreePointsReader
             || !TryNumber(fields, columns, NorthingColumn, out double northing)
             || !TryNumber(fields, columns, HeightColumn, out double height)
             || !TryNumber(fields, columns, CrownColumn, out double crown)
-            || !frame.TryToLocalMetres(easting, northing, out double east, out double north))
+            || !TryPlace(frame, layer, easting, northing, out double east, out double north))
         {
             return RowReading.Unreadable;
         }
@@ -326,10 +346,25 @@ public static class TreePointsReader
         }
 
         // Only ground_z has a unit to read. height_m and crown_radius_m say theirs in their names.
-        double groundM = ground * LinearUnits.MetresPerUnit(groundUnit);
+        double groundM = (ground * LinearUnits.MetresPerUnit(groundUnit)) + groundBaseM;
         point = new SiteTreePoint(east, north, groundM, height, crown, FoliageType.Tree);
         return RowReading.Read;
     }
+
+    /// <summary>
+    /// A row's plan position in frame-local metres: by the frame the step states, or, where it states
+    /// none, as absolute coordinates in the origin's own CRS.
+    /// </summary>
+    private static bool TryPlace(
+        SiteFrame frame,
+        LayerFrame? layer,
+        double x,
+        double y,
+        out double eastMetres,
+        out double northMetres)
+        => layer is { } stated
+            ? frame.TryPlace(stated, x, y, out eastMetres, out northMetres)
+            : frame.TryToLocalMetres(x, y, out eastMetres, out northMetres);
 
     private static bool TryNumber(string[] fields, Dictionary<string, int> columns, string column, out double value)
     {
