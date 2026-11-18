@@ -167,6 +167,11 @@ namespace MantlePlaceImportNaming
 		return FName(TEXT("mantleplace_odbl"));
 	}
 
+	FName CollisionOffTag()
+	{
+		return FName(TEXT("mantleplace_collision_off"));
+	}
+
 	FString EquivalenceTagPrefix()
 	{
 		return TEXT("mantleplace_equivalent=");

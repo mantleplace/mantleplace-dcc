@@ -155,6 +155,9 @@ public:
 		}
 		// One ground: over a Landscape this import built (Both mode) the mesh is an overlay and does not
 		// collide, so a body rests on the Landscape and never on whichever surface is higher at a point.
+		// The Landscape's handler runs first (MakeAll, asserted by MantlePlace.Import.TerrainCollisionLogic),
+		// so a Landscape this import built is among the drape targets by now; one that failed is not, and
+		// then the mesh is the ground.
 		const bool bLandscapeBuilt = Ctx.DrapeTargets.ContainsByPredicate(
 			[](const AActor* Target) { return Target != nullptr && Target->IsA<ALandscape>(); });
 		MantlePlaceMeshImporter::ApplyCollision(MeshActor, MantlePlaceTerrainCollisionLogic::ForTerrainMesh(bLandscapeBuilt));

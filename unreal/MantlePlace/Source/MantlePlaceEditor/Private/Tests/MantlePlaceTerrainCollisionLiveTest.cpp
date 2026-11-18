@@ -43,7 +43,10 @@
 //  - exactly one terrain representation may block: in Both mode the mesh overlay must not collide on
 //    top of the Landscape;
 //  - in the World Partition level every streaming proxy carries collision once loaded, and traces on
-//    the proxies' shared borders hit.
+//    the proxies' shared borders hit;
+//  - the building massing collides as its roofs: at every grid point over the buildings where a
+//    complex (per-triangle) trace finds a roof, a default trace hits the buildings at that roof, not at
+//    a hull or box above it.
 //
 // The rendered ground is the Landscape's own height data (the heights its components draw), read back
 // from the first Landscape the run imports, so the Mesh cases are held to the same ground. The terrain
@@ -61,6 +64,7 @@ namespace MantlePlaceTerrainCollisionLiveTest
 constexpr int32 GridPerAxis = 24;
 constexpr double SweepRadiusCm = 25.0;
 constexpr double SlackCm = 2.0;
+constexpr int32 RoofGridPerAxis = 64;
 
 bool IsCi() { return !FPlatformMisc::GetEnvironmentVariable(TEXT("CI")).IsEmpty(); }
 
@@ -170,6 +174,10 @@ struct FCase
 	int32 BorderPoints = 0;
 	int32 BorderHits = 0;
 	FString MeshCollision;
+	int32 RoofPoints = 0;
+	int32 RoofHits = 0;
+	int32 RoofWithin = 0;
+	double RoofMaxAbsDzCm = 0.0;
 
 	int32 Representations() const { return (bLandscapeBlocks ? 1 : 0) + (bMeshBlocks ? 1 : 0); }
 
@@ -182,11 +190,11 @@ struct FCase
 		return FString::Printf(
 			TEXT("| %s | %s | traces hit %d/%d | at ground %d/%d | max |dz| %.2f m, mean dz %.2f m | sweeps hit %d/%d | "
 				 "colliding terrain representations %d (landscape %s, mesh %s) | proxies with collision %d/%d, centre hits %d | "
-				 "border hits %d/%d | mesh: %s |"),
+				 "border hits %d/%d | building roofs hit %d/%d, at the roof %d/%d, max |dz| %.2f m | mesh: %s |"),
 			*Level, *Mode, Hits, Points, Within, Points, MaxAbsDzCm / 100.0, Points > 0 ? SumDzCm / Points / 100.0 : 0.0,
 			SweepHits, Points, Representations(), bLandscapeBlocks ? TEXT("yes") : TEXT("no"),
 			bMeshBlocks ? TEXT("yes") : TEXT("no"), ProxiesWithCollision, Proxies, ProxyCentreHits, BorderHits, BorderPoints,
-			MeshCollision.IsEmpty() ? TEXT("-") : *MeshCollision);
+			RoofHits, RoofPoints, RoofWithin, RoofPoints, RoofMaxAbsDzCm / 100.0, MeshCollision.IsEmpty() ? TEXT("-") : *MeshCollision);
 	}
 };
 
@@ -230,9 +238,12 @@ FString DescribeMeshCollision(const AStaticMeshActor* Actor)
 		NaniteTriangles);
 }
 
-/** The terrain actors of the level: every Landscape proxy, and the terrain mesh (the label the importer gives it). */
+/**
+ * The terrain actors of the level: every Landscape proxy, and the terrain mesh (the label the importer gives
+ * it). The building massing (its label) is also listed in OutBuildings; for the terrain it is one of the rest.
+ */
 void FindTerrain(UWorld* World, TArray<AActor*>& OutLandscape, TArray<AActor*>& OutMesh, TArray<AActor*>& OutOther,
-	const FString& MeshLabelPrefix)
+	TArray<AActor*>& OutBuildings, const FString& MeshLabelPrefix, const FString& BuildingsLabelPrefix)
 {
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
@@ -248,6 +259,10 @@ void FindTerrain(UWorld* World, TArray<AActor*>& OutLandscape, TArray<AActor*>& 
 		else
 		{
 			OutOther.Add(Actor);
+			if (Actor->IsA<AStaticMeshActor>() && Actor->GetActorLabel().StartsWith(BuildingsLabelPrefix))
+			{
+				OutBuildings.Add(Actor);
+			}
 		}
 	}
 }
@@ -266,6 +281,53 @@ bool SweepDown(UWorld* World, const FVector2D& XY, const FGround& Ground, const 
 	Params.AddIgnoredActors(Ignore);
 	return World->SweepSingleByChannel(Hit, FVector(XY, Ground.MaxZ + 10000.0), FVector(XY, Ground.MinZ - 10000.0),
 		FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(SweepRadiusCm), Params);
+}
+
+/**
+ * The building massing, traced onto its roofs. A roof is where a complex trace (the mesh's own triangles,
+ * whatever its simple collision is) going down onto the buildings alone meets an upward-facing surface; a
+ * default trace through the whole level (simple collision) must then hit the buildings at that roof.
+ */
+void MeasureRoofs(UWorld* World, const FGround& Ground, const TArray<AActor*>& Buildings, FCase& Out)
+{
+	for (AActor* Actor : Buildings)
+	{
+		AStaticMeshActor* Massing = Cast<AStaticMeshActor>(Actor);
+		UStaticMeshComponent* Component = Massing != nullptr ? Massing->GetStaticMeshComponent() : nullptr;
+		if (Component == nullptr)
+		{
+			continue;
+		}
+		const FBox Box = Component->Bounds.GetBox();
+		const double Top = FMath::Max(Box.Max.Z, Ground.MaxZ) + 10000.0;
+		const double Bottom = FMath::Min(Box.Min.Z, Ground.MinZ) - 10000.0;
+		const FCollisionQueryParams Complex(SCENE_QUERY_STAT(MantlePlaceRoofComplexTrace), /*bTraceComplex*/ true);
+		const FCollisionQueryParams Simple(SCENE_QUERY_STAT(MantlePlaceRoofTrace), /*bTraceComplex*/ false);
+		for (int32 J = 0; J < RoofGridPerAxis; ++J)
+		{
+			for (int32 I = 0; I < RoofGridPerAxis; ++I)
+			{
+				const FVector2D XY(FMath::Lerp(Box.Min.X, Box.Max.X, (I + 0.5) / RoofGridPerAxis),
+					FMath::Lerp(Box.Min.Y, Box.Max.Y, (J + 0.5) / RoofGridPerAxis));
+				FHitResult Roof;
+				if (!Component->LineTraceComponent(Roof, FVector(XY, Top), FVector(XY, Bottom), Complex)
+					|| Roof.ImpactNormal.Z < 0.7)
+				{
+					continue;
+				}
+				++Out.RoofPoints;
+				FHitResult Hit;
+				if (World->LineTraceSingleByChannel(Hit, FVector(XY, Top), FVector(XY, Bottom), ECC_Visibility, Simple)
+					&& Hit.GetActor() == Massing)
+				{
+					++Out.RoofHits;
+					const double Dz = Hit.ImpactPoint.Z - Roof.ImpactPoint.Z;
+					Out.RoofMaxAbsDzCm = FMath::Max(Out.RoofMaxAbsDzCm, FMath::Abs(Dz));
+					Out.RoofWithin += FMath::Abs(Dz) <= SlackCm ? 1 : 0;
+				}
+			}
+		}
+	}
 }
 
 void FinishCompiling()
@@ -409,6 +471,7 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 	const FString StartMap = StartWorld != nullptr ? StartWorld->GetOutermost()->GetName() : FString();
 
 	const FString MeshLabelPrefix = TEXT("MP_Mesh_");
+	const FString BuildingsLabelPrefix = TEXT("MP_Buildings_");
 	FGround Ground;
 	TArray<FCase> Cases;
 
@@ -448,8 +511,8 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 			AddInfo(FString::Printf(TEXT("%s %s import: success=%d\n%s"), *Level, Mode.Name, Result.bSuccess ? 1 : 0,
 				*Result.Message));
 
-			TArray<AActor*> Landscape, Mesh, Other;
-			FindTerrain(World, Landscape, Mesh, Other, MeshLabelPrefix);
+			TArray<AActor*> Landscape, Mesh, Other, Buildings;
+			FindTerrain(World, Landscape, Mesh, Other, Buildings, MeshLabelPrefix, BuildingsLabelPrefix);
 			if (!Ground.bValid)
 			{
 				for (AActor* Actor : Landscape)
@@ -471,6 +534,7 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 				Case.MeshCollision = DescribeMeshCollision(Cast<AStaticMeshActor>(Mesh[0]));
 			}
 			Measure(World, Ground, Landscape, Mesh, Other, Case);
+			MeasureRoofs(World, Ground, Buildings, Case);
 
 			const FString Name = FString::Printf(TEXT("%s level, %s mode"), *Level, Mode.Name);
 			TestEqual(*FString::Printf(TEXT("%s: every trace down hits the terrain (no fall-through)"), *Name), Case.Hits, Case.Points);
@@ -481,6 +545,12 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 			if (Mode.Mode != EMantlePlaceImportMode::Mesh)
 			{
 				TestTrue(*FString::Printf(TEXT("%s: the Landscape is the one that collides"), *Name), Case.bLandscapeBlocks);
+			}
+			if (Manifest.Buildings.bPresent)
+			{
+				TestTrue(*FString::Printf(TEXT("%s: the building massing has roofs to trace onto"), *Name), Case.RoofPoints > 0);
+				TestEqual(*FString::Printf(TEXT("%s: every trace onto a roof hits the buildings"), *Name), Case.RoofHits, Case.RoofPoints);
+				TestEqual(*FString::Printf(TEXT("%s: at the roof, not a hull above it"), *Name), Case.RoofWithin, Case.RoofPoints);
 			}
 			if (bPartitioned && Mode.Mode != EMantlePlaceImportMode::Mesh)
 			{

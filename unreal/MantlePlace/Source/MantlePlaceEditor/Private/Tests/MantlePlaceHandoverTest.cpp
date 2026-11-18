@@ -14,6 +14,7 @@
 #include "MantlePlaceOdblLogic.h"
 
 #include "Components/StaticMeshComponent.h"
+#include "Engine/CollisionProfile.h"
 #include "Components/TextRenderComponent.h"
 #include "DataLayer/DataLayerEditorSubsystem.h"
 #include "Editor.h"
@@ -220,6 +221,77 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 		Empty->DestroyWorld(/*bInformEngineOfDestruction*/ false);
 	}
 	TestFalse(TEXT("no level at all says so"), MantlePlaceHandover::Prepare(nullptr).Notes.IsEmpty());
+
+	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceHandoverCollisionTest,
+	"MantlePlace.Import.Odbl.HandoverCollision",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+// Prepare for handover turns collision back on for the terrain mesh the import left without it, and
+// for nothing else: not a mesh of the same ground whose collision a person set by hand, whether or not
+// the import had turned it off first.
+bool FMantlePlaceHandoverCollisionTest::RunTest(const FString& Parameters)
+{
+	using namespace MantlePlaceHandoverTest;
+	using Family = EMantlePlaceLayerFamily;
+
+	if (GEditor == nullptr)
+	{
+		AddInfo(TEXT("No editor: Prepare for handover needs an editor world. Skipped."));
+		return true;
+	}
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
+		FName(TEXT("MantlePlaceHandoverCollisionTestWorld")));
+	if (!TestNotNull(TEXT("a throwaway world to spawn into"), World))
+	{
+		return false;
+	}
+
+	FMantlePlaceVaultManifest Manifest;
+	StateRoles(Manifest);
+	FMantlePlaceImportSelection Selection;
+	MantlePlaceImportTiming::FTimeline Timeline;
+	Timeline.Start();
+	FMantlePlaceImportResult Result;
+	TArray<FString> Log;
+	FMantlePlaceImportContext Order(World, Manifest, nullptr, Selection, Timeline, Result, Log);
+	Order.Identity = TEXT("cccccccc-3333");
+
+	const FName CollisionOff = MantlePlaceImportNaming::CollisionOffTag();
+	const FName HandSetProfile(TEXT("OverlapAll"));
+	auto Profile = [](const AStaticMeshActor* Actor)
+	{
+		return IsValid(Actor) ? Actor->GetStaticMeshComponent()->GetCollisionProfileName() : NAME_None;
+	};
+
+	ClaimActor(World, Order, TEXT("MP_TestLandscape"), Family::Terrain, { TEXT("Elevation/Heightmap.png") }, TEXT("terrain"));
+	// The overlay the import turned off (Both mode).
+	AStaticMeshActor* Overlay = ClaimActor(World, Order, TEXT("MP_TestMesh"), Family::Terrain,
+		{ TEXT("Mesh/Terrain.glb") }, TEXT("terrain"));
+	MantlePlaceMeshImporter::ApplyCollision(Overlay, EMantlePlaceMeshCollision::None);
+	// An overlay the import turned off, whose collision a person has set since.
+	AStaticMeshActor* Retuned = ClaimActor(World, Order, TEXT("MP_TestMeshRetuned"), Family::Terrain,
+		{ TEXT("Mesh/Terrain.glb") }, TEXT("terrain"));
+	MantlePlaceMeshImporter::ApplyCollision(Retuned, EMantlePlaceMeshCollision::None);
+	Retuned->GetStaticMeshComponent()->SetCollisionProfileName(HandSetProfile);
+	// A mesh of the same ground the import left colliding, turned off by hand.
+	AStaticMeshActor* HandOff = ClaimActor(World, Order, TEXT("MP_TestMeshHandOff"), Family::Terrain,
+		{ TEXT("Mesh/Terrain.glb") }, TEXT("terrain"));
+	HandOff->GetStaticMeshComponent()->SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
+
+	TestTrue(TEXT("fixture: the import marks the overlay it turned off"), Overlay->Tags.Contains(CollisionOff));
+	TestFalse(TEXT("fixture: and marks nothing it left colliding"), HandOff->Tags.Contains(CollisionOff));
+
+	const FMantlePlaceHandoverReport Report = MantlePlaceHandover::Prepare(World);
+	TestEqual(TEXT("the landscape is swapped for the meshes"), Report.Swapped.Num(), 1);
+	TestEqual(TEXT("the overlay the import turned off collides now"), Profile(Overlay), UCollisionProfile::BlockAll_ProfileName);
+	TestFalse(TEXT("and is no longer marked"), IsValid(Overlay) && Overlay->Tags.Contains(CollisionOff));
+	TestEqual(TEXT("collision a person set on an overlay since the import is left as set"), Profile(Retuned), HandSetProfile);
+	TestEqual(TEXT("a mesh a person turned off by hand stays off"), Profile(HandOff), UCollisionProfile::NoCollision_ProfileName);
 
 	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
 	return true;

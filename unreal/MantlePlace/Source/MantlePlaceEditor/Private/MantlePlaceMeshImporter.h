@@ -64,7 +64,15 @@ namespace MantlePlaceMeshImporter
 	 * Set a placed mesh actor's collision explicitly: `Surface` blocks everything as the mesh's own
 	 * triangles (its asset was given complex-as-simple collision by ImportMeshAsset), `None` turns it off.
 	 * Import and ImportBuildings place every mesh as `Surface`; the terrain handler turns the overlay off
-	 * in Both mode, and Prepare for handover turns a terrain mesh back on when it swaps the Landscape out.
+	 * in Both mode (and tags it), and Prepare for handover turns that mesh back on when it swaps the
+	 * Landscape out (RestoreCollisionTurnedOff).
 	 */
 	void ApplyCollision(AStaticMeshActor* Actor, EMantlePlaceMeshCollision Collision);
+
+	/**
+	 * Turn collision back on for a mesh the import left without it (ApplyCollision `None` marks it with
+	 * MantlePlaceImportNaming::CollisionOffTag), and only while it is still off: collision a person has
+	 * set since, and every other mesh, is left alone. True when it turned collision on.
+	 */
+	bool RestoreCollisionTurnedOff(AStaticMeshActor* Actor);
 }

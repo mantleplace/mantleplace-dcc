@@ -70,22 +70,48 @@ namespace MantlePlaceMeshImporter
 		return nullptr;
 	}
 
+	/**
+	 * The mesh's Nanite settings, applied in one rebuild: Nanite on when the bundle recommends it, and a
+	 * fallback that keeps every triangle on any Nanite mesh. Complex collision is cooked from the render
+	 * LOD0, which for a Nanite mesh is its fallback mesh, reduced by default (27,123 of 255,024 triangles
+	 * on a 0.25 km2 terrain, up to 0.88 m off the surface Nanite draws). A fallback that keeps every
+	 * triangle makes the collision the drawn surface. Interchange turns Nanite on for a glTF by default,
+	 * so this is every terrain mesh. A fallback reduced to a bounded error is no cheaper: on a 64 km2,
+	 * 1,000,000-triangle terrain even a 2 m bound kept all but 22 triangles.
+	 */
+	static void SetNaniteSettings(UStaticMesh* Mesh, bool bEnableNanite)
+	{
+		// Through the accessors: UStaticMesh::NaniteSettings is UE_DEPRECATED(5.7) and goes private in
+		// the next release, so touching the member directly is a compile error there rather than the
+		// C4996 it is here. NotifyNaniteSettingsChanged() is the targeted PostEditChangeProperty for this
+		// property -- a bare PostEditChange() rebuilds more than the Nanite data needs -- and it rebuilds
+		// the mesh, so it runs once, and only when a setting changed.
+		FMeshNaniteSettings Settings = Mesh->GetNaniteSettings();
+		bool bChanged = false;
+		if (bEnableNanite && !Settings.bEnabled)
+		{
+			Settings.bEnabled = true;
+			bChanged = true;
+		}
+		if (Settings.bEnabled
+			&& (Settings.FallbackTarget != ENaniteFallbackTarget::PercentTriangles || Settings.FallbackPercentTriangles < 1.0f))
+		{
+			Settings.FallbackTarget = ENaniteFallbackTarget::PercentTriangles;
+			Settings.FallbackPercentTriangles = 1.0f;
+			bChanged = true;
+		}
+		if (bChanged)
+		{
+			Mesh->Modify();
+			Mesh->SetNaniteSettings(Settings);
+			Mesh->NotifyNaniteSettingsChanged();
+		}
+	}
+
 	/** Collide as the mesh's own triangles: complex as simple, with Interchange's simple hull removed. */
 	static void SetSurfaceCollision(UStaticMesh* Mesh)
 	{
 		Mesh->Modify();
-		if (Mesh->IsNaniteEnabled())
-		{
-			// Complex collision is cooked from the render LOD0, which for a Nanite mesh is its fallback
-			// mesh, reduced by default (27,123 of 255,024 triangles on a 0.25 km2 terrain, up to 0.88 m
-			// off the surface Nanite draws). A fallback that keeps every triangle makes the collision the
-			// drawn surface. Interchange turns Nanite on for a glTF by default, so this is every terrain mesh.
-			FMeshNaniteSettings Settings = Mesh->GetNaniteSettings();
-			Settings.FallbackTarget = ENaniteFallbackTarget::PercentTriangles;
-			Settings.FallbackPercentTriangles = 1.0f;
-			Mesh->SetNaniteSettings(Settings);
-			Mesh->NotifyNaniteSettingsChanged();
-		}
 		if (Mesh->GetBodySetup() == nullptr)
 		{
 			Mesh->CreateBodySetup();
@@ -123,20 +149,7 @@ namespace MantlePlaceMeshImporter
 			return nullptr;
 		}
 
-		if (bEnableNanite && Manifest.Mesh.bNaniteRecommended)
-		{
-			// Through the accessors: UStaticMesh::NaniteSettings is UE_DEPRECATED(5.7) and goes
-			// private in the next release, so touching the member directly is a compile error there
-			// rather than the C4996 it is here. NotifyNaniteSettingsChanged() is the targeted
-			// PostEditChangeProperty for this property — a bare PostEditChange() rebuilds more than
-			// the Nanite data needs.
-			Mesh->Modify();
-			FMeshNaniteSettings Settings = Mesh->GetNaniteSettings();
-			Settings.bEnabled = true;
-			Mesh->SetNaniteSettings(Settings);
-			Mesh->NotifyNaniteSettingsChanged();
-		}
-
+		SetNaniteSettings(Mesh, bEnableNanite && Manifest.Mesh.bNaniteRecommended);
 		SetSurfaceCollision(Mesh);
 		return Mesh;
 	}
@@ -217,9 +230,32 @@ namespace MantlePlaceMeshImporter
 		{
 			return;
 		}
+		Actor->Modify();
 		Component->Modify();
 		Component->SetCollisionProfileName(Collision == EMantlePlaceMeshCollision::Surface
 			? UCollisionProfile::BlockAll_ProfileName
 			: UCollisionProfile::NoCollision_ProfileName);
+		// What the import turned off is marked, so Prepare for handover restores that and nothing else.
+		if (Collision == EMantlePlaceMeshCollision::None)
+		{
+			Actor->Tags.AddUnique(MantlePlaceImportNaming::CollisionOffTag());
+		}
+		else
+		{
+			Actor->Tags.Remove(MantlePlaceImportNaming::CollisionOffTag());
+		}
+	}
+
+	bool RestoreCollisionTurnedOff(AStaticMeshActor* Actor)
+	{
+		const UStaticMeshComponent* Component = Actor != nullptr ? Actor->GetStaticMeshComponent() : nullptr;
+		if (Component == nullptr || !Actor->Tags.Contains(MantlePlaceImportNaming::CollisionOffTag())
+			|| Component->GetCollisionProfileName() != UCollisionProfile::NoCollision_ProfileName)
+		{
+			// Not a mesh the import left without collision, or collision someone has set since: theirs.
+			return false;
+		}
+		ApplyCollision(Actor, EMantlePlaceMeshCollision::Surface);
+		return true;
 	}
 }

@@ -145,12 +145,9 @@ FMantlePlaceHandoverReport MantlePlaceHandover::Prepare(UWorld* World)
 				{
 					Actors[Other]->Modify();
 					Actors[Other]->SetIsTemporarilyHiddenInEditor(false);
-					// And it is the ground now: a terrain mesh laid over the Landscape did not collide.
-					if (AStaticMeshActor* Mesh = Cast<AStaticMeshActor>(Actors[Other]))
-					{
-						MantlePlaceMeshImporter::ApplyCollision(
-							Mesh, MantlePlaceTerrainCollisionLogic::ForTerrainMesh(/*bLandscapeBuilt*/ false));
-					}
+					// And it is the ground now: the terrain mesh the import laid over the Landscape without
+					// collision gets it back. Any other mesh, and collision someone set by hand, stays as it is.
+					MantlePlaceMeshImporter::RestoreCollisionTurnedOff(Cast<AStaticMeshActor>(Actors[Other]));
 				}
 			}
 		}

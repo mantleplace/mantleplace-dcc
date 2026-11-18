@@ -116,16 +116,9 @@ ground.
   out for the mesh, it turns the mesh's collision on.
 - **Buildings** collide as their own triangles.
 
-**World Partition.** In a World Partition level the Landscape is split into streaming proxies, and
-each proxy carries the collision for its own ground. Collision exists only where a proxy is loaded:
-in the editor everything the import made is loaded, but at runtime a proxy loads only within the
-loading range of a streaming source (the player, by default), so anything outside that range (a unit
-across an RTS map, a body dropped far from the camera) has no ground under it and falls. That is how
-World Partition streams, not something the import does. For a level that needs the whole ground at
-all times, select the Landscape's streaming proxies and turn off **Is Spatially Loaded** in Details
-(they then load with the level, at the memory cost of the whole Landscape), or place streaming
-sources where the gameplay is. The plugin offers no option of its own for this: the engine's
-per-actor setting already does it, and how a level streams is the project's choice.
+**World Partition.** A streaming proxy collides only while it is loaded, so at runtime there is no
+ground beyond a streaming source's loading range. To keep the whole ground loaded, turn off **Is
+Spatially Loaded** on the Landscape's streaming proxies.
 
 ## Sharing a level: ODbL content and Prepare for handover
 
