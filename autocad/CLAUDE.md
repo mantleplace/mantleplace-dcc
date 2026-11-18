@@ -102,8 +102,10 @@ key this suite must assert, or it fails.
   zip on disk.
 - **An MPB 3.0 bundle is read from its catalog and frames** (`AutoCadThreeView`), told from 2.x by its
   root `Manifest.json`; a 2.x bundle is read from its `hosts.autocad` block as before. Each part finds its
-  file by name and is placed in the frame its family states, never a derived one. What a 3.0 import leaves
-  out is named in [`docs/release-notes-1.2.0.md`](docs/release-notes-1.2.0.md).
+  file by name and is placed in the frame its family states, never a derived one. The Civil 3D surface is
+  built from `Elevation/Terrain.landxml` once the run has held that file's own `<Units>` and
+  `<CoordinateSystem>` to the order's frame (`LandXmlSurface`); a file in another unit or CRS builds no
+  surface. What a 3.0 import leaves out is named in [`docs/release-notes-1.2.0.md`](docs/release-notes-1.2.0.md).
 - **The ribbon panel is built in code, on a `Mantle Place` tab of the plugin's own** (`HPS-57`), as
   Revit's is, in Civil 3D and plain AutoCAD alike. `PlugInsPanel` (Core) lists the commands, in
   `HPS-51`'s order, and decides the tab (`Place`: the plugin's tab, made when the ribbon lacks it);

@@ -15,6 +15,7 @@ checked against. Nothing is converted or reprojected, and no transform is worked
 | Step | The 3.0 file it reads |
 | --- | --- |
 | Contours | `Elevation/Contours.dxf` |
+| Civil 3D surface, a TIN surface (Civil 3D only) | `Elevation/Terrain.landxml`, absolute in the order's CRS, its coordinates in the georeferenced frame's horizontal unit and its heights in that frame's vertical unit |
 | Aerial imagery, as a raster image | `Imagery/Imagery.tif`, inserted at the rectangle its catalog entry states in the georeferenced frame, aligned with the axes of the order's CRS (rotation 0 in that system); the plugin derives no rotation |
 | Public-record layers, one layer a file, named by the file | each `Records/*.dxf` the catalog names |
 | Site linework | `Site/Site.dxf` |
@@ -30,6 +31,16 @@ when it offers a choice: a send from the web vault whose order offers levels ope
 will do, with the level control, and another level chosen there is downloaded and the window reopened on
 it before anything is drawn. Every other import, with nothing to choose, begins as the window opens.
 
+The Civil 3D surface is built by Civil 3D from `Elevation/Terrain.landxml`, which places the file's points as
+written, as from a 2.x bundle. Before Civil 3D reads the file, the plugin checks what the file says of itself
+against the frame the manifest states for it: the linear unit of its `<Units>` element must be the georeferenced
+frame's horizontal unit, and the EPSG code of its `<CoordinateSystem>` element, where it names one, the order's
+CRS. A file that states another unit or coordinate system, or a value the plugin does not know, builds no
+surface, and the step says what the file states and what the order states; the plugin never scales or
+reprojects it. In plain AutoCAD, and in Civil 3D started as AutoCAD, the step says the surface needs Civil 3D.
+A bundle whose catalog does not hold the surface file says the surface is not in this bundle, with the
+manifest's own reason where it gives one, and imports the rest.
+
 The aerial is placed from the georeferenced `Imagery/Imagery.tif` alone; the host-ready
 `Imagery/Imagery.png` is not read, and is not a step of the import.
 
@@ -39,7 +50,7 @@ Each is shown as skipped, with its reason, in the import window and on the comma
 
 | Item | Why |
 | --- | --- |
-| The Civil 3D surface | This version builds no surface from an MPB 3.0 bundle, so `Elevation/Terrain.landxml` is left in the bundle; the contours are still drawn from Elevation/Contours.dxf. |
+| A Civil 3D surface whose `Elevation/Terrain.landxml` states a unit or coordinate system other than the order's | The plugin never converts or reprojects a file; the surface is skipped, naming what the file states and what the order states, and the contours are still drawn from `Elevation/Contours.dxf`. |
 | An aerial whose catalog entry states no rectangle, states no frame for it, or states a frame other than the georeferenced one | The plugin never works out an insertion, never assumes a frame and never reprojects; the aerial is skipped, saying what the catalog states or does not. |
 | A public-record layer whose DXF carries an entity other than a polyline (a point or a hatch, as `Records/Contamination.dxf`, `Records/Heritage.dxf` and `Records/Floodplain.dxf` may) | As in 1.0, only polylines are placed, and a layer is never placed in part: the layer is named as not placed, with the entity it carries, and the other layers are placed. |
 | The readiness verdicts ("requires") | MPB 3.0 publishes none (A15): a file the catalog names is ready, and one it does not is not held. |

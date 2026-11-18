@@ -56,6 +56,8 @@ internal static class AutoCadThreePlanTests
         RunCorpusCases(run);
         RunFrameCases(run);
         RunAerialCases(run);
+        RunSurfaceCases(run);
+        RunSurfaceFileCases(run);
         RunAbsenceCases(run);
         RunChooserCases(run);
         RunReleaseNotesCases(run);
@@ -119,16 +121,20 @@ internal static class AutoCadThreePlanTests
             });
         }
 
-        run.Case("the full bundle is not refused, and places every part but the surface", () =>
+        run.Case("the full bundle is not refused, and in Civil 3D places every part, the surface among them", () =>
         {
-            AutoCadImportPlan plan = Plan(Full(WithTifRectangle));
+            AutoCadImportPlan plan = Civil(Full(WithTifRectangle), DrawingZone.None);
 
             run.False(plan.IsRefused, $"planned ({plan.Refusal})");
-            run.True(plan.Part(AutoCadPart.Contours).Place, "contours: " + plan.Part(AutoCadPart.Contours).Sentence);
-            run.True(plan.Part(AutoCadPart.Aerial).Place, "aerial: " + plan.Part(AutoCadPart.Aerial).Sentence);
-            run.True(plan.Part(AutoCadPart.Records).Place, "records: " + plan.Part(AutoCadPart.Records).Sentence);
-            run.True(plan.Part(AutoCadPart.Linework).Place, "linework: " + plan.Part(AutoCadPart.Linework).Sentence);
-            run.False(plan.Part(AutoCadPart.Surface).Place, "the surface is left out");
+            foreach (AutoCadPart kind in EveryPart)
+            {
+                run.True(plan.Part(kind).Place, $"{kind}: {plan.Part(kind).Sentence}");
+            }
+
+            AutoCadImportRun steps = new(plan, civil3d: true);
+            run.True(
+                Enumerable.Range(0, steps.Count).Any(i => steps.PartAt(i) == AutoCadPart.Surface),
+                "and the import runs a Civil 3D surface step");
         });
 
         run.Case("a 3.0 bundle is known by its manifest at the root, and a 2.x one is not taken for it", () =>
@@ -226,6 +232,37 @@ internal static class AutoCadThreePlanTests
 
             run.False(same.IsRefused, $"the order's zone places ({same.Refusal})");
             run.True(other.IsRefused, "another zone refuses");
+        });
+
+        run.Case("in Civil 3D the zone check names the zone it found and the order's CRS, and the surface is built under the order's zone", () =>
+        {
+            Dictionary<string, string> files = ThreePlanTests.Load(FullBundle);
+            AutoCadImportPlan same = Civil(files, new DrawingZone("UTM84-18N", 32618));
+            AutoCadImportPlan other = Civil(files, new DrawingZone("NY83-LIF", 2263));
+            AutoCadImportPlan none = Civil(files, DrawingZone.None);
+
+            run.True(
+                same.Notices.Any(n => n.Contains("Civil 3D coordinate zone, UTM84-18N (EPSG:32618), is the order's", StringComparison.Ordinal)),
+                "the order's zone is named, with its EPSG code: " + string.Join(" | ", same.Notices));
+            run.True(same.Part(AutoCadPart.Surface).Place, "and the surface is built");
+            run.Contains(other.Refusal, "NY83-LIF (EPSG:2263)", "another zone's refusal names the drawing's zone");
+            run.Contains(other.Refusal, "EPSG:32618", "and the order's CRS, the georeferenced frame's");
+            run.False(other.Part(AutoCadPart.Surface).Place, "and builds no surface");
+            run.True(
+                none.Notices.Any(n => n.Contains("no Civil 3D coordinate zone", StringComparison.Ordinal) && n.Contains("EPSG:32618", StringComparison.Ordinal)),
+                "a drawing with no zone is told the order's CRS: " + string.Join(" | ", none.Notices));
+        });
+
+        run.Case("feet: in Civil 3D the zone is checked against the feet order's CRS, not the local frame's", () =>
+        {
+            Dictionary<string, string> files = Full(WithFeetFrames);
+            AutoCadImportPlan same = Civil(files, new DrawingZone("NY83-LIF", 2263));
+            AutoCadImportPlan utm = Civil(files, new DrawingZone("UTM84-18N", 32618));
+
+            run.False(same.IsRefused, $"the feet order's zone places ({same.Refusal})");
+            run.True(same.Part(AutoCadPart.Surface).Place, "and builds the surface");
+            run.True(utm.IsRefused, "a UTM zone refuses the feet order");
+            run.Contains(utm.Refusal, "EPSG:2263", "naming the order's CRS");
         });
 
         run.Case("a CRS stated with no code is refused, never taken apart for one", () =>
@@ -329,19 +366,184 @@ internal static class AutoCadThreePlanTests
         });
     }
 
+    private static void RunSurfaceCases(TestRun run)
+    {
+        run.Case("LandXML surface: in Civil 3D, built from Elevation/Terrain.landxml, absolute in the order's CRS and units, with the catalog's digest", () =>
+        {
+            Dictionary<string, string> files = Full();
+            PlannedPart surface = Civil(files, DrawingZone.None).Part(AutoCadPart.Surface);
+
+            run.True(surface.Place, surface.Sentence);
+            run.Equal(surface.Path, AutoCadThreeView.SurfacePath, "the promised file, by name");
+            run.Equal(surface.Sha256, Sha(files, AutoCadThreeView.SurfacePath), "the catalog's digest, checked before anything is drawn");
+            run.Equal(surface.Format, AutoCadImportPlanner.LandXmlFormat, "read as LandXML");
+            run.Equal(surface.HorizontalFrame, "absolute_projected", "absolute in the order's CRS, never offsets about the site origin");
+            run.Equal(surface.HorizontalUnits, "m", "X/Y in the order's unit");
+            run.Equal(surface.VerticalUnits, "m", "heights in the order's vertical unit");
+            run.Equal(surface.Layer, AutoCadLayers.Surface, "on the surface's layer");
+            run.Contains(surface.Sentence, "metres", "and the sentence says the heights' unit");
+        });
+
+        run.Case("LandXML surface, feet: US survey feet across and international feet up, though the local frame is in metres", () =>
+        {
+            PlannedPart surface = Civil(Full(WithFeetFrames), DrawingZone.None).Part(AutoCadPart.Surface);
+
+            run.True(surface.Place, surface.Sentence);
+            run.Equal(surface.HorizontalUnits, "ftUS", "X/Y in the georeferenced frame's US survey foot, not the local metre");
+            run.Equal(surface.VerticalUnits, "ft", "heights in its international foot");
+            run.Contains(surface.Sentence, "international feet", "and the sentence says the heights' unit");
+        });
+
+        run.Case("LandXML surface: in plain AutoCAD it is skipped, saying it needs Civil 3D", () =>
+        {
+            PlannedPart surface = Plan(Full()).Part(AutoCadPart.Surface);
+
+            run.False(surface.Place, "not built");
+            run.Contains(surface.Sentence, "needs Civil 3D", "why");
+        });
+
+        run.Case("LandXML surface, frame mix-up: a pointer that states the local frame is skipped, never built at the order's coordinates", () =>
+        {
+            AutoCadBlockRead read = WithSurface(Read(Full()), p => p with { HorizontalFrame = "local_enu" });
+            PlannedPart surface = AutoCadImportPlanner.Plan(read, DrawingGeolocation.None, DrawingZone.None).Part(AutoCadPart.Surface);
+
+            run.False(surface.Place, "skipped");
+            run.Contains(surface.Sentence, "local_enu", "naming the frame its file states");
+            run.Contains(surface.Sentence, "does not reproject", "and that the plugin does not move it");
+        });
+
+        run.Case("LandXML surface, unit mix-up: a pointer in another unit than the frame's is skipped, never scaled", () =>
+        {
+            AutoCadBlockRead across = WithSurface(Read(Full()), p => p with { HorizontalUnits = "ftUS" });
+            AutoCadBlockRead up = WithSurface(Read(Full()), p => p with { VerticalUnits = "ft" });
+
+            foreach (AutoCadBlockRead read in new[] { across, up })
+            {
+                PlannedPart surface = AutoCadImportPlanner.Plan(read, DrawingGeolocation.None, DrawingZone.None).Part(AutoCadPart.Surface);
+                run.False(surface.Place, "skipped");
+                run.Contains(surface.Sentence, "not the frame's m", "naming the frame's unit");
+                run.Contains(surface.Sentence, "does not convert", "and that the plugin does not convert");
+            }
+        });
+    }
+
+    /// <summary>
+    /// The surface's own file checked against the frame the manifest states for it, as the Civil 3D step
+    /// reads it before Civil 3D is asked to build anything: a LandXML that states another unit or another
+    /// coordinate system than the order's builds no surface, and says which.
+    /// </summary>
+    private static void RunSurfaceFileCases(TestRun run)
+    {
+        const string Metres = "<Units><Metric linearUnit=\"meter\" areaUnit=\"squareMeter\" volumeUnit=\"cubicMeter\"/></Units>";
+        const string UsFeet = "<Units><Imperial linearUnit=\"USSurveyFoot\" areaUnit=\"squareFoot\" volumeUnit=\"cubicYard\"/></Units>";
+        const string Feet = "<Units><Imperial linearUnit=\"foot\" areaUnit=\"squareFoot\" volumeUnit=\"cubicYard\"/></Units>";
+
+        AutoCadImportPlan metric = Civil(Full(), DrawingZone.None);
+        AutoCadImportPlan feet = Civil(Full(WithFeetFrames), DrawingZone.None);
+
+        run.Case("LandXML file in the order's unit and CRS: its one surface is named for Civil 3D", () =>
+        {
+            string? problem = Check(metric, LandXml(Metres, "32618"), out string? name);
+
+            run.Equal(problem, null, "no problem");
+            run.Equal(name, "Terrain", "the file's surface, by its own name");
+        });
+
+        run.Case("LandXML file stating neither unit nor CRS: the frame the manifest states is the one applied", () =>
+        {
+            run.Equal(Check(metric, LandXml(null, null), out string? name), null, "no problem");
+            run.Equal(name, "Terrain", "named");
+        });
+
+        run.Case("LandXML file, unit mix-up: US survey feet in a metre order builds no surface, naming both units", () =>
+        {
+            string? problem = Check(metric, LandXml(UsFeet, "32618"), out string? name);
+
+            run.Equal(name, null, "nothing to build");
+            run.Contains(problem ?? string.Empty, "US survey feet", "the file's unit");
+            run.Contains(problem ?? string.Empty, "metres", "the order's unit");
+            run.Contains(problem ?? string.Empty, "does not convert", "and that the plugin does not convert");
+        });
+
+        run.Case("LandXML file, unit mix-up in feet: the international foot in a US-survey-foot order builds no surface", () =>
+        {
+            run.Equal(Check(feet, LandXml(UsFeet, "2263"), out _), null, "the order's own US survey foot is taken");
+            string? problem = Check(feet, LandXml(Feet, "2263"), out string? name);
+
+            run.Equal(name, null, "nothing to build");
+            run.Contains(problem ?? string.Empty, "international feet", "the file's unit");
+            run.Contains(problem ?? string.Empty, "US survey feet", "the order's X/Y unit");
+        });
+
+        run.Case("LandXML file, a linear unit this plugin does not know builds no surface, naming the value", () =>
+        {
+            string? problem = Check(metric, LandXml("<Units><Metric linearUnit=\"millimeter\"/></Units>", "32618"), out string? name);
+
+            run.Equal(name, null, "nothing to build");
+            run.Contains(problem ?? string.Empty, "millimeter", "the value it states");
+        });
+
+        run.Case("LandXML file, frame mix-up: another coordinate system than the order's builds no surface, naming both", () =>
+        {
+            string? problem = Check(metric, LandXml(Metres, "2263"), out string? name);
+
+            run.Equal(name, null, "nothing to build");
+            run.Contains(problem ?? string.Empty, "EPSG:2263", "the file's CRS");
+            run.Contains(problem ?? string.Empty, "EPSG:32618", "the order's CRS");
+            run.Contains(problem ?? string.Empty, "does not reproject", "and that the plugin does not reproject");
+        });
+
+        run.Case("LandXML file, a coordinate system code that is not one EPSG code builds no surface, naming the value", () =>
+        {
+            foreach (string code in new[] { "UTM84-18N", "32618+3855" })
+            {
+                string? problem = Check(metric, LandXml(Metres, code), out string? name);
+
+                run.Equal(name, null, $"{code}: nothing to build");
+                run.Contains(problem ?? string.Empty, code, $"{code}: the value it states");
+            }
+        });
+
+        run.Case("LandXML file of a 2.x order: read as before, its units and CRS not checked against the block", () =>
+        {
+            string text = TwoManifest(CompleteBlock);
+            AutoCadImportPlan two = AutoCadImportPlanner.Plan(text, DrawingGeolocation.None, DrawingZone.None);
+
+            run.Equal(Check(two, LandXml(UsFeet, "2263"), out string? name), null, "a 2.x surface's file is named as 1.0 named it");
+            run.Equal(name, "Terrain", "named");
+        });
+    }
+
     private static void RunAbsenceCases(TestRun run)
     {
-        run.Case("LandXML surface: skipped for 3.0 with a reason, in AutoCAD and in Civil 3D", () =>
+        run.Case("LandXML surface not in the catalog, with no reason: skipped saying it is not in this bundle, and the rest imports", () =>
         {
-            Dictionary<string, string> files = ThreePlanTests.Load(FullBundle);
-            PlannedPart plain = AutoCadImportPlanner.Plan(Read(files), DrawingGeolocation.None, null).Part(AutoCadPart.Surface);
-            PlannedPart civil = AutoCadImportPlanner.Plan(Read(files), DrawingGeolocation.None, DrawingZone.None).Part(AutoCadPart.Surface);
+            AutoCadImportPlan plan = Civil(Full(m => m["catalog"]!.AsObject().Remove(AutoCadThreeView.SurfacePath)), DrawingZone.None);
+            PlannedPart surface = plan.Part(AutoCadPart.Surface);
 
-            foreach (PlannedPart surface in new[] { plain, civil })
+            run.False(plan.IsRefused, $"not refused ({plan.Refusal})");
+            run.False(surface.Place, "no surface is built");
+            run.Contains(surface.Sentence, "Civil 3D surface: not in this bundle", "says the surface is not in this bundle");
+            run.Contains(surface.Sentence, AutoCadThreeView.SurfacePath, "naming the file");
+            run.Contains(surface.Sentence, "no reason", "and that the manifest gives none");
+            run.True(plan.Part(AutoCadPart.Contours).Place, "the contours still go in");
+            run.True(plan.Part(AutoCadPart.Records).Place, "and the public-record layers");
+            run.True(plan.Part(AutoCadPart.Linework).Place, "and the site linework");
+        });
+
+        run.Case("LandXML surface listed as not held: skipped with the manifest's reason, verbatim, in Civil 3D and in AutoCAD, and the rest imports", () =>
+        {
+            Dictionary<string, string> files = Full(m => NotHeld(m, AutoCadThreeView.SurfacePath, "terrain_not_built_for_this_aoi"));
+            foreach (AutoCadImportPlan plan in new[] { Civil(files, DrawingZone.None), Plan(files) })
             {
-                run.False(surface.Place, "not built");
-                run.Contains(surface.Sentence, "Elevation/Terrain.landxml", "names the file it would read");
-                run.Contains(surface.Sentence, "3.0", "and says why: the 3.0 surface is not built yet");
+                PlannedPart surface = plan.Part(AutoCadPart.Surface);
+
+                run.False(surface.Place, "no surface is built");
+                run.Contains(surface.Sentence, "Civil 3D surface: not in this bundle", "says the surface is not in this bundle");
+                run.Contains(surface.Sentence, AutoCadThreeView.SurfacePath, "naming the file");
+                run.Contains(surface.Sentence, "terrain_not_built_for_this_aoi", "with the manifest's reason, verbatim");
+                run.True(plan.Part(AutoCadPart.Contours).Place, "the contours still go in");
+                run.True(plan.Part(AutoCadPart.Linework).Place, "and the site linework");
             }
         });
 
@@ -529,16 +731,17 @@ internal static class AutoCadThreePlanTests
 
         run.Case("the release notes name every file the 3.0 plan reads", () =>
         {
-            foreach (string path in new[] { AutoCadThreeView.ContoursPath, AutoCadThreeView.AerialPath, AutoCadThreeView.LineworkPath, "Records/" })
+            foreach (string path in new[] { AutoCadThreeView.ContoursPath, AutoCadThreeView.SurfacePath, AutoCadThreeView.AerialPath, AutoCadThreeView.LineworkPath, "Records/" })
             {
                 run.Contains(notes, path, $"{path} is in the notes");
             }
         });
 
-        run.Case("the release notes list each item a 3.0 import leaves out", () =>
+        run.Case("the release notes list each item a 3.0 import leaves out, and no longer the Civil 3D surface", () =>
         {
-            run.Contains(notes, AutoCadThreeView.SurfacePath, "the Civil 3D surface's file");
             run.Contains(notes, "## Left out of an MPB 3.0 import", "under the heading the Revit notes use");
+            run.False(notes.Contains("builds no surface from an MPB 3.0 bundle", StringComparison.Ordinal), "the surface is built from a 3.0 bundle now");
+            run.Contains(notes, "<CoordinateSystem>", "and the notes say what the surface's file is checked against");
         });
     }
 
@@ -547,16 +750,44 @@ internal static class AutoCadThreePlanTests
     private static AutoCadImportPlan Plan(Dictionary<string, string> files) =>
         AutoCadImportPlanner.Plan(Read(files), DrawingGeolocation.None, null);
 
+    /// <summary>The plan in Civil 3D, the part on, under the drawing's <paramref name="zone"/>.</summary>
+    private static AutoCadImportPlan Civil(Dictionary<string, string> files, DrawingZone zone) =>
+        AutoCadImportPlanner.Plan(Read(files), DrawingGeolocation.None, zone);
+
     private static AutoCadBlockRead Read(Dictionary<string, string> files) =>
         AutoCadBlockReader.Read(ThreePlanTests.Read(files), manifestText: null);
 
     private static Dictionary<string, string> Full(Action<JsonObject>? edit = null) => ThreePlanTests.Load(FullBundle, edit);
 
+    /// <summary>The surface step's check of its file against <paramref name="plan"/>: the problem, or <c>null</c> and the surface's name.</summary>
+    private static string? Check(AutoCadImportPlan plan, string landXml, out string? name)
+    {
+        using StringReader reader = new(landXml);
+        return LandXmlSurface.TryReadName(reader, plan, out name);
+    }
+
+    /// <summary>A LandXML file of one surface named <c>Terrain</c>, with the <c>Units</c> element and the EPSG code given, or neither.</summary>
+    private static string LandXml(string? units, string? epsg) =>
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?><LandXML xmlns=\"http://www.landxml.org/schema/LandXML-1.2\" version=\"1.2\">"
+        + (units ?? string.Empty)
+        + (epsg is null ? string.Empty : $"<CoordinateSystem epsgCode=\"{epsg}\" horizontalCoordinateSystemName=\"Synthetic\"/>")
+        + "<Surfaces><Surface name=\"Terrain\"><Definition surfType=\"TIN\"><Pnts><P id=\"1\">4512000 586500 20</P></Pnts></Definition></Surface></Surfaces></LandXML>";
+
+    /// <summary>
+    /// The same reading with its surface pointer edited: a frame or unit a 3.0 catalog cannot state for
+    /// <c>Elevation/Terrain.landxml</c>, whose extension fixes its family, so only the plan's own check stands.
+    /// </summary>
+    private static AutoCadBlockRead WithSurface(AutoCadBlockRead read, Func<AutoCadPointer, AutoCadPointer> edit) =>
+        WithPointers(read, aerial: p => p, surface: edit);
+
     /// <summary>
     /// The same reading with its aerial pointer edited: a frame a 3.0 catalog cannot state for
     /// <c>Imagery/Imagery.tif</c>, whose extension fixes its family, so only the plan's own check stands.
     /// </summary>
-    private static AutoCadBlockRead WithAerial(AutoCadBlockRead read, Func<AutoCadPointer, AutoCadPointer> edit)
+    private static AutoCadBlockRead WithAerial(AutoCadBlockRead read, Func<AutoCadPointer, AutoCadPointer> edit) =>
+        WithPointers(read, aerial: edit, surface: p => p);
+
+    private static AutoCadBlockRead WithPointers(AutoCadBlockRead read, Func<AutoCadPointer, AutoCadPointer> aerial, Func<AutoCadPointer, AutoCadPointer> surface)
     {
         AutoCadBlock block = read.Block!;
         return new AutoCadBlockRead
@@ -567,8 +798,8 @@ internal static class AutoCadThreePlanTests
             {
                 FileFrame = block.FileFrame,
                 Contours = block.Contours,
-                Surface = block.Surface,
-                Aerial = edit(block.Aerial!),
+                Surface = block.Surface is { } s ? surface(s) : null,
+                Aerial = block.Aerial is { } a ? aerial(a) : null,
                 Records = block.Records,
                 Linework = block.Linework,
                 ContoursReadiness = block.ContoursReadiness,
