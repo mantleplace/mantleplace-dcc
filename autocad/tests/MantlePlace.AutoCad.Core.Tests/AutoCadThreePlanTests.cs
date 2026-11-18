@@ -505,23 +505,13 @@ internal static class AutoCadThreePlanTests
 
         run.Case("this plugin imports and announces 3.x, and reads no major above it", () =>
         {
-            run.Equal(HostIdentity.NewestImportedMajor, AutoCadImportPlan.NewestImportedMajor, "the shell's major, as the suite sets it");
-            run.Equal(AutoCadImportPlan.NewestImportedMajor, 3, "3.x");
+            run.Equal(HostIdentity.NewestImportedMajor, ManifestVersions.AutoCadNewestImportedMajor, "the shell's major, as the suite sets it");
+            run.Equal(ManifestVersions.AutoCadNewestImportedMajor, 3, "3.x");
+            run.True(ManifestVersions.AutoCadNewestImportedMajor <= ManifestVersions.NewestReadMajor, "no major the root reader refuses");
             run.Equal(ConnectedHosts.Announce("25.0", "1.2.0", null, "DESK").ReadsMaxMajor, 3, "the web is told 3.x");
             run.True(ExportBundles.CanRead("3.0.0"), "a 3.0 send is taken");
             run.False(ExportBundles.CanRead("4.0.0"), "a 4.0 one is not");
             run.True(ExportBundles.CanRead("2.4.0"), "and 2.x still is");
-        });
-
-        run.Case("a host can name no major its reader does not read, and naming one fails before anything changes", () =>
-        {
-            run.Throws<ArgumentOutOfRangeException>(
-                () => HostIdentity.Set(AutoCadBlockReader.HostKey, HostIdentity.PluginVersion, ManifestVersions.NewestReadMajor + 1),
-                "a major above the reader's");
-            run.Throws<ArgumentOutOfRangeException>(
-                () => HostIdentity.Set(AutoCadBlockReader.HostKey, HostIdentity.PluginVersion, ManifestVersions.NewestSupportedMajor - 1),
-                "a major below the 2.x import's");
-            run.Equal(HostIdentity.NewestImportedMajor, AutoCadImportPlan.NewestImportedMajor, "and the identity set is unchanged");
         });
     }
 

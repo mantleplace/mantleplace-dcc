@@ -15,7 +15,7 @@ using MantlePlace.Core.Tests;
 HostIdentity.Set(
     AutoCadBlockReader.HostKey,
     typeof(AutoCadBlockReader).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
-    AutoCadImportPlan.NewestImportedMajor);
+    ManifestVersions.AutoCadNewestImportedMajor);
 
 int exitCode = 0;
 exitCode |= ConformanceCorpusSelfTests.Run();

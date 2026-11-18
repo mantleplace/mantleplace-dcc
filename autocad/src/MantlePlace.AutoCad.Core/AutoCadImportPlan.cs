@@ -207,13 +207,6 @@ public sealed class AutoCadImportPlan
         "Site/Site.dxf",
     ];
 
-    /// <summary>
-    /// The newest bundle manifest major this plugin imports: 3.x, read from its catalog and frames
-    /// (<see cref="AutoCadThreeView"/>). The shell names it with its host id
-    /// (<see cref="HostIdentity.Set"/>), so a 3.0 send is taken and the web is told so.
-    /// </summary>
-    public const int NewestImportedMajor = 3;
-
     /// <summary>The order this bundle is, still named on a refusal (HPS-37).</summary>
     public string OrderId { get; init; } = string.Empty;
 

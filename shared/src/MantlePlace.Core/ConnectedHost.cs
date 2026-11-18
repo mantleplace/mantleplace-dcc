@@ -67,10 +67,9 @@ public readonly record struct ConnectedHost(
 /// <para>
 /// ⛔ <b>The manifest range is never written here.</b> <c>reads.min</c> is
 /// <see cref="ManifestVersions.MinSupportedManifestVersion"/> and <c>reads.maxMajor</c> is
-/// <see cref="HostIdentity.NewestImportedMajor"/> (<see cref="ManifestVersions.NewestSupportedMajor"/>
-/// unless the host's import takes a newer one): the reader's own floor and newest major, so
-/// the web greys out exactly the bundles this reader would refuse, and a range raised in one place
-/// moves in both.
+/// <see cref="HostIdentity.NewestImportedMajor"/>: the floor and the newest major the host imports,
+/// the same two a sent bundle is held to (<see cref="ExportBundles.CanRead"/>), so the web greys out
+/// exactly the bundles this host would refuse, and a range raised in one place moves in both.
 /// </para>
 /// </remarks>
 public static class ConnectedHosts

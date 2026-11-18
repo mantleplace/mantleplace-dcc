@@ -62,9 +62,9 @@ public static class BundleReadiness
 /// it: the reader decides when the bundle is open.
 /// </para>
 /// <para>
-/// "Cannot read" is the reader's own refusal, from the same two constants: below the floor, a major
-/// above the newest it takes, or not a <c>MAJOR.MINOR.PATCH</c> version at all (an integer from the
-/// pre-history, a pre-release tag).
+/// "Cannot read" is the host's own refusal: below the floor, a major above the newest the host
+/// imports (<see cref="HostIdentity.NewestImportedMajor"/>, the one its presence announces), or not a
+/// <c>MAJOR.MINOR.PATCH</c> version at all (an integer from the pre-history, a pre-release tag).
 /// </para>
 /// </remarks>
 public static class ExportBundles

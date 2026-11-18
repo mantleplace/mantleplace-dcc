@@ -50,6 +50,14 @@ public sealed class LevelOffer
 }
 
 /// <summary>
+/// What a refused 3.0 level request is asked again for, when the refusal names promised files the
+/// bundle does not hold (<see cref="DownloadLevels.FilesLeftAfterNotInBundle"/>).
+/// </summary>
+/// <param name="Remaining">The files to ask for again, in the order they were asked; never empty.</param>
+/// <param name="Absent">The files the bundle does not hold, as the refusal named them; never empty.</param>
+public sealed record NotInBundleRetry(IReadOnlyList<string> Remaining, IReadOnlyList<string> Absent);
+
+/// <summary>
 /// The 3.0 download: the levels a listing row offers, the level a download is cached at, and the
 /// request that names this host's files and one level (platform route <c>POST …/download</c>).
 /// </summary>
@@ -139,6 +147,74 @@ public static class DownloadLevels
         }
 
         return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    /// <summary>The status a refusal of promised files this bundle does not hold carries.</summary>
+    public const int NotInBundleStatus = 404;
+
+    /// <summary>The code a refusal of promised files this bundle does not hold carries.</summary>
+    public const string FileNotInBundleCode = "file_not_in_bundle";
+
+    /// <summary>
+    /// The files a refused 3.0 level request is asked again for. A promised file the bundle does not
+    /// hold (a layer the site lacks) is refused by name: HTTP 404, code <c>file_not_in_bundle</c>, the
+    /// names in <c>files</c>. An absent file is not an error, so the request goes again naming only the rest.
+    /// </summary>
+    /// <returns>
+    /// The rest (in the order asked) and the absent names; <c>null</c> for any other refusal, one naming
+    /// no file or a file not asked for, or one that would leave nothing to ask for, which is then
+    /// reported as it stands. The rest is always shorter than <paramref name="asked"/>, so asking again
+    /// ends within the file count.
+    /// </returns>
+    public static NotInBundleRetry? FilesLeftAfterNotInBundle(int status, string? body, IReadOnlyList<string> asked)
+    {
+        ArgumentNullException.ThrowIfNull(asked);
+        if (status != NotInBundleStatus || string.IsNullOrEmpty(body))
+        {
+            return null;
+        }
+
+        List<string> absent = [];
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(body);
+            JsonElement root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("code", out JsonElement code)
+                || code.ValueKind != JsonValueKind.String
+                || code.GetString() != FileNotInBundleCode
+                || !root.TryGetProperty("files", out JsonElement named)
+                || named.ValueKind != JsonValueKind.Array
+                || named.GetArrayLength() == 0)
+            {
+                return null;
+            }
+
+            foreach (JsonElement value in named.EnumerateArray())
+            {
+                // A name this request never asked for: not a refusal it can answer by asking less.
+                // Names are compared exactly, case included: catalog file names are case-sensitive, so a
+                // name differing only in case is another file, and its refusal is reported as it stands.
+                if (value.ValueKind != JsonValueKind.String
+                    || value.GetString() is not { } name
+                    || !asked.Contains(name, StringComparer.Ordinal))
+                {
+                    return null;
+                }
+
+                if (!absent.Contains(name, StringComparer.Ordinal))
+                {
+                    absent.Add(name);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        List<string> remaining = [.. asked.Where(file => !absent.Contains(file, StringComparer.Ordinal))];
+        return remaining.Count == 0 ? null : new NotInBundleRetry(remaining, absent);
     }
 
     /// <summary>
