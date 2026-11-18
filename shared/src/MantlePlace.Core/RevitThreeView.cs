@@ -169,6 +169,9 @@ internal static class RevitThreeView
                     Family = FileFamily.HostReady,
                     HeightBaseM = local.Origin.HeightMetres,
                     Raster = file.Raster,
+                    // The tree points' vocabulary, as the entry states it; the parse reads no foliage
+                    // type without one, so every point would be a tree (null for any other file).
+                    FoliageTypeVocabulary = file.FoliageTypeVocabulary,
                 }
                 : null;
 
