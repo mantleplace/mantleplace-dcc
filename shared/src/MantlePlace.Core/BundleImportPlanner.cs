@@ -915,9 +915,17 @@ public static class BundleImportPlanner
             steps,
             skipped,
             VectorAbsence(manifest, kind),
-            landPlan: new LandPlanFacts { Build = LandPlan.BuildToken(manifest.JobId), Crop = crop },
+            landPlan: new LandPlanFacts { Build = LandPlan.BuildToken(BuildIdentity(manifest)), Crop = crop },
             level: level);
     }
+
+    /// <summary>
+    /// What the land and hazard plans' build token is made from: the job id, and the order id when the
+    /// manifest has none. A 3.0 manifest states no job, only its order (§9.3), so without this every
+    /// 3.0 plan would be named <c>unidentified</c> and two orders in one project would share one.
+    /// </summary>
+    private static string BuildIdentity(BundleManifest manifest) =>
+        string.IsNullOrWhiteSpace(manifest.JobId) ? manifest.OrderId : manifest.JobId;
 
     /// <summary>
     /// One hazard layer on the hazard plan, or why it is not in this bundle in a form this host can
@@ -972,7 +980,7 @@ public static class BundleImportPlanner
             skipped,
             hazard: new HazardPlanFacts
             {
-                Build = HazardPlan.BuildToken(manifest.JobId),
+                Build = HazardPlan.BuildToken(BuildIdentity(manifest)),
                 Crop = crop,
                 FloodMap = flood ? manifest.FloodMap : null,
                 Threshold = flood ? null : manifest.SteepGroundThreshold,
