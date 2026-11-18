@@ -42,6 +42,19 @@ internal static class HostIdentityTests
             run.Equal(ConnectedHosts.HostId, "autocad", "and the constant the export filter compares against");
         });
 
+        run.Case("AutoCAD imports 2.x, so it announces 2 and refuses a 3.0 bundle sent from the web vault, as before", () =>
+        {
+            run.Equal(HostIdentity.NewestImportedMajor, 2, "AutoCAD's newest major");
+            run.Equal(ConnectedHosts.Announce("25.0", "1.0.0", null, "DESK").ReadsMaxMajor, 2, "reads.maxMajor is 2");
+            run.True(ExportBundles.CanRead("2.4.0"), "a 2.x bundle is read");
+            run.False(ExportBundles.CanRead("3.0.0"), "a 3.0 bundle is not");
+            run.Equal(
+                ExportBundles.RefuseUnreadable("3.0.0")?.Message,
+                "This bundle's manifest version (3.0.0) is outside what this plugin reads (1.0.0 to 2.x). "
+                + "Procure the bundle again, or update the Mantle Place plugin.",
+                "and a sent one is refused in the words it always was");
+        });
+
         run.Case("a feedback link says which host it came from", () =>
             run.Contains(FeedbackLink.Build("https://mantle.place", "1.0.0", "2026"), "source=dcc-autocad", "the form's source tag"));
 

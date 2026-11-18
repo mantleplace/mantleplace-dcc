@@ -493,6 +493,43 @@ internal static class ThreePlanTests
             run.Equal(skip?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.ArtifactNotInManifest, "not in the catalog");
             run.Contains(skip?.Reason, "Landcover/Trees.csv", "naming the file");
         });
+
+        run.Case("a level download without the layers the site lacks plans each of their steps as skipped, naming the file", () =>
+        {
+            // What a 3.0 order downloads as when the platform refused the files the bundle does not
+            // hold and the request went again for the rest: the catalog and the archive carry neither.
+            (ImportStepKind Kind, string File)[] absent =
+            [
+                (ImportStepKind.RoadCentrelines, "Basemap/Roads.gpkg"),
+                (ImportStepKind.Water, "Basemap/Water.gpkg"),
+                (ImportStepKind.LandUse, "Basemap/Landuse.gpkg"),
+                (ImportStepKind.LandCover, "Landcover/Landcover.gpkg"),
+            ];
+            Dictionary<string, string> files = Load(FullBundle, manifest =>
+            {
+                foreach ((_, string file) in absent)
+                {
+                    manifest["catalog"]!.AsObject().Remove(file);
+                }
+            });
+            foreach ((_, string file) in absent)
+            {
+                files.Remove(file);
+            }
+
+            BundleImportPlan plan = Plan(Read(files));
+            run.True(plan.CanImport, $"the rest still imports ({plan.BlockedReason})");
+            run.True(Step(plan, ImportStepKind.ToposurfaceFromSurfaceTin) is not null, "the terrain among it");
+            foreach ((ImportStepKind kind, string file) in absent)
+            {
+                run.True(Step(plan, kind) is null, $"no {kind} step");
+                SkippedImport? skip = Skip(plan, kind);
+                run.True(skip is not null, $"{kind} is shown as skipped");
+                run.Contains(skip?.Reason, file, $"{kind}'s skip names {file}");
+            }
+
+            run.True(!plan.Steps.Any(step => absent.Any(gone => gone.File == step.EntryName)), "no step reads a file the download lacks");
+        });
     }
 
     private static void RunReleaseNotesCases(TestRun run)

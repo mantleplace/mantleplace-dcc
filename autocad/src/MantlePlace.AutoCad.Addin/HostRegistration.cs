@@ -14,6 +14,8 @@ namespace MantlePlace.AutoCad.Addin;
 /// in. A module initializer runs before any type in this assembly is touched, so no static field of
 /// the add-in can reach the platform first. The version is this assembly's informational version, the
 /// one autocad/Directory.Build.props stamps, raw: the client header drops the build metadata itself.
+/// The newest manifest major it imports is stated here too: 2, so a 3.0 bundle sent from the web vault
+/// is refused as it always was.
 /// </remarks>
 internal static class HostRegistration
 {
@@ -25,5 +27,6 @@ internal static class HostRegistration
 #pragma warning restore CA2255
     internal static void Register() => HostIdentity.Set(
         HostId,
-        typeof(HostRegistration).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+        typeof(HostRegistration).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+        ManifestVersions.AutoCadNewestImportedMajor);
 }

@@ -70,8 +70,24 @@ internal static class ExportProtocolTests
             ConnectedHost host = ConnectedHosts.Announce("2026", "0.2.0", null, "m");
 
             run.Equal(host.ReadsMin, ManifestVersions.MinSupportedManifestVersion, "reads.min is the one floor");
-            run.Equal(host.ReadsMaxMajor, ManifestVersions.NewestSupportedMajor, "reads.maxMajor is the newest major");
+            run.Equal(host.ReadsMaxMajor, HostIdentity.NewestImportedMajor, "reads.maxMajor is the newest major the host imports");
             run.True(ManifestVersion.Parse(host.ReadsMin).IsValid, "and the floor is a MAJOR.MINOR.PATCH version");
+        });
+
+        run.Case("Revit imports 3.x, so it announces 3 and takes a 3.0 bundle sent from the web vault", () =>
+        {
+            run.Equal(HostIdentity.Id, "revit", "the suite is registered as Revit");
+            run.Equal(HostIdentity.NewestImportedMajor, ManifestVersions.RevitNewestImportedMajor, "with Revit's newest major");
+            run.Equal(ConnectedHosts.Announce("2027", "1.2.0", null, "m").ReadsMaxMajor, 3, "reads.maxMajor is 3");
+            run.True(ExportBundles.CanRead("3.0.0"), "a 3.0 bundle is read");
+            run.True(ExportBundles.RefuseUnreadable("3.0.0") is null, "and a sent one is not refused");
+            run.False(ExportBundles.CanRead("4.0.0"), "a 4.0 bundle is not");
+            run.Equal(
+                ExportBundles.RefuseUnreadable("4.0.0")?.Message,
+                "This bundle's manifest version (4.0.0) is outside what this plugin reads (1.0.0 to 3.x). "
+                + "Procure the bundle again, or update the Mantle Place plugin.",
+                "and its refusal names the range Revit reads");
+            run.Equal(ManifestVersions.NewestSupportedMajor, 2, "the 2.x reader's own newest major is unchanged");
         });
 
         run.Case("the range matches what the reader refuses, at both ends", () =>
@@ -97,7 +113,7 @@ internal static class ExportProtocolTests
             run.Equal(root.GetProperty("machine").GetString(), "DESK-7", "machine");
             JsonElement reads = root.GetProperty("reads");
             run.Equal(reads.GetProperty("min").GetString(), ManifestVersions.MinSupportedManifestVersion, "reads.min");
-            run.Equal(reads.GetProperty("maxMajor").GetInt32(), ManifestVersions.NewestSupportedMajor, "reads.maxMajor");
+            run.Equal(reads.GetProperty("maxMajor").GetInt32(), HostIdentity.NewestImportedMajor, "reads.maxMajor");
             run.Equal(root.EnumerateObject().Count(), 7, "and no other key");
 
             using JsonDocument none = JsonDocument.Parse(ConnectedHosts.Announce("2026", "0.2.0", null, "m").ToJson());

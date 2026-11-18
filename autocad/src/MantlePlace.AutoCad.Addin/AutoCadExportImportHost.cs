@@ -24,8 +24,8 @@ namespace MantlePlace.AutoCad.Addin;
 /// <para>
 /// A send names no level, so a 3.0 order arrives at the recommendation. The window gets no level control:
 /// the import begins as it opens, so there is no moment before Import to choose another level, and this
-/// plugin reads no 3.0 bundle yet (<see cref="ManifestVersions.NewestSupportedMajor"/>), so the window
-/// reports a 3.0 send as refused whatever its level.
+/// plugin reads no 3.0 bundle yet (<see cref="ManifestVersions.AutoCadNewestImportedMajor"/>), so a 3.0
+/// send is refused as <c>unsupported_version</c> whatever its level.
 /// </para>
 /// </remarks>
 internal sealed class AutoCadExportImportHost : IExportImportHost

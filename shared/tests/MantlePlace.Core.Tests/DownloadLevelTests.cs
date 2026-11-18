@@ -192,7 +192,271 @@ internal static class DownloadLevelTests
             }
         });
 
+        RunNotInBundleCases(run);
+
         return run.Report("download levels");
+    }
+
+    /// <summary>
+    /// A promised file the bundle does not hold (a layer the site lacks) is refused by name, and is
+    /// not an error: the request goes again naming only the rest. The platform's 404 description of the
+    /// download route is the contract.
+    /// </summary>
+    private static void RunNotInBundleCases(TestRun run)
+    {
+        run.Case("a refusal naming files the bundle does not hold leaves the rest to ask for, in the order asked", () =>
+        {
+            string[] asked = ["Elevation/Terrain.dxf", "Basemap/Roads.gpkg", "Site/Site.ifc", "Basemap/Water.gpkg"];
+            NotInBundleRetry? retry = DownloadLevels.FilesLeftAfterNotInBundle(404, NotInBundle("Basemap/Water.gpkg", "Basemap/Roads.gpkg"), asked);
+
+            run.True(retry is not null, "the refusal is answered by asking less");
+            run.True(retry?.Remaining.SequenceEqual(["Elevation/Terrain.dxf", "Site/Site.ifc"]) ?? false, "the rest, in the order asked");
+            run.True(retry?.Absent.SequenceEqual(["Basemap/Water.gpkg", "Basemap/Roads.gpkg"]) ?? false, "and the absent names, as the refusal named them");
+
+            NotInBundleRetry? twice = DownloadLevels.FilesLeftAfterNotInBundle(404, NotInBundle("Basemap/Roads.gpkg", "Basemap/Roads.gpkg"), asked);
+            run.Equal(twice?.Absent.Count ?? 0, 1, "a name given twice is absent once");
+            run.Equal(twice?.Remaining.Count ?? 0, 3, "and the rest are asked for");
+        });
+
+        run.Case("any other refusal is not answered by asking less", () =>
+        {
+            string[] asked = ["Elevation/Terrain.dxf", "Basemap/Roads.gpkg"];
+            run.True(DownloadLevels.FilesLeftAfterNotInBundle(400, NotInBundle("Basemap/Roads.gpkg"), asked) is null, "another status");
+            run.True(DownloadLevels.FilesLeftAfterNotInBundle(404, """{ "error": "No such order.", "code": "not_found", "files": ["Basemap/Roads.gpkg"] }""", asked) is null, "another code");
+            run.True(DownloadLevels.FilesLeftAfterNotInBundle(404, """{ "error": "No such Extra.", "code": "extra_not_in_bundle", "extra": "brief" }""", asked) is null, "an Extra the bundle does not hold");
+            run.True(DownloadLevels.FilesLeftAfterNotInBundle(404, NotInBundle(), asked) is null, "a refusal naming no file");
+            run.True(DownloadLevels.FilesLeftAfterNotInBundle(404, """{ "code": "file_not_in_bundle" }""", asked) is null, "a refusal with no file list");
+            run.True(DownloadLevels.FilesLeftAfterNotInBundle(404, """{ "code": "file_not_in_bundle", "files": [7] }""", asked) is null, "a name that is not a string");
+            run.True(DownloadLevels.FilesLeftAfterNotInBundle(404, NotInBundle("Basemap/Roads.gpkg", "Site/Site.ifc"), asked) is null, "a file that was not asked for");
+            run.True(DownloadLevels.FilesLeftAfterNotInBundle(404, NotInBundle("Basemap/Roads.gpkg", "Elevation/Terrain.dxf"), asked) is null, "one that would leave nothing to ask for");
+            run.True(DownloadLevels.FilesLeftAfterNotInBundle(404, "<html>not found</html>", asked) is null, "a body that is not JSON");
+            run.True(DownloadLevels.FilesLeftAfterNotInBundle(404, NotInBundle("Basemap/Roads.gpkg"), []) is null, "a request that named no file");
+        });
+
+        run.Case("a 3.0 download refused for files the bundle does not hold asks again for the rest, and downloads", () =>
+        {
+            string[] absent = ["Basemap/Roads.gpkg", "Basemap/Water.gpkg", "Basemap/Landuse.gpkg", "Landcover/Landcover.gpkg"];
+            using OneFileServer storage = new("level download"u8.ToArray());
+            Download download = Downloaded(
+                ListedExample("mpb3LargeSite"),
+                BundleImportPlanner.ThreeFiles,
+                (404, NotInBundle(absent)),
+                (200, Link(storage)));
+
+            run.True(download.Result.Ready, $"the download is ready ({download.Result.Message})");
+            run.Equal(download.Bodies.Count, 2, "asked twice");
+            run.True(Files(download.Bodies[0]).SequenceEqual(BundleImportPlanner.ThreeFiles), "first for every promised file");
+            run.True(Files(download.Bodies[1]).SequenceEqual(BundleImportPlanner.ThreeFiles.Except(absent)), "then for only the files left, in the order asked");
+            run.Equal((string?)JsonNode.Parse(download.Bodies[1])!["mpb3"]!["level"], "Med", "at the same level");
+            run.Equal(storage.Served, 1, "and the link was fetched");
+        });
+
+        run.Case("each time the files are asked for again, fewer are named, so the tries end", () =>
+        {
+            using OneFileServer storage = new("level download"u8.ToArray());
+            string[] files = ["Elevation/Terrain.dxf", "Basemap/Roads.gpkg", "Basemap/Water.gpkg"];
+            Download download = Downloaded(
+                ListedExample("mpb3LargeSite"),
+                files,
+                (404, NotInBundle("Basemap/Roads.gpkg")),
+                (404, NotInBundle("Basemap/Water.gpkg")),
+                (200, Link(storage)));
+
+            run.True(download.Result.Ready, $"the download is ready ({download.Result.Message})");
+            run.Equal(download.Bodies.Count, 3, "three tries");
+            run.True(Files(download.Bodies[1]).SequenceEqual(["Elevation/Terrain.dxf", "Basemap/Water.gpkg"]), "the second names two");
+            run.True(Files(download.Bodies[2]).SequenceEqual(["Elevation/Terrain.dxf"]), "the third names one");
+        });
+
+        run.Case("any other refusal of a 3.0 download is reported as before, after one request", () =>
+        {
+            string[] files = ["Elevation/Terrain.dxf", "Basemap/Roads.gpkg"];
+            string notFound = """{ "error": "No such order.", "code": "not_found" }""";
+            Download refused = Downloaded(ListedExample("mpb3LargeSite"), files, (404, notFound));
+            run.False(refused.Result.Ready, "nothing downloaded");
+            run.Equal(refused.Bodies.Count, 1, "asked once");
+            run.Equal(refused.Result.Message, PlatformErrors.Refusal(404, notFound), "the refusal as the platform worded it");
+
+            string every = NotInBundle(files);
+            Download nothingLeft = Downloaded(ListedExample("mpb3LargeSite"), files, (404, every));
+            run.False(nothingLeft.Result.Ready, "a bundle holding none of the files downloads nothing");
+            run.Equal(nothingLeft.Bodies.Count, 1, "asked once");
+            run.Equal(nothingLeft.Result.Message, PlatformErrors.Refusal(404, every), "and says so, as the platform worded it");
+        });
+
+        run.Case("a 2.x download is not asked again, whatever its refusal says", () =>
+        {
+            string body = NotInBundle("Basemap/Roads.gpkg");
+            Download two = Downloaded(Two(), ["Elevation/Terrain.dxf", "Basemap/Roads.gpkg"], (404, body));
+            run.False(two.Result.Ready, "nothing downloaded");
+            run.Equal(two.Bodies.Count, 1, "asked once");
+            run.True(SameJson(two.Bodies[0], HostViews.BuildRequestBody()), "with its view request");
+            run.Equal(two.Result.Message, PlatformErrors.Refusal(404, body), "and the refusal reported as before");
+        });
+    }
+
+    /// <summary>The platform's refusal of promised files this bundle does not hold.</summary>
+    private static string NotInBundle(params string[] files)
+        => new JsonObject
+        {
+            ["error"] = "This bundle holds no file named " + string.Join(", ", files),
+            ["code"] = "file_not_in_bundle",
+            ["reason"] = "unknown_file",
+            ["files"] = new JsonArray([.. files.Select(file => (JsonNode)file)]),
+        }.ToJsonString();
+
+    /// <summary>A level download's link to <paramref name="storage"/>, an hour from expiry.</summary>
+    internal static string Link(OneFileServer storage)
+        => new JsonObject
+        {
+            ["url"] = storage.Url,
+            ["expiresAt"] = DateTimeOffset.UtcNow.AddHours(1).ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            ["sizeBytes"] = storage.Length,
+        }.ToJsonString();
+
+    private static IReadOnlyList<string> Files(string body)
+        => JsonNode.Parse(body)!["mpb3"]?["files"]?.AsArray().Select(file => (string)file!).ToList() ?? [];
+
+    private readonly record struct Download(CompleteDownload Result, IReadOnlyList<string> Bodies);
+
+    /// <summary>
+    /// Downloads <paramref name="bundle"/> through the vault client, the download route answering with
+    /// <paramref name="answers"/> in turn; every download request's body is kept.
+    /// </summary>
+    private static Download Downloaded(VaultBundle bundle, IReadOnlyList<string> files, params (int Status, string Body)[] answers)
+    {
+        Scripted handler = new(answers);
+        VaultClient vault = SignedInVault(handler, files, out AuthSession session);
+        string root = Path.Combine(Path.GetTempPath(), "mantleplace-levels-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CompleteDownload result = vault.DownloadCompleteAsync(bundle, null, new BundleCache(root), new Progress<string>(), default)
+                .GetAwaiter().GetResult();
+            return new Download(result, handler.Downloads);
+        }
+        finally
+        {
+            session.Dispose();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>A vault client signed in through <paramref name="handler"/>, naming <paramref name="files"/> in a 3.0 download.</summary>
+    internal static VaultClient SignedInVault(HttpMessageHandler handler, IReadOnlyList<string> files, out AuthSession session)
+    {
+        const string Base = "https://platform.test";
+        MantlePlaceEndpoints endpoints = new()
+        {
+            ApiBaseUrl = Base,
+            TokenEndpointUrl = Base + "/api/v1/auth/native/token",
+            RefreshEndpointUrl = Base + "/api/v1/auth/native/refresh",
+        };
+        MemoryStore store = new();
+        store.Save("refresh-token", "stored-refresh");
+        session = new(endpoints, store, handler);
+        session.RestoreAsync(default).GetAwaiter().GetResult();
+        return new VaultClient(endpoints, session, handler, files);
+    }
+
+    /// <summary>The raw JSON of a 3.0 listing example in the vendored description.</summary>
+    internal static string ListedExampleJson(string name)
+    {
+        using JsonDocument spec = Spec();
+        return spec.RootElement.GetProperty("paths").GetProperty("/api/v1/vault/bundles")
+            .GetProperty("get").GetProperty("responses").GetProperty("200").GetProperty("content")
+            .GetProperty("application/json").GetProperty("examples").GetProperty(name).GetProperty("value").GetRawText();
+    }
+
+    /// <summary>
+    /// Grants a token, answers a route <see cref="Routes"/> names, and answers each download request
+    /// with the next scripted answer.
+    /// </summary>
+    internal sealed class Scripted((int Status, string Body)[] answers) : HttpMessageHandler
+    {
+        private int _next;
+
+        internal List<string> Downloads { get; } = [];
+
+        /// <summary>The answer for a request's path other than the download route, or <c>null</c> for none.</summary>
+        internal Func<string, (int Status, string Body)?> Routes { get; init; } = _ => null;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/refresh", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{ "access_token": "token-1", "refresh_token": "stored-refresh", "expires_in": 3600, "user": { "email": "c@example.com" } }"""),
+                };
+            }
+
+            if (!path.EndsWith("/download", StringComparison.Ordinal))
+            {
+                (int routeStatus, string routeBody) = Routes(path) ?? (500, "{}");
+                return new HttpResponseMessage((HttpStatusCode)routeStatus) { Content = new StringContent(routeBody) };
+            }
+
+            Downloads.Add(request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken));
+            (int status, string body) = _next < answers.Length ? answers[_next++] : (500, "{}");
+            return new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(body) };
+        }
+    }
+
+    /// <summary>A storage link on loopback that serves one body to every request.</summary>
+    internal sealed class OneFileServer : IDisposable
+    {
+        private readonly System.Net.Sockets.TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly byte[] _body;
+        private int _served;
+
+        internal OneFileServer(byte[] body)
+        {
+            _body = body;
+            _listener.Start();
+            Url = $"http://127.0.0.1:{((IPEndPoint)_listener.LocalEndpoint).Port}/level.zip";
+            _ = Task.Run(ServeAsync);
+        }
+
+        internal string Url { get; }
+
+        internal long Length => _body.Length;
+
+        internal int Served => Volatile.Read(ref _served);
+
+        public void Dispose() => _listener.Stop();
+
+        private async Task ServeAsync()
+        {
+            try
+            {
+                while (true)
+                {
+                    using System.Net.Sockets.TcpClient client = await _listener.AcceptTcpClientAsync();
+                    using System.Net.Sockets.NetworkStream stream = client.GetStream();
+                    byte[] buffer = new byte[4096];
+                    string seen = string.Empty;
+                    int read;
+                    while (!seen.Contains("\r\n\r\n", StringComparison.Ordinal) && (read = await stream.ReadAsync(buffer)) > 0)
+                    {
+                        seen += System.Text.Encoding.ASCII.GetString(buffer, 0, read);
+                    }
+
+                    Interlocked.Increment(ref _served);
+                    byte[] head = System.Text.Encoding.ASCII.GetBytes(
+                        $"HTTP/1.1 200 OK\r\nContent-Type: application/zip\r\nContent-Length: {_body.Length}\r\nConnection: close\r\n\r\n");
+                    await stream.WriteAsync(head);
+                    await stream.WriteAsync(_body);
+                }
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or System.Net.Sockets.SocketException or IOException)
+            {
+                // Stopped: the test is done with the link.
+            }
+        }
     }
 
     /// <summary>Every promised file a 3.0 download may name, from the vendored Platform API description.</summary>
@@ -222,7 +486,7 @@ internal static class DownloadLevelTests
     }
 
     /// <summary>One bundle from a 3.0 listing example in the vendored description.</summary>
-    private static VaultBundle ListedExample(string name)
+    internal static VaultBundle ListedExample(string name)
     {
         using JsonDocument spec = Spec();
         JsonElement example = spec.RootElement.GetProperty("paths").GetProperty("/api/v1/vault/bundles")
