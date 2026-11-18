@@ -430,7 +430,8 @@ internal static class AutoCadThreePlanTests
     /// <summary>
     /// The surface's own file checked against the frame the manifest states for it, as the Civil 3D step
     /// reads it before Civil 3D is asked to build anything: a LandXML that states another unit or another
-    /// coordinate system than the order's builds no surface, and says which.
+    /// coordinate system than the order's, or states none, builds no surface, and says which (HPS-53). Its
+    /// one linear unit must be both the order's horizontal and its vertical unit.
     /// </summary>
     private static void RunSurfaceFileCases(TestRun run)
     {
@@ -449,10 +450,40 @@ internal static class AutoCadThreePlanTests
             run.Equal(name, "Terrain", "the file's surface, by its own name");
         });
 
-        run.Case("LandXML file stating neither unit nor CRS: the frame the manifest states is the one applied", () =>
+        run.Case("LandXML file stating no linear unit builds no surface: an unstated unit is never assumed to match", () =>
         {
-            run.Equal(Check(metric, LandXml(null, null), out string? name), null, "no problem");
-            run.Equal(name, "Terrain", "named");
+            string? problem = Check(metric, LandXml(null, "32618"), out string? name);
+
+            run.Equal(name, null, "nothing to build");
+            run.Contains(problem ?? string.Empty, "states no linear unit", "the sentence says the unit is not stated");
+            run.Contains(problem ?? string.Empty, "metres", "the order's unit");
+        });
+
+        run.Case("LandXML file with no CoordinateSystem builds no surface: an unstated CRS is never assumed to match", () =>
+        {
+            string? problem = Check(metric, LandXml(Metres, null), out string? name);
+
+            run.Equal(name, null, "nothing to build");
+            run.Contains(problem ?? string.Empty, "states no EPSG code", "the sentence says the CRS is not stated");
+            run.Contains(problem ?? string.Empty, "EPSG:32618", "the order's CRS");
+        });
+
+        run.Case("LandXML file whose CoordinateSystem has a name and no epsgCode builds no surface", () =>
+        {
+            string named = LandXmlWith(Metres, "<CoordinateSystem horizontalCoordinateSystemName=\"UTM84-18N\"/>");
+            string? problem = Check(metric, named, out string? name);
+
+            run.Equal(name, null, "nothing to build");
+            run.Contains(problem ?? string.Empty, "states no EPSG code", "the sentence says the CRS is not stated as a code");
+            run.Contains(problem ?? string.Empty, "EPSG:32618", "the order's CRS");
+        });
+
+        run.Case("LandXML file stating neither unit nor CRS builds no surface, the unit named first", () =>
+        {
+            string? problem = Check(metric, LandXml(null, null), out string? name);
+
+            run.Equal(name, null, "nothing to build");
+            run.Contains(problem ?? string.Empty, "states no linear unit", "the unit is not stated");
         });
 
         run.Case("LandXML file, unit mix-up: US survey feet in a metre order builds no surface, naming both units", () =>
@@ -465,14 +496,33 @@ internal static class AutoCadThreePlanTests
             run.Contains(problem ?? string.Empty, "does not convert", "and that the plugin does not convert");
         });
 
-        run.Case("LandXML file, unit mix-up in feet: the international foot in a US-survey-foot order builds no surface", () =>
+        run.Case("LandXML file, a frame of two units (X/Y US survey feet, heights feet): whichever one unit the file states, no surface", () =>
         {
-            run.Equal(Check(feet, LandXml(UsFeet, "2263"), out _), null, "the order's own US survey foot is taken");
-            string? problem = Check(feet, LandXml(Feet, "2263"), out string? name);
+            foreach (string units in new[] { UsFeet, Feet })
+            {
+                string? problem = Check(feet, LandXml(units, "2263"), out string? name);
 
-            run.Equal(name, null, "nothing to build");
+                run.Equal(name, null, $"{units}: nothing to build");
+                run.Contains(problem ?? string.Empty, units == UsFeet ? "US survey feet" : "international feet", $"{units}: the file's unit");
+                run.Contains(problem ?? string.Empty, "coordinates in US survey feet", $"{units}: the order's X/Y unit");
+                run.Contains(problem ?? string.Empty, "heights in international feet", $"{units}: the order's height unit");
+                run.Contains(problem ?? string.Empty, "does not convert", $"{units}: and that the plugin does not convert");
+            }
+        });
+
+        run.Case("LandXML file, a feet frame whose two units agree with the file: its one surface is named for Civil 3D", () =>
+        {
+            AutoCadImportPlan usFeet = Civil(Full(WithUsFeetHeights), DrawingZone.None);
+            run.False(usFeet.IsRefused, $"planned ({usFeet.Refusal})");
+            run.Equal(usFeet.VerticalUnit, "ftUS", "heights in US survey feet, as X/Y");
+
+            run.Equal(Check(usFeet, LandXml(UsFeet, "2263"), out string? name), null, "the order's own US survey foot, X/Y and heights");
+            run.Equal(name, "Terrain", "named");
+
+            string? problem = Check(usFeet, LandXml(Feet, "2263"), out string? none);
+            run.Equal(none, null, "the international foot in a US-survey-foot order: nothing to build");
             run.Contains(problem ?? string.Empty, "international feet", "the file's unit");
-            run.Contains(problem ?? string.Empty, "US survey feet", "the order's X/Y unit");
+            run.Contains(problem ?? string.Empty, "US survey feet", "the order's unit");
         });
 
         run.Case("LandXML file, a linear unit this plugin does not know builds no surface, naming the value", () =>
@@ -768,9 +818,13 @@ internal static class AutoCadThreePlanTests
 
     /// <summary>A LandXML file of one surface named <c>Terrain</c>, with the <c>Units</c> element and the EPSG code given, or neither.</summary>
     private static string LandXml(string? units, string? epsg) =>
+        LandXmlWith(units, epsg is null ? null : $"<CoordinateSystem epsgCode=\"{epsg}\" horizontalCoordinateSystemName=\"Synthetic\"/>");
+
+    /// <summary>A LandXML file of one surface named <c>Terrain</c>, with the <c>Units</c> and <c>CoordinateSystem</c> elements given as written, or neither.</summary>
+    private static string LandXmlWith(string? units, string? coordinateSystem) =>
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?><LandXML xmlns=\"http://www.landxml.org/schema/LandXML-1.2\" version=\"1.2\">"
         + (units ?? string.Empty)
-        + (epsg is null ? string.Empty : $"<CoordinateSystem epsgCode=\"{epsg}\" horizontalCoordinateSystemName=\"Synthetic\"/>")
+        + (coordinateSystem ?? string.Empty)
         + "<Surfaces><Surface name=\"Terrain\"><Definition surfType=\"TIN\"><Pnts><P id=\"1\">4512000 586500 20</P></Pnts></Definition></Surface></Surfaces></LandXML>";
 
     /// <summary>
@@ -826,6 +880,13 @@ internal static class AutoCadThreePlanTests
     {
         JsonObject feet = ThreePlanTests.Manifest(ThreePlanTests.Load(FeetBundle));
         manifest["frames"] = feet["frames"]!.DeepClone();
+    }
+
+    /// <summary>The feet frames with the order's heights in US survey feet too, so its two units agree.</summary>
+    private static void WithUsFeetHeights(JsonObject manifest)
+    {
+        WithFeetFrames(manifest);
+        manifest["frames"]!["georeferenced"]!["vertical_unit"] = new JsonObject { ["name"] = "US survey foot", ["to_metres"] = 0.3048006096012192 };
     }
 
     /// <summary>Takes <paramref name="path"/> out of the catalog and lists it as not held, for <paramref name="reason"/>.</summary>

@@ -63,7 +63,7 @@ whole of an MPB 3.0 order, chosen in the vault before the download, or for a 3.0
 before Import; a 2.x order offers none, and its send begins as the window opens. "Import a complete order in one press" is the one
 press of an export sent from the web vault; from a 2.x order it places what the order's `hosts.autocad` block names, and from an MPB 3.0
 order the files its catalog names for the same parts: the contours, the aerial image, the public-record layers, the site linework
-and, in Civil 3D, the surface (from a 3.0 order, `Elevation/Terrain.landxml`). "Place content at the
+and, in Civil 3D, the surface (from a 2.x order, the LandXML its block names; from a 3.0 order, `Elevation/Terrain.landxml`). "Place content at the
 published georeference" places at the order's coordinates and refuses a drawing whose geographic location is in another coordinate
 system; in Civil 3D it also refuses a drawing whose coordinate zone is in another one, and never sets the zone. That zone check is
 Civil 3D-only because the zone is a Civil 3D drawing setting, which plain AutoCAD does not have. "Terrain" is a Civil 3D TIN surface
