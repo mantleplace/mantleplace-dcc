@@ -30,18 +30,19 @@ Upgrade by closing Revit and running the new `Install.cmd` over the old one; see
 
 ## Verification
 
-- Built from `<short sha>` on `main`. <Gate result at that commit, on the packaged zip installed clean in Revit 2027 and signed in on the dev platform: the ribbon commands, one dev-built 3.0 order imported at Max, Med and Min, one 2.x order imported, and a bundle sent from the web vault and imported.>
+- Built from `156146c` on `main`. Release gate (2026-11-18) at that commit, against this zip installed clean by the host harness in Revit 2027 and signed in on the dev platform: the plugin loaded with its ribbon; one platform-built MPB 3.0 order was downloaded and imported at Max, at Med and at Min, every layer the import window offers, unattended; a 2.x bundle imported; and the same 3.0 order sent from the web vault was received and imported.
 
-  - `revit.plugin-loads <result line>`
-  - `revit.import-check <result line>, bundle 3.0.0 level Max`
-  - `revit.import-check <result line>, bundle 3.0.0 level Med`
-  - `revit.import-check <result line>, bundle 3.0.0 level Min`
-  - `revit.import-check <result line>, bundle 2.x`
-  - `revit.connected-host <result line>`
-  - `vault.round-trip <result line>`
+  - `revit.plugin-loads`: pass, 8 of 8
+  - `revit.import-check`, bundle 3.0.0 level Max: pass, 41 of 41
+  - `revit.import-check`, bundle 3.0.0 level Med: pass, 41 of 41
+  - `revit.import-check`, bundle 3.0.0 level Min: pass, 41 of 41
+  - `revit.import-check`, bundle 2.2.0: pass, 18 of 18
+  - `revit.connected-host`: 25 of 27. Its presence and import steps passed. Its cancel step sends the same 3.0 order to the same project a second time, and the plugin refused it before its import window opened, as Upgrading says it does ([677](https://github.com/mantleplace/mantleplace-dcc/issues/677)); cancelling a sent bundle was not exercised.
+  - `vault.round-trip`: pass, 27 of 27
 
+- Not run: Revit 2025 and 2026; a second bundle into a project that holds an import; roads, road surfaces, water, land use and land cover from a 3.0 order (the order holds none of those files, so each step was shown as skipped).
 - Published asset: <check from step 4 and its date>.
-- `MantlePlace-Revit-1.2.0.zip` sha256 `<sha256 of the zip that passed the gate>`
+- `MantlePlace-Revit-1.2.0.zip` sha256 `1fe84c327460c35ff64f973cb32a205192a986b7d43908ed2dde0b6519271974`
 - Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
 
 Previous: [revit-1.1.1](https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-1.1.1)
