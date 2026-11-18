@@ -66,6 +66,14 @@ struct FMantlePlaceManifestThreeLogic
 	static const TArray<FString>& RequestedFiles();
 
 	/**
+	 * Of `Names`, the ones the read's catalog lists: held in the download, or named by the catalog and
+	 * missing from the zip. A file the platform refused as not in the bundle is held against this: the
+	 * manifest listing it contradicts the refusal. A file stated not held, or never named, is not listed.
+	 * Matched regardless of case; in the order of `Names`.
+	 */
+	static TArray<FString> ListedAmong(const FMantlePlaceBundleRead& Read, const TArray<FString>& Names);
+
+	/**
 	 * Fill `OutManifest` from a 3.x read and its manifest text. False, with OutError naming the value,
 	 * when the manifest is not one this host can place at all (no site origin, a frame not in metres, an
 	 * axis it does not know); every per-step problem is a named skip instead.

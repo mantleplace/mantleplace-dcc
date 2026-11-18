@@ -367,6 +367,51 @@ bool FMantlePlaceVaultLogic::ParseLevelDownloadResponse(
 	return true;
 }
 
+bool FMantlePlaceVaultLogic::FilesLeftAfterNotInBundle(int32 ResponseCode, const FString& JsonStr,
+	const TArray<FString>& Asked, TArray<FString>& OutRemaining, TArray<FString>& OutAbsent)
+{
+	if (ResponseCode != 404)
+	{
+		return false;
+	}
+	const TSharedPtr<FJsonObject> Root = VaultDeserializeObject(JsonStr);
+	FString Code;
+	if (!Root.IsValid() || !Root->TryGetStringField(TEXT("code"), Code) || Code != TEXT("file_not_in_bundle"))
+	{
+		return false;
+	}
+	const TArray<TSharedPtr<FJsonValue>>* Named = nullptr;
+	if (!Root->TryGetArrayField(TEXT("files"), Named) || Named == nullptr || Named->Num() == 0)
+	{
+		return false;
+	}
+	TArray<FString> Absent;
+	for (const TSharedPtr<FJsonValue>& Value : *Named)
+	{
+		FString Name;
+		if (!Value.IsValid() || !Value->TryGetString(Name) || !Asked.Contains(Name))
+		{
+			return false; // a name this request never asked for: not a refusal it can answer by asking less
+		}
+		Absent.AddUnique(Name);
+	}
+	TArray<FString> Remaining;
+	for (const FString& File : Asked)
+	{
+		if (!Absent.Contains(File))
+		{
+			Remaining.Add(File);
+		}
+	}
+	if (Remaining.Num() == 0)
+	{
+		return false;
+	}
+	OutRemaining = MoveTemp(Remaining);
+	OutAbsent = MoveTemp(Absent);
+	return true;
+}
+
 bool FMantlePlaceVaultLogic::ParseDownloadResponse(const FString& JsonStr, FMantlePlacePresignedDownload& OutDownload, FString& OutError)
 {
 	const TSharedPtr<FJsonObject> Root = VaultDeserializeObject(JsonStr);

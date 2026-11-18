@@ -427,6 +427,14 @@ struct FMantlePlacePresignedDownload
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	FString Level;
+
+	/**
+	 * The files a 3.0 level request named that the platform refused as not in this bundle (HTTP 404,
+	 * `file_not_in_bundle`), so the download was asked for without them. The import holds each against the
+	 * downloaded manifest: one the manifest lists is a platform fault, not a layer the site lacks.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	TArray<FString> AbsentFiles;
 };
 
 /**
