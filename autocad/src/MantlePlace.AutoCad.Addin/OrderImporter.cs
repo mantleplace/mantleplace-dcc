@@ -110,7 +110,8 @@ internal sealed class OrderImporter : IDisposable
                 }
             }
 
-            AutoCadBlockRead read = AutoCadBlockReader.Read(opened.ManifestText!);
+            // A 3.x bundle from its catalog and frames, a 2.x one from its hosts.autocad block.
+            AutoCadBlockRead read = AutoCadBlockReader.Read(opened.Manifest, opened.ManifestText);
             AutoCadImportPlan plan = AutoCadImportPlanner.Plan(read, DrawingObservations.Geolocation(database), zone);
             if (plan.IsRefused)
             {

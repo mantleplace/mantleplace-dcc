@@ -37,17 +37,16 @@ public static class ManifestVersions
     public const string MinSupportedManifestVersion = "1.0.0";
 
     /// <summary>
-    /// The newest MAJOR the 2.x manifest reader (<see cref="BundleManifestReader"/>) reads, and so the
-    /// newest the AutoCAD plugin imports and announces (<see cref="AutoCadNewestImportedMajor"/>). A
+    /// The newest MAJOR the 2.x manifest reader (<see cref="BundleManifestReader"/>) reads. A
     /// <c>Metadata/manifest.json</c> of a higher major is refused with the update remedy, never parsed
     /// on a best effort (<c>spec/compatibility.md</c> §3).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Not what every host imports: each host states its own newest major once, when it registers
+    /// Not what a host imports: each host states its own newest major once, when it registers
     /// (<see cref="HostIdentity.NewestImportedMajor"/>), and its announcement and its refusal of a sent
-    /// bundle read that. Tooling outside this repository reads this line by name, as the AutoCAD
-    /// plugin's newest major, so it keeps this name and stays an integer literal.
+    /// bundle read that. Tooling outside this repository reads this line by name, as the 2.x reader's
+    /// newest major, so it keeps this name and stays an integer literal.
     /// </para>
     /// <para>
     /// The floor's major up to this one: 1.x and 2.x. MPB 2.0 moves and renames files and removes
@@ -71,10 +70,14 @@ public static class ManifestVersions
     public const int RevitNewestImportedMajor = 3;
 
     /// <summary>
-    /// The newest MAJOR the AutoCAD plugin imports, and so announces: 2, the 2.x reader's, since it
-    /// reads no 3.0 bundle yet.
+    /// The newest MAJOR the AutoCAD plugin imports, and so announces as <c>reads.maxMajor</c> and takes
+    /// when a bundle is sent from the web vault: 3, since it plans an import from a 3.x reading.
     /// </summary>
-    public const int AutoCadNewestImportedMajor = NewestSupportedMajor;
+    /// <remarks>
+    /// Tooling outside this repository reads this line by name, so it keeps this name and stays an
+    /// integer literal.
+    /// </remarks>
+    public const int AutoCadNewestImportedMajor = 3;
 
     /// <summary>
     /// The newest MAJOR <see cref="BundleReader"/> reads: a <c>Manifest.json</c> at a bundle's root of

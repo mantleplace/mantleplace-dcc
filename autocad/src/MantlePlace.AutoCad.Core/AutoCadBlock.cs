@@ -116,6 +116,25 @@ public sealed class AutoCadBlock
 
     /// <summary>The site linework's verdict; unstated on a block from before 1.19.0.</summary>
     public PartReadiness LineworkReadiness { get; init; } = PartReadiness.Unstated;
+
+    /// <summary>
+    /// Whether the block was read from an MPB 3.x bundle (<see cref="AutoCadThreeView"/>), which has no
+    /// <c>hosts.autocad</c> block: each part's file found by name in the catalog, in the frame its family
+    /// states. <c>false</c> for a 2.x block.
+    /// </summary>
+    public bool FromThree { get; init; }
+
+    /// <summary>
+    /// The parts a 3.x bundle leaves out, each with the sentence that says why, which the plan shows in
+    /// place of the part's own. Empty for a 2.x block, whose verdicts say it.
+    /// </summary>
+    public IReadOnlyDictionary<AutoCadPart, string> LeftOut { get; init; } = new Dictionary<AutoCadPart, string>();
+
+    /// <summary>
+    /// The public-record layers a 3.x bundle does not hold while it holds others, each as
+    /// <c>Name (why)</c>, which the records' sentence names. Empty for a 2.x block.
+    /// </summary>
+    public IReadOnlyList<string> RecordsLeftOut { get; init; } = [];
 }
 
 /// <summary>What reading a manifest for AutoCAD gave: the shared facts, and this host's block or why there is none.</summary>
@@ -152,6 +171,25 @@ public static class AutoCadBlockReader
 {
     /// <summary>This host's key under <c>hosts</c>, the id the platform knows the plugin by.</summary>
     public const string HostKey = "autocad";
+
+    /// <summary>
+    /// Reads a bundle of either major, as the shared reader found it: a 3.x bundle from its catalog and
+    /// frames (<see cref="AutoCadThreeView"/>), a 2.x one from its <c>hosts.autocad</c> block in
+    /// <paramref name="manifestText"/>, exactly as <see cref="Read(string)"/> reads it. Never throws.
+    /// </summary>
+    /// <param name="manifest">The shared reader's reading of the bundle, or <c>null</c> when it holds no manifest.</param>
+    /// <param name="manifestText">The 2.x manifest's text, or <c>null</c> for a 3.x bundle, which has none.</param>
+    public static AutoCadBlockRead Read(BundleManifest? manifest, string? manifestText)
+    {
+        if (AutoCadThreeView.IsThree(manifest))
+        {
+            return AutoCadThreeView.Read(manifest!);
+        }
+
+        return manifestText is not null
+            ? Read(manifestText)
+            : new AutoCadBlockRead { Manifest = manifest ?? new BundleManifest(), Refusal = LocalBundleImport.NotABundle };
+    }
 
     /// <summary>Reads the manifest text. Never throws.</summary>
     public static AutoCadBlockRead Read(string manifestJson)
