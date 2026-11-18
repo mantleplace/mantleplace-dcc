@@ -99,6 +99,44 @@ internal static class ThreePlanTests
                     }
                 }
             });
+
+            run.Case($"{corpusCase.Id}: the plan is identified by the order id the manifest states", () =>
+            {
+                Dictionary<string, string> files = Load(bundle);
+                BundleManifest manifest = Read(files);
+                if (!manifest.IsValid)
+                {
+                    return;
+                }
+
+                // A 3.0 manifest has no job id, so the order is the one identity it states (§9.3).
+                string orderId = Manifest(files)["order"]!["id"]!.GetValue<string>();
+                string token = LandPlan.BuildToken(orderId);
+                run.True(orderId.Length > 0, "the corpus bundle states an order id");
+                run.Equal(manifest.OrderId, orderId, "the reader carries the order id");
+                run.Equal(manifest.JobId, string.Empty, "and the manifest has no job id");
+                run.True(token != "unidentified", "so the build token is one the order id makes");
+
+                BundleImportPlan plan = Plan(manifest);
+                ImportStep? provenance = Step(plan, ImportStepKind.AttributionAndProvenance);
+                if (provenance is not null)
+                {
+                    run.Equal(provenance.Provenance?.OrderId, orderId, "the provenance carries the order id");
+                }
+
+                foreach (ImportStep step in plan.Steps)
+                {
+                    if (step.LandPlan is not null)
+                    {
+                        run.Equal(step.LandPlan.Build, token, $"{step.Kind}'s land plan is built from the order id");
+                    }
+
+                    if (step.Hazard is not null)
+                    {
+                        run.Equal(step.Hazard.Build, HazardPlan.BuildToken(orderId), $"{step.Kind}'s hazard plan is built from the order id");
+                    }
+                }
+            });
         }
     }
 
