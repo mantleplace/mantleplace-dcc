@@ -92,6 +92,13 @@ public sealed record BundleFile(string Path, FileFamily Family, long? Count, str
     /// catalog's order; empty when it names none, and for a 2.x file.
     /// </summary>
     public IReadOnlyList<string> Tables { get; init; } = [];
+
+    /// <summary>
+    /// The vocabulary a 3.x tree-points entry states its <c>foliage_type</c> values are drawn from
+    /// (<c>table.foliage_types.vocabulary</c>), verbatim; <c>null</c> when the entry states none, for
+    /// every other file, and for a 2.x file (which carries it on the layout instead).
+    /// </summary>
+    public string? FoliageTypeVocabulary { get; init; }
 }
 
 /// <summary>
