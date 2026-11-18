@@ -12,9 +12,11 @@
 #include "MantlePlaceImportTiming.h"
 #include "MantlePlaceManifestJson.h"
 #include "MantlePlaceMeshImporter.h"
+#include "MantlePlaceTerrainCollisionLogic.h"
 
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Landscape.h"
 #include "Materials/MaterialInstanceConstant.h"
 
 namespace
@@ -151,6 +153,11 @@ public:
 			Ctx.bAllRequestedSucceeded = false;
 			return;
 		}
+		// One ground: over a Landscape this import built (Both mode) the mesh is an overlay and does not
+		// collide, so a body rests on the Landscape and never on whichever surface is higher at a point.
+		const bool bLandscapeBuilt = Ctx.DrapeTargets.ContainsByPredicate(
+			[](const AActor* Target) { return Target != nullptr && Target->IsA<ALandscape>(); });
+		MantlePlaceMeshImporter::ApplyCollision(MeshActor, MantlePlaceTerrainCollisionLogic::ForTerrainMesh(bLandscapeBuilt));
 		Ctx.DrapeTargets.Add(MeshActor);
 		if (Ctx.DrapeMic != nullptr && !MantlePlaceDrape::AssignMaterial(MeshActor, Ctx.DrapeMic))
 		{

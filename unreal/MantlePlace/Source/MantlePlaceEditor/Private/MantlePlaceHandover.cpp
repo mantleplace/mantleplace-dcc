@@ -4,10 +4,12 @@
 
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportOrchestration.h"
+#include "MantlePlaceMeshImporter.h"
 #include "MantlePlaceOdblLogic.h"
 
 #include "Components/TextRenderComponent.h"
 #include "Editor.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/TextRenderActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -143,6 +145,12 @@ FMantlePlaceHandoverReport MantlePlaceHandover::Prepare(UWorld* World)
 				{
 					Actors[Other]->Modify();
 					Actors[Other]->SetIsTemporarilyHiddenInEditor(false);
+					// And it is the ground now: a terrain mesh laid over the Landscape did not collide.
+					if (AStaticMeshActor* Mesh = Cast<AStaticMeshActor>(Actors[Other]))
+					{
+						MantlePlaceMeshImporter::ApplyCollision(
+							Mesh, MantlePlaceTerrainCollisionLogic::ForTerrainMesh(/*bLandscapeBuilt*/ false));
+					}
 				}
 			}
 		}

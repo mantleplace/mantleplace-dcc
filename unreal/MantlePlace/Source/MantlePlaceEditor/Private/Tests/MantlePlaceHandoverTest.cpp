@@ -10,8 +10,10 @@
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportTiming.h"
+#include "MantlePlaceMeshImporter.h"
 #include "MantlePlaceOdblLogic.h"
 
+#include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "DataLayer/DataLayerEditorSubsystem.h"
 #include "Editor.h"
@@ -130,6 +132,10 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 		{ TEXT("Mesh/Terrain.glb") }, TEXT("terrain"));
 	AStaticMeshActor* Road = ClaimActor(World, OrderA, TEXT("MP_TestRoad"), Family::Roads,
 		{ TEXT("Vector/RoadSplines.gpkg") });
+	// The mesh overlays a Landscape this import built (Both mode), so the import left it without collision.
+	MantlePlaceMeshImporter::ApplyCollision(Mesh, MantlePlaceTerrainCollisionLogic::ForTerrainMesh(/*bLandscapeBuilt*/ true));
+	TestEqual(TEXT("fixture: the terrain mesh over the landscape does not collide"),
+		Mesh->GetStaticMeshComponent()->GetCollisionEnabled(), ECollisionEnabled::Type(ECollisionEnabled::NoCollision));
 	AStaticMeshActor* Buildings = ClaimActor(World, OrderA, TEXT("MP_TestBuildings"), Family::Buildings,
 		{ TEXT("Mesh/Buildings.glb") });
 	AStaticMeshActor* OtherRoad = ClaimActor(World, OrderB, TEXT("MP_TestOtherRoad"), Family::Roads,
@@ -170,6 +176,9 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 		FString(TEXT("MP_TestLandscape")));
 	TestEqual(TEXT("no ODbL actor is left in the level"), CountOf(World, OdblTag), 0);
 	TestTrue(TEXT("the Produced Work mesh stays"), IsValid(Mesh));
+	TestEqual(TEXT("and it is the ground now: the mesh that stands in for the landscape collides"),
+		IsValid(Mesh) ? Mesh->GetStaticMeshComponent()->GetCollisionEnabled() : ECollisionEnabled::NoCollision,
+		ECollisionEnabled::Type(ECollisionEnabled::QueryAndPhysics));
 	TestTrue(TEXT("so do the buildings"), IsValid(Buildings));
 	TestTrue(TEXT("and an actor that is not an import's"), IsValid(Plain) && Plain->GetFolderPath() == FName(TEXT("Mine")));
 	TestFalse(TEXT("the removed landscape is gone"), IsValid(Landscape));

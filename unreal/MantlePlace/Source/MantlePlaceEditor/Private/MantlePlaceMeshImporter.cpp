@@ -10,9 +10,11 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/CollisionProfile.h"
 #include "Engine/World.h"
 #include "IAssetTools.h"
 #include "Modules/ModuleManager.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "UObject/UObjectGlobals.h"
 
 namespace MantlePlaceMeshImporter
@@ -68,6 +70,40 @@ namespace MantlePlaceMeshImporter
 		return nullptr;
 	}
 
+	/** Collide as the mesh's own triangles: complex as simple, with Interchange's simple hull removed. */
+	static void SetSurfaceCollision(UStaticMesh* Mesh)
+	{
+		Mesh->Modify();
+		if (Mesh->IsNaniteEnabled())
+		{
+			// Complex collision is cooked from the render LOD0, which for a Nanite mesh is its fallback
+			// mesh, reduced by default (27,123 of 255,024 triangles on a 0.25 km2 terrain, up to 0.88 m
+			// off the surface Nanite draws). A fallback that keeps every triangle makes the collision the
+			// drawn surface. Interchange turns Nanite on for a glTF by default, so this is every terrain mesh.
+			FMeshNaniteSettings Settings = Mesh->GetNaniteSettings();
+			Settings.FallbackTarget = ENaniteFallbackTarget::PercentTriangles;
+			Settings.FallbackPercentTriangles = 1.0f;
+			Mesh->SetNaniteSettings(Settings);
+			Mesh->NotifyNaniteSettingsChanged();
+		}
+		if (Mesh->GetBodySetup() == nullptr)
+		{
+			Mesh->CreateBodySetup();
+		}
+		UBodySetup* Body = Mesh->GetBodySetup();
+		if (Body == nullptr)
+		{
+			return;
+		}
+		Body->Modify();
+		Body->RemoveSimpleCollision();
+		Body->CollisionTraceFlag = CTF_UseComplexAsSimple;
+		Body->InvalidatePhysicsData();
+		Body->CreatePhysicsMeshes();
+		// The collision was chosen, not generated: a rebuild of the mesh keeps it.
+		Mesh->bCustomizedCollision = true;
+	}
+
 	UStaticMesh* ImportMeshAsset(
 		const FMantlePlaceVaultManifest& Manifest,
 		const FString& GlbFile,
@@ -101,6 +137,7 @@ namespace MantlePlaceMeshImporter
 			Mesh->NotifyNaniteSettingsChanged();
 		}
 
+		SetSurfaceCollision(Mesh);
 		return Mesh;
 	}
 
@@ -133,6 +170,7 @@ namespace MantlePlaceMeshImporter
 
 		Actor->SetMobility(EComponentMobility::Static);
 		Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
+		ApplyCollision(Actor, MantlePlaceTerrainCollisionLogic::ForTerrainMesh(/*bLandscapeBuilt*/ false));
 		// Labelled, tagged and filed by the caller. See MantlePlaceLandscapeImporter::Import.
 		return Actor;
 	}
@@ -167,7 +205,21 @@ namespace MantlePlaceMeshImporter
 
 		Actor->SetMobility(EComponentMobility::Static);
 		Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
+		ApplyCollision(Actor, MantlePlaceTerrainCollisionLogic::ForBuildings());
 		// Labelled, tagged and filed by the caller.
 		return Actor;
+	}
+
+	void ApplyCollision(AStaticMeshActor* Actor, EMantlePlaceMeshCollision Collision)
+	{
+		UStaticMeshComponent* Component = Actor != nullptr ? Actor->GetStaticMeshComponent() : nullptr;
+		if (Component == nullptr)
+		{
+			return;
+		}
+		Component->Modify();
+		Component->SetCollisionProfileName(Collision == EMantlePlaceMeshCollision::Surface
+			? UCollisionProfile::BlockAll_ProfileName
+			: UCollisionProfile::NoCollision_ProfileName);
 	}
 }
