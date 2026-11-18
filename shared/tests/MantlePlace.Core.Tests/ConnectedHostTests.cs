@@ -593,7 +593,7 @@ internal static class ConnectedHostTests
                     : null,
             };
             VaultClient client = DownloadLevelTests.SignedInVault(handler, BundleImportPlanner.ThreeFiles, out AuthSession session);
-            string root = Path.Combine(Path.GetTempPath(), "mantleplace-sent-three-" + Guid.NewGuid().ToString("N"));
+            string root = Path.Combine(Path.GetTempPath(), "mantleplace-levels-" + Guid.NewGuid().ToString("N"));
             try
             {
                 VaultExportSource source = new(client, new BundleCache(root));
