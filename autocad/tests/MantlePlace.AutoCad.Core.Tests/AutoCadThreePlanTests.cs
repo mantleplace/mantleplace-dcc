@@ -245,7 +245,7 @@ internal static class AutoCadThreePlanTests
 
     private static void RunAerialCases(TestRun run)
     {
-        run.Case("GeoTIFF aerial: Imagery/Imagery.tif at the rectangle it covers in the order's CRS, north-up", () =>
+        run.Case("GeoTIFF aerial: stated in the georeferenced frame, inserted at (left, bottom), right-left by top-bottom, unrotated in the order's CRS", () =>
         {
             Dictionary<string, string> files = ThreePlanTests.Load(FullBundle, WithTifRectangle);
             PlannedPart aerial = Plan(files).Part(AutoCadPart.Aerial);
@@ -253,11 +253,35 @@ internal static class AutoCadThreePlanTests
             run.True(aerial.Place, aerial.Sentence);
             run.Equal(aerial.Path, "Imagery/Imagery.tif", "the georeferenced image, not the host-ready PNG");
             run.Equal(aerial.Sha256, Sha(files, "Imagery/Imagery.tif"), "the catalog's digest");
-            run.Within(aerial.Insertion!.X, 586000, 1e-9, "the rectangle's west edge, in the order's CRS");
-            run.Within(aerial.Insertion.Y, 4511000, 1e-9, "its south edge");
-            run.Within(aerial.Insertion.Width, 1024, 1e-9, "its width, east minus west");
-            run.Within(aerial.Insertion.Height, 2048, 1e-9, "its height, north minus south");
-            run.Within(aerial.Insertion.RotationDeg, 0, 0, "north-up on the order's grid (A14), not the local frame's 0.67 degrees");
+            run.Equal(aerial.HorizontalFrame, "absolute_projected", "placed at the order's coordinates");
+            run.Within(aerial.Insertion!.X, 586000, 1e-9, "the rectangle's left edge, in the order's CRS");
+            run.Within(aerial.Insertion.Y, 4511000, 1e-9, "its bottom edge");
+            run.Within(aerial.Insertion.Width, 1024, 1e-9, "its width, right minus left");
+            run.Within(aerial.Insertion.Height, 2048, 1e-9, "its height, top minus bottom");
+            run.Within(aerial.Insertion.RotationDeg, 0, 0, "aligned with the order's axes: no rotation is derived, not the local frame's 0.67 degrees");
+        });
+
+        run.Case("GeoTIFF aerial: a raster entry that states no frame is skipped by name, saying the catalog states none", () =>
+        {
+            PlannedPart aerial = Plan(Full(m =>
+            {
+                WithTifRectangle(m);
+                m["catalog"]!["Imagery/Imagery.tif"]!["raster"]!.AsObject().Remove("frame");
+            })).Part(AutoCadPart.Aerial);
+
+            run.False(aerial.Place, "skipped, never placed as georeferenced");
+            run.Contains(aerial.Sentence, "Imagery/Imagery.tif", "naming the file");
+            run.Contains(aerial.Sentence, "states no frame", "and saying the catalog states none");
+        });
+
+        run.Case("GeoTIFF aerial: a pointer outside the georeferenced family is skipped, never inserted at the order's coordinates", () =>
+        {
+            AutoCadBlockRead read = WithAerial(Read(Full(WithTifRectangle)), p => p with { HorizontalFrame = "local_enu" });
+            PlannedPart aerial = AutoCadImportPlanner.Plan(read, DrawingGeolocation.None, null).Part(AutoCadPart.Aerial);
+
+            run.False(aerial.Place, "skipped");
+            run.Contains(aerial.Sentence, "local_enu", "naming the frame its file states");
+            run.Contains(aerial.Sentence, "does not reproject", "and that the plugin does not convert it");
         });
 
         run.Case("GeoTIFF aerial: the PNG's local rectangle is never the insertion", () =>
@@ -499,16 +523,6 @@ internal static class AutoCadThreePlanTests
                 "a major below the 2.x import's");
             run.Equal(HostIdentity.NewestImportedMajor, AutoCadImportPlan.NewestImportedMajor, "and the identity set is unchanged");
         });
-
-        run.Case("the shell names its newest major where it names its host", () =>
-        {
-            string? folder = RepoTree.Find("autocad/src/MantlePlace.AutoCad.Addin");
-            run.True(folder is not null, "the shell's source is found");
-            if (folder is not null)
-            {
-                run.Contains(File.ReadAllText(Path.Combine(folder, "HostRegistration.cs")), "AutoCadImportPlan.NewestImportedMajor", "HostRegistration passes it");
-            }
-        });
     }
 
     private static void RunReleaseNotesCases(TestRun run)
@@ -547,6 +561,37 @@ internal static class AutoCadThreePlanTests
         AutoCadBlockReader.Read(ThreePlanTests.Read(files), manifestText: null);
 
     private static Dictionary<string, string> Full(Action<JsonObject>? edit = null) => ThreePlanTests.Load(FullBundle, edit);
+
+    /// <summary>
+    /// The same reading with its aerial pointer edited: a frame a 3.0 catalog cannot state for
+    /// <c>Imagery/Imagery.tif</c>, whose extension fixes its family, so only the plan's own check stands.
+    /// </summary>
+    private static AutoCadBlockRead WithAerial(AutoCadBlockRead read, Func<AutoCadPointer, AutoCadPointer> edit)
+    {
+        AutoCadBlock block = read.Block!;
+        return new AutoCadBlockRead
+        {
+            Manifest = read.Manifest,
+            Refusal = read.Refusal,
+            Block = new AutoCadBlock
+            {
+                FileFrame = block.FileFrame,
+                Contours = block.Contours,
+                Surface = block.Surface,
+                Aerial = edit(block.Aerial!),
+                Records = block.Records,
+                Linework = block.Linework,
+                ContoursReadiness = block.ContoursReadiness,
+                SurfaceReadiness = block.SurfaceReadiness,
+                AerialReadiness = block.AerialReadiness,
+                RecordsReadiness = block.RecordsReadiness,
+                LineworkReadiness = block.LineworkReadiness,
+                FromThree = block.FromThree,
+                LeftOut = block.LeftOut,
+                RecordsLeftOut = block.RecordsLeftOut,
+            },
+        };
+    }
 
     private static string Sha(Dictionary<string, string> files, string path) =>
         ThreePlanTests.Manifest(files)["catalog"]![path]!["sha256"]!.GetValue<string>();

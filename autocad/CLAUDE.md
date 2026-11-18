@@ -90,10 +90,11 @@ key this suite must assert, or it fails.
   [`shared/src/MantlePlace.Wpf`](../shared/README.md); the shell opens them and hands them its main
   window, its feedback launcher and its About sentences, and its ribbon reads the monogram from the
   same assembly (`MarkImages`). The shell declares no window of its own. Every import opens the import
-  window (`ImportWindowThread`, `HPS-60`) through `WindowedImport`, with no checklist. Import Bundle's run
-  begins as it opens; a send from the web vault and an import from the vault browser open on the shared
-  window's stage before Import (`ImportWindowRequest.BeforeImport`, `WindowedImportStage`), and a sent 3.0
-  order shows the level control there, as Revit's window does. Its steps and their states are
+  window (`ImportWindowThread`, `HPS-60`) through `WindowedImport`, with no checklist. The window waits for
+  Import only when it offers a choice: a send from the web vault whose order offers levels opens on the
+  shared window's stage before Import (`ImportWindowRequest.BeforeImport`, `WindowedImportStage`) with the
+  level control, as Revit's window does. Every other run (Import Bundle, the vault browser, a 2.x send)
+  begins as the window opens. Its steps and their states are
   `AutoCadImportRun` (Core), each row named by this host (`ImportRunRow.Named`): `Verify Files`, then each
   placed part, one transaction a step, posted one per dispatcher operation so Cancel is heard between
   steps. An order comes into a drawing from the vault browser (Prepare, download, Import), from an export

@@ -18,7 +18,8 @@ namespace MantlePlace.AutoCad;
 /// </para>
 /// <para>
 /// The 2.x parts and what each reads in 3.0: the contours, <see cref="ContoursPath"/>; the aerial,
-/// <see cref="AerialPath"/> at the rectangle its catalog entry states in the order's CRS, north-up (A14);
+/// <see cref="AerialPath"/> at the rectangle its catalog entry states in the order's CRS, aligned with that
+/// system's axes, and only when the entry states the georeferenced frame (A14);
 /// each public-record layer, a <c>Records/*.dxf</c> named by its file (A06); and the site linework,
 /// <see cref="LineworkPath"/>. The Civil 3D surface is left out with its reason: this version builds no
 /// surface from a 3.0 bundle. A file the manifest lists as not held is skipped with the manifest's
@@ -231,20 +232,43 @@ public static class AutoCadThreeView
     }
 
     /// <summary>
-    /// The aerial: the GeoTIFF at the rectangle its catalog entry states in the order's CRS, north-up (A14).
+    /// The aerial: the GeoTIFF at the rectangle its catalog entry states in the order's CRS (A14), aligned
+    /// with that system's axes; the plugin derives no rotation. It fails closed: an entry outside the
+    /// georeferenced family, or whose raster frame is not stated as the georeferenced one, is not placed.
     /// <paramref name="why"/> is the sentence for an image that cannot be placed as stated.
     /// </summary>
     private static AutoCadPointer? Aerial(BundleContents contents, Frame frame, out string? why)
     {
         why = null;
         string label = AutoCadImportPlanner.LabelOf(AutoCadPart.Aerial);
-        RasterGrid? raster = contents.Find(AerialPath)?.Raster;
+        BundleFile? file = contents.Find(AerialPath);
+        RasterGrid? raster = file?.Raster;
 
-        if (raster?.Frame is { } stated && !string.Equals(stated, GeoreferencedRasterFrame, StringComparison.OrdinalIgnoreCase))
+        // A catalog entry is placed only as it states itself: in the georeferenced family, its rectangle
+        // in the georeferenced frame. A file the catalog names and the bundle lacks has no entry here,
+        // and is planned so the run says it is missing.
+        if (file is not null)
         {
-            why = $"{label}: not imported, because the catalog states {AerialPath}'s rectangle in the \"{stated}\" frame, not the "
-                + "order's coordinate system, and the plugin does not reproject.";
-            return null;
+            if (file.Family != FileFamily.Georeferenced)
+            {
+                why = $"{label}: not imported, because {AerialPath} is not in the georeferenced family, so its coordinates are "
+                    + "not the order's, and the plugin does not reproject.";
+                return null;
+            }
+
+            if (raster?.Frame is not { } stated)
+            {
+                why = $"{label}: not imported, because the catalog states no frame for {AerialPath}'s rectangle, so it is not "
+                    + "shown to be in the order's coordinate system, and the plugin does not assume it is.";
+                return null;
+            }
+
+            if (!string.Equals(stated, GeoreferencedRasterFrame, StringComparison.OrdinalIgnoreCase))
+            {
+                why = $"{label}: not imported, because the catalog states {AerialPath}'s rectangle in the \"{stated}\" frame, not the "
+                    + "order's coordinate system, and the plugin does not reproject.";
+                return null;
+            }
         }
 
         AerialInsertion? insertion = null;
@@ -252,7 +276,7 @@ public static class AutoCadThreeView
         {
             insertion = new AerialInsertion(r.Left, r.Bottom, r.Right - r.Left, r.Top - r.Bottom, 0);
         }
-        else if (contents.Find(AerialPath) is not null)
+        else if (file is not null)
         {
             why = $"{label}: not imported. The bundle publishes no insertion for it: its catalog states no rectangle for "
                 + $"{AerialPath}, and the plugin does not work one out.";

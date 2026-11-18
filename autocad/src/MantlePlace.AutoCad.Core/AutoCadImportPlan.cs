@@ -835,6 +835,13 @@ public static class AutoCadImportPlanner
             return Skip(AutoCadPart.Aerial, verdict, pointer, $"{label}: not imported, because its format \"{pointer.Format}\" is one this plugin does not know.");
         }
 
+        // A 3.x aerial is held to the frame and unit its file states, as every other 3.x part is; a 2.x
+        // block's aerial is planned as it always was.
+        if (block.FromThree && OutOfFrame(pointer, frame, hasHeights: false) is { } why)
+        {
+            return Skip(AutoCadPart.Aerial, verdict, pointer, $"{label}: not imported, because {why}.");
+        }
+
         if (pointer.Insertion is not { } insertion)
         {
             return Skip(AutoCadPart.Aerial, verdict, pointer, $"{label}: not imported. The bundle publishes no insertion for it, and the plugin does not work one out.");

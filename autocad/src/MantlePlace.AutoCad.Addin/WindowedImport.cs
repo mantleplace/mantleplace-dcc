@@ -12,11 +12,12 @@ namespace MantlePlace.AutoCad.Addin;
 internal sealed record WindowedImportEnd(ImportEnding Ending, string Summary);
 
 /// <summary>
-/// A stage before Import: the window opens on what the import will do, with Import to press, and the
-/// run waits for it (<see cref="ImportWindowRequest.BeforeImport"/>). With a level control, a received
-/// send's 3.0 order can be fetched at another level first, as in Revit.
+/// A stage before Import: the window opens on what the import will do, with the level control and Import
+/// to press, and the run waits for it (<see cref="ImportWindowRequest.BeforeImport"/>), so a received
+/// send's 3.0 order can be fetched at another level first, as in Revit. A stage with no level control
+/// offers no choice, so the import begins at once, as with no stage.
 /// </summary>
-/// <param name="Levels">The level control, on the level the zip is at; <c>null</c> for none.</param>
+/// <param name="Levels">The level control, on the level the zip is at; <c>null</c> for none, and then no stage is shown.</param>
 /// <param name="LevelNote">The line under the control: what the last level choice did; <c>null</c> for none.</param>
 /// <param name="Fetch">Downloads the order at a level, off AutoCAD's thread; <c>null</c> when no level can be changed.</param>
 /// <param name="Reopen">
@@ -38,11 +39,11 @@ internal sealed record WindowedImportStage(
 /// </summary>
 /// <remarks>
 /// <para>
-/// AutoCAD offers no per-layer choice, so the window opens with no checklist. Import Bundle's import
-/// begins at once. A received send and an import from the vault open on a stage before Import instead
-/// (<see cref="WindowedImportStage"/>): what the plan will do, and Import to press; a send's 3.0 order
-/// shows the level control there, and another level is downloaded and the window reopened on it before
-/// anything is drawn. What the window shows is <see cref="AutoCadImportRun"/>'s, decided in Core; this
+/// AutoCAD offers no per-layer choice, so the window opens with no checklist, and an import with nothing
+/// to choose begins at once: Import Bundle's, an import from the vault, and a received 2.x send. Only a
+/// received send whose order offers levels opens on a stage before Import (<see cref="WindowedImportStage"/>):
+/// what the plan will do, the level control and Import to press; another level is downloaded and the
+/// window reopened on it before anything is drawn. What the window shows is <see cref="AutoCadImportRun"/>'s, decided in Core; this
 /// runs the step it is handed (<see cref="OrderImporter"/>) and posts the view.
 /// </para>
 /// <para>
@@ -112,8 +113,9 @@ internal sealed class WindowedImport : IImportWindowHost
     /// <param name="ended">Told once the run is over, on AutoCAD's thread; <c>null</c> when nobody listens.</param>
     /// <param name="refusal">Why no import started: one is already running, or the window would not open.</param>
     /// <param name="stage">
-    /// A stage before Import, or <c>null</c> for an import that begins as the window opens. Shown only for
-    /// a plan that places something; a refusal is reported as before.
+    /// A stage before Import, or <c>null</c> for an import that begins as the window opens. Shown only when
+    /// it has a level control, over a plan that places something; otherwise the import begins at once, and
+    /// a refusal is reported as before.
     /// </param>
     /// <returns>
     /// Whether the import started; when it did, <paramref name="ended"/> will be called, unless a level
@@ -145,8 +147,9 @@ internal sealed class WindowedImport : IImportWindowHost
             import._fault = ex;
         }
 
-        // The stage before Import only over a plan to press it on: a refusal opens on its report, as before.
-        bool staged = stage is not null && import._importer is not null;
+        // The stage before Import only when it offers a choice (a level control) over a plan to press it on:
+        // with nothing to choose the import begins at once, and a refusal opens on its report, as before.
+        bool staged = stage is { Levels: not null } && import._importer is not null;
         ImportWindowRequest request = new(
             Path.GetFileName(zipPath),
             import._importer?.DeliveryLine,

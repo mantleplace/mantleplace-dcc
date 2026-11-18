@@ -17,17 +17,17 @@ namespace MantlePlace.AutoCad.Addin;
 /// </para>
 /// <para>
 /// A send opens the shared import window, as it does in Revit (<see cref="WindowedImport"/>, <c>HPS-60</c>).
-/// AutoCAD offers no per-layer choice, so there is no checklist to wait on: the window opens on a stage
-/// before Import (<see cref="WindowedImportStage"/>), saying what the import will do, and the web hears it
-/// open, then begin when Import is pressed. Cancel stops it between steps, which the web hears as cancelled;
-/// a close before Import is heard as dismissed before it started. While another import runs, from disk or
-/// from an earlier send, the export waits its turn.
+/// AutoCAD offers no per-layer choice, so there is no checklist to wait on. A send with nothing to choose
+/// (every 2.x order, which has no level control, <see cref="LevelControl.For"/>) begins as the window opens,
+/// and the web hears it open and begin. Cancel stops it between steps, which the web hears as cancelled.
+/// While another import runs, from disk or from an earlier send, the export waits its turn.
 /// </para>
 /// <para>
-/// A send names no level, so a 3.0 order arrives at the recommendation, and the stage shows the level
-/// control on it, as Revit's window does. Another level is downloaded into the slot and the window reopened
-/// on it, or on the level it held when the download failed, before anything is drawn. A 2.x order has no
-/// control (<see cref="LevelControl.For"/>).
+/// A send names no level, so a 3.0 order arrives at the recommendation. When its order offers levels the
+/// window opens on a stage before Import (<see cref="WindowedImportStage"/>) with the level control on it,
+/// as Revit's window does, and the web hears it open, then begin when Import is pressed; a close before
+/// Import is heard as dismissed before it started. Another level is downloaded into the slot and the window
+/// reopened on it, or on the level it held when the download failed, before anything is drawn.
 /// </para>
 /// </remarks>
 internal sealed class AutoCadExportImportHost : IExportImportHost
@@ -72,15 +72,19 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
         // the control on it; reopened after a level choice, on the level now in the slot. A 2.x order has none.
         VaultExportSource? source = MantlePlaceApplication.ExportSource;
         VaultBundle? listed = source?.Listed(export.OrderId);
+        // The window waits for Import only when it offers that choice: with no level control (every 2.x
+        // send) there is no stage, and the import begins as the window opens, as it always has.
         LevelControl? levels = held is { } level ? LevelControl.At(listed, level) : LevelControl.For(listed);
-        WindowedImportStage stage = new(
-            levels,
-            levelNote,
-            source is null || levels is null
-                ? null
-                : (chosen, token) => source.FetchLevelAsync(export.OrderId, chosen, new Progress<string>(_ => { }), token),
-            (zip, now, note) => Open(export, zip, now, note),
-            () => connected?.ImportBegan(export.Id));
+        WindowedImportStage? stage = levels is null
+            ? null
+            : new(
+                levels,
+                levelNote,
+                source is null
+                    ? null
+                    : (chosen, token) => source.FetchLevelAsync(export.OrderId, chosen, new Progress<string>(_ => { }), token),
+                (zip, now, note) => Open(export, zip, now, note),
+                () => connected?.ImportBegan(export.Id));
 
         if (Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.MdiActiveDocument is not { } document)
         {
@@ -128,7 +132,8 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
         connected?.ImportOpened(export.Id);
 
         // On the stage before Import, the web hears the import begin when Import is pressed (the stage's
-        // Began); a refusal shows its report at once, and is begun and ended as before.
+        // Began); with no stage the import has begun already, and a refusal shows its report at once,
+        // and is begun and ended as before.
         if (!WindowedImport.AwaitsImport)
         {
             connected?.ImportBegan(export.Id);

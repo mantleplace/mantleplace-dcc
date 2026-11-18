@@ -48,17 +48,22 @@ release replaces each with a status and a link. The `autocad` column is in that 
 the host it is built from, or names why it differs, and a row's `not applicable` is the same
 reason Revit gives (the capability has no meaning in a host that has no streaming layer or no landscape material).
 
-Seventeen rows of the `autocad` column are built in the tree and not yet released, so each still reads `not shipped` until the first
-release replaces it. Six are the account, vault and ribbon rows: sign in and out, search the vault, remove a download, the notice when an
-order arrives, receive a bundle sent from the web vault, which now imports it and reports the import back, and a `Mantle Place` tab
-of its own on the ribbon, as Revit has, in Civil 3D and plain AutoCAD alike. Eleven are import rows:
+Nineteen rows of the `autocad` column are built in the tree and not yet released, so each still reads `not shipped` until the first
+release replaces it. Seven are the account, vault and ribbon rows: sign in and out, list, prepare and download your orders, search
+the vault, remove a download, the notice when an order arrives, receive a bundle sent from the web vault, which now imports it and
+reports the import back, and a `Mantle Place` tab of its own on the ribbon, as Revit has, in Civil 3D and plain AutoCAD alike.
+Twelve are import rows:
 import a complete order in one press, refuse a manifest version outside the supported range,
-refuse a bundle whose bytes do not match its published digest, say the bundle's unit system and delivery CRS, say what a bundle holds
-that an import cannot place and why, place content at the published georeference, refuse a file that is not in the host frame,
-terrain, published contours, parcels and zoning, and site linework. Seven of them differ from Revit. "List, prepare and download your orders" is the listing alone (no Prepare, no
-download). "Import a complete order in one press" is the one press of an export sent from the web vault; it places what the order's
-`hosts.autocad` block names: the contours, the aerial image, the public-record layers, the site linework and, in Civil 3D only,
-the surface. "Place content at the
+refuse a bundle whose bytes do not match its published digest, say the bundle's unit system and delivery CRS, choose a fidelity
+level for each category before it runs, say what a bundle holds that an import cannot place and why, place content at the published
+georeference, refuse a file that is not in the host frame, terrain, published contours, parcels and zoning, and site linework.
+Eight of them differ from Revit. "List, prepare and download your orders" ends in an Import that begins as the import window opens,
+since the level was chosen in the vault and there is no checklist. "Choose a fidelity level for each category" is one level for the
+whole of an MPB 3.0 order, chosen in the vault before the download, or for a 3.0 order sent from the web vault, in the import window
+before Import; a 2.x order offers none, and its send begins as the window opens. "Import a complete order in one press" is the one
+press of an export sent from the web vault; from a 2.x order it places what the order's `hosts.autocad` block names, and from an MPB 3.0
+order the files its catalog names for the same parts: the contours, the aerial image, the public-record layers, the site linework
+and, in Civil 3D and from a 2.x order only, the surface. "Place content at the
 published georeference" places at the order's coordinates and refuses a drawing whose geographic location is in another coordinate
 system; in Civil 3D it also refuses a drawing whose coordinate zone is in another one, and never sets the zone. That zone check is
 Civil 3D-only because the zone is a Civil 3D drawing setting, which plain AutoCAD does not have. "Terrain" is a Civil 3D TIN surface
@@ -69,7 +74,8 @@ names, parcels and zoning among them, as polylines on a layer per record, which 
 as linework and not as Revit's hazard plan, so "Flood zones and steep ground" stays not built. "Site linework" is the
 order's linework drawing as polylines, each on a layer under the linework layer named by the layer the drawing puts it on, and no
 other host places it. A block from before either part existed names neither, and the import says so and places the rest. The aerial
-image is placed at its published insertion, which is not the imagery drape Revit's row means, so "Imagery drape" stays not built.
+image is placed at its published insertion (from a 3.0 order, the rectangle the GeoTIFF's catalog entry states in the georeferenced
+frame, and only when it states that frame), which is not the imagery drape Revit's row means, so "Imagery drape" stays not built.
 Every other row that places content, and the Prepare-ended notice and the re-join, are not built.
 
 Every cell but `not applicable` is a status, an em dash and one or more links: the release it comes
@@ -93,8 +99,8 @@ come from; this table never restates one.
 | --- | --- | --- | --- | --- |
 | 1. Sign in (`HPS-04` … `HPS-13`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 2. List the vault (`HPS-18`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
-| 3. Choose a level (`HPS-59`) | planned for the 3.0 reader release | planned for the 3.0 reader release | planned for the 3.0 reader release | planned for the 3.0 reader release |
-| 4. Download (`HPS-18`, `HPS-26`) | supported | supported | planned for the 3.0 reader release | planned for the 3.0 reader release |
+| 3. Choose a level (`HPS-59`) | planned for the 3.0 reader release | planned for the 3.0 reader release | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
+| 4. Download (`HPS-18`, `HPS-26`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 5. Import, through the import window (`HPS-60`) | planned for the 3.0 reader release; **named gap: its import window has no per-layer checklist** | supported | not shipped — no `autocad` release yet; **named gap: its import window has no per-layer checklist** | not shipped — no `autocad` release yet; **named gap: its import window has no per-layer checklist** |
 | 6. Import a zip from disk, with no account (`HPS-61`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
 | 7. Refuse a version out of range (`HPS-31`) | supported | supported | not shipped — no `autocad` release yet | not shipped — no `autocad` release yet |
