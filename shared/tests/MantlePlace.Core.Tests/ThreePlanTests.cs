@@ -208,6 +208,57 @@ internal static class ThreePlanTests
             run.Equal(points?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.NotInFormat, "the points file is skipped: 3.0 has none");
         });
 
+        run.Case("the foliage vocabulary the Trees.csv entry states rides on the vegetation step, so a shrub row is a shrub", () =>
+        {
+            // The corpus entry states the table's columns and no vocabulary, so this case edits a copy
+            // of the manifest to state the one the served 3.0.0 schema carries at table.foliage_types.
+            const string vocabulary = FoliageTypes.KnownVocabulary;
+            BundleManifest manifest = Read(Load(FullBundle, document =>
+                document["catalog"]!["Landcover/Trees.csv"]!["table"]!.AsObject()["foliage_types"] =
+                    new JsonObject { ["vocabulary"] = vocabulary, ["values"] = new JsonArray("tree", "shrub") }));
+
+            run.Equal(
+                manifest.Contents!.Find("Landcover/Trees.csv")?.FoliageTypeVocabulary,
+                vocabulary,
+                "the shared reader exposes the vocabulary the entry states, verbatim");
+            run.Equal(
+                manifest.Contents!.Find("Elevation/Terrain.dxf")?.FoliageTypeVocabulary,
+                null,
+                "and no other file has one");
+
+            ImportStep? trees = Step(Plan(manifest), ImportStepKind.Vegetation);
+            run.Equal(trees?.FoliageTypeVocabulary, vocabulary, "the vegetation step carries it, as a 2.x step does");
+
+            TreePointsParse parse = TreePointsReader.Parse(
+                "x,y,ground_z,height_m,crown_radius_m,foliage_type\n"
+                + "1,2,3,4,1,tree\n"
+                + "5,6,7,1,0.5,shrub\n"
+                + "9,8,7,6,2,\n",
+                trees!.Frame!,
+                trees.FoliageTypeVocabulary,
+                trees.Units);
+            run.True(parse.Failure is null, $"the tree file parses ({parse.Failure})");
+            run.Equal(parse.Points.Count, 3, "every row is a point");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "a tree row is a tree");
+            run.Equal(parse.Points[1].FoliageType, FoliageType.Shrub, "a shrub row is a shrub");
+            run.Equal(parse.Points[2].FoliageType, FoliageType.Tree, "an empty cell is a tree");
+            run.Equal(parse.EmptyFoliageCells, 1, "and is counted");
+            run.Equal(
+                PlantingFamilies.FamilyName(parse.Points[1].FoliageType),
+                ShrubFamily.FamilyName,
+                "so the shrub is planted with the shrub family");
+
+            BundleManifest unstated = Read(Load(FullBundle));
+            run.Equal(
+                unstated.Contents!.Find("Landcover/Trees.csv")?.FoliageTypeVocabulary,
+                null,
+                "an entry that states none reads none");
+            run.Equal(
+                Step(Plan(unstated), ImportStepKind.Vegetation)?.FoliageTypeVocabulary,
+                null,
+                "and its step carries none");
+        });
+
         run.Case("a 3.0 bundle imported again over its own earlier import follows the re-import rule", () =>
         {
             // The project's anchor is what the first import of the same 3.0 order wrote: its survey
