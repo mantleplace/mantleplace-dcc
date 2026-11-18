@@ -212,7 +212,9 @@ internal static class ThreePlanTests
         {
             // The corpus entry states the table's columns and no vocabulary, so this case edits a copy
             // of the manifest to state the one the served 3.0.0 schema carries at table.foliage_types.
-            const string vocabulary = FoliageTypes.KnownVocabulary;
+            // Pinned to the literal token the platform publishes for vocabulary "1" (spec/format-2.md), so a change to
+            // FoliageTypes.KnownVocabulary cannot silently follow the test.
+            const string vocabulary = "1";
             BundleManifest manifest = Read(Load(FullBundle, document =>
                 document["catalog"]!["Landcover/Trees.csv"]!["table"]!.AsObject()["foliage_types"] =
                     new JsonObject { ["vocabulary"] = vocabulary, ["values"] = new JsonArray("tree", "shrub") }));
