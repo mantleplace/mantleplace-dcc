@@ -99,6 +99,27 @@ rather than adding a second copy ([ADR 0002](../docs/adr/0002-import-identity.md
 root is a project setting — Project Settings ▸ Plugins ▸ Mantle Place ▸ *Generated content root* —
 the outliner folder is fixed.
 
+## Collision
+
+Every import sets its collision itself rather than taking the glTF importer's default, which wraps a
+whole mesh in one convex hull, a lid over the terrain that bodies and traces met instead of the
+ground.
+
+- **Landscape:** the engine's own landscape collision, built with the Landscape from the same
+  heights it draws.
+- **Mesh:** the terrain mesh collides as its own triangles (complex collision used as simple, with no
+  simple shapes). The mesh is a Nanite mesh, and the engine cooks its collision from the Nanite
+  fallback mesh, so the import keeps every triangle in that fallback: the collision is the surface
+  Nanite draws, not a reduced copy of it.
+- **Both:** the Landscape collides and the mesh laid over it does not, so there is one ground and a
+  body rests on the surface the Landscape draws. When **Prepare for handover** swaps the Landscape
+  out for the mesh, it turns the mesh's collision on.
+- **Buildings** collide as their own triangles.
+
+**World Partition.** A streaming proxy collides only while it is loaded, so at runtime there is no
+ground beyond a streaming source's loading range. To keep the whole ground loaded, turn off **Is
+Spatially Loaded** on the Landscape's streaming proxies.
+
 ## Sharing a level: ODbL content and Prepare for handover
 
 Content made from files the bundle marks `database` (an ODbL Derivative Database; a file with no

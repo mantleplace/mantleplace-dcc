@@ -30,6 +30,8 @@ FHandlers MakeAll()
 	Handlers.Add(MakeDrape());
 	Handlers.Add(MakeLandscape());
 	Handlers.Add(MakeCoverageRasters());
+	// The terrain mesh after the Landscape: in Both mode it turns its own collision off when it finds the
+	// Landscape this import built (MantlePlace.Import.TerrainCollisionLogic asserts the order).
 	Handlers.Add(MakeTerrainMesh());
 	Handlers.Add(MakeBuildings());
 	Handlers.Add(MakeRoadSplines());

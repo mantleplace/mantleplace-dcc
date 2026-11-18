@@ -4,10 +4,12 @@
 
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceImportOrchestration.h"
+#include "MantlePlaceMeshImporter.h"
 #include "MantlePlaceOdblLogic.h"
 
 #include "Components/TextRenderComponent.h"
 #include "Editor.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/TextRenderActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -143,6 +145,9 @@ FMantlePlaceHandoverReport MantlePlaceHandover::Prepare(UWorld* World)
 				{
 					Actors[Other]->Modify();
 					Actors[Other]->SetIsTemporarilyHiddenInEditor(false);
+					// And it is the ground now: the terrain mesh the import laid over the Landscape without
+					// collision gets it back. Any other mesh, and collision someone set by hand, stays as it is.
+					MantlePlaceMeshImporter::RestoreCollisionTurnedOff(Cast<AStaticMeshActor>(Actors[Other]));
 				}
 			}
 		}
