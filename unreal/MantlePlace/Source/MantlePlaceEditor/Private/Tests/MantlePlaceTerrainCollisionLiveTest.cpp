@@ -10,6 +10,7 @@
 #include "MantlePlaceEditorSettings.h"
 #include "MantlePlaceScopedRestore.h"
 #include "MantlePlaceRoofTraceLogic.h"
+#include "MantlePlaceVaultTypes.h"
 
 #include "AssetCompilingManager.h"
 #include "Components/StaticMeshComponent.h"
@@ -49,7 +50,8 @@
 //    complex (per-triangle) trace finds a roof, a default trace hits the buildings at that roof, not at
 //    a hull or box above it. Where the drawn ground lies over the roof (a building levelled to its lowest
 //    ground, on ground that rises across it by more than its height), the trace must hit that ground
-//    instead, and only the drawn ground: FMantlePlaceRoofTraceLogic judges each point.
+//    instead, and the terrain must collide where it is drawn there: FMantlePlaceRoofTraceLogic judges each
+//    point, and at most a small share of a level's roof points may lie under the drawn ground.
 //
 // The rendered ground is the Landscape's own height data (the heights its components draw), read back
 // from the first Landscape the run imports, so the Mesh cases are held to the same ground. The terrain
@@ -60,7 +62,8 @@
 //
 // The bundle is MP_LIVETEST_BUNDLE (the sealed archive of a bundle), as for MantlePlace.Import.LiveFreeTier:
 // a missing bundle, or one with no heightmap, warns and passes locally and fails where CI is set. A bundle
-// with no Terrain.glb (MPB 1.x) is measured in Landscape mode only, with a warning naming the modes left out.
+// older than 3.0 with no Terrain.glb is measured in Landscape mode only, with a warning naming the modes left
+// out; a 3.x bundle with no Terrain.glb fails, because the 3.0 file table holds the terrain mesh.
 // Each case opens a new unsaved map, and the run reopens the map it started on.
 
 namespace MantlePlaceTerrainCollisionLiveTest
@@ -198,11 +201,12 @@ struct FCase
 			TEXT("| %s | %s | traces hit %d/%d | at ground %d/%d | max |dz| %.2f m, mean dz %.2f m | sweeps hit %d/%d | "
 				 "colliding terrain representations %d (landscape %s, mesh %s) | proxies with collision %d/%d, centre hits %d | "
 				 "border hits %d/%d | open roofs hit at the roof %d/%d, max |dz| %.2f m | roofs under the drawn ground hit at the ground %d/%d | "
-				 "mesh: %s |"),
+				 "buried roof points %d of %d (%.2f %%) | mesh: %s |"),
 			*Level, *Mode, Hits, Points, Within, Points, MaxAbsDzCm / 100.0, Points > 0 ? SumDzCm / Points / 100.0 : 0.0,
 			SweepHits, Points, Representations(), bLandscapeBlocks ? TEXT("yes") : TEXT("no"),
 			bMeshBlocks ? TEXT("yes") : TEXT("no"), ProxiesWithCollision, Proxies, ProxyCentreHits, BorderHits, BorderPoints,
-			RoofWithin, RoofPoints, RoofMaxAbsDzCm / 100.0, CoveredAtGround, CoveredPoints,
+			RoofWithin, RoofPoints, RoofMaxAbsDzCm / 100.0, CoveredAtGround, CoveredPoints, CoveredPoints,
+			CoveredPoints + RoofPoints, 100.0 * FMantlePlaceRoofTraceLogic::BuriedFraction(CoveredPoints, RoofPoints),
 			MeshCollision.IsEmpty() ? TEXT("-") : *MeshCollision);
 	}
 };
@@ -509,16 +513,27 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 		return SkipOrFail(FString::Printf(TEXT("The bundle's manifest could not be read (%s)."), *ReadError));
 	}
 	// The ground every case is held to is read back from a Landscape, so a bundle with no heightmap has nothing
-	// to measure. One with no Terrain.glb (an MPB 1.x bundle) is measured in Landscape mode only: the Mesh and
+	// to measure. The terrain mesh is a member of the 3.0 file table (spec/format.md section 6,
+	// `Elevation/Terrain.glb`), so a 3.x bundle without it fails. Before 3.0 the pointers decided whether a
+	// bundle held one, so an older bundle with no Terrain.glb is measured in Landscape mode only: the Mesh and
 	// Both modes need the mesh, and the warning names what was not measured.
 	if (!Manifest.Heightmap.bPresent)
 	{
 		return SkipOrFail(TEXT("The bundle holds no heightmap, so there is no Landscape to measure the terrain against."));
 	}
+	const FMantlePlaceManifestVersion Version = FMantlePlaceManifestVersion::Parse(Manifest.Version);
+	const bool bMeshPromised = Version.bValid && Version.Major >= 3;
 	const bool bMeshModes = Manifest.Mesh.bPresent;
 	if (!bMeshModes)
 	{
-		AddWarning(TEXT("The bundle holds no Terrain.glb: the Mesh and Both modes were not measured, the Landscape mode was."));
+		if (bMeshPromised)
+		{
+			AddError(FString::Printf(TEXT("The bundle is MPB %s, whose file table holds Elevation/Terrain.glb, and it holds no Terrain.glb: "
+				"the Mesh and Both modes cannot be measured."), *Manifest.Version));
+			return false;
+		}
+		AddWarning(FString::Printf(TEXT("The bundle (MPB %s, before 3.0) holds no Terrain.glb: the Mesh and Both modes were not measured, "
+			"the Landscape mode was."), *Manifest.Version));
 	}
 
 	UWorld* StartWorld = GEditor->GetEditorWorldContext().World();
@@ -606,7 +621,12 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 			}
 			if (Manifest.Buildings.bPresent)
 			{
-				TestTrue(*FString::Printf(TEXT("%s: the building massing has open roofs to trace onto"), *Name), Case.RoofPoints > 0);
+				TestTrue(*FString::Printf(TEXT("%s: at least one open roof point was judged"), *Name), Case.RoofPoints > 0);
+				TestTrue(*FString::Printf(TEXT("%s: %d of %d roof points (%.2f %%) lie under the drawn ground, at most %.0f %% may"), *Name,
+					Case.CoveredPoints, Case.CoveredPoints + Case.RoofPoints,
+					100.0 * FMantlePlaceRoofTraceLogic::BuriedFraction(Case.CoveredPoints, Case.RoofPoints),
+					100.0 * FMantlePlaceRoofTraceLogic::MaxBuriedFraction),
+					FMantlePlaceRoofTraceLogic::IsBuriedWithinBound(Case.CoveredPoints, Case.RoofPoints));
 				TestEqual(*FString::Printf(TEXT("%s: every trace onto an open roof hits the buildings at the roof, not a hull above it"), *Name),
 					Case.RoofWithin, Case.RoofPoints);
 				TestEqual(*FString::Printf(TEXT("%s: every trace onto a roof the drawn ground lies over hits that ground"), *Name),

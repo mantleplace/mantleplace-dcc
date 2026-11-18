@@ -110,6 +110,48 @@ bool FMantlePlaceRoofTraceLogicTest::RunTest(const FString& Parameters)
 			EMantlePlaceRoofTraceVerdict::Missed);
 	}
 
+	// --- Defects that the judgement must not excuse. -------------------------------------------------
+	{
+		// (a) The drawn ground is 21.6 cm over the roof, but the terrain's collision sinks 30 cm below it, under
+		// the roof: a trace then meets the roof through ground that is drawn but does not collide.
+		FMantlePlaceRoofSample Sunk = Measured();
+		Sunk.TerrainZ = Sunk.GroundZ - 30.0;
+		Sunk.bHitBuildings = true;
+		Sunk.bHitTerrain = false;
+		Sunk.HitZ = Sunk.RoofZ;
+		TestTrue(TEXT("a roof under the drawn ground is covered, wherever the terrain's collision is"), Logic::IsCovered(Sunk));
+		TestEqual(TEXT("terrain collision sunk 30 cm under the drawn ground over a roof fails"), Logic::Judge(Sunk),
+			EMantlePlaceRoofTraceVerdict::Missed);
+		Sunk.bHitBuildings = false;
+		Sunk.bHitTerrain = true;
+		Sunk.HitZ = Sunk.TerrainZ;
+		TestEqual(TEXT("and so does a trace that meets that sunk collision"), Logic::Judge(Sunk), EMantlePlaceRoofTraceVerdict::Missed);
+	}
+	{
+		// (b) An open roof 1 cm over the drawn ground, with the terrain's collision raised 30 cm over the roof.
+		FMantlePlaceRoofSample Raised = Open();
+		Raised.GroundZ = Raised.RoofZ - 1.0;
+		Raised.GroundReliefCm = 40.0;
+		Raised.TerrainZ = Raised.RoofZ + 30.0;
+		Raised.bHitBuildings = false;
+		Raised.bHitTerrain = true;
+		Raised.HitZ = Raised.TerrainZ;
+		TestFalse(TEXT("a roof over the drawn ground is open, whatever the terrain's collision does"), Logic::IsCovered(Raised));
+		TestEqual(TEXT("terrain collision raised 30 cm over an open roof near the ground fails"), Logic::Judge(Raised),
+			EMantlePlaceRoofTraceVerdict::Missed);
+	}
+	{
+		FMantlePlaceRoofSample Off = Measured();
+		Off.TerrainZ = Off.GroundZ + 5.0;
+		Off.HitZ = Off.TerrainZ;
+		TestEqual(TEXT("a covering terrain collision 5 cm off the drawn ground fails"), Logic::Judge(Off),
+			EMantlePlaceRoofTraceVerdict::Missed);
+		Off.TerrainZ = Off.GroundZ + 0.3;
+		Off.HitZ = Off.TerrainZ;
+		TestEqual(TEXT("and one 0.3 cm off it (the terrain mesh, measured) passes"), Logic::Judge(Off),
+			EMantlePlaceRoofTraceVerdict::AtCoveringGround);
+	}
+
 	// --- A tie: the ground level with the roof, within the slack. -------------------------------------
 	{
 		FMantlePlaceRoofSample Tie = Open();
@@ -121,6 +163,15 @@ bool FMantlePlaceRoofTraceLogicTest::RunTest(const FString& Parameters)
 		Tie.HitZ = Tie.TerrainZ;
 		TestEqual(TEXT("and a trace meeting that ground is at the roof's height"), Logic::Judge(Tie), EMantlePlaceRoofTraceVerdict::AtRoof);
 	}
+
+	// --- How many roof points may lie under the drawn ground. ---------------------------------------
+	TestTrue(TEXT("1 buried point of 622 (the 3.0 bundle) is within the bound"), Logic::IsBuriedWithinBound(1, 621));
+	TestTrue(TEXT("no buried point is within the bound"), Logic::IsBuriedWithinBound(0, 10));
+	TestFalse(TEXT("roofs mostly under the ground fail"), Logic::IsBuriedWithinBound(500, 122));
+	TestFalse(TEXT("2 % of the roof points buried fails"), Logic::IsBuriedWithinBound(2, 98));
+	TestFalse(TEXT("no open roof point judged fails"), Logic::IsBuriedWithinBound(0, 0));
+	TestFalse(TEXT("every roof point buried fails"), Logic::IsBuriedWithinBound(3, 0));
+	TestEqual(TEXT("the buried fraction is buried over all roof points"), Logic::BuriedFraction(1, 621), 1.0 / 622.0);
 	return true;
 }
 
