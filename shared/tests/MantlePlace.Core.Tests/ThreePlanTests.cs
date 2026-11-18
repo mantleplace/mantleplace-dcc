@@ -208,6 +208,39 @@ internal static class ThreePlanTests
             run.Equal(points?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.NotInFormat, "the points file is skipped: 3.0 has none");
         });
 
+        run.Case("a 3.0 tree point lands where the toposolid is: offsets from the site origin, heights above its height", () =>
+        {
+            // Trees.csv is host-ready (spec/format.md §4): x and y are metres east and north of the site
+            // origin and ground_z is metres above the origin's height, so the file is already local. Read
+            // as absolute coordinates in the delivery CRS, the origin is subtracted a second time and
+            // every tree stands millions of metres from the site, with its height off by the origin's.
+            BundleImportPlan plan = Plan(Read(Load(FullBundle)));
+            ImportStep trees = Step(plan, ImportStepKind.Vegetation)!;
+            GeoOrigin origin = trees.Frame!.Origin;
+
+            TreePointsParse parse = TreePointsReader.Parse(
+                "x,y,ground_z,height_m,crown_radius_m\n"
+                + "12.5,-7.25,5.0,4,1\n"
+                + "-300,410,-2.5,6,2\n",
+                trees.Frame,
+                trees.FoliageTypeVocabulary,
+                trees.Units,
+                layer: trees.Layer,
+                groundBaseM: trees.HeightBaseM ?? 0.0);
+
+            run.True(parse.Failure is null, $"the tree file parses ({parse.Failure})");
+            run.Equal(parse.Points.Count, 2, "both rows are points");
+            run.Within(parse.Points[0].EastM, 12.5, 1e-9, "east is the offset the file states, not the offset less the origin");
+            run.Within(parse.Points[0].NorthM, -7.25, 1e-9, "north is the offset the file states");
+            run.Within(parse.Points[1].EastM, -300.0, 1e-9, "another row's east");
+            run.Within(parse.Points[1].NorthM, 410.0, 1e-9, "another row's north");
+            run.True(
+                parse.Points.All(point => Math.Abs(point.EastM) < 1000.0 && Math.Abs(point.NorthM) < 1000.0),
+                $"every tree is within the site's footprint, not {origin.Easting:N0} m from it");
+            run.Within(parse.Points[0].GroundElevationM, 25.0, 1e-9, "ground_z is above the origin's height of 20 m, so it lands at 25 m");
+            run.Within(parse.Points[1].GroundElevationM, 17.5, 1e-9, "a row below the origin's height lands below it, not below zero");
+        });
+
         run.Case("the foliage vocabulary the Trees.csv entry states rides on the vegetation step, so a shrub row is a shrub", () =>
         {
             // The corpus entry states the table's columns and no vocabulary, so this case edits a copy
