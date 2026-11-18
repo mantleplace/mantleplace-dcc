@@ -80,7 +80,7 @@ public static class ExportBundles
         ManifestVersion parsed = ManifestVersion.Parse(manifestVersion);
         return parsed.IsValid
                && !ManifestVersion.IsBelowFloor(manifestVersion, ManifestVersions.MinSupportedManifestVersion)
-               && parsed.Major <= ManifestVersions.NewestSupportedMajor;
+               && parsed.Major <= HostIdentity.NewestImportedMajor;
     }
 
     /// <summary>
@@ -92,6 +92,6 @@ public static class ExportBundles
             ? null
             : ExportTransitions.UnsupportedVersion(
                 $"This bundle's manifest version ({ManifestVersion.Describe(manifestVersion)}) is outside what this plugin reads "
-                + $"({ManifestVersions.MinSupportedManifestVersion} to {ManifestVersions.NewestSupportedMajor}.x). "
+                + $"({ManifestVersions.MinSupportedManifestVersion} to {HostIdentity.NewestImportedMajor}.x). "
                 + "Procure the bundle again, or update the Mantle Place plugin.");
 }

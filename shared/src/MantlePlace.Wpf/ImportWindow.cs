@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -53,6 +54,12 @@ internal sealed partial class ImportWindow : Window
     private const double PlainWidth = 520;
 
     private readonly ImportChecklist? _checklist;
+
+    /// <summary>
+    /// A host with no checklist that asked for a stage before Import (<see cref="ImportWindowRequest.BeforeImport"/>):
+    /// the window opens on that text with Import, and the run waits for the press.
+    /// </summary>
+    private readonly bool _beforeImport;
     private readonly IImportWindowHost _host;
     private readonly IntPtr _hostWindow;
     private readonly ImportWindowState _state;
@@ -124,13 +131,14 @@ internal sealed partial class ImportWindow : Window
         ArgumentNullException.ThrowIfNull(request);
 
         _checklist = request.Checklist;
+        _beforeImport = request.Checklist is null && request.BeforeImport is not null;
         _host = request.Host;
         _levels = request.Levels is { } levels ? new LevelSwitch(levels) : null;
         _levelRow.Show(request.Levels);
         _levelRow.Chosen += OnLevelChosen;
         SayLevel(request.LevelNote);
         _hostWindow = request.HostWindow;
-        _state = new ImportWindowState(_checklist is not null, WindowLabels.HostName(HostIdentity.Id), request.MeasuredCosts);
+        _state = new ImportWindowState(_checklist is not null || _beforeImport, WindowLabels.HostName(HostIdentity.Id), request.MeasuredCosts);
 
         Title = WindowLabels.ImportWindowTitle;
         BrandChrome.ShowMarkInTitleBar(this);
@@ -157,6 +165,21 @@ internal sealed partial class ImportWindow : Window
         {
             _body.Child = BuildChecklist(_checklist);
         }
+        else if (_beforeImport)
+        {
+            TextBlock before = new() { Text = request.BeforeImport, TextWrapping = TextWrapping.Wrap };
+            AutomationProperties.SetAutomationId(before, ImportWindowAutomation.BeforeImport);
+            _body.Child = before;
+        }
+
+        AutomationProperties.SetAutomationId(this, ImportWindowAutomation.Window);
+        AutomationProperties.SetAutomationId(_import, ImportWindowAutomation.Import);
+        AutomationProperties.SetAutomationId(_cancel, ImportWindowAutomation.Cancel);
+        AutomationProperties.SetAutomationId(_close, ImportWindowAutomation.Close);
+        _levelRow.SetAutomationId(ImportWindowAutomation.Level);
+        AutomationProperties.SetAutomationId(_levelNote, ImportWindowAutomation.LevelNote);
+        AutomationProperties.SetAutomationId(_status, ImportWindowAutomation.Status);
+        AutomationProperties.SetAutomationId(_report, ImportWindowAutomation.Report);
 
         BrandChrome.MakePrimary(_import);
 
@@ -358,7 +381,7 @@ internal sealed partial class ImportWindow : Window
     private void PaintButtons()
     {
         _import.Visibility = _state.ImportVisible ? Visibility.Visible : Visibility.Collapsed;
-        _import.IsEnabled = _state.ImportEnabled(_checklist?.CanImport ?? false) && (_levels?.CanImport ?? true);
+        _import.IsEnabled = _state.ImportEnabled(CanImport) && (_levels?.CanImport ?? true);
         _cancel.IsEnabled = _state.CancelEnabled;
         _close.Visibility = _state.CloseVisible ? Visibility.Visible : Visibility.Collapsed;
         _close.IsEnabled = _state.CloseEnabled;
@@ -564,7 +587,7 @@ internal sealed partial class ImportWindow : Window
     {
         // Dark before the call rather than after it (the state's reason). And from here a close is a
         // cancel, even before the plan's steps arrive: the import is already the host's to run.
-        if (_checklist is null || !_state.PressImport(_checklist.CanImport))
+        if ((_checklist is null && !_beforeImport) || !_state.PressImport(CanImport))
         {
             return;
         }
@@ -572,8 +595,13 @@ internal sealed partial class ImportWindow : Window
         _levelRow.IsEnabled = false;
         PaintButtons();
         RefreshChecklist();
-        _host.Begin(_checklist.Choice);
+
+        // A stage before Import has no per-layer choice: the host runs every part it planned.
+        _host.Begin(_checklist?.Choice ?? ImportLayerChoice.All);
     }
+
+    /// <summary>Whether what is chosen allows Import: the checklist's say, and a stage before Import always.</summary>
+    private bool CanImport => _checklist?.CanImport ?? _beforeImport;
 
     /// <summary>
     /// Another level, before Import: Import and the control go dark while the host downloads it, and

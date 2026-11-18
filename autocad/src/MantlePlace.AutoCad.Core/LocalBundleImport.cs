@@ -28,7 +28,7 @@ public static class LocalBundleImport
     public const string Command = "MANTLEPLACEIMPORTBUNDLE";
 
     /// <summary>What a zip with no manifest is told.</summary>
-    public const string NotABundle = "This file is not a Mantle Place bundle: it holds no Metadata/manifest.json. Nothing was imported.";
+    public const string NotABundle = "This file is not a Mantle Place bundle: it holds no Manifest.json or Metadata/manifest.json. Nothing was imported.";
 
     /// <summary>
     /// Opens <paramref name="zipPath"/> as a bundle, or says why it is not one. Never throws for a bad file.
@@ -71,7 +71,9 @@ public static class LocalBundleImport
             return false;
         }
 
-        if (opened.ManifestText is null)
+        // Either manifest makes it a bundle: a 3.x one at the root, which carries no host block, or a
+        // 2.x one under Metadata/. What it says, a refusal included, is the plan's to read.
+        if (opened.Manifest is null && opened.ManifestText is null)
         {
             opened.Dispose();
             refusal = NotABundle;

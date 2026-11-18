@@ -48,8 +48,7 @@ public sealed record VaultImporting(PrepareWatcher Watcher, IVaultImport Import)
 /// <remarks>
 /// <para>
 /// One source for every .NET host. What a host hands it is its own: the owner window, its import from
-/// the vault (<see cref="VaultImporting"/>; Revit has one, AutoCAD does not yet, and its orders arrive
-/// as an export from the web vault or through Import Bundle), and its feedback launcher. Its name
+/// the vault (<see cref="VaultImporting"/>; Revit and AutoCAD each have one), and its feedback launcher. Its name
 /// comes from <see cref="HostIdentity"/>. Which buttons show, in which order, and where a signed-out
 /// curator is sent are the pure core's (<see cref="WindowLabels.VaultButtons"/>,
 /// <see cref="WindowLabels.SignInFirst"/>), where the headless suite holds them for both hosts.

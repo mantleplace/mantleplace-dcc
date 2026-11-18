@@ -32,13 +32,29 @@ public static class HostIdentity
     /// </summary>
     public static string? PluginVersion { get; private set; }
 
+    /// <summary>
+    /// The newest bundle manifest major this host's import takes: what a send is checked against
+    /// (<see cref="ExportBundles.CanRead"/>) and what its presence announces
+    /// (<see cref="ConnectedHosts.Announce"/>). <see cref="ManifestVersions.NewestSupportedMajor"/>
+    /// unless the host's shell names a newer one it imports.
+    /// </summary>
+    public static int NewestImportedMajor { get; private set; } = ManifestVersions.NewestSupportedMajor;
+
     /// <summary>Names the plugin this code is loaded by.</summary>
     /// <param name="hostId">The host id the platform contracts name, <c>revit</c> or <c>autocad</c>.</param>
     /// <param name="pluginVersion">The plugin's informational version, or <c>null</c>.</param>
-    public static void Set(string hostId, string? pluginVersion)
+    /// <param name="newestImportedMajor">
+    /// The newest manifest major the host's import takes, from <see cref="ManifestVersions.NewestSupportedMajor"/>
+    /// to <see cref="ManifestVersions.NewestReadMajor"/>; <c>null</c> for <see cref="ManifestVersions.NewestSupportedMajor"/>.
+    /// </param>
+    public static void Set(string hostId, string? pluginVersion, int? newestImportedMajor = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(hostId);
+        int major = newestImportedMajor ?? ManifestVersions.NewestSupportedMajor;
+        ArgumentOutOfRangeException.ThrowIfLessThan(major, ManifestVersions.NewestSupportedMajor, nameof(newestImportedMajor));
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(major, ManifestVersions.NewestReadMajor, nameof(newestImportedMajor));
         id = hostId;
         PluginVersion = pluginVersion;
+        NewestImportedMajor = major;
     }
 }

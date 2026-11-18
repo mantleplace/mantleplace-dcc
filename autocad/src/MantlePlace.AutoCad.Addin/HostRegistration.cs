@@ -6,7 +6,8 @@ using MantlePlace.Core;
 namespace MantlePlace.AutoCad.Addin;
 
 /// <summary>
-/// Tells the shared code which plugin loaded it: <c>autocad</c>, at this assembly's version.
+/// Tells the shared code which plugin loaded it: <c>autocad</c>, at this assembly's version, importing
+/// up to the manifest major <see cref="AutoCadImportPlan.NewestImportedMajor"/>.
 /// </summary>
 /// <remarks>
 /// The shared Core and Client are one assembly for every .NET host (shared/), so the host id the
@@ -25,5 +26,7 @@ internal static class HostRegistration
 #pragma warning restore CA2255
     internal static void Register() => HostIdentity.Set(
         HostId,
-        typeof(HostRegistration).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+        typeof(HostRegistration).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+        // 3.x is imported from its catalog and frames, so a 3.0 send is taken and the web is told so.
+        AutoCadImportPlan.NewestImportedMajor);
 }

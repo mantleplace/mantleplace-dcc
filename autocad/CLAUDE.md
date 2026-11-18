@@ -90,12 +90,19 @@ key this suite must assert, or it fails.
   [`shared/src/MantlePlace.Wpf`](../shared/README.md); the shell opens them and hands them its main
   window, its feedback launcher and its About sentences, and its ribbon reads the monogram from the
   same assembly (`MarkImages`). The shell declares no window of its own. Every import opens the import
-  window (`ImportWindowThread`, `HPS-60`) through `WindowedImport`, with no checklist, so the run begins
-  as it opens; its steps and their states are `AutoCadImportRun` (Core), each row named by this host
-  (`ImportRunRow.Named`): `Verify Files`, then each placed part, one transaction a step, posted one per
-  dispatcher operation so Cancel is heard between steps. The vault browser
-  has no Prepare, download or import yet: an order comes into a drawing through an export sent from the web vault, or through
-  Import Bundle (`MANTLEPLACEIMPORTBUNDLE`, `HPS-61`), which takes a zip on disk.
+  window (`ImportWindowThread`, `HPS-60`) through `WindowedImport`, with no checklist. Import Bundle's run
+  begins as it opens; a send from the web vault and an import from the vault browser open on the shared
+  window's stage before Import (`ImportWindowRequest.BeforeImport`, `WindowedImportStage`), and a sent 3.0
+  order shows the level control there, as Revit's window does. Its steps and their states are
+  `AutoCadImportRun` (Core), each row named by this host (`ImportRunRow.Named`): `Verify Files`, then each
+  placed part, one transaction a step, posted one per dispatcher operation so Cancel is heard between
+  steps. An order comes into a drawing from the vault browser (Prepare, download, Import), from an export
+  sent from the web vault, or through Import Bundle (`MANTLEPLACEIMPORTBUNDLE`, `HPS-61`), which takes a
+  zip on disk.
+- **An MPB 3.0 bundle is read from its catalog and frames** (`AutoCadThreeView`), told from 2.x by its
+  root `Manifest.json`; a 2.x bundle is read from its `hosts.autocad` block as before. Each part finds its
+  file by name and is placed in the frame its family states, never a derived one. What a 3.0 import leaves
+  out is named in [`docs/release-notes-1.2.0.md`](docs/release-notes-1.2.0.md).
 - **The ribbon panel is built in code, on a `Mantle Place` tab of the plugin's own** (`HPS-57`), as
   Revit's is, in Civil 3D and plain AutoCAD alike. `PlugInsPanel` (Core) lists the commands, in
   `HPS-51`'s order, and decides the tab (`Place`: the plugin's tab, made when the ribbon lacks it);

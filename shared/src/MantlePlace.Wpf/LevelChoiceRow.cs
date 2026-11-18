@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using MantlePlace.Core;
 
@@ -40,6 +41,9 @@ public sealed class LevelChoiceRow : DockPanel
 
     /// <summary>The curator chose a level.</summary>
     public event Action<FidelityLevel>? Chosen;
+
+    /// <summary>Names the row's list for UI Automation, so a check can find and set it in the window that draws it.</summary>
+    public void SetAutomationId(string automationId) => AutomationProperties.SetAutomationId(_levels, automationId);
 
     /// <summary>Fills the row from <paramref name="control"/>, on its selected level; <c>null</c> hides the row.</summary>
     public void Show(LevelControl? control)

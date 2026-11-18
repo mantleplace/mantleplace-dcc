@@ -137,9 +137,9 @@ internal static class VaultBrowser
             MantlePlaceApplication.Announced,
             FeedbackLauncher.TryOpen,
 
-            // No Prepare and no Import yet: an order reaches a drawing through an export sent from
-            // the web vault, or through Import Bundle.
-            importing: null,
+            // Prepare and Import, as Revit's: the download at the chosen level goes into the active
+            // drawing through the one windowed import (AutoCadVaultImport).
+            new VaultImporting(MantlePlaceApplication.Watcher, new AutoCadVaultImport()),
             hostWindow,
             selectOrderId);
 
