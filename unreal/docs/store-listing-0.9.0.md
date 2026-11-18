@@ -1,6 +1,6 @@
 ---
 name: unreal-store-listing-0-9-0
-description: Draft Fab listing text for Mantle Place for Unreal 0.9.0 - title, short and long description, what is new, technical details, and the reviewer instructions. Read before editing the Fab listing or cutting unreal-0.9.0; it describes only what 0.9.0 does, and the founder approves every word.
+description: Draft Fab listing text for Mantle Place for Unreal Engine, release 0.9.0 - title, short and long description, what is new, technical details, and the reviewer instructions. Read before editing the Fab listing or cutting unreal-0.9.0; it describes only what 0.9.0 does, and the founder approves every word.
 ---
 
 # Fab listing text, Unreal 0.9.0
@@ -13,22 +13,24 @@ Fab's submission form before pasting: a limit that has changed there wins over t
 
 ## Title
 
-Mantle Place - Real-World Terrain, Imagery, Buildings, Roads & Land Cover
+Mantle Place - Real-World Terrain, Imagery, Buildings, Roads and more
 
-(Unchanged from the live listing. Keep it unless the form's limit says otherwise.)
+(The live title lists "Land Cover" last; this one ends "and more" like the other storefront listings.
+Keep the live title if the form's limit or the store's rules say otherwise.)
 
 ## Short description
 
-Import real-world terrain, aerial imagery, buildings, roads and trees for any site as one Landscape
-in Unreal Engine 5.8. Free, offline once imported, and no account is needed to import a bundle from disk.
+Bring a real site into an Unreal Engine level: terrain, aerial imagery, buildings, roads, trees and
+more, from a bundle you ordered or downloaded. A bundle import needs no account.
 
 ## Long description
 
-Mantle Place turns a real place into a level you keep. Draw a site on mantle.place, take the bundle
-it produces, and import it: one Landscape with the aerial imagery draped on it, placed at the site's
-real position, plus the other things the bundle carries.
+Mantle Place turns open geospatial data for any site into a bundle: one download holding the terrain,
+aerial imagery, buildings, roads, land cover and more for the area you chose. This plugin brings that
+bundle into Unreal Engine as a level you keep: one Landscape with the aerial imagery draped on it,
+placed at the site's real position, plus the other things the bundle carries.
 
-**What one import brings in**
+**What an import brings in**
 
 - A Landscape built from the bundle's elevation, with the imagery draped on its footprint.
 - The land-cover weights painted as Landscape layers.
@@ -37,14 +39,15 @@ real position, plus the other things the bundle carries.
 - Tree points as a data table you can feed to PCG, and, if you turn it on in the project settings,
   a PCG foliage scatter.
 - Coverage rasters (water, land cover and their like) as data textures with their value mappings.
-- Public-record layers (parcels, zoning, flood zones) drawn as one toggleable overlay of lines each,
-  where the bundle states a frame the plugin places in.
+- Public-record layers (parcels, zoning, flood zones and more) drawn as one toggleable overlay of lines
+  each, where the bundle states a frame the plugin places in.
 - The bundle's credits, written into the import log and the project.
+- And more, depending on what the bundle holds.
 
-**Watch it work.** A Bundle Import window lists each step in order, with its state and how long it
-has run, and a Cancel that stops the import between steps.
+**Watch it work.** A **Bundle Import** window lists each step in order, with its state and how long it
+has run, and a **Cancel** that stops the import between steps.
 
-**Bundle formats.** The plugin reads MPB 3.0 bundles and MPB 2.x bundles side by side; a 2.x bundle
+**MPB 3.0 beside 2.x.** The plugin reads MPB 3.0 bundles and MPB 2.x bundles side by side; a 2.x bundle
 imports as it did before.
 
 **Choose a level before you download.** For an MPB 3.0 order in your vault, the import window offers
@@ -56,15 +59,17 @@ bundle beside the imported copy, to compare. For an MPB 3.0 order it fetches the
 platform lists beside the bundle the first time you stream it (a signed-in session is needed for
 that fetch).
 
-**Yours to keep.** The import is ordinary Landscape, mesh, spline and data assets in your project.
-Importing the same order again replaces the previous import rather than adding a copy. The plugin
-saves nothing itself: use File > Save All.
+**Credit and sharing.** Content made from OpenStreetMap-derived data is kept apart and tagged, and
+**Tools > Mantle Place > Prepare for handover** makes a level safe to share and adds the credit text.
 
-**Sharing a level.** Content made from OpenStreetMap-derived data is kept apart and tagged, and
-Tools > Mantle Place > Prepare for handover makes a level safe to share and adds the credit text.
+**Yours to keep.** The bundle is downloaded to you, and the import is ordinary Landscape, mesh, spline
+and data assets in your project. Importing the same order again replaces the previous import rather
+than adding a copy. The plugin saves nothing itself: use **File > Save All**.
 
-**Free.** The plugin is free. Importing a bundle you downloaded needs no account and no sign-in.
-Ordering a bundle needs a mantle.place account; small areas are free (see the pricing page for the limit).
+**Account and sign-in.** A bundle import needs no account and no sign-in. Ordering a bundle needs a
+mantle.place account.
+
+**Support.** Report a problem or send feedback at `https://mantle.place/feedback`. It needs no account.
 
 ## What is new in 0.9.0
 
@@ -78,20 +83,20 @@ Ordering a bundle needs a mantle.place account; small areas are free (see the pr
 
 ## Technical details
 
-- Engine: Unreal Engine 5.8.
+- Compatibility: Unreal Engine 5.8.
 - Platform: Windows 64-bit. The plugin is editor-side; its modules are `MantlePlaceRuntime` and
   `MantlePlaceEditor`, both Win64.
+- Network: signing in and the vault need an internet connection; importing a bundle from disk does not.
 - Engine plugins it depends on: Interchange, PCG, SQLiteCore (all Epic's own, enabled by the plugin).
 - Cesium for Unreal is optional, used only for the stream-to-compare path; it is not required to import.
-- Network: signing in and the vault need an internet connection; importing a bundle from disk does not.
 - Distribution: a Fab Source zip, compiled by Epic.
 
-## For a reviewer or a first-time user (no account)
+## Reviewer instructions
 
 1. Open `https://mantle.place/mpb-samples` and download one of the sample bundle zips. Do not
    unzip it.
-2. Install the plugin, open a UE 5.8 project and accept the prompt to enable it, then restart
-   when asked.
+2. Install the plugin, open an Unreal Engine project in the version the listing names, accept the
+   prompt to enable it, then restart when asked.
 3. Choose **Window > Mantle Place**.
 4. Press **Browse...**, pick the zip you downloaded, leave the mode at *Landscape*, and press **Import**.
 5. The **Bundle Import** window lists the steps; wait until each reads `Done`. The level now holds one
