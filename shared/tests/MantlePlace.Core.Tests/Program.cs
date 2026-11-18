@@ -9,7 +9,8 @@ using MantlePlace.Core.Tests;
 // the way the Revit shell does (revit/src/MantlePlace.Revit.Addin/HostRegistration.cs).
 HostIdentity.Set(
     "revit",
-    typeof(ConformanceCorpus).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+    typeof(ConformanceCorpus).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+    ManifestVersions.RevitNewestImportedMajor);
 
 int exitCode = 0;
 exitCode |= ManifestConformanceTests.Run();

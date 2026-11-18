@@ -32,13 +32,31 @@ public static class HostIdentity
     /// </summary>
     public static string? PluginVersion { get; private set; }
 
+    private static int? newestImportedMajor;
+
+    /// <summary>
+    /// The newest bundle-manifest MAJOR the plugin that set it imports: what its presence announces as
+    /// <c>reads.maxMajor</c>, and what a bundle sent from the web vault is held to
+    /// (<see cref="ExportBundles.CanRead"/>), so the web greys out exactly what the host would refuse.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No host has called <see cref="Set"/>.</exception>
+    public static int NewestImportedMajor => newestImportedMajor ?? throw new InvalidOperationException(
+        "No host plugin has set HostIdentity: the plugin's shell calls HostIdentity.Set before anything reaches the platform.");
+
     /// <summary>Names the plugin this code is loaded by.</summary>
     /// <param name="hostId">The host id the platform contracts name, <c>revit</c> or <c>autocad</c>.</param>
     /// <param name="pluginVersion">The plugin's informational version, or <c>null</c>.</param>
-    public static void Set(string hostId, string? pluginVersion)
+    /// <param name="newestImportedMajor">
+    /// The newest manifest major the host imports (<see cref="ManifestVersions.RevitNewestImportedMajor"/>,
+    /// <see cref="ManifestVersions.AutoCadNewestImportedMajor"/>); never below the floor's major.
+    /// </param>
+    public static void Set(string hostId, string? pluginVersion, int newestImportedMajor)
     {
         ArgumentException.ThrowIfNullOrEmpty(hostId);
+        ArgumentOutOfRangeException.ThrowIfLessThan(
+            newestImportedMajor, ManifestVersion.Parse(ManifestVersions.MinSupportedManifestVersion).Major);
         id = hostId;
         PluginVersion = pluginVersion;
+        HostIdentity.newestImportedMajor = newestImportedMajor;
     }
 }

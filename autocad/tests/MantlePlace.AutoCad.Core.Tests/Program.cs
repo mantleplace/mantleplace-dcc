@@ -14,7 +14,8 @@ using MantlePlace.Core.Tests;
 // The suite names itself the way the AutoCAD shell does (MantlePlace.AutoCad.Addin/HostRegistration.cs).
 HostIdentity.Set(
     AutoCadBlockReader.HostKey,
-    typeof(AutoCadBlockReader).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+    typeof(AutoCadBlockReader).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+    ManifestVersions.AutoCadNewestImportedMajor);
 
 int exitCode = 0;
 exitCode |= ConformanceCorpusSelfTests.Run();
