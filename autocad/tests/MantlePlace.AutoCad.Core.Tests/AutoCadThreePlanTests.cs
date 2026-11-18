@@ -440,7 +440,7 @@ internal static class AutoCadThreePlanTests
 
         run.Case("a 3.0 zip on disk opens as a bundle, and plans from its catalog", () =>
         {
-            string sandbox = Path.Combine(Path.GetTempPath(), "mantleplace-acad-three-" + Guid.NewGuid().ToString("N")[..8]);
+            string sandbox = Path.Combine(Path.GetTempPath(), "autocad-three-zip-" + Guid.NewGuid().ToString("N")[..8]);
             Directory.CreateDirectory(sandbox);
             try
             {
