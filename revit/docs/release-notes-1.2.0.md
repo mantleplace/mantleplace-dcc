@@ -40,7 +40,7 @@ Upgrade by closing Revit and running the new `Install.cmd` over the old one; see
   - `revit.connected-host`: 25 of 27. Its presence and import steps passed. Its cancel step sends the same 3.0 order to the same project a second time, and the plugin refused it before its import window opened, as Upgrading says it does ([677](https://github.com/mantleplace/mantleplace-dcc/issues/677)); cancelling a sent bundle was not exercised.
   - `vault.round-trip`: pass, 27 of 27
 
-- Not run: Revit 2025 and 2026; a second bundle into a project that holds an import; roads, road surfaces, water, land use and land cover from a 3.0 order (the order holds none of those files, so each step was shown as skipped).
+- Not run: Revit 2025 and 2026; cancelling a sent bundle; a 2.x bundle beside an earlier import; roads, road surfaces, water, land use and land cover from a 3.0 order (the order holds none of those files, so each step was shown as skipped).
 - Published asset: <check from step 4 and its date>.
 - `MantlePlace-Revit-1.2.0.zip` sha256 `1fe84c327460c35ff64f973cb32a205192a986b7d43908ed2dde0b6519271974`
 - Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
