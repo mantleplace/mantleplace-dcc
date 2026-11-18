@@ -41,4 +41,5 @@ Each is shown as skipped, with its reason, in the import window and on the comma
 | --- | --- |
 | The Civil 3D surface | This version builds no surface from an MPB 3.0 bundle, so `Elevation/Terrain.landxml` is left in the bundle; the contours are still drawn from Elevation/Contours.dxf. |
 | An aerial whose catalog entry states no rectangle, states no frame for it, or states a frame other than the georeferenced one | The plugin never works out an insertion, never assumes a frame and never reprojects; the aerial is skipped, saying what the catalog states or does not. |
+| A public-record layer whose DXF carries an entity other than a polyline (a point or a hatch, as `Records/Contamination.dxf`, `Records/Heritage.dxf` and `Records/Floodplain.dxf` may) | As in 1.1, only polylines are placed, and a layer is never placed in part: the layer is named as not placed, with the entity it carries, and the other layers are placed. |
 | The readiness verdicts ("requires") | MPB 3.0 publishes none (A15): a file the catalog names is ready, and one it does not is not held. |
