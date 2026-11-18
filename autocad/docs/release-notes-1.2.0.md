@@ -1,9 +1,9 @@
 # AutoCAD 1.2.0: what an MPB 3.0 bundle imports
 
 The notes the `autocad-1.2.0` release body takes for importing an MPB 3.0 bundle ([`docs/releases.md`](../../docs/releases.md)
-holds the body's template). A 2.x bundle imports exactly as in 1.1: the same steps, placed the same way, and a
+holds the body's template). A 2.x bundle imports exactly as in 1.0: the same steps, placed the same way, and a
 2.x send from the web vault begins as its window opens, as before. What is new for a 2.x bundle is one more
-way in: Import in the vault browser, which 1.1 did not offer in AutoCAD, runs the same import.
+way in: Import in the vault browser, which 1.0 did not offer, runs the same import.
 
 ## What an MPB 3.0 bundle imports
 
@@ -41,5 +41,5 @@ Each is shown as skipped, with its reason, in the import window and on the comma
 | --- | --- |
 | The Civil 3D surface | This version builds no surface from an MPB 3.0 bundle, so `Elevation/Terrain.landxml` is left in the bundle; the contours are still drawn from Elevation/Contours.dxf. |
 | An aerial whose catalog entry states no rectangle, states no frame for it, or states a frame other than the georeferenced one | The plugin never works out an insertion, never assumes a frame and never reprojects; the aerial is skipped, saying what the catalog states or does not. |
-| A public-record layer whose DXF carries an entity other than a polyline (a point or a hatch, as `Records/Contamination.dxf`, `Records/Heritage.dxf` and `Records/Floodplain.dxf` may) | As in 1.1, only polylines are placed, and a layer is never placed in part: the layer is named as not placed, with the entity it carries, and the other layers are placed. |
+| A public-record layer whose DXF carries an entity other than a polyline (a point or a hatch, as `Records/Contamination.dxf`, `Records/Heritage.dxf` and `Records/Floodplain.dxf` may) | As in 1.0, only polylines are placed, and a layer is never placed in part: the layer is named as not placed, with the entity it carries, and the other layers are placed. |
 | The readiness verdicts ("requires") | MPB 3.0 publishes none (A15): a file the catalog names is ready, and one it does not is not held. |
