@@ -203,6 +203,16 @@ public static class ImportWindowStacking
     /// <summary>Whether a second Import Bundle, or the vault's Import, brings the running import's window forward now.</summary>
     public static bool BringsForward(ForegroundFacts facts) => Classify(facts) != ForegroundHolder.RevitModal;
 
+    /// <summary>Whether the window comes forward, unasked, to show its report when an import ends.</summary>
+    /// <remarks>
+    /// Only while its host is in front with no modal up: the host's main window, another of its
+    /// windows, or the import window itself. Nobody pressed anything when a run ends, so a curator in
+    /// another application, or a harness, keeps the foreground; the window is already behind that
+    /// application and floats again when the host comes forward.
+    /// </remarks>
+    public static bool ComesForwardAtTheEnd(ForegroundFacts facts)
+        => Classify(facts) is ForegroundHolder.ImportWindow or ForegroundHolder.RevitMainWindow or ForegroundHolder.RevitOtherWindow;
+
     /// <summary><c>true</c> to float, <c>false</c> to go behind, <c>null</c> to change nothing.</summary>
     private static bool? Floats(ForegroundHolder holder) => holder switch
     {
