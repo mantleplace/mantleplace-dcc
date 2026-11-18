@@ -283,9 +283,17 @@ internal sealed partial class ImportWindow : Window
     }
 
     /// <summary>Brings the window forward, for a second click on the host's import command — never over a host modal.</summary>
-    internal void BringForward()
+    internal void BringForward() => ComeForward(ImportWindowStacking.BringsForward);
+
+    /// <summary>
+    /// Brings the window forward to show the report of an import that has ended — only while its host is
+    /// in front, so it never takes the keyboard from another application.
+    /// </summary>
+    internal void BringForwardAtTheEnd() => ComeForward(ImportWindowStacking.ComesForwardAtTheEnd);
+
+    private void ComeForward(Func<ForegroundFacts, bool> allowed)
     {
-        if (!ImportWindowStacking.BringsForward(ForegroundWatch.Read(new WindowInteropHelper(this).Handle, _hostWindow).Facts))
+        if (!allowed(ForegroundWatch.Read(new WindowInteropHelper(this).Handle, _hostWindow).Facts))
         {
             return;
         }

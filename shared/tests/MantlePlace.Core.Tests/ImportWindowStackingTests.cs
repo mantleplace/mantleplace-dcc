@@ -156,6 +156,23 @@ internal static class ImportWindowStackingTests
             run.False(ImportWindowStacking.BringsForward(RevitMain with { RevitMainWindowEnabled = false }), "the busy dialog, or any modal, is up");
         });
 
+        run.Case("an import that ends comes forward only while its host is in front", () =>
+        {
+            // Nobody asked for the window when a run ends, so it may take the keyboard only from its
+            // own host. A curator in another application, or a harness, is left with the foreground:
+            // the window is behind that application and floats again when the host comes forward.
+            run.True(ImportWindowStacking.ComesForwardAtTheEnd(RevitMain), "the host's main window in front");
+            run.True(ImportWindowStacking.ComesForwardAtTheEnd(RevitDialog), "another of the host's windows in front");
+            run.True(ImportWindowStacking.ComesForwardAtTheEnd(ImportWindow), "the import window itself in front");
+            run.False(ImportWindowStacking.ComesForwardAtTheEnd(RevitMain with { RevitMainWindowEnabled = false }), "never over a modal");
+            run.False(ImportWindowStacking.ComesForwardAtTheEnd(OtherApp), "not from another application");
+            run.False(ImportWindowStacking.ComesForwardAtTheEnd(FloatingOtherApp), "not from another application that floats");
+            run.False(ImportWindowStacking.ComesForwardAtTheEnd(RevitGhost), "not from a hung host");
+            run.False(ImportWindowStacking.ComesForwardAtTheEnd(OtherGhost), "not from another application's ghost");
+            run.False(ImportWindowStacking.ComesForwardAtTheEnd(Desktop), "not from the desktop");
+            run.False(ImportWindowStacking.ComesForwardAtTheEnd(Nothing), "not from nothing");
+        });
+
         run.Case("it opens centred over Revit, and never hangs off Revit's left or top edge", () =>
         {
             ScreenRect revit = new(100, 50, 1600, 900);

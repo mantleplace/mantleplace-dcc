@@ -195,6 +195,12 @@ public sealed class ImportWindowThread
     /// <summary>Brings the window forward, unless a host modal is up. Called on the host's thread.</summary>
     public void BringForward() => Post(() => _window?.BringForward());
 
+    /// <summary>
+    /// Brings the window forward to show the report of an import that has ended, only while the host is
+    /// in front: another application keeps the foreground. Called on the host's thread.
+    /// </summary>
+    public void BringForwardAtTheEnd() => Post(() => _window?.BringForwardAtTheEnd());
+
     /// <summary>Stops the window floating, before the host shows a dialog. Called on the host's thread.</summary>
     public void Lower() => Post(() => _window?.Lower());
 

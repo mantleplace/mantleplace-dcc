@@ -265,7 +265,9 @@ internal sealed class WindowedImport : IImportWindowHost
             _run?.View(),
             _run is { WasCancelled: true } ? AutoCadImportRun.CancelledOutcome : null,
             result.Summary);
-        _window?.BringForward();
+
+        // Unasked, so only over AutoCAD: a curator in another application is not interrupted.
+        _window?.BringForwardAtTheEnd();
         _importer?.Dispose();
 
         MantlePlaceApplication.Say(result.Summary);
