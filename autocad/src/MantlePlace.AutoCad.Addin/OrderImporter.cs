@@ -110,7 +110,8 @@ internal sealed class OrderImporter : IDisposable
                 }
             }
 
-            AutoCadBlockRead read = AutoCadBlockReader.Read(opened.ManifestText!);
+            // A 3.x bundle from its catalog and frames, a 2.x one from its hosts.autocad block.
+            AutoCadBlockRead read = AutoCadBlockReader.Read(opened.Manifest, opened.ManifestText);
             AutoCadImportPlan plan = AutoCadImportPlanner.Plan(read, DrawingObservations.Geolocation(database), zone);
             if (plan.IsRefused)
             {
@@ -200,7 +201,7 @@ internal sealed class OrderImporter : IDisposable
         Func<string?>? place = kind switch
         {
             AutoCadPart.Aerial when _files.TryGetValue(kind, out string? image) => () => PlaceAerial(database, image, part, Plan.OrderId),
-            AutoCadPart.Surface when _civil3d is not null && _files.TryGetValue(kind, out string? landXml) => () => BuildSurface(database, _civil3d!, landXml, part, Plan.OrderId),
+            AutoCadPart.Surface when _civil3d is not null && _files.TryGetValue(kind, out string? landXml) => () => BuildSurface(database, _civil3d!, landXml, part, Plan),
             AutoCadPart.Contours when _files.TryGetValue(kind, out string? dxf) => () => PlaceContours(database, dxf, part),
             AutoCadPart.Records when _recordFiles.Count > 0 => () => PlaceRecords(database, _recordFiles, part),
             AutoCadPart.Linework when _files.TryGetValue(kind, out string? linework) => () => PlaceLinework(database, linework, part),
@@ -273,17 +274,29 @@ internal sealed class OrderImporter : IDisposable
 
     /// <summary>
     /// The surface as a Civil 3D TIN surface on its layer, built by Civil 3D from the block's LandXML. The
-    /// zone check has already shown the drawing's zone to be the order's, or the drawing to have none.
+    /// zone check has already shown the drawing's zone to be the order's, or the drawing to have none. For
+    /// a 3.x order the file's own units and coordinate system are held to the frame the manifest states for
+    /// it first, so a file in another frame builds nothing rather than a surface in the wrong place.
+    /// The drawing's Civil 3D drawing units are then held to the order's, for any order: Civil 3D converts
+    /// the file to the drawing's units as it reads it, so in a drawing of the other units nothing is built
+    /// either, and no layer is made for it.
     /// </summary>
-    private static string BuildSurface(Database database, Type civil3d, string landXmlPath, PlannedPart part, string orderId)
+    private static string BuildSurface(Database database, Type civil3d, string landXmlPath, PlannedPart part, AutoCadImportPlan plan)
     {
+        string orderId = plan.OrderId;
         string? landXmlSurface;
         using (StreamReader reader = File.OpenText(landXmlPath))
         {
-            if (LandXmlSurface.TryReadName(reader, out landXmlSurface) is { } problem)
+            if (LandXmlSurface.TryReadName(reader, plan, out landXmlSurface) is { } problem)
             {
                 throw new PartRefusedException(problem + ".");
             }
+        }
+
+        // Civil 3D converts the file's unit to the drawing's as it reads it: only a drawing in the order's units gets the surface.
+        if (LandXmlSurface.DrawingUnitsProblem(plan, Civil3dPartLoader.ReadDrawingUnits(civil3d, database)) is { } unitsProblem)
+        {
+            throw new PartRefusedException(unitsProblem + ".");
         }
 
         using (Transaction transaction = database.TransactionManager.StartTransaction())

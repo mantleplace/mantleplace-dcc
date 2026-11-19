@@ -239,13 +239,71 @@ was read back. Each step is **worked**, **did nothing** or **threw**:
   window was open afterwards, as a palette: it held nothing up.
 - **Not run here:** the attended path, a dialog under `FILEDIA` 1 that a curator answers.
 
+## The import gate in the shared import window, live (2026-11-18)
+
+Two live runs on the build machine (the full AutoCAD window rather than the console, .NET 10, AutoCAD and Civil 3D 2027), with the plugin 1.0.0 built from `main` at
+`5090449` and installed as its `MantlePlaceAutoCad.bundle`, with nobody at the screen and the plugin
+signed out, driven by the host harness: one with the Civil 3D launcher, one with the "as AutoCAD"
+launcher over the same install. Each imported the 2.2 fixture bundle (manifest 2.2.0, a `hosts.autocad`
+block in a metric UTM frame) from a zip on disk through Import Bundle's unattended path: the zip named
+in `MANTLEPLACE_BUNDLE_ZIP` and `MANTLEPLACEIMPORTBUNDLE` typed, so no file dialog opened. Every import
+ran in the shared import window, read by its title, and what each said was read from the record it
+wrote beside the zip, with the drawing read back. Four imports per run:
+
+| Pass | Civil 3D 2027 | As AutoCAD 2027 |
+|---|---|---|
+| 1. Refusal: the drawing in another coordinate system (a zone; for AutoCAD, a geographic location) | refused, named both systems, placed nothing | the same |
+| 2. Version refusal: the bundle restamped one manifest major past the newest the plugin reads | refused in the plugin's own words, placed nothing | the same |
+| 3. Import | imported: aerial, contours, public records, linework and surface | imported, the surface said to need Civil 3D, no crash |
+| 4. Second import of the same order | imported, with numbered names | the same |
+
+- **The window on a refusal names the zip and lists no step.** A bundle refused before any step opens
+  the import window on its name, with Cancel and Close; the reason is in the report. An import that
+  runs lists its steps from `Verify Files` on. The first version of the live check expected steps on
+  the two refusal passes and recorded failures for that on the ticket (32 and 31 assertions, same
+  plugin build); the check was wrong, not the plugin, and now asks only that the window name the bundle.
+- **The plugin never wrote the drawing's units, geographic location or zone,** and took the order's
+  units from its block, not the drawing's `INSUNITS` (Inches in the "as AutoCAD" drawing).
+- **The `Mantle Place` tab, live in both.** One panel, its six buttons in order (Sign In, Sign Out,
+  Vault, Import Bundle, About, Send Feedback), F1 on each opening the plugin's help page at its topic.
+- **Only the plugin's own load prompt** ("Unsigned Executable File", answered Load Once) appeared. It
+  briefly takes the foreground at each start, before it is answered. One earlier run, same build, saw
+  a single focus change handed back after 0.2 s; the passing runs recorded here do not show that it
+  cannot happen again.
+- **The command order is the standard's.** `HPS-57` (`docs/host-plugin-standard.md`) puts the shared
+  actions in the order of the `HPS-51` table: Sign In, Sign Out, Vault, Import Bundle, About, Send
+  Feedback. The panel read live matches it. (The ticket says only "the standard's command order".)
+- **Why these lines are `pass`.** The ticket holds `fail` lines for the same plugin build. The live
+  checks' assertions were corrected (the refusal rule above, and a first check that the loaded plugin
+  was built from the current `autocad/` and `shared/src/` sources); the plugin was not changed.
+- **Each run took under two minutes,** start included.
+
+The calls each run made, from the drawing read back:
+
+| Call | Civil 3D 2027 | As AutoCAD 2027 |
+|---|---|---|
+| Presence test: `AeccLand.dbx` a loaded module | worked | worked (not loaded, so no Civil 3D part) |
+| Civil 3D part loaded by reflection, behind the verdict | worked | n/a |
+| `UnitZoneSettings.CoordinateSystemCode`, read | worked | n/a |
+| `Database.GeoDataObject`, then `GeoLocationData.CoordinateSystem` | worked | worked |
+| `GeoCoordinateSystem.Create(code).EPSGcode` | worked | worked |
+| `Document.LockDocument()` | worked | worked |
+| `LayerTable.Add` | worked | worked |
+| `RasterImageDef` (image dictionary, `Load()`) | worked | worked |
+| `RasterImage` (`Orientation`, `AssociateRasterDef`) | worked | worked |
+| `RasterImage.TransformBy` (rotation) | n/a: the order's aerial is not rotated | n/a |
+| `Polyline.AddVertexAt`, `Elevation`, `AppendEntity`: contours, public records, site linework | worked | worked |
+| `CivilDocument.GetSurfaceIds()` | worked | n/a |
+| `TinSurface.CreateFromLandXML(db, name, path, surfaceName)` | worked | n/a |
+| `TinSurface.GetGeneralProperties()`, `.Layer` | worked | n/a |
+
 ## What this does not yet cover
 
 - **Import Bundle's file dialog**, answered by a person (`FILEDIA` 1); the command-line prompt is above.
 - **A second workspace load of the `Mantle Place` tab**, live. The tab and its buttons were read on a
-  running Civil 3D 2027 (above); plain AutoCAD 2027 and a round trip to another workspace were not.
+  running Civil 3D 2027 and on the "as AutoCAD" launcher (above); a round trip to another workspace was not.
 - **A drawing in feet**, with a foot-based zone and a metric DEM.
-- **The plugin's own load path in 2025 and 2026**, and in plain AutoCAD; 2027's is above.
+- **The plugin's own load path in 2025 and 2026**, and in AutoCAD installed without Civil 3D; 2027's, Civil 3D and "as AutoCAD", is above.
 - **A .NET 8 build.** Every install here, 2025 and 2026 included, runs .NET 10 after its updates, and
   its API assemblies reference .NET 10, so a .NET 8 project cannot compile against them (`CS1705`).
   The probe builds each year against that year's installed API, at the framework its own runtime

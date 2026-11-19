@@ -17,15 +17,17 @@ namespace MantlePlace.AutoCad.Addin;
 /// </para>
 /// <para>
 /// A send opens the shared import window, as it does in Revit (<see cref="WindowedImport"/>, <c>HPS-60</c>).
-/// AutoCAD offers no per-layer choice, so there is no checklist to wait on: the import begins as the window
-/// opens, the web hears it open and begin, and Cancel stops it between steps, which the web hears as
-/// cancelled. While another import runs, from disk or from an earlier send, the export waits its turn.
+/// AutoCAD offers no per-layer choice, so there is no checklist to wait on. A send with nothing to choose
+/// (every 2.x order, which has no level control, <see cref="LevelControl.For"/>) begins as the window opens,
+/// and the web hears it open and begin. Cancel stops it between steps, which the web hears as cancelled.
+/// While another import runs, from disk or from an earlier send, the export waits its turn.
 /// </para>
 /// <para>
-/// A send names no level, so a 3.0 order arrives at the recommendation. The window gets no level control:
-/// the import begins as it opens, so there is no moment before Import to choose another level, and this
-/// plugin reads no 3.0 bundle yet (<see cref="ManifestVersions.NewestSupportedMajor"/>), so the window
-/// reports a 3.0 send as refused whatever its level.
+/// A send names no level, so a 3.0 order arrives at the recommendation. When its order offers levels the
+/// window opens on a stage before Import (<see cref="WindowedImportStage"/>) with the level control on it,
+/// as Revit's window does, and the web hears it open, then begin when Import is pressed; a close before
+/// Import is heard as dismissed before it started. Another level is downloaded into the slot and the window
+/// reopened on it, or on the level it held when the download failed, before anything is drawn.
 /// </para>
 /// </remarks>
 internal sealed class AutoCadExportImportHost : IExportImportHost
@@ -50,23 +52,43 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
     }
 
     /// <summary>
-    /// The web asked for this export's window to close. There is no checklist to close it from: the import
-    /// began as the window opened, and a running import is left alone, as Revit leaves one.
+    /// The web asked for this export's window to close. A running import is left alone, as Revit leaves one;
+    /// a window still before Import is left for the curator to close.
     /// </summary>
     public void Close(string exportId)
     {
     }
 
     /// <summary>On AutoCAD's UI thread.</summary>
-    private void Open(HostExport export, string zipPath)
+    /// <param name="export">The export the web sent.</param>
+    /// <param name="zipPath">The zip the slot holds.</param>
+    /// <param name="held">The level a reopened window holds after a level choice; <c>null</c> for a first open.</param>
+    /// <param name="levelNote">What the level choice did, under the control; <c>null</c> for a first open.</param>
+    private void Open(HostExport export, string zipPath, FidelityLevel? held = null, string? levelNote = null)
     {
         ConnectedHostService? connected = MantlePlaceApplication.Connected;
 
+        // A send names no level: a 3.0 order was fetched at the recommendation, and its window opens with
+        // the control on it; reopened after a level choice, on the level now in the slot. A 2.x order has none.
+        VaultExportSource? source = MantlePlaceApplication.ExportSource;
+        VaultBundle? listed = source?.Listed(export.OrderId);
+        // The window waits for Import only when it offers that choice: with no level control (every 2.x
+        // send) there is no stage, and the import begins as the window opens, as it always has.
+        LevelControl? levels = held is { } level ? LevelControl.At(listed, level) : LevelControl.For(listed);
+        WindowedImportStage? stage = levels is null
+            ? null
+            : new(
+                levels,
+                levelNote,
+                source is null
+                    ? null
+                    : (chosen, token) => source.FetchLevelAsync(export.OrderId, chosen, new Progress<string>(_ => { }), token),
+                (zip, now, note) => Open(export, zip, now, note),
+                () => connected?.ImportBegan(export.Id));
+
         if (Autodesk.AutoCAD.ApplicationServices.Core.Application.DocumentManager.MdiActiveDocument is not { } document)
         {
-            Release();
-            connected?.ImportRefused(export.Id, ExportReasons.WindowFailed, "AutoCAD has no drawing open to import into. Nothing was imported.");
-            connected?.TurnFree();
+            Refuse(connected, export.Id, held is not null, "AutoCAD has no drawing open to import into. Nothing was imported.");
             return;
         }
 
@@ -80,9 +102,13 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
                 end =>
                 {
                     Release();
-                    connected?.ImportEnded(export.Id, end.Ending, end.Ending == ImportEnding.Imported ? string.Empty : end.Summary);
+                    connected?.ImportEnded(
+                        export.Id,
+                        end.Ending,
+                        end.Ending is ImportEnding.Imported or ImportEnding.DismissedBeforeStart ? string.Empty : end.Summary);
                 },
-                out refusal);
+                out refusal,
+                stage);
         }
 #pragma warning disable CA1031 // A window that will not open must be reported to the web, not left to hang the export.
         catch (Exception ex)
@@ -94,15 +120,43 @@ internal sealed class AutoCadExportImportHost : IExportImportHost
 
         if (!started)
         {
-            Release();
-            connected?.ImportRefused(export.Id, ExportReasons.WindowFailed, refusal ?? "AutoCAD could not open the window for this export.");
-            connected?.TurnFree();
+            Refuse(connected, export.Id, held is not null, refusal ?? "AutoCAD could not open the window for this export.");
             return;
         }
 
-        MantlePlaceApplication.Say(ExportReceipt.Describe(export, zipPath));
+        MantlePlaceApplication.Say(held is { } at
+            ? $"Reopened for export {export.Id} at the {DownloadLevels.Word(at)} level."
+            : ExportReceipt.Describe(export, zipPath));
+
+        // After a reopen this is nothing to the desk: the export is already awaiting options.
         connected?.ImportOpened(export.Id);
-        connected?.ImportBegan(export.Id);
+
+        // On the stage before Import, the web hears the import begin when Import is pressed (the stage's
+        // Began); with no stage the import has begun already, and a refusal shows its report at once,
+        // and is begun and ended as before.
+        if (!WindowedImport.AwaitsImport)
+        {
+            connected?.ImportBegan(export.Id);
+        }
+    }
+
+    /// <summary>
+    /// No window opened on the export. A first open is refused; a reopen after a level choice already had
+    /// its window open, so the web hears the import fail instead.
+    /// </summary>
+    private void Refuse(ConnectedHostService? connected, string exportId, bool reopened, string message)
+    {
+        Release();
+        if (reopened)
+        {
+            connected?.ImportEnded(exportId, ImportEnding.Failed, message);
+        }
+        else
+        {
+            connected?.ImportRefused(exportId, ExportReasons.WindowFailed, message);
+        }
+
+        connected?.TurnFree();
     }
 
     private void Release()

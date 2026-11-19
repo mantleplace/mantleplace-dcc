@@ -113,6 +113,22 @@ internal static class HeightDatumTests
             Same(run, HeightDatums.GroundFor([new(1, null)], Stem, used: 1), null, "no ground of this order");
         });
 
+        run.Case("a 3.0 vertical CRS code is compared with a ground a 2.x import recorded by its 2.x name", () =>
+        {
+            FrameCrs navdCode = new("EPSG:5703", null, null);
+            FrameCrs egmCode = new("EPSG:3855", null, null);
+            StatedDatum navd30 = new(HeightDatums.FromFrame(navdCode, "GEOID18"), true);
+            StatedDatum egm30 = new(HeightDatums.FromFrame(egmCode, "EGM2008"), true);
+
+            run.Equal(HeightDatums.Refusal(new GroundDatum(7, Navd), navd30, "roads"), null, "EPSG:5703 on GEOID18 sits on a NAVD88 (GEOID18) ground");
+            run.Equal(HeightDatums.Refusal(new GroundDatum(7, Egm), egm30, "roads"), null, "EPSG:3855 sits on an EGM2008 ground");
+            run.Equal(HeightDatums.Refusal(new GroundDatum(7, null), egm30, "roads"), null, "and on a ground from before 1.8.0");
+            run.Contains(HeightDatums.Refusal(new GroundDatum(7, Egm), navd30, "roads"), Navd, "a different datum is still refused");
+
+            StatedDatum otherGeoid = new(HeightDatums.FromFrame(navdCode, "GEOID12B"), true);
+            run.Contains(HeightDatums.Refusal(new GroundDatum(7, Navd), otherGeoid, "roads"), "EPSG:5703", "NAVD88 on another geoid fails closed, naming the code");
+        });
+
         PlannerCarriesDatums(run);
 
         return run.Report("height datums");

@@ -99,6 +99,44 @@ internal static class ThreePlanTests
                     }
                 }
             });
+
+            run.Case($"{corpusCase.Id}: the plan is identified by the order id the manifest states", () =>
+            {
+                Dictionary<string, string> files = Load(bundle);
+                BundleManifest manifest = Read(files);
+                if (!manifest.IsValid)
+                {
+                    return;
+                }
+
+                // A 3.0 manifest has no job id, so the order is the one identity it states (§9.3).
+                string orderId = Manifest(files)["order"]!["id"]!.GetValue<string>();
+                string token = LandPlan.BuildToken(orderId);
+                run.True(orderId.Length > 0, "the corpus bundle states an order id");
+                run.Equal(manifest.OrderId, orderId, "the reader carries the order id");
+                run.Equal(manifest.JobId, string.Empty, "and the manifest has no job id");
+                run.True(token != "unidentified", "so the build token is one the order id makes");
+
+                BundleImportPlan plan = Plan(manifest);
+                ImportStep? provenance = Step(plan, ImportStepKind.AttributionAndProvenance);
+                if (provenance is not null)
+                {
+                    run.Equal(provenance.Provenance?.OrderId, orderId, "the provenance carries the order id");
+                }
+
+                foreach (ImportStep step in plan.Steps)
+                {
+                    if (step.LandPlan is not null)
+                    {
+                        run.Equal(step.LandPlan.Build, token, $"{step.Kind}'s land plan is built from the order id");
+                    }
+
+                    if (step.Hazard is not null)
+                    {
+                        run.Equal(step.Hazard.Build, HazardPlan.BuildToken(orderId), $"{step.Kind}'s hazard plan is built from the order id");
+                    }
+                }
+            });
         }
     }
 
@@ -168,6 +206,92 @@ internal static class ThreePlanTests
 
             SkippedImport? points = plan.Skipped.FirstOrDefault(skip => skip.Kind == ImportStepKind.ToposurfaceFromPointsFile);
             run.Equal(points?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.NotInFormat, "the points file is skipped: 3.0 has none");
+        });
+
+        run.Case("a 3.0 tree point lands where the toposolid is: offsets from the site origin, heights above its height", () =>
+        {
+            // Trees.csv is host-ready (spec/format.md §4): x and y are metres east and north of the site
+            // origin and ground_z is metres above the origin's height, so the file is already local. Read
+            // as absolute coordinates in the delivery CRS, the origin is subtracted a second time and
+            // every tree stands millions of metres from the site, with its height off by the origin's.
+            BundleImportPlan plan = Plan(Read(Load(FullBundle)));
+            ImportStep trees = Step(plan, ImportStepKind.Vegetation)!;
+            GeoOrigin origin = trees.Frame!.Origin;
+
+            TreePointsParse parse = TreePointsReader.Parse(
+                "x,y,ground_z,height_m,crown_radius_m\n"
+                + "12.5,-7.25,5.0,4,1\n"
+                + "-300,410,-2.5,6,2\n",
+                trees.Frame,
+                trees.FoliageTypeVocabulary,
+                trees.Units,
+                layer: trees.Layer,
+                groundBaseM: trees.HeightBaseM ?? 0.0);
+
+            run.True(parse.Failure is null, $"the tree file parses ({parse.Failure})");
+            run.Equal(parse.Points.Count, 2, "both rows are points");
+            run.Within(parse.Points[0].EastM, 12.5, 1e-9, "east is the offset the file states, not the offset less the origin");
+            run.Within(parse.Points[0].NorthM, -7.25, 1e-9, "north is the offset the file states");
+            run.Within(parse.Points[1].EastM, -300.0, 1e-9, "another row's east");
+            run.Within(parse.Points[1].NorthM, 410.0, 1e-9, "another row's north");
+            run.True(
+                parse.Points.All(point => Math.Abs(point.EastM) < 1000.0 && Math.Abs(point.NorthM) < 1000.0),
+                $"every tree is within the site's footprint, not {origin.Easting:N0} m from it");
+            run.Within(parse.Points[0].GroundElevationM, 25.0, 1e-9, "ground_z is above the origin's height of 20 m, so it lands at 25 m");
+            run.Within(parse.Points[1].GroundElevationM, 17.5, 1e-9, "a row below the origin's height lands below it, not below zero");
+        });
+
+        run.Case("the foliage vocabulary the Trees.csv entry states rides on the vegetation step, so a shrub row is a shrub", () =>
+        {
+            // The corpus entry states the table's columns and no vocabulary, so this case edits a copy
+            // of the manifest to state the one the served 3.0.0 schema carries at table.foliage_types.
+            // Pinned to the literal token the platform publishes for vocabulary "1" (spec/format-2.md), so a change to
+            // FoliageTypes.KnownVocabulary cannot silently follow the test.
+            const string vocabulary = "1";
+            BundleManifest manifest = Read(Load(FullBundle, document =>
+                document["catalog"]!["Landcover/Trees.csv"]!["table"]!.AsObject()["foliage_types"] =
+                    new JsonObject { ["vocabulary"] = vocabulary, ["values"] = new JsonArray("tree", "shrub") }));
+
+            run.Equal(
+                manifest.Contents!.Find("Landcover/Trees.csv")?.FoliageTypeVocabulary,
+                vocabulary,
+                "the shared reader exposes the vocabulary the entry states, verbatim");
+            run.Equal(
+                manifest.Contents!.Find("Elevation/Terrain.dxf")?.FoliageTypeVocabulary,
+                null,
+                "and no other file has one");
+
+            ImportStep? trees = Step(Plan(manifest), ImportStepKind.Vegetation);
+            run.Equal(trees?.FoliageTypeVocabulary, vocabulary, "the vegetation step carries it, as a 2.x step does");
+
+            TreePointsParse parse = TreePointsReader.Parse(
+                "x,y,ground_z,height_m,crown_radius_m,foliage_type\n"
+                + "1,2,3,4,1,tree\n"
+                + "5,6,7,1,0.5,shrub\n"
+                + "9,8,7,6,2,\n",
+                trees!.Frame!,
+                trees.FoliageTypeVocabulary,
+                trees.Units);
+            run.True(parse.Failure is null, $"the tree file parses ({parse.Failure})");
+            run.Equal(parse.Points.Count, 3, "every row is a point");
+            run.Equal(parse.Points[0].FoliageType, FoliageType.Tree, "a tree row is a tree");
+            run.Equal(parse.Points[1].FoliageType, FoliageType.Shrub, "a shrub row is a shrub");
+            run.Equal(parse.Points[2].FoliageType, FoliageType.Tree, "an empty cell is a tree");
+            run.Equal(parse.EmptyFoliageCells, 1, "and is counted");
+            run.Equal(
+                PlantingFamilies.FamilyName(parse.Points[1].FoliageType),
+                ShrubFamily.FamilyName,
+                "so the shrub is planted with the shrub family");
+
+            BundleManifest unstated = Read(Load(FullBundle));
+            run.Equal(
+                unstated.Contents!.Find("Landcover/Trees.csv")?.FoliageTypeVocabulary,
+                null,
+                "an entry that states none reads none");
+            run.Equal(
+                Step(Plan(unstated), ImportStepKind.Vegetation)?.FoliageTypeVocabulary,
+                null,
+                "and its step carries none");
         });
 
         run.Case("a 3.0 bundle imported again over its own earlier import follows the re-import rule", () =>
@@ -298,16 +422,16 @@ internal static class ThreePlanTests
 
     private static void RunDrapeCases(TestRun run)
     {
-        run.Case("the drape is placed on the catalog's rectangle in the local site frame, verbatim", () =>
+        run.Case("the drape is placed on the corpus catalog's rectangle in the local site frame, verbatim", () =>
         {
-            BundleImportPlan plan = Plan(Read(Load(FullBundle, manifest => Rectangle(manifest, -512.0, -400.5, 512.0, 623.5))));
+            BundleImportPlan plan = Plan(Read(Load(FullBundle)));
 
             ImportStep? drape = Step(plan, ImportStepKind.ImageryDrape);
             run.Equal(drape?.EntryName, "Imagery/Imagery.png", "the drape is the host-ready imagery");
             run.Within(drape?.Drape?.LeftM ?? 0, -512.0, 1e-12, "west edge");
-            run.Within(drape?.Drape?.BottomM ?? 0, -400.5, 1e-12, "south edge");
+            run.Within(drape?.Drape?.BottomM ?? 0, -512.0, 1e-12, "south edge");
             run.Within(drape?.Drape?.RightM ?? 0, 512.0, 1e-12, "east edge");
-            run.Within(drape?.Drape?.TopM ?? 0, 623.5, 1e-12, "north edge");
+            run.Within(drape?.Drape?.TopM ?? 0, 512.0, 1e-12, "north edge");
             run.True(drape?.Drape?.ExtentFromDrapeBlock ?? false, "a stated rectangle, not an inferred one");
             run.Equal(
                 Step(plan, ImportStepKind.ToposurfaceFromSurfaceTin)?.ToposolidType ?? TerrainToposolidType.Project,
@@ -317,7 +441,7 @@ internal static class ThreePlanTests
 
         run.Case("a drape whose image is not the size the catalog states is skipped, saying so", () =>
         {
-            Dictionary<string, string> files = Load(FullBundle, manifest => Rectangle(manifest, -512.0, -512.0, 512.0, 512.0));
+            Dictionary<string, string> files = Load(FullBundle);
             BundleImportPlan plan = BundleImportPlanner.Plan(Read(files), files.Keys, _ => new ImageSize(2048, 2048));
 
             SkippedImport? skip = Skip(plan, ImportStepKind.ImageryDrape);
@@ -327,7 +451,7 @@ internal static class ThreePlanTests
 
         run.Case("a drape whose catalog entry states no rectangle is skipped, saying so", () =>
         {
-            BundleImportPlan plan = Plan(Read(Load(FullBundle)));
+            BundleImportPlan plan = Plan(Read(Load(FullBundle, WithoutRectangle)));
 
             SkippedImport? skip = Skip(plan, ImportStepKind.ImageryDrape);
             run.Equal(skip?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.ExtentNotCorroborated, "no rectangle to place it on");
@@ -368,6 +492,43 @@ internal static class ThreePlanTests
             SkippedImport? skip = Skip(plan, ImportStepKind.Vegetation);
             run.Equal(skip?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.ArtifactNotInManifest, "not in the catalog");
             run.Contains(skip?.Reason, "Landcover/Trees.csv", "naming the file");
+        });
+
+        run.Case("a level download without the layers the site lacks plans each of their steps as skipped, naming the file", () =>
+        {
+            // What a 3.0 order downloads as when the platform refused the files the bundle does not
+            // hold and the request went again for the rest: the catalog and the archive carry neither.
+            (ImportStepKind Kind, string File)[] absent =
+            [
+                (ImportStepKind.RoadCentrelines, "Basemap/Roads.gpkg"),
+                (ImportStepKind.Water, "Basemap/Water.gpkg"),
+                (ImportStepKind.LandUse, "Basemap/Landuse.gpkg"),
+                (ImportStepKind.LandCover, "Landcover/Landcover.gpkg"),
+            ];
+            Dictionary<string, string> files = Load(FullBundle, manifest =>
+            {
+                foreach ((_, string file) in absent)
+                {
+                    manifest["catalog"]!.AsObject().Remove(file);
+                }
+            });
+            foreach ((_, string file) in absent)
+            {
+                files.Remove(file);
+            }
+
+            BundleImportPlan plan = Plan(Read(files));
+            run.True(plan.CanImport, $"the rest still imports ({plan.BlockedReason})");
+            run.True(Step(plan, ImportStepKind.ToposurfaceFromSurfaceTin) is not null, "the terrain among it");
+            foreach ((ImportStepKind kind, string file) in absent)
+            {
+                run.True(Step(plan, kind) is null, $"no {kind} step");
+                SkippedImport? skip = Skip(plan, kind);
+                run.True(skip is not null, $"{kind} is shown as skipped");
+                run.Contains(skip?.Reason, file, $"{kind}'s skip names {file}");
+            }
+
+            run.True(!plan.Steps.Any(step => absent.Any(gone => gone.File == step.EntryName)), "no step reads a file the download lacks");
         });
     }
 
@@ -418,9 +579,9 @@ internal static class ThreePlanTests
         BundleReader.Read(files.Keys, entry => files.TryGetValue(entry, out string? text) ? text : null)
         ?? throw new InvalidOperationException("the reader found no manifest");
 
-    /// <summary>Gives Imagery.png's raster the rectangle it covers in the local site frame, which the corpus bundle leaves out.</summary>
-    private static void Rectangle(JsonObject manifest, double left, double bottom, double right, double top) =>
-        manifest["catalog"]!["Imagery/Imagery.png"]!["raster"]!["rectangle"] = new JsonArray(left, bottom, right, top);
+    /// <summary>Takes the rectangle off Imagery.png's raster, which the corpus bundle states.</summary>
+    private static void WithoutRectangle(JsonObject manifest) =>
+        manifest["catalog"]!["Imagery/Imagery.png"]!["raster"]!.AsObject().Remove("rectangle");
 
     internal static JsonObject Manifest(Dictionary<string, string> files) =>
         JsonNode.Parse(files["Manifest.json"])!.AsObject();

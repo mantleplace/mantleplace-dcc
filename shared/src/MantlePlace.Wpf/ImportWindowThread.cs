@@ -37,6 +37,15 @@ public sealed record ImportWindowRequest(
 
     /// <summary>A line under the level control: what the last level choice did. <c>null</c> for none.</summary>
     public string? LevelNote { get; init; }
+
+    /// <summary>
+    /// For a host with no checklist, a stage before Import: this text, what the import will do, shown
+    /// with an Import button, and the run waits for the press (<see cref="IImportWindowHost.Begin"/>,
+    /// with every layer). So the level control can be used before anything is placed. <c>null</c>, the
+    /// default, opens such a host's window on its steps, with no Import to press, as before.
+    /// Ignored when <see cref="Checklist"/> is set, whose own list is that stage.
+    /// </summary>
+    public string? BeforeImport { get; init; }
 }
 
 /// <summary>
@@ -194,6 +203,12 @@ public sealed class ImportWindowThread
 
     /// <summary>Brings the window forward, unless a host modal is up. Called on the host's thread.</summary>
     public void BringForward() => Post(() => _window?.BringForward());
+
+    /// <summary>
+    /// Brings the window forward to show the report of an import that has ended, only while the host is
+    /// in front: another application keeps the foreground. Called on the host's thread.
+    /// </summary>
+    public void BringForwardAtTheEnd() => Post(() => _window?.BringForwardAtTheEnd());
 
     /// <summary>Stops the window floating, before the host shows a dialog. Called on the host's thread.</summary>
     public void Lower() => Post(() => _window?.Lower());

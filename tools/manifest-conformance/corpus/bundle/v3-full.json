@@ -706,6 +706,7 @@
             "scale": 1,
             "offset": 0,
             "nodata": null,
+            "rectangle": [-512, -512, 512, 512],
             "frame": "local"
           },
           "odbl_role": "none",

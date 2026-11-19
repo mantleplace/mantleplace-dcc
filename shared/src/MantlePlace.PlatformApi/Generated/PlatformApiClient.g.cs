@@ -815,7 +815,7 @@ namespace MantlePlace.PlatformApi
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
-                            throw new ApiException<Response8>("Refused. Codes: price_changed (carries the current quote; nothing was charged), free_cap_reached (the account is at its free-build limit), idempotency_key_reused (the key placed an order for a different extent).", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                            throw new ApiException<Response8>("Refused. Codes: price_changed (carries the current quote; nothing was charged), free_cap_reached (the account is at its free-build limit), free_builds_paused (new free builds are paused for now; paid orders are unaffected), idempotency_key_reused (the key placed an order for a different extent).", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 422)
@@ -891,7 +891,7 @@ namespace MantlePlace.PlatformApi
         /// The curator bundles
         /// </summary>
         /// <remarks>
-        /// The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import. A 3.0 bundle also carries mpb3: the level recommended for the asking host and site, the size and counts of Max, Med and Min, and its three Extras, each with the download a signed-in plugin sends. The 3.0 form is published ahead of the behaviour and is not served yet; the examples are for a plugin test double and follow the draft tree of the 3.0 spec, which may still rename files.
+        /// The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import. A 3.0 bundle also carries mpb3: the level recommended for the host the Mantle-Place-Client header names and this site (the highest level expected to import in about five minutes on the reference machine; the platform works it out from the counts of each level and figures it keeps private, and no figure appears in any response), the size and counts of Max, Med and Min, and its Extras, each with the download a signed-in plugin sends. A bundle that is not 3.0 has no mpb3 member and is answered as it always was. The examples are for a plugin test double and follow the draft tree of the 3.0 spec, which may still rename files.
         /// </remarks>
         /// <returns>The bundles.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -905,7 +905,7 @@ namespace MantlePlace.PlatformApi
         /// The curator bundles
         /// </summary>
         /// <remarks>
-        /// The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import. A 3.0 bundle also carries mpb3: the level recommended for the asking host and site, the size and counts of Max, Med and Min, and its three Extras, each with the download a signed-in plugin sends. The 3.0 form is published ahead of the behaviour and is not served yet; the examples are for a plugin test double and follow the draft tree of the 3.0 spec, which may still rename files.
+        /// The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import. A 3.0 bundle also carries mpb3: the level recommended for the host the Mantle-Place-Client header names and this site (the highest level expected to import in about five minutes on the reference machine; the platform works it out from the counts of each level and figures it keeps private, and no figure appears in any response), the size and counts of Max, Med and Min, and its Extras, each with the download a signed-in plugin sends. A bundle that is not 3.0 has no mpb3 member and is answered as it always was. The examples are for a plugin test double and follow the draft tree of the 3.0 spec, which may still rename files.
         /// </remarks>
         /// <returns>The bundles.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -1013,7 +1013,7 @@ namespace MantlePlace.PlatformApi
         /// <remarks>
         /// Mints a presigned URL for one artifact format, or for the whole archive with format bundle. A host that declares view support sends format bundle with a view naming itself, and gets a link to a view holding only the files its host block points at.
         /// <br/>
-        /// <br/>The 3.0 form (not yet served): format bundle with mpb3 asks for one level (Max, Med or Min; none means Max) and the promised files wanted, by path from the bundle root, or for one Extra by id. There is no file list per host for 3.0, so mpb3 never comes with view. The answer is the same link answer, with sizeBytes. Until 3.0 is served, every request in the 3.0 form is refused with HTTP 501 and the code mpb3_not_yet_served; every 2.x request and answer is unchanged. When a plugin too old to read 3.0 asks for a 3.0 bundle, it will receive the update answer (HTTP 426, below).
+        /// <br/>The 3.0 form: format bundle with mpb3 asks for one level (Max, Med or Min; none means Max) and the promised files wanted, by path from the bundle root, or for one Extra by id. There is no file list per host for 3.0, so mpb3 never comes with view, and a view asked of a 3.0 bundle is refused (HTTP 400, code invalid_request). A level request is served: with no files the link is to the whole download of that level (every georeferenced file once and each host-ready file at that level, with the manifest of that level, in a zip whose name states the level); with files named it is to a view holding exactly those files at that level, and Manifest.json always comes with it, named or not. A file the bundle does not hold is refused by name (HTTP 404, code file_not_in_bundle, with the names in files); a level request for a 2.x bundle is refused (HTTP 400, code invalid_request). The answer is the same link answer, with sizeBytes. An Extra is served: the link is to the Site Brief, the plan sheets or the terrain tiles, each its own free download beside the bundle, and the answer is the link (url and expiresAt). It sits behind the gates of the bundle: an order the bearer does not own, a refund, a deleted bundle and an expired free bundle refuse it as they refuse the bundle, and an Extra the bundle does not hold is refused (HTTP 404, code extra_not_in_bundle). A request that names no level receives Max. Every 2.x request and answer is unchanged. A plugin too old to read 3.0 that asks for a 3.0 bundle, in the 3.0 form or in the 2.x form for an order whose bundle is 3.0, is answered HTTP 426 with the update answer (below) instead; the same plugin asking for a 2.x bundle is served as before. The first release that reads 3.0 is Unreal 0.9.0, Revit 1.2.0, AutoCAD and Civil 3D 1.2.0. The web client and a client that states no version are never asked to update for a bundle.
         /// </remarks>
         /// <param name="orderId">The id of an order the signed-in curator owns.</param>
         /// <returns>The link.</returns>
@@ -1030,7 +1030,7 @@ namespace MantlePlace.PlatformApi
         /// <remarks>
         /// Mints a presigned URL for one artifact format, or for the whole archive with format bundle. A host that declares view support sends format bundle with a view naming itself, and gets a link to a view holding only the files its host block points at.
         /// <br/>
-        /// <br/>The 3.0 form (not yet served): format bundle with mpb3 asks for one level (Max, Med or Min; none means Max) and the promised files wanted, by path from the bundle root, or for one Extra by id. There is no file list per host for 3.0, so mpb3 never comes with view. The answer is the same link answer, with sizeBytes. Until 3.0 is served, every request in the 3.0 form is refused with HTTP 501 and the code mpb3_not_yet_served; every 2.x request and answer is unchanged. When a plugin too old to read 3.0 asks for a 3.0 bundle, it will receive the update answer (HTTP 426, below).
+        /// <br/>The 3.0 form: format bundle with mpb3 asks for one level (Max, Med or Min; none means Max) and the promised files wanted, by path from the bundle root, or for one Extra by id. There is no file list per host for 3.0, so mpb3 never comes with view, and a view asked of a 3.0 bundle is refused (HTTP 400, code invalid_request). A level request is served: with no files the link is to the whole download of that level (every georeferenced file once and each host-ready file at that level, with the manifest of that level, in a zip whose name states the level); with files named it is to a view holding exactly those files at that level, and Manifest.json always comes with it, named or not. A file the bundle does not hold is refused by name (HTTP 404, code file_not_in_bundle, with the names in files); a level request for a 2.x bundle is refused (HTTP 400, code invalid_request). The answer is the same link answer, with sizeBytes. An Extra is served: the link is to the Site Brief, the plan sheets or the terrain tiles, each its own free download beside the bundle, and the answer is the link (url and expiresAt). It sits behind the gates of the bundle: an order the bearer does not own, a refund, a deleted bundle and an expired free bundle refuse it as they refuse the bundle, and an Extra the bundle does not hold is refused (HTTP 404, code extra_not_in_bundle). A request that names no level receives Max. Every 2.x request and answer is unchanged. A plugin too old to read 3.0 that asks for a 3.0 bundle, in the 3.0 form or in the 2.x form for an order whose bundle is 3.0, is answered HTTP 426 with the update answer (below) instead; the same plugin asking for a 2.x bundle is served as before. The first release that reads 3.0 is Unreal 0.9.0, Revit 1.2.0, AutoCAD and Civil 3D 1.2.0. The web client and a client that states no version are never asked to update for a bundle.
         /// </remarks>
         /// <param name="orderId">The id of an order the signed-in curator owns.</param>
         /// <returns>The link.</returns>
@@ -1103,7 +1103,7 @@ namespace MantlePlace.PlatformApi
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
-                            throw new ApiException<ApiError>("Malformed body or unknown format. A 3.0 request is malformed when it names two levels, a file the tree does not promise, or an Extra that does not exist; or is sent without format bundle, or with a view. Code: invalid_request for the last two.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                            throw new ApiException<ApiError>("Malformed body or unknown format. A 3.0 request is malformed when it names two levels, a file the tree does not promise, or an Extra that does not exist; or is sent without format bundle, or with a view. Code: invalid_request for the last two, and for a view or a level request made of a bundle that cannot serve it (a view of a 3.0 bundle; a level of a 2.x bundle).", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 401)
@@ -1133,7 +1133,7 @@ namespace MantlePlace.PlatformApi
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
-                            throw new ApiException<ApiError>("No such order or artifact. Code: not_found or not_ready.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                            throw new ApiException<ApiError>("No such order or artifact. Code: not_found or not_ready. A 3.0 request that names a promised file this bundle does not hold (a record layer the site lacks): code file_not_in_bundle, with the missing names in files. A request for an Extra this bundle does not hold: code extra_not_in_bundle, with the Extra in extra; a Site Brief the bundle never recorded is code missing_bytes.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 410)
@@ -1153,7 +1153,7 @@ namespace MantlePlace.PlatformApi
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
-                            throw new ApiException<Response12>("The calling client is below the minimum version the platform serves for it (code client_update_required, as on every route). For a request in the 3.0 form from a plugin too old to read 3.0 bundles, the answer also carries bundleVersion 3.0 and minimumVersion, the lowest version of that client that reads 3.0. Show an update prompt, not an error. Never cached (Cache-Control: no-store). The bundleVersion answer is not served yet: published ahead of the behaviour.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                            throw new ApiException<Response12>("The calling client is below the minimum version the platform serves for it (code client_update_required, as on every route). For a request for a 3.0 bundle (the 3.0 form, or any request for an order whose bundle is 3.0) from a plugin too old to read 3.0 bundles, the answer also carries bundleVersion 3.0, and minimumVersion is the lowest version of that client that reads 3.0 (Unreal 0.9.0, Revit 1.2.0, AutoCAD and Civil 3D 1.2.0) rather than the lowest the platform serves at all: the same plugin asking for a 2.x bundle is served as before. Show an update prompt, not an error. Never cached (Cache-Control: no-store).", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 500)
@@ -1164,16 +1164,6 @@ namespace MantlePlace.PlatformApi
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
                             throw new ApiException<ApiError>("Transient failure; retry. Code: transient.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
-                        }
-                        else
-                        if (status_ == 501)
-                        {
-                            var objectResponse_ = await ReadObjectResponseAsync<ApiError>(response_, headers_, cancellationToken).ConfigureAwait(false);
-                            if (objectResponse_.Object == null)
-                            {
-                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
-                            }
-                            throw new ApiException<ApiError>("A request in the 3.0 form (mpb3), until the platform serves 3.0. Code: mpb3_not_yet_served. Nothing was minted; use the 2.x form or wait.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         {
@@ -2184,7 +2174,7 @@ namespace MantlePlace.PlatformApi
         public View? View { get; set; } = default!;
 
         /// <summary>
-        /// The 3.0 form of the request, with format bundle: one level and the promised files wanted, by name, or one Extra. Not served yet: it is refused with HTTP 501 and the code mpb3_not_yet_served. It never comes with view: a 3.0 bundle has no file list per host.
+        /// The 3.0 form of the request, with format bundle: one level and the promised files wanted, by name, or one Extra. A level request is served: the answer is a link to that level of the bundle, or, with files named, to exactly those files at that level; a file the bundle does not hold is refused by name (HTTP 404, code file_not_in_bundle). An Extra is served: the answer is the link to its own download (url and expiresAt), behind the same gates as the bundle, and an Extra the bundle does not hold is refused (HTTP 404, code extra_not_in_bundle). A plugin too old to read 3.0 is answered HTTP 426, the update answer, instead. It never comes with view: a 3.0 bundle has no file list per host.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("mpb3")]
         public Mpb3? Mpb3 { get; set; } = default!;
@@ -2680,14 +2670,14 @@ namespace MantlePlace.PlatformApi
         public string Version { get; set; } = default!;
 
         /// <summary>
-        /// The lowest version of this client the platform serves. For a 3.0 request, the lowest that reads a 3.0 bundle.
+        /// The lowest version of this client the platform serves. For a request for a 3.0 bundle, the lowest that reads a 3.0 bundle: Unreal 0.9.0, Revit 1.2.0, AutoCAD and Civil 3D 1.2.0.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("minimumVersion")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
         public string MinimumVersion { get; set; } = default!;
 
         /// <summary>
-        /// Present when the request was in the 3.0 form: the bundle version the client cannot read.
+        /// Present when the request was for a 3.0 bundle: the bundle version the client cannot read.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("bundleVersion")]
         public string? BundleVersion { get; set; } = default!;
@@ -3362,7 +3352,7 @@ namespace MantlePlace.PlatformApi
         public Links? Links { get; set; } = default!;
 
         /// <summary>
-        /// Present only on a 3.0 bundle (not served yet): the recommended level for the asking host and site, the size and counts of each of the three levels, and the Extras. A 2.x bundle has no mpb3 member and every other member is as it was; on a 3.0 bundle, sizeBytes and download.formats describe the Max download.
+        /// Present only on an available 3.0 bundle: the recommended level for the asking host and site, the size and counts of each of the three levels, and the Extras. A 2.x bundle has no mpb3 member and every other member is as it was; on a 3.0 bundle, sizeBytes and the bundle entry of download.formats state the size of the Max download, and sha256 is null (the manifest sits inside the zip).
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("mpb3")]
         public Mpb32? Mpb3 { get; set; } = default!;
@@ -4375,7 +4365,7 @@ namespace MantlePlace.PlatformApi
         public string Version { get; set; } = default!;
 
         /// <summary>
-        /// The highest level expected to import in about five minutes on the reference machine, for the host that asked (the Mantle-Place-Client header) and this site. The platform works it out; the figures behind it stay private and can change without rebuilding a bundle.
+        /// The highest level expected to import in about five minutes on the reference machine, for the host that asked (the Mantle-Place-Client header; a request that names none is answered as for the slowest host) and this site. The platform works it out from the counts of each level and figures it holds; the figures stay private, appear in no response, and can change without rebuilding a bundle. Apply it as it is: a plugin holds no budget of its own.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("recommendedLevel")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
@@ -4390,7 +4380,7 @@ namespace MantlePlace.PlatformApi
         public Levels Levels { get; set; } = new Levels();
 
         /// <summary>
-        /// The three Extras, each free.
+        /// The Extras the bundle holds, each free: the Site Brief, the plan sheets and the terrain tiles, in that order. A bundle whose Extra was not built lists the others.
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("extras")]
         [System.ComponentModel.DataAnnotations.Required]

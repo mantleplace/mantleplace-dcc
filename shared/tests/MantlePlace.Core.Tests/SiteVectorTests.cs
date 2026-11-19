@@ -347,6 +347,48 @@ internal static class SiteVectorTests
             run.Within(trees[0].CrownRadiusM, 1.18, 1e-9, "crown radius");
         });
 
+        run.Case("a 2.x tree file stays absolute: no stated frame subtracts the origin and adds no height", () =>
+        {
+            const string csv = """
+                x,y,ground_z,height_m,crown_radius_m
+                472195.00,4257585.00,2006.71,3.38,1.18
+                """;
+
+            TreePointsParse unstated = TreePointsReader.Parse(
+                csv, MetricFrame, foliageVocabulary: null, groundUnit: LinearUnit.Metre, layer: null, groundBaseM: 0.0);
+            TreePointsParse absolute = TreePointsReader.Parse(
+                csv,
+                MetricFrame,
+                foliageVocabulary: null,
+                groundUnit: LinearUnit.Metre,
+                layer: new LayerFrame(LayerCoordinates.AbsoluteProjected, LinearUnit.Metre));
+
+            foreach (TreePointsParse parse in new[] { unstated, absolute })
+            {
+                run.Within(parse.Points[0].EastM, 600.0, 1e-6, "east is the offset from the origin");
+                run.Within(parse.Points[0].NorthM, 535.0, 1e-6, "north is the offset from the origin");
+                run.Within(parse.Points[0].GroundElevationM, 2006.71, 1e-9, "ground_z is absolute, nothing added");
+            }
+        });
+
+        run.Case("a local-offsets file is taken as it is, in its own unit, whatever the origin", () =>
+        {
+            TreePointsParse parse = TreePointsReader.Parse(
+                """
+                x,y,ground_z,height_m,crown_radius_m
+                100,-50,10,3,1
+                """,
+                FootFrame,
+                foliageVocabulary: null,
+                groundUnit: LinearUnit.Metre,
+                layer: new LayerFrame(LayerCoordinates.LocalOffsets, LinearUnit.Metre),
+                groundBaseM: 2.5);
+
+            run.Within(parse.Points[0].EastM, 100.0, 1e-9, "east is metres, not reduced by the foot origin");
+            run.Within(parse.Points[0].NorthM, -50.0, 1e-9, "north likewise");
+            run.Within(parse.Points[0].GroundElevationM, 12.5, 1e-9, "ground_z is above the stated base");
+        });
+
         run.Case("ground_z is read in the unit it is published in, so a foot delivery's trees stand on the ground", () =>
         {
             // A real sp_ftus bundle's first row: ground_z 313.56 is US survey feet, beside terrain

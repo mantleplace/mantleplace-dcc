@@ -579,6 +579,51 @@ internal static class ConnectedHostTests
             run.Equal(result.Kind, ExportFetchKind.StillBuilding, "still building");
         });
 
+        run.Case("a 3.0 order sent from the web vault is fetched at the recommendation, and its window opens on it", () =>
+        {
+            VaultBundle listed = DownloadLevelTests.ListedExample("mpb3LargeSite");
+            run.Equal(listed.ManifestVersion, "3.0.0", "the order is a 3.0 bundle");
+
+            using DownloadLevelTests.OneFileServer storage = new("level download"u8.ToArray());
+            string listing = DownloadLevelTests.ListedExampleJson("mpb3LargeSite");
+            DownloadLevelTests.Scripted handler = new([(200, DownloadLevelTests.Link(storage))])
+            {
+                Routes = path => path.EndsWith("/vault/bundles", StringComparison.Ordinal) ? (200, listing)
+                    : path.EndsWith("/materialize", StringComparison.Ordinal) ? (200, """{ "noop": true, "delivered": [] }""")
+                    : null,
+            };
+            VaultClient client = DownloadLevelTests.SignedInVault(handler, BundleImportPlanner.ThreeFiles, out AuthSession session);
+            string root = Path.Combine(Path.GetTempPath(), "mantleplace-levels-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                VaultExportSource source = new(client, new BundleCache(root));
+                ExportFetchResult fetched = new ExportBundleFetcher(source, new FakePrepare())
+                    .FetchAsync(listed.OrderId, () => { }, CancellationToken.None).GetAwaiter().GetResult();
+
+                run.Equal(fetched.Kind, ExportFetchKind.Ready, $"the fetch is ready ({fetched.Message})");
+                run.Equal(handler.Downloads.Count, 1, "one level download");
+                run.Equal((string?)System.Text.Json.Nodes.JsonNode.Parse(handler.Downloads[0])!["mpb3"]!["level"], "Med", "at the recommendation, since a send names no level");
+                run.Equal(storage.Served, 1, "and the link was fetched");
+
+                ExportDesk desk = Received();
+                IReadOnlyList<ExportAction> opened = desk.FetchEnded("e1", fetched);
+                run.Equal(Of<OpenExportImport>(opened).Count, 1, "the window opens");
+                run.Equal(Of<AdvanceExport>(opened).Count, 0, "and nothing is refused");
+
+                LevelControl? control = LevelControl.For(source.Listed(listed.OrderId));
+                run.True(control is not null, "the window gets the level control from the row the fetch listed");
+                run.Equal(control?.Selected ?? FidelityLevel.Raw, FidelityLevel.Med, "on the recommendation");
+            }
+            finally
+            {
+                session.Dispose();
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        });
+
         run.Case("a refused route is a failed download with the platform's words", () =>
         {
             FakeVault vault = new() { Bundles = [Bundle("2.0.0")], Route = ImportRouteDecision.Refuse("Not yours.") };

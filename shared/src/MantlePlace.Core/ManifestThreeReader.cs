@@ -34,6 +34,13 @@ internal static class ManifestThreeReader
     /// <summary>A GeoPackage entry's table names (§13, R20).</summary>
     private const string TablesMember = "tables";
 
+    /// <summary>A table entry's facts (§9.5): its columns and, for the tree points, the foliage types.</summary>
+    private const string TableMember = "table";
+
+    private const string FoliageTypesMember = "foliage_types";
+
+    private const string VocabularyMember = "vocabulary";
+
     /// <summary>The bundle's credits, each a line of text and a link (§9.8), and the two members of one.</summary>
     private const string CreditsMember = "credits";
 
@@ -222,6 +229,7 @@ internal static class ManifestThreeReader
                 },
                 Raster = entry.Value.ValueKind == JsonValueKind.Object ? Raster(entry.Value) : null,
                 Tables = entry.Value.ValueKind == JsonValueKind.Object ? entry.Value.StringArray(TablesMember) : [],
+                FoliageTypeVocabulary = entry.Value.ValueKind == JsonValueKind.Object ? FoliageVocabulary(entry.Value) : null,
             });
         }
 
@@ -357,6 +365,13 @@ internal static class ManifestThreeReader
             raster.OptionalStr(RasterFrameMember),
             rectangle);
     }
+
+    /// <summary>
+    /// The vocabulary a tree-points entry's <c>table.foliage_types</c> names (§9.5), verbatim, or
+    /// <c>null</c> when the entry states none. Never defaulted: without one every point is a tree.
+    /// </summary>
+    private static string? FoliageVocabulary(JsonElement entry) =>
+        entry.Object(TableMember)?.Object(FoliageTypesMember)?.OptionalStr(VocabularyMember);
 
     private static int PositiveInt(JsonElement element, string member) =>
         element.TryGetProperty(member, out JsonElement value)

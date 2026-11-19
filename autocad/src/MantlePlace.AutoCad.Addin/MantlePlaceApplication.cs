@@ -19,9 +19,10 @@ namespace MantlePlace.AutoCad.Addin;
 /// token, and signing out in one would leave the other authenticated.
 /// </para>
 /// <para>
-/// The wiring is the Revit plugin's, minus the parts that need a hook into the drawing: no Prepare
-/// watcher, no re-joiner and no import event. What each part decides is in the shared sources, where
-/// the headless suite holds it; what is here is construction, threads and teardown.
+/// The wiring is the Revit plugin's, minus the parts that need a hook into the drawing or a ledger: a
+/// Prepare watcher with no ledger, so no re-joiner, and no import event, since an import runs on
+/// AutoCAD's own dispatcher. What each part decides is in the shared sources, where the headless suite
+/// holds it; what is here is construction, threads and teardown.
 /// </para>
 /// </remarks>
 internal static class MantlePlaceApplication
@@ -34,6 +35,8 @@ internal static class MantlePlaceApplication
     private static AnnouncedOrderStore? _announced;
     private static VaultNewsChecker? _news;
     private static ConnectedHostService? _connected;
+    private static VaultExportSource? _exportSource;
+    private static PrepareWatcher? _watcher;
     private static readonly SignInEdge SignIns = new();
     private static readonly ConnectedHostEdge ConnectedEdge = new();
 
@@ -67,6 +70,20 @@ internal static class MantlePlaceApplication
     /// </summary>
     internal static ConnectedHostService? Connected => _connected;
 
+    /// <summary>
+    /// The vault as a send's fetch sees it: the row a send's order was listed with, which a 3.0 send's
+    /// level control is built from, and the download at another level. <c>null</c> before startup and
+    /// after shutdown.
+    /// </summary>
+    internal static VaultExportSource? ExportSource => _exportSource;
+
+    /// <summary>
+    /// The session's Prepare watcher, which a Prepare pressed in the vault window outlives the window in.
+    /// Kept for this launch only: AutoCAD keeps no ledger of Prepares, so one AutoCAD closed on is not
+    /// re-joined at the next launch.
+    /// </summary>
+    internal static PrepareWatcher Watcher => _watcher ?? throw NotStarted();
+
     /// <summary>Starts everything. AutoCAD's UI thread, from <c>IExtensionApplication.Initialize</c>.</summary>
     internal static void Start()
     {
@@ -94,7 +111,9 @@ internal static class MantlePlaceApplication
         // the UI thread by AutoCadExportImportHost.
         ConnectedHostLog connectedLog = new(ConnectedHostLog.DefaultPath);
         string connectionId = ConnectionIdSource.ThisLaunch.Id;
-        ExportBundleFetcher fetcher = new(new VaultExportSource(_vault, _cache), new VaultPrepareSteps(_vault, _cache));
+        _exportSource = new VaultExportSource(_vault, _cache);
+        _watcher = new PrepareWatcher(new VaultPrepareSteps(_vault, _cache));
+        ExportBundleFetcher fetcher = new(_exportSource, new VaultPrepareSteps(_vault, _cache));
         _connected = new ConnectedHostService(
             connectionId,
             () => RealtimeClient.For(endpoints, connectionId, connectedLog.Append),
@@ -145,6 +164,11 @@ internal static class MantlePlaceApplication
         VaultBrowser.Close();
         ArrivalNotifier.Forget();
         ClientUpdateDialog.Detach();
+
+        // A Prepare still running stops with AutoCAD; with no ledger, nothing is left to re-join.
+        _watcher?.InterruptAll();
+        _watcher = null;
+        _exportSource = null;
 
         if (_uiDispatcher is not null)
         {

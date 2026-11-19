@@ -208,6 +208,58 @@ bool FMantlePlaceVaultLevelNotInBundleTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FMantlePlaceVaultLevelRecordsAbsentTest,
+	"MantlePlace.Vault.Levels.RecordsAbsent",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+
+bool FMantlePlaceVaultLevelRecordsAbsentTest::RunTest(const FString& Parameters)
+{
+	// A 3.0 request names the nine public-record linework files beside the step files. An order that holds
+	// few or none of them is refused by name, and the request is asked again without them: the rest still
+	// downloads, and every refused file is reported so the import can hold it against its manifest.
+	const TArray<FString> Records = { TEXT("Records/Parcels.dxf"), TEXT("Records/Zoning.dxf"), TEXT("Records/Floodplain.dxf"),
+		TEXT("Records/Wetlands.dxf"), TEXT("Records/Soils.dxf"), TEXT("Records/Heritage.dxf"),
+		TEXT("Records/Conservation.dxf"), TEXT("Records/Hydrography.dxf"), TEXT("Records/Contamination.dxf") };
+	const TArray<FString> Others = { TEXT("Elevation/Elevation.png"), TEXT("Basemap/Roads.csv"), TEXT("Materials/Water.png") };
+	TArray<FString> Asked = Others;
+	Asked.Append(Records);
+	auto RefusalNaming = [](const TArray<FString>& Names)
+	{
+		TArray<FString> Quoted;
+		for (const FString& Name : Names)
+		{
+			Quoted.Add(FString::Printf(TEXT("\"%s\""), *Name));
+		}
+		return FString::Printf(TEXT("{\"error\":\"This bundle holds no such file\",\"code\":\"file_not_in_bundle\","
+			"\"reason\":\"unknown_file\",\"files\":[%s]}"), *FString::Join(Quoted, TEXT(",")));
+	};
+
+	// Some absent: only those go, the held records stay in the request.
+	{
+		const TArray<FString> Some = { Records[1], Records[3], Records[8] };
+		TArray<FString> Remaining;
+		TArray<FString> Absent;
+		TestTrue(TEXT("Several refused record files are dropped"),
+			FLogic::FilesLeftAfterNotInBundle(404, RefusalNaming(Some), Asked, Remaining, Absent));
+		TestEqual(TEXT("Each absent record is reported"), Absent.Num(), 3);
+		TestEqual(TEXT("Only they are dropped"), Remaining.Num(), Asked.Num() - 3);
+		TestTrue(TEXT("A record the order holds is still asked for"), Remaining.Contains(Records[0]));
+		TestFalse(TEXT("A refused one is not asked for again"), Remaining.Contains(Records[3]));
+	}
+
+	// Every record absent: the other files still download.
+	{
+		TArray<FString> Remaining;
+		TArray<FString> Absent;
+		TestTrue(TEXT("All nine refused still leaves a request"),
+			FLogic::FilesLeftAfterNotInBundle(404, RefusalNaming(Records), Asked, Remaining, Absent));
+		TestEqual(TEXT("All nine are reported"), Absent.Num(), 9);
+		TestEqual(TEXT("The other files are asked for, in order"), FString::Join(Remaining, TEXT(",")), FString::Join(Others, TEXT(",")));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceVaultExtrasTest,
 	"MantlePlace.Vault.Levels.Extras",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)

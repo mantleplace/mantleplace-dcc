@@ -32,11 +32,25 @@ public static class Civil3dPart
     }
 
     /// <summary>
+    /// The drawing's Civil 3D drawing units, as Civil 3D names them (<c>Feet</c> or <c>Meters</c>), read
+    /// from its drawing settings. Read only: ⛔ the plugin never sets them. Civil 3D converts a LandXML
+    /// file's linear unit to these as it reads the file, so the core holds them to the order's before a
+    /// surface is built.
+    /// </summary>
+    public static string ReadDrawingUnits(Database database)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        return CivilDocument.GetCivilDocument(database).Settings.DrawingSettings.UnitZoneSettings.DrawingUnits.ToString();
+    }
+
+    /// <summary>
     /// Builds a TIN surface from the surface the LandXML file at <paramref name="landXmlPath"/> names
     /// <paramref name="landXmlSurface"/>, named
     /// <paramref name="stem"/> (or the stem and a number, when the drawing has a surface of that name
     /// already), on <paramref name="layer"/>, which the shell has made. Civil 3D reads the file and builds
-    /// the triangles; the plugin hands it the path and works nothing out.
+    /// the triangles; the plugin hands it the path and works nothing out. Civil 3D converts the file's
+    /// linear unit to the drawing's as it reads, so the shell calls this only once
+    /// <see cref="ReadDrawingUnits"/> has shown the drawing to be in the order's units.
     /// </summary>
     /// <returns>The name the surface was given, and the points Civil 3D read.</returns>
     public static (string Name, int Points) BuildSurfaceFromLandXml(Database database, string stem, string landXmlPath, string landXmlSurface, string layer)

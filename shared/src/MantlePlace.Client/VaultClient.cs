@@ -274,6 +274,12 @@ public sealed class VaultClient
     /// level download of a host's files: the download is checked against the size the link states and
     /// recorded as its own (<c>holdsView</c>), and the files inside it against the manifest's digests
     /// at import, as a 2.x view is.
+    /// <para>
+    /// A promised file the bundle does not hold (a layer the site lacks) is refused by name and is not
+    /// an error: the request goes again naming only the rest (<see cref="DownloadLevels.FilesLeftAfterNotInBundle"/>),
+    /// and the import plan shows the absent file's step as skipped. Each try names fewer files, so the
+    /// tries end within the file count; any other refusal is reported as it stands.
+    /// </para>
     /// </remarks>
     private async Task<CompleteDownload> DownloadLevelAsync(
         VaultBundle bundle,
@@ -282,10 +288,25 @@ public sealed class VaultClient
         IProgress<string> say,
         CancellationToken cancellationToken)
     {
-        (int status, string body, string? error) = await SendAsync(
-            (api, ct) => api.GetVaultBundleDownloadAsync(bundle.OrderId, new Body4(), ct),
-            DownloadLevels.BuildRequestBody(level, _threeFiles),
-            cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<string> files = _threeFiles;
+        int status;
+        string body;
+        string? error;
+        while (true)
+        {
+            (status, body, error) = await SendAsync(
+                (api, ct) => api.GetVaultBundleDownloadAsync(bundle.OrderId, new Body4(), ct),
+                DownloadLevels.BuildRequestBody(level, files),
+                cancellationToken).ConfigureAwait(false);
+
+            if (error is not null || DownloadLevels.FilesLeftAfterNotInBundle(status, body, files) is not { } retry)
+            {
+                break;
+            }
+
+            say.Report($"This bundle holds no {string.Join(", ", retry.Absent)}; asking for the rest…");
+            files = retry.Remaining;
+        }
 
         HostViewLink link = default;
         error ??= Refusal(status, body) ?? HostViews.TryParse(body, out link);

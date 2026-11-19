@@ -166,6 +166,12 @@ public sealed class PlannedPart
 
     /// <summary>The public-record layers' files, in the order the block lists them; empty for every other part.</summary>
     public IReadOnlyList<PlannedFile> Files { get; init; } = [];
+
+    /// <summary>
+    /// The public-record layers a 3.x bundle does not hold while it holds others, each as <c>Name (why)</c>;
+    /// said after the layers placed. Empty for every other part, and for a 2.x bundle.
+    /// </summary>
+    public IReadOnlyList<string> NotInBundle { get; init; } = [];
 }
 
 /// <summary>What one press does to the drawing: refuse, or place these parts and skip those, saying why.</summary>
@@ -215,6 +221,13 @@ public sealed class AutoCadImportPlan
 
     /// <summary>The block's file frame.</summary>
     public AutoCadFileFrame Frame { get; init; } = AutoCadFileFrame.None;
+
+    /// <summary>
+    /// Whether the plan is an MPB 3.x bundle's, whose frame the manifest states once for every georeferenced
+    /// file: the surface step then holds its LandXML's own units and coordinate system to it
+    /// (<see cref="LandXmlSurface"/>). A 2.x plan's surface is read as it always was.
+    /// </summary>
+    public bool FromThree { get; init; }
 
     /// <summary>The unit the drawing's X and Y are in for this order: the block's, never the drawing's.</summary>
     public string HorizontalUnit => Frame.HorizontalUnit;
@@ -342,7 +355,7 @@ public static class AutoCadImportPlanner
         }
 
         AutoCadFileFrame frame = block.FileFrame;
-        if (FrameProblem(frame) is { } frameProblem)
+        if (FrameProblem(frame, block.FromThree) is { } frameProblem)
         {
             return new AutoCadImportPlan { OrderId = orderId, JobId = jobId, Frame = frame, Refusal = frameProblem };
         }
@@ -370,13 +383,14 @@ public static class AutoCadImportPlanner
             OrderId = orderId,
             JobId = jobId,
             Frame = frame,
+            FromThree = block.FromThree,
             Parts =
             [
-                PlanContours(block, frame),
-                PlanSurface(block, frame, civil3d is not null),
-                PlanAerial(block, frame),
-                PlanRecords(block, frame),
-                PlanLinework(block, frame),
+                LeftOut(block, AutoCadPart.Contours) ?? PlanContours(block, frame),
+                LeftOut(block, AutoCadPart.Surface) ?? PlanSurface(block, frame, civil3d is not null),
+                LeftOut(block, AutoCadPart.Aerial) ?? PlanAerial(block, frame),
+                LeftOut(block, AutoCadPart.Records) ?? PlanRecords(block, frame),
+                LeftOut(block, AutoCadPart.Linework) ?? PlanLinework(block, frame),
             ],
             Notices = notices,
         };
@@ -406,10 +420,16 @@ public static class AutoCadImportPlanner
         string sentence = string.Create(
             CultureInfo.InvariantCulture,
             $"{Label(AutoCadPart.Records)}: {placed} polylines placed on {layers.Count} layers ({string.Join(", ", layers)}).");
-        return refused.Count == 0
-            ? sentence
-            : $"{sentence} Not placed: {string.Join(" ", refused.Select(r => $"{r.Name} ({r.Why})"))}";
+        if (refused.Count > 0)
+        {
+            sentence = $"{sentence} Not placed: {string.Join(" ", refused.Select(r => $"{r.Name} ({r.Why})"))}";
+        }
+
+        return WithNotInBundle(sentence, part.NotInBundle);
     }
+
+    /// <summary>The words a part is called by in every sentence about it.</summary>
+    internal static string LabelOf(AutoCadPart kind) => Label(kind);
 
     /// <summary>What the user is told about placed site linework, with the count that went in and the layers it went on.</summary>
     public static string LineworkPlacedSentence(PlannedPart part, int placed, int layers)
@@ -442,29 +462,31 @@ public static class AutoCadImportPlanner
         _ => null,
     };
 
-    private static string? FrameProblem(AutoCadFileFrame frame)
+    private static string? FrameProblem(AutoCadFileFrame frame, bool fromThree)
     {
-        const string Lead = "The order's AutoCAD block states a frame this plugin cannot place in";
+        string lead = fromThree
+            ? "This bundle's georeferenced frame is one this plugin cannot place in"
+            : "The order's AutoCAD block states a frame this plugin cannot place in";
 
         if (UnitWords(frame.HorizontalUnit) is null)
         {
-            return $"{Lead}: its X/Y unit is \"{frame.HorizontalUnit}\", which this plugin does not know, so nothing was imported.";
+            return $"{lead}: its X/Y unit is \"{frame.HorizontalUnit}\", which this plugin does not know, so nothing was imported.";
         }
 
         if (UnitWords(frame.VerticalUnit) is null)
         {
-            return $"{Lead}: its height unit is \"{frame.VerticalUnit}\", which this plugin does not know, so nothing was imported.";
+            return $"{lead}: its height unit is \"{frame.VerticalUnit}\", which this plugin does not know, so nothing was imported.";
         }
 
         return frame.Type switch
         {
             AutoCadFileFrame.Projected when EpsgOf(frame.Crs) is null =>
-                $"{Lead}: it names the coordinate system \"{frame.Crs}\", which is not an EPSG code, so nothing was imported.",
+                $"{lead}: it names the coordinate system \"{frame.Crs}\", which is not an EPSG code, so nothing was imported.",
             AutoCadFileFrame.Projected => null,
             AutoCadFileFrame.Local when frame.BaseCrs.Length == 0 || frame.OriginEasting is null || frame.OriginNorthing is null =>
-                $"{Lead}: it is a local frame with no complete origin, so nothing was imported.",
+                $"{lead}: it is a local frame with no complete origin, so nothing was imported.",
             AutoCadFileFrame.Local => null,
-            _ => $"{Lead}: its type is \"{frame.Type}\", which this plugin does not know, so nothing was imported.",
+            _ => $"{lead}: its type is \"{frame.Type}\", which this plugin does not know, so nothing was imported.",
         };
     }
 
@@ -588,6 +610,33 @@ public static class AutoCadImportPlanner
         AutoCadPart.Linework => "Site linework",
         _ => "Aerial image",
     };
+
+    /// <summary>
+    /// A part a 3.x bundle leaves out, skipped with the sentence its reading gave, or <c>null</c> for a
+    /// part it holds and every part of a 2.x block, which is planned as usual.
+    /// </summary>
+    private static PlannedPart? LeftOut(AutoCadBlock block, AutoCadPart kind)
+    {
+        if (!block.LeftOut.TryGetValue(kind, out string? sentence))
+        {
+            return null;
+        }
+
+        (PartReadiness verdict, AutoCadPointer? pointer) = kind switch
+        {
+            AutoCadPart.Contours => (block.ContoursReadiness, block.Contours),
+            AutoCadPart.Surface => (block.SurfaceReadiness, block.Surface),
+            AutoCadPart.Aerial => (block.AerialReadiness, block.Aerial),
+            AutoCadPart.Records => (block.RecordsReadiness, null),
+            _ => (block.LineworkReadiness, block.Linework),
+        };
+
+        return Skip(kind, verdict, pointer, sentence);
+    }
+
+    /// <summary>The records' sentence, and the layers a 3.x bundle does not hold after it.</summary>
+    private static string WithNotInBundle(string sentence, IReadOnlyList<string> notInBundle) =>
+        notInBundle.Count == 0 ? sentence : $"{sentence} Not in this bundle: {string.Join(", ", notInBundle)}.";
 
     /// <summary>The part's verdict and pointer, before anything particular to the part is decided.</summary>
     private static PlannedPart? Absent(AutoCadPart kind, PartReadiness verdict, AutoCadPointer? pointer)
@@ -780,9 +829,18 @@ public static class AutoCadImportPlanner
             return absent;
         }
 
-        if (!string.Equals(pointer!.Format, AerialPngFormat, StringComparison.Ordinal))
+        // A 2.x block's one aerial format is the PNG; a 3.0 bundle's aerial is the GeoTIFF (A14).
+        string format = block.FromThree ? AutoCadThreeView.GeoTiffFormat : AerialPngFormat;
+        if (!string.Equals(pointer!.Format, format, StringComparison.Ordinal))
         {
             return Skip(AutoCadPart.Aerial, verdict, pointer, $"{label}: not imported, because its format \"{pointer.Format}\" is one this plugin does not know.");
+        }
+
+        // A 3.x aerial is held to the frame and unit its file states, as every other 3.x part is; a 2.x
+        // block's aerial is planned as it always was.
+        if (block.FromThree && OutOfFrame(pointer, frame, hasHeights: false) is { } why)
+        {
+            return Skip(AutoCadPart.Aerial, verdict, pointer, $"{label}: not imported, because {why}.");
         }
 
         if (pointer.Insertion is not { } insertion)
@@ -847,11 +905,14 @@ public static class AutoCadImportPlanner
             Ready = true,
             VerdictStated = true,
             Reason = verdict.Reason,
-            Sentence = $"{label}: placed as polylines, each on its own layer ({string.Join(", ", files.Select(f => f.Layer))}), in {UnitWords(frame.HorizontalUnit)}.",
+            Sentence = WithNotInBundle(
+                $"{label}: placed as polylines, each on its own layer ({string.Join(", ", files.Select(f => f.Layer))}), in {UnitWords(frame.HorizontalUnit)}.",
+                block.RecordsLeftOut),
             HorizontalFrame = files[0].HorizontalFrame,
             HorizontalUnits = files[0].HorizontalUnits,
             VerticalUnits = files[0].VerticalUnits,
             Files = files,
+            NotInBundle = block.RecordsLeftOut,
         };
     }
 

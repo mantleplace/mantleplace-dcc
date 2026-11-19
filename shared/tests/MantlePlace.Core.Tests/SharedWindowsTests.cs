@@ -84,12 +84,28 @@ internal static class SharedWindowsTests
             run.Equal(string.Join(" | ", faces), string.Join(" | ", expected), "Revit's vault buttons");
         });
 
-        run.Case("the vault's buttons, in order, for a host with no import from the vault (AutoCAD)", () =>
+        run.Case("the vault's buttons, in order, for a host with no import from the vault", () =>
         {
             string[] faces = [.. WindowLabels.VaultButtons(imports: false, WindowLabels.HostName("autocad")).Select(button => button.Face)];
             string[] expected =
             [
                 WindowLabels.Refresh,
+                WindowLabels.RemoveDownload,
+                WindowLabels.ReportProblem,
+                WindowLabels.Cancel,
+            ];
+
+            run.Equal(string.Join(" | ", faces), string.Join(" | ", expected), "a host with no import's vault buttons");
+        });
+
+        run.Case("the vault's buttons, in order, for AutoCAD, which prepares and imports from the vault", () =>
+        {
+            string[] faces = [.. WindowLabels.VaultButtons(imports: true, WindowLabels.HostName("autocad")).Select(button => button.Face)];
+            string[] expected =
+            [
+                WindowLabels.Refresh,
+                WindowLabels.PrepareFor("AutoCAD"),
+                WindowLabels.Import,
                 WindowLabels.RemoveDownload,
                 WindowLabels.ReportProblem,
                 WindowLabels.Cancel,

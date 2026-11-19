@@ -61,13 +61,19 @@ internal sealed partial class RevitBundleImporter
 
         string csvPath = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
         // The vocabulary rides on the step because the manifest owns what the CSV's foliage values
-        // mean; the parse maps them, and nothing reads a point's size to decide one.
+        // mean; the parse maps them, and nothing reads a point's size to decide one. The frame rides
+        // there too: a 3.x file is local offsets with its heights above the site origin's, and the
+        // step carries the origin's height, so the parse applies both as published and stands the
+        // points where the toposolid and the roads are. A 2.x step states neither, and the parse
+        // reads the file as absolute in the delivery CRS.
         TreePointsParse parse = TreePointsReader.Parse(
             File.ReadAllText(csvPath),
             frame,
             step.FoliageTypeVocabulary,
             step.Units,
-            rowLimit: step.Level is { Kind: FidelityLevelKind.RowCut } level ? level.Rows : null);
+            rowLimit: step.Level is { Kind: FidelityLevelKind.RowCut } level ? level.Rows : null,
+            layer: step.Layer,
+            groundBaseM: step.HeightBaseM ?? 0.0);
         if (parse.Failure is not null)
         {
             Say(parse.Failure);

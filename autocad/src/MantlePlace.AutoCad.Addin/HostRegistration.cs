@@ -6,7 +6,8 @@ using MantlePlace.Core;
 namespace MantlePlace.AutoCad.Addin;
 
 /// <summary>
-/// Tells the shared code which plugin loaded it: <c>autocad</c>, at this assembly's version.
+/// Tells the shared code which plugin loaded it: <c>autocad</c>, at this assembly's version, importing
+/// up to the manifest major <see cref="ManifestVersions.AutoCadNewestImportedMajor"/>.
 /// </summary>
 /// <remarks>
 /// The shared Core and Client are one assembly for every .NET host (shared/), so the host id the
@@ -14,6 +15,9 @@ namespace MantlePlace.AutoCad.Addin;
 /// in. A module initializer runs before any type in this assembly is touched, so no static field of
 /// the add-in can reach the platform first. The version is this assembly's informational version, the
 /// one autocad/Directory.Build.props stamps, raw: the client header drops the build metadata itself.
+/// The newest manifest major it imports is stated here too: 3, read from its catalog and frames
+/// (<see cref="AutoCadThreeView"/>), so a 3.0 bundle sent from the web vault is taken and the web is
+/// told so.
 /// </remarks>
 internal static class HostRegistration
 {
@@ -25,5 +29,6 @@ internal static class HostRegistration
 #pragma warning restore CA2255
     internal static void Register() => HostIdentity.Set(
         HostId,
-        typeof(HostRegistration).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+        typeof(HostRegistration).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+        ManifestVersions.AutoCadNewestImportedMajor);
 }

@@ -158,6 +158,13 @@ namespace MantlePlaceImportNaming
 	/** The tag that marks an actor as imported from `database` files. Prepare for handover matches on it. */
 	FName OdblTag();
 
+	/**
+	 * `mantleplace_collision_off` -- marks a terrain mesh whose collision the import turned off (it lies
+	 * over a Landscape the same import built). Prepare for handover turns collision back on for that
+	 * mesh alone, and only while it is still off.
+	 */
+	FName CollisionOffTag();
+
 	/** `mantleplace_equivalent=<group>` -- artifacts of one group stand for the same thing (the terrain). */
 	FString EquivalenceTag(const FString& Group);
 	FString EquivalenceTagPrefix();
