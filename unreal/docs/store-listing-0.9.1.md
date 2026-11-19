@@ -1,13 +1,13 @@
 ---
-name: unreal-store-listing-0-9-0
-description: Draft Fab listing text for Mantle Place for Unreal Engine, release 0.9.0 - title, short and long description, what is new, technical details, and the reviewer instructions. Read before editing the Fab listing or cutting unreal-0.9.0; it describes only what 0.9.0 does, and the founder approves every word.
+name: unreal-store-listing-0-9-1
+description: Draft Fab listing text for Mantle Place for Unreal Engine, release 0.9.1 - title, short and long description, what is new, technical details, and the reviewer instructions. Read before editing the Fab listing or cutting unreal-0.9.1; it describes only what 0.9.1 does, and the founder approves every word.
 ---
 
-# Fab listing text, Unreal 0.9.0
+# Fab listing text, Unreal 0.9.1
 
 **Draft for the founder's approval.** Each field below is the text to paste into the matching Fab
-field. It describes only what the plugin does at 0.9.0; where the README or the release notes
-([`release-notes-0.9.0.md`](release-notes-0.9.0.md)) own a fact, this file words it for a store
+field. It describes only what the plugin does at 0.9.1; where the README or the release notes
+([`release-notes-0.9.1.md`](release-notes-0.9.1.md), and [`release-notes-0.9.0.md`](release-notes-0.9.0.md) for what an MPB 3.0 bundle imports) own a fact, this file words it for a store
 page and does not become a second home for it. The field limits below are the ones to check in
 Fab's submission form before pasting: a limit that has changed there wins over this file.
 
@@ -71,7 +71,7 @@ mantle.place account.
 
 **Support.** Report a problem or send feedback at `https://mantle.place/feedback`. It needs no account.
 
-## What is new in 0.9.0
+## What is new since 0.8.1
 
 - Imports MPB 3.0 bundles, beside MPB 2.x ones.
 - A Bundle Import window with a step list, elapsed time and Cancel between steps.
