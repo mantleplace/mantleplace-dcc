@@ -264,7 +264,9 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
     "Elevation/Slope.tif")JSON");
 		const FString NotHeld = TEXT(R"JSON([{"path": "Records/Zoning.dxf", "reason": "The AOI has no zoning record."},
  {"path": "Records/Zoning.gpkg", "reason": "The AOI has no zoning record."},
- {"path": "Records/Habitat.gpkg", "reason": "Pending: the source did not answer in time."}])JSON");
+ {"path": "Records/Habitat.gpkg", "reason": "Pending: the source did not answer in time."},
+ {"path": "Records/Wetlands.dxf", "reason": "The AOI has no wetland record."},
+ {"path": "Records/Soils.dxf", "reason": "The source did not answer in time."}])JSON");
 		const TArray<FString> Held = { TEXT("Records/Parcels.dxf"), TEXT("Records/Parcels.gpkg"), TEXT("Records/Floodplain.gpkg"),
 			TEXT("Records/Newfamily.dxf") };
 		const FString Imperial = Manifest(TEXT("{\"name\": \"metre\", \"to_metres\": 1}"),
@@ -319,6 +321,9 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 			TEXT("Zoning not in this download (Records/Zoning.dxf, Records/Zoning.gpkg): The AOI has no zoning record.")));
 		TestTrue(TEXT("a pending layer shows its reason verbatim"), NotDelivered.Contains(
 			TEXT("Habitat not in this download (Records/Habitat.gpkg): Pending: the source did not answer in time.")));
+		TestTrue(TEXT("several record files absent at once each show their own reason, beside the first"), NotDelivered.Contains(
+			TEXT("Wetlands not in this download (Records/Wetlands.dxf): The AOI has no wetland record.")) && NotDelivered.Contains(
+			TEXT("Soils not in this download (Records/Soils.dxf): The source did not answer in time.")));
 
 		const MantlePlaceArtifacts::FHandlers Handlers = MantlePlaceArtifacts::MakeAll();
 		FMantlePlaceImportSteps Steps;

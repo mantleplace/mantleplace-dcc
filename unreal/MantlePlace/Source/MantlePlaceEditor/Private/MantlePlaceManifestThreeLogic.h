@@ -58,10 +58,11 @@ struct FMantlePlaceManifestThreeLogic
 
 	/**
 	 * The promised files a 3.0 download names for this host, by path from the bundle root: one per step
-	 * above, and each weight map in MaterialsFolder() by the name the published Platform API description
-	 * lists. Declared once, here, beside the steps that read them; a file joins the list when a step that
-	 * reads it lands and leaves it when the last such step goes. `Manifest.json` comes with every download,
-	 * named or not. The download holds these files at the one level the curator chose.
+	 * above, each weight map in MaterialsFolder() by the name the published Platform API description lists,
+	 * and each public-record `.dxf` in RecordsFolder() by the platform's name (never its GeoPackage twin,
+	 * which the import does not draw). Declared once, here, beside the steps that read them; a file joins the
+	 * list when a step that reads it lands and leaves it when the last such step goes. `Manifest.json` comes
+	 * with every download, named or not. The download holds these files at the one level the curator chose.
 	 */
 	static const TArray<FString>& RequestedFiles();
 

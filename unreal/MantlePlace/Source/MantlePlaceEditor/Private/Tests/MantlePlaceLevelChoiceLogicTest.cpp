@@ -139,8 +139,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceLevelChoiceFilesTest::RunTest(const FString& Parameters)
 {
-	// The 3.0 request names exactly the files Unreal's import steps read: each step's file and the eight
-	// weight maps, no more (a georeferenced file Unreal never reads is not downloaded).
+	// The 3.0 request names exactly the files Unreal's import steps read: each step's file, the eight
+	// weight maps and the nine public-record linework files, no more (a georeferenced file Unreal never
+	// reads is not downloaded, and neither is a record's GeoPackage twin: the import draws only the DXF).
 	using F3 = FMantlePlaceManifestThreeLogic;
 	const TArray<FString>& Files = F3::RequestedFiles();
 	for (const TCHAR* Step : { F3::HeightmapPath(), F3::DrapePath(), F3::TerrainMeshPath(), F3::BuildingsPath(), F3::TreesPath(), F3::RoadsPath() })
@@ -152,7 +153,19 @@ bool FMantlePlaceLevelChoiceFilesTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("The request names the %s weight map"), Map),
 			Files.Contains(FString::Printf(TEXT("Materials/%s.png"), Map)));
 	}
-	TestEqual(TEXT("Six step files and eight weight maps"), Files.Num(), 14);
+	// The nine the published description lists for a 3.0 download, in the platform's own spelling.
+	// Habitat is absent from that description, so it is not asked for.
+	for (const TCHAR* Record : { TEXT("Parcels"), TEXT("Zoning"), TEXT("Floodplain"), TEXT("Wetlands"), TEXT("Soils"),
+			 TEXT("Heritage"), TEXT("Conservation"), TEXT("Hydrography"), TEXT("Contamination") })
+	{
+		TestTrue(FString::Printf(TEXT("The request names the %s linework"), Record),
+			Files.Contains(FString::Printf(TEXT("Records/%s.dxf"), Record)));
+	}
+	TestFalse(TEXT("Habitat is not in the published description, so it is not asked for"),
+		Files.ContainsByPredicate([](const FString& File) { return File.Contains(TEXT("Habitat")); }));
+	TestEqual(TEXT("Six step files, eight weight maps and nine record files"), Files.Num(), 23);
+	TestFalse(TEXT("No record is asked for as anything but linework"), Files.ContainsByPredicate(
+		[](const FString& File) { return File.StartsWith(F3::RecordsFolder()) && !File.EndsWith(TEXT(".dxf")); }));
 	TestFalse(TEXT("A georeferenced file is never asked for"), Files.ContainsByPredicate(
 		[](const FString& File) { return File.EndsWith(TEXT(".tif")) || File.EndsWith(TEXT(".gpkg")); }));
 	TestFalse(TEXT("Manifest.json comes anyway and is not named"), Files.Contains(TEXT("Manifest.json")));

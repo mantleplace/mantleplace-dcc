@@ -496,6 +496,17 @@ const TArray<FString>& FMantlePlaceManifestThreeLogic::RequestedFiles()
 		{
 			Out.Add(FString(MaterialsFolder()) + Layer + TEXT(".png"));
 		}
+		// The public-record linework: each `Records/<Name>.dxf` the published description lists for a 3.0
+		// download, by the platform's own spelling. The DXF is what the import draws; the GeoPackage twin is
+		// never asked for (the plugin verifies and credits one it is given, and draws only the DXF). The
+		// description does not list `Records/Habitat.dxf` yet, so it is not named here: add it with the
+		// rest when the description lists it. A record the order does not hold is answered
+		// `file_not_in_bundle` and asked again without it.
+		for (const TCHAR* Record : { TEXT("Parcels"), TEXT("Zoning"), TEXT("Floodplain"), TEXT("Wetlands"),
+				 TEXT("Soils"), TEXT("Heritage"), TEXT("Conservation"), TEXT("Hydrography"), TEXT("Contamination") })
+		{
+			Out.Add(FString(RecordsFolder()) + Record + TEXT(".dxf"));
+		}
 		return Out;
 	}();
 	return Files;
