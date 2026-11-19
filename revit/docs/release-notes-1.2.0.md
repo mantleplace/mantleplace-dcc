@@ -30,9 +30,10 @@ Upgrade by closing Revit and running the new `Install.cmd` over the old one; see
 
 ## Verification
 
-- Built from `156146c` on `main`. Release gate (2026-11-18) at that commit, against this zip installed clean by the host harness in Revit 2027 and signed in on the dev platform: the plugin loaded with its ribbon; one platform-built MPB 3.0 order was downloaded and imported at Max, at Med and at Min, every layer the import window offers, unattended; a 2.x bundle imported; and the same 3.0 order sent from the web vault was received and imported.
+- Built from `156146c` on `main`. Release gate (2026-11-18) at that commit, against this zip installed clean by the host harness in Revit 2027 and signed in on the dev platform: the plugin loaded with its ribbon; its sign-in, vault, About and notice windows opened and read as the plugin's labels say; one platform-built MPB 3.0 order was downloaded and imported at Max, at Med and at Min, every layer the import window offers, unattended; a 2.x bundle imported; and the same 3.0 order sent from the web vault was received and imported.
 
   - `revit.plugin-loads`: pass, 8 of 8
+  - `revit.plugin-windows`: pass, 50 of 50
   - `revit.import-check`, bundle 3.0.0 level Max: pass, 41 of 41
   - `revit.import-check`, bundle 3.0.0 level Med: pass, 41 of 41
   - `revit.import-check`, bundle 3.0.0 level Min: pass, 41 of 41
@@ -51,7 +52,9 @@ Upgrade by closing Revit and running the new `Install.cmd` over the old one; see
   - Revit 2026, `revit.import-check`, bundle 3.0.0 level Max: pass, 40 of 40
   - Revit 2026, `revit.import-check`, bundle 2.2.0: pass, 18 of 18
 
-- Not run: on Revit 2025 and 2026, Med and Min and a send from the web vault (run on Revit 2027 alone); cancelling a sent bundle; a 2.x bundle beside an earlier import; roads, road surfaces, water, land use and land cover from a 3.0 order (the order holds none of those files, so each step was shown as skipped).
+  A run left on the recommended level makes 40 assertions where a run at a named level makes 41: naming a level also asserts that the order offers it. The first 3.0 run on Revit 2026 was ended by the harness at 28 of 29: it read Revit's own Model Upgrade progress window, shown for a moment while the planting family loads, as a dialog waiting for a person. The import itself went on to finish, and the same run again, unchanged, is the pass above.
+
+- Not run: the ribbon's commands other than Vault, Import Bundle and About. Sign In, Sign Out, Open mantle.place, Send Feedback, Prepare for Handover, Open in Curator, Probe Terrain and Logs are on the ribbon in each year, each with its help page, and the gate ran none of them. On Revit 2025 and 2026, Med and Min and a send from the web vault (run on Revit 2027 alone); cancelling a sent bundle; a 2.x bundle beside an earlier import; roads, road surfaces, water, land use and land cover from a 3.0 order (the order holds none of those files, so each step was shown as skipped).
 - Published asset: <check from step 4 and its date>.
 - `MantlePlace-Revit-1.2.0.zip` sha256 `1fe84c327460c35ff64f973cb32a205192a986b7d43908ed2dde0b6519271974`
 - Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
