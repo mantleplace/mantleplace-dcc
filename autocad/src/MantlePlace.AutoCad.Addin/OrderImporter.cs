@@ -277,6 +277,9 @@ internal sealed class OrderImporter : IDisposable
     /// zone check has already shown the drawing's zone to be the order's, or the drawing to have none. For
     /// a 3.x order the file's own units and coordinate system are held to the frame the manifest states for
     /// it first, so a file in another frame builds nothing rather than a surface in the wrong place.
+    /// The drawing's Civil 3D drawing units are then held to the order's, for any order: Civil 3D converts
+    /// the file to the drawing's units as it reads it, so in a drawing of the other units nothing is built
+    /// either, and no layer is made for it.
     /// </summary>
     private static string BuildSurface(Database database, Type civil3d, string landXmlPath, PlannedPart part, AutoCadImportPlan plan)
     {
@@ -288,6 +291,12 @@ internal sealed class OrderImporter : IDisposable
             {
                 throw new PartRefusedException(problem + ".");
             }
+        }
+
+        // Civil 3D converts the file's unit to the drawing's as it reads it: only a drawing in the order's units gets the surface.
+        if (LandXmlSurface.DrawingUnitsProblem(plan, Civil3dPartLoader.ReadDrawingUnits(civil3d, database)) is { } unitsProblem)
+        {
+            throw new PartRefusedException(unitsProblem + ".");
         }
 
         using (Transaction transaction = database.TransactionManager.StartTransaction())

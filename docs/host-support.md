@@ -69,7 +69,9 @@ system; in Civil 3D it also refuses a drawing whose coordinate zone is in anothe
 Civil 3D-only because the zone is a Civil 3D drawing setting, which plain AutoCAD does not have. "Terrain" is a Civil 3D TIN surface
 built from the order's LandXML, and it is Civil 3D-only because a TIN surface is a Civil 3D object: plain AutoCAD, and Civil 3D
 started with its "as AutoCAD" launcher, have nothing to build it as, so there the import says the surface needs Civil 3D and goes
-on with the rest. "Published contours" are polylines on a layer. "Parcels and zoning" places every public-record layer the block
+on with the rest. Civil 3D converts a LandXML to the drawing's own drawing units (feet or metres) as it reads it, so the surface is
+built only in a drawing whose drawing units are the order's; in any other the import names both units and goes on with the rest,
+and it never changes a drawing's units. "Published contours" are polylines on a layer. "Parcels and zoning" places every public-record layer the block
 names, parcels and zoning among them, as polylines on a layer per record, which Revit does not; a flood-zone layer the block names is placed the same way,
 as linework and not as Revit's hazard plan, so "Flood zones and steep ground" stays not built. "Site linework" is the
 order's linework drawing as polylines, each on a layer under the linework layer named by the layer the drawing puts it on, and no

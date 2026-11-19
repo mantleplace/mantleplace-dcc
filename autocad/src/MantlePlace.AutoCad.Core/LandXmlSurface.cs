@@ -29,10 +29,21 @@ namespace MantlePlace.AutoCad;
 /// <para>
 /// A 2.x plan is read exactly as 1.0 read it: the file's one surface, by name, and nothing else.
 /// </para>
+/// <para>
+/// The drawing has a say too. Civil 3D converts a LandXML file's linear unit to the drawing's Civil 3D
+/// drawing units (feet or metres) as it reads the file, so a file in metres read into a drawing in feet is
+/// built 3.28 times further from the origin than every other part, which is placed as written.
+/// <see cref="DrawingUnitsProblem(AutoCadImportPlan, string)"/> holds the drawing's units to the order's,
+/// for a 2.x order and a 3.x one alike; the plugin never sets a drawing's units.
+/// </para>
 /// </remarks>
 public static class LandXmlSurface
 {
     private const string EpsgPrefix = "EPSG:";
+
+    /// <summary>Civil 3D's own names for its two drawing units, as its drawing settings read.</summary>
+    private const string DrawingUnitsFeet = "Feet";
+    private const string DrawingUnitsMetres = "Meters";
 
     /// <summary>
     /// The name of the file's one surface, or <c>null</c> and the sentence that says why there is none
@@ -51,6 +62,60 @@ public static class LandXmlSurface
     {
         ArgumentNullException.ThrowIfNull(plan);
         return TryRead(reader, plan.FromThree ? plan.Frame : null, out name);
+    }
+
+    /// <summary>
+    /// Why Civil 3D would not build <paramref name="plan"/>'s surface where the order states it, in a
+    /// drawing whose Civil 3D drawing units read <paramref name="drawingUnits"/>, or <c>null</c> when it
+    /// would. For a 2.x order and a 3.x one alike.
+    /// </summary>
+    public static string? DrawingUnitsProblem(AutoCadImportPlan plan, string drawingUnits)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return DrawingUnitsProblem(plan.Frame, drawingUnits);
+    }
+
+    /// <summary>
+    /// As <see cref="DrawingUnitsProblem(AutoCadImportPlan, string)"/>, for the order's
+    /// <paramref name="frame"/>. Civil 3D converts a LandXML file's linear unit to the drawing's Civil 3D
+    /// drawing units as it reads the file: <paramref name="drawingUnits"/> is that setting as Civil 3D
+    /// names it, <c>Feet</c> or <c>Meters</c>. A drawing in feet reads a file in either foot as written,
+    /// and one in metres a file in metres; any other pairing scales the surface away from the order's other
+    /// parts, so it is the reason there is no surface to build. Units this plugin does not know are never
+    /// assumed to match.
+    /// </summary>
+    public static string? DrawingUnitsProblem(AutoCadFileFrame frame, string drawingUnits)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        string orderWords = AutoCadImportPlanner.UnitWords(frame.HorizontalUnit) ?? frame.HorizontalUnit;
+        (string Name, string Words)? wanted = frame.HorizontalUnit switch
+        {
+            "m" => (DrawingUnitsMetres, "metres"),
+            "ft" or "ftUS" => (DrawingUnitsFeet, "feet"),
+            _ => null,
+        };
+        string? drawingWords = drawingUnits switch
+        {
+            DrawingUnitsMetres => "metres",
+            DrawingUnitsFeet => "feet",
+            _ => null,
+        };
+
+        if (wanted is { } match && string.Equals(drawingUnits, match.Name, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string set = wanted is { } to
+            ? $"; set them to {to.Words} (Drawing Settings, Units and Zone) and import again"
+            : string.Empty;
+        return drawingWords is null
+            ? $"this drawing's Civil 3D drawing units read \"{drawingUnits}\", which this plugin does not know, and the order is in {orderWords}, "
+                + "so the drawing is not shown to be in the order's units; Civil 3D converts a LandXML file to the drawing's units as it reads it, "
+                + $"and the plugin never changes a drawing's units{set}"
+            : $"this drawing's Civil 3D drawing units are {drawingWords} and the order is in {orderWords}; Civil 3D converts a LandXML file to the "
+                + "drawing's units as it reads it, which would build the surface away from the order's other parts, and the plugin never changes a "
+                + $"drawing's units{set}";
     }
 
     private static string? TryRead(TextReader reader, AutoCadFileFrame? frame, out string? name)

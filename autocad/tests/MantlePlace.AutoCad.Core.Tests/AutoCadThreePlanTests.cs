@@ -58,6 +58,7 @@ internal static class AutoCadThreePlanTests
         RunAerialCases(run);
         RunSurfaceCases(run);
         RunSurfaceFileCases(run);
+        RunDrawingUnitsCases(run);
         RunAbsenceCases(run);
         RunChooserCases(run);
         RunReleaseNotesCases(run);
@@ -561,6 +562,69 @@ internal static class AutoCadThreePlanTests
 
             run.Equal(Check(two, LandXml(UsFeet, "2263"), out string? name), null, "a 2.x surface's file is named as 1.0 named it");
             run.Equal(name, "Terrain", "named");
+        });
+    }
+
+    /// <summary>
+    /// The drawing's Civil 3D drawing units held to the order's, as the Civil 3D step reads them before
+    /// Civil 3D is asked to build anything. Civil 3D converts a LandXML file's linear unit to the drawing's
+    /// units as it reads the file (feet or metres, a drawing setting), so in a drawing of the other units the
+    /// surface would be built away from every other part, which is placed as written. The plugin never sets
+    /// a drawing's units: there the surface is skipped, saying which units the drawing is in, which the
+    /// order is in, and what to set. A drawing in feet reads a file in either foot as written.
+    /// </summary>
+    private static void RunDrawingUnitsCases(TestRun run)
+    {
+        AutoCadImportPlan metric = Civil(Full(), DrawingZone.None);
+        AutoCadImportPlan usFeet = Civil(Full(WithUsFeetHeights), DrawingZone.None);
+
+        run.Case("drawing units: a metre order in a drawing in metres has no problem", () =>
+            run.Equal(LandXmlSurface.DrawingUnitsProblem(metric, "Meters"), null, "the file's numbers are the drawing's"));
+
+        run.Case("drawing units: a metre order in a drawing in feet builds no surface, naming both units and what to set", () =>
+        {
+            string problem = LandXmlSurface.DrawingUnitsProblem(metric, "Feet") ?? string.Empty;
+
+            run.Contains(problem, "drawing units are feet", "the drawing's units");
+            run.Contains(problem, "the order is in metres", "the order's unit");
+            run.Contains(problem, "Civil 3D converts", "why: Civil 3D converts the file as it reads it");
+            run.Contains(problem, "never changes a drawing's units", "and the plugin does not set them");
+            run.Contains(problem, "to metres", "what to set them to");
+        });
+
+        run.Case("drawing units: a feet order, in either foot, in a drawing in feet has no problem", () =>
+        {
+            run.Equal(LandXmlSurface.DrawingUnitsProblem(usFeet, "Feet"), null, "US survey feet");
+            run.Equal(LandXmlSurface.DrawingUnitsProblem(usFeet.Frame with { HorizontalUnit = "ft" }, "Feet"), null, "international feet");
+        });
+
+        run.Case("drawing units: a feet order in a drawing in metres builds no surface, naming the order's foot", () =>
+        {
+            string problem = LandXmlSurface.DrawingUnitsProblem(usFeet, "Meters") ?? string.Empty;
+
+            run.Contains(problem, "drawing units are metres", "the drawing's units");
+            run.Contains(problem, "the order is in US survey feet", "the order's unit");
+            run.Contains(problem, "to feet", "what to set them to");
+        });
+
+        run.Case("drawing units this plugin does not know build no surface, naming the value: unread units are never assumed to match", () =>
+        {
+            foreach (string units in new[] { "Chains", string.Empty })
+            {
+                string problem = LandXmlSurface.DrawingUnitsProblem(metric, units) ?? string.Empty;
+
+                run.Contains(problem, $"\"{units}\"", $"\"{units}\": the value read");
+                run.Contains(problem, "the order is in metres", $"\"{units}\": the order's unit");
+            }
+        });
+
+        run.Case("drawing units, a 2.x order: held to its block's unit the same way", () =>
+        {
+            AutoCadImportPlan two = AutoCadImportPlanner.Plan(TwoManifest(CompleteBlock), DrawingGeolocation.None, DrawingZone.None);
+            run.Equal(two.Frame.HorizontalUnit, "ftUS", "the fixture's order is in US survey feet");
+
+            run.Equal(LandXmlSurface.DrawingUnitsProblem(two, "Feet"), null, "a drawing in feet");
+            run.Contains(LandXmlSurface.DrawingUnitsProblem(two, "Meters") ?? string.Empty, "the order is in US survey feet", "a drawing in metres");
         });
     }
 

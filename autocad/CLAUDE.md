@@ -129,6 +129,13 @@ key this suite must assert, or it fails.
   EPSG code through AutoCAD's own library for the plan to compare, and it builds the TIN surface from
   the LandXML (a 2.x order's, from its block; a 3.0 order's, `Elevation/Terrain.landxml`) with
   `TinSurface.CreateFromLandXML`. Part off, the plan is plain AutoCAD's.
+- **Civil 3D converts a LandXML to the drawing's units, so the surface is built only in a drawing of
+  the order's.** `CreateFromLandXML` scales the file's linear unit to the drawing's Civil 3D drawing
+  units (`UnitZoneSettings.DrawingUnits`, feet or metres) as it reads: a file in metres read into a
+  drawing in feet lands 3.28 times further out than the parts placed as written. The part reads those
+  units (never sets them) and `LandXmlSurface.DrawingUnitsProblem` holds them to the order's unit, for a
+  2.x and a 3.x order alike: metres needs `Meters`, either foot needs `Feet` (a drawing in feet reads
+  both feet as written). Otherwise the surface is skipped, with the units named and what to set.
 
 ## Commands
 
