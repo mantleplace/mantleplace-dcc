@@ -83,6 +83,10 @@ internal static class Civil3dPartLoader
     internal static string ReadZoneCode(Type part, Database database) =>
         Convert.ToString(Call(part, "ReadZoneCode", database), System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
 
+    /// <summary>The drawing's Civil 3D drawing units, as Civil 3D names them. Read only: the part never sets them.</summary>
+    internal static string ReadDrawingUnits(Type part, Database database) =>
+        Convert.ToString(Call(part, "ReadDrawingUnits", database), System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+
     /// <summary>A TIN surface built from a LandXML file: the name it was given and the points Civil 3D read.</summary>
     internal static (string Name, int Points) BuildSurfaceFromLandXml(Type part, Database database, string stem, string landXmlPath, string landXmlSurface, string layer) =>
         ((string, int))Call(part, "BuildSurfaceFromLandXml", database, stem, landXmlPath, landXmlSurface, layer)!;

@@ -222,6 +222,13 @@ public sealed class AutoCadImportPlan
     /// <summary>The block's file frame.</summary>
     public AutoCadFileFrame Frame { get; init; } = AutoCadFileFrame.None;
 
+    /// <summary>
+    /// Whether the plan is an MPB 3.x bundle's, whose frame the manifest states once for every georeferenced
+    /// file: the surface step then holds its LandXML's own units and coordinate system to it
+    /// (<see cref="LandXmlSurface"/>). A 2.x plan's surface is read as it always was.
+    /// </summary>
+    public bool FromThree { get; init; }
+
     /// <summary>The unit the drawing's X and Y are in for this order: the block's, never the drawing's.</summary>
     public string HorizontalUnit => Frame.HorizontalUnit;
 
@@ -376,6 +383,7 @@ public static class AutoCadImportPlanner
             OrderId = orderId,
             JobId = jobId,
             Frame = frame,
+            FromThree = block.FromThree,
             Parts =
             [
                 LeftOut(block, AutoCadPart.Contours) ?? PlanContours(block, frame),

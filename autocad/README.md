@@ -64,7 +64,11 @@ is worked out in AutoCAD:
   location or the zone.
 - **The surface, in Civil 3D only.** Civil 3D builds a TIN surface from the order's LandXML, on the
   `MantlePlace-Surface` layer. In plain AutoCAD, and in Civil 3D started as AutoCAD, the import says
-  the surface needs Civil 3D and places the rest.
+  the surface needs Civil 3D and places the rest. Civil 3D converts a LandXML file to the drawing's
+  own drawing units (feet or metres) as it reads it, so the surface is built only in a drawing whose
+  drawing units are the order's: in any other the import says which units the drawing is in, which
+  the order is in, and places the rest. The plugin never changes a drawing's units; set them under
+  Drawing Settings, Units and Zone, and import again.
 - **Public-record layers**, such as parcels and zoning, as polylines, each record on its own
   `MantlePlace-Records-<name>` layer.
 - **Site linework**, as polylines under the `MantlePlace-Linework` layer, each on a layer named for the

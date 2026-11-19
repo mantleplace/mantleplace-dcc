@@ -102,8 +102,11 @@ key this suite must assert, or it fails.
   zip on disk.
 - **An MPB 3.0 bundle is read from its catalog and frames** (`AutoCadThreeView`), told from 2.x by its
   root `Manifest.json`; a 2.x bundle is read from its `hosts.autocad` block as before. Each part finds its
-  file by name and is placed in the frame its family states, never a derived one. What a 3.0 import leaves
-  out is named in [`docs/release-notes-1.2.0.md`](docs/release-notes-1.2.0.md).
+  file by name and is placed in the frame its family states, never a derived one. The Civil 3D surface is
+  built from `Elevation/Terrain.landxml` once the run has held that file's own `<Units>` and
+  `<CoordinateSystem>` to the order's frame (`LandXmlSurface`): its one linear unit must be both the
+  frame's horizontal and vertical unit, and its EPSG code the order's CRS. A file in another unit or CRS, or
+  that states no unit or no EPSG code, builds no surface (`HPS-53`). What a 3.0 import leaves out is named in [`docs/release-notes-1.2.0.md`](docs/release-notes-1.2.0.md).
 - **The ribbon panel is built in code, on a `Mantle Place` tab of the plugin's own** (`HPS-57`), as
   Revit's is, in Civil 3D and plain AutoCAD alike. `PlugInsPanel` (Core) lists the commands, in
   `HPS-51`'s order, and decides the tab (`Place`: the plugin's tab, made when the ribbon lacks it);
@@ -124,7 +127,15 @@ key this suite must assert, or it fails.
 - **Civil 3D adds the zone check and the surface, through its part alone.** When the presence test
   lets the part load, it reads the drawing's zone code (never sets it), which the shell resolves to an
   EPSG code through AutoCAD's own library for the plan to compare, and it builds the TIN surface from
-  the block's LandXML (`TinSurface.CreateFromLandXML`). Part off, the plan is plain AutoCAD's.
+  the LandXML (a 2.x order's, from its block; a 3.0 order's, `Elevation/Terrain.landxml`) with
+  `TinSurface.CreateFromLandXML`. Part off, the plan is plain AutoCAD's.
+- **Civil 3D converts a LandXML to the drawing's units, so the surface is built only in a drawing of
+  the order's.** `CreateFromLandXML` scales the file's linear unit to the drawing's Civil 3D drawing
+  units (`UnitZoneSettings.DrawingUnits`, feet or metres) as it reads: a file in metres read into a
+  drawing in feet lands 3.28 times further out than the parts placed as written. The part reads those
+  units (never sets them) and `LandXmlSurface.DrawingUnitsProblem` holds them to the order's unit, for a
+  2.x and a 3.x order alike: metres needs `Meters`, either foot needs `Feet` (a drawing in feet reads
+  both feet as written). Otherwise the surface is skipped, with the units named and what to set.
 
 ## Commands
 

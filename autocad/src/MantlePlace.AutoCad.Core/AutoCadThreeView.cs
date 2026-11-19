@@ -21,8 +21,9 @@ namespace MantlePlace.AutoCad;
 /// <see cref="AerialPath"/> at the rectangle its catalog entry states in the order's CRS, aligned with that
 /// system's axes, and only when the entry states the georeferenced frame (A14);
 /// each public-record layer, a <c>Records/*.dxf</c> named by its file (A06); and the site linework,
-/// <see cref="LineworkPath"/>. The Civil 3D surface is left out with its reason: this version builds no
-/// surface from a 3.0 bundle. A file the manifest lists as not held is skipped with the manifest's
+/// <see cref="LineworkPath"/>; and the Civil 3D surface, <see cref="SurfacePath"/>, which Civil 3D builds
+/// once the run has checked the file's own units and coordinate system against the order's
+/// (<see cref="LandXmlSurface"/>). A file the manifest lists as not held is skipped with the manifest's
 /// reason, verbatim, and one the catalog does not name is skipped saying so.
 /// </para>
 /// <para>
@@ -36,7 +37,7 @@ public static class AutoCadThreeView
     /// <summary>The contours (A05).</summary>
     public const string ContoursPath = "Elevation/Contours.dxf";
 
-    /// <summary>The terrain's LandXML, the Civil 3D surface's source, which this version does not build from.</summary>
+    /// <summary>The terrain's LandXML, the Civil 3D surface's source, absolute in the order's CRS and units (§4, §6).</summary>
     public const string SurfacePath = "Elevation/Terrain.landxml";
 
     /// <summary>The georeferenced aerial image, placed at the rectangle it covers in the order's CRS (A14).</summary>
@@ -112,10 +113,14 @@ public static class AutoCadThreeView
             leftOut[AutoCadPart.Contours] = Absence(manifest, AutoCadPart.Contours, ContoursPath);
         }
 
-        // The surface is Civil 3D's TIN from the terrain's LandXML; a 3.0 bundle's is not built yet, so
-        // the part says so whether or not the file is held.
-        leftOut[AutoCadPart.Surface] = $"{AutoCadImportPlanner.LabelOf(AutoCadPart.Surface)}: not imported. This version of the plugin "
-            + $"builds no surface from an MPB 3.0 bundle, so {SurfacePath} is left in the bundle.";
+        // The surface is Civil 3D's TIN from the terrain's LandXML, in the georeferenced family (§4): the
+        // order's CRS and units, as every other file here. The run checks the file's own Units and
+        // CoordinateSystem against that frame before Civil 3D reads it (LandXmlSurface).
+        AutoCadPointer? surface = Pointer(contents, SurfacePath, frame, AutoCadImportPlanner.LandXmlFormat);
+        if (surface is null)
+        {
+            leftOut[AutoCadPart.Surface] = Absence(manifest, AutoCadPart.Surface, SurfacePath);
+        }
 
         AutoCadPointer? aerial = Aerial(contents, frame, out string? aerialWhy);
         if (aerialWhy is not null)
@@ -158,6 +163,10 @@ public static class AutoCadThreeView
         PartReadiness held = new(true, true, null, null);
         PartReadiness notHeld = new(true, false, null, null);
 
+        // The one host part 3.0 implies: the surface is built by Civil 3D, so plain AutoCAD says it needs
+        // it, as a 2.x verdict's `requires` made it say.
+        PartReadiness surfaceHeld = held with { Requires = AutoCadImportPlanner.Civil3dPart };
+
         return new AutoCadBlockRead
         {
             Manifest = manifest,
@@ -174,11 +183,12 @@ public static class AutoCadThreeView
                     frame.Horizontal,
                     frame.Vertical),
                 Contours = contours,
+                Surface = surface,
                 Aerial = aerial,
                 Records = records.Count == 0 ? null : records,
                 Linework = linework,
                 ContoursReadiness = contours is null ? notHeld : held,
-                SurfaceReadiness = notHeld,
+                SurfaceReadiness = surface is null ? notHeld : surfaceHeld,
                 AerialReadiness = aerial is null ? notHeld : held,
                 RecordsReadiness = records.Count == 0 ? notHeld : held,
                 LineworkReadiness = linework is null ? notHeld : held,
