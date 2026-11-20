@@ -24,12 +24,13 @@ Mantle Place monogram and no other logo.
 
 ## App name
 
-Mantle Place - Real-World Contours, Aerial Imagery, Parcels, Linework and more
+Mantle Place - Real-World Terrain, Contours, Imagery, Parcels and more
 
 ## Short description
 
 Bring a real site into a drawing: contours, aerial imagery, parcels and zoning, site linework and more,
-and in Civil 3D a TIN surface, from a bundle you ordered or downloaded. A bundle import needs no account.
+and in Civil 3D the terrain as a TIN surface, from a bundle you ordered or downloaded. A bundle import
+needs no account.
 
 ## App description
 
@@ -91,13 +92,17 @@ needs no account.
 
 ## What is new in 1.2.0
 
-The version description for the plugin's first storefront release:
+The version description. This is the plugin's first storefront release, so it lists what the plugin
+does rather than what changed:
 
-- Imports MPB 3.0 bundles, beside MPB 2.x ones.
-- Choose Max, Med or Min before an MPB 3.0 order downloads, with each level's size.
-- In Civil 3D, the surface is built from an MPB 3.0 bundle's LandXML too, and for any bundle it is
-  skipped, with the reason, when the drawing's Civil 3D drawing units are not the order's.
-- The Vault window imports a bundle into the active drawing.
+- Imports a Mantle Place bundle into the active drawing: contours, the aerial image, public-record
+  layers such as parcels and zoning, site linework and more, at the order's own coordinates.
+- In Civil 3D, builds the terrain as a TIN surface from the order's LandXML.
+- Reads MPB 3.0 bundles beside MPB 2.x ones, and offers Max, Med or Min, with each level's size, before
+  an MPB 3.0 order downloads.
+- Shows every import's steps in a Bundle Import window, and checks every file before anything is drawn.
+- A Vault window to list, prepare, download and import the bundles you keep, once signed in.
+- Imports a bundle from disk with no account.
 
 ## Known issues
 

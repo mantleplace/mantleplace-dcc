@@ -17,6 +17,11 @@ is the plugin's README ([`../README.md`](../README.md)).
 2. Open `https://mantle.place/mpb-samples` (it opens the Samples page) and download the **Austin
    Downtown** bundle with *Download the bundle (.zip)*. No account or email is asked for. **Do not unzip
    it.** Austin is in metres (UTM 14N); the other three samples import the same way.
+
+   > **Founder note, delete before submitting.** The samples on that page were built before the
+   > manifest carried an AutoCAD block, and Import Bundle refuses such a bundle. Submit only once the
+   > samples are rebuilt on the current MPB version, then re-run step 4 on the rebuilt sample and check
+   > the sample name, its units and the parts step 4 lists against what it shows.
 3. Start AutoCAD 2025, 2026 or 2027 and start a new drawing. If AutoCAD asks whether to load Mantle
    Place, choose **Always Load**. A **Mantle Place** tab appears on the ribbon, holding one **Mantle
    Place** panel with six buttons: Sign In, Sign Out, Vault, Import Bundle, About Mantle Place and Send
