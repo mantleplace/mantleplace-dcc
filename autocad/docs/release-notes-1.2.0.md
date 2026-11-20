@@ -38,9 +38,21 @@ Upgrade by closing AutoCAD and running the new `Install.cmd` over the old one; s
 
 ## Verification
 
-- Built from `<short sha>` on `main`. <Release gate at that commit, against this zip installed clean in AutoCAD 2027.>
+- Built from `86cc2f0` on `main`. Release gate (2026-11-19) at that commit, against this zip installed clean by the host harness in AutoCAD 2027 and signed in on the dev platform: the plugin loaded with its panel; its sign-in, vault, About and notice windows opened and read as the plugin's labels say; one platform-built MPB 3.0 order was chosen in the vault window and imported at Max, at Med and at Min, unattended; a 2.x bundle was imported from disk with no account signed in; and a bundle sent from the web vault was received and imported.
+
+  - `autocad.plugin-loads`: pass, 13 of 13
+  - `autocad.plugin-windows`: pass, 47 of 47
+  - `autocad.import-check`, bundle 3.0.0 level Max: pass, 33 of 33
+  - `autocad.import-check`, bundle 3.0.0 level Med: pass, 33 of 33
+  - `autocad.import-check`, bundle 3.0.0 level Min: pass, 33 of 33
+  - `autocad.import-check`, bundle 2.2.0 from disk, no account: pass, 35 of 35
+  - `vault.round-trip`: pass, 21 of 21
+
+  AutoCAD 2027 ran as Civil 3D 2027 started as plain AutoCAD, the one AutoCAD 2027 on the gate machine. The round trip installs no zip of its own for AutoCAD, so this zip's bundle was put in the plugins folder by hand for it, and the run confirmed the loaded build was this one. The Max run imported the download a rehearsal of the same order and level had left; Med and Min downloaded theirs.
+
+- Not run: the Civil 3D surface, which needs Civil 3D and is not part of a plain AutoCAD import; the panel's commands other than Vault, Import Bundle, Sign In and About; a time for each import step, since every step finished before the import window was first read (the whole import took 1.4 to 2.5 seconds).
 - Published asset: <check from step 4 and its date>.
-- `MantlePlace-AutoCad-1.2.0.zip` sha256 `<hash>`
+- `MantlePlace-AutoCad-1.2.0.zip` sha256 `a6baf4a172efe8a8dbfadca3a22c94af09916a81c8271bb8cba4921e9ec9078a`
 - Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
 
 Previous: [autocad-1.0.0](https://github.com/mantleplace/mantleplace-dcc/releases/tag/autocad-1.0.0)
