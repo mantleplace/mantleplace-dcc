@@ -1,6 +1,6 @@
 ---
 name: import-timing
-description: How long each import step took at Max, Med and Min in every host, as measured by the MPB 3.0 release gates — Unreal 0.9.0 on Unreal 5.8, Revit 1.2.0 on Revit 2025, 2026 and 2027, AutoCAD 1.2.0 on AutoCAD 2027 and Civil 3D 2027 — with the site, the counts and the machine, and the rule the recommended level follows. Read before choosing or changing a recommended level, before quoting how long an import takes, or when a host's import gets slower.
+description: How long each import step took at Max, Med and Min in every host, as measured by the MPB 3.0 release gates — Unreal 0.9.0 on Unreal 5.8, Revit 1.2.0 on Revit 2025, 2026 and 2027, AutoCAD 1.2.0 on AutoCAD 2025, 2026 and 2027 and Civil 3D 2027 — with the site, the counts and the machine, and the rule the recommended level follows. Read before choosing or changing a recommended level, before quoting how long an import takes, or when a host's import gets slower.
 ---
 
 # Import timing
@@ -171,4 +171,18 @@ Source: [issue 619](https://github.com/mantleplace/mantleplace-dcc/issues/619) a
 Source: [issue 620](https://github.com/mantleplace/mantleplace-dcc/issues/620) and
 [pull request 735](https://github.com/mantleplace/mantleplace-dcc/pull/735).
 
-AutoCAD 2025 and 2026 are gated at the recommended level and are not timed step by step.
+### AutoCAD 2025 and AutoCAD 2026
+
+Gated at the recommended level alone, on the same order. That order's vault showed 69.2 MB at Max,
+55.3 MB at Med and 43.5 MB at Min on 2026-11-20, so these rows are not comparable with the 2027 rows
+above, which were measured when it showed 108.4 MB at Max.
+
+| Step | AutoCAD 2025, Max | AutoCAD 2026, Max |
+| --- | ---: | ---: |
+| Open the vault window | 5.61 | 5.58 |
+| Choose the order | 0.06 | 0.05 |
+| Set the level | 0.06 | 0.03 |
+| Download | 12.26 | cached from the AutoCAD 2025 run |
+| Import, all steps | 0.67 | 2.27, opening the cached copy included |
+
+Source: [issue 621](https://github.com/mantleplace/mantleplace-dcc/issues/621).
