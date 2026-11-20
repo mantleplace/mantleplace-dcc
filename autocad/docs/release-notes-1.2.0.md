@@ -63,6 +63,15 @@ Upgrade by closing AutoCAD and running the new `Install.cmd` over the old one; s
 
   The round trip took this zip's bundle by hand, as on AutoCAD 2027, and confirmed the loaded build was this one. The Med run imported the download an earlier attempt at the same order and level had left; Max and Min downloaded theirs. Earlier attempts at Med, Min, the windows check and the round trip failed for reasons outside the plugin, and each passed when run again: a check of another AutoCAD year replaced the installed bundle partway through one attempt, and the local dev server stopped answering during the others.
 
+- Release gate on AutoCAD 2025 and AutoCAD 2026 (2026-11-19 and 2026-11-20), at the same commit and against the same zip, installed clean by the host harness in each and signed in on the dev platform: the plugin loaded with its panel; its sign-in, vault, About and notice windows opened and read as its labels say; the same platform-built MPB 3.0 order was chosen in the vault window and imported at its recommended level, Max, unattended; and a 2.x bundle was imported from disk with no account signed in.
+
+  - `autocad.plugin-loads`: pass, 13 of 13 in each year
+  - `autocad.plugin-windows`: pass, 47 of 47 in each year
+  - `autocad.import-check`, bundle 3.0.0 at the recommended level (Max): pass, 32 of 32 in each year
+  - `autocad.import-check`, bundle 2.2.0 from disk, no account: pass, 35 of 35 in each year
+
+  The AutoCAD 2026 run of the 3.0 order imported the download the AutoCAD 2025 run of the same order and level had left. Earlier attempts at the 3.0 import and the windows check failed for reasons outside the plugin, and each passed when run again: the local dev server stopped answering, and the machine's display could not be read while its session was disconnected.
+
 - Not run: the panel's commands other than Vault, Import Bundle, Sign In and About; a time for each import step, since the steps finished between reads of the import window (the whole import took 1.4 to 2.5 seconds in AutoCAD and 9.6 to 15.2 seconds in Civil 3D, where the surface is built).
 - Published asset: <check from step 4 and its date>.
 - `MantlePlace-AutoCad-1.2.0.zip` sha256 `a6baf4a172efe8a8dbfadca3a22c94af09916a81c8271bb8cba4921e9ec9078a`
