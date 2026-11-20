@@ -133,12 +133,13 @@ in `Core`, asserted headlessly; the shim only reads the order id and the site lo
 `Mantle Place ▸ Bundles ▸ Import Bundle` takes a bundle you already downloaded and:
 
 - refuses anything below manifest **MPB 1.0.0**, and anything whose MAJOR is above the newest it
-  reads (1.x and 2.x), naming re-download and plugin-update respectively rather than guessing at a
-  newer major (`HPS-31`).
+  reads (1.x, 2.x and, from `revit-1.2.0`, 3.0), naming re-download and plugin-update respectively
+  rather than guessing at a newer major (`HPS-31`).
   The integer pre-history (v7–v19) is below the floor as a family: a bundle cut before the MPB
-  re-baseline is not merely old, it is written in a dialect this reader does not speak. Both
-  layouts are read through their pointers, never a folder name, so a 1.x bundle in the vault imports
-  beside a 2.0 one;
+  re-baseline is not merely old, it is written in a dialect this reader does not speak. Each
+  layout is read through its pointers, never a folder name, so a 1.x bundle in the vault imports
+  beside a 2.0 one; a 3.0 bundle is read through its catalog, as
+  [MPB 3.0 beside 2.x](#mpb-30-beside-2x) says;
 - builds the terrain from the TIN in `Surface/Surface.dxf` — its vertices are placed adaptively,
   dense on slopes and sparse on flats, where `Surface/SurfacePoints.csv` is a perfectly regular
   lattice whose cells are cocircular and therefore degenerate to triangulate, so the triangulator
@@ -306,6 +307,37 @@ back, so nothing in the project changes; use it when a bundle import is refused 
 say enough. `Logs` shows the most recent import or probe log in File Explorer. `Probe Terrain`
 used to sit on the panel face beside `Vault` and `Import Bundle`, where a first-time user read a
 diagnostic as a third way to import.
+
+### MPB 3.0 beside 2.x
+
+From `revit-1.2.0` the plugin imports an MPB 3.0 bundle beside every 1.x and 2.x one, by the same three ways
+in: the vault, `Import Bundle` from disk, and a send from the web vault. Which major a bundle is decides how it
+is read, never how it is offered: both open the same `Bundle Import` window, with the same checklist, the same
+staged steps and the same Cancel.
+
+- **The level is chosen before the download.** A 3.0 order in the vault shows `Fidelity Level` with `Max`,
+  `Med` and `Min`, each with its download size, and the platform's recommendation preselected; `Import`
+  downloads that level alone. The plugin keeps one download per order, so another level is a fresh download
+  that replaces it, and the level you chose stays chosen while the vault refreshes. A bundle sent from the web
+  vault opens on the recommendation. A 2.x order has no level to choose in the vault: its levels are the
+  checklist's per-row dropdowns above.
+- **The import window takes what the download holds.** A 3.0 download holds one level of every file, so its
+  rows have no level list; each says what it will take instead, and a row estimated at over five minutes starts unticked, saying why. A step whose file
+  the bundle does not hold is shown as skipped, naming the file, with the manifest's own reason where it gives
+  one.
+- **Some 2.x items are not part of a 3.0 import**, and each is shown as skipped with its reason, in the window
+  and the log: the toposurface points file, cropping the terrain and contours to the area of interest, the
+  project's time zone, and some details on the hazard plan's key. The list and the reason for each are in the
+  [1.2.0 release notes](docs/release-notes-1.2.0.md#every-2x-item-an-mpb-30-import-leaves-out).
+- **A 3.0 bundle goes into a project that holds no earlier import.** A project that already holds one, the same
+  order included, refuses a 3.0 bundle before its window opens, says why, and is left unchanged, until the
+  format settles which angle to true north a 3.x host applies
+  ([issue 677](https://github.com/mantleplace/mantleplace-dcc/issues/677)). A 2.x bundle beside an earlier
+  import is placed as before.
+
+Which 3.0 file each step reads is the
+[release notes' table](docs/release-notes-1.2.0.md#what-an-mpb-30-bundle-imports); the format itself is
+[`spec/`](../spec/README.md).
 
 ### Terrain accuracy by Revit version
 
