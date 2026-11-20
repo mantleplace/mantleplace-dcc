@@ -20,7 +20,7 @@ other logo.
 | --- | --- | --- |
 | Sign In | `MANTLEPLACESIGNIN` | Opens your browser to sign in; AutoCAD never sees your password. A small window waits for the browser and stays out of the way. Signing in here signs you in for every Mantle Place plugin on this machine. |
 | Sign Out | `MANTLEPLACESIGNOUT` | Drops the session and forgets the stored credential. |
-| Vault | `MANTLEPLACEVAULT` | The bundles you keep, with a search box, which of them are on this machine, removing a local copy, and reporting a problem with one. Needs you signed in. There is no Prepare or download in AutoCAD yet: an order comes into a drawing as an export sent from the web vault, or through Import Bundle. |
+| Vault | `MANTLEPLACEVAULT` | The bundles you keep, with a search box, which of them are on this machine, removing a local copy, and reporting a problem with one. **Prepare** and **Import**: Import downloads the selected order, at the level chosen for an MPB 3.0 one, and imports it into the active drawing in the import window, in one press for an order already built whole. An order still to be prepared is handed to Prepare instead; press **Import** again once Prepare says it is ready. Needs you signed in. |
 | Import Bundle | `MANTLEPLACEIMPORTBUNDLE` | Asks for a Mantle Place bundle zip on this computer and imports it into the active drawing in the import window, exactly as an export from the web is imported: the same checks, the same refusals, the same surface. It needs no account. |
 | About Mantle Place | `MANTLEPLACEABOUT` | Which build is loaded, whether the Civil 3D part is on, whether you are signed in, and a link to the [privacy page](https://mantle.place/privacy). |
 | Send Feedback | `MANTLEPLACEFEEDBACK` | The Mantle Place feedback form in your browser. It needs no account. Only this plugin's version and your AutoCAD year go with the link: nothing from your drawing, and nothing about you. |
@@ -30,8 +30,25 @@ notice appears in a corner of AutoCAD's window; clicking it opens the vault on t
 
 **Exports from the web.** While you are signed in, this AutoCAD appears as a destination in your web
 vault. Sending an export to it fetches the bundle, checks it, and imports the whole order into the
-active drawing in the import window, the one Revit uses. AutoCAD offers no choice of layers, so the
-import begins as the window opens.
+active drawing in the import window, the one Revit uses. AutoCAD offers no choice of layers, so a 2.x
+order's import begins as the window opens; an MPB 3.0 order that offers levels opens on the level
+control first (below).
+
+**Bundle formats: MPB 3.0 beside 2.x.** The plugin reads MPB 3.0 bundles and MPB 2.x bundles side by
+side, by every way in: the vault, an export from the web, and Import Bundle. A 2.x bundle imports
+from its AutoCAD block, as before, except that in Civil 3D the drawing-units check below now applies
+to it too. A 3.0 bundle's parts are found by name in its manifest's
+catalog, and a part it does not hold is shown as skipped, naming the file, with the manifest's reason
+where it gives one. Which 3.0 file each step reads, and what a 3.0 import leaves out, are in the
+[1.2.0 release notes](docs/release-notes-1.2.0.md).
+
+**The level control.** An MPB 3.0 order comes in one of three levels, **Max**, **Med** and **Min**, and
+the level is chosen before the download, for the whole order. In the Vault window, selecting a 3.0
+order shows the control under the buttons, each level with its download size and the platform's
+recommendation preselected; **Import** downloads the chosen level. An export of a 3.0 order sent from
+the web vault opens the import window on what the import will do, with the same control and **Import**
+to press: choosing another level there downloads it and reopens the window on it before anything is
+drawn. A 2.x order offers no level.
 
 **The import window.** Every import, from the web or from Import Bundle, runs in the **Bundle Import**
 window: it lists the steps (**Verify Files**, then each part the order places) with each one's state,

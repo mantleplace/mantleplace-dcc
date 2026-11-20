@@ -7,6 +7,7 @@ tools designers actually work in.
 | --- | --- | --- |
 | **Unreal Engine 5.8** | [`unreal/`](unreal/README.md) | [Releases](https://github.com/mantleplace/mantleplace-dcc/releases) |
 | **Autodesk Revit 2025 / 2026 / 2027** ([product page](https://mantle.place/revit)) | [`revit/`](revit/README.md) — builds a native Toposolid for the ground | [Releases](https://github.com/mantleplace/mantleplace-dcc/releases) |
+| **Autodesk AutoCAD and Civil 3D 2025 / 2026 / 2027** ([product page](https://mantle.place/autocad)) | [`autocad/`](autocad/README.md) — one plugin for both; Civil 3D builds a TIN surface for the ground | First release (1.2.0) pending; [Releases](https://github.com/mantleplace/mantleplace-dcc/releases) |
 
 Licensed under [Apache 2.0](LICENSE), except the prose in [`spec/`](spec/), which is CC BY 4.0. The name is not covered — see [TRADEMARK.md](TRADEMARK.md).
 
