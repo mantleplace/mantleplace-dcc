@@ -9,8 +9,21 @@ description: Draft Fab listing text for Mantle Place for Unreal Engine, release 
 field. It describes only what the plugin does at 0.9.1; where the README or the release notes
 ([`release-notes-0.9.1.md`](release-notes-0.9.1.md), and [`release-notes-0.9.0.md`](release-notes-0.9.0.md)
 for what an MPB 3.0 bundle imports) hold a fact, this file words it for a store page and does not become
-a second home for it. Fab's submission form shows each field's limit and a live count; check every field
-there before pasting, and the form wins over this file.
+a second home for it.
+
+## Where each section goes, and Fab's limits
+
+Read from the Fab publisher portal's own settings on 2026-11-20; a limit the form shows later wins over
+this table. Fab has no short-description field, so the short description is the first paragraph of
+Description.
+
+| Section here | Fab field | Fab limit | This draft |
+| --- | --- | --- | --- |
+| Title | Title | 80 characters | 69 |
+| Short description, then Long description | Description | 10,000 characters, formatting markup counted | about 2,900 as plain text |
+| What is new since 0.8.1 | Changelog | 2,000 characters | about 500 |
+| Technical details | Technical details (on the product) | 1,900 characters | about 520 |
+| Reviewer instructions | An FAQ entry (the listing form has no reviewer-notes field) | 2,000 characters per answer | about 900 |
 
 ## Title
 
