@@ -1,9 +1,50 @@
-# AutoCAD 1.2.0: what an MPB 3.0 bundle imports
+# AutoCAD 1.2.0: release notes
 
-The notes the `autocad-1.2.0` release body takes for importing an MPB 3.0 bundle ([`docs/releases.md`](../../docs/releases.md)
-holds the body's template). A 2.x bundle imports exactly as in 1.0: the same steps, placed the same way, and a
-2.x send from the web vault begins as its window opens, as before. What is new for a 2.x bundle is one more
-way in: Import in the vault browser, which 1.0 did not offer, runs the same import.
+The body the `autocad-1.2.0` release takes, titled `autocad-1.2.0 — Mantle Place for AutoCAD` and written to
+[`docs/releases.md`](../../docs/releases.md), then the detail behind its MPB 3.0 lines. The version goes from 1.0.0
+to 1.2.0, with no 1.1.0, so that both Autodesk plugins carry one number for the MPB 3.0 release. A 2.x bundle
+imports exactly as in 1.0: the same steps, placed the same way, and a 2.x send from the web vault begins as its
+window opens, as before. What is new for a 2.x bundle is more ways in: Import Bundle and Import in the vault browser,
+which 1.0 did not offer, run the same import. The **Verification** section holds the release gate's results on the
+packaged zip; its published-asset and storefront lines are filled in when the release is cut and the zip is
+submitted. The published body cites each pull request by its bare number, as
+[`docs/releases.md`](../../docs/releases.md) asks; this file links each number instead, because a bare number in a
+tracked file is refused by the public-reference gate.
+
+## The release body
+
+```markdown
+**AutoCAD and Civil 3D 2025, 2026 and 2027, Windows 64-bit.** One package serves both products and all three years: close AutoCAD, extract the zip and run `MantlePlaceAutoCad.bundle\Install.cmd`, or copy the `MantlePlaceAutoCad.bundle` folder into `%APPDATA%\Autodesk\ApplicationPlugins` as `README.txt` describes. The plugin is unsigned, so each AutoCAD version asks once: choose **Always Load**. [Install guide](https://github.com/mantleplace/mantleplace-dcc/blob/main/autocad/README.md)
+Upgrade by closing AutoCAD and running the new `Install.cmd` over the old one; see below for what an MPB 3.0 order changes.
+
+## Upgrading from 1.0.0
+
+- **An MPB 3.0 order is downloaded at one level.** The vault shows Max, Med and Min, each with its download size and the platform's recommendation preselected. A 2.x order downloads as before.
+- **Some items are not part of an MPB 3.0 import.** A Civil 3D surface whose LandXML states another unit or coordinate system than the order's, an aerial whose catalog entry states no rectangle in the order's frame, and a public-record layer that holds anything but polylines. Each is shown as skipped, with its reason, in the import window and on the command line.
+- **In Civil 3D, set the drawing's units to the order's before you import.** The surface is now skipped, naming both units, in a drawing whose Civil 3D drawing units (Drawing Settings, Units and Zone) are not the order's, from any bundle. 1.0.0 built it there, scaled away from every other part.
+- **An earlier version cannot import an MPB 3.0 order.** The platform asks it to update to this one first.
+
+## What's new
+
+- **MPB 3.0 bundles import**, beside 2.x: contours, the Civil 3D surface, the aerial, public-record layers and site linework, each from the file the bundle's catalog names, in the order's own coordinates and units; from the vault, from a zip on disk and from a send out of the web vault ([654](https://github.com/mantleplace/mantleplace-dcc/pull/654), [662](https://github.com/mantleplace/mantleplace-dcc/pull/662), [716](https://github.com/mantleplace/mantleplace-dcc/pull/716), [718](https://github.com/mantleplace/mantleplace-dcc/pull/718)).
+- **Choose the level before the download.** Max, Med or Min, each with its size; a send from the web vault opens on the recommendation, and the level you choose stays chosen while the vault window refreshes ([660](https://github.com/mantleplace/mantleplace-dcc/pull/660), [694](https://github.com/mantleplace/mantleplace-dcc/pull/694)).
+- **Import Bundle** imports a bundle zip from disk, with no account needed ([636](https://github.com/mantleplace/mantleplace-dcc/pull/636)).
+- **Every import runs in one import window**, step by step, with Cancel heard between steps; a cached download is reused only for its host and level ([632](https://github.com/mantleplace/mantleplace-dcc/pull/632), [648](https://github.com/mantleplace/mantleplace-dcc/pull/648), [649](https://github.com/mantleplace/mantleplace-dcc/pull/649), [705](https://github.com/mantleplace/mantleplace-dcc/pull/705)).
+- **Sign-in, the vault, About and notices are new windows**, shared with the Revit plugin; the vault offers Import, and About links the privacy page ([646](https://github.com/mantleplace/mantleplace-dcc/pull/646)).
+
+## Known issues
+
+- **AutoCAD asks before loading the plugin**, because it is not signed: choose **Always Load**.
+
+## Verification
+
+- Built from `<short sha>` on `main`. <Release gate at that commit, against this zip installed clean in AutoCAD 2027.>
+- Published asset: <check from step 4 and its date>.
+- `MantlePlace-AutoCad-1.2.0.zip` sha256 `<hash>`
+- Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
+
+Previous: [autocad-1.0.0](https://github.com/mantleplace/mantleplace-dcc/releases/tag/autocad-1.0.0)
+```
 
 ## What an MPB 3.0 bundle imports
 
