@@ -50,7 +50,20 @@ Upgrade by closing AutoCAD and running the new `Install.cmd` over the old one; s
 
   AutoCAD 2027 ran as Civil 3D 2027 started as plain AutoCAD, the one AutoCAD 2027 on the gate machine. The round trip installs no zip of its own for AutoCAD, so this zip's bundle was put in the plugins folder by hand for it, and the run confirmed the loaded build was this one. The Max run imported the download a rehearsal of the same order and level had left; Med and Min downloaded theirs.
 
-- Not run: the Civil 3D surface, which needs Civil 3D and is not part of a plain AutoCAD import; the panel's commands other than Vault, Import Bundle, Sign In and About; a time for each import step, since every step finished before the import window was first read (the whole import took 1.4 to 2.5 seconds).
+- Release gate on Civil 3D 2027 (2026-11-19), at the same commit and against the same zip, installed clean by the host harness and signed in on the dev platform: the plugin loaded with its panel; its windows opened and read as its labels say; the same platform-built MPB 3.0 order was imported at Max, at Med and at Min through the vault window, each time with the drawing's Civil 3D zone matching the order's coordinate system and the Civil 3D surface built from its LandXML; a 2.x bundle was imported from disk, with the zone refusal, the version refusal, the drawing-units pass and a second import; a LandXML file was imported into Civil 3D; and a bundle sent from the web vault was received and imported, surface included.
+
+  - `civil3d.plugin-loads`: pass, 13 of 13
+  - `civil3d.plugin-windows`: pass, 47 of 47
+  - `civil3d.import-check`, bundle 3.0.0 level Max: pass, 35 of 35
+  - `civil3d.import-check`, bundle 3.0.0 level Med: pass, 35 of 35
+  - `civil3d.import-check`, bundle 3.0.0 level Min: pass, 35 of 35
+  - `civil3d.import-check`, bundle 2.2.0 from disk: pass, 40 of 40
+  - `civil3d.landxml-import`: pass, 13 of 13
+  - `vault.round-trip`, Civil 3D 2027: pass, 22 of 22
+
+  The round trip took this zip's bundle by hand, as on AutoCAD 2027, and confirmed the loaded build was this one. The Med run imported the download an earlier attempt at the same order and level had left; Max and Min downloaded theirs. Earlier attempts at Med, Min, the windows check and the round trip failed for reasons outside the plugin, and each passed when run again: a check of another AutoCAD year replaced the installed bundle partway through one attempt, and the local dev server stopped answering during the others.
+
+- Not run: the panel's commands other than Vault, Import Bundle, Sign In and About; a time for each import step, since the steps finished between reads of the import window (the whole import took 1.4 to 2.5 seconds in AutoCAD and 9.6 to 15.2 seconds in Civil 3D, where the surface is built).
 - Published asset: <check from step 4 and its date>.
 - `MantlePlace-AutoCad-1.2.0.zip` sha256 `a6baf4a172efe8a8dbfadca3a22c94af09916a81c8271bb8cba4921e9ec9078a`
 - Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
