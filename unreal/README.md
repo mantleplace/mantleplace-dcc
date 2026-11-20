@@ -1,9 +1,11 @@
 # Mantle Place for Unreal
 
 The Unreal plugin — host #1, and the reference host. One `.uplugin` with two modules,
-`MantlePlaceRuntime` and `MantlePlaceEditor`, for **Unreal Engine 5.8**, editor-side. Its engine
+`MantlePlaceRuntime` and `MantlePlaceEditor`, for **Unreal Engine 5**, editor-side. Its engine
 dependencies are Epic's built-in Interchange, PCG (the foliage scatter) and SQLiteCore (the road
 splines' GeoPackage).
+
+**Compatibility:** Unreal Engine 5.8, Windows 64-bit.
 
 **Status:** pre-1.0. Releases are tagged `unreal-<version>`
 ([ADR 0001](../docs/adr/0001-per-host-release-tracks.md)); the version lives in
@@ -14,12 +16,13 @@ splines' GeoPackage).
 One import produces **one `ALandscape`** with the bundle's imagery draped onto its geographic
 footprint, plus whatever else the bundle ships: the buildings as a static mesh, the road centrelines
 as one typed spline actor per road, the coverage rasters (water, land cover and their like) as data
-textures with their value mappings attached, and the landcover material weights painted as landscape
-layers. The tree points land as a data table, PCG-ready scatter input, and on request (a project setting) as a PCG foliage scatter that keeps off water, follows the canopy height and streams per World Partition cell. The public-record layers a bundle carries
+textures with their value mappings attached, the landcover material weights painted as landscape
+layers, and more. The tree points land as a data table, PCG-ready scatter input, and on request (a project setting) as a PCG foliage scatter that keeps off water, follows the canopy height and streams per World Partition cell. The public-record layers a bundle carries
 (parcels, zoning, flood zones and the families that follow them) are credited in the import log, and their
 DXF linework is drawn as one toggleable overlay per family where the file states a frame that is this
 host's. Importing a local bundle
-needs no account and no sign-in.
+needs no account and no sign-in. It reads MPB 3.0 bundles and MPB 2.x bundles side by side; what a
+3.0 bundle imports is in [`docs/release-notes-0.9.0.md`](docs/release-notes-0.9.0.md).
 
 What this plugin does not do yet, and what it leaves out on purpose, is the
 [host support matrix](../docs/host-support.md) — one row per feature, beside every other host.
@@ -49,8 +52,17 @@ source build: see [Building](../README.md#building) in the root README.
   was bought has nothing left to build, so the plugin downloads Unreal's own view of it — the files
   this import reads, without the meshes and rasters other hosts use — and imports, with no Prepare.
   An order built on demand is prepared first, as before.
+
+  An MPB 3.0 order is downloaded at one level. The window shows `Fidelity Level` with Max, Med and
+  Min, each with its download size and the platform's recommendation preselected and marked
+  `Recommended`; `Download` fetches the chosen level. Importing the same level again reuses the
+  download, and choosing another replaces it. A 2.x order has no level to choose.
 - **Browse...** — pick a bundle `.zip` you downloaded from [mantle.place](https://mantle.place),
   leave the mode at *Landscape*, and press **Import**.
+
+For a first look with no account, download a sample bundle zip from the public
+[samples page](https://mantle.place/mpb-samples) and import it with **Browse...**. The samples there are
+MPB 2.0 bundles.
 
 Either way the **Bundle Import** window opens and lists the import's steps in order: *Download* when
 the bundle is fetched, *Integrity Check*, then one per thing the bundle builds. Each row reads
