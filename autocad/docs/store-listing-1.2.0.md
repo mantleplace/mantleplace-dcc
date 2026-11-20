@@ -10,7 +10,9 @@ covers AutoCAD and Civil 3D: they are one plugin. Each section below is the text
 matching storefront field. It describes only what the plugin does at 1.2.0; where the README
 ([`../README.md`](../README.md)) or the release notes ([`release-notes-1.2.0.md`](release-notes-1.2.0.md))
 own a fact, this file words it for a store page and does not become a second home for it. The steps for
-the store's reviewer are in [`store-review-1.2.0.md`](store-review-1.2.0.md).
+the store's reviewer are in [`store-review-1.2.0.md`](store-review-1.2.0.md). The skeleton every host's
+listing follows is [`store-listing-principles.md`](../../docs/store-listing-principles.md); this one
+keeps its order and names only what AutoCAD imports.
 
 **Field limits held to.** Autodesk's publisher guide for its app store (*Browser based app submission
 process overview*, undated) gives the App Description 4000 characters, Known Issues 1000, Support
