@@ -7,9 +7,10 @@ description: Draft Fab listing text for Mantle Place for Unreal Engine, release 
 
 **Draft for the founder's approval.** Each field below is the text to paste into the matching Fab
 field. It describes only what the plugin does at 0.9.1; where the README or the release notes
-([`release-notes-0.9.1.md`](release-notes-0.9.1.md), and [`release-notes-0.9.0.md`](release-notes-0.9.0.md) for what an MPB 3.0 bundle imports) own a fact, this file words it for a store
-page and does not become a second home for it. The field limits below are the ones to check in
-Fab's submission form before pasting: a limit that has changed there wins over this file.
+([`release-notes-0.9.1.md`](release-notes-0.9.1.md), and [`release-notes-0.9.0.md`](release-notes-0.9.0.md)
+for what an MPB 3.0 bundle imports) hold a fact, this file words it for a store page and does not become
+a second home for it. Fab's submission form shows each field's limit and a live count; check every field
+there before pasting, and the form wins over this file.
 
 ## Title
 
@@ -38,7 +39,8 @@ placed at the site's real position, plus the other things the bundle carries.
 - Road centrelines as one typed spline actor per road.
 - Tree points as a data table you can feed to PCG, and, if you turn it on in the project settings,
   a PCG foliage scatter.
-- Coverage rasters (water, land cover and their like) as data textures with their value mappings.
+- From an MPB 2.x bundle, its coverage rasters (water, land cover and their like) as data textures
+  with their value mappings.
 - Public-record layers (parcels, zoning, flood zones and more) drawn as one toggleable overlay of lines
   each, where the bundle states a frame the plugin places in.
 - The bundle's credits, written into the import log and the project.
@@ -78,8 +80,10 @@ mantle.place account.
 - For an MPB 3.0 order, choose Max, Med or Min before the download.
 - Public-record layers are drawn as toggleable overlays on the Landscape.
 - Terrain for a streamed 3.0 order is fetched from the order's terrain tiles.
-- A tree-point file with a few points now places on the Landscape edge, and a 3.0 road table with
-  no name column now reads.
+- Imported terrain collides where it is drawn, in every import mode.
+- A 3.0 order downloaded at a level now brings its public-record layers with it.
+- Tree points that lie on the Landscape's edge now place, and a 3.0 road table with no name column
+  now reads.
 
 ## Technical details
 
