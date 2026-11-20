@@ -19,7 +19,9 @@ checklist for the MPB 3.0 format text.
 ([Unreal](../unreal/README.md), [Revit](../revit/README.md)). This file says which pointer, which
 default, what cost and what driver, and nothing about status.
 
-**One home per figure.**
+**One home per figure.** The release gates' step times for each host at each level, with the
+recommendation rule, are [import timing](import-timing.md)'s; the figures below are the ones a
+plugin or a design decision reads.
 
 - **Revit's figures live in code**, in `SlowStepNotice.Measured(ImportStepKind)` in
   [`SlowStepNotice.cs`](../shared/src/MantlePlace.Core/SlowStepNotice.cs), because the import
