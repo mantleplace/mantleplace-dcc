@@ -16,8 +16,8 @@ there before pasting, and the form wins over this file.
 
 Mantle Place - Real-World Terrain, Imagery, Buildings, Roads and more
 
-(The live title lists "Land Cover" last; this one ends "and more" like the other storefront listings.
-Keep the live title if the form's limit or the store's rules say otherwise.)
+(This replaces the live title, which lists "Land Cover" last, so it ends "and more" like the other
+storefront listings.)
 
 ## Short description
 
@@ -82,8 +82,6 @@ mantle.place account.
 - Terrain for a streamed 3.0 order is fetched from the order's terrain tiles.
 - Imported terrain collides where it is drawn, in every import mode.
 - A 3.0 order downloaded at a level now brings its public-record layers with it.
-- Tree points that lie on the Landscape's edge now place, and a 3.0 road table with no name column
-  now reads.
 
 ## Technical details
 
