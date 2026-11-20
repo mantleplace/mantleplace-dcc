@@ -22,7 +22,8 @@ those keeps a feature list of its own. The one table elsewhere that names a host
 is the standard's shared-vocabulary table (`HPS-51`), and it says which *words* a host shows, not
 whether the host has the feature. Which pointer each host imports a category from, whether it comes in
 by default, and what it was measured to cost is the [import inventory](import-inventory.md)'s, and
-it states no status either.
+it states no status either. How long each import step took at each level in every host's release
+gate, and the rule the recommended level follows, is [import timing](import-timing.md)'s.
 
 **A status comes from a release or an ADR, never from an issue.** A release is the host's published
 notes: what its *What's new* or *What it does* names is `supported`, what its *Known issues* names as a
