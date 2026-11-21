@@ -61,8 +61,8 @@ source build: see [Building](../README.md#building) in the root README.
   leave the mode at *Landscape*, and press **Import**.
 
 For a first look with no account, download a sample bundle zip from the public
-[samples page](https://mantle.place/mpb-samples) and import it with **Browse...**. The samples there are
-MPB 2.0 bundles.
+[samples page](https://mantle.place/samples) and import it with **Browse...**. The samples there are
+MPB 3.0 bundles, each offered at the Max, Med and Min levels.
 
 Either way the **Bundle Import** window opens and lists the import's steps in order: *Download* when
 the bundle is fetched, *Integrity Check*, then one per thing the bundle builds. Each row reads
