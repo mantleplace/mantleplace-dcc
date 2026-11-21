@@ -57,6 +57,11 @@ source build: see [Building](../README.md#building) in the root README.
   Min, each with its download size and the platform's recommendation preselected and marked
   `Recommended`; `Download` fetches the chosen level. Importing the same level again reuses the
   download, and choosing another replaces it. A 2.x order has no level to choose.
+
+  The vault's detail page lists an MPB 3.0 order's Extras. On a free order the plan sheets and the terrain
+  tiles are locked rows, `More Extras come with paid sites`, with nothing to download, and the page says
+  plan sheets and terrain tiles come with paid builds; streaming into Cesium on such an order says the
+  same words and fetches nothing. A kept or paid order lists them unlocked.
 - **Browse...** — pick a bundle `.zip` you downloaded from [mantle.place](https://mantle.place),
   leave the mode at *Landscape*, and press **Import**.
 

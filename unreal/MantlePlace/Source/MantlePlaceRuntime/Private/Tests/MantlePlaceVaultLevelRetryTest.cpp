@@ -164,6 +164,27 @@ bool FMantlePlaceVaultLevelRetryTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("a failure"), F.Presigned->bSuccess);
 	}
 
+	// An Extra the platform locks on a free bundle is the locked row's words, not an error: no request again,
+	// and no "HTTP 403" or code for the surface to show.
+	{
+		FRetryFixture F;
+		FMantlePlaceVaultClientTestAccess::AsIfLevelRequestSent(*F.Client, RetryOrderId, FString(), {});
+		FMantlePlaceVaultClientTestAccess::Answer(*F.Client, 403,
+			TEXT("{\"error\":\"Comes with a paid site.\",\"code\":\"extra_locked\",\"extra\":\"PlanSheets\"}"));
+		TestEqual(TEXT("no request is made again"), F.Requests->Num(), 0);
+		TestEqual(TEXT("one result"), F.Presigned->Count, 1);
+		TestFalse(TEXT("nothing was minted"), F.Presigned->bSuccess);
+		TestEqual(TEXT("the result is the locked row's words"), F.Presigned->Message, FString(MantlePlaceLockedExtrasWords()));
+	}
+
+	// Another 403 is still the platform's own refusal, code and all.
+	{
+		FRetryFixture F;
+		FMantlePlaceVaultClientTestAccess::AsIfLevelRequestSent(*F.Client, RetryOrderId, FString(), {});
+		FMantlePlaceVaultClientTestAccess::Answer(*F.Client, 403, TEXT("{\"error\":\"Not yours.\",\"code\":\"forbidden\"}"));
+		TestTrue(TEXT("the platform's code is kept"), F.Presigned->Message.Contains(TEXT("forbidden")));
+	}
+
 	// A 2.x request (no level pending) is never asked again, whatever the refusal says.
 	{
 		FRetryFixture F;

@@ -1176,7 +1176,7 @@
       "get": {
         "operationId": "listVaultBundles",
         "summary": "The curator bundles",
-        "description": "The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import. A 3.0 bundle also carries mpb3: the level recommended for the host the Mantle-Place-Client header names and this site (the highest level expected to import in about five minutes on the reference machine; the platform works it out from the counts of each level and figures it keeps private, and no figure appears in any response), the size and counts of Max, Med and Min, and its Extras, each with the download a signed-in plugin sends. A bundle that is not 3.0 has no mpb3 member and is answered as it always was. The examples are for a plugin test double and follow the draft tree of the 3.0 spec, which may still rename files.",
+        "description": "The signed-in curator owned bundles, one row per order, with facts from each sidecar manifest. Each row carries the order extent, so a host can hand the web curator the extent of its import. A 3.0 bundle also carries mpb3: the level recommended for the host the Mantle-Place-Client header names and this site (the highest level expected to import in about five minutes on the reference machine; the platform works it out from the size of each level and figures it keeps private, and no figure appears in any response), the size and counts of Max, Med and Min, and its Extras, each with the download a signed-in plugin sends. A bundle that is not 3.0 has no mpb3 member and is answered as it always was. The examples are for a plugin test double and follow the draft tree of the 3.0 spec, which may still rename files.",
         "tags": [
           "Vault"
         ],
@@ -1465,7 +1465,7 @@
                                   "Med",
                                   "Min"
                                 ],
-                                "description": "The highest level expected to import in about five minutes on the reference machine, for the host that asked (the Mantle-Place-Client header; a request that names none is answered as for the slowest host) and this site. The platform works it out from the counts of each level and figures it holds; the figures stay private, appear in no response, and can change without rebuilding a bundle. Apply it as it is: a plugin holds no budget of its own."
+                                "description": "The highest level expected to import in about five minutes on the reference machine, for the host that asked (the Mantle-Place-Client header; a request that names none is answered as for the slowest host) and this site. The platform works it out from the size of each level and figures it holds; the figures stay private, appear in no response, and can change without rebuilding a bundle. Apply it as it is: a plugin holds no budget of its own."
                               },
                               "levels": {
                                 "type": "object",
@@ -1657,6 +1657,10 @@
                                       "minimum": 0,
                                       "maximum": 9007199254740991
                                     },
+                                    "locked": {
+                                      "type": "boolean",
+                                      "description": "True while the bundle is free and this Extra comes only with a paid or kept bundle: the plan sheets and the terrain tiles. Show it as a locked row beside the free Site Brief, with the words More Extras come with paid sites, and no download; asking for it anyway is refused (HTTP 403, code extra_locked). A paid or kept bundle lists every Extra unlocked, and a keep unlocks them at once with no rebuild. The Site Brief is never locked."
+                                    },
                                     "download": {
                                       "type": "object",
                                       "properties": {
@@ -1719,11 +1723,12 @@
                                     "id",
                                     "name",
                                     "sizeBytes",
+                                    "locked",
                                     "download"
                                   ],
                                   "additionalProperties": false
                                 },
-                                "description": "The Extras the bundle holds, each free: the Site Brief, the plan sheets and the terrain tiles, in that order. A bundle whose Extra was not built lists the others."
+                                "description": "The Extras the bundle holds: the Site Brief, the plan sheets and the terrain tiles, in that order, each with whether it is locked. The Site Brief is free on every bundle; the plan sheets and the terrain tiles come with a paid or kept bundle. A bundle whose Extra was not built lists the others."
                               }
                             },
                             "required": [
@@ -1836,6 +1841,7 @@
                                 "id": "SiteBrief",
                                 "name": "Site Brief",
                                 "sizeBytes": 1468006,
+                                "locked": false,
                                 "download": {
                                   "method": "POST",
                                   "path": "/api/v1/vault/bundles/6f1c1d0e-3b0a-4d6e-9d57-0a6c2f8e4a11/download",
@@ -1852,6 +1858,7 @@
                                 "id": "PlanSheets",
                                 "name": "Plan sheets",
                                 "sizeBytes": 272630,
+                                "locked": true,
                                 "download": {
                                   "method": "POST",
                                   "path": "/api/v1/vault/bundles/6f1c1d0e-3b0a-4d6e-9d57-0a6c2f8e4a11/download",
@@ -1868,6 +1875,7 @@
                                 "id": "TerrainTiles",
                                 "name": "Terrain tiles",
                                 "sizeBytes": 31457,
+                                "locked": true,
                                 "download": {
                                   "method": "POST",
                                   "path": "/api/v1/vault/bundles/6f1c1d0e-3b0a-4d6e-9d57-0a6c2f8e4a11/download",
@@ -1887,7 +1895,7 @@
                     }
                   },
                   "mpb3LargeSite": {
-                    "summary": "A large site (63.93 km²): Med is recommended",
+                    "summary": "A large site (63.93 km²): Min is recommended to Revit",
                     "value": {
                       "bundles": [
                         {
@@ -1927,7 +1935,7 @@
                           },
                           "mpb3": {
                             "version": "3.0",
-                            "recommendedLevel": "Med",
+                            "recommendedLevel": "Min",
                             "levels": {
                               "Max": {
                                 "sizeBytes": 1811415040,
@@ -1962,6 +1970,7 @@
                                 "id": "SiteBrief",
                                 "name": "Site Brief",
                                 "sizeBytes": 13526630,
+                                "locked": false,
                                 "download": {
                                   "method": "POST",
                                   "path": "/api/v1/vault/bundles/b7a52e49-81c3-4f0d-a2e4-5d1f93c6b7e2/download",
@@ -1978,6 +1987,7 @@
                                 "id": "PlanSheets",
                                 "name": "Plan sheets",
                                 "sizeBytes": 7654605,
+                                "locked": false,
                                 "download": {
                                   "method": "POST",
                                   "path": "/api/v1/vault/bundles/b7a52e49-81c3-4f0d-a2e4-5d1f93c6b7e2/download",
@@ -1994,6 +2004,7 @@
                                 "id": "TerrainTiles",
                                 "name": "Terrain tiles",
                                 "sizeBytes": 692060,
+                                "locked": false,
                                 "download": {
                                   "method": "POST",
                                   "path": "/api/v1/vault/bundles/b7a52e49-81c3-4f0d-a2e4-5d1f93c6b7e2/download",
@@ -2039,7 +2050,7 @@
       "post": {
         "operationId": "getVaultBundleDownload",
         "summary": "A fresh download link for one format of a bundle",
-        "description": "Mints a presigned URL for one artifact format, or for the whole archive with format bundle. A host that declares view support sends format bundle with a view naming itself, and gets a link to a view holding only the files its host block points at.\n\nThe 3.0 form: format bundle with mpb3 asks for one level (Max, Med or Min; none means Max) and the promised files wanted, by path from the bundle root, or for one Extra by id. There is no file list per host for 3.0, so mpb3 never comes with view, and a view asked of a 3.0 bundle is refused (HTTP 400, code invalid_request). A level request is served: with no files the link is to the whole download of that level (every georeferenced file once and each host-ready file at that level, with the manifest of that level, in a zip whose name states the level); with files named it is to a view holding exactly those files at that level, and Manifest.json always comes with it, named or not. A file the bundle does not hold is refused by name (HTTP 404, code file_not_in_bundle, with the names in files); a level request for a 2.x bundle is refused (HTTP 400, code invalid_request). The answer is the same link answer, with sizeBytes. An Extra is served: the link is to the Site Brief, the plan sheets or the terrain tiles, each its own free download beside the bundle, and the answer is the link (url and expiresAt). It sits behind the gates of the bundle: an order the bearer does not own, a refund, a deleted bundle and an expired free bundle refuse it as they refuse the bundle, and an Extra the bundle does not hold is refused (HTTP 404, code extra_not_in_bundle). A request that names no level receives Max. Every 2.x request and answer is unchanged. A plugin too old to read 3.0 that asks for a 3.0 bundle, in the 3.0 form or in the 2.x form for an order whose bundle is 3.0, is answered HTTP 426 with the update answer (below) instead; the same plugin asking for a 2.x bundle is served as before. The first release that reads 3.0 is Unreal 0.9.0, Revit 1.2.0, AutoCAD and Civil 3D 1.2.0. The web client and a client that states no version are never asked to update for a bundle.",
+        "description": "Mints a presigned URL for one artifact format, or for the whole archive with format bundle. A host that declares view support sends format bundle with a view naming itself, and gets a link to a view holding only the files its host block points at.\n\nThe 3.0 form: format bundle with mpb3 asks for one level (Max, Med or Min; none means Max) and the promised files wanted, by path from the bundle root, or for one Extra by id. There is no file list per host for 3.0, so mpb3 never comes with view, and a view asked of a 3.0 bundle is refused (HTTP 400, code invalid_request). A level request is served: with no files the link is to the whole download of that level (every georeferenced file once and each host-ready file at that level, with the manifest of that level, in a zip whose name states the level); with files named it is to a view holding exactly those files at that level, and Manifest.json always comes with it, named or not. A file the bundle does not hold is refused by name (HTTP 404, code file_not_in_bundle, with the names in files); a level request for a 2.x bundle is refused (HTTP 400, code invalid_request). The answer is the same link answer, with sizeBytes. An Extra is served: the link is to the Site Brief, the plan sheets or the terrain tiles, each its own download beside the bundle, and the answer is the link (url and expiresAt). It sits behind the gates of the bundle: an order the bearer does not own, a refund, a deleted bundle and an expired free bundle refuse it as they refuse the bundle, and an Extra the bundle does not hold is refused (HTTP 404, code extra_not_in_bundle). The Site Brief is free on every bundle; the plan sheets and the terrain tiles come only with a paid or kept bundle, and on a free bundle they are refused (HTTP 403, code extra_locked, with the Extra in extra): the bundle list marks each Extra locked or not, and a keep unlocks them at once with no rebuild. A request that names no level receives Max. Every 2.x request and answer is unchanged. A plugin too old to read 3.0 that asks for a 3.0 bundle, in the 3.0 form or in the 2.x form for an order whose bundle is 3.0, is answered HTTP 426 with the update answer (below) instead; the same plugin asking for a 2.x bundle is served as before. The first release that reads 3.0 is Unreal 0.9.0, Revit 1.2.0, AutoCAD and Civil 3D 1.2.0. The web client and a client that states no version are never asked to update for a bundle.",
         "tags": [
           "Vault"
         ],
@@ -2106,7 +2117,7 @@
                     "additionalProperties": false
                   },
                   "mpb3": {
-                    "description": "The 3.0 form of the request, with format bundle: one level and the promised files wanted, by name, or one Extra. A level request is served: the answer is a link to that level of the bundle, or, with files named, to exactly those files at that level; a file the bundle does not hold is refused by name (HTTP 404, code file_not_in_bundle). An Extra is served: the answer is the link to its own download (url and expiresAt), behind the same gates as the bundle, and an Extra the bundle does not hold is refused (HTTP 404, code extra_not_in_bundle). A plugin too old to read 3.0 is answered HTTP 426, the update answer, instead. It never comes with view: a 3.0 bundle has no file list per host.",
+                    "description": "The 3.0 form of the request, with format bundle: one level and the promised files wanted, by name, or one Extra. A level request is served: the answer is a link to that level of the bundle, or, with files named, to exactly those files at that level; a file the bundle does not hold is refused by name (HTTP 404, code file_not_in_bundle). An Extra is served: the answer is the link to its own download (url and expiresAt), behind the same gates as the bundle, and an Extra the bundle does not hold is refused (HTTP 404, code extra_not_in_bundle). The plan sheets and the terrain tiles of a free bundle are refused (HTTP 403, code extra_locked): they come with a paid or kept bundle. A plugin too old to read 3.0 is answered HTTP 426, the update answer, instead. It never comes with view: a 3.0 bundle has no file list per host.",
                     "anyOf": [
                       {
                         "type": "object",
@@ -2172,6 +2183,8 @@
                                 "Basemap/Water.dxf",
                                 "Basemap/Landuse.gpkg",
                                 "Basemap/Landuse.dxf",
+                                "Basemap/Pavement.gpkg",
+                                "Basemap/Pavement.dxf",
                                 "Records/Parcels.gpkg",
                                 "Records/Parcels.dxf",
                                 "Records/Zoning.gpkg",
@@ -2190,6 +2203,8 @@
                                 "Records/Hydrography.dxf",
                                 "Records/Contamination.gpkg",
                                 "Records/Contamination.dxf",
+                                "Records/Habitat.gpkg",
+                                "Records/Habitat.dxf",
                                 "Site/Site.usdz",
                                 "Site/Site.ifc",
                                 "Site/Site.dxf"
@@ -2303,7 +2318,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "description": "Not the order of the bearer, or not downloadable. Code: forbidden or not_ready.",
+            "description": "Not the order of the bearer, or not downloadable. Code: forbidden or not_ready. A request for the plan sheets or the terrain tiles of a free bundle: code extra_locked, with the Extra in extra; they come with a paid or kept bundle, and a keep unlocks them at once.",
             "content": {
               "application/json": {
                 "schema": {

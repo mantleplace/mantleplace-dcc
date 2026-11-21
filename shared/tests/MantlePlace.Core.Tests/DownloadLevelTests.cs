@@ -24,7 +24,7 @@ internal static class DownloadLevelTests
             VaultBundle large = ListedExample("mpb3LargeSite");
             run.True(large.Levels is not null, "the offer is read");
             LevelOffer offer = large.Levels!;
-            run.Equal(offer.Recommended, FidelityLevel.Med, "Med is recommended for the large site");
+            run.Equal(offer.Recommended, FidelityLevel.Min, "Min is recommended for the large site, to Revit");
             run.Equal(offer.Levels.Count, 3, "three levels");
             run.True(offer.Levels.Select(level => level.Level).SequenceEqual(DownloadLevels.Offered), "Max, Med, Min in order");
             run.True(offer.SizeOf(FidelityLevel.Max).SizeBytes == 1811415040L, "Max's size");
@@ -34,6 +34,29 @@ internal static class DownloadLevelTests
             run.Equal(offer.Extras[0].Name, "Site Brief", "named as a curator sees them");
 
             run.Equal(ListedExample("mpb3SmallSite").Levels!.Recommended, FidelityLevel.Max, "Max for the small site");
+        });
+
+        run.Case("a free site's plan sheets and terrain tiles are locked rows with no download; a large site's are not", () =>
+        {
+            LevelControl small = LevelControl.For(ListedExample("mpb3SmallSite"))!;
+            run.True(small.Offer.Extras.Select(extra => extra.Locked).SequenceEqual([false, true, true]), "the Site Brief is never locked");
+            run.Equal(WindowLabels.LockedExtrasWords, "More Extras come with paid sites", "the founder's words");
+            run.True(
+                small.LockedRows.SequenceEqual(
+                [
+                    "Plan sheets — More Extras come with paid sites",
+                    "Terrain tiles — More Extras come with paid sites",
+                ]),
+                "one locked row for each, in the platform's order");
+
+            LevelControl large = LevelControl.For(ListedExample("mpb3LargeSite"))!;
+            run.True(large.Offer.Extras.All(extra => !extra.Locked), "a kept or paid bundle lists them unlocked");
+            run.Equal(large.LockedRows.Count, 0, "so no locked row");
+
+            run.True(
+                VaultListingReader.TryParse("""{ "bundles": [ { "id": "c", "mpb3": { "version": "3.0", "recommendedLevel": "Max", "levels": { "Max": { "sizeBytes": 1 }, "Med": { "sizeBytes": 1 }, "Min": { "sizeBytes": 1 } }, "extras": [ { "id": "PlanSheets", "name": "Plan sheets", "sizeBytes": 5 } ] } } ] }""", out VaultListing older) is null,
+                "parsed");
+            run.False(older.Bundles[0].Levels!.Extras[0].Locked, "a platform that does not say is a platform that does not lock");
         });
 
         run.Case("a 2.x row has no levels, and a 3.0 offer that cannot be read is said, not guessed", () =>
@@ -55,12 +78,12 @@ internal static class DownloadLevelTests
             run.Equal(LevelControl.Heading, "Fidelity Level", "the glossary's term beside it");
             run.Equal(control.Options.Count, 3, "three choices");
             run.Equal(control.Options[0].Label, "Max — 1.8 GB", "Max with its size");
-            run.Equal(control.Options[1].Label, "Med — 1.4 GB (recommended)", "Med with its size, marked as the recommendation");
-            run.Equal(control.Options[2].Label, "Min — 1.2 GB", "Min with its size");
-            run.True(control.Options[1].IsRecommended && !control.Options[0].IsRecommended, "one recommendation");
+            run.Equal(control.Options[1].Label, "Med — 1.4 GB", "Med with its size");
+            run.Equal(control.Options[2].Label, "Min — 1.2 GB (recommended)", "Min with its size, marked as the recommendation");
+            run.True(control.Options[2].IsRecommended && !control.Options[0].IsRecommended && !control.Options[1].IsRecommended, "one recommendation");
             run.Equal(control.Options[1].ToolTip, "Med: 700,000 rows, 212,000 features, 48,000,000 triangles, 16,777,216 pixels", "the counts behind the size");
-            run.Equal(control.Selected, FidelityLevel.Med, "preselected on the recommendation");
-            run.Equal(control.SelectedIndex, 1, "the control shows it");
+            run.Equal(control.Selected, FidelityLevel.Min, "preselected on the recommendation");
+            run.Equal(control.SelectedIndex, 2, "the control shows it");
 
             run.True(control.Choose(FidelityLevel.Max), "the curator chooses Max");
             run.Equal(control.Selected, FidelityLevel.Max, "and Max is what downloads");
@@ -76,10 +99,10 @@ internal static class DownloadLevelTests
         {
             VaultBundle large = ListedExample("mpb3LargeSite");
             LevelControl first = LevelControl.For(large)!;
-            first.Choose(FidelityLevel.Min);
+            first.Choose(FidelityLevel.Med);
 
-            run.Equal(LevelControl.For(large)!.Selected, FidelityLevel.Med, "built again for the export, it is on the recommendation");
-            run.Equal(DownloadLevels.SlotLevel(large), "MED", "the export's cache slot is the recommendation's");
+            run.Equal(LevelControl.For(large)!.Selected, FidelityLevel.Min, "built again for the export, it is on the recommendation");
+            run.Equal(DownloadLevels.SlotLevel(large), "MIN", "the export's cache slot is the recommendation's");
             run.Equal(DownloadLevels.SlotLevel(Two()), HostViews.EveryEntryLevel, "a 2.x order's slot is the one it always was");
         });
 
@@ -88,25 +111,25 @@ internal static class DownloadLevelTests
             VaultBundle large = ListedExample("mpb3LargeSite");
             LevelSwitch sent = new(LevelControl.For(large)!);
 
-            run.Equal(sent.Control.Selected, FidelityLevel.Med, "the window a send opens is on the recommendation");
-            run.Equal(sent.Held, FidelityLevel.Med, "which is the level the send was fetched at");
+            run.Equal(sent.Control.Selected, FidelityLevel.Min, "the window a send opens is on the recommendation");
+            run.Equal(sent.Held, FidelityLevel.Min, "which is the level the send was fetched at");
             run.True(sent.CanImport, "so Import may run at once");
-            run.True(sent.Choose(FidelityLevel.Med) is null, "choosing the level the slot holds fetches nothing");
+            run.True(sent.Choose(FidelityLevel.Min) is null, "choosing the level the slot holds fetches nothing");
 
-            run.True(sent.Choose(FidelityLevel.Min) == FidelityLevel.Min, "another level is downloaded");
+            run.True(sent.Choose(FidelityLevel.Med) == FidelityLevel.Med, "another level is downloaded");
             run.False(sent.CanImport, "and Import waits for it");
             run.True(sent.Choose(FidelityLevel.Max) is null, "one download at a time");
             sent.Fetched(ready: true);
-            run.Equal(sent.Held, FidelityLevel.Min, "the slot now holds Min");
+            run.Equal(sent.Held, FidelityLevel.Med, "the slot now holds Med");
             run.True(sent.CanImport, "and Import reads it");
 
             run.True(sent.Choose(FidelityLevel.Max) == FidelityLevel.Max, "another choice");
             sent.Fetched(ready: false);
-            run.Equal(sent.Control.Selected, FidelityLevel.Min, "a failed download puts the control back on the level the slot holds");
+            run.Equal(sent.Control.Selected, FidelityLevel.Med, "a failed download puts the control back on the level the slot holds");
             run.True(sent.CanImport, "and Import reads that");
 
-            run.Equal(LevelControl.At(large, FidelityLevel.Min)!.Selected, FidelityLevel.Min, "a window reopened on a fresh download is on its level");
-            run.Equal(LevelControl.At(large, FidelityLevel.Raw)!.Selected, FidelityLevel.Med, "a level not offered leaves it on the recommendation");
+            run.Equal(LevelControl.At(large, FidelityLevel.Med)!.Selected, FidelityLevel.Med, "a window reopened on a fresh download is on its level");
+            run.Equal(LevelControl.At(large, FidelityLevel.Raw)!.Selected, FidelityLevel.Min, "a level not offered leaves it on the recommendation");
             run.True(LevelControl.At(Two(), FidelityLevel.Min) is null, "a 2.x order shows no control");
         });
 
@@ -131,24 +154,24 @@ internal static class DownloadLevelTests
             LevelChoices choices = new();
 
             LevelControl shown = choices.ControlFor(large)!;
-            run.Equal(shown.Selected, FidelityLevel.Med, "before any choice, the control is on the recommendation");
-            run.True(choices.Choose(shown, FidelityLevel.Min), "the curator chooses Min");
+            run.Equal(shown.Selected, FidelityLevel.Min, "before any choice, the control is on the recommendation");
+            run.True(choices.Choose(shown, FidelityLevel.Med), "the curator chooses Med");
 
             // A row refresh clears the list's selection and seats the row again: the window asks for
             // the control twice, once for no row and once for the same order, now a fresh listing row.
             run.True(choices.ControlFor(null) is null, "no row selected shows no control");
             LevelControl reseated = choices.ControlFor(ListedExample("mpb3LargeSite"))!;
-            run.Equal(reseated.Selected, FidelityLevel.Min, "the control still shows the choice");
-            run.Equal(reseated.SlotLevel, "MIN", "and Download requests that level");
+            run.Equal(reseated.Selected, FidelityLevel.Med, "the control still shows the choice");
+            run.Equal(reseated.SlotLevel, "MED", "and Download requests that level");
 
             run.False(choices.Choose(reseated, FidelityLevel.Raw), "a level not offered is no choice");
-            run.Equal(choices.ControlFor(large)!.Selected, FidelityLevel.Min, "and the choice stands");
+            run.Equal(choices.ControlFor(large)!.Selected, FidelityLevel.Med, "and the choice stands");
 
             run.True(choices.Choose(reseated, FidelityLevel.Max), "the curator chooses again");
             run.Equal(choices.ControlFor(large)!.Selected, FidelityLevel.Max, "the latest choice stands");
 
             run.True(choices.ControlFor(Two()) is null, "a 2.x order has no control, as before");
-            run.True(new LevelChoices().ControlFor(large)!.Selected == FidelityLevel.Med, "a window with no choice is on the recommendation");
+            run.True(new LevelChoices().ControlFor(large)!.Selected == FidelityLevel.Min, "a window with no choice is on the recommendation");
         });
 
         run.Case("Revit's 3.0 files are files the published description promises", () =>
@@ -159,8 +182,8 @@ internal static class DownloadLevelTests
             string[] files = ["Elevation/Contours.dxf"];
             VaultBundle large = ListedExample("mpb3LargeSite");
 
-            run.True(SameJson(SentBody(large, FidelityLevel.Min, files), DownloadLevels.BuildRequestBody(FidelityLevel.Min, files)), "the chosen level and the host's files");
-            run.True(SameJson(SentBody(large, null, files), DownloadLevels.BuildRequestBody(FidelityLevel.Med, files)), "no level is the recommendation");
+            run.True(SameJson(SentBody(large, FidelityLevel.Med, files), DownloadLevels.BuildRequestBody(FidelityLevel.Med, files)), "the chosen level and the host's files");
+            run.True(SameJson(SentBody(large, null, files), DownloadLevels.BuildRequestBody(FidelityLevel.Min, files)), "no level is the recommendation");
             run.True(SameJson(SentBody(Two(), FidelityLevel.Min, files), HostViews.BuildRequestBody()), "a 2.x order sends its view request");
         });
 
@@ -247,7 +270,7 @@ internal static class DownloadLevelTests
             run.Equal(download.Bodies.Count, 2, "asked twice");
             run.True(Files(download.Bodies[0]).SequenceEqual(BundleImportPlanner.ThreeFiles), "first for every promised file");
             run.True(Files(download.Bodies[1]).SequenceEqual(BundleImportPlanner.ThreeFiles.Except(absent)), "then for only the files left, in the order asked");
-            run.Equal((string?)JsonNode.Parse(download.Bodies[1])!["mpb3"]!["level"], "Med", "at the same level");
+            run.Equal((string?)JsonNode.Parse(download.Bodies[1])!["mpb3"]!["level"], "Min", "at the same level");
             run.Equal(storage.Served, 1, "and the link was fetched");
         });
 

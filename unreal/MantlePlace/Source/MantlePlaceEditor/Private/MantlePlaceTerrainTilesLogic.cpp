@@ -88,11 +88,12 @@ FMantlePlaceTerrainTilesLogic::EFetchPlan FMantlePlaceTerrainTilesLogic::PlanFet
 	{
 		return EFetchPlan::Reuse;
 	}
-	if (Item == nullptr || Item->FindExtra(MantlePlaceTerrainTilesExtraId()) == nullptr)
+	const FMantlePlaceVaultExtra* Tiles = Item != nullptr ? Item->FindExtra(MantlePlaceTerrainTilesExtraId()) : nullptr;
+	if (Tiles == nullptr)
 	{
 		return EFetchPlan::NoTilesListed;
 	}
-	return EFetchPlan::Fetch;
+	return Tiles->bLocked ? EFetchPlan::Locked : EFetchPlan::Fetch;
 }
 
 bool FMantlePlaceTerrainTilesLogic::SizeMatches(int64 StatedBytes, int64 ActualBytes)
@@ -103,6 +104,11 @@ bool FMantlePlaceTerrainTilesLogic::SizeMatches(int64 StatedBytes, int64 ActualB
 FString FMantlePlaceTerrainTilesLogic::NoTilesListedReason()
 {
 	return TEXT("Streaming into Cesium is not available for this order: the platform lists no terrain tiles for it.");
+}
+
+FString FMantlePlaceTerrainTilesLogic::LockedReason()
+{
+	return MantlePlaceLockedExtrasWords();
 }
 
 FString FMantlePlaceTerrainTilesLogic::NoTilesBesideReason()

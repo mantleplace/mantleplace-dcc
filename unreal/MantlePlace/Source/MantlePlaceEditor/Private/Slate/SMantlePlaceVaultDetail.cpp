@@ -197,6 +197,53 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 		}
 	}
 
+	// The Extras frame, only for an MPB 3.0 bundle that lists some. A locked Extra is the words and nothing to
+	// press: the platform refuses it, so no download is offered. A free bundle says what comes with paid builds.
+	const TSharedRef<SVerticalBox> ExtrasBox = SNew(SVerticalBox);
+	if (View.Extras.Num() > 0)
+	{
+		ExtrasBox->AddSlot().AutoHeight()
+		[
+			SNew(STextBlock)
+			.Text(LOCTEXT("Extras", "EXTRAS"))
+			.Font(FMantlePlaceEditorStyle::GetFont(EFont::Mono))
+			.ColorAndOpacity(FSlateColor(MantlePlacePalette::Sub()))
+		];
+		if (!View.PaidOnlyNote.IsEmpty())
+		{
+			ExtrasBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S3, 0.f, 0.f)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(View.PaidOnlyNote))
+				.Font(FMantlePlaceEditorStyle::GetFont(EFont::Small))
+				.ColorAndOpacity(FSlateColor(MantlePlacePalette::Subtle()))
+				.AutoWrapText(true)
+			];
+		}
+		for (const FMantlePlaceVaultExtraView& Extra : View.Extras)
+		{
+			ExtrasBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S3, 0.f, 0.f)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(STextBlock)
+					.Text(FText::FromString(Extra.Label))
+					.Font(FMantlePlaceEditorStyle::GetFont(EFont::Body))
+					.ColorAndOpacity(FSlateColor(Extra.bLocked ? MantlePlacePalette::Faint() : MantlePlacePalette::White()))
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S6, 0.f, 0.f)
+				[
+					SNew(STextBlock)
+					.Text(FText::FromString(Extra.SubLine))
+					.Font(FMantlePlaceEditorStyle::GetFont(EFont::Mono))
+					.ColorAndOpacity(FSlateColor(MantlePlacePalette::Faint()))
+					.AutoWrapText(true)
+				]
+			];
+		}
+	}
+
 	// Paint the same onyx panel backdrop the list page draws so both switcher states share one palette
 	// (the scroll body would otherwise fall back to the editor's default grey).
 	ChildSlot
@@ -227,6 +274,16 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 					.BorderImage(FMantlePlaceEditorStyle::Get().GetBrush("MantlePlace.Frame"))
 					.Padding(FMargin(FMantlePlaceEditorStyle::S2))
 					[ ArtifactsBox ]
+				]
+
+				// Extras frame (an MPB 3.0 bundle's own; collapsed when it lists none).
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S2, 0.f, 0.f)
+				[
+					SNew(SBorder)
+					.Visibility(View.Extras.Num() > 0 ? EVisibility::Visible : EVisibility::Collapsed)
+					.BorderImage(FMantlePlaceEditorStyle::Get().GetBrush("MantlePlace.Frame"))
+					.Padding(FMargin(FMantlePlaceEditorStyle::S2))
+					[ ExtrasBox ]
 				]
 			]
 		]

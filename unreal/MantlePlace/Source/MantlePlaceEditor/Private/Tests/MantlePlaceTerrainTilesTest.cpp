@@ -145,6 +145,15 @@ bool FMantlePlaceTerrainTilesLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("tiles on disk: a second ask fetches nothing, whatever the listing says"),
 			L::PlanFetch(true, &Listed) == L::EFetchPlan::Reuse && L::PlanFetch(true, nullptr) == L::EFetchPlan::Reuse);
 		TestTrue(TEXT("listed and not on disk: fetch"), L::PlanFetch(false, &Listed) == L::EFetchPlan::Fetch);
+		FMantlePlaceVaultItem Locked;
+		FMantlePlaceVaultExtra LockedTiles;
+		LockedTiles.Id = MantlePlaceTerrainTilesExtraId();
+		LockedTiles.bLocked = true;
+		Locked.Extras.Add(LockedTiles);
+		TestTrue(TEXT("listed but locked on a free bundle: nothing is fetched, the platform would refuse it"),
+			L::PlanFetch(false, &Locked) == L::EFetchPlan::Locked);
+		TestTrue(TEXT("tiles already on disk are used even when the listing now locks them"),
+			L::PlanFetch(true, &Locked) == L::EFetchPlan::Reuse);
 		TestTrue(TEXT("the platform lists other Extras but no terrain tiles: disabled"),
 			L::PlanFetch(false, &Unlisted) == L::EFetchPlan::NoTilesListed);
 		TestTrue(TEXT("the listing holds no such order: disabled"), L::PlanFetch(false, nullptr) == L::EFetchPlan::NoTilesListed);
@@ -156,6 +165,7 @@ bool FMantlePlaceTerrainTilesLogicTest::RunTest(const FString& Parameters)
 
 	// The reasons say what is wrong and how to go on.
 	TestTrue(TEXT("none listed names the cause"), L::NoTilesListedReason().Contains(TEXT("lists no terrain tiles")));
+	TestEqual(TEXT("locked says the locked row's words"), L::LockedReason(), FString(MantlePlaceLockedExtrasWords()));
 	TestTrue(TEXT("none beside names the file and the way on"),
 		L::NoTilesBesideReason().Contains(L::TilesFileName()) && L::NoTilesBesideReason().Contains(TEXT("vault")));
 	return true;

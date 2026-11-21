@@ -153,6 +153,15 @@ public static partial class WindowLabels
     /// </summary>
     public const string DownloadLevelHeading = LevelHeading;
 
+    /// <summary>
+    /// What a locked Extra says in place of a download: the plan sheets and the terrain tiles of a free
+    /// bundle come with a paid or kept one.
+    /// </summary>
+    public const string LockedExtrasWords = "More Extras come with paid sites";
+
+    /// <summary>One locked Extra's row: its name, then the words. <c>Plan sheets — More Extras come with paid sites</c>.</summary>
+    public static string LockedExtraRow(string name) => $"{name} — {LockedExtrasWords}";
+
     /// <summary>The words that mark the level the platform recommends for this host and site.</summary>
     public const string RecommendedLevel = "recommended";
 

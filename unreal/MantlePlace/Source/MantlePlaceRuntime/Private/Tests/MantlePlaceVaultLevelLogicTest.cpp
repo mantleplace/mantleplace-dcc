@@ -293,6 +293,39 @@ bool FMantlePlaceVaultExtrasTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("The levels are unharmed"), Items[0].bHasLevels && Items[0].Levels.Num() == 3);
 	}
 
+	// The platform marks each Extra locked or not: the Site Brief never, the plan sheets and terrain tiles on a
+	// free bundle. A row that does not say is a row that does not lock.
+	{
+		const FString Extras = TEXT(",\"extras\":["
+			"{\"id\":\"SiteBrief\",\"name\":\"Site Brief\",\"sizeBytes\":1468006,\"locked\":false},"
+			"{\"id\":\"PlanSheets\",\"name\":\"Plan sheets\",\"sizeBytes\":272630,\"locked\":true},"
+			"{\"id\":\"TerrainTiles\",\"name\":\"Terrain tiles\",\"sizeBytes\":31457,\"locked\":true}]");
+		TArray<FMantlePlaceVaultItem> Items;
+		FString Error;
+		FLogic::ParseListResponse(
+			ListWithRow(FString(TEXT("{\"version\":\"3.0\",\"recommendedLevel\":\"Max\",")) + LevelsJson + Extras + TEXT("}")),
+			Items, Error);
+		if (TestEqual(TEXT("One row"), Items.Num(), 1) && TestEqual(TEXT("Three Extras"), Items[0].Extras.Num(), 3))
+		{
+			TestFalse(TEXT("The Site Brief is never locked"), Items[0].Extras[0].bLocked);
+			TestTrue(TEXT("The plan sheets are locked"), Items[0].Extras[1].bLocked);
+			TestTrue(TEXT("The terrain tiles are locked"), Items[0].Extras[2].bLocked);
+			TestTrue(TEXT("The row has locked Extras"), Items[0].HasLockedExtras());
+		}
+	}
+	{
+		TArray<FMantlePlaceVaultItem> Items;
+		FString Error;
+		FLogic::ParseListResponse(
+			ListWithRow(FString(TEXT("{\"version\":\"3.0\",\"recommendedLevel\":\"Med\",")) + LevelsJson
+				+ TEXT(",\"extras\":[{\"id\":\"PlanSheets\",\"name\":\"Plan sheets\",\"sizeBytes\":1}]}")),
+			Items, Error);
+		if (TestEqual(TEXT("One row"), Items.Num(), 1))
+		{
+			TestFalse(TEXT("An Extra the platform does not mark is not locked"), Items[0].HasLockedExtras());
+		}
+	}
+
 	// A row that lists no terrain tiles has none to ask for: nothing is requested.
 	{
 		TArray<FMantlePlaceVaultItem> Items;

@@ -251,6 +251,14 @@ internal static class SharedWindowsTests
             }
         });
 
+        run.Case("the level row draws a locked Extra as the control's words and nothing to press", () =>
+        {
+            string? shared = RepoTree.Find(SharedWindowsFolder);
+            string row = shared is null ? string.Empty : File.ReadAllText(Path.Combine(shared, "LevelChoiceRow.cs"));
+            run.True(row.Contains("control.LockedRows", StringComparison.Ordinal), "it draws the rows the control decided");
+            run.True(!row.Contains("Button", StringComparison.Ordinal), "and offers no button, so no request for a locked Extra");
+        });
+
         return run.Report("shared windows");
     }
 

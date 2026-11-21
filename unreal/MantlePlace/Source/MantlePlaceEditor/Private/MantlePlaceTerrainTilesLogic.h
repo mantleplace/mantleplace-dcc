@@ -79,6 +79,9 @@ struct FMantlePlaceTerrainTilesLogic
 
 		/** The platform lists no terrain tiles for the order (or no such order): the action is disabled. */
 		NoTilesListed,
+
+		/** The platform lists them locked, the bundle being free: nothing is requested; the locked row's words. */
+		Locked,
 	};
 
 	/** `Item` is the listing row of the bundle's order, or null when the listing holds no such order. */
@@ -89,6 +92,7 @@ struct FMantlePlaceTerrainTilesLogic
 
 	// The words of each refusal. One home, so the log, the Python helper and the tests say the same thing.
 	static FString NoTilesListedReason();
+	static FString LockedReason();
 	static FString NoTilesBesideReason();
 	static FString NotFetchedYetMessage();
 	static FString NotATilesetReason();
