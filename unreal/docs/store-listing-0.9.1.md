@@ -108,8 +108,8 @@ mantle.place account.
 
 ## Reviewer instructions
 
-1. Open `https://mantle.place/mpb-samples` and download one of the sample bundle zips. Do not
-   unzip it.
+1. Open `https://mantle.place/samples` and download a sample bundle at one level, such as Austin
+   Downtown at Min (about 90 MB). Do not unzip it.
 2. Install the plugin, open an Unreal Engine project in the version the listing names, accept the
    prompt to enable it, then restart when asked.
 3. Choose **Window > Mantle Place**.
@@ -119,5 +119,5 @@ mantle.place account.
 6. To keep the result, use **File > Save All**.
 
 No sign-in or account is used in these steps. The sample bundles carry OpenStreetMap-derived data under
-the ODbL; each file holds its notice. The samples page serves MPB 2.0 bundles, so this walk-through
-exercises the 2.x path; the MPB 3.0 path needs an order from an account.
+the ODbL; each file holds its notice. The samples are MPB 3.0 bundles, so this walk-through exercises
+the 3.0 path; choosing a level inside the plugin needs an order from an account.

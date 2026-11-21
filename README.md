@@ -94,10 +94,10 @@ is what [Building](#building) below covers.
 
 ## Get a real bundle in minutes
 
-**Four MPB 2.0 sample bundles are published at [mantle.place/mpb-samples](https://mantle.place/mpb-samples)**,
+**Four MPB 3.0 sample bundles are published at [mantle.place/samples](https://mantle.place/samples)**,
 one per delivery frame: UTM metres (Austin), State Plane US survey feet (Charlotte), a local site grid in
-feet (St. Louis) and one outside the US (Zurich). Each comes with `CheckPoints.json` and `CheckPoints.csv`,
-known coordinates to test a reader's placement against. They carry ODbL data (OpenStreetMap, Overture):
+feet (St. Louis) and one outside the US (Zurich), each at the Max, Med and Min levels with its Extras.
+They carry ODbL data (OpenStreetMap, Overture):
 every ODbL file holds its notice and the licence link inside it, so keep them with any file you pass on.
 The bundles are served from there; this repository still ships none, because a repository that carries a
 bundle redistributes its data. To make one over your own ground, the free tier takes minutes, not a
