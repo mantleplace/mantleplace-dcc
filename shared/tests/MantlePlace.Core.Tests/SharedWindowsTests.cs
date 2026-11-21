@@ -255,7 +255,21 @@ internal static class SharedWindowsTests
         {
             string? shared = RepoTree.Find(SharedWindowsFolder);
             string row = shared is null ? string.Empty : File.ReadAllText(Path.Combine(shared, "LevelChoiceRow.cs"));
-            run.True(row.Contains("control.LockedRows", StringComparison.Ordinal), "it draws the rows the control decided");
+            // WPF cannot load in this headless suite, so the drawing is read as its source: the loop over the
+            // control's rows must add a TextBlock to the locked panel, showing the row's words, greyed.
+            Match drawn = Regex.Match(
+                row,
+                @"foreach\s*\(\s*string\s+(?<r>\w+)\s+in\s+control\.LockedRows\s*\)\s*\{(?<body>.*?)\r?\n            \}",
+                RegexOptions.CultureInvariant | RegexOptions.Singleline);
+            string body = drawn.Groups["body"].Value;
+            run.True(drawn.Success, "it loops over the rows the control decided");
+            run.True(
+                Regex.IsMatch(body, @"^\s*_locked\.Children\.Add\(\s*new\s+TextBlock\b", RegexOptions.CultureInvariant),
+                "and adds a TextBlock to the locked panel for each, as the first thing it does");
+            run.True(
+                Regex.IsMatch(body, $@"Text\s*=\s*{Regex.Escape(drawn.Groups["r"].Value)}\s*,", RegexOptions.CultureInvariant),
+                "showing the row's words");
+            run.True(body.Contains("IsEnabled = false", StringComparison.Ordinal), "disabled, so there is nothing to press");
             run.True(!row.Contains("Button", StringComparison.Ordinal), "and offers no button, so no request for a locked Extra");
         });
 
