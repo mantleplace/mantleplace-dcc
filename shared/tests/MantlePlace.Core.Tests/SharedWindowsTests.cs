@@ -262,6 +262,14 @@ internal static class SharedWindowsTests
                 @"foreach\s*\(\s*string\s+(?<r>\w+)\s+in\s+control\.LockedRows\s*\)\s*\{(?<body>.*?)\r?\n            \}",
                 RegexOptions.CultureInvariant | RegexOptions.Singleline);
             string body = drawn.Groups["body"].Value;
+            // The rows are only drawn if the panel they are added to is itself in the row: a loop adding to a panel
+            // nobody attached draws nothing, so the attachment is held in the constructor, ahead of any Show.
+            Match ctor = Regex.Match(row, @"public\s+LevelChoiceRow\s*\(\s*\)\s*\{(?<body>.*?)?
+    \}", RegexOptions.CultureInvariant | RegexOptions.Singleline);
+            run.True(ctor.Success, "the row has its constructor");
+            run.True(
+                Regex.IsMatch(ctor.Groups["body"].Value, @"^\s*Children\.Add\(\s*_locked\s*\)\s*;", RegexOptions.CultureInvariant | RegexOptions.Multiline),
+                "the locked panel is attached to the row in the constructor, so what is added to it is drawn");
             run.True(drawn.Success, "it loops over the rows the control decided");
             run.True(
                 Regex.IsMatch(body, @"^\s*_locked\.Children\.Add\(\s*new\s+TextBlock\b", RegexOptions.CultureInvariant),
