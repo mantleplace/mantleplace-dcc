@@ -153,6 +153,12 @@ names what to ask for, never how the wire is shaped.
 - **Extras are separate downloads** beside the bundle: the Site Brief, the plan sheets and the terrain
   tiles. They carry no version promise, and the manifest names none of them
   ([`format.md`](../spec/format.md) §1, §9.9).
+- **A locked Extra is a locked row, not a download.** The listing marks each Extra `locked`: true for the
+  plan sheets and the terrain tiles while the bundle is free, never for the Site Brief. Show a locked
+  Extra as a row with the words `More Extras come with paid sites` and offer no download; the platform
+  refuses a request for it (HTTP 403, code `extra_locked`, with the Extra in `extra`), and a reader that
+  meets that answer shows the same row, not an error. A kept or paid bundle lists them unlocked at once,
+  with no rebuild.
 - **The 3.0 form of these requests may be published ahead of the behaviour.** Read the served spec for
   whether it is live before you depend on it.
 

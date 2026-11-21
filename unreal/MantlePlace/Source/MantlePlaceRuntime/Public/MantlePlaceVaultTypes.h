@@ -228,9 +228,11 @@ struct FMantlePlaceLevelSize
 };
 
 /**
- * One Extra of an MPB 3.0 order, as its vault listing row lists it (`mpb3.extras`): a free download beside the
+ * One Extra of an MPB 3.0 order, as its vault listing row lists it (`mpb3.extras`): a download beside the
  * bundle, outside the standard (spec/format.md 9.9). Id is the platform's own token (`SiteBrief`, `PlanSheets`,
  * `TerrainTiles`); the plugin asks for the one it uses by that token and shows the platform's name verbatim.
+ * The Site Brief is free on every bundle; the plan sheets and the terrain tiles come with a paid or kept
+ * bundle, and the platform marks them locked while the bundle is free.
  */
 USTRUCT(BlueprintType)
 struct FMantlePlaceVaultExtra
@@ -248,7 +250,27 @@ struct FMantlePlaceVaultExtra
 	/** The size of the Extra's download, as a zip ("sizeBytes"); 0 when the row stated none. */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	int64 SizeBytes = 0;
+
+	/**
+	 * True while the bundle is free and this Extra comes only with a paid or kept bundle ("locked"). It is
+	 * shown as a locked row with no download and never requested: the platform refuses it (HTTP 403, code
+	 * `extra_locked`). A row that does not say is read as not locked.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
+	bool bLocked = false;
 };
+
+/** What a locked Extra says in place of a download, in every surface of this plugin. */
+inline const TCHAR* MantlePlaceLockedExtrasWords()
+{
+	return TEXT("More Extras come with paid sites");
+}
+
+/** What the proof view of a free bundle says of the Extras it does not hold. */
+inline const TCHAR* MantlePlacePaidBuildsWords()
+{
+	return TEXT("Plan sheets and terrain tiles come with paid builds.");
+}
 
 /** The id the platform gives the terrain tiles Extra (`mpb3.extras[].id`), spelled exactly. */
 inline const TCHAR* MantlePlaceTerrainTilesExtraId()
@@ -363,6 +385,12 @@ struct FMantlePlaceVaultItem
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	TArray<FMantlePlaceVaultExtra> Extras;
+
+	/** True when the platform locks at least one of the listed Extras: the bundle is free. */
+	bool HasLockedExtras() const
+	{
+		return Extras.ContainsByPredicate([](const FMantlePlaceVaultExtra& Extra) { return Extra.bLocked; });
+	}
 
 	/** The listed Extra with this id, spelled exactly, or null when the platform lists none. */
 	const FMantlePlaceVaultExtra* FindExtra(const FString& ExtraId) const

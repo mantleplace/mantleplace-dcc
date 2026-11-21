@@ -249,6 +249,20 @@ FMantlePlaceVaultDetailView BuildVaultDetailView(const FMantlePlaceVaultItem& It
 	View.bHasManifestVersion = Item.bHasManifestVersion;
 	View.ManifestVersion = Item.ManifestVersion;
 
+	// The Extras the platform lists: a locked one is the words and nothing to download.
+	for (const FMantlePlaceVaultExtra& Extra : Item.Extras)
+	{
+		FMantlePlaceVaultExtraView Row;
+		Row.Label = Extra.Name.IsEmpty() ? Extra.Id : Extra.Name;
+		Row.bLocked = Extra.bLocked;
+		Row.SubLine = Extra.bLocked ? FString(MantlePlaceLockedExtrasWords()) : FormatVaultBytes(Extra.SizeBytes);
+		View.Extras.Add(MoveTemp(Row));
+	}
+	if (Item.HasLockedExtras())
+	{
+		View.PaidOnlyNote = MantlePlacePaidBuildsWords();
+	}
+
 	for (const FMantlePlaceVaultArtifact& Artifact : Item.DownloadFormats)
 	{
 		const FMantlePlaceFormatExplainer Explainer = GetFormatExplainer(Artifact.Format);

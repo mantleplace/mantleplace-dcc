@@ -131,10 +131,16 @@ void UMantlePlaceTerrainTilesFetcher::HandleListedNative(bool bSuccess, const TA
 	}
 	const FMantlePlaceVaultItem* Row = Bundles.FindByPredicate(
 		[this](const FMantlePlaceVaultItem& Item) { return Item.OrderId == ActiveOrderId; });
-	if (FMantlePlaceTerrainTilesLogic::PlanFetch(/*bTilesBesideUsable*/ false, Row)
-		== FMantlePlaceTerrainTilesLogic::EFetchPlan::NoTilesListed)
+	const FMantlePlaceTerrainTilesLogic::EFetchPlan Plan = FMantlePlaceTerrainTilesLogic::PlanFetch(/*bTilesBesideUsable*/ false, Row);
+	if (Plan == FMantlePlaceTerrainTilesLogic::EFetchPlan::NoTilesListed)
 	{
 		Finish(false, FMantlePlaceTerrainTilesLogic::NoTilesListedReason());
+		return;
+	}
+	if (Plan == FMantlePlaceTerrainTilesLogic::EFetchPlan::Locked)
+	{
+		// A free bundle: the platform would refuse the link, so none is asked for.
+		Finish(false, FMantlePlaceTerrainTilesLogic::LockedReason());
 		return;
 	}
 	ActiveExtra = *Row->FindExtra(MantlePlaceTerrainTilesExtraId());
@@ -150,7 +156,10 @@ void UMantlePlaceTerrainTilesFetcher::HandlePresignedNative(bool bSuccess, const
 	}
 	if (!bSuccess || Download.Url.IsEmpty())
 	{
-		Finish(false, FString::Printf(TEXT("Could not get a link for the terrain tiles: %s"), *Message));
+		// The platform refused the link as locked: the locked row's words, not "could not".
+		Finish(false, Message == FMantlePlaceTerrainTilesLogic::LockedReason()
+			? Message
+			: FString::Printf(TEXT("Could not get a link for the terrain tiles: %s"), *Message));
 		return;
 	}
 	Step = EStep::Downloading;

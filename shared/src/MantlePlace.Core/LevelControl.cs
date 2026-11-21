@@ -59,6 +59,13 @@ public sealed class LevelControl
     /// <summary>The index of <see cref="Selected"/> in <see cref="Options"/>.</summary>
     public int SelectedIndex => Options.ToList().FindIndex(option => option.Level == Selected);
 
+    /// <summary>
+    /// One row for each Extra the platform locks on this bundle, in its order, each with the words that
+    /// stand in place of a download. Empty on a kept or paid bundle, and on a row that lists no Extra.
+    /// </summary>
+    public IReadOnlyList<string> LockedRows
+        => [.. Offer.Extras.Where(extra => extra.Locked).Select(extra => WindowLabels.LockedExtraRow(extra.Name))];
+
     /// <summary>The cache slot level the selected level is downloaded into (<see cref="DownloadLevels.SlotLevel"/>).</summary>
     public string SlotLevel => DownloadLevels.SlotLevel(Bundle, Selected);
 

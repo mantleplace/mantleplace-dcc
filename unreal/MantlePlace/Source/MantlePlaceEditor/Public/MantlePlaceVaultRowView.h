@@ -104,6 +104,14 @@ FString FormatDeliveredAs(const TArray<FString>& Formats);
  * unit-testable. Deliberately omits any advanced-processing / format-catalog fields - the editor
  * surface only imports; format generation lives on the website.
  */
+/** One Extra of an MPB 3.0 bundle on the detail page: a row with its size, or a locked row with the words and no download. */
+struct FMantlePlaceVaultExtraView
+{
+	FString Label;     // the platform's name for it, e.g. "Plan sheets"
+	FString SubLine;   // its size, or "More Extras come with paid sites" when locked
+	bool bLocked = false;
+};
+
 struct FMantlePlaceVaultDetailView
 {
 	FString Codename;                          // capitalized AOI label
@@ -122,6 +130,8 @@ struct FMantlePlaceVaultDetailView
 	bool bHasManifestVersion = false;
 	FString ManifestVersion;   // verbatim, both families — rendered, never gated on
 	TArray<FMantlePlaceVaultArtifactView> Artifacts;
+	TArray<FMantlePlaceVaultExtraView> Extras;  // an MPB 3.0 bundle's Extras; empty on a 2.x bundle
+	FString PaidOnlyNote;                      // "Plan sheets and terrain tiles come with paid builds." on a free bundle, else empty
 	FString PrimaryLabel;                      // "Import"
 	bool bPrimaryEnabled = false;              // Available && !bBusy
 };

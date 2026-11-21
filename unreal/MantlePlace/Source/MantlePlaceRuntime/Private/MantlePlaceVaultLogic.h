@@ -58,6 +58,12 @@ struct FMantlePlaceVaultLogic
 	 */
 	static bool ParseErrorBody(const FString& JsonStr, FString& OutError, FString& OutCode);
 
+	/**
+	 * True for the platform's refusal of an Extra a free bundle does not hold: HTTP 403 with code
+	 * `extra_locked`. It is the locked row, not a failure: the surface shows MantlePlaceLockedExtrasWords().
+	 */
+	static bool IsExtraLockedRefusal(int32 ResponseCode, const FString& JsonStr);
+
 	/** Map a status string to the enum; unrecognized strings -> Unknown (not a parse error). */
 	static EMantlePlaceVaultBundleStatus ParseStatus(const FString& Status);
 

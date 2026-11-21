@@ -602,7 +602,7 @@ internal static class ConnectedHostTests
 
                 run.Equal(fetched.Kind, ExportFetchKind.Ready, $"the fetch is ready ({fetched.Message})");
                 run.Equal(handler.Downloads.Count, 1, "one level download");
-                run.Equal((string?)System.Text.Json.Nodes.JsonNode.Parse(handler.Downloads[0])!["mpb3"]!["level"], "Med", "at the recommendation, since a send names no level");
+                run.Equal((string?)System.Text.Json.Nodes.JsonNode.Parse(handler.Downloads[0])!["mpb3"]!["level"], "Min", "at the recommendation, since a send names no level");
                 run.Equal(storage.Served, 1, "and the link was fetched");
 
                 ExportDesk desk = Received();
@@ -612,7 +612,7 @@ internal static class ConnectedHostTests
 
                 LevelControl? control = LevelControl.For(source.Listed(listed.OrderId));
                 run.True(control is not null, "the window gets the level control from the row the fetch listed");
-                run.Equal(control?.Selected ?? FidelityLevel.Raw, FidelityLevel.Med, "on the recommendation");
+                run.Equal(control?.Selected ?? FidelityLevel.Raw, FidelityLevel.Min, "on the recommendation");
             }
             finally
             {

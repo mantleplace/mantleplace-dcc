@@ -485,6 +485,13 @@ void UMantlePlaceVaultClient::HandleDownloadAnswer(int32 ResponseCode, const FSt
 			return;
 		}
 
+		// An Extra a free bundle does not hold is the locked row, not an error: the words, and no code.
+		if (FMantlePlaceVaultLogic::IsExtraLockedRefusal(ResponseCode, Content))
+		{
+			NotifyPresigned(false, Empty, MantlePlaceLockedExtrasWords());
+			return;
+		}
+
 		FString Error;
 		FString Code;
 		if (!FMantlePlaceVaultLogic::ParseErrorBody(Content, Error, Code))

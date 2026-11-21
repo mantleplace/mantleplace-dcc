@@ -310,10 +310,18 @@ void FMantlePlaceVaultLogic::ReadLevelOffer(const TSharedPtr<FJsonObject>& Row, 
 			{
 				(*Obj)->TryGetStringField(TEXT("name"), Extra.Name);
 				ReadCount(*Obj, TEXT("sizeBytes"), Extra.SizeBytes);
+				(*Obj)->TryGetBoolField(TEXT("locked"), Extra.bLocked); // absent or not a boolean: not locked
 				Item.Extras.Add(MoveTemp(Extra));
 			}
 		}
 	}
+}
+
+bool FMantlePlaceVaultLogic::IsExtraLockedRefusal(int32 ResponseCode, const FString& JsonStr)
+{
+	FString Error;
+	FString Code;
+	return ResponseCode == 403 && ParseErrorBody(JsonStr, Error, Code) && Code == TEXT("extra_locked");
 }
 
 FString FMantlePlaceVaultLogic::BuildExtraDownloadBody(const FString& ExtraId)

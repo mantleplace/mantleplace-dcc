@@ -191,6 +191,41 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("detail basemap"), D.bBasemap);
 	}
 
+	// 12b. Detail view of a free 3.0 bundle: the plan sheets and terrain tiles are locked rows with the words,
+	// the Site Brief is a row with its size, and the view says they come with paid builds. A paid bundle
+	// lists them unlocked, and says nothing of the kind.
+	{
+		FMantlePlaceVaultItem Item = MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("glb")});
+		FMantlePlaceVaultExtra Brief; Brief.Id = TEXT("SiteBrief"); Brief.Name = TEXT("Site Brief"); Brief.SizeBytes = 2048;
+		FMantlePlaceVaultExtra Plans; Plans.Id = TEXT("PlanSheets"); Plans.Name = TEXT("Plan sheets"); Plans.bLocked = true;
+		FMantlePlaceVaultExtra Tiles; Tiles.Id = TEXT("TerrainTiles"); Tiles.Name = TEXT("Terrain tiles"); Tiles.bLocked = true;
+		Item.Extras = {Brief, Plans, Tiles};
+
+		const FMantlePlaceVaultDetailView Free = BuildVaultDetailView(Item, false);
+		if (TestEqual(TEXT("three Extra rows"), Free.Extras.Num(), 3))
+		{
+			TestFalse(TEXT("the Site Brief row is not locked"), Free.Extras[0].bLocked);
+			TestEqual(TEXT("the Site Brief row shows its size"), Free.Extras[0].SubLine, FString(TEXT("2.0 KB")));
+			TestTrue(TEXT("the plan sheets row is locked"), Free.Extras[1].bLocked);
+			TestEqual(TEXT("the plan sheets row is named"), Free.Extras[1].Label, FString(TEXT("Plan sheets")));
+			TestEqual(TEXT("and says the words, with nothing to download"), Free.Extras[1].SubLine,
+				FString(TEXT("More Extras come with paid sites")));
+			TestTrue(TEXT("the terrain tiles row is locked"), Free.Extras[2].bLocked);
+		}
+		TestEqual(TEXT("the proof view says what comes with paid builds"), Free.PaidOnlyNote,
+			FString(TEXT("Plan sheets and terrain tiles come with paid builds.")));
+
+		Item.Extras[1].bLocked = false;
+		Item.Extras[2].bLocked = false;
+		const FMantlePlaceVaultDetailView Paid = BuildVaultDetailView(Item, false);
+		TestTrue(TEXT("a paid bundle's Extras are all unlocked rows"),
+			!Paid.Extras[0].bLocked && !Paid.Extras[1].bLocked && !Paid.Extras[2].bLocked);
+		TestTrue(TEXT("and it says nothing of paid builds"), Paid.PaidOnlyNote.IsEmpty());
+
+		TestEqual(TEXT("a 2.x bundle has no Extra rows"),
+			BuildVaultDetailView(MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("glb")}), false).Extras.Num(), 0);
+	}
+
 	// 13. Detail view for a non-Available bundle -> Import disabled.
 	{
 		const FMantlePlaceVaultDetailView D = BuildVaultDetailView(

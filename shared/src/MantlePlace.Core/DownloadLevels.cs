@@ -19,11 +19,16 @@ public readonly record struct LevelSize(
     long Triangles,
     long Pixels);
 
-/// <summary>One Extra of a 3.0 order: a free download outside the bundle.</summary>
+/// <summary>One Extra of a 3.0 order: a download outside the bundle, locked while the bundle is free.</summary>
 /// <param name="Id">The platform's id for it, which the request names.</param>
 /// <param name="Name">The name a curator sees.</param>
 /// <param name="SizeBytes">Its size.</param>
-public readonly record struct LevelExtra(string Id, string Name, long SizeBytes);
+/// <param name="Locked">
+/// The platform's word that the Extra comes only with a paid or kept bundle: shown as a locked row with
+/// no download, and never requested (the platform refuses it, HTTP 403, <c>extra_locked</c>). A listing
+/// that does not say is read as not locked.
+/// </param>
+public readonly record struct LevelExtra(string Id, string Name, long SizeBytes, bool Locked = false);
 
 /// <summary>
 /// The levels a 3.0 order offers, as one vault listing row states them: the level the platform
@@ -42,7 +47,7 @@ public sealed class LevelOffer
     /// <summary>Max, Med and Min, in that order, each with its size and counts.</summary>
     public required IReadOnlyList<LevelSize> Levels { get; init; }
 
-    /// <summary>The Extras, each free; empty when the row listed none.</summary>
+    /// <summary>The Extras, locked or not as the platform marks each; empty when the row listed none.</summary>
     public IReadOnlyList<LevelExtra> Extras { get; init; } = [];
 
     /// <summary>The size and counts of <paramref name="level"/>.</summary>
@@ -260,7 +265,11 @@ public static class DownloadLevels
             {
                 if (extra.ValueKind == JsonValueKind.Object && extra.Str("id") is { Length: > 0 } id)
                 {
-                    extras.Add(new LevelExtra(id, extra.Str("name"), Long(extra, "sizeBytes") ?? 0));
+                    extras.Add(new LevelExtra(
+                        id,
+                        extra.Str("name"),
+                        Long(extra, "sizeBytes") ?? 0,
+                        extra.TryGetProperty("locked", out JsonElement locked) && locked.ValueKind == JsonValueKind.True));
                 }
             }
         }
