@@ -103,9 +103,10 @@ A 3.0 bundle imports from the vault, from a zip on disk and from a send out of t
 as a 2.x bundle. The project's shared coordinates are turned by the grid rotation the manifest's local frame
 states, verbatim. That rotation is the grid's angle to true north at the site, which is not zero for a real
 order, and the plugin never places a bundle on a rotated grid beside an earlier import: so a project that already
-holds an import refuses a 3.0 bundle, the same order again included, and is left unchanged. Which angle a 3.x
-host applies is an open question of the format ([677](https://github.com/mantleplace/mantleplace-dcc/issues/677));
-until it is settled, a 3.0 order goes into a project that holds no earlier import. A layer file whose catalog entry names its tables is read
+holds an import refuses a 3.0 bundle at another point, and is left unchanged. The same order again is not refused:
+its point is the project's own, a zero offset takes no rotation, and it imports at the position the first import set.
+Which angle a 3.x host applies is an open question of the format ([677](https://github.com/mantleplace/mantleplace-dcc/issues/677));
+until it is settled, a 3.0 order goes into a project that holds no earlier import, or into the one that holds it. A layer file whose catalog entry names its tables is read
 at the table of the step's geometry (the water bodies from `Water_polygon`), and the manifest's credits are
 the import's attribution. The land and hazard plans are named for the order, since a 3.0 manifest states no
 job id.

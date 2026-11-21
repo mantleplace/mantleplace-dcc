@@ -45,7 +45,7 @@ public enum AnchorRefusal
     /// <summary>The two publish different angles to true north.</summary>
     DifferentAngle,
 
-    /// <summary>Both publish one non-zero angle; offsetting along a rotated grid is a rotation the plugin does not compute.</summary>
+    /// <summary>Both publish one non-zero angle and the bundle is not at the anchor's point; offsetting along a rotated grid is a rotation the plugin does not compute.</summary>
     RotatedGrid,
 
     /// <summary>The bundle's point is farther from the anchor than <see cref="AdjacentBundle.MaxOffsetM"/>.</summary>
@@ -128,8 +128,9 @@ public static class AdjacentBundle
     public const double AngleToleranceRadians = 1e-7;
 
     /// <summary>
-    /// How close two points must be to be the same point, in metres. Used only where the project's EPSG
-    /// was never recorded, to recognise a re-import of the bundle that set the position.
+    /// How close two points must be to be the same point, in metres. Used to recognise a re-import of
+    /// the bundle that set the position: where the project's EPSG was never recorded, and where the
+    /// grid is rotated (a zero offset needs no rotation).
     /// </summary>
     public const double SamePointToleranceM = 0.001;
 
@@ -177,6 +178,13 @@ public static class AdjacentBundle
                 AnchorRefusal.DifferentAngle,
                 $"This project's angle to true north is {Degrees(anchor.AngleRadians)} degrees and this bundle's is "
                 + $"{Degrees(incoming.AngleRadians)}. Placing one beside the other would take a rotation, which this plugin never computes.");
+        }
+
+        if (distanceM <= SamePointToleranceM)
+        {
+            // The bundle's point is the anchor itself: a re-import of the bundle that set the position.
+            // A zero offset takes no rotation, so a rotated grid is no reason to refuse it.
+            return new AnchorDecision { Kind = AnchorDecisionKind.Offset };
         }
 
         if (Math.Abs(incoming.AngleRadians) > AngleToleranceRadians)
