@@ -19,8 +19,8 @@ vault and for Open in Curator's order extent, and both are optional below.
 ## 2. Download a sample bundle
 
 Open [mantle.place/samples](https://mantle.place/samples) in a browser. The bundles there are free and
-anonymous: no account, no email. Download **Austin Downtown** with its *Download the bundle (.zip)* link. It is
-about 500 MB. Do not unzip it.
+anonymous: no account, no email. Download **Austin Downtown** at its **Min** level, about 90 MB (Max and Med
+import the same way). Do not unzip it.
 
 Any bundle on that page imports. Austin Downtown is the one this guide describes: metres, about 2 km², and in
 the United States, so its flood zones draw on the hazard plan.

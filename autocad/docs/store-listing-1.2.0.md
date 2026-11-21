@@ -16,9 +16,11 @@ keeps its order and names only what AutoCAD imports.
 
 **Field limits held to.** Autodesk's publisher guide for its app store (*Browser based app submission
 process overview*, undated) gives the App Description 4000 characters, Known Issues 1000, Support
-Information 1000 and Additional Information 2000, with minimal HTML. It states no limit for the app name,
-the short description or the version description. The text below fits those limits; where the
-submission form shows a different one, the form wins. The same guide says "AutoCAD" in the compatibility
+Information 1000 and Additional Information 2000, with minimal HTML. The submission form, read on
+2026-11-21, also limits the app name to 50 characters and the short description to 200, and gives General
+Usage Instructions and Installation/Uninstallation 1000 each. The text below fits those limits; where the
+form shows a different one, the form wins. Technical details go in Additional Information, and the
+**Learn More Url** is `https://mantle.place/autocad`. The same guide says "AutoCAD" in the compatibility
 list means plain AutoCAD only, so Civil 3D is ticked as a product of its own.
 
 No host logo appears in the listing or in any image submitted with it; the plugin's buttons carry the
@@ -26,13 +28,16 @@ Mantle Place monogram and no other logo.
 
 ## App name
 
-Mantle Place - Real-World Terrain, Contours, Imagery, Parcels and more
+Mantle Place — Real-World Sites
+
+(The form allows 50 characters, read on 2026-11-21, so the name is the Revit listing's own.)
 
 ## Short description
 
-Bring a real site into a drawing: contours, aerial imagery, parcels and zoning, site linework and more,
-and in Civil 3D the terrain as a TIN surface, from a bundle you ordered or downloaded. A bundle import
-needs no account.
+Bring a real site into a drawing: contours, aerial imagery, parcels, zoning, site linework and, in Civil
+3D, a TIN surface, from a bundle you ordered or downloaded. Importing needs no account.
+
+(192 of the form's 200 characters.)
 
 ## App description
 
@@ -115,6 +120,33 @@ does rather than what changed:
 - The import window has no per-layer choice: an import brings in every part the bundle holds.
 - The plugin never changes a drawing's units, location or zone: set them under Drawing Settings, and
   import again.
+
+## General usage instructions
+
+1. Get a bundle. Order a site on mantle.place, or download a free sample bundle from mantle.place/samples
+   (no account needed).
+2. Import it. Start a new drawing, then Mantle Place > Import Bundle and pick the zip, or sign in and use
+   Vault to download an order and import it.
+3. Watch it run. The Bundle Import window marks each step as it runs and can cancel between steps; when it
+   ends it says what went in and what did not, and why. Type ZOOM then E to see all of it.
+4. In Civil 3D, start from a template in the order's units (metres or feet), and the terrain is also
+   built as a TIN surface.
+
+Press F1 over any Mantle Place button for help.
+
+## Installation and uninstallation
+
+Requirements: AutoCAD 2025, 2026 or 2027, or Civil 3D 2025, 2026 or 2027, on Windows 64-bit; one package
+serves all of them. Importing a bundle from disk needs no account; the vault needs a free Mantle Place
+account.
+
+Install: close AutoCAD, install from this store, and start AutoCAD. If AutoCAD asks whether to load Mantle
+Place, choose Always Load. A Mantle Place tab appears on the ribbon. If you copied Mantle Place in from the
+zip on GitHub before, remove that `MantlePlaceAutoCad.bundle` folder first, so the plugin does not load
+twice.
+
+Uninstall: close AutoCAD and uninstall Mantle Place from Windows Settings > Apps > Installed apps. Your
+drawings keep everything an import made.
 
 ## Support information
 
