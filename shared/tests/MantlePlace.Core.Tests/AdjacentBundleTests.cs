@@ -168,6 +168,42 @@ internal static class AdjacentBundleTests
             run.Contains(decision.Message, "rotat", "says why");
         });
 
+        run.Case("the same point on the same non-zero angle is an offset of zero: a re-import of a rotated bundle", () =>
+        {
+            // 0.629 degrees, as a live order publishes. Re-importing the bundle that set the position
+            // needs no rotation, because the offset is zero.
+            double angle = 0.629 * Math.PI / 180.0;
+            AnchorDecision decision = AdjacentBundle.Decide(
+                Anchor(angleRadians: angle),
+                Incoming(500_000.0, 4_400_000.0, angleRadians: angle));
+
+            run.Equal(decision.Kind, AnchorDecisionKind.Offset, "kind");
+            run.Equal(decision.Refusal, AnchorRefusal.None, "no reason");
+            run.False(decision.IsRefusal, "not a refusal");
+            run.Within(decision.OffsetEastM, 0.0, 1e-9, "east");
+            run.Within(decision.OffsetNorthM, 0.0, 1e-9, "north");
+            run.False(decision.MovesGeometry, "nothing to move");
+        });
+
+        run.Case("a point just past the same-point tolerance on a rotated grid is still refused", () =>
+        {
+            double angle = 0.629 * Math.PI / 180.0;
+            AnchorDecision decision = AdjacentBundle.Decide(
+                Anchor(angleRadians: angle),
+                Incoming(500_000.0 + (AdjacentBundle.SamePointToleranceM * 2.0), 4_400_000.0, angleRadians: angle));
+
+            run.Equal(decision.Refusal, AnchorRefusal.RotatedGrid, "reason");
+        });
+
+        run.Case("the same point at a different angle is still refused as a different angle", () =>
+        {
+            AnchorDecision decision = AdjacentBundle.Decide(
+                Anchor(angleRadians: 0.01),
+                Incoming(500_000.0, 4_400_000.0, angleRadians: 0.02));
+
+            run.Equal(decision.Refusal, AnchorRefusal.DifferentAngle, "reason");
+        });
+
         run.Case("a bundle farther from the anchor than the limit is refused", () =>
         {
             double justOver = AdjacentBundle.MaxOffsetM + 1.0;

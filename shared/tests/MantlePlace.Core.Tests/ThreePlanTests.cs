@@ -298,7 +298,7 @@ internal static class ThreePlanTests
         {
             // The project's anchor is what the first import of the same 3.0 order wrote: its survey
             // point and its stated angle. A second import of that bundle meets the rule any re-import
-            // meets: one point and one angle, which is the same anchor when the angle is zero.
+            // meets: one point and one angle, at a zero offset whatever the angle is.
             static ProjectAnchor AnchorOf(SurveyPointPlacement placement) =>
                 new(placement.Origin.Epsg, placement.Origin.Easting!.Value, placement.Origin.Northing!.Value, placement.AngleRadians);
 
@@ -312,7 +312,9 @@ internal static class ThreePlanTests
 
             SurveyPointPlacement turned = Step(Plan(Read(Load(FullBundle))), ImportStepKind.SetSharedCoordinates)!.SurveyPoint!;
             AnchorDecision turnedAgain = AdjacentBundle.Decide(AnchorOf(turned), turned);
-            run.Equal(turnedAgain.Refusal, AnchorRefusal.RotatedGrid, "a stated non-zero rotation is refused on re-import, as a 2.x one is");
+            run.False(turnedAgain.IsRefusal, $"a stated non-zero rotation re-imports too: a zero offset takes no rotation: {turnedAgain.Message}");
+            run.Equal(turnedAgain.Kind, AnchorDecisionKind.Offset, "placed against the anchor it set");
+            run.False(turnedAgain.MovesGeometry, "at no offset");
         });
 
         run.Case("the terrain's uncropped notice reads as one sentence", () =>
