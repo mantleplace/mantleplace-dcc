@@ -188,6 +188,17 @@ internal static class ThreePlanTests
             run.Equal(points?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.NotInFormat, "the points file is skipped: 3.0 has none");
         });
 
+        run.Case("a 3.0 vault download asks for every file the plan reads", () =>
+        {
+            BundleImportPlan plan = Plan(Read(Load(FullBundle)));
+            string[] read = plan.Steps.Select(step => step.EntryName).Where(name => name.Length > 0).Distinct(StringComparer.Ordinal).ToArray();
+            run.True(read.Contains("Basemap/Pavement.gpkg"), "the plan reads the pavement");
+            foreach (string file in read)
+            {
+                run.True(BundleImportPlanner.ThreeFiles.Contains(file), $"the download asks for {file}");
+            }
+        });
+
         run.Case("a 3.0 tree point lands where the toposolid is: offsets from the site origin, heights above its height", () =>
         {
             BundleImportPlan plan = Plan(Read(Load(FullBundle)));
