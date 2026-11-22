@@ -282,6 +282,25 @@ internal static class PlatformApiTests
             }
         });
 
+        run.Case("generated enum collections carry the enum-member converter, with no TODO left", () =>
+        {
+            string? folder = RepoTree.Find("shared/src/MantlePlace.PlatformApi/Generated");
+            string? file = folder is null ? null : Path.Combine(folder, "PlatformApiClient.g.cs");
+            run.True(file is not null, "the generated client is found");
+            run.False(File.ReadAllText(file!).Contains("TODO(system.text.json)", StringComparison.Ordinal), "no enum collection is left without a converter");
+
+            Response15 read = JsonSerializer.Deserialize<Response15>(
+                """{"delivered":["basemap.pmtiles"],"base":["basemap.cog"],"notDelivered":[],"pendingRetryTokens":["basemap.drape_png"]}""")!;
+            run.True(read.Delivered.SequenceEqual([Delivered.Basemap_pmtiles]), "delivered reads by its spec spelling");
+            run.True(read.Base.SequenceEqual([MantlePlace.PlatformApi.Base.Basemap_cog]), "base reads by its spec spelling");
+            run.True(read.PendingRetryTokens.SequenceEqual([PendingRetryTokens.Basemap_drape_png]), "pendingRetryTokens reads by its spec spelling");
+
+            JsonNode written = JsonNode.Parse(JsonSerializer.Serialize(read))!;
+            run.Equal(written["delivered"]![0]!.GetValue<string>(), "basemap.pmtiles", "and delivered writes it");
+            run.Equal(written["base"]![0]!.GetValue<string>(), "basemap.cog", "and base writes it");
+            run.Equal(written["pendingRetryTokens"]![0]!.GetValue<string>(), "basemap.drape_png", "and pendingRetryTokens writes it");
+        });
+
         return run.Report("platform api");
     }
 

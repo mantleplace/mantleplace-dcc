@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -71,8 +72,28 @@ STOCK_ENUM_CONVERTER = "System.Text.Json.Serialization.JsonStringEnumConverter<"
 ENUM_MEMBER_CONVERTER = "MantlePlace.PlatformApi.EnumMemberJsonConverter<"
 
 
+ENUM_COLLECTION_TODO = re.compile(
+    r"^(?P<indent>[ \t]*)// TODO\(system\.text\.json\): Add ItemConverterType with enum converter when supported\n"
+    r"(?P<between>(?:[ \t]*\[[^\n]*\]\n)*)"
+    r"(?P<declaration>[ \t]*public System\.Collections\.Generic\.ICollection<(?P<item>\w+)> )",
+    re.MULTILINE,
+)
+
+
+def enum_collection_converter(match: re.Match[str]) -> str:
+    attribute = (
+        f"{match['indent']}[System.Text.Json.Serialization.JsonConverter("
+        f"typeof(MantlePlace.PlatformApi.EnumMemberCollectionJsonConverter<{match['item']}>))]\n"
+    )
+    return attribute + match["between"] + match["declaration"]
+
+
 def honour_enum_member(client_text: str) -> str:
-    return client_text.replace(STOCK_ENUM_CONVERTER, ENUM_MEMBER_CONVERTER)
+    client_text = client_text.replace(STOCK_ENUM_CONVERTER, ENUM_MEMBER_CONVERTER)
+    client_text = ENUM_COLLECTION_TODO.sub(enum_collection_converter, client_text)
+    if "TODO(system.text.json)" in client_text:
+        raise SystemExit("The generator left an enum collection without a converter this script can attach.")
+    return client_text
 
 
 def generate(spec_text: str) -> str:

@@ -101,6 +101,36 @@ internal static class OpenLogsTests
             run.True(target.Notice is not null, "and a sentence saying so");
         });
 
+        run.Case("reveal selects a log that is there, and opens its folder when the log is gone", () =>
+        {
+            string folder = Path.Combine(sandbox, "reveal");
+            Directory.CreateDirectory(folder);
+            string log = Path.Combine(folder, "bundle.zip" + LocalBundleSource.ImportLogSuffix);
+            Write(log, "a log");
+
+            List<System.Diagnostics.ProcessStartInfo> started = [];
+            run.True(ShellLauncher.TryReveal(log, folder, started.Add, out _), "a present log is revealed");
+            run.True(
+                started.Count == 1 && started[0].FileName == "explorer.exe" && started[0].Arguments.Contains("/select", StringComparison.Ordinal) && started[0].Arguments.Contains(log, StringComparison.Ordinal),
+                "by selecting it in Explorer");
+
+            File.Delete(log);
+            started.Clear();
+            run.True(ShellLauncher.TryReveal(log, folder, started.Add, out _), "a log that is gone falls back");
+            run.True(started.Count == 1 && started[0].FileName == folder && started[0].UseShellExecute, "to opening its folder");
+
+            started.Clear();
+            string gone = Path.Combine(sandbox, "reveal-gone");
+            run.False(ShellLauncher.TryReveal(Path.Combine(gone, "x.log"), gone, started.Add, out string error), "neither there: refused");
+            run.Equal(error, Path.Combine(gone, "x.log"), "naming the log");
+            run.Equal(started.Count, 0, "and nothing is started");
+
+            run.False(
+                ShellLauncher.TryReveal(log, folder, _ => throw new System.ComponentModel.Win32Exception(), out string refused),
+                "a shell that refuses is a refusal, not a throw");
+            run.Equal(refused, folder, "naming what could not be opened");
+        });
+
         run.Case("a search over an existing but logless root opens it", () =>
         {
             string root = Path.Combine(sandbox, "logless");

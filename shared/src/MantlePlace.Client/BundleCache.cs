@@ -28,25 +28,38 @@ public readonly record struct CacheEntry(BundleCacheLayout Layout, CacheVerdict 
 
 public sealed class BundleCache
 {
+    public const int RemoveAttempts = 3;
+
+    private static readonly TimeSpan RemoveRetryDelay = TimeSpan.FromMilliseconds(150);
+
     private readonly string? _root;
     private readonly string _host;
+    private readonly Action<string> _deleteTree;
 
     public BundleCache()
     {
         _root = null;
         _host = HostIdentity.Id;
+        _deleteTree = DeleteTree;
     }
 
     public BundleCache(string root)
     {
         _root = root;
         _host = HostIdentity.Id;
+        _deleteTree = DeleteTree;
     }
 
     public BundleCache(string root, string host)
+        : this(root, host, DeleteTree)
+    {
+    }
+
+    public BundleCache(string root, string host, Action<string> deleteTree)
     {
         _root = root;
         _host = host;
+        _deleteTree = deleteTree ?? throw new ArgumentNullException(nameof(deleteTree));
     }
 
     public string Host => _host;
@@ -185,7 +198,7 @@ public sealed class BundleCache
 
         File.Move(partial, layout.BundleZipPath, overwrite: true);
 
-        WriteSidecar(layout, new CacheSidecar
+        string? sidecarError = WriteSidecar(layout, new CacheSidecar
         {
             OrderId = orderId,
             SizeBytes = size,
@@ -198,23 +211,41 @@ public sealed class BundleCache
             Level = level,
         });
 
-        return null;
+        return sidecarError is null
+            ? null
+            : $"The download finished, but its cache record could not be written, so it is unverified. Try again. ({sidecarError})";
     }
 
-    public void Remove(string orderId)
+    public string? Remove(string orderId)
     {
         BundleCacheLayout layout = LayoutFor(orderId);
-        try
+        Exception? last = null;
+        for (int attempt = 1; attempt <= RemoveAttempts; attempt++)
         {
-            if (Directory.Exists(layout.Root))
+            try
             {
-                Directory.Delete(layout.Root, recursive: true);
+                if (Directory.Exists(layout.Root))
+                {
+                    _deleteTree(layout.Root);
+                }
+
+                return null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                last = ex;
+                if (attempt < RemoveAttempts)
+                {
+                    Thread.Sleep(RemoveRetryDelay);
+                }
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
+
+        ClientLog.Write($"Could not remove the cached bundle at {layout.Root} after {RemoveAttempts} attempts: {last!.Message}");
+        return $"The local copy could not be removed, as a file in it is in use: {last.Message}";
     }
+
+    private static void DeleteTree(string root) => Directory.Delete(root, recursive: true);
 
     private static CacheSidecar? ReadSidecar(BundleCacheLayout layout)
     {
@@ -230,14 +261,17 @@ public sealed class BundleCache
         }
     }
 
-    private static void WriteSidecar(BundleCacheLayout layout, CacheSidecar sidecar)
+    private static string? WriteSidecar(BundleCacheLayout layout, CacheSidecar sidecar)
     {
         try
         {
             File.WriteAllText(layout.SidecarPath, CacheSidecars.Serialize(sidecar));
+            return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            ClientLog.Write($"Could not write the cache record {layout.SidecarPath}, so the bundle there is unverified: {ex.Message}");
+            return ex.Message;
         }
     }
 

@@ -129,6 +129,36 @@ internal static class LocalBundleArchiveTests
             run.True(File.Exists(retainedPath), "retained survives — links point into it (HPS-44)");
         });
 
+        if (OperatingSystem.IsWindows())
+        {
+            run.Case("a scratch folder held open at dispose is logged and deleted at the next import", () =>
+            {
+                string zip = WriteBundle(Path.Combine(sandbox, "held", "download.zip"), OrderId);
+                List<string> logged = [];
+                string scratch;
+
+                using (ClientLog.RedirectTo(logged.Add))
+                {
+                    LocalBundleArchive archive = LocalBundleArchive.Open(zip, cacheRoot);
+                    string transient = archive.Extract("Surface/SurfacePoints.csv", ExtractionLifetime.Transient, PointsSha256);
+                    scratch = Path.GetDirectoryName(Path.GetDirectoryName(transient)!)!;
+
+                    using (new FileStream(transient, FileMode.Open, FileAccess.Read, FileShare.None))
+                    {
+                        archive.Dispose();
+                    }
+                }
+
+                run.True(Directory.Exists(scratch), "the held scratch folder outlives the dispose");
+                run.True(logged.Count == 1 && logged[0].Contains(scratch, StringComparison.Ordinal), $"and the failure is logged ({string.Join(" | ", logged)})");
+
+                using (LocalBundleArchive.Open(zip, cacheRoot))
+                {
+                    run.False(Directory.Exists(scratch), "the next import deletes it once nothing holds it");
+                }
+            });
+        }
+
         run.Case("a retained file a host holds open is reused when it is already the published one", () =>
         {
             string zip = WriteBundle(Path.Combine(sandbox, "h", "download.zip"), OrderId);

@@ -91,11 +91,18 @@ public sealed class VaultNewsChecker
 
             Listed?.Invoke(this, listing);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-        }
         catch (OperationCanceledException)
         {
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException or TimeoutException)
+        {
+            ClientLog.Write($"The background vault listing failed: {ex.GetType().Name}: {ex.Message}");
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            ClientLog.Write($"The background vault listing hit an unexpected fault: {ex}");
         }
         finally
         {

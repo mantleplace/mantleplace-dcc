@@ -51,9 +51,16 @@ struct FEntry
 class FTimeline
 {
 public:
+	FTimeline() = default;
+
+	explicit FTimeline(TFunction<double()> InClock)
+	    : Clock(MoveTemp(InClock))
+	{
+	}
+
 	void Start()
 	{
-		StartSeconds = FPlatformTime::Seconds();
+		StartSeconds = Clock();
 	}
 
 	void Record(const TCHAR* InPhase, double InSeconds, FString InDetail = FString())
@@ -91,7 +98,7 @@ public:
 
 	double ElapsedSeconds() const
 	{
-		return StartSeconds > 0.0 ? FPlatformTime::Seconds() - StartSeconds : 0.0;
+		return StartSeconds > 0.0 ? Clock() - StartSeconds : 0.0;
 	}
 
 	const TArray<FEntry>& GetEntries() const
@@ -113,6 +120,10 @@ public:
 
 private:
 	TArray<FEntry> Entries;
+	TFunction<double()> Clock = []()
+	{
+		return FPlatformTime::Seconds();
+	};
 	double StartSeconds = 0.0;
 
 	int32 OpenPhaseCount = 0;

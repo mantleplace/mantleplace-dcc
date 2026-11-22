@@ -1,4 +1,5 @@
 using System.Windows.Threading;
+using MantlePlace.Client;
 using MantlePlace.Core;
 
 namespace MantlePlace.Wpf;
@@ -136,8 +137,9 @@ public sealed class ImportWindowThread
         {
             action();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            ClientLog.Write($"The import window dropped a fault where nothing may be thrown: {ex}");
         }
     }
 
