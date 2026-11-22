@@ -111,13 +111,16 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 	}
 
 	{
-		FTimeline Timeline;
+		double Now = 100.0;
+		FTimeline Timeline([&Now]()
+		                   { return Now; });
 		Timeline.Start();
-		FPlatformProcess::Sleep(0.001f);
+		Now += 2.0;
 		Timeline.Record(Phase::ZipAndManifest, 1000.0);
 
 		const TArray<FString> Summary = Timeline.BuildSummary();
 		TestEqual(TEXT("the remainder is named"), RowsMentioning(Summary, TEXT("unmeasured")), 1);
+		TestEqual(TEXT("wall time is read from the timeline's clock"), Timeline.ElapsedSeconds(), 2.0);
 		TestTrue(TEXT("wall time is not the sum"), Timeline.ElapsedSeconds() < 1000.0);
 	}
 

@@ -42,14 +42,6 @@ public:
 	FString CacheSubDir = TEXT("MantlePlace/VaultCache");
 
 	/**
-	 * Largest bundle (bytes) we sha256-verify by loading into memory; above this, integrity falls
-	 * back to size (+ manifest version), surfaced as valid-but-unverified. Bounded by TArray<uint8>
-	 * int32 indexing (~2 GiB).
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Mantle Place|Vault")
-	int64 MaxHashSizeBytes = 2147483647;
-
-	/**
 	 * Download an owned bundle's presigned URL into the local cache (streamed, async, fail-closed).
 	 * Result via OnDownloadComplete; progress via OnDownloadProgress. The bundle is verified against
 	 * the item's advertised size/sha256 before it is promoted; a failed/torn download never presents

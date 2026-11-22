@@ -49,8 +49,6 @@ struct FMantlePlaceVaultLogic
 
 	static bool ParseMaterializeStartResponse(const FString& JsonStr, FMantlePlaceMaterializeStart& OutStart, FString& OutError);
 
-	static bool ParseMaterializeStartResponse(const FString& JsonStr, FString& OutJobId, bool& bOutAlreadyRunning, FString& OutError);
-
 	static bool IsPermanentlyAbsentReason(const FString& Reason);
 
 	static TArray<FString> RequestedForPolling(const FMantlePlaceMaterializeStart& Start);
