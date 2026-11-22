@@ -3,6 +3,7 @@
 #include "MantlePlaceSecretStore.h"
 
 #include "MantlePlaceBundleCacheLogic.h"
+#include "MantlePlaceSha256.h"
 
 #include "HAL/CriticalSection.h"
 #include "HAL/FileManager.h"
@@ -22,8 +23,8 @@ namespace
 		if (Stem != Key)
 		{
 			const FTCHARToUTF8 Utf8(*Key);
-			const FString Digest = FMantlePlaceBundleCacheLogic::Sha256Hex(
-				reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length());
+			const FString Digest = FMantlePlaceSha256::HexDigest(
+				TConstArrayView<uint8>(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length()));
 			FileName = Stem + TEXT("_") + Digest.Left(8);
 		}
 

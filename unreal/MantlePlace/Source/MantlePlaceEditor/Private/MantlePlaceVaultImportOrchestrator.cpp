@@ -389,7 +389,7 @@ FString UMantlePlaceVaultImportOrchestrator::ComputeStagedSha256() const
 	{
 		return FString();
 	}
-	return MantlePlaceSha256::HexDigest(Bytes);
+	return FMantlePlaceSha256::HexDigest(Bytes);
 }
 
 void UMantlePlaceVaultImportOrchestrator::CleanupLocalStaging()

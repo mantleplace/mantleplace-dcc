@@ -6,21 +6,6 @@
 #include "MantlePlaceBundleCacheTypes.h"
 #include "MantlePlaceVaultTypes.h"
 
-struct FMantlePlaceSha256
-{
-	FMantlePlaceSha256();
-
-	void Update(const uint8* Data, int64 NumBytes);
-
-	FString Final();
-
-private:
-	uint32 H[8];
-	uint8 Pending[64];
-	int32 PendingLen = 0;
-	uint64 TotalBytes = 0;
-};
-
 struct FMantlePlaceBundleCacheLogic
 {
 	static FString SanitizeKeySegment(const FString& OrderId);
@@ -75,8 +60,6 @@ struct FMantlePlaceBundleCacheLogic
 	static bool IsExpired(const FDateTime& NowUtc, const FDateTime& ExpiresAtUtc, int32 SkewSeconds = 60);
 
 	static bool Sha256Equal(const FString& A, const FString& B);
-
-	static FString Sha256Hex(const uint8* Data, int64 NumBytes);
 
 	static FString SerializeMeta(const FMantlePlaceCachedBundle& Meta);
 

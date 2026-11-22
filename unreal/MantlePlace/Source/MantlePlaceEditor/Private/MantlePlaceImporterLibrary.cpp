@@ -275,7 +275,7 @@ bool UMantlePlaceImporterLibrary::ReadManifestSha256(const FString& ZipPath, FSt
 		return false;
 	}
 
-	OutSha256 = MantlePlaceSha256::HexDigest(ManifestBytes);
+	OutSha256 = FMantlePlaceSha256::HexDigest(ManifestBytes);
 	return true;
 }
 
@@ -524,7 +524,7 @@ FMantlePlaceImportResult UMantlePlaceImporterLibrary::ImportVaultPackageWithSele
 	}
 
 	const FString Identity = MantlePlaceImportNaming::ResolveIdentity(
-		Manifest.OrderId, MantlePlaceSha256::HexDigest(ManifestBytes));
+		Manifest.OrderId, FMantlePlaceSha256::HexDigest(ManifestBytes));
 	if (!MantlePlaceImportNaming::IsUsableIdentity(Identity))
 	{
 		Result.Message = TEXT(
@@ -792,7 +792,7 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 		TerrainPrefix = Tileset.Prefix;
 		TerrainPath = Tileset.LayerJsonPath;
 		TerrainTileCount = Tileset.TileCount;
-		SourceDigest = MantlePlaceSha256::HexDigest(TilesBytes);
+		SourceDigest = FMantlePlaceSha256::HexDigest(TilesBytes);
 		if (Manifest.Georef.bHasGeographicOrigin)
 		{
 			Info.bHasOrigin = true;
@@ -829,7 +829,7 @@ FMantlePlaceStreamInfo UMantlePlaceImporterLibrary::StreamBundleIntoCesium(const
 		}
 		TerrainPath = Manifest.Cesium.TerrainPath;
 		TerrainTileCount = Manifest.Cesium.TerrainTileCount;
-		SourceDigest = MantlePlaceSha256::HexDigest(ManifestBytes);
+		SourceDigest = FMantlePlaceSha256::HexDigest(ManifestBytes);
 	}
 
 	const FString ManifestSha256 = SourceDigest;
