@@ -6,6 +6,7 @@
 #include "Engine/DataTable.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
+#include "GameFramework/Actor.h"
 #include "IAssetTools.h"
 #include "LandscapeLayerInfoObject.h"
 #include "Materials/MaterialInstanceConstant.h"
@@ -162,6 +163,20 @@ namespace MantlePlaceImportNaming
 	FString EquivalenceTag(const FString& Group)
 	{
 		return EquivalenceTagPrefix() + Group;
+	}
+
+	bool TagValue(const AActor& Actor, const FString& Prefix, FString& OutValue)
+	{
+		for (const FName& Tag : Actor.Tags)
+		{
+			const FString Text = Tag.ToString();
+			if (Text.StartsWith(Prefix))
+			{
+				OutValue = Text.Mid(Prefix.Len());
+				return true;
+			}
+		}
+		return false;
 	}
 
 	FString CreditLineTagPrefix()

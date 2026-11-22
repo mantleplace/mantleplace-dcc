@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 
+class AActor;
 class UObject;
 
 namespace MantlePlaceImportNaming
@@ -50,6 +51,8 @@ namespace MantlePlaceImportNaming
 
 	FString EquivalenceTag(const FString& Group);
 	FString EquivalenceTagPrefix();
+
+	bool TagValue(const AActor& Actor, const FString& Prefix, FString& OutValue);
 
 	FString CreditLineTag(const FString& Line);
 	FString CreditLineTagPrefix();
