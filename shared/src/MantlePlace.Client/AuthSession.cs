@@ -94,6 +94,12 @@ public sealed class AuthSession : IDisposable
             return AuthOutcome.Abandoned;
         }
 
+        if (_endpoints.SplitSignIn() is { } split)
+        {
+            Raise(AuthEvent.SignInFailed);
+            return AuthOutcome.Failed(split);
+        }
+
         CancellationTokenSource signIn = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         lock (_gate)
         {
@@ -370,7 +376,7 @@ public sealed class AuthSession : IDisposable
         }
         catch (HttpRequestException ex)
         {
-            return new GrantFailure($"Could not reach mantle.place: {ex.Message}", IsDefinitive: false);
+            return new GrantFailure(_endpoints.Unreachable(baseUrl, ex.Message), IsDefinitive: false);
         }
 
         if (ClientUpdatePrompt.MinimumVersionOf(status, responseBody) is { } minimumVersion)

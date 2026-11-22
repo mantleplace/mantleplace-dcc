@@ -991,7 +991,10 @@ One optional file remains: `%LOCALAPPDATA%\MantlePlace\config.json`, overrides l
 compiled defaults when it is present, and nothing installs it. Every key in it is an override for one
 of those defaults (`webLoginUrl`, `tokenEndpointUrl`, `refreshEndpointUrl`, `apiBaseUrl`,
 `realtimeUrl`, `realtimePublishableKey`, `loopbackPorts`, `callbackPath`, `signInTimeoutSeconds`) and is
-how a dev build points at a non-production stack. `realtimeUrl` and `realtimePublishableKey` have no
+how a dev build points at a non-production stack. A dev stack moves `webLoginUrl`, `tokenEndpointUrl` and
+`refreshEndpointUrl` together: each server signs its sign-in codes with its own key, so a file that moves the
+code exchange without the sign-in page can never sign in, and Sign In refuses it before opening a browser,
+naming both servers and the file. `realtimeUrl` and `realtimePublishableKey` have no
 compiled default: the platform publishes both on a public route, and with neither set the
 connected host reads them from there when it first joins, so a moved socket needs no new release. Setting
 either one means the route is not asked, and with only one set the connected host stays off. With the route
