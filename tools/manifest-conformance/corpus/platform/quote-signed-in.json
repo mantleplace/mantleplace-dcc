@@ -25,6 +25,16 @@
       "currency": "usd",
       "pricingConfigVersion": 7,
       "freeEligible": false,
+      "proof": {
+        "extent": {
+          "west": -122.4125,
+          "south": 37.7075,
+          "east": -122.4075,
+          "north": 37.7125
+        },
+        "areaKm2": 0.24,
+        "priceCents": 0
+      },
       "coverage": "covered",
       "licence": {
         "line": "Synthetic licence line for the conformance corpus.",
