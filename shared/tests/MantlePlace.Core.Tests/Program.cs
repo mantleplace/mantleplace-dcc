@@ -61,6 +61,7 @@ exitCode |= SubDivisionDrapeTests.Run();
 exitCode |= SubDivisionMaterialTests.Run();
 exitCode |= LandPlanTests.Run();
 exitCode |= GroundCutsTests.Run();
+exitCode |= GroundCutBatchesTests.Run();
 exitCode |= RoadIdentityTests.Run();
 exitCode |= TerrainSmoothingTests.Run();
 exitCode |= DrapeAnchorTests.Run();

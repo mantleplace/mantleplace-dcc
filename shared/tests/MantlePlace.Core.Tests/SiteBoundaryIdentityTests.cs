@@ -294,6 +294,63 @@ internal static class SiteBoundaryIdentityTests
                 "with neither, the element id under the land-use spelling, as before");
         });
 
+        run.Case("a subdivision cut from many roads carries every road's stamp, one to a line", () =>
+        {
+            string first = SiteBoundaryIdentity.Stamp(GroundLayer.RoadSurface, Stem, "primary 1", 1);
+            string second = SiteBoundaryIdentity.Stamp(GroundLayer.RoadSurface, Stem, "primary 2", 2);
+            string third = SiteBoundaryIdentity.Stamp(GroundLayer.RoadSurface, Stem, null, 3);
+            string comments = SiteBoundaryIdentity.Batch([first, second, third]);
+
+            run.Equal(comments, first + "\n" + second + "\n" + third, "one stamp to a line");
+            run.Equal(SiteBoundaryIdentity.Members(comments).Count, 3, "every member reads back");
+            run.Equal(SiteBoundaryIdentity.Members(comments)[2], third, "in the order they were cut");
+            run.Equal(SiteBoundaryIdentity.Batch([first]), first, "a batch of one is the stamp it always was");
+            run.Equal(SiteBoundaryIdentity.Members(first).Count, 1, "and reads back as itself");
+            run.Equal(SiteBoundaryIdentity.Members(null).Count, 0, "no comment, no member");
+        });
+
+        run.Case("a re-import of a batched layer finds every road it cut", () =>
+        {
+            string comments = SiteBoundaryIdentity.Batch(
+                SiteBoundaryIdentity.Stamps(GroundLayer.RoadSurface, ["primary", "primary", null], Stem));
+
+            IReadOnlyList<NewSiteBoundary> created = SiteBoundaryIdentity.NewFeatures(
+                GroundLayer.RoadSurface,
+                SiteBoundaryIdentity.Members(comments),
+                ["primary", "primary", null, "service"],
+                Stem);
+
+            run.Equal(created.Count, 1, "only the road the batch does not hold is cut again");
+            run.Equal(created[0].Ordinal, 4, "and it is the new one");
+        });
+
+        run.Case("a batched subdivision is owned and named by its first road", () =>
+        {
+            string comments = SiteBoundaryIdentity.Batch(
+                SiteBoundaryIdentity.Stamps(GroundLayer.RoadSurface, ["primary", "service"], Stem));
+
+            run.True(SiteBoundaryIdentity.IsStampFor(comments, Stem), "this import owns it");
+            run.True(
+                SiteBoundaryIdentity.Parse(comments, Stem) == new GroundStamp(GroundLayer.RoadSurface, "primary"),
+                "its drape material is named for its first road, not for every road it holds");
+            run.False(
+                SiteBoundaryIdentity.IsStampFor("a curator's note\n" + comments, Stem),
+                "a curator's note on the first line is still not a stamp");
+        });
+
+        run.Case("a line break inside a name cannot split one road's stamp into two", () =>
+        {
+            run.Equal(
+                SiteBoundaryIdentity.Stamp(GroundLayer.RoadSurface, Stem, "Main\nStreet", 1),
+                $"Mantle Place Road Surface {Stem}/Main Street",
+                "the break reads as a space");
+            run.Equal(
+                SiteBoundaryIdentity.Members(SiteBoundaryIdentity.Batch(
+                    SiteBoundaryIdentity.Stamps(GroundLayer.RoadSurface, ["Main\r\nStreet", "Elm"], Stem))).Count,
+                2,
+                "so a batch of two reads back as two");
+        });
+
         return run.Report("site boundary identity");
     }
 }

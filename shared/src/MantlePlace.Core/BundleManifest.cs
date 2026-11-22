@@ -326,6 +326,17 @@ public sealed class BundleManifest
 
     public GeoOrigin? SurveyPoint { get; internal set; }
 
+    public int? SiteOriginEpsg { get; internal set; }
+
+    public string? SiteOriginElsewhere(string outcome)
+        => SiteOriginEpsg is { } origin
+            && GeoProjection.TryParseEpsg(Georeference.CrsProjected) is { } delivery
+            && origin != delivery
+            ? $"{outcome}: this bundle's files are in EPSG:{delivery}, and it states its site origin only in EPSG:{origin}, "
+                + "a different coordinate system. The format promises the origin in the files' own system, and "
+                + "placing one in the other would mean reprojecting, which this plugin never does."
+            : null;
+
     public bool HasPreDerivedSurveyPoint => SurveyPoint is { IsUsable: true };
 
     public BundleContents? Contents { get; internal set; }

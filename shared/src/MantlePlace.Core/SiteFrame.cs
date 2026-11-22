@@ -20,6 +20,8 @@ public sealed class SiteFrame
 
     public int Epsg => Origin.Epsg ?? 0;
 
+    public bool ConvertsStatedUnits { get; init; }
+
     public bool CanPlaceGeographic
         => GeoProjection.IsUtmEpsg(Epsg) && Origin.LinearUnit is LinearUnit.Unspecified or LinearUnit.Metre;
 
@@ -64,7 +66,7 @@ public sealed class SiteFrame
                 return TryProjectToLocalMetres(x, y, out eastMetres, out northMetres);
 
             case LayerCoordinates.AbsoluteProjected:
-                return IsInOriginUnit(layer.Unit) && TryToLocalMetres(x, y, out eastMetres, out northMetres);
+                return TryToLocalMetres(x, y, layer.Unit, out eastMetres, out northMetres);
 
             case LayerCoordinates.LocalOffsets:
                 double metresPerUnit = LinearUnits.MetresPerUnit(layer.Unit);
@@ -97,6 +99,27 @@ public sealed class SiteFrame
         return true;
     }
 
+    public bool TryToLocalMetres(double easting, double northing, LinearUnit unit, out double eastMetres, out double northMetres)
+    {
+        if (IsInOriginUnit(unit))
+        {
+            return TryToLocalMetres(easting, northing, out eastMetres, out northMetres);
+        }
+
+        eastMetres = 0.0;
+        northMetres = 0.0;
+        if (!ConvertsStatedUnits || Origin.Easting is not { } originEasting || Origin.Northing is not { } originNorthing)
+        {
+            return false;
+        }
+
+        double metresPerUnit = LinearUnits.MetresPerUnit(unit);
+        double originMetresPerUnit = LinearUnits.MetresPerUnit(Origin.LinearUnit);
+        eastMetres = (easting * metresPerUnit) - (originEasting * originMetresPerUnit);
+        northMetres = (northing * metresPerUnit) - (originNorthing * originMetresPerUnit);
+        return true;
+    }
+
     public bool TryProjectToLocalMetres(double lonDeg, double latDeg, out double eastMetres, out double northMetres)
     {
         eastMetres = 0.0;
@@ -111,6 +134,8 @@ public sealed class SiteFrame
     {
         ArgumentNullException.ThrowIfNull(manifest);
 
-        return manifest.SurveyPoint is { IsUsable: true } origin ? new SiteFrame { Origin = origin } : null;
+        return manifest.SurveyPoint is { IsUsable: true } origin
+            ? new SiteFrame { Origin = origin, ConvertsStatedUnits = RevitThreeView.IsThree(manifest) }
+            : null;
     }
 }
