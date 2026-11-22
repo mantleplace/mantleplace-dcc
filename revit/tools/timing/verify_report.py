@@ -21,7 +21,6 @@ PLACEMENT_TOLERANCE_M = 1.0
 PLACEMENT_TOLERANCE_2025_M = 2.0
 FRAME_TOLERANCE_M = 0.01
 FOOT_M = {"ft": 0.3048, "ftUS": 1200 / 3937}
-LINK_BASE_TOLERANCE_M = 3.0
 CREDIT_WORD = "openstreetmap"
 
 
@@ -49,9 +48,13 @@ def _revit_year(folder):
         return None
 
 
+def _placement_tolerance(folder):
+    return PLACEMENT_TOLERANCE_2025_M if _revit_year(folder) == "2025" else PLACEMENT_TOLERANCE_M
+
+
 def _placement(folder):
     rows = _read_csv(os.path.join(folder, "placement.csv"))
-    tolerance = PLACEMENT_TOLERANCE_2025_M if _revit_year(folder) == "2025" else PLACEMENT_TOLERANCE_M
+    tolerance = _placement_tolerance(folder)
     deltas, misses = [], 0
     for row in rows:
         expected, measured = _floats(row, "expected_z_m", "measured_z_m")
@@ -147,11 +150,16 @@ def _link(folder, record, footprints, table):
     rows = _read_csv(os.path.join(folder, "link-buildings.csv"))
     if not links:
         return {"pass": False, "note": "the project has no linked model"}
-    gaps = []
+    placement_tolerance = _placement_tolerance(folder)
+    gaps, within = [], 0
     for row in rows:
-        base, ground = _floats(row, "base_z_m", "ground_z_m")
-        if base is not None and ground is not None:
-            gaps.append(base - ground)
+        base, ground, low, high = _floats(row, "base_z_m", "ground_z_m", "ground_min_z_m", "ground_max_z_m")
+        if base is None or ground is None:
+            continue
+        gaps.append(base - ground)
+        rise = high - low if low is not None and high is not None else 0.0
+        if abs(base - ground) <= rise + placement_tolerance:
+            within += 1
     verdict = {
         "links": [link.get("name") for link in links],
         "origin_to_origin": all(link.get("transform_is_identity") for link in links),
@@ -159,8 +167,8 @@ def _link(folder, record, footprints, table):
         "buildings": len(rows),
         "on_ground": len(gaps),
         "median_base_minus_ground_m": statistics.median(gaps) if gaps else None,
-        "within_base_tolerance": sum(1 for g in gaps if abs(g) <= LINK_BASE_TOLERANCE_M),
-        "tolerance_m": LINK_BASE_TOLERANCE_M,
+        "within_base_tolerance": within,
+        "tolerance_m": placement_tolerance,
     }
     if footprints:
         centres = _footprint_centres(footprints, table)
@@ -179,8 +187,7 @@ def _link(folder, record, footprints, table):
         and verdict["loaded"]
         and bool(rows)
         and bool(gaps)
-        and verdict["median_base_minus_ground_m"] is not None
-        and abs(verdict["median_base_minus_ground_m"]) <= LINK_BASE_TOLERANCE_M
+        and 2 * within >= len(gaps)
     )
     return verdict
 
@@ -290,7 +297,7 @@ def markdown(report):
         text = (
             f"{_mark(k)}: {', '.join(map(str, k['links']))}; origin to origin {k['origin_to_origin']}; "
             f"{k['buildings']} elements with an IFC GlobalId; median base minus ground {_number(k['median_base_minus_ground_m'])} m, "
-            f"{k['within_base_tolerance']}/{k['on_ground']} within {k['tolerance_m']} m"
+            f"{k['within_base_tolerance']}/{k['on_ground']} within the ground's rise under the box plus {k['tolerance_m']} m"
         )
         if "median_centre_to_footprint_m" in k:
             text += (

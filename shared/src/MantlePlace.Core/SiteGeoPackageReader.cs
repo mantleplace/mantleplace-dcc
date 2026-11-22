@@ -79,31 +79,16 @@ public static class SiteGeoPackageReader
             return;
         }
 
-        double metresPerUnit = LinearUnits.MetresPerUnit(layer.Unit);
         List<SiteVertex> vertices = new(part.Positions.Count);
         foreach (GeoPackagePosition position in part.Positions)
         {
-            if (frame.TryPlace(layer, position.X, position.Y, out double east, out double north))
+            if (SiteVectorReader.TryPlaceVertex(frame, layer, position.X, position.Y, position.Z, out SiteVertex vertex))
             {
-                vertices.Add(new SiteVertex(east, north, position.Z * metresPerUnit));
+                vertices.Add(vertex);
             }
         }
 
-        if (part.Closed)
-        {
-            if (vertices.Count > 1
-                && Math.Abs(vertices[0].EastM - vertices[^1].EastM) < 1e-6
-                && Math.Abs(vertices[0].NorthM - vertices[^1].NorthM) < 1e-6)
-            {
-                vertices.RemoveAt(vertices.Count - 1);
-            }
-
-            if (vertices.Count < SiteVectorReader.MinimumRingVertices)
-            {
-                return;
-            }
-        }
-        else if (vertices.Count < SiteVectorReader.MinimumLineVertices)
+        if (!SiteVectorReader.TryFinishPath(vertices, part.Closed))
         {
             return;
         }

@@ -144,10 +144,12 @@ internal static class Verify
     private static string Describe(Element? element)
         => element is null ? "(gone)" : $"{element.GetType().Name}/{element.Category?.Name ?? "-"}{(element.ViewSpecific ? "/view-specific" : "")}";
 
+    private static string Metres(double? value) => value is { } v ? v.ToString("F3", Invariant) : "";
+
     private static List<object> Links(Document document, Transform toShared, Ground? ground, string dir)
     {
         List<object> links = [];
-        StringBuilder csv = new("link,guid,centre_east_m,centre_north_m,base_z_m,top_z_m,ground_z_m\n");
+        StringBuilder csv = new("link,guid,centre_east_m,centre_north_m,base_z_m,top_z_m,ground_z_m,ground_min_z_m,ground_max_z_m\n");
         foreach (RevitLinkInstance instance in new FilteredElementCollector(document).OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>())
         {
             Transform total = instance.GetTotalTransform();
@@ -168,7 +170,16 @@ internal static class Verify
                     double cx = (min.X + max.X) / 2;
                     double cy = (min.Y + max.Y) / 2;
                     double? under = ground?.At(cx, cy) / FeetPerMetre;
-                    csv.Append(Invariant, $"{instance.Name.Replace(',', ' ')},{guid},{cx / FeetPerMetre:F3},{cy / FeetPerMetre:F3},{Math.Min(min.Z, max.Z) / FeetPerMetre:F3},{Math.Max(min.Z, max.Z) / FeetPerMetre:F3},{(under is { } g ? g.ToString("F3", Invariant) : "")}\n");
+                    List<double> span = [];
+                    foreach ((double x, double y) in new[] { (min.X, min.Y), (min.X, max.Y), (max.X, min.Y), (max.X, max.Y), (cx, cy) })
+                    {
+                        if (ground?.At(x, y) is { } z)
+                        {
+                            span.Add(z / FeetPerMetre);
+                        }
+                    }
+
+                    csv.Append(Invariant, $"{instance.Name.Replace(',', ' ')},{guid},{cx / FeetPerMetre:F3},{cy / FeetPerMetre:F3},{Math.Min(min.Z, max.Z) / FeetPerMetre:F3},{Math.Max(min.Z, max.Z) / FeetPerMetre:F3},{Metres(under)},{Metres(span.Count == 0 ? null : span.Min())},{Metres(span.Count == 0 ? null : span.Max())}\n");
                     buildings++;
                 }
             }
