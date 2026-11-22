@@ -3037,11 +3037,12 @@
       "group": "platform",
       "file": "platform/quote-public.json",
       "expect": "accept",
-      "reason": "A Quote asked with no bearer is the public Quote: price, coverage and licence, and no account fields. The Quote is public, so a signed-out curator sees a price.",
+      "reason": "A Quote asked with no bearer is the public Quote: price, coverage and licence, and no account fields. The Quote is public, so a signed-out curator sees a price. The extent is above the free area, so the Quote also offers its free proof, priced 0, beside the whole site.",
       "expectations": {
         "priceCents": 1234,
         "coverage": "covered",
-        "accountFields": false
+        "accountFields": false,
+        "proofPriceCents": 0
       }
     },
     {
