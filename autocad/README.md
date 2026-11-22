@@ -13,7 +13,7 @@ first.
 
 The plugin puts a **Mantle Place** tab of its own on the ribbon, as Revit does, holding a **Mantle Place** panel;
 the host's Add-ins tab is left as it is (Civil 3D and plain AutoCAD alike). F1 over any of its buttons opens this page. Each
-command can also be typed at the command line. The panel carries the Mantle Place monogram and no
+command can also be typed at the command line. The panel carries the Mantle Place mark and no
 other logo.
 
 | Button | Command | What it does |

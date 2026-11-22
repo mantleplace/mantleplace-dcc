@@ -2,16 +2,13 @@
 
 Sources for the images beside this folder.
 
-## The mark has no source here
+## The mark's source is not here
 
-`MantlePlaceMark_*.png` are rendered from the canonical Mantle Place mark, which is a **private
-vector source** held by Mantle Place LLC and is not in this repository. The renders are committed;
-their input is not, and cannot be.
-
-The script that produces them is [`tools/brand-assets/`](../../../../../tools/brand-assets/), and
-the reasoning behind what it does to the artwork — the dropped extrude, the recentring, the
-hardened edge below 32 px — is
-[ADR 0009](../../../../../docs/adr/0009-host-assets-render-the-monogram.md).
+`MantlePlaceMark_*.png` are rendered from the Mantle Place mark's one vector source,
+[`tools/brand-assets/mark.svg`](../../../../../tools/brand-assets/mark.svg),
+by the script beside it, which writes every host's mark files at once. Every host shows the same
+mark, uncropped and with its extrude
+([ADR 0033](../../../../../docs/adr/0033-every-host-shows-the-round-mark-with-its-extrude.md)).
 
 Command glyphs are a different matter: those are MIT-licensed SVGs and their sources belong in
 this folder, beside the licence text.

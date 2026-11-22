@@ -18,12 +18,13 @@ For the avoidance of doubt, the marks this policy covers are:
 
 - the **"Mantle Place"** word mark;
 - the **`mantle.place`** domain;
-- the square **"mp" mark** and the Mantle Place logo lockups shipped in
-  [`unreal/MantlePlace/Resources/`](unreal/MantlePlace/Resources/) and
+- the round **"mp" mark**, its vector source in
+  [`tools/brand-assets/`](tools/brand-assets/), and its renders and the Mantle Place logo lockups
+  shipped in [`unreal/MantlePlace/Resources/`](unreal/MantlePlace/Resources/) and
   [`revit/src/MantlePlace.Revit.Addin/Resources/`](revit/src/MantlePlace.Revit.Addin/Resources/);
-- the **"mp" roundel**, the round treatment the Unreal plugin shipped through `unreal-0.4.0`. It
-  is no longer rendered anywhere in this repository, and it remains covered: it is installed on
-  machines we do not control, so a fork still has to replace it;
+- the square **"mp" tile**, the treatment the Revit, AutoCAD and Unreal plugins shipped before the
+  round mark replaced it. It is no longer rendered anywhere in this repository, and it remains
+  covered: it is installed on machines we do not control, so a fork still has to replace it;
 - the tagline **"place it on mantle"**.
 
 All are trademarks (™) of Mantle Place LLC.

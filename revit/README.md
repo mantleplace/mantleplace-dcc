@@ -847,8 +847,9 @@ and not `EmbeddedResource`, because a pack URI resolves against the WPF resource
 `EmbeddedResource` does not populate it. Nothing has to be copied at packaging time, and there is no
 way to ship a release whose ribbon is blank because a folder did not get zipped.
 
-The Account face draws the Mantle Place mark, which comes from a private vector source through
-[`tools/brand-assets/`](../tools/brand-assets/) ([ADR 0009](../docs/adr/0009-host-assets-render-the-monogram.md)).
+The Account face, the title bar of every Mantle Place window and each dialog header draw the Mantle
+Place mark, rendered from its one vector source by
+[`tools/brand-assets/`](../tools/brand-assets/) ([ADR 0033](../docs/adr/0033-every-host-shows-the-round-mark-with-its-extrude.md)).
 The four command buttons draw glyphs rendered from MIT-licensed SVGs committed in the tree, by
 
 ```powershell
@@ -879,7 +880,7 @@ Inside: one root folder, `MantlePlace.bundle`, which is an Autodesk application 
 `Install.cmd`, `Uninstall.cmd` and their two scripts beside both. The same zip therefore installs from
 the Autodesk storefront and by hand; the copy-first install reads `Contents` exactly as it always did
 ([ADR 0005](../docs/adr/0005-release-installs-are-copy-first.md)). `Contents/Resources/` carries the
-bundle icon (the monogram) and is not copied into a Revit add-ins folder.
+bundle icon (the mark) and is not copied into a Revit add-ins folder.
 
 `PackageContents.xml` is built by `AutodeskBundleManifest` in the core, a pure function of the declared
 version and the supported Revit years (2025, 2026 and 2027, each naming the module that year loads,

@@ -88,7 +88,7 @@ key this suite must assert, or it fails.
 - **Windows are shared with Revit, not copied.** Sign-in, the vault browser, About, the notices and
   the import window, with their brand chrome and window styles, are the one set in
   [`shared/src/MantlePlace.Wpf`](../shared/README.md); the shell opens them and hands them its main
-  window, its feedback launcher and its About sentences, and its ribbon reads the monogram from the
+  window, its feedback launcher and its About sentences, and its ribbon reads the mark from the
   same assembly (`MarkImages`). The shell declares no window of its own. Every import opens the import
   window (`ImportWindowThread`, `HPS-60`) through `WindowedImport`, with no checklist. The window waits for
   Import only when it offers a choice: a send from the web vault whose order offers levels opens on the

@@ -1,7 +1,7 @@
 ---
 name: adr-0009-host-assets-render-the-monogram
 description: Every host asset renders the monogram alone - extrude stripped, recentred on its optical box at a 12% margin, hardened below 32 px - because the mark as drawn carries detail finer than a pixel at ribbon sizes. Read before restoring the extrude, re-centring anything, splitting Unreal's shared 64 px file back in two, or rendering this pipeline large.
-status: accepted
+status: superseded
 ---
 
 # 9. Host assets render the monogram, not the mark as drawn
@@ -10,7 +10,7 @@ Date: 2026-09-16
 
 ## Status
 
-Accepted.
+Superseded by [ADR 0033](0033-every-host-shows-the-round-mark-with-its-extrude.md): every host shows the round mark with its extrude.
 
 ## Context
 

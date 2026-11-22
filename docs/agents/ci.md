@@ -18,10 +18,11 @@ publishes the `mantleplace-mpb` package to PyPI through trusted publishing (no s
 environment is where a maintainer approves). `release_check.py` holds the tag to the package version and
 the package version to the conformance corpus; the mpb tests hold the same line on every pull request.
 
-`ci-brand-assets` is **half a gate by construction**: the mark renderer's input is a private file,
-so no runner can regenerate the committed PNGs, and the job tests the rules that decide what a
-render looks like rather than the renders themselves
-([ADR 0009](../adr/0009-host-assets-render-the-monogram.md)).
+`ci-brand-assets` tests the mark's vector source and the list of files rendered from it, with the
+standard library alone. It does not re-render the committed PNGs: rendering needs Pillow, and its
+output is not byte-identical across Pillow versions, so anyone can regenerate them with
+`tools/brand-assets/render_mark.py` and the diff is reviewed by eye
+([ADR 0033](../adr/0033-every-host-shows-the-round-mark-with-its-extrude.md)).
 
 `ci-platform-api` (`sync-check`) fetches the Platform API spec the platform serves, regenerates the
 shared client both .NET plugins ship with the pinned generator, and fails when the vendored copy under

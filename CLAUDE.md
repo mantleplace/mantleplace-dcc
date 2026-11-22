@@ -194,7 +194,7 @@ Most facts already have exactly one home. Find it before writing a fact down any
   **0005** release installs are copy-first · **0006** Unreal **declines**
   `elevation.dem.bounds_target_crs`, Revit consumes it · **0007** a publicly cited `HPS-NN` must
   resolve in a public document · **0008** the Revit drape is anchored to the **smooth-shading
-  origin** · **0009** host assets render the **monogram** · **0010** Revit tooltip **vignettes are
+  origin** · **0009** host assets render the **monogram** (superseded by 0033) · **0010** Revit tooltip **vignettes are
   drawn**, capped at 355 px · **0011** the Revit provenance **schema GUID is permanent** ·
   **0012** Revit context buildings are **the site model's own extrusions, copied** · **0013** Revit
   **published contours** are DirectShapes · **0014** Revit draws hazards **on a hazard plan** ·
@@ -208,7 +208,7 @@ Most facts already have exactly one home. Find it before writing a fact down any
   **0022** the shared .NET core library · **0023** the shared core behind the Revit import · **0024** the shared client and WPF code ·
   **0025** shared core, import and site handling · **0026** the Unreal editor importer · **0027** Unreal editor import path ·
   **0028** Unreal editor module and tests · **0029** Unreal auth, cache and vault · **0030** Unreal runtime, corpus reader and Cesium streaming ·
-  **0031** CI, AutoCAD, Blender and gate tooling. **0032** **code carries no comments**; the `comment-ratchet` check holds the line.
+  **0031** CI, AutoCAD, Blender and gate tooling. **0032** **code carries no comments**; the `comment-ratchet` check holds the line. **0033** every host shows **the round mark with its extrude**, rendered from one source.
   When to write one, and the two edits it takes: [`docs/agents/domain.md`](docs/agents/domain.md).
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
   authority; never restate a value it owns or hardcode a version in prose — each host's verified
