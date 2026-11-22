@@ -11,6 +11,7 @@ public static class BundleImportPlanner
         "Elevation/Slope.gpkg",
         "Site/Site.ifc",
         "Basemap/Roads.gpkg",
+        "Basemap/Pavement.gpkg",
         "Basemap/Water.gpkg",
         "Basemap/Landuse.gpkg",
         "Landcover/Landcover.gpkg",
