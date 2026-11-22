@@ -189,7 +189,7 @@ bool VerifyEntrySha256(
 	FString Actual;
 	{
 		const MantlePlaceImportTiming::FAccumulatedPhase::FSpan DigestSpan(Timing.Digest);
-		Actual = MantlePlaceSha256::HexDigest(Bytes);
+		Actual = FMantlePlaceSha256::HexDigest(Bytes);
 	}
 	if (!Actual.Equals(ExpectedHex, ESearchCase::IgnoreCase))
 	{

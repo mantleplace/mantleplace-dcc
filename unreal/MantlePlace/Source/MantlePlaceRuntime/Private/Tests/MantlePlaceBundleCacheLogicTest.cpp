@@ -5,6 +5,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "MantlePlaceBundleCacheLogic.h"
+#include "MantlePlaceSha256.h"
 #include "MantlePlaceBundleCacheTypes.h"
 #include "MantlePlaceVaultTypes.h"
 #include "Tests/MantlePlaceConformanceCorpus.h"
@@ -39,8 +40,8 @@ FString CacheStateName(EMantlePlaceCacheState State)
 FString Sha256OfUtf8(const FString& Text)
 {
 	const FTCHARToUTF8 Utf8(*Text);
-	return FMantlePlaceBundleCacheLogic::Sha256Hex(
-		reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length());
+	return FMantlePlaceSha256::HexDigest(
+		TConstArrayView<uint8>(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length()));
 }
 }
 
@@ -114,7 +115,7 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 				FLogic::Sha256Equal(TEXT("abcd"), TEXT("abce")));
 
 			TestEqual(Case->What(TEXT("sha256 of a null/zero-length buffer")),
-				FLogic::Sha256Hex(nullptr, 0), Sha256OfUtf8(FString()));
+				FMantlePlaceSha256::HexDigest(TConstArrayView<uint8>()), Sha256OfUtf8(FString()));
 		}
 
 		for (const FString& Missing : UndrivenCases(Cases, Driven))

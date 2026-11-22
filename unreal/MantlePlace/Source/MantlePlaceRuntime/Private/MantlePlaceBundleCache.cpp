@@ -3,6 +3,7 @@
 #include "MantlePlaceBundleCache.h"
 
 #include "MantlePlaceBundleCacheLogic.h"
+#include "MantlePlaceSha256.h"
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"

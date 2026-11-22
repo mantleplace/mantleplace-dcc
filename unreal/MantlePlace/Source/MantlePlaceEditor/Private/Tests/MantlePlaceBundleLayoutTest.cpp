@@ -131,15 +131,15 @@ FString ManifestOf(const FSyntheticBundle& B)
 	Text.ReplaceInline(TEXT("@PARCELS@"), *B.Parcels);
 	Text.ReplaceInline(TEXT("@ENTRIES@"), *Entries);
 	Text.ReplaceInline(TEXT("@HEIGHTMAP@"), *B.Heightmap);
-	Text.ReplaceInline(TEXT("@HEIGHTMAP_SHA@"), *MantlePlaceSha256::HexDigest(PayloadOf(B.Heightmap)));
+	Text.ReplaceInline(TEXT("@HEIGHTMAP_SHA@"), *FMantlePlaceSha256::HexDigest(PayloadOf(B.Heightmap)));
 	Text.ReplaceInline(TEXT("@HEIGHTMAP_MAPPING@"), *HeightmapMapping);
 	Text.ReplaceInline(TEXT("@DRAPE@"), *B.Drape);
-	Text.ReplaceInline(TEXT("@DRAPE_SHA@"), *MantlePlaceSha256::HexDigest(PayloadOf(B.Drape)));
+	Text.ReplaceInline(TEXT("@DRAPE_SHA@"), *FMantlePlaceSha256::HexDigest(PayloadOf(B.Drape)));
 	Text.ReplaceInline(TEXT("@MESH@"), *B.Mesh);
-	Text.ReplaceInline(TEXT("@MESH_SHA@"), *MantlePlaceSha256::HexDigest(PayloadOf(B.Mesh)));
+	Text.ReplaceInline(TEXT("@MESH_SHA@"), *FMantlePlaceSha256::HexDigest(PayloadOf(B.Mesh)));
 	Text.ReplaceInline(TEXT("@WATER_SOURCE@"), TEXT("LandCover/WaterMask.tif"));
 	Text.ReplaceInline(TEXT("@WATER@"), *B.WaterMask);
-	Text.ReplaceInline(TEXT("@WATER_SHA@"), *MantlePlaceSha256::HexDigest(PayloadOf(B.WaterMask)));
+	Text.ReplaceInline(TEXT("@WATER_SHA@"), *FMantlePlaceSha256::HexDigest(PayloadOf(B.WaterMask)));
 	Text.ReplaceInline(TEXT("@WATER_MEANING@"), *WaterMeaning);
 	Text.ReplaceInline(TEXT("@EXTRA@"), *B.Extra);
 	Text.ReplaceInline(TEXT("'"), TEXT("\""));
@@ -289,7 +289,7 @@ FSelectionOutcome VerifyCut(FAutomationTestBase& T, const FString& Label, const 
 	B.bParcelsInArchive = bParcelsInArchive;
 	B.Extra = FString::Printf(
 		TEXT("'files':{'%s':{'part':'records.parcels_gpkg@MAX','size_bytes':1,'sha256':'%s'}},%s"),
-		*B.Parcels, *MantlePlaceSha256::HexDigest(PayloadOf(B.Parcels)), *ViewJson);
+		*B.Parcels, *FMantlePlaceSha256::HexDigest(PayloadOf(B.Parcels)), *ViewJson);
 
 	const FString ZipPath = FPaths::Combine(
 		FPaths::ProjectSavedDir(), TEXT("MantlePlace"), TEXT("Tests"), FGuid::NewGuid().ToString() + TEXT(".zip"));
