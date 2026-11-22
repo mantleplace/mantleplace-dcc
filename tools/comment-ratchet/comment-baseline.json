@@ -8,8 +8,6 @@
     "^\\s*not a Platform API call$"
   ],
   "keepDocstrings": false,
-  "total": 38,
-  "files": {
-    "shared/tests/MantlePlace.Core.Tests/SharedWindowsTests.cs": 38
-  }
+  "total": 0,
+  "files": {}
 }

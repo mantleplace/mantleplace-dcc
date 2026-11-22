@@ -548,7 +548,8 @@ function familyOf(file) {
   return { family: FAMILY.get(ext), ext };
 }
 
-export function scanText(text, file, config = {}) {
+export function scanText(raw, file, config = {}) {
+  const text = raw.includes('\r\n') ? raw.replace(/\r\n/g, '\n') : raw;
   const { family, ext } = familyOf(file);
   if (!family || text.includes('\u0000')) return null;
   const starts = lineStarts(text);
@@ -691,10 +692,24 @@ function soleBody(text, comment, comments) {
 }
 
 export function stripText(source, file, config = {}, wanted = null) {
-  const crlf = source.includes('\r\n');
-  const stripped = stripLf(crlf ? source.replace(/\r\n/g, '\n') : source, file, config, wanted);
+  const paired = (source.match(/\r\n/g) ?? []).length;
+  if (!paired) return stripLf(source, file, config, wanted);
+  const bare = (source.match(/(?<!\r)\n/g) ?? []).length;
+  const odd = bare ? MARKS.find((candidate) => !source.includes(candidate)) : '';
+  if (odd === undefined) return { text: source, removed: 0 };
+  const crlf = paired >= bare;
+  const flat = crlf
+    ? source.replace(/(?<!\r)\n/g, `${odd}\n`).replace(/\r\n/g, '\n')
+    : source.replace(/\r\n/g, `${odd}\n`);
+  const stripped = stripLf(flat, file, config, wanted);
   if (!stripped.removed) return { ...stripped, text: source };
-  return crlf ? { ...stripped, text: stripped.text.replace(/\n/g, '\r\n') } : stripped;
+  const [usual, rare] = crlf ? ['\r\n', '\n'] : ['\n', '\r\n'];
+  const lines = stripped.text.split('\n');
+  const last = lines.pop();
+  const text = `${lines
+    .map((line) => (odd && line.endsWith(odd) ? `${line.slice(0, -1)}${rare}` : `${line}${usual}`))
+    .join('')}${last}`;
+  return { ...stripped, text: odd ? text.split(odd).join('') : text };
 }
 
 function stripLf(text, file, config, wanted) {
