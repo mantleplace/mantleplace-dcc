@@ -37,10 +37,9 @@ public sealed class PrepareRejoiner
         {
             Rejoin(listing);
         }
-#pragma warning disable CA1031
-        catch (Exception)
-#pragma warning restore CA1031
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
+            ClientLog.Write($"Re-joining interrupted Prepares failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

@@ -1,6 +1,9 @@
 using System.Reflection;
+using MantlePlace.Client;
 using MantlePlace.Core;
 using MantlePlace.Core.Tests;
+
+using IDisposable noClientLogFile = ClientLog.RedirectTo(_ => { });
 
 HostIdentity.Set(
     "revit",

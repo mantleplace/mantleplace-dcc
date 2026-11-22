@@ -584,11 +584,13 @@ internal static class StagedImportTests
     private static IEnumerable<StepProgress> ThrowsInsideCommit(Func<StagedImport> import)
     {
         import().CommitStarted();
-        throw new IOException("the commit threw");
-#pragma warning disable CS0162
-        yield break;
-#pragma warning restore CS0162
+        foreach (StepProgress progress in CommitThatThrows())
+        {
+            yield return progress;
+        }
     }
+
+    private static StepProgress[] CommitThatThrows() => throw new IOException("the commit threw");
 
     private static IEnumerable<StepProgress> ChunksThenSay(FakeRunner runner, string closing, params int[] sizes)
     {

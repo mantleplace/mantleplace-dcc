@@ -9,6 +9,8 @@ public sealed class LocalBundleArchive : IDisposable
 
     private readonly ZipArchive _archive;
     private readonly string _scratchDirectory;
+    private static readonly HashSet<string> PendingScratch = new(StringComparer.OrdinalIgnoreCase);
+
     private readonly HashSet<string> _verified = new(StringComparer.Ordinal);
 
     private LocalBundleArchive(
@@ -40,6 +42,8 @@ public sealed class LocalBundleArchive : IDisposable
 
     public static LocalBundleArchive Open(string zipPath, string? cacheRoot)
     {
+        RetryPendingScratchCleanup();
+
         ZipArchive archive = ZipFile.OpenRead(zipPath);
 
         string? manifestText = ReadManifestText(archive);
@@ -167,18 +171,50 @@ public sealed class LocalBundleArchive : IDisposable
     public void Dispose()
     {
         _archive.Dispose();
-        try
+        if (TryDeleteScratch(_scratchDirectory) is { } failure)
         {
-            if (Directory.Exists(_scratchDirectory))
+            ClientLog.Write($"Could not delete the import scratch folder {_scratchDirectory}; it is retried at the next import: {failure.Message}");
+            lock (PendingScratch)
             {
-                Directory.Delete(_scratchDirectory, recursive: true);
+                PendingScratch.Add(_scratchDirectory);
             }
         }
-        catch (IOException)
+    }
+
+    public static void RetryPendingScratchCleanup()
+    {
+        string[] pending;
+        lock (PendingScratch)
         {
+            pending = [.. PendingScratch];
         }
-        catch (UnauthorizedAccessException)
+
+        foreach (string directory in pending)
         {
+            if (TryDeleteScratch(directory) is null)
+            {
+                lock (PendingScratch)
+                {
+                    PendingScratch.Remove(directory);
+                }
+            }
+        }
+    }
+
+    private static Exception? TryDeleteScratch(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return ex;
         }
     }
 

@@ -223,7 +223,7 @@ public sealed class PrepareWatcher
         PrepareEnding ending;
         string detail = string.Empty;
 
-        Record(() => _ledger.Started(run.OrderId, run.StartedAt));
+        Record(run.OrderId, () => _ledger.Started(run.OrderId, run.StartedAt));
 
         try
         {
@@ -248,7 +248,7 @@ public sealed class PrepareWatcher
             ending = PrepareEnding.Interrupted;
         }
 
-        Record(() => _ledger.Ended(run.OrderId, ending));
+        Record(run.OrderId, () => _ledger.Ended(run.OrderId, ending));
 
         lock (_gate)
         {
@@ -259,16 +259,17 @@ public sealed class PrepareWatcher
         Ended?.Invoke(this, run);
     }
 
-    private static void Record(Action write)
+    private static void Record(string orderId, Action write)
     {
         try
         {
             write();
         }
 #pragma warning disable CA1031
-        catch (Exception)
+        catch (Exception ex)
 #pragma warning restore CA1031
         {
+            ClientLog.Write($"Could not record the Prepare of {orderId} in the interrupted-Prepare ledger: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

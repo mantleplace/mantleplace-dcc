@@ -167,10 +167,18 @@ internal static class PrepareWatcherTests
 
         run.Case("a ledger that throws costs nothing but the re-join", () =>
         {
-            PrepareRun prepared = new PrepareWatcher(new FakeSteps(), new FakeLedger { Throws = true }).Prepare(Bundle, out _);
+            System.Collections.Concurrent.ConcurrentQueue<string> logged = new();
+            PrepareRun prepared;
+            using (ClientLog.RedirectTo(logged.Enqueue))
+            {
+                prepared = new PrepareWatcher(new FakeSteps(), new FakeLedger { Throws = true }).Prepare(Bundle, out _);
+            }
+
             Wait(prepared);
 
             run.Equal(prepared.Ending == PrepareEnding.Ready, true, "still ready");
+            run.Equal(logged.Count, 2, "and both failed ledger writes are logged");
+            run.True(logged.All(line => line.Contains("order-1", StringComparison.Ordinal) && line.Contains("the record is locked", StringComparison.Ordinal)), $"naming the order and the failure ({string.Join(" | ", logged)})");
         });
 
         run.Case("a re-join joins a watch already on the order, and keeps the original ask's time", () =>

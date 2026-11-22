@@ -11,6 +11,13 @@ public sealed record HostCommand(string Face, string ToolTip, Action Run);
 
 public sealed class AboutWindow : Window
 {
+    private readonly TextBlock _linkRefused = new()
+    {
+        Margin = new Thickness(0, 8, 0, 0),
+        TextWrapping = TextWrapping.Wrap,
+        Visibility = Visibility.Collapsed,
+    };
+
     public AboutWindow(string body, string privacyUrl, IntPtr hostWindow, params HostCommand[] commands)
     {
         ArgumentNullException.ThrowIfNull(commands);
@@ -66,12 +73,20 @@ public sealed class AboutWindow : Window
         StackPanel text = new();
         text.Children.Add(new TextBlock { Text = body, TextWrapping = TextWrapping.Wrap });
         text.Children.Add(privacy);
+        text.Children.Add(_linkRefused);
         root.Children.Add(text);
         Content = root;
     }
 
-    private static void ShellOpen(string address)
+    private void ShellOpen(string address)
     {
-        _ = ShellLauncher.TryOpen(address, out _);
+        if (ShellLauncher.TryOpen(address, out string refused))
+        {
+            _linkRefused.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _linkRefused.Text = $"Could not open your browser. Open this address manually: {refused}";
+        _linkRefused.Visibility = Visibility.Visible;
     }
 }

@@ -194,6 +194,42 @@ internal static class PrepareRejoinerTests
             own.Completion.Wait(TimeSpan.FromSeconds(10));
         });
 
+        run.Case("an expected re-join failure is logged, not thrown", () =>
+        {
+            Rig rig = new(sandbox, "rejoin-fault");
+            rig.Interrupt("order-1");
+            rig.Watcher.Said += (_, _) => throw new InvalidOperationException("the window is gone");
+
+            List<string> logged = [];
+            using (ClientLog.RedirectTo(logged.Add))
+            {
+                rig.Rejoiner.Arm();
+                rig.Rejoiner.OnListed(new VaultListing { Bundles = rig.Vault.Rows });
+            }
+
+            run.True(logged.Count == 1 && logged[0].Contains("the window is gone", StringComparison.Ordinal), $"logged ({string.Join(" | ", logged)})");
+        });
+
+        run.Case("an unexpected re-join failure is not swallowed", () =>
+        {
+            Rig rig = new(sandbox, "rejoin-defect");
+            rig.Interrupt("order-1");
+            rig.Watcher.Said += (_, _) => throw new ArgumentException("a defect");
+
+            rig.Rejoiner.Arm();
+            bool thrown = false;
+            try
+            {
+                rig.Rejoiner.OnListed(new VaultListing { Bundles = rig.Vault.Rows });
+            }
+            catch (ArgumentException)
+            {
+                thrown = true;
+            }
+
+            run.True(thrown, "a programming defect reaches the caller");
+        });
+
         run.Case("stopped for shutdown: an armed listing re-joins nothing", () =>
         {
             Rig rig = new(sandbox, "stopped");

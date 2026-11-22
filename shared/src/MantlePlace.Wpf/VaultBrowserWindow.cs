@@ -27,11 +27,10 @@ public sealed class VaultBrowserWindow : Window
     private readonly PrepareWatcher? _watcher;
     private readonly IVaultImport? _import;
 
-    private const double SearchRowHeight = 32;
-
     private readonly ListBox _list = new() { Margin = new Thickness(0, 0, 0, 8), MinHeight = 220 };
     private readonly TextBox _search = new() { ToolTip = WindowLabels.SearchToolTip, VerticalContentAlignment = VerticalAlignment.Center };
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, MinHeight = 40 };
+    private readonly DockPanel _searchRow = new() { Margin = new Thickness(0, 0, 0, 8) };
 
     private readonly StackPanel _buttons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
     private Button? _cancel;
@@ -78,13 +77,13 @@ public sealed class VaultBrowserWindow : Window
         Title = WindowLabels.VaultWindowTitle;
         BrandChrome.ShowMarkInTitleBar(this);
         Width = 720;
-
-        Height = 460 + BrandChrome.HeaderHeight + SearchRowHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         new WindowInteropHelper(this) { Owner = hostWindow };
 
         Content = BuildLayout(WindowLabels.VaultButtons(importing is not null, WindowLabels.HostName(HostIdentity.Id)));
+        _searchRow.Measure(new Size(Width, double.PositiveInfinity));
+        Height = 460 + BrandChrome.HeaderHeight + _searchRow.DesiredSize.Height;
 
         _search.TextChanged += (_, _) => OnSearchChanged();
         _list.SelectionChanged += (_, _) => OnSelectionChanged();
@@ -180,7 +179,7 @@ public sealed class VaultBrowserWindow : Window
             _buttons.Children.Add(button);
         }
 
-        DockPanel search = new() { Margin = new Thickness(0, 0, 0, 8) };
+        DockPanel search = _searchRow;
         TextBlock searchLabel = new()
         {
             Text = WindowLabels.Search,
@@ -471,8 +470,14 @@ public sealed class VaultBrowserWindow : Window
             return;
         }
 
-        _cache.Remove(bundle.OrderId);
+        string? removeError = _cache.Remove(bundle.OrderId);
         UpdateRow(bundle, QuickEntry(bundle));
+        if (removeError is not null)
+        {
+            Report(removeError);
+            return;
+        }
+
         Report($"Removed the local copy of {bundle.AoiLabel}. It stays in your vault and can be downloaded again.");
     }
 
