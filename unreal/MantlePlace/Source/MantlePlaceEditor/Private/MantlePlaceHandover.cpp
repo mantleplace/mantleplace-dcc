@@ -21,28 +21,14 @@
 
 namespace
 {
-bool TagValue(const AActor& Actor, const FString& Prefix, FString& OutValue)
-{
-	for (const FName& Tag : Actor.Tags)
-	{
-		const FString Text = Tag.ToString();
-		if (Text.StartsWith(Prefix))
-		{
-			OutValue = Text.Mid(Prefix.Len());
-			return true;
-		}
-	}
-	return false;
-}
-
 bool ReadItem(const AActor& Actor, MantlePlaceOdblLogic::FHandoverItem& OutItem)
 {
-	if (!TagValue(Actor, MantlePlaceImportNaming::ImportTagPrefix(), OutItem.Identity))
+	if (!MantlePlaceImportNaming::TagValue(Actor, MantlePlaceImportNaming::ImportTagPrefix(), OutItem.Identity))
 	{
 		return false;
 	}
 	OutItem.bOdbl = Actor.Tags.Contains(MantlePlaceImportNaming::OdblTag());
-	TagValue(Actor, MantlePlaceImportNaming::EquivalenceTagPrefix(), OutItem.EquivalenceGroup);
+	MantlePlaceImportNaming::TagValue(Actor, MantlePlaceImportNaming::EquivalenceTagPrefix(), OutItem.EquivalenceGroup);
 	TArray<FString> TagStrings;
 	for (const FName& Tag : Actor.Tags)
 	{

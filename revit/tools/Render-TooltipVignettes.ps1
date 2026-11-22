@@ -10,6 +10,8 @@ $ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName PresentationCore, WindowsBase
 
+. (Join-Path $PSScriptRoot 'IconRendering.ps1')
+
 $revitRoot = Split-Path -Parent $PSScriptRoot
 $resources = Join-Path $revitRoot 'src/MantlePlace.Revit.Addin/Resources'
 
@@ -65,46 +67,6 @@ $surface = @{
     BaseDrop   = 26.0
     Divisions  = 3
     Samples    = 24
-}
-
-function Get-IconStroke {
-    param([string]$Path)
-
-    [xml]$svg = Get-Content -Raw -LiteralPath $Path
-    $drawn = @(
-        $svg.svg.path |
-            Where-Object { $_.GetAttribute('stroke') -ne 'none' } |
-            ForEach-Object { $_.GetAttribute('d') })
-
-    if ($drawn.Count -eq 0) {
-        throw "No drawable path in '$Path'. A Tabler outline icon has at least one path that is not stroke none."
-    }
-
-    return $drawn
-}
-
-function ConvertTo-MediaColour {
-    param([int]$Rgb)
-
-    return [System.Windows.Media.Color]::FromRgb(
-        [byte](($Rgb -shr 16) -band 0xFF),
-        [byte](($Rgb -shr 8) -band 0xFF),
-        [byte]($Rgb -band 0xFF))
-}
-
-function New-VignettePen {
-    param([System.Windows.Media.Color]$Colour)
-
-    $brush = [System.Windows.Media.SolidColorBrush]::new($Colour)
-    $brush.Freeze()
-
-    $pen = [System.Windows.Media.Pen]::new($brush, $strokeWidth)
-    $pen.StartLineCap = [System.Windows.Media.PenLineCap]::Round
-    $pen.EndLineCap = [System.Windows.Media.PenLineCap]::Round
-    $pen.LineJoin = [System.Windows.Media.PenLineJoin]::Round
-    $pen.Freeze()
-
-    return $pen
 }
 
 function New-Stroke {
@@ -258,8 +220,8 @@ function Save-VignettePng {
         [string]$Destination
     )
 
-    $foregroundPen = New-VignettePen -Colour $Foreground
-    $accentPen = New-VignettePen -Colour $Accent
+    $foregroundPen = New-IconPen -Colour $Foreground -Thickness $strokeWidth
+    $accentPen = New-IconPen -Colour $Accent -Thickness $strokeWidth
 
     $visual = [System.Windows.Media.DrawingVisual]::new()
     $context = $visual.RenderOpen()

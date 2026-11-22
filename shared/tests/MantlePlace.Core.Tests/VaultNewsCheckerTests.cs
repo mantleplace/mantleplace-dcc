@@ -94,9 +94,13 @@ internal static class VaultNewsCheckerTests
         {
             FakeSource source = new() { Throws = true };
             bool threw = false;
+            List<string> logged = [];
             try
             {
-                Check(new VaultNewsChecker(source, NewStore(), () => false));
+                using (ClientLog.RedirectTo(logged.Add))
+                {
+                    Check(new VaultNewsChecker(source, NewStore(), () => false));
+                }
             }
             catch (InvalidOperationException)
             {
@@ -104,6 +108,19 @@ internal static class VaultNewsCheckerTests
             }
 
             run.False(threw, "a background check never faults its caller");
+            run.True(logged.Count == 1 && logged[0].Contains("unexpected", StringComparison.Ordinal) && logged[0].Contains("boom", StringComparison.Ordinal), $"but an unexpected fault is logged, not hidden ({string.Join(" | ", logged)})");
+        });
+
+        run.Case("a listing the network fails is logged as a failure, not a fault", () =>
+        {
+            FakeSource source = new() { OnList = () => throw new HttpRequestException("offline") };
+            List<string> logged = [];
+            using (ClientLog.RedirectTo(logged.Add))
+            {
+                Check(new VaultNewsChecker(source, NewStore(), () => false));
+            }
+
+            run.True(logged.Count == 1 && !logged[0].Contains("unexpected", StringComparison.Ordinal) && logged[0].Contains("offline", StringComparison.Ordinal), $"logged ({string.Join(" | ", logged)})");
         });
 
         run.Case("a sign-in lists at once — a startup restore included — and a token renewal does not", () =>

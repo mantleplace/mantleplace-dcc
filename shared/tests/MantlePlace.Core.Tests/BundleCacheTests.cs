@@ -287,8 +287,65 @@ internal static class BundleCacheTests
             cache.Remove(OrderId);
             run.False(Directory.Exists(layout.Root), "removed on request");
 
-            cache.Remove(OrderId);
-            run.True(true, "and removing twice is not an error");
+            run.True(cache.Remove(OrderId) is null, "and removing twice is not an error");
+        });
+
+        run.Case("a removal that keeps failing is retried, logged and reported", () =>
+        {
+            int attempts = 0;
+            BundleCache cache = new(Path.Combine(sandbox, "held"), HostIdentity.Id, _ =>
+            {
+                attempts++;
+                throw new IOException("a file is in use");
+            });
+            Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
+
+            List<string> logged = [];
+            string? error;
+            using (ClientLog.RedirectTo(logged.Add))
+            {
+                error = cache.Remove(OrderId);
+            }
+
+            run.Equal(attempts, BundleCache.RemoveAttempts, "every attempt is spent");
+            run.True(error is not null && error.Contains("a file is in use", StringComparison.Ordinal), $"the caller is told ({error})");
+            run.True(logged.Count == 1 && logged[0].Contains(cache.LayoutFor(OrderId).Root, StringComparison.Ordinal), "and the log names the folder");
+        });
+
+        run.Case("a removal that fails once and then succeeds reports nothing", () =>
+        {
+            int attempts = 0;
+            BundleCache cache = new(Path.Combine(sandbox, "held-once"), HostIdentity.Id, root =>
+            {
+                if (++attempts == 1)
+                {
+                    throw new UnauthorizedAccessException("briefly locked");
+                }
+
+                Directory.Delete(root, recursive: true);
+            });
+            Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
+
+            run.True(cache.Remove(OrderId) is null, "the retry removed it");
+            run.Equal(attempts, 2, "on the second attempt");
+            run.False(Directory.Exists(cache.LayoutFor(OrderId).Root), "and the folder is gone");
+        });
+
+        run.Case("a sidecar that cannot be written is logged and the download reported unverified", () =>
+        {
+            BundleCache cache = new(Path.Combine(sandbox, "no-sidecar"));
+            Directory.CreateDirectory(cache.LayoutFor(OrderId).SidecarPath);
+
+            List<string> logged = [];
+            string? error;
+            using (ClientLog.RedirectTo(logged.Add))
+            {
+                error = Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
+            }
+
+            run.True(error is not null && error.Contains("unverified", StringComparison.Ordinal), $"the download says so ({error})");
+            run.True(logged.Count == 1 && logged[0].Contains(cache.LayoutFor(OrderId).SidecarPath, StringComparison.Ordinal), "and the log names the record");
+            run.True(File.Exists(cache.LayoutFor(OrderId).BundleZipPath), "the bundle itself is kept");
         });
 
         run.Case("the sidecar round-trips, and null sha stays null", () =>

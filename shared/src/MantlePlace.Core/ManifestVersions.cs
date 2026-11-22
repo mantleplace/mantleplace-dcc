@@ -59,7 +59,7 @@ public readonly record struct ManifestVersion(bool IsValid, int Major, int Minor
         ManifestVersion floorParsed = Parse(floor);
         if (!floorParsed.IsValid)
         {
-            return false;
+            throw new ArgumentException($"The version floor \"{floor}\" is not a MAJOR.MINOR.PATCH version.", nameof(floor));
         }
 
         ManifestVersion parsed = Parse(version);

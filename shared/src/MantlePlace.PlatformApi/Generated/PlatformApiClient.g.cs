@@ -2727,12 +2727,12 @@ namespace MantlePlace.PlatformApi
         public ManifestVersion? ManifestVersion { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("delivered")]
-        // TODO(system.text.json): Add ItemConverterType with enum converter when supported
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberCollectionJsonConverter<Delivered>))]
         [System.ComponentModel.DataAnnotations.Required]
         public System.Collections.Generic.ICollection<Delivered> Delivered { get; set; } = new System.Collections.ObjectModel.Collection<Delivered>();
 
         [System.Text.Json.Serialization.JsonPropertyName("base")]
-        // TODO(system.text.json): Add ItemConverterType with enum converter when supported
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberCollectionJsonConverter<Base>))]
         [System.ComponentModel.DataAnnotations.Required]
         public System.Collections.Generic.ICollection<Base> Base { get; set; } = new System.Collections.ObjectModel.Collection<Base>();
 
@@ -2750,7 +2750,7 @@ namespace MantlePlace.PlatformApi
         public LastAttempt? LastAttempt { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("pendingRetryTokens")]
-        // TODO(system.text.json): Add ItemConverterType with enum converter when supported
+        [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberCollectionJsonConverter<PendingRetryTokens>))]
         [System.ComponentModel.DataAnnotations.Required]
         public System.Collections.Generic.ICollection<PendingRetryTokens> PendingRetryTokens { get; set; } = new System.Collections.ObjectModel.Collection<PendingRetryTokens>();
 

@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import zipfile
 
 from .bundle import BundleRefused
@@ -146,5 +147,25 @@ def _find(root: str, archive_path: str) -> str | None:
     return here if os.path.isfile(here) else None
 
 
-def remove_tree(path: str) -> None:
-    shutil.rmtree(path, ignore_errors=True)
+def remove_tree(path: str, attempts: int = 3, pause: float = 0.25, sleep=time.sleep) -> list[str]:
+    for attempt in range(attempts):
+        try:
+            shutil.rmtree(path)
+            return []
+        except FileNotFoundError:
+            break
+        except OSError:
+            if attempt + 1 < attempts:
+                sleep(pause)
+    return _left_behind(path)
+
+
+def _left_behind(path: str) -> list[str]:
+    if not os.path.exists(path):
+        return []
+    files = [os.path.join(folder, name) for folder, _, names in os.walk(path) for name in names]
+    return files or [path]
+
+
+def left_behind_note(paths: list[str]) -> str:
+    return "Could not remove the import's scratch files; delete them by hand: " + ", ".join(paths)

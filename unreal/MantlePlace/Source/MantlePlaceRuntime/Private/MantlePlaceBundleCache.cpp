@@ -311,10 +311,6 @@ FString UMantlePlaceBundleCache::ComputeFileSha256(const FString& Path, int64& O
 	{
 		return FString();
 	}
-	if (OutSizeBytes > MaxHashSizeBytes)
-	{
-		return FString();
-	}
 
 	TUniquePtr<FArchive> Reader(IFileManager::Get().CreateFileReader(*Path));
 	if (!Reader)

@@ -16,7 +16,7 @@ from .core import VERSION
 from .core.anchor import ANCHOR_KEY, BUNDLE_KEY, Placement, bundle_record, decide_placement
 from .core.bundle import BundleRefused, Plan, plan_import, scene_properties, wrapper_stage
 from .core.feedback import feedback_url
-from .core.source import open_bundle, remove_tree
+from .core.source import left_behind_note, open_bundle, remove_tree
 
 ROOT_LAYER = "Site.usda"
 
@@ -58,7 +58,10 @@ def import_bundle(context: bpy.types.Context, path: str, include_features: bool 
         result = ImportResult(plan, [o for o in bpy.data.objects if o not in before], notes)
         collections = [c for c in bpy.data.collections if c not in before_collections]
     finally:
-        remove_tree(scratch)
+        leftover = remove_tree(scratch)
+
+    if leftover:
+        result.notes.append(left_behind_note(leftover))
 
     result.placement = _place(context.scene, plan, result.objects, collections)
     if result.placement.note:

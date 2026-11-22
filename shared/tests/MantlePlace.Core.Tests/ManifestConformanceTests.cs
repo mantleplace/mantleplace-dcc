@@ -48,6 +48,26 @@ internal static partial class ManifestConformanceTests
             return run.Report("manifest conformance");
         }
 
+        run.Case("every version floor parses, and an unparseable one refuses loudly instead of disabling the gate", () =>
+        {
+            foreach (string floor in new[] { ManifestVersions.MinSupportedManifestVersion, HeightDatums.StatedFromVersion })
+            {
+                run.True(ManifestVersion.Parse(floor).IsValid, $"{floor} is a MAJOR.MINOR.PATCH version");
+            }
+
+            bool refused = false;
+            try
+            {
+                ManifestVersion.IsBelowFloor("1.0.0", "1.0");
+            }
+            catch (ArgumentException)
+            {
+                refused = true;
+            }
+
+            run.True(refused, "a typo in a floor throws rather than letting every version through");
+        });
+
         run.Case("corpus pin is at or above this host's floor (clean break, HPS-31)", () =>
             run.True(
                 !ManifestVersion.IsBelowFloor(

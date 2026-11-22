@@ -117,20 +117,6 @@ namespace
 			GEditor->SelectActor(Actor, true, true);
 		}
 	}
-
-	bool TagValue(const AActor& Actor, const FString& Prefix, FString& OutValue)
-	{
-		for (const FName& Tag : Actor.Tags)
-		{
-			const FString Text = Tag.ToString();
-			if (Text.StartsWith(Prefix))
-			{
-				OutValue = Text.Mid(Prefix.Len());
-				return true;
-			}
-		}
-		return false;
-	}
 }
 
 namespace MantlePlaceLevelExtent
@@ -215,7 +201,7 @@ namespace MantlePlaceLevelExtent
 		for (TActorIterator<AActor> It(World); It; ++It)
 		{
 			FString Identity;
-			if (!TagValue(**It, Prefix, Identity) || Seen.Contains(Identity))
+			if (!MantlePlaceImportNaming::TagValue(**It, Prefix, Identity) || Seen.Contains(Identity))
 			{
 				continue;
 			}

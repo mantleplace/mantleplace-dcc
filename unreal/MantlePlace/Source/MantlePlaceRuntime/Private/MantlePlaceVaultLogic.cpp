@@ -700,16 +700,6 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStartResponse(const FString& JsonSt
 	return false;
 }
 
-bool FMantlePlaceVaultLogic::ParseMaterializeStartResponse(const FString& JsonStr, FString& OutJobId, bool& bOutAlreadyRunning, FString& OutError)
-{
-	FMantlePlaceMaterializeStart Start;
-	const bool bParsed = ParseMaterializeStartResponse(JsonStr, Start, OutError);
-
-	OutJobId = Start.JobId;
-	bOutAlreadyRunning = Start.IsAlreadyRunning();
-	return bParsed;
-}
-
 EMantlePlaceMaterializeState FMantlePlaceVaultLogic::ParseMaterializeState(const FString& State)
 {
 	static const TArray<FString> PendingWords = { TEXT("pending"), TEXT("queued"), TEXT("accepted"), TEXT("waiting") };

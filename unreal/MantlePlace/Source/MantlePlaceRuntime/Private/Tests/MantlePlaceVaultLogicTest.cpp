@@ -408,33 +408,31 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 	{
 		if (const FCase* Case = Take(Id))
 		{
-			FString JobId;
-			bool bAlreadyRunning = false;
+			FMantlePlaceMaterializeStart Start;
 			FString Error;
 			TestTrue(Case->What(TEXT("accepted")),
-				FLogic::ParseMaterializeStartResponse(Case->Payload, JobId, bAlreadyRunning, Error));
+			         FLogic::ParseMaterializeStartResponse(Case->Payload, Start, Error));
 
 			FString ExpectedJobId;
 			if (WantsString(*Case, TEXT("jobId"), ExpectedJobId))
 			{
-				TestEqual(Case->What(TEXT("jobId")), JobId, ExpectedJobId);
+				TestEqual(Case->What(TEXT("jobId")), Start.JobId, ExpectedJobId);
 			}
 			bool bExpected = false;
 			if (WantsBool(*Case, TEXT("alreadyRunning"), bExpected))
 			{
-				TestTrue(Case->What(TEXT("alreadyRunning")), bAlreadyRunning == bExpected);
+				TestTrue(Case->What(TEXT("alreadyRunning")), Start.IsAlreadyRunning() == bExpected);
 			}
 		}
 	}
 
 	if (const FCase* Case = Take(TEXT("vault.materialize.startNoJobId")))
 	{
-		FString JobId;
-		bool bAlreadyRunning = false;
+		FMantlePlaceMaterializeStart Start;
 		FString Error;
 		TestFalse(Case->What(TEXT("rejected")),
-			FLogic::ParseMaterializeStartResponse(Case->Payload, JobId, bAlreadyRunning, Error));
-		TestTrue(Case->What(TEXT("no job id is invented")), JobId.IsEmpty());
+		          FLogic::ParseMaterializeStartResponse(Case->Payload, Start, Error));
+		TestTrue(Case->What(TEXT("no job id is invented")), Start.JobId.IsEmpty());
 		TestFalse(Case->What(TEXT("states an errorContains")), Case->ErrorContains.IsEmpty());
 		TestTrue(Case->What(TEXT("error body message surfaces")), Error.Contains(Case->ErrorContains));
 	}
